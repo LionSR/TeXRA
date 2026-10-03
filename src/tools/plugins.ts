@@ -36,10 +36,7 @@ import { StateReadFailed, type StateStore } from '@platform/interfaces';
 import type { ToolCategory } from '@shared/settingsView/settingsViewMessages';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingHost } from '@shared/state/stateSettings';
-import type {
-  ToolAvailabilityChecks,
-  ToolProbeServices,
-} from '@tools/toolProbes';
+import type { ToolAvailabilityChecks } from '@tools/toolProbes';
 import type {
   Continuation,
   PluginHold,
@@ -126,7 +123,10 @@ export interface PluginDefinition<ROut> extends Omit<
   readonly continuation?: Continuation<ROut>;
   readonly processLayer?: ProcessPluginLayer<ROut>;
   readonly sessionLayer?: Layer.Layer<ROut, never, Runs | PluginHold>;
-  readonly availability?: ToolAvailabilityChecks<ToolProbeServices | ROut>;
+  /** Probed outside any step, whether or not the plugin is on: it may
+   *  require only the process's probe services. Its own process services
+   *  are offered while its layer is up, read with `Effect.serviceOption`. */
+  readonly availability?: ToolAvailabilityChecks;
 }
 
 /** A plugin value from its definition, its own services erased. */
