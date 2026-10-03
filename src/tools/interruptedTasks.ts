@@ -48,9 +48,10 @@ const checkRun = (session: SessionHandle, runId: RunId, resume: boolean) =>
         reason: blocker,
         retry: resume,
       });
-    // The resume checks again, and clears the reason itself.
+    // Nothing blocks it now. A resume that finds it blocked again records
+    // that itself; one refused for any other reason leaves no stale block.
+    yield* session.markResumeBlocked(runId, null);
     if (resume) yield* resumeOnSession(runId, session);
-    else yield* session.markResumeBlocked(runId, null);
   }).pipe(
     Effect.catch((error) =>
       Effect.logWarning(
