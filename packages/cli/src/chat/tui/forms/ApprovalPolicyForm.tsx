@@ -1,72 +1,42 @@
 import { Text } from 'ink';
 
 import type { SelectItem } from '@cli/tui/ui/Select';
+import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import {
   TEXRA_APPROVAL_POLICY_OPTIONS,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
+import { RUN_GRANT_COPY } from '@ui/copy/delegationApproval';
 
 import { ListForm } from './_shared/ListForm';
 
-/** The session auto-approvals `/approval` toggles next to the policy. */
-type ApprovalToggle = 'bash' | 'toolEdit' | 'goal';
-
-export const APPROVAL_BYPASS_LABEL = {
-  bash: 'Auto-approve commands',
-  toolEdit: 'Auto-approve edits',
-} as const;
-
-export type ApprovalFormValue = TexraApprovalPolicy | ApprovalToggle;
-
-interface ApprovalToggleState {
-  /** Undefined while the chat's run takes no grant (not yet active). */
-  readonly bash: boolean | undefined;
-  readonly toolEdit: boolean | undefined;
-  readonly goal: boolean;
-}
+/** A policy, or a grant of the focused task to revoke. */
+export type ApprovalFormValue = TexraApprovalPolicy | ApprovalBypassKind;
 
 interface ApprovalPolicyFormProps {
   readonly currentPolicy: TexraApprovalPolicy;
-  readonly toggles: ApprovalToggleState;
+  /** The focused task's grants that are on, each offered for revoking;
+   *  granting is the card's `a`. */
+  readonly grants: readonly ApprovalBypassKind[];
   readonly availableRows?: number;
   readonly onSelect: (value: ApprovalFormValue) => void;
   readonly onCancel: () => void;
 }
 
-function onOff(enabled: boolean): string {
-  return enabled ? 'On' : 'Off';
-}
-
-function bypassItem(
-  value: 'bash' | 'toolEdit',
-  label: string,
-  enabled: boolean | undefined,
-): SelectItem<ApprovalFormValue> {
-  return enabled === undefined
-    ? {
-        value,
-        label,
-        description: 'available while the chat is active',
-        disabled: true,
-      }
-    : { value, label, description: `${onOff(enabled)} · this session` };
-}
-
+/**
+ * `/approval`: the policy, which applies before a task asks. Grants given on
+ * a card are listed only to take them back (`/status` lists them too).
+ */
 export function ApprovalPolicyForm(
   props: ApprovalPolicyFormProps,
 ): React.JSX.Element {
-  const { toggles } = props;
   const items: ReadonlyArray<SelectItem<ApprovalFormValue>> = [
     ...TEXRA_APPROVAL_POLICY_OPTIONS,
-    bypassItem('bash', APPROVAL_BYPASS_LABEL.bash, toggles.bash),
-    bypassItem('toolEdit', APPROVAL_BYPASS_LABEL.toolEdit, toggles.toolEdit),
-    {
-      value: 'goal',
-      label: 'Goal: approve all work',
-      description: toggles.goal
-        ? 'On · commands, edits, and delegated work'
-        : 'Off · commands only',
-    },
+    ...props.grants.map((kind) => ({
+      value: kind,
+      label: RUN_GRANT_COPY.revoke(kind),
+      description: 'granted on a card in this task',
+    })),
   ];
   return (
     <ListForm
@@ -77,7 +47,8 @@ export function ApprovalPolicyForm(
       activeValue={props.currentPolicy}
       description={
         <Text dimColor>
-          Choose when commands and edits ask first, or toggle an auto-approval.
+          Choose when commands and edits ask first. Press a on a request to
+          approve all of its kind in this task.
         </Text>
       }
       selectMarginTop={1}

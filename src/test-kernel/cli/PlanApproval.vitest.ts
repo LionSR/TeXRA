@@ -12,7 +12,6 @@ async function renderPlanApproval(availableRows: number): Promise<string> {
   return renderOutputAtTerminalSize(
     ink,
     React.createElement(PlanApproval, {
-      autoApproveAll: false,
       availableRows,
       onDecide: () => undefined,
       payload: {
@@ -31,16 +30,17 @@ describe('CLI plan approval layout', () => {
     // Goal approval adds two notice rows to the compact threshold (7 + 2).
     const bordered = await renderPlanApproval(10);
     expect(bordered).toContain('╔');
-    expect(bordered).toContain('run as goal');
+    // Both goal keys fit beside y and n in their compact words.
+    expect(bordered).toContain('r goal · a all work');
 
     const compact = await renderPlanApproval(9);
     expect(compact).not.toContain('╔');
-    expect(compact).toContain('run as goal');
+    expect(compact).toContain('r goal');
 
     // Two chrome rows at 60 columns leave one body row: too few for the
     // goal notice plus a plan row, so the action is withheld.
     const cramped = await renderPlanApproval(3);
     expect(cramped).not.toContain('╔');
-    expect(cramped).not.toContain('run as goal');
+    expect(cramped).not.toContain('r goal');
   });
 });

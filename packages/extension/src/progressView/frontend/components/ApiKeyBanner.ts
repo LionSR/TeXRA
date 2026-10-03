@@ -6,8 +6,17 @@ import { SessionUiEvents } from '@shared/session/uiEvents';
 import { designTokens, commonViewStyles, bannerStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderWarningBanner } from '@ui/wa/bannerFrame';
-import { ONBOARDING_CHOICE_CHATGPT } from '@ui/copy/onboarding';
+import {
+  CREDENTIAL_LOST_NOTICE,
+  ONBOARDING_CHOICE_CHATGPT,
+} from '@ui/copy/onboarding';
 
+/**
+ * The credential-lost banner: shown only once a credential that worked stops
+ * working (the host raises it after a first task has finished). Until then
+ * the "Connect a model" card is the one prompt, so the banner never repeats
+ * it on a first install.
+ */
 @customElement('api-key-banner')
 export class ApiKeyBanner extends LitElement {
   static override styles = [designTokens, commonViewStyles, bannerStyles];
@@ -16,8 +25,8 @@ export class ApiKeyBanner extends LitElement {
     this.dispatchEvent(SessionUiEvents.host({ kind: 'apiKeyBanner', action }));
   }
 
-  /** The same host action as the welcome card's first choice, so a user
-   *  who skipped onboarding is offered both ways to connect, not only one. */
+  /** The same host action as the card's first choice, so reconnecting
+   *  offers both ways to connect, not only one. */
   private signInChatGpt(): void {
     this.dispatchEvent(
       SessionUiEvents.host({ kind: 'onboarding', action: 'signInChatGpt' }),
@@ -29,10 +38,7 @@ export class ApiKeyBanner extends LitElement {
       id: 'apiKeyBanner',
       role: 'alert',
       body: html`
-        <span
-          >Connect a model to start: sign in with ChatGPT or add an API
-          key.</span
-        >
+        <span>${CREDENTIAL_LOST_NOTICE}</span>
         <div class="actions">
           <wa-button
             id="apiKeyBannerChatGptButton"

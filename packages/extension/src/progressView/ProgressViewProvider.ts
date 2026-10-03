@@ -60,10 +60,11 @@ import {
   type SessionType,
   type RunId,
 } from '@shared/schemas';
+import { projectDisplayOf } from '@shared/session/hostSnapshot';
 import {
-  projectDisplayOf,
-  type HostSnapshot,
-} from '@shared/session/hostSnapshot';
+  getFirstRunDone,
+  setOnboardingDeclined,
+} from '@shared/state/onboardingState';
 import type {
   DownMessage,
   SurfaceActionMessage,
@@ -118,12 +119,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private sidebarPort: Port | undefined;
   /** The popped-out tab and its port, attached and released together. */
   private editor: { panel: vscode.WebviewPanel; port: Port } | undefined;
-  /** The last API-key banner the snapshot published. */
-  private apiKeyBanner: HostSnapshot['banners']['apiKey'] = { visible: false };
+  /** The last credential answer the API-key banner's producer read. */
+  private credentialUsable = true;
 
   /**
-   * A credential changed: re-read the API-key banner, which repaints the
-   * setup pill, then the funnel that reads it.
+   * A credential changed: re-read the credential through the API-key
+   * banner's producer, which repaints the setup pill, then the funnel that
+   * reads it.
    */
   public readonly refreshApiKeyStatus = Effect.suspend(() =>
     this.snapshot.refreshHostBanners.pipe(
@@ -163,17 +165,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    globalState: StateStore,
+    private readonly globalState: StateStore,
     private readonly secrets: PlatformSecrets,
     /** Process runtime shared with every extension surface. */
     private readonly runtime: ProcessRuntime,
     /** Session created by the extension entry. */
     public readonly session: SessionHandle,
-    /** The setup pill: painted from the snapshot's API-key banner on every
-     *  publish, so the pill and the welcome card read one credential answer. */
-    private readonly paintSetupPill: (
-      banner: HostSnapshot['banners']['apiKey'],
-    ) => void,
+    /** The setup pill: painted from the same credential answer the funnel
+     *  reads, so the pill and the "Connect a model" card agree. */
+    private readonly paintSetupPill: (credentialUsable: boolean) => void,
   ) {
     this.contentProvider = new BundledViewContentProvider(
       context,
@@ -181,10 +181,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       'progressView',
     );
     this.onboardingFunnel = new OnboardingFunnelRefresher({
-      // The snapshot's API-key banner is the one credential answer: every
+      // The API-key banner's producer reads the one credential answer: every
       // credential change re-reads it (`refreshApiKeyStatus`) before this
       // refresher runs.
-      hasCredential: () => Effect.sync(() => !this.apiKeyBanner.visible),
+      hasCredential: () => Effect.sync(() => this.credentialUsable),
       flags: globalState,
       apply: (transition) =>
         Effect.gen({ self: this }, function* () {
@@ -235,10 +235,24 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         })) ?? [],
       // Already an Effect program: the typed port lets the banner read it
       // directly instead of settling it on the runtime first.
+      // The banner says a credential stopped working, so it is raised only
+      // once a task has finished; before that the card is the one prompt.
       apiKeyBanner: () =>
-        hasUsableSetupCredential(this.session.roots, this.secrets).pipe(
-          withLogChannel('Setup Credentials'),
-          Effect.map((usable) => ({ visible: !usable })),
+        Effect.all([
+          hasUsableSetupCredential(this.session.roots, this.secrets).pipe(
+            withLogChannel('Setup Credentials'),
+          ),
+          getFirstRunDone(globalState),
+        ]).pipe(
+          Effect.tap(([usable]) =>
+            Effect.sync(() => {
+              this.credentialUsable = usable;
+              this.paintSetupPill(usable);
+            }),
+          ),
+          Effect.map(([usable, firstRunDone]) => ({
+            visible: !usable && firstRunDone,
+          })),
           Effect.mapError(
             (cause) =>
               new HostSnapshotReadFailed({
@@ -264,15 +278,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             withLogChannel(CHANNEL),
           ),
         ),
-      publish: (snapshot) =>
-        this.bridge.setHost(snapshot).pipe(
-          Effect.andThen(
-            Effect.sync(() => {
-              this.apiKeyBanner = snapshot.banners.apiKey;
-              this.paintSetupPill(snapshot.banners.apiKey);
-            }),
-          ),
-        ),
+      publish: (snapshot) => this.bridge.setHost(snapshot),
     });
     const storageRoot = context.storageUri ?? context.globalStorageUri;
     // The tool-edit preview: staged copies of the original and proposed
@@ -633,6 +639,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   /** The New-task state in the sidebar (`texra.showMainView`). */
+  /**
+   * "Connect a model" from outside the panel (the setup command, the status
+   * pill): bring the one credential prompt into view. A previous "Skip for
+   * now" is cleared so the card shows again on a first install; after a
+   * finished task the credential-lost banner stands in its place.
+   */
+  public showConnectModel() {
+    return Effect.gen({ self: this }, function* () {
+      yield* setOnboardingDeclined(this.globalState, false);
+      yield* this.refreshApiKeyStatus;
+      yield* this.showLauncher();
+    });
+  }
+
   public showLauncher() {
     return Effect.gen({ self: this }, function* () {
       yield* this.showInSidebar();

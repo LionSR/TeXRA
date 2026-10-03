@@ -232,9 +232,6 @@ export const sessionRunIds = computed((): ReadonlySet<RunId> => {
 // slash-command palette, and reverse search. These view-level toggles live
 // here as signal state rather than local component state.
 
-/** Session-local approval scope captured by the next Run as Goal action. */
-export const goalAutoApproveAll = signal(false);
-
 interface InfoPaneContent {
   readonly title: string;
   readonly lines: readonly string[];
@@ -477,7 +474,6 @@ export function resetCliState(
   sessionMeta.set(nextSessionMeta);
   surfaceChoice.set(emptySurface('cli'));
   rootRunId.set(undefined);
-  goalAutoApproveAll.set(false);
   INFO_PANE_QUEUE.set([]);
   FOREGROUND_READER.set(undefined);
   slashPaletteOpen.set(false);

@@ -57,15 +57,24 @@ async function commandPaletteIsClosed(): Promise<boolean> {
   });
 }
 
-test('startup team chooser screenshot', async () => {
-  const panel = launched.page.locator('wa-dialog.desktop-onboarding');
-  // The dialog host has no box of its own; its open state is the check.
-  await expect(panel).toHaveAttribute('open', '');
-  await expect(
-    panel.locator('wa-checkbox').filter({
-      hasText: "Don't show this at startup",
-    }),
-  ).toBeVisible();
+// No startup dialog: a fresh profile opens on the conversation, where the
+// "Connect a model" card stands in for the launcher until a credential
+// exists (a profile whose environment already carries a key opens on the
+// launcher).
+test('first-run screenshot', async () => {
+  await launched.page.waitForFunction(
+    () => {
+      const root = document.querySelector('progress-app')?.shadowRoot;
+      return (
+        root?.querySelector('onboarding-welcome-card, session-composer') != null
+      );
+    },
+    undefined,
+    { timeout: 15_000 },
+  );
+  expect(
+    await launched.page.locator('wa-dialog.desktop-onboarding').count(),
+  ).toBe(0);
   await launched.page.screenshot({
     path: getScreenshotPath(test.info(), 'startup.png'),
     fullPage: false,

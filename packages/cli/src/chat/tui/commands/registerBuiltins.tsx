@@ -20,6 +20,7 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type RunId } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { PLUGINS_TUI } from '@ui/copy/plugins';
 
 import { AgentListForm, type AgentPickerValue } from '../forms/AgentListForm';
@@ -35,7 +36,6 @@ import { PluginsListForm } from '../forms/PluginsListForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
 import { SkillsListForm, type SkillActivation } from '../forms/SkillsListForm';
 import {
-  goalAutoApproveAll,
   patchSessionMeta,
   selectedRunId,
   sessionMeta,
@@ -50,7 +50,7 @@ import {
 } from './handlers/agentModelCommands';
 import {
   applyCliApprovalPolicySelection,
-  setCliRunBypass,
+  revokeCliRunGrant,
 } from './handlers/approvalCommand';
 import {
   type SlashCommandContext,
@@ -204,50 +204,31 @@ export function registerBuiltinSlashCommands(options: {
 
   function ApprovalPolicyFormAdapter(props: SlashFormProps): React.JSX.Element {
     const current = options.getApprovalPolicy?.() ?? 'ask';
-    // The run the status bar describes: its bypass badges are how a toggle
-    // here reads as applied.
-    // The toggles are offered only while that run's `actions` takes a grant
-    // (the gate `policy.set` is refused by), so a run still activating never
-    // shows a toggle that would be refused.
+    // The grants of the run the status bar describes, offered for revoking
+    // only while that run's `actions` takes a grant (the gate `policy.set`
+    // is refused by).
     const run = runViewOf(currentView(), selectedRunId.get());
     const runId = run?.actions.includes('grant') === true ? run.id : undefined;
     const bypasses =
       runId === undefined
         ? undefined
         : currentView().policy.get(runId)?.bypasses;
-    const bypassState = (kind: 'bash' | 'toolEdit'): boolean | undefined =>
-      runId === undefined ? undefined : bypasses?.[kind] === true;
+    const grants = RUN_GRANT_ORDER.filter((kind) => bypasses?.[kind] === true);
     return (
       <ApprovalPolicyForm
         availableRows={props.availableRows}
         currentPolicy={current}
-        toggles={{
-          bash: bypassState('bash'),
-          toolEdit: bypassState('toolEdit'),
-          goal: goalAutoApproveAll.get(),
-        }}
+        grants={grants}
         onSelect={bindSelection<ApprovalFormValue>(
           props,
           (value) => {
             switch (value) {
-              case 'goal':
-                return Effect.sync(() => {
-                  const enabled = !goalAutoApproveAll.get();
-                  goalAutoApproveAll.set(enabled);
-                  appendLocalNotice(
-                    `Goal mode approves all work: ${enabled ? 'on' : 'off'}`,
-                  );
-                });
               case 'bash':
               case 'toolEdit':
+              case 'superYolo':
                 return runId === undefined
                   ? Effect.void
-                  : setCliRunBypass(
-                      options.runtimeSession,
-                      runId,
-                      value,
-                      !bypassState(value),
-                    );
+                  : revokeCliRunGrant(options.runtimeSession, runId, value);
               case 'ask':
               case 'never':
               case 'yolo':
@@ -493,7 +474,7 @@ export function registerBuiltinSlashCommands(options: {
       commands: [
         {
           name: 'approval',
-          description: 'Set the approval policy and auto-approvals',
+          description: 'Set the approval policy',
           category: 'configuration',
           echo: 'ifPersists',
           handler: (remainder, context) =>

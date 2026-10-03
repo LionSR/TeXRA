@@ -19,7 +19,6 @@ import type { PendingApproval } from '../state/approvalQueue';
 
 export interface ApprovalModalProps {
   readonly availableRows?: number;
-  readonly goalAutoApproveAll: boolean;
   readonly pending: PendingApproval | undefined;
   /** The session the answered decision lands on, from the App that holds it. */
   readonly session: SessionHandle;
@@ -56,7 +55,6 @@ export function ApprovalModal(
     case 'planApproval':
       return (
         <PlanApproval
-          autoApproveAll={props.goalAutoApproveAll}
           availableRows={availableRows}
           payload={payload.data}
           onDecide={onDecide}

@@ -491,10 +491,10 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     ),
   );
 
-  // The setup pill: shown only while the host snapshot's API-key banner is,
-  // the one credential answer the welcome card also reads (a ChatGPT
-  // subscription and a direct API key count alike). The welcome card in the
-  // TeXRA panel is the one home for that choice.
+  // The setup pill: shown only while no credential is usable, the one
+  // credential answer the "Connect a model" card also reads (a ChatGPT
+  // subscription and a direct API key count alike). It runs setup, which
+  // brings that card, the one home for the choice, into view first.
   const setupPill = vscode.window.createStatusBarItem(
     'texra.setupStatus',
     vscode.StatusBarAlignment.Left,
@@ -503,7 +503,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   setupPill.text = '$(rocket) TeXRA: Get Started';
   setupPill.tooltip =
     'Connect a model: sign in with ChatGPT or add a provider API key';
-  setupPill.command = EXTENSION_COMMANDS.SHOW_MAIN_VIEW;
+  setupPill.command = EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT;
   setupPill.accessibilityInformation = { label: 'TeXRA setup, get started' };
   context.subscriptions.push(setupPill);
   const progressViewProvider = new ProgressViewProvider(
@@ -512,7 +512,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     secrets,
     runtime,
     runtimeSession,
-    (banner) => (banner.visible ? setupPill.show() : setupPill.hide()),
+    (usable) => (usable ? setupPill.hide() : setupPill.show()),
   );
   yield* Effect.andThen(
     progressViewProvider.initialize(),

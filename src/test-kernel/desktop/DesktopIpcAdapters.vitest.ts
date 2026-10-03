@@ -10,7 +10,7 @@ import { FakeStateStore } from '@test/support/FakePlatform';
 type DesktopOnboardingMainModule =
   typeof import('@desktop/main/desktopOnboardingIpc');
 type DesktopOnboardingOptions = NonNullable<
-  Parameters<DesktopOnboardingMainModule['createDesktopOnboardingIpc']>[1]
+  Parameters<DesktopOnboardingMainModule['createDesktopOnboardingIpc']>[0]
 >;
 type OnboardingHarnessOptions = Partial<
   Omit<DesktopOnboardingOptions, 'state'>
@@ -32,35 +32,19 @@ async function createOnboardingHarness({
   seed = {},
   ...options
 }: OnboardingHarnessOptions = {}) {
-  const [
-    { createDesktopOnboardingIpc },
-    { DESKTOP_ONBOARDING_DISMISSED_STATE_KEY },
-  ] = await Promise.all([
-    import('@desktop/main/desktopOnboardingIpc'),
-    import('@desktop/shared/desktopOnboardingMessages'),
-  ]);
+  const { createDesktopOnboardingIpc } =
+    await import('@desktop/main/desktopOnboardingIpc');
   const state = new FakeStateStore({ ...seed });
   const update = vi.spyOn(state, 'update');
-  const postToRenderer = vi.fn();
   const runtime = testRuntime();
-  const onboarding = createDesktopOnboardingIpc(
-    { postToRenderer },
-    {
-      hasCredential: () => Effect.succeed(false),
-      kickoffSetup: () => Effect.void,
-      signInWithChatGpt: () => Effect.void,
-      ...options,
-      state,
-    },
-  );
-  return {
+  const onboarding = createDesktopOnboardingIpc({
+    hasCredential: () => Effect.succeed(false),
+    kickoffSetup: () => Effect.void,
+    signInWithChatGpt: () => Effect.void,
+    ...options,
     state,
-    update,
-    onboarding,
-    postToRenderer,
-    runtime,
-    dismissedStateKey: DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
-  };
+  });
+  return { state, update, onboarding, runtime };
 }
 
 function expectFunnelState(
@@ -71,68 +55,29 @@ function expectFunnelState(
 }
 
 describe('desktop IPC adapters', () => {
-  it.effect(
-    'persists first-run walkthrough dismissal in the onboarding adapter',
-    () =>
-      Effect.gen(function* () {
-        const {
-          dismissedStateKey,
-          onboarding,
-          postToRenderer,
-          runtime,
-          update,
-        } = yield* Effect.promise(() => createOnboardingHarness());
+  it.effect('derives State 0 on a fresh install and skips to done', () =>
+    Effect.gen(function* () {
+      const { onboarding, runtime, update } = yield* Effect.promise(() =>
+        createOnboardingHarness(),
+      );
 
-        yield* withProcessServices(
-          runtime,
-          onboarding.refreshOnboardingFunnel(),
-        );
-        // The refresh is serialized through a promise chain (concurrency guard), so
-        // drain microtasks before asserting the derived state.
-        yield* Effect.promise(() => flushAsync());
-        // Fresh install with no credential: State 0 (welcome card).
-        expectFunnelState(onboarding, 'needs-credential');
-        postToRenderer.mockClear();
-        // Runs an owned command's program the way the window's router does.
-        const send = (command: string) =>
-          withProcessServices(
-            runtime,
-            onboarding.routes[command]?.({ command }) ??
-              Effect.die(`${command} is not an onboarding command`),
-          );
+      yield* withProcessServices(runtime, onboarding.refreshOnboardingFunnel());
+      // The refresh is serialized through a promise chain (concurrency guard), so
+      // drain microtasks before asserting the derived state.
+      yield* Effect.promise(() => flushAsync());
+      // Fresh install with no credential: State 0 (the Connect a model card).
+      expectFunnelState(onboarding, 'needs-credential');
 
-        yield* send('desktop:requestOnboarding');
-        expect(postToRenderer).toHaveBeenLastCalledWith({
-          command: 'desktop:setOnboarding',
-          shouldShow: true,
-        });
-
-        yield* send('desktop:dismissOnboarding');
-        expect(update).toHaveBeenCalledWith(dismissedStateKey, true);
-        expect(postToRenderer).toHaveBeenLastCalledWith({
-          command: 'desktop:setOnboarding',
-          shouldShow: false,
-        });
-
-        yield* send('desktop:requestOnboarding');
-        expect(postToRenderer).toHaveBeenLastCalledWith({
-          command: 'desktop:setOnboarding',
-          shouldShow: false,
-        });
-
-        expect(onboarding.routes['desktop:showOnboarding']).toBeUndefined();
-
-        postToRenderer.mockClear();
-        yield* withProcessServices(runtime, onboarding.skipOnboarding());
-        // The skip persists the declined flag then refreshes through the serialized
-        // chain, so drain microtasks before asserting.
-        yield* Effect.promise(() => flushAsync());
-        expect(update).toHaveBeenLastCalledWith(
-          GlobalStateKey.ONBOARDING_DECLINED,
-          true,
-        );
-        expectFunnelState(onboarding, 'done');
-      }),
+      yield* withProcessServices(runtime, onboarding.skipOnboarding());
+      // The skip persists the declined flag then refreshes through the serialized
+      // chain, so drain microtasks before asserting.
+      yield* Effect.promise(() => flushAsync());
+      expect(update).toHaveBeenLastCalledWith(
+        GlobalStateKey.ONBOARDING_DECLINED,
+        true,
+      );
+      expectFunnelState(onboarding, 'done');
+    }),
   );
 
   it.effect(
