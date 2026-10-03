@@ -15,6 +15,7 @@ import { DELEGATION_APPROVAL_COPY } from '@ui/copy/delegationApproval';
 import {
   SCRIPT_REQUEST_COPY,
   scriptRequestCallLine,
+  scriptRequestFirstAgentLine,
 } from '@ui/copy/scriptRequest';
 
 import { ConfirmCard } from './ConfirmCard';
@@ -96,16 +97,22 @@ function agentProposalMetadataLines({
   readonly fileGroups: ReturnType<typeof getProposalFileGroups>;
   readonly payload: AgentProposalPermission;
 }): MetadataLine[] {
-  // A script's request for its `agent` calls: what one approval covers and
-  // the calls it issued first; its source is the scrolling text below.
+  // A script's request for its `agent` calls: what approving allows, the
+  // first agent, and the calls it issued first; its code is the scrolling
+  // text below, under its line count.
   if (payload.script) {
     const { calls } = payload.script;
     return [
       { segments: [{ text: SCRIPT_REQUEST_COPY.grant }], tone: 'warning' },
       {
         segments: [
-          { text: 'First agent call: ', bold: true },
-          { text: `${payload.agent} · ${getModelLabel(payload.model)}` },
+          {
+            text: scriptRequestFirstAgentLine(
+              payload.agent,
+              getModelLabel(payload.model),
+              payload.instruction,
+            ),
+          },
         ],
       },
       ...(calls.length > 0
@@ -121,7 +128,7 @@ function agentProposalMetadataLines({
           ]
         : []),
       {
-        segments: [{ text: `${SCRIPT_REQUEST_COPY.sourceHeading}:` }],
+        segments: [{ text: `${SCRIPT_REQUEST_COPY.code(payload.script)}:` }],
         tone: 'dim',
       },
     ];
@@ -200,7 +207,7 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
   const fileGroups = getProposalFileGroups(props.payload);
   const { script } = props.payload;
   let title = `Spawn ${props.payload.agent}?`;
-  if (script) title = `${SCRIPT_REQUEST_COPY.title(script)}?`;
+  if (script) title = SCRIPT_REQUEST_COPY.title(script);
   const instructionWidth = confirmCardContentWidth(columns);
   const metadataLines = agentProposalMetadataLines({
     fileGroups,
@@ -228,9 +235,9 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
         ))}
       </Box>
       <ScrollableModalText
-        hiddenNoun={script ? 'source rows' : AGENT_PROPOSAL_HIDDEN_NOUN}
+        hiddenNoun={script ? 'code rows' : AGENT_PROPOSAL_HIDDEN_NOUN}
         maxRows={maxInstructionRows}
-        scrollHint={script ? 'scroll source' : 'scroll prompt'}
+        scrollHint={script ? 'scroll code' : 'scroll prompt'}
         text={script ? script.source : props.payload.instruction}
         width={instructionWidth}
       />

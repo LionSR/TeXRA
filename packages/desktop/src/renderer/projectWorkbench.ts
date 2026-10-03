@@ -1,8 +1,6 @@
 // The document resources of one project. Selection changes which owner is visible;
 // only tab closure, project closure, or document disposal releases its resources.
 
-import { nothing, type TemplateResult } from 'lit';
-
 import type { SessionSurfaces } from '@progressView/frontend/sessionSurfaces';
 import type { Theme } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
@@ -31,7 +29,6 @@ export function createProjectWorkbench(options: {
   logsPane: HTMLElement;
   isActive(): boolean;
   isBrowserCovered(): boolean;
-  subagentsTemplate(): TemplateResult | typeof nothing;
   onLayoutChanged(
     session: string,
     previous: DesktopShellState,
@@ -154,7 +151,6 @@ export function createProjectWorkbench(options: {
     terminalPane,
     reviewPane,
     pdfPane,
-    subagentsTemplate: options.subagentsTemplate,
     logsPane: options.logsPane,
     getState,
     updateShell: updateState,

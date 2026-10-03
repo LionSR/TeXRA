@@ -4,10 +4,8 @@
 import { html, nothing, type TemplateResult } from 'lit';
 
 import { createPdfPane } from '@desktop/renderer/pdfPane.js';
-import { subagentsPaneTemplate } from '@desktop/renderer/subagentsPane.js';
 import {
   shellSidebarTemplate,
-  subagentsButtonTemplate,
   workbenchTabsTemplate,
   type RailProject,
 } from '@desktop/renderer/desktopShell.js';
@@ -29,7 +27,6 @@ import {
   foldAll,
   local,
   OWNER,
-  ROOT,
   tail,
 } from '@test/shared/session/fanOutScenario';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -177,7 +174,7 @@ const iconBtn = (name: Parameters<typeof waIcon>[0], label: string) =>
   >`;
 
 /** The conversation pane as `main.ts` composes it: the header row carries
- *  the sidebar toggle, the Subagents button and the side-panel toggle (the
+ *  the sidebar toggle and the side-panel toggle (the
  *  run's own stop and menu live in its run header), then the conversation
  *  shell's pieces for the selected run. */
 const conversationPane = (
@@ -185,16 +182,13 @@ const conversationPane = (
   active: RailProject,
   run: RunView | undefined,
   body: TemplateResult | typeof nothing,
-  options: { chip?: boolean; dock?: boolean } = {},
+  options: { dock?: boolean } = {},
 ) =>
   html`<main class="shell-conversation" aria-label="Task conversation">
     <header class="shell-header">
       <span class="shell-header-button-slot"
         >${iconBtn('chevron-left', 'Hide sidebar')}</span
       >
-      ${
-        options.chip === false ? nothing : subagentsButtonTemplate(active, noop)
-      }
       ${iconBtn('picture-in-picture', 'Toggle Side Panel')}
     </header>
     <div class="shell-conversation-body">
@@ -353,47 +347,9 @@ function sceneDesktopNarrow(): TemplateResult {
   </div>`;
 }
 
-/** Desktop 5: the rail lists top-level runs only while the Subagents
- *  workbench tab owns the tree; a child is selected. */
-function sceneDesktopSubagents(): TemplateResult {
-  const lp = project(LP, withConversation(), CHILD);
-  const projects = [
-    lp,
-    project(CT, runningOnlyView()),
-    project(TN, fanOutView()),
-  ];
-  const run = lp.view.runs.get(CHILD);
-  const root = lp.view.runs.get(ROOT);
-  const tabs = [
-    tab('subagents', `Subagents · ${root?.rollup.total ?? 0}`),
-    tab('pdf', 'main.pdf', '/paper/main.pdf'),
-  ];
-  return desktopFrame(
-    '288px minmax(0,1fr) 400px',
-    rail(projects, shellOf('LP', ['LP', 'CT', 'TN'])),
-    conversationPane(
-      projects,
-      lp,
-      run,
-      run ? transcriptBody(lp, run) : nothing,
-    ),
-    workbench(
-      lp.display.key,
-      tabs,
-      tabs[0].id,
-      subagentsPaneTemplate({
-        view: lp.view,
-        surface: lp.surface,
-        selected: CHILD,
-      }),
-    ),
-  );
-}
-
 export const desktopScenes: Record<string, () => TemplateResult> = {
   'desktop-projects': sceneDesktopProjects,
   'desktop-one-project': sceneDesktopOneProject,
   'desktop-empty-project': sceneDesktopEmptyProject,
   'desktop-narrow': sceneDesktopNarrow,
-  'desktop-subagents': sceneDesktopSubagents,
 };

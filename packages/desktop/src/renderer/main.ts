@@ -57,12 +57,7 @@ import {
 } from './desktopShortcutRegistry';
 import { createStartupTeamPanel } from './desktopOnboarding';
 import './desktopShell.css';
-import {
-  shellSidebarTemplate,
-  subagentsButtonTemplate,
-  type RailProject,
-} from './desktopShell';
-import { subagentsPaneTemplate } from './subagentsPane';
+import { shellSidebarTemplate, type RailProject } from './desktopShell';
 import {
   activeWorkbenchTab,
   initialDesktopShellState,
@@ -441,9 +436,7 @@ function shellConversationTemplate(): TemplateResult {
     html`<span slot="header-start" class="shell-header-start"
         >${sidebarToggle}</span
       ><span slot="header-end" class="shell-header-end"
-        >${subagentsButtonTemplate(activeProject, () =>
-          currentWorkbench().workbench.openKind('subagents'),
-        )}${renderIconActionButton({
+        >${renderIconActionButton({
           id: 'shellToggleSidePanel',
           icon: 'picture-in-picture',
           label: commandLabel(DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL),
@@ -884,16 +877,6 @@ const routeMessage = createMessageRoutes({
           logsPane,
           isActive: () => shell.active === key,
           isBrowserCovered: settingsDialog.isOpen,
-          subagentsTemplate: () => {
-            const session = projectSessions.get(key);
-            return session
-              ? subagentsPaneTemplate({
-                  view: session.view$.get(),
-                  surface: session.surface$.get(),
-                  selected: session.surface$.get().selected,
-                })
-              : nothing;
-          },
           onLayoutChanged: layoutChanged,
         });
         projectWorkbenches.set(key, project);

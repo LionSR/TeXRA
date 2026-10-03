@@ -830,47 +830,6 @@ body[data-desktop-platform='darwin']
   --run-tab-meta-display: none;
 }
 
-.shell-subagents-open-count {
-  font-variant-numeric: tabular-nums;
-  color: var(--wa-color-text-quiet);
-}
-
-/* The Subagents workbench tab. */
-.shell-subagents {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 8px;
-}
-
-.shell-subagents-path {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 4px;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-sm);
-}
-
-.shell-subagents-path .is-current {
-  color: var(--wa-color-text-normal);
-  font-weight: var(--font-weight-medium);
-}
-
-.shell-subagents > run-tabs {
-  display: flex;
-  min-width: 0;
-  --background-color: transparent;
-  --color-border: transparent;
-}
-
-.shell-subagents-note,
-.shell-subagents-empty {
-  padding: 6px 8px;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-sm);
-}
-
 /* Project and tab contents retain their DOM nodes while another owner is visible. */
 .shell-project-workbench,
 .shell-workbench-retained-surface {
@@ -881,17 +840,6 @@ body[data-desktop-platform='darwin']
 .shell-project-workbench[hidden],
 .shell-workbench-retained-surface[hidden] {
   display: none;
-}
-
-.shell-subagents-open {
-  flex: 0 0 auto;
-  margin-left: 8px;
-  -webkit-app-region: no-drag;
-}
-
-.shell-subagents-open-count {
-  font-variant-numeric: tabular-nums;
-  color: var(--wa-color-text-quiet);
 }
 
 /* The Files tab: the tree alone; the tab names it, so its own heading

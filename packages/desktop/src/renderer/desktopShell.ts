@@ -104,7 +104,8 @@ function projectStatus(
 
 /**
  * One section per open project: the row, then that project's conversations
- * (its top-level runs; a run's subagents live in the Subagents tab) unless
+ * (its top-level runs; a run's agents live on its script and dispatch
+ * cards) unless
  * the user folded the section shut. Every row has the same controls, so the
  * shown project differs only by its highlight: the row chooses the project,
  * `+` starts a task in it, and `×` closes it.
@@ -259,40 +260,6 @@ export function shellSidebarTemplate(
         })}
       </footer>
     </aside>
-  `;
-}
-
-/**
- * The way into the selected conversation's subagents: the Subagents tab
- * holds the tree, so this only opens it. Nothing when the conversation has
- * no children.
- */
-export function subagentsButtonTemplate(
-  project: RailProject | undefined,
-  onOpen: () => void,
-): TemplateResult | typeof nothing {
-  if (!project) return nothing;
-  const { selected } = project.surface;
-  const run = selected === null ? undefined : project.view.runs.get(selected);
-  const rootId = run?.ancestors[0]?.id ?? run?.id;
-  const root = rootId === undefined ? undefined : project.view.runs.get(rootId);
-  if (root === undefined || root.rollup.total === 0) return nothing;
-  const { icon, label } = WORKBENCH_KIND_META.subagents;
-  return html`
-    <wa-button
-      type="button"
-      class="shell-subagents-open btn-secondary"
-      appearance="outlined"
-      size="s"
-      title="Show this task's subagents"
-      @click=${onOpen}
-    >
-      ${waIcon(icon, { slot: 'start' })}
-      <span>${label}</span>
-      <span class="shell-subagents-open-count" slot="end"
-        >${root.rollup.total}</span
-      >
-    </wa-button>
   `;
 }
 

@@ -43,7 +43,8 @@ function scriptPlainLines(
   view: SessionView,
 ): ReadonlyMap<string, string> {
   const lines = new Map<string, string>();
-  for (const stage of scriptStages(run, view)) {
+  // Headless output prints lines, no talk action: any host reads the same.
+  for (const stage of scriptStages(run, view, { terminalBacked: false })) {
     for (const call of stage.calls) {
       if (call.phase !== null)
         lines.set(`${stage.id}:phase:${call.phase}`, `◆ ${call.phase}`);

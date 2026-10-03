@@ -4,6 +4,7 @@ import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import { confirmCardContentWidth } from '@cli/tui/ui/theme';
 import type { ToolOutcomePermission } from '@shared/schemas';
 import type { SurfaceDecision } from '@shared/session/approvalDecision';
+import { TOOL_OUTCOME_COPY } from '@ui/copy/toolOutcome';
 import { ConfirmCard } from './ConfirmCard';
 import {
   ScrollableModalText,
@@ -16,23 +17,21 @@ interface ToolOutcomeRequestProps {
   readonly onDecide: (decision: SurfaceDecision) => void;
 }
 
-const TOOL_OUTCOME_TITLE = 'Run the interrupted call again?';
-
 /** A call that may have run with no recorded result: run it again, or skip
  *  it and tell the model its outcome is unknown. */
 export function ToolOutcomeRequest(
   props: ToolOutcomeRequestProps,
 ): React.JSX.Element {
   const { columns } = useWindowSize();
-  const { title, childRunId } = props.payload;
-  const text = childRunId === null ? title : `${title}\nRun ${childRunId}`;
+  const title = TOOL_OUTCOME_COPY.question(props.payload);
+  const text = `${props.payload.title}\n${TOOL_OUTCOME_COPY.explanation}`;
   return (
     <ConfirmCard
       color={COLOR_WARNING}
-      title={TOOL_OUTCOME_TITLE}
-      approveLabel="run again"
+      title={title}
+      approveLabel={TOOL_OUTCOME_COPY.runAgain.toLowerCase()}
       approveDecision={{ action: 'retry' }}
-      rejectLabel="skip"
+      rejectLabel={TOOL_OUTCOME_COPY.skip.toLowerCase()}
       rejectionMode="immediate"
       onDecide={props.onDecide}
     >
@@ -40,7 +39,7 @@ export function ToolOutcomeRequest(
         maxRows={scrollableModalTextRowsBudget({
           availableRows: props.availableRows,
           columns,
-          title: TOOL_OUTCOME_TITLE,
+          title,
         })}
         scrollHint="scroll"
         text={text}

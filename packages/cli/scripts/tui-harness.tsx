@@ -170,6 +170,12 @@ const RETRY_APPROVAL_CHATGPT =
 const SHOW_USER_QUESTION = process.env.HARNESS_USER_QUESTION === '1';
 const SHOW_PLAN_APPROVAL = process.env.HARNESS_PLAN_APPROVAL === '1';
 const SHOW_AGENT_PROPOSAL = process.env.HARNESS_AGENT_PROPOSAL === '1';
+/** The proposal is a script's request for its `agent` calls. */
+const SCRIPT_PROPOSAL = process.env.HARNESS_SCRIPT_PROPOSAL === '1';
+/** A finished `agent` call whose output is its delivery envelope. */
+const SHOW_AGENT_RESULT = process.env.HARNESS_AGENT_RESULT === '1';
+/** An agent call that may have run before TeXRA stopped, with no result. */
+const SHOW_TOOL_OUTCOME = process.env.HARNESS_TOOL_OUTCOME === '1';
 const PLAN_APPROVAL_OBJECTIVE =
   process.env.HARNESS_PLAN_APPROVAL_OBJECTIVE ??
   [
@@ -979,7 +985,49 @@ function makeAgentProposalPayload() {
     instruction: AGENT_PROPOSAL_INSTRUCTION,
     memories: [],
     workingDirectory: HARNESS_CWD,
+    ...(SCRIPT_PROPOSAL
+      ? {
+          script: {
+            title: 'Review and fix chapter 2',
+            source: [
+              "phase('Review')",
+              'const reviews = await Promise.all(',
+              "  ['A', 'B'].map((name) =>",
+              "    agent(`Review chapter 2 as referee ${name}.`, { agentName: 'review' }),",
+              '  ),',
+              ')',
+            ].join('\n'),
+            calls: [{ toolName: 'read_file', preview: 'chapter2.tex' }],
+          },
+        }
+      : {}),
   };
+}
+
+/** A finished `agent` call: its card's output is the delivery envelope the
+ *  parent's model reads, which no surface prints. */
+function seedAgentResultTranscript(): void {
+  seedRows(HARNESS_RUN_ID, [
+    {
+      id: 'agent-result-call',
+      level: LOG_LEVELS.INFO,
+      timestamp: Date.now(),
+      messageType: MESSAGE_TYPES.TOOL_USE,
+      data: {
+        toolName: 'agent',
+        input: { agentName: 'review', prompt: 'Review chapter 2.' },
+        output: [
+          '<subagent-result id="aaaa0009f10e" agent="review" status="completed">',
+          '<wall-time>2m 4s</wall-time>',
+          '<response>Lemma 4 needs a bound on the error term.',
+          'The rest of chapter 2 reads cleanly.</response>',
+          '</subagent-result>',
+        ].join('\n'),
+        summary: "Completed 'review'",
+        status: TOOL_CALL_STATUS.COMPLETED,
+      },
+    },
+  ]);
 }
 
 function makeUserQuestionPayload(): UserQuestionPermission {
@@ -1169,6 +1217,10 @@ if (SHOW_LIVE_TOOL_ONLY) {
 
 if (SHOW_SUBAGENT_FOLLOWUPS) {
   seedSubagentFollowupTranscript();
+}
+
+if (SHOW_AGENT_RESULT) {
+  seedAgentResultTranscript();
 }
 
 /** A background script run with two `agent` children still running. */
@@ -1433,6 +1485,25 @@ if (SHOW_PLAN_APPROVAL) {
     HARNESS_RUN_ID,
     { kind: 'planApproval', data: makePlanApprovalPayload() },
     appendHarnessPlanDecision,
+  );
+}
+
+if (SHOW_TOOL_OUTCOME) {
+  requestHarnessApproval(
+    HARNESS_RUN_ID,
+    {
+      kind: 'toolOutcome',
+      data: {
+        requestId: 'harness-tool-outcome',
+        runId: HARNESS_RUN_ID,
+        toolName: 'agent',
+        title:
+          "'review' may have done work no result records: the run stopped while it was working",
+        childRunId: RunIdSchema.parse('aaaa0009f10e'),
+      },
+    },
+    (decision) =>
+      appendHarnessAssistantTranscript(`TOOL-OUTCOME: ${decision.action}`),
   );
 }
 

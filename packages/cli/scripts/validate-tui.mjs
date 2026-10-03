@@ -1688,6 +1688,55 @@ const SCENARIOS = [
     unexpect: ['Run command?', '1 approval', 's subagents'],
   },
   {
+    // A script's request leads with what approving allows and the first
+    // agent; the code follows under its line count.
+    name: 'script-proposal',
+    frame: 'viewport',
+    rows: 30,
+    cols: 100,
+    env: {
+      HARNESS_ENTRIES: '0',
+      HARNESS_AGENT_PROPOSAL: '1',
+      HARNESS_SCRIPT_PROPOSAL: '1',
+    },
+    bootExpect: 'Start agents for',
+    expect: [
+      'Start agents for "Review and fix chapter 2"?',
+      'Approving lets this script start agents until it ends.',
+      'First agent: review',
+      'Code (6 lines):',
+    ],
+    unexpect: ['Source:', 'Run the script'],
+  },
+  {
+    // A call that may have run before TeXRA stopped asks one plain
+    // question, with no run id.
+    name: 'tool-outcome-card',
+    frame: 'viewport',
+    rows: 30,
+    cols: 100,
+    env: { HARNESS_ENTRIES: '0', HARNESS_TOOL_OUTCOME: '1' },
+    bootExpect: 'Did the agent finish',
+    expect: [
+      'Did the agent finish before TeXRA stopped?',
+      'Run again repeats it',
+      'run again',
+      'skip it',
+    ],
+    unexpect: ['aaaa0009f10e', 'Run the interrupted call again?'],
+  },
+  {
+    // A finished agent call shows its answer, never the delivery XML.
+    name: 'agent-result-card',
+    frame: 'viewport',
+    rows: 30,
+    cols: 100,
+    env: { HARNESS_ENTRIES: '0', HARNESS_AGENT_RESULT: '1' },
+    bootExpect: 'Lemma 4 needs a bound',
+    expect: ['Result:', 'Lemma 4 needs a bound on the error term.'],
+    unexpect: ['<subagent-result', '<response>', '</subagent-result>'],
+  },
+  {
     name: 'agent-proposal-long',
     frame: 'scrollback',
     rows: 24,
