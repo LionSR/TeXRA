@@ -22,8 +22,8 @@ import {
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
   executionsWaitTimeoutSeconds,
 } from '@shared/toolUse';
+import type { TeXRAIconName } from '@shared/iconNames';
 import type { TranscriptRowBase } from '@ui/transcript';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { isObject } from '@utils/core';
 
 // Side-effect import to register <terminal-output> custom element

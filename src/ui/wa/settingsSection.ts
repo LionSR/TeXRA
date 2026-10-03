@@ -7,11 +7,11 @@ import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Local imports - utils
+import type { TeXRAIconName } from '@shared/iconNames';
 import { clampOptional } from '@utils/core';
 
 // Local imports - Web Awesome
 import { waIcon } from './webAwesomeIcons';
-import type { TeXRAIconName } from './iconNames';
 
 // Web Awesome input element type (kept after local imports per import/order)
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';

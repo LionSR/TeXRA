@@ -4,7 +4,7 @@
 
 // Local imports
 import type { LogLevel } from '@shared/schemas';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
+import type { TeXRAIconName } from '@shared/iconNames';
 import { getBasename } from '@utils/core';
 
 /**

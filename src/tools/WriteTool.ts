@@ -4,12 +4,9 @@ import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - tools
-import { isTexFile } from '@common/files/fileTypeUtils';
+import type { ConfigProvider } from '@platform/interfaces';
 import type { AgentCatalogServices } from '@platform/processRuntime';
 import { WorkspaceFs } from '@platform/rootedFs';
-import replacementEngine, {
-  logReplacementDiagnostics,
-} from '@replacement/engine';
 import type { ToolResult } from '@shared/schemas';
 import {
   applyApprovedFileEdit,
@@ -29,8 +26,20 @@ const WriteInputSchema = z.strictObject({
 
 type WriteInput = z.infer<typeof WriteInputSchema>;
 
+/**
+ * What an app does to the content `write_file` is given before it proposes
+ * it, by path, under the call's workspace configuration: TeXRA's `.tex`
+ * replacements. The harness's `write_file` writes what it is given.
+ */
+export type WriteFilter = (
+  path: string,
+  content: string,
+  config: ConfigProvider,
+) => Effect.Effect<string>;
+
 const write = Effect.fn('WriteFileTool.execute')(function* (
   input: WriteInput,
+  writeFilter: WriteFilter | undefined,
 ): Effect.fn.Return<
   ToolResult,
   Error,
@@ -44,16 +53,10 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
     return prepared.blocked;
   }
   const { path, displayPath, exists, originalContent } = prepared.target;
-  let proposedContent = input.content;
-  if (isTexFile(path)) {
-    const replaced = replacementEngine.applyFor(
-      input.content,
-      'tex-write',
-      (key) => call.roots.config.get(key),
-    );
-    yield* logReplacementDiagnostics(replaced.diagnostics);
-    proposedContent = replaced.text;
-  }
+  const proposedContent =
+    writeFilter === undefined
+      ? input.content
+      : yield* writeFilter(path, input.content, call.roots.config);
 
   return yield* applyApprovedFileEdit({
     path,
@@ -78,14 +81,16 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
   });
 });
 
-export const WriteFileTool = defineTool({
-  name: 'write_file',
-  requiresApproval: 'inBody',
-  description:
-    'Overwrite a workspace file with the provided content. Creates the file if it does not exist.',
-  schema: WriteInputSchema,
-  // The file this call overwrites: the loop refuses it before the body runs
-  // when it escapes the call's roots or lands in a read-only external root.
-  guard: { writes: (input: WriteInput) => [input.path] },
-  execute: write,
-});
+/** The `write_file` tool, with the app's filter on what it writes. */
+export const writeFileTool = (writeFilter?: WriteFilter) =>
+  defineTool({
+    name: 'write_file',
+    requiresApproval: 'inBody',
+    description:
+      'Overwrite a workspace file with the provided content. Creates the file if it does not exist.',
+    schema: WriteInputSchema,
+    // The file this call overwrites: the loop refuses it before the body runs
+    // when it escapes the call's roots or lands in a read-only external root.
+    guard: { writes: (input: WriteInput) => [input.path] },
+    execute: (input) => write(input, writeFilter),
+  });

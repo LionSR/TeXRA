@@ -11,8 +11,8 @@ import {
   type SettingsSectionName,
   type SettingsTabPanelName,
 } from '@shared/settingsView/settingsViewMessages';
+import type { TeXRAIconName } from '@shared/iconNames';
 import { PLUGINS_PAGE } from '@ui/copy/plugins';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
 
 interface SettingsSectionEntry {
   readonly section: SettingsSectionName;

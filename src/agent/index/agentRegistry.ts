@@ -12,7 +12,7 @@ import type {
   AgentOptionData,
   AgentSource,
 } from '@shared/schemas';
-import type { AgentScanIssue } from '@shared/settingsView/settingsViewMessages';
+import type { AgentScanIssue } from '@shared/schemas';
 import {
   AgentCategory,
   DEFAULT_WORKFLOW_AGENT,

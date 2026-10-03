@@ -25,7 +25,7 @@ import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { HostRequestFailure } from '@shared/session/requestErrors';
-import type { BuildDisplayFn } from '@tools/approval/latexPreview';
+import type { BuildDisplayFn } from '@tools/latex/latexPreview';
 import type { ApprovalTempFiles } from '@tools/approval/tempFileManager';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import {

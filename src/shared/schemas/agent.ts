@@ -145,3 +145,10 @@ export function agentMatchesIdentifier(
     ? entry.name === name
     : agentKeyOf(entry) === identifier;
 }
+
+/** A custom-agent YAML file the registry found but could not load. */
+export const AgentScanIssueSchema = z.object({
+  path: z.string(),
+  message: z.string(),
+});
+export type AgentScanIssue = z.infer<typeof AgentScanIssueSchema>;

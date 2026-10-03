@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
-import { CHATGPT_AUTH } from '@ui/copy/accountAuth';
+import { CHATGPT_AUTH } from '@shared/model/accountAuth';
 import {
   ONBOARDING_CHOICE_API_KEY,
   ONBOARDING_CHOICE_CHATGPT,

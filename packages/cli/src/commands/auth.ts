@@ -1,6 +1,6 @@
 import { defineCommand } from 'citty';
 
-import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
+import { CHATGPT_AUTH, GROK_AUTH } from '@shared/model/accountAuth';
 
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { defineSubscriptionAuthCommand } from './_helpers/subscriptionAuthCommand';

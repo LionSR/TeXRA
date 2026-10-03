@@ -11,7 +11,6 @@
     { "from": "agent", "to": "skills", "kind": "value" },
     { "from": "agent", "to": "tools", "kind": "value" },
     { "from": "agent", "to": "transcript", "kind": "value" },
-    { "from": "agent", "to": "ui", "kind": "value" },
     { "from": "agent", "to": "utils", "kind": "value" },
     { "from": "common", "to": "shared", "kind": "value" },
     { "from": "common", "to": "utils", "kind": "value" },

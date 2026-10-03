@@ -4,7 +4,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { html, nothing, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
-import type { TeXRAIconName } from '@ui/wa/iconNames';
+import type { TeXRAIconName } from '@shared/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 /**

@@ -40,7 +40,7 @@ import type {
 } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
+import { SUBSCRIPTION_AUTH_COPY } from '@shared/model/accountAuth';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import type { HttpClient } from 'effect/http';
 

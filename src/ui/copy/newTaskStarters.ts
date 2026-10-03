@@ -6,7 +6,7 @@
  * a short menu rather than a catalog.
  */
 
-import type { TeXRAIconName } from '@ui/wa/iconNames';
+import type { TeXRAIconName } from '@shared/iconNames';
 
 interface NewTaskStarter {
   readonly id: string;

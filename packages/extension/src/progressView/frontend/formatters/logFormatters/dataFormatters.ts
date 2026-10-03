@@ -20,13 +20,13 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - shared schemas and utilities
 import { OUTPUT_DOCUMENTS_TAG } from '@shared/schemas';
+import type { TeXRAIconName } from '@shared/iconNames';
 import type {
   FileListRow,
   LatexdiffRow,
   MissingOutputsRow,
   StatisticsRow,
 } from '@ui/transcript';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { getBasename } from '@utils/core';
 

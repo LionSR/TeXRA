@@ -22,8 +22,11 @@ import type { SubscriptionProviderId } from '@controllers/modelAccess/subscripti
 import type { AgentCatalogServices } from '@platform/processRuntime';
 import type { Secrets, PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/settingsView/settingsViewMessages';
-import { ACCOUNT_OUTCOME, SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
+import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
+import {
+  ACCOUNT_OUTCOME,
+  SUBSCRIPTION_AUTH_COPY,
+} from '@shared/model/accountAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {

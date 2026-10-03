@@ -2,7 +2,7 @@ import type { TranscriptExportFormat } from '@controllers/progressView/exportTra
 import type { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
 import type { DiffViewHost, MessageHost, PromptFailed } from '@hosts/uiHosts';
 import type { InstructionAction } from '@shared/schemas';
-import type { BuildDisplayFn } from '@tools/approval/latexPreview';
+import type { BuildDisplayFn } from '@tools/latex/latexPreview';
 import type { Effect } from 'effect';
 
 import type { PreviewUnavailable } from './desktopPreviewHost.js';

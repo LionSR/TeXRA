@@ -23,6 +23,7 @@ import {
   agentKey as agentKeyFromSourceName,
   isPackagedAgentSource,
 } from '@shared/schemas';
+import type { TeXRAIconName } from '@shared/iconNames';
 import {
   commonViewStyles,
   designTokens,
@@ -32,7 +33,6 @@ import {
   renderLabeledActionButton,
   type LabeledActionButtonOptions,
 } from '@ui/wa/actionButtons';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { AGENT_DECORATORS } from '@ui/wa/icons';
 import { getBasename } from '@utils/core';
