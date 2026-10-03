@@ -114,7 +114,9 @@ export function PluginsListForm(
         row.item.enabled === false,
       ).pipe(Effect.asVoid);
     if (row.kind === 'installed')
-      return row.plugin.enabled
+      // On and trusted switches off; on but changed since it was trusted
+      // opens the review, as switching on does.
+      return row.plugin.enabled && row.plugin.trusted
         ? disablePlugin(row.plugin.name, roots)
         : enablePlugin(row.plugin.name, roots, confirmTrust).pipe(
             Effect.asVoid,

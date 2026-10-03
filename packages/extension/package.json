@@ -521,6 +521,10 @@
           "when": "false"
         },
         {
+          "command": "texra.showApprovalSettings",
+          "when": "false"
+        },
+        {
           "command": "texra.showGitSettings",
           "when": "false"
         },

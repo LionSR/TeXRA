@@ -363,8 +363,11 @@ export function registerBuiltinSlashCommands(options: {
     context: SlashCommandContext,
   ): SlashCommandEffect =>
     Effect.gen(function* () {
-      // The source is the rest of the line, so a folder may hold spaces.
-      const [, verb, source] = /^(\S+)\s+(.+)$/.exec(remainder.trim()) ?? [];
+      // The source is the rest of the line, so a folder may hold spaces; a
+      // trailing `--plugin <name>` picks one plugin of a marketplace.
+      const [, verb, rest] = /^(\S+)\s+(.+)$/.exec(remainder.trim()) ?? [];
+      const [, source, pick] =
+        /^(.+?)(?:\s+--plugin\s+(\S+))?$/.exec(rest ?? '') ?? [];
       if (verb?.toLowerCase() !== 'add' || !source)
         return yield* Effect.fail(new Error(PLUGINS_TUI.addUsage));
       const { roots } = options.runtimeSession;
@@ -374,7 +377,11 @@ export function registerBuiltinSlashCommands(options: {
         undefined,
       );
       if (Result.isFailure(origin)) return yield* Effect.fail(origin.failure);
-      const added = yield* installPlugins(origin.success, [], roots);
+      const added = yield* installPlugins(
+        origin.success,
+        pick === undefined ? [] : [pick],
+        roots,
+      );
       appendLocalNotice(PLUGINS_TUI.added(added.map(({ name }) => name)));
     });
 

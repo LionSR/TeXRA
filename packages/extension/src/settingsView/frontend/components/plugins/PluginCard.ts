@@ -31,6 +31,7 @@ import type {
   ToolInstallAction,
 } from '@shared/settingsView/settingsViewMessages';
 import { DetailsOpenController } from '@shared/litControllers/DetailsOpenController';
+import { toolDependencyStatusLabel } from '@shared/tools/toolDependencyStatusLabels';
 import {
   PLUGINS_PAGE,
   pluginRowName,
@@ -92,6 +93,12 @@ export class PluginCard extends LitElement {
         color: var(--wa-color-text-normal);
         margin: 0;
         overflow-wrap: anywhere;
+      }
+
+      .plugin-ready {
+        display: inline-flex;
+        color: var(--color-status-ok);
+        font-size: var(--font-size-sm);
       }
 
       wa-tag.plugin-badge {
@@ -376,6 +383,24 @@ export class PluginCard extends LitElement {
     `;
   }
 
+  /** A probed TeXRA plugin that can run here says so: the result a
+   *  Re-check is waiting for. */
+  private renderReady(): TemplateResult | typeof nothing {
+    const { row } = this;
+    if (row.kind !== 'texra' || !row.item.requiresSetup) return nothing;
+    const label = toolDependencyStatusLabel(
+      row.item.status,
+      row.item.statusLabel,
+    );
+    return html`<span
+      class="plugin-ready"
+      role="img"
+      aria-label=${label}
+      title=${label}
+      >${waIcon('check')}</span
+    >`;
+  }
+
   /** The row's one switch, or none for a row that is always on or read-only. */
   private renderSwitch(): TemplateResult | typeof nothing {
     const { row } = this;
@@ -473,7 +498,7 @@ export class PluginCard extends LitElement {
                     label: problem,
                     className: 'plugin-badge',
                   })
-                : nothing
+                : this.renderReady()
             }
             ${
               authNote

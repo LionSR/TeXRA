@@ -448,9 +448,9 @@ detection result.
 
 Use `--output-format json` or `--output-format ndjson` for
 scripts. `tools install <id>` prints the install guide and registered command;
-it only runs the command when passed `--run`. In the interactive TUI, `/config` → Tools
-opens the same integration list and toggles integrations that support enabling
-or disabling.
+it only runs the command when passed `--run`. In the interactive TUI, `/plugins`
+lists the same plugins, with installed plugins and MCP servers beside them, and
+switches the ones that can be switched on or off.
 
 ## Models and memories
 

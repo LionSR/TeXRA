@@ -42,7 +42,7 @@ export const PLUGINS_TUI = Object.freeze({
   trust: 'Trust and switch on',
   decline: 'Keep it off',
   addUsage:
-    'Usage: /plugins add <github.com/owner/repo[@ref], a repository URL, or a folder>',
+    'Usage: /plugins add <github.com/owner/repo[@ref], a repository URL, or a folder> [--plugin <name>]',
   added: (names: readonly string[]) =>
     `Added ${names.join(', ')}. Switch it on in /plugins to review what it declares and trust it.`,
 });
