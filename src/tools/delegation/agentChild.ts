@@ -17,7 +17,8 @@ import { Effect } from 'effect';
 
 // Local imports
 import { deliveredOutput, getRunRecords } from '@agent/storage';
-import { readChildTurnState } from '@agent/storage/runRecords';
+import { retireRun } from '@agent/storage/runLifecycle';
+import { callChildRunId, readChildTurnState } from '@agent/storage/runRecords';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import {
@@ -29,21 +30,17 @@ import {
 import type { DatabaseReadFailed } from '@shared/session/database';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import type { RunToolCall } from '@tools/core/toolRun';
-import { deriveRunId } from '@utils/core/idHash';
 
 // Local file imports
 import { resumeSubagentInBand } from './inBandSubagentRun';
 
-/**
- * The child run one attempt of a call runs under, `call`'s own by default.
- * A provider's call ids are unique within one response only, so the call is
- * named by its response too.
- */
+/** The child run one attempt of a call runs under, `call`'s own by
+ *  default ({@link callChildRunId}). */
 export const agentChildRunId = (
   call: RunToolCall,
   attempt = call.attempt ?? 1,
 ): RunId =>
-  deriveRunId({
+  callChildRunId({
     parentRunId: call.run.runId,
     responseId: call.responseId ?? '',
     callId: call.toolCallId ?? call.run.runId,
@@ -192,6 +189,9 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
           childRunId: earlier,
         },
       });
+      // Whichever way it was decided, nothing continues the earlier child:
+      // one left without a terminal row ends here, not as an orphan.
+      yield* retireRun(session, earlier);
       return decision.action === 'retry'
         ? { kind: 'launch' }
         : { kind: 'unknown', runId: earlier, reason: standing.reason };

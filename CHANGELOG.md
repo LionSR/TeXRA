@@ -261,6 +261,12 @@ All notable changes to this project will be documented in this file.
 - **The desktop Subagents pane and its header button are gone.** A script's
   agents live on its card and detached agents on their dispatch card; a
   workbench layout saved with the pane open starts fresh once.
+- **An agent a call is waiting on resumes with its caller.** After a crash,
+  resuming a child run that an open `agent` call was waiting on resumes the
+  run that called it, which picks the child back up; the child no longer runs
+  on its own while its caller stays stopped. A run also no longer records
+  that it finished while a call of it still waits on a child that has not
+  ended; stopping such a run stops the child first.
 - **An interrupted call asks one plain question.** When a call may have run
   before a run was interrupted and left no result, the request now names the
   tool (and the agent run it left, for an `agent` call) and offers Run again

@@ -578,14 +578,25 @@ export function createChatSessionController(
         // transcript switched onto a dead stream. A Ctrl-C during the steps
         // below lands as `session.stopRequested`, which `resumeRun` re-reads
         // once this returns, rather than starting an agent the user cancelled.
-        const adoptResumedRun = Effect.fn('adoptResumedRun')(function* () {
-          yield* setCliHelperModel(stores.globalState, config.model);
-          yield* adoptRunConfig(config, 'history');
+        // The run resumed is the one asked for, or the parent that owns it.
+        const adoptResumedRun = Effect.fn('adoptResumedRun')(function* (
+          resumed: RunId,
+        ) {
+          const adoptedConfig =
+            resumed === id
+              ? config
+              : yield* agentRuns.records(runtimeSession, resumed).readConfig();
+          if (adoptedConfig === null)
+            return yield* Effect.fail(
+              new Error(`Run ${resumed} has no configuration to resume`),
+            );
+          yield* setCliHelperModel(stores.globalState, adoptedConfig.model);
+          yield* adoptRunConfig(adoptedConfig, 'history');
           adopted = true;
           clearLocalTranscript();
           followUpQueue.clear();
-          session.runId = id;
-          rootRunId.set(id);
+          session.runId = resumed;
+          rootRunId.set(resumed);
           // The pre-resume stream was dropped by the synchronous slot claim
           // above, so a Ctrl-C before adoption had nothing to interrupt;
           // re-read the request here and let it land on the run the user
@@ -597,7 +608,7 @@ export function createChatSessionController(
           // The transcript and the work plan are the fold's: the TUI
           // subscribes the run's aggregate and renders `transcript.rows`, and
           // an open `/plan` reader reads the same `RunView`.
-          focusRun(id);
+          focusRun(resumed);
         });
 
         runtime.runFork(

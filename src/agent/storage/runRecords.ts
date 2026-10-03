@@ -39,6 +39,8 @@ import {
   type RunId,
 } from '@shared/schemas';
 
+import { deriveRunId } from '@utils/core/idHash';
+
 import { deliveredOutput, type RunResult } from './resultMeta';
 
 /**
@@ -120,16 +122,96 @@ export function runEndFromEvents(
  */
 export const persistedParentRunId = Effect.fn('persistedParentRunId')(
   function* (session: SessionHandle, runId: RunId) {
-    const edge = (yield* session.readRunRecords(runId)).findLast(
-      (row) => row.type === 'run.start' || row.type === 'run.detach',
-    );
-    if (edge?.type !== 'run.start' || edge.parent === null) return undefined;
-    const parent = edge.parent.id;
+    const parent = (yield* parentEdge(session, runId))?.id;
+    if (parent === undefined) return undefined;
     return (yield* getRunRecords(session, parent).exists())
       ? parent
       : undefined;
   },
 );
+
+/** The run's parent edge as its rows leave it: null for a root, and for a
+ *  child a `run.detach` severed. */
+const parentEdge = Effect.fn('parentEdge')(function* (
+  session: SessionHandle,
+  runId: RunId,
+) {
+  const edge = (yield* session.readRunRecords(runId)).findLast(
+    (row) => row.type === 'run.start' || row.type === 'run.detach',
+  );
+  return edge?.type === 'run.start' ? edge.parent : null;
+});
+
+/**
+ * The run one attempt of a parent's call launches: an `agent` call's child,
+ * a background `script` run. A provider's call ids are unique within one
+ * response only, so the call is named by its response too.
+ */
+export const callChildRunId = (call: {
+  readonly parentRunId: RunId;
+  readonly responseId: string;
+  readonly callId: string;
+  readonly attempt: number;
+}): RunId => deriveRunId(call);
+
+/** The runs the attempts so far of one open call of `parentRunId` launched
+ *  under their derived ids (they may not exist). */
+const callChildren = (
+  parentRunId: RunId,
+  callId: string,
+  intent: { readonly responseId: string; readonly attempt: number },
+): readonly RunId[] =>
+  Array.from({ length: intent.attempt }, (_, index) =>
+    callChildRunId({
+      parentRunId,
+      responseId: intent.responseId,
+      callId,
+      attempt: index + 1,
+    }),
+  );
+
+/**
+ * The open call that owns `runId` (HQ6): the parent call that launched it,
+ * while the run is not detached and the call is still unsettled in the
+ * parent's ledger. Null for a root, a detached child, a child no call
+ * launched, or one whose call has settled.
+ */
+export const owningCall = Effect.fn('owningCall')(function* (
+  session: SessionHandle,
+  runId: RunId,
+) {
+  const edge = yield* parentEdge(session, runId);
+  if (edge?.callId == null) return null;
+  const { id, callId } = edge;
+  const intent = (yield* session.ledger.load(id))?.pendingIntents[callId];
+  // A later response may reuse the call id: the pending call owns the run
+  // only when the run is named by it.
+  return intent !== undefined &&
+    callChildren(id, callId, intent).includes(runId)
+    ? { parentRunId: id, callId }
+    : null;
+});
+
+/**
+ * The children `runId`'s open calls own that have not ended, read from its
+ * ledger and the children's own rows, never from a view that may lag them.
+ */
+export const openOwnedChildren = Effect.fn('openOwnedChildren')(function* (
+  session: SessionHandle,
+  runId: RunId,
+) {
+  const intents = (yield* session.ledger.load(runId))?.pendingIntents ?? {};
+  const open: { readonly runId: RunId; readonly callId: string }[] = [];
+  for (const [callId, intent] of Object.entries(intents))
+    for (const child of callChildren(runId, callId, intent)) {
+      const records = getRunRecords(session, child);
+      if (!(yield* records.exists())) continue;
+      if ((yield* parentEdge(session, child))?.callId !== callId) continue;
+      if ((yield* records.readRunEnd()) === null)
+        open.push({ runId: child, callId });
+    }
+  return open;
+});
 
 /**
  * The run's latest row of one type, or null. The one latest-row reader every

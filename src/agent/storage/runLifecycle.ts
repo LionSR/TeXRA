@@ -17,6 +17,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 import {
   AgentCategory,
+  RUN_OUTCOME,
   RunRecordFieldsSchema,
   aggregateId,
   storedRunOutput,
@@ -34,7 +35,11 @@ import {
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { getRunRecords, runEndFromEvents } from './runRecords';
+import {
+  getRunRecords,
+  openOwnedChildren,
+  runEndFromEvents,
+} from './runRecords';
 
 function pinRunWorkingDirectory(
   record: RunRecord,
@@ -294,6 +299,51 @@ export type FinalizeRunResult =
     };
 
 /**
+ * End a run nothing drives any more, CANCELLED (an outcome it already wrote
+ * stands), under its own claim: an owned child its parent's stop outlived,
+ * or one a person's outcome decision left behind.
+ */
+export const retireRun = Effect.fn('retireRun')(function* (
+  session: SessionHandle,
+  runId: RunId,
+) {
+  const ended = yield* Effect.scoped(
+    session.holdRunClaim(runId).pipe(
+      Effect.andThen(
+        finalizeRun(session, {
+          runId,
+          outcome: RUN_OUTCOME.CANCELLED,
+          keepExistingOutcome: true,
+        }),
+      ),
+    ),
+  );
+  if (!ended.ok) return yield* Effect.fail(ensureError(ended.error));
+});
+
+/**
+ * HQ6: a run does not end while an open call of it owns a child that has not
+ * ended. A stop or a backstop (`cascade`) retires such a child first, as the
+ * live cascade would have; the run's own terminal, or a stop whose child is
+ * still live in this process, is refused.
+ */
+const endOwnedChildren = Effect.fn('endOwnedChildren')(function* (
+  session: SessionHandle,
+  runId: RunId,
+  cascade: boolean,
+) {
+  for (const child of yield* openOwnedChildren(session, runId)) {
+    if (!cascade || session.runs.isLive(child.runId))
+      return yield* Effect.fail(
+        new Error(
+          `Run ${runId} cannot end while its open call ${child.callId} owns run ${child.runId}, which has not ended`,
+        ),
+      );
+    yield* retireRun(session, child.runId);
+  }
+});
+
+/**
  * The one terminal-persistence tail, and the one writer of the `run.end` row
  * (one run model, section 3.3): persist the run's terminal fact. The run's
  * rows live until explicit deletion (C9); nothing is removed beside the row.
@@ -308,6 +358,14 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   input: FinalizeRunInput,
 ): Effect.fn.Return<FinalizeRunResult> {
   const { runId, outcome, keepExistingOutcome } = input;
+  const owned = yield* Effect.exit(
+    endOwnedChildren(session, runId, keepExistingOutcome === true),
+  );
+  if (Exit.isFailure(owned)) {
+    const error = ensureError(Cause.squash(owned.cause));
+    input.report?.(error);
+    return { ok: false, error, outcomePersisted: false };
+  }
   const status = yield* Effect.exit(
     session.updateRecordFacts(runId, (rows) =>
       Effect.gen(function* () {

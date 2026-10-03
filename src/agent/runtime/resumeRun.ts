@@ -13,7 +13,11 @@ import {
   type FollowUpFailureReason,
 } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpConsumerLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import { getRunRecords, persistedParentRunId } from '@agent/storage/runRecords';
+import {
+  getRunRecords,
+  owningCall,
+  persistedParentRunId,
+} from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import {
@@ -72,9 +76,13 @@ export interface ResumeRunOptions extends Pick<
   readonly isCancellationRequested?: () => boolean;
   /**
    * Rearrange the host only after state retrieval and ownership checks have
-   * accepted this run. Failures propagate; cancellation is re-read afterwards.
+   * accepted this run. It hears the run actually resumed, which is the
+   * parent when the run asked for is an owned child. Failures propagate;
+   * cancellation is re-read afterwards.
    */
-  readonly onResumeResolved?: () => Effect.Effect<void, Error, ProcessServices>;
+  readonly onResumeResolved?: (
+    resumed: RunId,
+  ) => Effect.Effect<void, Error, ProcessServices>;
 }
 
 const CHANNEL = 'ResumeRun';
@@ -114,6 +122,15 @@ export const resumeRun = Effect.fn('resumeRun')(function* (
   const session = options.session;
   const cancelled = () => options.isCancellationRequested?.() === true;
   if (cancelled()) return REFUSED;
+  // An owned child is resumed through its parent (HQ6): the parent's open
+  // call reattaches it, so it never runs alone or twice.
+  const owner = yield* owningCall(session, runId);
+  if (owner !== null) {
+    yield* Effect.logInfo(
+      `Run ${runId} belongs to the open call ${owner.callId} of run ${owner.parentRunId}: resuming that run, which reattaches it`,
+    ).pipe(withLogChannel(CHANNEL));
+    return yield* resumeRun(owner.parentRunId, options);
+  }
   const recovery = session.followUps.claimRecovery(runId, true);
   if (!recovery) return REFUSED;
   // Set once a launched run owns the recovery: it gives that back itself.
@@ -164,7 +181,7 @@ export const resumeRun = Effect.fn('resumeRun')(function* (
       return { failed: 'owned_elsewhere' };
     }
     if (options.onResumeResolved) {
-      yield* options.onResumeResolved();
+      yield* options.onResumeResolved(runId);
       if (cancelled()) return REFUSED;
     }
     if (config.agentCategory === AgentCategory.ToolUse) {
