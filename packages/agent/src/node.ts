@@ -3,7 +3,8 @@ import process from 'node:process';
 import { Effect } from 'effect';
 
 // Local imports - types
-import { SecretsFailed, type PlatformSecrets } from '@platform/secrets';
+import { SecretsFailed } from '@texra-ai/llm';
+import type { PlatformSecrets } from '@platform/secrets';
 
 // Local imports - platform defaults
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';

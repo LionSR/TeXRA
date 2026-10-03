@@ -1,7 +1,7 @@
 import { type BrowserWindow, clipboard, dialog } from 'electron';
 import { Effect } from 'effect';
-import type { SubscriptionDeviceCodePrompt } from '@auth/oauth/deviceAuthorization';
 import { ensureError } from '@utils/errors/errorMessage';
+import type { SubscriptionDeviceCodePrompt } from '@texra-ai/llm/node';
 
 /** A synchronous clipboard throw is a typed failure, so it reaches the
  *  presenter's `onError` and the failure dialog instead of skipping both. */

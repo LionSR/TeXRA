@@ -2,16 +2,16 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import {
   SubscriptionOAuthCoordinator,
   type SubscriptionOAuthClient,
   type SubscriptionSessionStorage,
-} from '@auth/oauth/SubscriptionOAuthCoordinator';
-import { XAI_POLICY } from '@auth/xai/xaiSessionPolicy';
-import type { XaiSession } from '@auth/xai/xaiSessionTypes';
-import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
-import { setLogSink } from '@logger/logSink';
-import { captureLogEntries } from '@test/support/logSinkCapture';
+} from '../../../packages/llm/src/oauth/SubscriptionOAuthCoordinator.js';
+import { XAI_POLICY } from '../../../packages/llm/src/oauth/xai/xaiSessionPolicy.js';
+import type { XaiSession } from '../../../packages/llm/src/oauth/xai/xaiSessionTypes.js';
 
 const NOW = 1_900_000_000_000;
 

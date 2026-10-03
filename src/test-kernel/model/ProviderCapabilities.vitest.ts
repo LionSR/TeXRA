@@ -9,12 +9,10 @@ import {
 } from 'llm-zoo';
 
 import { Effect } from 'effect';
-import { CODEX_SESSION_SECRET_KEY } from '@auth/codex/codexConstants';
-import type { CodexSession } from '@auth/codex/codexSessionTypes';
+import { codexBackendModelId, routeConfig } from '@texra-ai/llm';
 import { installSubscriptionProbes } from '@controllers/modelAccess/installSubscriptionProbes';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
-import { routeConfig } from '@model/modelRoute';
-import { codexBackendModelId } from '@model/providerCapabilities';
+import { readRouteFacts } from '@model/modelRoute';
 import { withProcessServices } from '@platform/processRuntime';
 import { CHATGPT_CODEX_CONTEXT_WINDOW_SETTING } from '@shared/schemas';
 
@@ -24,10 +22,16 @@ const DEFAULT_INPUT_LIMIT =
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.tokensPerUnit;
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
+import { CODEX_SESSION_SECRET_KEY } from '../../../packages/llm/src/oauth/codex/codexConstants.js';
+import type { CodexSession } from '../../../packages/llm/src/oauth/codex/codexSessionTypes.js';
 
 /** The config a model runs with on the ChatGPT subscription. */
 const chatgptConfig = (config: ModelConfig) =>
-  routeConfig(hostStores(), config, { kind: 'chatgpt-subscription' });
+  readRouteFacts(hostStores()).pipe(
+    Effect.map((facts) =>
+      routeConfig(config, { kind: 'chatgpt-subscription' }, facts),
+    ),
+  );
 
 const gpt55Config: ModelConfig = {
   ref: 'openai/gpt-5.5-2026-04-23',

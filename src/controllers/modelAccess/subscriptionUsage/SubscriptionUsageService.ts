@@ -2,14 +2,21 @@ import { Effect, Exit } from 'effect';
 import { HttpClientError } from 'effect/http';
 import { LRUCache } from 'lru-cache';
 
-import { settleFailure } from '@auth/authProgram';
-import { codexCoordinator } from '@auth/codex';
-import { SubscriptionOAuthError } from '@auth/oauth/subscriptionOAuthError';
+import {
+  codexCoordinator,
+  settleFailure,
+  SharedAttempt,
+  SubscriptionOAuthError,
+} from '@texra-ai/llm/node';
+import {
+  CODING_PLAN_SUBSCRIPTIONS,
+  exposeApiKey,
+  lookupApiKey,
+  type SecretsFailed,
+} from '@texra-ai/llm';
 import { withLogChannel } from '@logger/effectLog';
-import { exposeApiKey, lookupApiKey } from '@model/apiProviders';
-import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
+import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import type {
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,
@@ -17,7 +24,6 @@ import type {
 } from '@shared/schemas';
 import { SUBSCRIPTION_USAGE_PROVIDERS } from '@shared/schemas';
 import { useChinaRegion } from '@utils/config/providerConfig';
-import { SharedAttempt } from '@utils/core/sharedAttempt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { fetchChatGptUsage } from './codexUsageAdapter';

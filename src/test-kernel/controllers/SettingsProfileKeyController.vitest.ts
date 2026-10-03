@@ -4,8 +4,8 @@ import { it } from '@effect/vitest';
 import { Cause, Effect, Exit } from 'effect';
 import { describe } from 'vitest';
 
+import { SecretsFailed } from '@texra-ai/llm';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
-import { SecretsFailed } from '@platform/secrets';
 import { createFakeUIHosts } from '@test/support/FakeHosts';
 import { FakeSecrets } from '@test/support/FakePlatform';
 

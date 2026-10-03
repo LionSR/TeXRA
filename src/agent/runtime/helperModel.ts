@@ -9,6 +9,7 @@
  */
 import { Data, Effect, Exit, Ref, Scope } from 'effect';
 
+import { selectModel } from '@texra-ai/llm';
 import {
   modelUnavailableReasonFrom,
   readModelAvailabilityInputs,
@@ -18,7 +19,6 @@ import type { LanguageModel } from '@platform/languageModel';
 import { AgentCategory } from '@shared/schemas';
 import type { UsageLog } from '@shared/usageLog';
 
-import { selectModel } from '@shared/model/modelSelection';
 import { getHelperModelName } from './helperModelName';
 import { bindModel, type BoundModel } from './run/modelBinding';
 import { callModel, type UsageAttribution } from './run/modelCall';

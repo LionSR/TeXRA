@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { API_PROVIDERS } from '@model/apiProviders';
+import { API_PROVIDERS, PROVIDER_DISPLAY_NAMES } from '@texra-ai/llm';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { modelsTabSettings } from '@shared/state/stateSettings';
 import {
@@ -10,7 +10,6 @@ import {
   readSetting,
   type SettingsStores,
 } from '@shared/config/settingsAccess';
-import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import {
   getProviderDisplayName,
   getProviderEndpoint,

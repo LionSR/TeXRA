@@ -44,7 +44,7 @@ import { hostStores } from '@test/support/setupPlatform';
 import { generateRunId, generateShortId } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';
 
-import type { Model, TurnResult } from '@texra-ai/llm/turn';
+import type { Model, TurnResult } from '@texra-ai/llm';
 
 export const TEST_ORIGIN = {
   protocol: 'openai-responses',

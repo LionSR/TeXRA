@@ -5,11 +5,11 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 // Local imports
+import { modelFileName } from '@texra-ai/llm';
 import { withLogChannel } from '@logger/effectLog';
 import { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import type { RunId, FileOpResult } from '@shared/schemas';
 import { agentFileName } from '@shared/schemas';
-import { modelFileName } from '@shared/model/modelSelection';
 import { resolveRunStoragePath } from '@utils/files/runStorageFs';
 import { copyDereferenced } from '@utils/files/fsDurability';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';

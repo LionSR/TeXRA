@@ -9,7 +9,7 @@
  */
 import { Effect, Layer, Result } from 'effect';
 
-import { PreparedHistorySchema, type ModelOrigin } from '@texra-ai/llm/turn';
+import { PreparedHistorySchema, type ModelOrigin } from '@texra-ai/llm';
 import {
   aggregateId as qualifyAggregateId,
   type RunId,

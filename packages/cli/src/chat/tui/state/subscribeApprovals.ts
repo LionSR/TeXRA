@@ -15,6 +15,11 @@
 
 import { Effect } from 'effect';
 
+import {
+  hasUsableApiKey,
+  lookupApiKey,
+  providerDisplayName,
+} from '@texra-ai/llm';
 import type { HostInteractions, SessionHandle } from '@agent/runtime';
 import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
 import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
@@ -25,10 +30,8 @@ import {
   ProgressApiKeyRetryController,
 } from '@controllers/progressView/ProgressApiKeyRetryController';
 import { withLogChannel } from '@logger/effectLog';
-import { hasUsableApiKey, lookupApiKey } from '@model/apiProviders';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
-import { providerDisplayName } from '@shared/constants/providers';
 import type { RetryPermission } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { HostRequest } from '@shared/session/hostRequest';

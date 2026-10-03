@@ -1,10 +1,10 @@
 // Local imports - shared schemas and constants
-import type { ProviderKeyStatus } from '@shared/settingsView/settingsViewMessages';
 import {
   API_KEY_PROVIDER_IDS,
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
-} from '@shared/constants/providers';
+} from '@texra-ai/llm';
+import type { ProviderKeyStatus } from '@shared/settingsView/settingsViewMessages';
 
 /**
  * Shared placeholder rows. Frozen because every caller receives the same

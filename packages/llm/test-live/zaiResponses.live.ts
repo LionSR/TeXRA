@@ -1,5 +1,5 @@
 // Local imports
-import { openaiResponsesModel } from '../src/openaiResponses.js';
+import { openaiResponsesModel } from '../src/api/openaiResponses.js';
 import { liveProtocol } from './support.js';
 
 // Z.AI, Zhipu's international host, serves the same Responses API as

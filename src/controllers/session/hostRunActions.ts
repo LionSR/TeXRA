@@ -10,6 +10,12 @@ import {
   SubscriptionRef,
 } from 'effect';
 
+import {
+  type ApiProvider,
+  hasUsableApiKey,
+  lookupApiKey,
+  type SecretsFailed,
+} from '@texra-ai/llm';
 import { presentFollowUpResult, submitFollowUp } from '@agent/followUp';
 import { resumeOnSession } from '@agent/followUp/ToolUseFollowUp';
 import { getRunRecords } from '@agent/storage';
@@ -27,12 +33,10 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import type { MessageHost, NotificationFailed } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
-import type { ApiProvider } from '@model/apiProviders';
-import { lookupApiKey, hasUsableApiKey } from '@model/apiProviders';
 import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
 import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
 import type { AppState, StateReadFailed } from '@platform/interfaces';
-import { Secrets, type SecretsFailed } from '@platform/secrets';
+import { Secrets } from '@platform/secrets';
 import {
   AgentCategory,
   agentKey,

@@ -30,7 +30,7 @@ import {
   sessionWithInteractions,
 } from '../progressTestUtils';
 
-import type { TurnResult } from '@texra-ai/llm/turn';
+import type { TurnResult } from '@texra-ai/llm';
 
 // ---------------------------------------------------------------------------
 // The loop harness: the run's own services over a real session ledger, with

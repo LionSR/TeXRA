@@ -10,7 +10,6 @@ import {
   type LoginFormValue,
   parseChatLoginSlashArgs,
 } from '@cli/runtime/loginOptions';
-import type { ApiProvider } from '@model/apiProviders';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -34,6 +33,7 @@ import {
   logoutFromChat,
 } from './handlers/loginCommands';
 import { openCliSlashCommandForm } from './slashForms';
+import type { ApiProvider } from '@texra-ai/llm';
 import type {
   SlashCommandEffect,
   SlashCommandOutput,

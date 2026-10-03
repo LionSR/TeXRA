@@ -4,17 +4,17 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { assert, describe, expect } from 'vitest';
 
-import { bindModel } from '@agent/runtime/run/modelBinding';
-import { apiKeySecretName } from '@model/apiProviders';
 import {
+  apiKeySecretName,
   isOpenRouterRoutingUnsupported,
+  selectModel,
   shouldRouteModelThroughOpenRouter,
-} from '@model/openRouterRouting';
+} from '@texra-ai/llm';
+import { bindModel } from '@agent/runtime/run/modelBinding';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
-import { selectModel } from '@shared/model/modelSelection';
 import { AgentCategory } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';

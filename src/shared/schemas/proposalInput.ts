@@ -23,9 +23,9 @@
  */
 import { z } from 'zod';
 
+import { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
 import { isObject } from '@utils/core';
 
-import { DEFAULT_AGENT_MODEL } from '../constants/providers';
 import { AGENT_TOOL_NAME } from '../constants/delegationTools';
 import { AgentCategory } from './agent';
 import { fileListFields } from './fileFields';

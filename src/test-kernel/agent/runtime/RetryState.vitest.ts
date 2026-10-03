@@ -32,16 +32,17 @@ import { afterEach, describe, expect, vi } from 'vitest';
 import {
   BackgroundEventSchema,
   BackgroundSubmissionSchema,
-  ModelError,
-  RemoteOperationSchema,
-  ResolvedTurnSchema,
-  TurnResultSchema,
+  chooseReasoning,
   type Model,
+  ModelError,
   type ModelOrigin,
+  RemoteOperationSchema,
   type ResolvedTurn,
+  ResolvedTurnSchema,
   type TurnEvent,
   type TurnResult,
-} from '@texra-ai/llm/turn';
+  TurnResultSchema,
+} from '@texra-ai/llm';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -58,7 +59,6 @@ import { classifyModelFailure } from '@agent/runtime/run/modelFailure';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import { attachContextWindowError } from '@common/errors/sdkError/errorMetadata';
-import { chooseReasoning } from '@model/reasoningChoice';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,

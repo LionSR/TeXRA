@@ -1,4 +1,4 @@
-import { MODEL_PROVIDER_PLUGINS } from '@shared/constants/modelProviderPlugins';
+import { MODEL_PROVIDER_PLUGINS } from '@texra-ai/llm';
 
 /**
  * Provider-specific models the setup assistant can use when that provider is

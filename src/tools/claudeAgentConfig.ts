@@ -7,10 +7,9 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 // Local imports
+import { apiKeyEnvName, exposeApiKey, lookupApiKey } from '@texra-ai/llm';
 import { withLogChannel } from '@logger/effectLog';
-import { exposeApiKey, lookupApiKey } from '@model/apiProviders';
 import { Secrets } from '@platform/secrets';
-import { apiKeyEnvName } from '@shared/constants/providers';
 import { inheritedEnv } from '@utils/system/envFlags';
 import { executeCommand } from '@utils/system/execUtils';
 import { safeHomedir } from '@utils/system/platformPaths';

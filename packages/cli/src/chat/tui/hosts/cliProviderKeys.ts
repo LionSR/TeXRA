@@ -14,6 +14,11 @@
 import { Effect, Fiber } from 'effect';
 
 // Local imports - CLI runtime
+import {
+  type ApiProvider,
+  apiProviderOfSecretName,
+  providerDisplayName,
+} from '@texra-ai/llm';
 import { cliExternalOpener } from '@cli/runtime/hosts/cliExternalOpener';
 // Local imports - controllers
 import {
@@ -25,13 +30,11 @@ import { onAppSignal } from '@eventBus/AppSignals';
 // Local imports - hosts
 import { PromptFailed, type PromptHost } from '@hosts/uiHosts';
 // Local imports - model
-import { apiProviderOfSecretName, type ApiProvider } from '@model/apiProviders';
 // Local imports - platform
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 // Local imports - shared
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { providerDisplayName } from '@shared/constants/providers';
 // Local imports - utils
 import {
   getProviderDisplayName,

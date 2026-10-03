@@ -17,7 +17,7 @@ import type {
   ModelOrigin,
   RemoteOperation,
   TurnResult,
-} from '@texra-ai/llm/turn';
+} from '@texra-ai/llm';
 import type { z } from 'zod';
 
 export type HistoryMessage = z.output<typeof MessageSchema>;

@@ -1,9 +1,11 @@
-import type { ConfigWriteFailed, StateReadFailed } from '@platform/interfaces';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
-} from '@shared/codingPlanSubscriptions';
+} from '@texra-ai/llm';
+
+import type { ConfigWriteFailed, StateReadFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { providerRegionSetting } from '@shared/state/providerSettings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   getGLMCodingPlan,
@@ -55,3 +57,16 @@ export const codingPlanSubscriptionRuntimes: readonly CodingPlanSubscriptionRunt
       Object.freeze({ descriptor, ...RUNTIME_BY_ID[descriptor.id] }),
     ),
   );
+
+/**
+ * The plan whose usage endpoint varies with the setting `key`: a plan's
+ * usage is read on its provider's region, so its region toggle is that
+ * setting (the GLM Coding Plan on `texra.glm.useChina`).
+ */
+export function codingPlanForUsageSetting(
+  key: string,
+): CodingPlanSubscription | undefined {
+  return CODING_PLAN_SUBSCRIPTIONS.find(
+    (plan) => providerRegionSetting(plan.apiProvider)?.key === key,
+  );
+}

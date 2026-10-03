@@ -4,16 +4,16 @@ import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
 import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
+import {
+  chooseReasoning,
+  defaultReasoningLevel,
+  type ReasoningRequest,
+} from '@texra-ai/llm';
 import type { StateStore } from '@platform/interfaces';
 import { REASONING_LEVEL_LABELS } from '@shared/settingsView/settingsViewMessages';
 import { readState } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { ensureError } from '@utils/errors/errorMessage';
-import {
-  chooseReasoning,
-  defaultReasoningLevel,
-  type ReasoningRequest,
-} from './reasoningChoice';
 
 /**
  * The user's per-model reasoning effort overrides, in llm-zoo's vocabulary,

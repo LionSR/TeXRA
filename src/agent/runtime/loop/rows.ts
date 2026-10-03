@@ -21,7 +21,7 @@ import {
   type ToolBindingPayload,
 } from '@shared/schemas';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
-import type { MessageSchema } from '@texra-ai/llm/turn';
+import type { MessageSchema } from '@texra-ai/llm';
 import type { z } from 'zod';
 
 export type Message = z.infer<typeof MessageSchema>;

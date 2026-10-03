@@ -1,13 +1,15 @@
 import { Effect } from 'effect';
 
+import {
+  CODING_PLAN_SUBSCRIPTIONS,
+  configuredApiKeyProviders,
+  providerDisplayName,
+} from '@texra-ai/llm';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
-import { configuredApiKeyProviders } from '@model/apiProviders';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import { formatSubscriptionUsageSummary } from '@shared/subscriptionUsagePresentation';
 import type { SubscriptionUsageSnapshot } from '@shared/schemas';
-import { providerDisplayName } from '@shared/constants/providers';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/settingsView/settingsViewMessages';
 import { SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';

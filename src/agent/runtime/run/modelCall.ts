@@ -14,7 +14,7 @@ import {
   completedTurn,
   type TurnRequest,
   type TurnResult,
-} from '@texra-ai/llm/turn';
+} from '@texra-ai/llm';
 
 import type { AgentTrace } from '@agent/trace';
 import type { SettingsStores } from '@shared/config/settingsAccess';

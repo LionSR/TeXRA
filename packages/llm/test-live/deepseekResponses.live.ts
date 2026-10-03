@@ -1,5 +1,5 @@
 // Local imports
-import { openaiResponsesModel } from '../src/openaiResponses.js';
+import { openaiResponsesModel } from '../src/api/openaiResponses.js';
 import { liveProtocol } from './support.js';
 
 liveProtocol({

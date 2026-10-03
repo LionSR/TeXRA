@@ -1,9 +1,9 @@
 import { Effect } from 'effect';
+import { modelRefOf } from '@texra-ai/llm';
 import { getEnabledModels } from '@model/computeModelOptions';
+import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { modelRefOf } from '@shared/model/modelSelection';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
 /**

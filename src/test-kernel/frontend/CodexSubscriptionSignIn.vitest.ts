@@ -32,11 +32,11 @@ vi.mock('vscode', () => ({
   },
 }));
 
-vi.mock('@auth/codex', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@auth/codex')>()),
+vi.mock('@texra-ai/llm/node', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@texra-ai/llm/node')>()),
   codexCoordinator: vi.fn(() => ({})),
-  loginWithDeviceCode: vi.fn(),
-  loginWithLoopback: mocks.loginWithLoopback,
+  codexLoginWithDeviceCode: vi.fn(),
+  codexLoginWithLoopback: mocks.loginWithLoopback,
 }));
 
 vi.mock('@model/subscriptionAccess', async (importOriginal) => ({

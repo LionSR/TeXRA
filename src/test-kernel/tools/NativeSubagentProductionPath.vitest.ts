@@ -17,16 +17,17 @@ import '@test/support/defaultSessionTestSetup';
 import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import {
-  ModelError,
-  ResolvedTurnSchema,
-  TurnResultSchema,
+  chooseReasoning,
   type Model,
+  ModelError,
   type ModelOrigin,
   type ResolvedTurn,
+  ResolvedTurnSchema,
   type TurnEvent,
   type TurnRequest,
   type TurnResult,
-} from '@texra-ai/llm/turn';
+  TurnResultSchema,
+} from '@texra-ai/llm';
 
 const modelBindingMocks = vi.hoisted(() => ({
   bindModel: vi.fn(),
@@ -61,7 +62,6 @@ import {
 // Local imports - shared/runtime boundaries
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { launchDesktopAgent } from '@desktop/main/desktopAgentLaunch';
-import { chooseReasoning } from '@model/reasoningChoice';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
 import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@shared/schemas';

@@ -17,7 +17,7 @@ import {
   RemoteOperationSchema,
   TurnResultSchema,
   type RemoteOperation,
-} from '@texra-ai/llm/turn';
+} from '@texra-ai/llm';
 import {
   ContextEditPayloadSchema,
   ModelMessagePayloadSchema,

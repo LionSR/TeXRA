@@ -11,7 +11,7 @@ import {
   JsonObjectSchema,
   type TurnRequest,
   type TurnResult,
-} from '@texra-ai/llm/turn';
+} from '@texra-ai/llm';
 import type { RuntimeToolRegistry as IToolRegistry } from '@agent/runtime/ToolServices';
 import { partitionDuplicateCalls } from '@agent/core/tools/toolCallParsing';
 import type { AgentTrace } from '@agent/trace';

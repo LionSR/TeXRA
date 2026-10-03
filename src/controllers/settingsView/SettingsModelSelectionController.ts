@@ -8,8 +8,14 @@ import {
 } from 'llm-zoo';
 
 // Local imports
+import {
+  defaultReasoningLevel,
+  isExpensiveModel,
+  isFastFirstResponseModel,
+  MODEL_SOURCE_ORDER,
+  resolveModelSource,
+} from '@texra-ai/llm';
 import { getHelperModelName } from '@agent/runtime/helperModelName';
-import { defaultReasoningLevel } from '@model/reasoningChoice';
 import {
   reasoningEffortOverrides,
   selectableReasoningLevels,
@@ -19,7 +25,6 @@ import {
   preferredCopilotRouteModels,
   type CopilotModelRoute,
 } from '@model/copilotRouting';
-import { resolveModelSource } from '@model/openRouterRouting';
 import {
   getEnabledModels,
   setModelEnabled,
@@ -36,11 +41,6 @@ import {
   type UpdateModelSelectionMessage,
 } from '@shared/settingsView/settingsViewMessages';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import {
-  isExpensiveModel,
-  isFastFirstResponseModel,
-  MODEL_SOURCE_ORDER,
-} from '@shared/constants/providers';
 import { byName } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
 

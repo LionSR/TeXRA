@@ -5,11 +5,11 @@ import { FetchHttpClient } from 'effect/http';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import { loginWithLoopback } from '@auth/codex';
-import { CODEX_CALLBACK_PATH } from '@auth/codex/codexConstants';
-import type { CodexSessionCoordinator } from '@auth/codex/CodexSessionCoordinator';
-import type { CodexSession } from '@auth/codex/codexSessionTypes';
-import type { SubscriptionAuthorizeRequest } from '@auth/oauth/SubscriptionOAuthCoordinator';
+import { codexLoginWithLoopback as loginWithLoopback } from '@texra-ai/llm/node';
+import { CODEX_CALLBACK_PATH } from '../../../packages/llm/src/oauth/codex/codexConstants.js';
+import type { CodexSessionCoordinator } from '../../../packages/llm/src/oauth/codex/CodexSessionCoordinator.js';
+import type { CodexSession } from '../../../packages/llm/src/oauth/codex/codexSessionTypes.js';
+import type { SubscriptionAuthorizeRequest } from '../../../packages/llm/src/oauth/SubscriptionOAuthCoordinator.js';
 
 function testSession(): CodexSession {
   return {
