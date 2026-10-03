@@ -504,8 +504,11 @@ describe('canonical Google Interactions protocol', () => {
 
   // The SDK hands fetch a global `Request`; the harness transport is a
   // different undici, which once stringified it to "[object Request]".
-  it.effect('reaches the server through the harness model transport', () =>
+  it.live('reaches the server through the harness model transport', () =>
     Effect.gen(function* () {
+      // The transport's proxy agent reads the environment when first built.
+      vi.stubEnv('no_proxy', '127.0.0.1');
+      vi.stubEnv('NO_PROXY', '127.0.0.1');
       const received = createDeferred<{
         method: string | undefined;
         key: string | string[] | undefined;

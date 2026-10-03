@@ -48,22 +48,26 @@ function modelDispatcher(): EnvHttpProxyAgent {
  * `Request`, which this undici does not recognize and would stringify to
  * "[object Request]". Its URL, method, headers, body, signal and redirect
  * mode are carried over as an init instead; an explicit `init` still wins.
+ * A `Request` body is a stream or null, and only a stream takes `duplex`.
+ * The request is held until the fetch settles: a cloned `Request`'s signal
+ * follows its parent only while the clone is alive.
  */
 export const longRunningModelFetch: typeof fetch = (input, init) => {
   const request =
     typeof input === 'string' || input instanceof URL ? undefined : input;
-  return undiciFetch(request?.url ?? (input as string | URL), {
+  const response = undiciFetch(request?.url ?? (input as string | URL), {
     ...(request && {
       method: request.method,
       headers: request.headers,
       body: request.body,
       signal: request.signal,
       redirect: request.redirect,
-      duplex: 'half',
+      ...(request.body !== null && { duplex: 'half' }),
     }),
     ...init,
     dispatcher: modelDispatcher(),
   } as Parameters<typeof undiciFetch>[1]) as unknown as Promise<Response>;
+  return request === undefined ? response : response.finally(() => request);
 };
 
 /** A host root's process-wide HTTP dispatcher: the same agent, globally. */
