@@ -46,7 +46,6 @@ import {
 
 import type { AgentEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -95,7 +94,10 @@ import {
 import { policyDecidedRows } from './requestPolicy';
 import { runEventDraft } from './SessionEvents';
 import { presentTerminalResult } from './terminalResultToast';
-import { createNeutralResponseTextProcessing } from './responseTextProcessing';
+import {
+  createNeutralResponseTextProcessing,
+  type ResponseTextProcessing,
+} from './responseTextProcessing';
 import type { SessionGraph } from './sessionGraph';
 import type { SessionApprovals } from './runApprovalQueue';
 import type { RunRegistry } from './runRegistry';

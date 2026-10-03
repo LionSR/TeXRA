@@ -420,7 +420,7 @@ const openStep = Effect.fn('Step.open')(function* (
       offered: step.tools.definitions.map(({ name }) => name),
       isChild: runSystem.isChild(),
       isAnthropic: model.config.provider === ModelProvider.ANTHROPIC,
-      bibPath: roots.config.get<string>('texra.bib.defaultPath') ?? '',
+      config: roots.config,
     }),
     ...(delegation && { delegation }),
   };

@@ -40,7 +40,6 @@ import {
   aggregateId,
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
-  extractionShorthandToolConfig,
   toJsonValue,
   ToolError,
   type RunEnd,
@@ -98,7 +97,8 @@ class AgentTimedOut extends Data.TaggedError('AgentTimedOut')<{
 const fileList = (description: string) =>
   nullishWithDefault(z.array(z.string()), []).describe(description);
 
-const AgentInputSchema = z.strictObject({
+/** The fields of every `agent` call, ahead of a plugin's workflow options. */
+const LAUNCH_FIELDS = {
   prompt: z
     .string()
     .min(1, 'prompt is required')
@@ -133,18 +133,10 @@ const AgentInputSchema = z.strictObject({
   outputFiles: fileList(
     'Workflow agents: output paths, a subset of `inputFiles`. Empty for the default outputs.',
   ),
-  extractFigures: z
-    .boolean()
-    .nullish()
-    .describe(
-      'Workflow agents: attach the figures the input LaTeX includes as media.',
-    ),
-  extractTikz: z
-    .boolean()
-    .nullish()
-    .describe(
-      'Workflow agents: compile the input LaTeX TikZ figures and attach them.',
-    ),
+};
+
+/** The fields of every `agent` call, after a plugin's workflow options. */
+const CALL_FIELDS = {
   memories: memoriesField,
   working_directory: workingDirectoryField,
   id: z
@@ -166,8 +158,35 @@ const AgentInputSchema = z.strictObject({
     .describe(
       'In a script: return `{ runId }` at once; the result arrives as a follow-up. A direct call always runs in the background, except in a one-shot run.',
     ),
-});
-type AgentInput = z.infer<typeof AgentInputSchema>;
+};
+type AgentInput = z.infer<
+  z.ZodObject<typeof LAUNCH_FIELDS & typeof CALL_FIELDS>
+>;
+
+/**
+ * Options an app adds to `agent` for a workflow child: input fields, each
+ * nullish, and the tool configuration their values give the child. The
+ * harness names none; TeXRA's table declares the figure-extraction pair
+ * (`@tools/registry`).
+ */
+export interface WorkflowAgentOptions {
+  readonly fields: Readonly<Record<string, z.ZodType>>;
+  readonly toolConfig: (
+    values: Readonly<Record<string, unknown>>,
+  ) => Record<string, unknown>;
+}
+
+/** The workflow options a call carried, each null when it did not. */
+const optionValues = (
+  input: AgentInput,
+  options: WorkflowAgentOptions,
+): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.keys(options.fields).map((name) => [
+      name,
+      Reflect.get(input, name) ?? null,
+    ]),
+  );
 
 const WORKFLOW_ONLY = [
   'inputFiles',
@@ -180,6 +199,7 @@ const WORKFLOW_ONLY = [
 function optionMisfit(
   input: AgentInput,
   category: AgentCategory,
+  options: WorkflowAgentOptions,
 ): string | null {
   if (category === AgentCategory.Workflow) {
     if (input.schema != null)
@@ -192,8 +212,9 @@ function optionMisfit(
   }
   const misfit = [
     ...WORKFLOW_ONLY.filter((field) => input[field].length > 0),
-    ...(input.extractFigures != null ? ['extractFigures'] : []),
-    ...(input.extractTikz != null ? ['extractTikz'] : []),
+    ...Object.entries(optionValues(input, options)).flatMap(([name, value]) =>
+      value == null ? [] : [name],
+    ),
   ];
   return misfit.length === 0
     ? null
@@ -419,18 +440,19 @@ function childResult(
  */
 const executeAgentTool = Effect.fn('AgentTool.call')(function* (
   input: AgentInput,
+  options: WorkflowAgentOptions,
 ) {
   const call = yield* requireToolRun('agent', yield* ToolCall);
   const { script } = call;
   if (script === undefined || input.background === true)
-    return yield* agentCall(call, input);
+    return yield* agentCall(call, input, options);
   const budget = yield* script.shared(
     'agent:budget',
     Effect.flatMap(resolveChildRunConcurrencyBudget(call.roots), (permits) =>
       Semaphore.make(permits),
     ),
   );
-  return yield* budget.withPermits(1)(agentCall(call, input));
+  return yield* budget.withPermits(1)(agentCall(call, input, options));
 });
 
 /** A child's run failed the call: timed out, or ended without an answer. */
@@ -450,6 +472,7 @@ function failedResult(agentName: string, error: Error): ToolResult {
 const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   call: RunToolCall,
   input: AgentInput,
+  options: WorkflowAgentOptions,
 ) {
   const { run, script } = call;
   const { session, runId: parentRunId } = run;
@@ -460,7 +483,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     scope,
   );
   const workflow = agent.category === AgentCategory.Workflow;
-  const misfit = optionMisfit(input, agent.category);
+  const misfit = optionMisfit(input, agent.category, options);
   if (misfit !== null) return errorResult(misfit);
   const unusable = yield* rejectUnusableWorkingDirectory(
     call.roots,
@@ -539,8 +562,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
               contextFiles: input.contextFiles,
               mediaFiles: input.mediaFiles,
               outputFiles: input.outputFiles,
-              extractFigures: input.extractFigures ?? null,
-              extractTikz: input.extractTikz ?? null,
+              ...optionValues(input, options),
               memories: input.memories,
               workingDirectory: input.working_directory ?? null,
               id: input.id ?? null,
@@ -636,10 +658,10 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
         contextFiles,
         mediaFiles: media.map(({ file }) => file),
         outputFiles: input.outputFiles,
-        // The extraction flags reach the child as its tool configuration.
+        // The workflow options reach the child as its tool configuration.
         toolConfig: {
           ...DEFAULT_TOOL_CONFIG,
-          ...extractionShorthandToolConfig(input),
+          ...options.toolConfig(optionValues(input, options)),
         },
       })
     : ToolUseAgentProposalSchema.parse({
@@ -748,28 +770,42 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       );
 });
 
-export const AgentTool = defineTool({
-  name: 'agent',
-  requiresApproval: 'inBody',
-  // A resumed call finds the child its earlier attempt launched and settles
-  // from it, or resumes it under its own id: it never launches a second one.
-  replay: 'safe',
-  // A script's calls run beside each other, held to the child-run budget.
-  ownsConcurrency: true,
-  scriptGlobal: { positional: 'prompt' },
-  // The named agent decides the category: both lists are its targets.
-  availabilityCategory: [AgentCategory.Workflow, AgentCategory.ToolUse],
-  // A script awaits the child's envelope, or `{ runId }` in the background.
-  scriptReturns:
-    "{ category: 'toolUse'; response: string; files: string[]; structured?: unknown; outcome: 'completed'; cost: number } | { category: 'workflow'; outputs: { relativePath: string; absolutePath: string; added: number | null; removed: number | null }[]; outcome: 'completed'; cost: number } | { runId: string }",
-  slow: true,
-  description: `Run a named agent as a child of this run.
+/** The call's fields with an app's workflow options in their place, so
+ *  the definition the model sees keeps its order. */
+function agentInputSchema(
+  options: WorkflowAgentOptions,
+): z.ZodType<AgentInput> {
+  return z.strictObject({
+    ...LAUNCH_FIELDS,
+    ...options.fields,
+    ...CALL_FIELDS,
+  });
+}
+
+/** The `agent` tool, with the workflow options an app declares. */
+export const agentTool = (options: WorkflowAgentOptions) =>
+  defineTool({
+    name: 'agent',
+    requiresApproval: 'inBody',
+    // A resumed call finds the child its earlier attempt launched and settles
+    // from it, or resumes it under its own id: it never launches a second one.
+    replay: 'safe',
+    // A script's calls run beside each other, held to the child-run budget.
+    ownsConcurrency: true,
+    scriptGlobal: { positional: 'prompt' },
+    // The named agent decides the category: both lists are its targets.
+    availabilityCategory: [AgentCategory.Workflow, AgentCategory.ToolUse],
+    // A script awaits the child's envelope, or `{ runId }` in the background.
+    scriptReturns:
+      "{ category: 'toolUse'; response: string; files: string[]; structured?: unknown; outcome: 'completed'; cost: number } | { category: 'workflow'; outputs: { relativePath: string; absolutePath: string; added: number | null; removed: number | null }[]; outcome: 'completed'; cost: number } | { runId: string }",
+    slow: true,
+    description: `Run a named agent as a child of this run.
 
 From a script, \`agent(prompt, opts)\` (the same as \`tools.agent({ prompt, ...opts })\`) waits for the child and resolves to its result: \`{ category, response | outputs, structured?, outcome, cost }\`. It rejects with an Error named \`AgentFailed\`, \`TimedOut\`, or \`Skipped\` (the user stopped the child). With \`background: true\` it resolves to \`{ runId }\` at once and the result arrives as a follow-up. A completed call is reused, not run again, by a later call in this run with the same prompt, options and file contents; give two otherwise identical calls of one script distinct \`id\`s.
 
 Called directly, the child runs in the background and its result arrives as a follow-up message; in a one-shot run the call waits for it.
 
 A workflow agent rewrites every file in \`inputFiles\`, one revised document each; a tool-use agent works with its own tools and returns its final reply, or a \`schema\` value. Pick the agent whose description fits the task.`,
-  schema: AgentInputSchema,
-  execute: executeAgentTool,
-});
+    schema: agentInputSchema(options),
+    execute: (input) => executeAgentTool(input, options),
+  });
