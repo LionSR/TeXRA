@@ -17,6 +17,7 @@ import { Effect } from 'effect';
 
 // Local imports
 import { deliveredOutput, getRunRecords } from '@agent/storage';
+import { finalizeRun } from '@agent/storage/runLifecycle';
 import { readChildTurnState } from '@agent/storage/runRecords';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
@@ -30,6 +31,7 @@ import type { DatabaseReadFailed } from '@shared/session/database';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import type { RunToolCall } from '@tools/core/toolRun';
 import { deriveRunId } from '@utils/core/idHash';
+import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { resumeSubagentInBand } from './inBandSubagentRun';
@@ -192,6 +194,14 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
           childRunId: earlier,
         },
       });
+      // Whichever way it was decided, nothing continues the earlier child:
+      // one left without a terminal row ends here, not as an orphan.
+      const retired = yield* finalizeRun(session, {
+        runId: earlier,
+        outcome: RUN_OUTCOME.CANCELLED,
+        keepExistingOutcome: true,
+      });
+      if (!retired.ok) return yield* Effect.fail(ensureError(retired.error));
       return decision.action === 'retry'
         ? { kind: 'launch' }
         : { kind: 'unknown', runId: earlier, reason: standing.reason };

@@ -47,6 +47,7 @@ import { afterAll, afterEach, beforeEach, describe, expect } from 'vitest';
 
 import { refresh } from '@agent/index';
 import { resumeRun } from '@agent/runtime/resumeRun';
+import { finalizeRun } from '@agent/storage/runLifecycle';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -74,6 +75,7 @@ import {
   aggregateId,
   isDisplaySessionEvent,
   ROW_KINDS,
+  RUN_OUTCOME,
   RunIdSchema,
   type RunId,
 } from '@shared/schemas';
@@ -855,7 +857,7 @@ describe('the interrupted golden runs', () => {
    * script in a new call, whose two calls reuse those results.
    */
   it.live(
-    'resumes the killed fan-out, reattaching its child, then reuses',
+    'resumes the killed fan-out from its child, reattaching it, then reuses',
     () =>
       Effect.gen(function* () {
         const { storage, workspace } = testWorkspaceRoots();
@@ -912,14 +914,6 @@ describe('the interrupted golden runs', () => {
           },
         ]);
         yield* session.setTranscriptSubscriptions('golden-test', []);
-        const asked = autoDecideRequests(session, (opened) =>
-          opened.payload.kind === 'proposal' ? { action: 'approve' } : null,
-        );
-        const result = yield* withProcessServices(
-          testRuntime(),
-          resumeRun(FANOUT, { session }),
-        ).pipe(Effect.ensuring(Effect.sync(asked.detach)));
-        expect(result).toMatchObject({ started: true, outcome: 'waiting' });
         const count = (run: RunId, type: string) =>
           Number(
             raw(storage, (db) =>
@@ -932,6 +926,27 @@ describe('the interrupted golden runs', () => {
                 .get(run, type),
             )?.n,
           );
+        // HQ6: the parent cannot end while its open call owns the child the
+        // kill left running.
+        const ended = yield* finalizeRun(session, {
+          runId: FANOUT,
+          outcome: RUN_OUTCOME.COMPLETED,
+        });
+        expect(ended.ok ? null : String(ended.error)).toContain(
+          `owns run ${RUNNING}`,
+        );
+        expect(count(FANOUT, 'run.end')).toBe(0);
+        const asked = autoDecideRequests(session, (opened) =>
+          opened.payload.kind === 'proposal' ? { action: 'approve' } : null,
+        );
+        // Resuming the owned child resumes its parent, whose call
+        // reattaches it.
+        const result = yield* withProcessServices(
+          testRuntime(),
+          resumeRun(RUNNING, { session }),
+        ).pipe(Effect.ensuring(Effect.sync(asked.detach)));
+        expect(result).toMatchObject({ started: true, outcome: 'waiting' });
+        expect(count(FANOUT, 'run.activate')).toBe(2);
         // No child was launched again: the two the kill left, each started
         // once; the completed one never ran again, the running one resumed.
         expect(

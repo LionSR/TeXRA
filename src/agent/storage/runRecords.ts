@@ -132,6 +132,27 @@ export const persistedParentRunId = Effect.fn('persistedParentRunId')(
 );
 
 /**
+ * The open call that owns `runId` (HQ6): the parent call that launched it,
+ * while the run is not detached and the call is still unsettled in the
+ * parent's ledger. Null for a root, a detached child, a child no call
+ * launched, or one whose call has settled.
+ */
+export const owningCall = Effect.fn('owningCall')(function* (
+  session: SessionHandle,
+  runId: RunId,
+) {
+  const edge = (yield* session.readRunRecords(runId)).findLast(
+    (row) => row.type === 'run.start' || row.type === 'run.detach',
+  );
+  if (edge?.type !== 'run.start' || edge.parent?.callId == null) return null;
+  const { id, callId } = edge.parent;
+  const parent = yield* session.ledger.load(id);
+  return parent?.pendingIntents[callId] === undefined
+    ? null
+    : { parentRunId: id, callId };
+});
+
+/**
  * The run's latest row of one type, or null. The one latest-row reader every
  * named record goes through: the read already keeps only the newest row of
  * each type per aggregate, so "latest" is `findLast` over what it returned,

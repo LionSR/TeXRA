@@ -17,6 +17,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 import {
   AgentCategory,
+  RUN_OUTCOME,
   RunRecordFieldsSchema,
   aggregateId,
   storedRunOutput,
@@ -34,7 +35,7 @@ import {
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { getRunRecords, runEndFromEvents } from './runRecords';
+import { getRunRecords, owningCall, runEndFromEvents } from './runRecords';
 
 function pinRunWorkingDirectory(
   record: RunRecord,
@@ -294,6 +295,36 @@ export type FinalizeRunResult =
     };
 
 /**
+ * HQ6: a run does not end while an open call of it owns a child that has not
+ * ended. A stop or a backstop (`cascade`) ends such a child first, CANCELLED,
+ * as the live cascade would have; the run's own terminal, or a stop whose
+ * child is still live in this process, is refused.
+ */
+const endOwnedChildren = Effect.fn('endOwnedChildren')(function* (
+  session: SessionHandle,
+  runId: RunId,
+  cascade: boolean,
+) {
+  for (const child of session.runView(runId)?.childIds ?? []) {
+    const owner = yield* owningCall(session, child);
+    if (owner?.parentRunId !== runId) continue;
+    if ((yield* getRunRecords(session, child).readRunEnd()) !== null) continue;
+    if (!cascade || session.runs.isLive(child))
+      return yield* Effect.fail(
+        new Error(
+          `Run ${runId} cannot end while its open call ${owner.callId} owns run ${child}, which has not ended`,
+        ),
+      );
+    const ended = yield* finalizeRun(session, {
+      runId: child,
+      outcome: RUN_OUTCOME.CANCELLED,
+      keepExistingOutcome: true,
+    });
+    if (!ended.ok) return yield* Effect.fail(ensureError(ended.error));
+  }
+});
+
+/**
  * The one terminal-persistence tail, and the one writer of the `run.end` row
  * (one run model, section 3.3): persist the run's terminal fact. The run's
  * rows live until explicit deletion (C9); nothing is removed beside the row.
@@ -308,6 +339,14 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   input: FinalizeRunInput,
 ): Effect.fn.Return<FinalizeRunResult> {
   const { runId, outcome, keepExistingOutcome } = input;
+  const owned = yield* Effect.exit(
+    endOwnedChildren(session, runId, keepExistingOutcome === true),
+  );
+  if (Exit.isFailure(owned)) {
+    const error = ensureError(Cause.squash(owned.cause));
+    input.report?.(error);
+    return { ok: false, error, outcomePersisted: false };
+  }
   const status = yield* Effect.exit(
     session.updateRecordFacts(runId, (rows) =>
       Effect.gen(function* () {
