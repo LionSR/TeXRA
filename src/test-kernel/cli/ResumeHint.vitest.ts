@@ -228,33 +228,18 @@ describe('formatResumeHint', () => {
 });
 
 describe('collectResumeUsage', () => {
-  it('sums usage from every stream under the root', () => {
-    const view = viewWith([
-      root({
-        inputTokens: 100,
-        outputTokens: 20,
-        cost: 0.2,
-        cacheReadInputTokens: 7,
-      }),
-      child({
-        id: 'rev' as RunId,
-        usage: {
-          inputTokens: 40,
-          outputTokens: 8,
-          cost: 0.3,
-          cacheReadInputTokens: 3,
-          reasoningTokens: 5,
-        },
-      }),
-    ]);
-    expect(collectResumeUsage(view, ROOT)).toEqual({
+  it("reports the root's tree total, and nothing before a priced turn", () => {
+    const treeUsage = {
       inputTokens: 140,
       outputTokens: 28,
       cost: 0.5,
       cacheReadInputTokens: 10,
-      cacheMissInputTokens: 0,
-      cacheCreationInputTokens: 0,
-      reasoningTokens: 5,
-    });
+    };
+    const view = viewWith([
+      makeRunView({ id: ROOT, label: 'main', treeUsage }),
+      child({ id: 'rev' as RunId }),
+    ]);
+    expect(collectResumeUsage(view, ROOT)).toEqual(treeUsage);
+    expect(collectResumeUsage(viewWith([root()]), ROOT)).toBeUndefined();
   });
 });

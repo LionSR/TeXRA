@@ -2,7 +2,10 @@ import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
-import { formatCliSessionStatus } from '@cli/chat/tui/sessionStatus';
+import {
+  formatCliSessionStatus,
+  taskCostStatus,
+} from '@cli/chat/tui/sessionStatus';
 import {
   selectedRunId as selectedRunIdSignal,
   clearTransientNotice,
@@ -122,6 +125,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
           ? []
           : (view.queuedFollowUps.get(activeRunId) ?? [])
         ).map((followUp) => followUp.text),
+        cost: taskCostStatus(view, run),
       }),
     );
   },

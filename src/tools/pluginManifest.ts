@@ -396,6 +396,8 @@ export const MANIFEST = [
     description:
       'Review annotations, PDF viewing, user questions, and Loogle search.',
     hidden: true,
+    // The configured default bibliography (`@tools/registry`).
+    promptSection: true,
   },
   {
     // The `script` tool: a program that calls the run's other tools. An

@@ -106,8 +106,8 @@ export interface ScriptStageView {
   /** Every call, in issue order. */
   readonly calls: readonly ScriptCallView[];
   readonly phases: readonly ScriptPhaseView[];
-  /** What every child its calls launched has cost so far, discarded
-   *  attempts included. */
+  /** What every child its calls launched has cost so far, their own
+   *  agents included (`treeUsage`), discarded attempts included. */
   readonly costUsd: number;
 }
 
@@ -221,8 +221,8 @@ function callView(
     ended !== undefined && ended.lastTimestamp !== null
       ? formatCompactDuration(ended.lastTimestamp - ended.launchedAt)
       : undefined,
-    ended !== undefined && ended.usage.cost > 0
-      ? formatCostUsd(ended.usage.cost)
+    ended !== undefined && ended.treeUsage.cost > 0
+      ? formatCostUsd(ended.treeUsage.cost)
       : undefined,
   ].filter((part): part is string => part !== undefined);
   const label = agent
@@ -336,7 +336,7 @@ export function scriptStages(
     for (const childId of run.childIds) {
       const child = view.runs.get(childId);
       if (child?.parentCard != null && cards.has(child.parentCard))
-        costUsd += child.usage.cost;
+        costUsd += child.treeUsage.cost;
     }
     return {
       id: stage.id,

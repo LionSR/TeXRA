@@ -5,25 +5,18 @@ import replacementEngine, {
 } from '@replacement/engine';
 
 /**
- * Latex-owned policy contract for provider-output cleanup; latex owns the
- * type and the TeXRA-specific factory.
+ * TeXRA's LaTeX-aware provider-output policy, which hosts pass as a session's
+ * `responseTextProcessing` (the harness's contract, which it satisfies
+ * structurally: latex does not import the agent runtime).
  */
-export interface ResponseTextProcessing {
-  /**
-   * Cleanup for one run's response text, over the configuration of the
-   * workspace that run belongs to: the replacement rules are that project's
-   * settings, not whichever roots the calling fiber carries.
-   */
+export function createTexraResponseTextProcessing(): {
   readonly postProcessResponse: (
     text: string,
     config: ConfigProvider,
   ) => Effect.Effect<string>;
-}
-
-/** Create TeXRA's LaTeX-aware provider-output policy, injected by hosts. */
-export function createTexraResponseTextProcessing(): ResponseTextProcessing {
-  return Object.freeze<ResponseTextProcessing>({
-    postProcessResponse: (text, config) =>
+} {
+  return Object.freeze({
+    postProcessResponse: (text: string, config: ConfigProvider) =>
       Effect.suspend(() => {
         const replaced = replacementEngine.applyAll(text, (key) =>
           config.get(key),

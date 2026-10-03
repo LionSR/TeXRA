@@ -8,7 +8,6 @@ import {
   descendantRuns,
   isLiveRun,
   isWorkingRun,
-  runTreeUsage,
   sessionActivity,
 } from '@shared/session/sessionView';
 
@@ -19,7 +18,7 @@ import {
  * Holds no state of its own: the session's fold is the one reader of which
  * runs are live (`isLiveRun`, the reading every host shares) and carries each
  * run's own metered total (`RunView.usage`); a live tree's total is
- * `runTreeUsage`, the sum every host's session total reads. The pill shows the session's
+ * `RunView.treeUsage`, the total every host's session total reads. The pill shows the session's
  * activity (`sessionActivity`, the reading every host's title shares), so a
  * request waiting on the user keeps it on screen; its spinner counts the live
  * runs that are working right now.
@@ -40,7 +39,7 @@ export class StatusBarUsageTracker {
 
   /** The spend of every run tree still in flight: a root counts, with all
    *  its runs, finished children included, while any run in its tree is
-   *  live. A child's spend is on its own run only (`runTreeUsage`). */
+   *  live. A child's spend is on its root's `treeUsage`. */
   public get totalUsage(): TokenUsageStats {
     const view = SubscriptionRef.getUnsafe(this.session.view);
     const liveTreeRoots = [...view.runs.values()].filter(
@@ -51,8 +50,6 @@ export class StatusBarUsageTracker {
           return member !== undefined && isLiveRun(member);
         }),
     );
-    return sumUsageStats(
-      liveTreeRoots.map((root) => runTreeUsage(view, root.id)),
-    );
+    return sumUsageStats(liveTreeRoots.map((root) => root.treeUsage));
   }
 }

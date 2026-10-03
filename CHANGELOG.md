@@ -518,6 +518,16 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A task's cost counts every agent it started, on every surface.** The
+  progress-view footer showed only the run's own model calls (so a task that
+  ran two agents could read `$0.000`), and a script card added its direct
+  agents but not the agents they started. The footer, the script card and its
+  rows now show the total with all agents included, and hovering the footer
+  cost names the run's own share. The CLI status line shows the task's total
+  as it runs, and `/status` breaks it down by agent. The VS Code status-bar
+  tooltip labels subscription usage the way the footer does ("Included in
+  ChatGPT Pro") instead of a raw dollar figure.
+
 - **Adding an API key or enabling an agent mid-run no longer breaks the
   prompt cache.** The agents and models a delegating agent can use were
   rewritten into its delegation tools' descriptions at every step, so any

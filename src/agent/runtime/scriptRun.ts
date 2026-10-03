@@ -26,7 +26,6 @@ import {
   type ScriptDeliverySummary,
   type ScriptTally,
 } from '@shared/schemas';
-import { runTreeUsage } from '@shared/session/sessionView';
 import { scriptSummaryElement } from '@shared/subagentFollowup';
 import { isPathWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -204,7 +203,7 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
     outcome,
     phaseCount: new Set(calls.flatMap(({ phase }) => phase ?? [])).size,
     tally,
-    costUsd: runTreeUsage(view, runId).cost,
+    costUsd: view.runs.get(runId)?.treeUsage.cost ?? 0,
     durationMs: Math.max(0, Math.round(now - startedAt)),
     files: [...files.values()],
     errorCause,

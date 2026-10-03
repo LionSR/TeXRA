@@ -114,7 +114,8 @@ export abstract class BaseRunContent extends LitElement {
 
   protected renderUsagePanel(run: RunView): TemplateResult {
     return html`<usage-panel
-      .usage=${run.usage}
+      .usage=${run.treeUsage}
+      .ownUsage=${run.usage}
       .contextState=${run.context}
     ></usage-panel>`;
   }

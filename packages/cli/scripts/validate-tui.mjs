@@ -1660,6 +1660,21 @@ const SCENARIOS = [
     unexpect: ['Run command?', '1 approval'],
   },
   {
+    // The task's total, its agents included, live on the status line, and
+    // `/status` breaking it down: only `reviewer` carries usage ($0.12).
+    name: 'task-cost-status',
+    cols: 120,
+    env: { HARNESS_ENTRIES: '4', HARNESS_CHILDREN: '1' },
+    bootExpect: '$0.120',
+    keys: ['/status', '\r'],
+    frame: 'viewport',
+    expect: [
+      'cost: $0.120, agents included',
+      'own model calls: $0.000',
+      'reviewer: $0.120',
+    ],
+  },
+  {
     name: 'team-status-empty-subagents-hidden',
     env: {
       HARNESS_ENTRIES: '4',

@@ -108,6 +108,7 @@ function runViewFields(over: RunViewOverrides): RunView {
     forceExpanded: false,
     group: isInFlightPhase(status) ? ('running' as const) : ('recent' as const),
     usage: { inputTokens: 0, outputTokens: 0, cost: 0 },
+    treeUsage: { inputTokens: 0, outputTokens: 0, cost: 0 },
     thinkingActive: false,
     compactingActive: false,
     latestLine: null,
