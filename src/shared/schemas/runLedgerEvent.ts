@@ -306,7 +306,14 @@ export const ContextEditPayloadSchema = z
   .refine(({ range }) => range.from <= range.to, {
     path: ['range'],
     message: 'An edit range ends before it starts.',
-  });
+  })
+  .refine(
+    ({ cause, trigger }) => (cause === 'compaction') === (trigger !== null),
+    {
+      path: ['trigger'],
+      message: 'A compaction names its trigger, and no other cause has one.',
+    },
+  );
 
 /* ------------------------------------------------------------ script.call */
 

@@ -261,15 +261,17 @@ export function createHeadlessCliHostInteractions(
           yield* askHeadlessUserQuestion(payload.data, context, hooks),
         );
       case 'toolOutcome': {
+        const { title, childRunId } = payload.data;
         const decision = yield* ask({
-          summary: `${payload.data.title}\nIt may have run before the run was interrupted, and no result was recorded. Run it again?`,
+          summary: `${title}${childRunId === null ? '' : ` (run ${childRunId})`}\nIt may have run before the run was interrupted, and no result was recorded. Run it again?`,
         });
+        if (decision.action === 'approve')
+          return yield* decide(runId, requestId, { action: 'retry' });
+        // A prompt that closed decides nothing: the barrier is asked again.
         return yield* decide(
           runId,
           requestId,
-          decision.action === 'approve'
-            ? { action: 'retry' }
-            : { action: 'skip' },
+          decision.action === 'reject' ? { action: 'skip' } : decision,
         );
       }
     }
