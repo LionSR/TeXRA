@@ -186,6 +186,9 @@ const RunViewCommonSchema = z.object({
   /** Latest `context.state`. */
   context: ContextStateDataSchema.nullable(),
   parentId: RunIdSchema.nullable(),
+  /** The task this one was forked from and the settled point it was cut at
+   *  (`run.start.provenance`); null for a run its own launch began. */
+  forkedFrom: z.object({ id: RunIdSchema, at: z.int().positive() }).nullable(),
   /** The parent's tool card that launched this run (`run.start.parentCard`). */
   parentCard: z.string().nullable(),
   /** Root first. */

@@ -5,6 +5,7 @@
 import {
   AgentCategory,
   isPlainAgentIdentity,
+  RUN_LIFECYCLE_READY,
   RUN_PHASE,
   RUN_SUBSTATE,
   type RunAction,
@@ -20,14 +21,16 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * The one rule for which actions a run's state licenses, applied by the fold
  * into `RunView.actions`. A run another process holds (or one this process
  * cannot read) is inspect-only. A live run (`isLiveRun`: working, waiting,
- * or spawned and not started yet) can only be stopped; while it works, an
- * agent's run takes approval grants and a tool-use agent's compaction.
- * Nothing that rewrites or removes a run's files or history is offered while
- * it is live; any run this process can act on can be renamed. After, it can be deleted; a plain agent's can be resumed (an
- * interrupted one, or a workflow from its saved outputs), run again, or
- * restored into the launcher; a background script's can be resumed unless it
- * completed, and restored; a workflow agent's outputs can be diffed,
- * archived, or removed.
+ * or spawned and not started yet) can be stopped; while it works, an
+ * agent's run takes approval grants, and a tool-use agent's its compaction
+ * and a reset or handoff. Nothing that rewrites or removes a run's files or
+ * history is offered while it is live. Any run this process can act on can
+ * be renamed, and a started tool-use conversation forked (at its latest
+ * settled point, which a run in a turn now has before that turn). After, a
+ * run can be deleted; a plain agent's can be resumed (an interrupted one,
+ * or a workflow from its saved outputs) or run again; a background
+ * script's can be resumed unless it completed; a workflow agent's outputs
+ * can be diffed, archived, or removed.
  */
 export function runActions(
   run: Pick<
@@ -46,8 +49,9 @@ export function runActions(
     return [
       'stop',
       ...(agent ? (['grant'] as const) : []),
-      ...(compact ? (['compact'] as const) : []),
+      ...(compact ? (['compact', 'reset'] as const) : []),
       'rename',
+      ...(forkable(run) ? (['fork'] as const) : []),
       ...inspectActions(),
     ];
   }
@@ -55,19 +59,25 @@ export function runActions(
   if (isPlainAgentIdentity(run.identity)) {
     if (run.group === 'interrupted' || run.category === AgentCategory.Workflow)
       actions.push('resume');
-    actions.push('runNew', 'restore');
+    actions.push('runNew');
+    if (forkable(run)) actions.push('fork');
   }
   // A background script takes no message: a resume is how it continues
   // after a crash or a stop, its finished calls handed back from its rows.
-  // Its script can also start a new task from the launcher.
-  if (run.identity.kind === 'script') {
-    if (run.status !== RUN_PHASE.COMPLETED) actions.push('resume');
-    actions.push('restore');
-  }
+  if (run.identity.kind === 'script' && run.status !== RUN_PHASE.COMPLETED)
+    actions.push('resume');
   if (run.identity.kind === 'agent' && run.category === AgentCategory.Workflow)
     actions.push('diff', 'pack', 'clean');
   return [...actions, ...inspectActions()];
 }
+
+/** A conversation that has started: a plain tool-use agent past `ready`. */
+const forkable = (
+  run: Pick<RunView, 'identity' | 'category' | 'status'>,
+): boolean =>
+  isPlainAgentIdentity(run.identity) &&
+  run.category === AgentCategory.ToolUse &&
+  run.status !== RUN_LIFECYCLE_READY;
 
 /** Why a run no longer takes `action`: the refusal every handler words. */
 export function runActionRefusal(
@@ -88,7 +98,8 @@ const ACTION_LABEL: Record<RunAction, string> = {
   compact: 'Compaction',
   resume: 'Resume',
   runNew: 'Run again',
-  restore: 'Edit as new task',
+  fork: 'Forking',
+  reset: 'Handing off',
   diff: 'Latexdiff of the outputs',
   pack: 'Archiving the outputs',
   clean: 'Deleting the output files',

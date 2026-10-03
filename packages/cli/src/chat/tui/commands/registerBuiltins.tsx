@@ -425,7 +425,9 @@ export function registerBuiltinSlashCommands(options: {
           category: 'session',
           echo: 'ifPersists',
           handler: (_remainder, context) =>
-            Effect.sync(() => context.resetSession()),
+            Effect.sync(() => {
+              context.resetSession();
+            }),
         },
       ],
     },

@@ -362,6 +362,10 @@ function createRun(
       (isPlainAgentIdentity(identity) || identity.kind === 'script'),
     context: null,
     parentId: event.parent === null ? null : event.parent.id,
+    forkedFrom:
+      event.provenance?.kind === 'fork'
+        ? { id: event.provenance.from.id, at: event.provenance.at }
+        : null,
     parentCard: event.parentCard ?? null,
     ancestors: [],
     childIds: [],

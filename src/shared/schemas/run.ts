@@ -115,8 +115,11 @@ const RUN_ACTIONS = [
   'resume',
   /** Launch the run's saved setup again from scratch. */
   'runNew',
-  /** Put the run's saved setup back into the launcher. */
-  'restore',
+  /** A new task holding this conversation (`run.fork`). */
+  'fork',
+  /** Clear the model's view of a live conversation, or start it from a
+   *  handoff's text (`run.reset`). */
+  'reset',
   /** A finished workflow run's latexdiff, archive, and output removal. */
   'diff',
   'pack',

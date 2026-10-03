@@ -271,8 +271,7 @@ describe('tool-use formatter', () => {
 
 /**
  * Regression coverage for PR #8165 review findings: controls slotted into a
- * `<wa-details>` summary (the "Edit as new task" proposal-restore-link and the copy
- * button) must not toggle the panel when activated, via mouse or keyboard.
+ * `<wa-details>` summary (the copy buttons) must not toggle the panel when activated, via mouse or keyboard.
  *
  * `<wa-details>`'s own summary click handler already excludes real
  * `<button>`/`<wa-button>` elements from its toggle, but its keydown handler
@@ -288,19 +287,6 @@ type WaDetailsElement = HTMLElement & {
 const ACTIVATION_KEYS = ['Enter', ' '] as const;
 
 const SUMMARY_CONTROL_CASES = [
-  {
-    control: 'proposal-restore-link',
-    detailsSelector: 'wa-details.tool-use-details',
-    controlSelector: 'button.proposal-restore-link',
-    buildTemplate: () =>
-      formatToolUseTemplate(
-        toolUseRow('proposal-2', {
-          toolName: 'agent',
-          input: { agentName: 'assistant', prompt: 'do the thing' },
-          output: 'proposed',
-        }),
-      ),
-  },
   {
     control: 'copy button',
     detailsSelector: 'wa-details.banner-details',
@@ -350,39 +336,6 @@ const SUMMARY_CONTROL_CASES = [
 ];
 
 describe('wa-details summary controls: activation does not toggle the panel', () => {
-  it('clicking the proposal-restore-link ("Edit as new task") button does not toggle the panel, and the click still bubbles to an outer delegated handler', async () => {
-    const row = toolUseRow('proposal-1', {
-      toolName: 'agent',
-      input: { agentName: 'assistant', prompt: 'do the thing' },
-      output: 'proposed',
-    });
-
-    const container = renderTemplateInDocument(formatToolUseTemplate(row));
-
-    const waDetails = container.querySelector(
-      'wa-details.tool-use-details',
-    ) as WaDetailsElement | null;
-    expect(waDetails).not.toBeNull();
-    await waDetails!.updateComplete;
-
-    const setupButton = container.querySelector(
-      'button.proposal-restore-link',
-    ) as HTMLButtonElement | null;
-    expect(setupButton).not.toBeNull();
-
-    let ancestorSawClick = false;
-    container.addEventListener('click', () => {
-      ancestorSawClick = true;
-    });
-
-    expect(waDetails!.open).toBe(false);
-    setupButton!.click();
-    await new Promise((resolve) => setTimeout(resolve, 20));
-
-    expect(waDetails!.open).toBe(false);
-    expect(ancestorSawClick).toBe(true);
-  });
-
   it.each(
     SUMMARY_CONTROL_CASES.flatMap((summaryCase) =>
       ACTIVATION_KEYS.map((key) => ({ ...summaryCase, key })),

@@ -118,6 +118,16 @@ export const conversationContentStyles: CSSResult = css`
     font-size: var(--wa-font-size-s);
   }
 
+  /* A fork's first line, where its own transcript begins. */
+  .forked-from-line {
+    display: flex;
+    align-items: baseline;
+    gap: var(--wa-space-2xs);
+    margin: var(--wa-space-xs) 0;
+    color: var(--color-text-secondary);
+    font-size: var(--wa-font-size-s);
+  }
+
   .conversation-ended > span {
     flex: 1 1 100%;
   }

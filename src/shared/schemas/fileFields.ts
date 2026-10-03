@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /** The four canonical `*Files` list fields, defaulting to `[]` when absent. */
-export const fileListFields = {
+const fileListFields = {
   inputFiles: z.array(z.string()).prefault([]),
   contextFiles: z.array(z.string()).prefault([]),
   mediaFiles: z.array(z.string()).prefault([]),

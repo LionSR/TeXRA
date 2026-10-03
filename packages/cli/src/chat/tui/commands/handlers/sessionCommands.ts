@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Result, Stream, SubscriptionRef } from 'effect';
 
 import { resumeOnSession } from '@agent/followUp';
 import type { SessionHandle } from '@agent/runtime';
@@ -28,8 +28,10 @@ import {
 } from '@cli/chat/tui/state/transcript';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import { goalStateOf } from '@shared/plugins/goal';
+import { isLiveRun } from '@shared/session/sessionView';
 import { AgentCategory, type RunId } from '@shared/schemas';
 import { interruptedTasks } from '@ui/copy/interruptedTasks';
+import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { formatSlashCommandHelp } from '../helpText';
@@ -37,7 +39,10 @@ import {
   listSlashCommands,
   type SlashCommandContribution,
 } from '../slashRegistry';
-import { type SlashCommandContext } from './slashContext';
+import {
+  type SlashCommandContext,
+  type SlashCommandEffect,
+} from './slashContext';
 
 export function showCliSlashCommandHelp(): void {
   openInfoPane(
@@ -213,6 +218,87 @@ function renameCliTask(
   });
 }
 
+/**
+ * `/fork`: a new task holding the focused conversation up to its latest
+ * settled point, which this chat then continues; the original keeps its
+ * history and stays in `/resume`. Its transcript starts empty, so a line
+ * says where it came from.
+ */
+function forkCliTask(context: SlashCommandContext): SlashCommandEffect {
+  return Effect.gen(function* () {
+    const runId = selectedRunIdSignal.get() ?? context.session.runId;
+    if (runId === undefined) {
+      setTransientNotice('No conversation to fork yet.');
+      return;
+    }
+    const source = runViewOf(currentView(), runId);
+    // Cut before this chat lets go of the source, so the fork reads it as
+    // it stands now.
+    const forked = yield* Effect.result(
+      context.runtimeSession.requests.request({ kind: 'run.fork', runId }),
+    );
+    if (Result.isFailure(forked)) {
+      appendLocalRequestRefusal(forked.failure, runId);
+      return;
+    }
+    if (forked.success.kind !== 'forked') return;
+    const fork = forked.success.runId;
+    // The chat holds one task: the conversation it shows gives way to the
+    // fork, as `/clear` gives way to a new task (refused mid-response). The
+    // fork is taken up once the source has ended, so the source's end cannot
+    // land on the chat's new task.
+    if (!context.resetSession()) {
+      appendLocalNotice(
+        'The fork is ready in /resume; it opens there once this response is done.',
+        runId,
+      );
+      return;
+    }
+    yield* SubscriptionRef.changes(context.runtimeSession.view).pipe(
+      Stream.takeUntil((view) => {
+        const run = view.runs.get(runId);
+        return run === undefined || !isLiveRun(run);
+      }),
+      Stream.runDrain,
+      Effect.timeout('10 seconds'),
+      Effect.ignore({ log: 'Warn' }),
+    );
+    yield* context.resumeRun(fork);
+    const title = source ? source.description || source.label : runId;
+    appendLocalNotice(
+      `${TASK_ACTIONS.forkedFrom(title)}. The model holds that conversation; the original is in /resume.`,
+      fork,
+    );
+  });
+}
+
+/** `/handoff <text>` and `/reset`: the focused task continues in a fresh
+ *  context, from the text, or from the next message. */
+function resetCliTask(
+  session: SessionHandle,
+  handoff: string | null,
+): Effect.Effect<void> {
+  return Effect.suspend(() => {
+    const runId = selectedRunIdSignal.get();
+    if (runId === undefined) {
+      setTransientNotice('No task to hand off.');
+      return Effect.void;
+    }
+    return session.requests.request({ kind: 'run.reset', runId, handoff }).pipe(
+      Effect.match({
+        onFailure: (error) => appendLocalRequestRefusal(error, runId),
+        onSuccess: () =>
+          appendLocalNotice(
+            handoff === null
+              ? 'Reset: the model no longer sees the conversation before this point and answers your next message from it alone.'
+              : 'Handed off: the model no longer sees the conversation before this point and continues from your text.',
+            runId,
+          ),
+      }),
+    );
+  });
+}
+
 /** The task commands: compacting the focused agent's context, and leaving.
  *  The agent list (Tab) lists and focuses the task's agents; typing to a
  *  focused agent messages it. */
@@ -229,6 +315,37 @@ export function sessionContributions(
           category: 'session',
           echo: 'ifPersists',
           handler: () => requestCliSessionCompaction(session),
+        },
+        {
+          name: 'fork',
+          description:
+            'Continue a new task holding this conversation; the original stays as it is',
+          category: 'session',
+          echo: 'ifPersists',
+          handler: (_remainder, context) => forkCliTask(context),
+        },
+        {
+          name: 'handoff',
+          description:
+            'Continue in a fresh context that starts from your text: /handoff <text>',
+          category: 'session',
+          echo: 'ifPersists',
+          handler: (remainder) => {
+            const text = remainder.trim();
+            if (text !== '') return resetCliTask(session, text);
+            setTransientNotice(
+              'Usage: /handoff <text the task continues from>',
+            );
+            return Effect.void;
+          },
+        },
+        {
+          name: 'reset',
+          description:
+            'Clear what the model sees of this task; it answers your next message alone',
+          category: 'session',
+          echo: 'ifPersists',
+          handler: () => resetCliTask(session, null),
         },
         {
           name: 'rename',

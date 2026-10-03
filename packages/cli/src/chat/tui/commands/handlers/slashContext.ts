@@ -46,7 +46,9 @@ export interface SlashCommandContext {
   readonly requestInputExit: () => void;
   readonly getApprovalPolicy: () => TexraApprovalPolicy;
   readonly setApprovalPolicy: (policy: TexraApprovalPolicy) => void;
-  readonly resetSession: () => void;
+  /** Start a new task (`/clear`): false, with a notice, while a response
+   *  is running. */
+  readonly resetSession: () => boolean;
   readonly resumeRun: (id: RunId) => Effect.Effect<void, Error>;
 }
 

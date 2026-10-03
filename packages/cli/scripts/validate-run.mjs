@@ -1185,6 +1185,65 @@ async function validateForkResetHandoff() {
 }
 
 /**
+ * The TUI's fork, handoff and reset (GUI lane G5): in a resumed chat,
+ * `/fork` continues a new task holding the conversation (its next reply
+ * names the first message), `/handoff` continues it from a note alone, and
+ * `/reset` from the next message alone. The store's `run.start` and
+ * `context.edit` rows and the replies are the artifact.
+ */
+async function validateTuiForkHandoffReset() {
+  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-tui-fork-'));
+  try {
+    const project = echoProject(cwd);
+    const source = project.firstRun('First message');
+    const replies = [
+      'Forked from',
+      'First message | Second message',
+      'Model saw: Handoff note',
+      'Reset: the model',
+      'Model saw: After reset',
+    ];
+    const exitId = await project.chat(
+      [source],
+      [
+        { message: '/fork', reply: replies[0] },
+        { message: 'Second message', reply: replies[1] },
+        { message: '/handoff Handoff note', reply: replies[2] },
+        { message: '/reset', reply: replies[3] },
+        { message: 'After reset', reply: replies[4] },
+      ],
+    );
+    const rows = project.readStore(VIEW_ROWS);
+    const artifactPath = writeArtifact('tui-fork-handoff-reset.json', {
+      source,
+      exitId,
+      replies,
+      rows,
+    });
+    const forkStart = rows.find(
+      (row) =>
+        row.type === 'run.start' &&
+        JSON.parse(row.provenance ?? 'null')?.from?.id === source,
+    );
+    const causes = rows
+      .filter(
+        (row) => row.run === forkStart?.run && row.type === 'context.edit',
+      )
+      .map((row) => row.cause);
+    assert(
+      forkStart !== undefined && exitId === forkStart.run,
+      `/fork should continue a new task forked from ${source} (artifact: ${artifactPath})`,
+    );
+    assert(
+      causes.join() === 'fork,handoff,reset',
+      `the fork should record its seed, the handoff and the reset, got ${causes.join()} (artifact: ${artifactPath})`,
+    );
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+}
+
+/**
  * Background compaction end to end (durable harness H5, gap 4): at a 1%
  * threshold, a long first message puts the conversation over it. The
  * resumed chat's next turn starts the summary off the loop and still sends
@@ -1691,6 +1750,7 @@ async function validateCliRunArtifacts(options = {}) {
   validateToolUseAgentRunCommand();
   validateHistoryQueryRunCommand();
   await validateForkResetHandoff();
+  await validateTuiForkHandoffReset();
   await validateBackgroundCompaction();
   await validateInterruptedTasks();
   await validateOpenTimePrompt();

@@ -287,6 +287,7 @@ export function logPayloadRow(
   base: TranscriptRowBase,
   text: string,
   payload: LogRowPayload,
+  forkAt?: number,
 ): TranscriptRow | undefined {
   switch (payload.messageType) {
     case MESSAGE_TYPES.USER_MESSAGE: {
@@ -302,6 +303,7 @@ export function logPayloadRow(
         ...(payload.data?.attachments
           ? { attachments: payload.data.attachments }
           : {}),
+        ...(forkAt === undefined ? {} : { forkAt }),
       };
     }
 

@@ -7,6 +7,7 @@ import { html, type TemplateResult } from 'lit';
 import {
   AgentCategory,
   emptyRunEndOutput,
+  MESSAGE_TYPES,
   RunIdSchema,
   type MissingTool,
 } from '@shared/schemas';
@@ -304,6 +305,87 @@ function interruptedTasksView(): SessionView {
   ]);
 }
 
+/** A finished conversation of two turns, and a fork of it at the end of
+ *  its first turn, which this window holds, waiting for a message. */
+const FORK_SOURCE = RunIdSchema.parse('f1f1f1f1f1f1');
+const FORK = RunIdSchema.parse('f2f2f2f2f2f2');
+function forkView(): SessionView {
+  const log = new Log();
+  const start = (
+    id: typeof FORK,
+    at: number,
+    provenance: null | {
+      kind: 'fork';
+      from: { id: typeof FORK; uid: string };
+      at: number;
+    },
+  ) => {
+    log.emit(id, at, {
+      type: 'run.start',
+      identity: { kind: 'agent', agent: 'assistant' },
+      category: AgentCategory.ToolUse,
+      worktree: { workingDirectory: '/paper', branch: 'main' },
+      parent: null,
+      provenance,
+      userFollowUpSupport: 'nativeInteractive',
+    });
+    log.emit(id, at, { type: 'run.activate', category: AgentCategory.ToolUse });
+  };
+  const say = (id: typeof FORK, at: number, text: string) =>
+    log.emit(id, at, {
+      type: 'log',
+      level: 'info',
+      messageType: MESSAGE_TYPES.USER_MESSAGE,
+      message: text,
+    });
+  const answer = (id: typeof FORK, at: number, text: string) =>
+    log.emit(id, at, {
+      type: 'log',
+      level: 'info',
+      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+      message: text,
+    });
+  const park = (id: typeof FORK, at: number, turn: number) =>
+    log.emit(id, at, {
+      type: 'run.position',
+      payload: { family: 'toolUse', at: 'waiting', turn },
+    });
+  start(FORK_SOURCE, T.root, null);
+  log.emit(FORK_SOURCE, T.root, {
+    type: 'run.description',
+    description: 'Polish abstract',
+    by: 'user',
+  });
+  say(FORK_SOURCE, T.root, 'Tighten the abstract to 150 words.');
+  answer(FORK_SOURCE, T.root + 30_000, 'Done: the abstract is now 148 words.');
+  const firstPark = park(FORK_SOURCE, T.root + 31_000, 1);
+  say(FORK_SOURCE, T.child, 'Now make it sound less formal.');
+  answer(FORK_SOURCE, T.child + 20_000, 'Rewritten in a plainer voice.');
+  park(FORK_SOURCE, T.child + 21_000, 2);
+  log.emit(FORK_SOURCE, T.child + 22_000, {
+    type: 'run.end',
+    outcome: 'completed',
+    output: emptyRunEndOutput(AgentCategory.ToolUse),
+  });
+  start(FORK, T.childDone, {
+    kind: 'fork',
+    from: { id: FORK_SOURCE, uid: log.parent(FORK_SOURCE).uid },
+    at: firstPark.seq,
+  });
+  log.emit(FORK, T.childDone, {
+    type: 'run.description',
+    description: 'Polish abstract',
+    by: 'user',
+  });
+  park(FORK, T.childDone + 1, 1);
+  return foldAll([
+    subscribe(FORK_SOURCE, FORK),
+    ...log.events.map(tail),
+    log.drained(),
+    local({ self: [OWNER] }),
+  ]);
+}
+
 // ── scenes ──────────────────────────────────────────────────────────────
 
 export const extensionScenes: Record<string, () => TemplateResult> = {
@@ -436,6 +518,18 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
   'desktop-interrupted-open': () => {
     const view = interruptedTasksView();
     return desktopColumn(view, surface(view, { kind: 'selectNew' }));
+  },
+  // A fork waiting for its first message: where it came from, its header
+  // link back, and the composer.
+  'ext-forked': () => {
+    const view = forkView();
+    return sidebar(view, surface(view, { kind: 'select', runId: FORK }));
+  },
+  // The fork's source, finished: Fork on its ended line, and its user
+  // messages' Fork from here (on hover).
+  'ext-fork-source': () => {
+    const view = forkView();
+    return sidebar(view, surface(view, { kind: 'select', runId: FORK_SOURCE }));
   },
   // Real-ExtensionDrawer: the Sessions drawer over the same conversation.
   'ext-drawer': () => {

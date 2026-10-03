@@ -16,12 +16,9 @@
 import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared utilities
-import { AgentCategory, parseDelegationToolInput } from '@shared/schemas';
-import { SessionUiEvents } from '@shared/session/uiEvents';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import { normalizeToolName } from '@shared/tools/toolDisplayName';
 import type { TeXRAIconName } from '@shared/iconNames';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type { ToolRow } from '@ui/transcript';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
@@ -30,7 +27,6 @@ import {
   buildToolUseSection,
   wrapInPre,
   getToolIconName,
-  stopSummaryToggleKeydown,
   SPINNER_ICON_NAME,
 } from '../htmlBuilders';
 
@@ -140,30 +136,10 @@ export function formatToolUseTemplate(
   // prettier-ignore
   const timerTemplate = running ? html`<tool-timer .startTime=${row.timestamp} .timeoutMs=${toolTimeoutMs ?? 0}></tool-timer>` : nothing;
 
-  // Delegation row extra: "Edit as new task" loads the subagent's agent,
-  // model, instruction and files into the launcher (shown in summary row)
-  const proposal = model.isInProgress
-    ? null
-    : parseDelegationToolInput(input, toolName);
-
-  // A real <button> (not a role="button" span) so wa-details' own summary
-  // click handler recognizes it as interactive and skips its toggle — see
-  // stopSummaryToggleKeydown for why the keydown path additionally needs an
-  // explicit stopPropagation. The click binding carries the parsed proposal
-  // itself, so nothing has to survive a round trip through a DOM attribute.
-  // A workflow proposal carries its files; a tool-use one has none.
-  const copied =
-    proposal?.agentCategory === AgentCategory.Workflow
-      ? 'agent, model, instruction and files'
-      : 'agent, model and instruction';
-  // prettier-ignore
-  const setupButton = proposal
-    ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" title="Copy this subagent's ${copied} into a new task" @click=${(event: Event) => { event.preventDefault(); event.currentTarget?.dispatchEvent(SessionUiEvents.host({ kind: 'restoreProposalConfig', proposal })); }} @keydown=${stopSummaryToggleKeydown}>${waIcon('reply')} Edit as new task</button>`
-    : nothing;
   // prettier-ignore
   const stoppedTemplate = stopped ? html`<span class="tool-interrupted">Interrupted</span>` : nothing;
   // prettier-ignore
-  const extraContent = html`${timerTemplate}${stoppedTemplate}${setupButton}`;
+  const extraContent = html`${timerTemplate}${stoppedTemplate}`;
 
   return buildToolUseDetails({
     row,

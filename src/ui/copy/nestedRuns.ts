@@ -64,6 +64,18 @@ export const TASK_ACTIONS = {
   delete: 'Delete task',
   /** The header menu's clipboard item: the task's facts for a bug report. */
   copyDiagnostics: 'Copy diagnostics',
+  /** A new task holding this conversation: the ended line and the header
+   *  menu (the TUI's `/fork`). */
+  fork: 'Fork',
+  /** The same, cut before one of the user's messages, which returns to the
+   *  new task's composer. */
+  forkFromHere: 'Fork from here',
+  /** The header menu's fresh-context item (the TUI's `/handoff`). */
+  handOff: 'Hand off…',
+  /** A forked task's header line and its empty transcript's first line. */
+  forkedFrom: (title: string) => `Forked from ${title}`,
+  /** The source's header menu item for each of its forks. */
+  openFork: (title: string) => `Open fork: ${title}`,
   /** The header menu's title item (the TUI's `/rename`). */
   rename: 'Rename…',
   /** The header menu's folder item. */

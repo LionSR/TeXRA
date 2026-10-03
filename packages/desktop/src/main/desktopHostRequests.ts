@@ -468,9 +468,6 @@ export function createDesktopHostRequests(
     showInfo: (message) => host.showInfoMessage(message),
     // The window's paper is its one workspace: any launch runs as asked.
     admitLaunch: () => Effect.void,
-    // One window per paper: the two surface actions above are the whole
-    // move into the launcher here, so there is no sidebar left to raise.
-    showLauncher: Effect.void,
     runWorkflowDiff,
     runWorkflowFileOperation,
     latexdiffAgainstCommit,

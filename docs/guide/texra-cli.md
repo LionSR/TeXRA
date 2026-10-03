@@ -430,6 +430,11 @@ texra resume <id> --reset              # clear what the model sees, then continu
 texra resume <id> --handoff "<text>"   # clear it and continue from this text
 ```
 
+Inside the chat, `/fork` continues a new task holding the conversation
+(the original stays in `/resume`), `/handoff <text>` continues the task in a
+fresh context that starts from your text, and `/reset` clears that context
+so the model answers your next message alone.
+
 A fork leaves the original task unchanged, and it can be cut only at the
 end of a turn: a position inside one is refused. A reset or a handoff takes
 effect when the task is next waiting for you, after any message already

@@ -452,6 +452,12 @@ export function createSessionSurfaces(options: {
     // The host already decided a chime's transition and chose this port.
     if (action.kind === 'chime') playCompletionSound();
     else if (action.kind === 'submit') submit(entry);
+    else if (action.kind === 'draft')
+      act(entry, {
+        kind: 'draft',
+        runId: action.runId,
+        patch: { text: action.text },
+      });
     else if (action.kind !== 'showSessions') act(entry, action);
     // Show Sessions opens the newest session only from the New-task state.
     else if (entry.surface$.get().selected === null) {

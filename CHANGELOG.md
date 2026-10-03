@@ -35,6 +35,20 @@ All notable changes to this project will be documented in this file.
   marker is gone (Enter on that row still resumes). A request card whose
   task stopped before it was answered carries its own **Resume** button.
   `/resume` lists tasks by title, not id.
+- **Fork and hand off; "Edit as new task" is gone.** A conversation's
+  ended line and header menu offer **Fork**: a new task holding the
+  conversation, opened and waiting for your message, while the original is
+  left as it was. Each of your messages after the first offers **Fork from
+  here** (on hover): the fork holds the conversation before that message,
+  and the message waits in its composer to change. A forked task says
+  "Forked from _task_" in its header and at the top of its transcript, and
+  the source's menu lists its forks. **Hand off…** in the header menu
+  continues a running task in a fresh context that starts from text you
+  write, or, with **Clear without a summary**, from your next message. In
+  the CLI: `/fork`, `/handoff <text>` and `/reset` (`/clear` still starts a
+  new task). "Edit as new task" is removed from the ended line (Fork keeps
+  the history it dropped; the composer already starts a new task) and from
+  the delegation row (the agent's own task has Fork).
 - **Rename a task.** The header menu's **Rename…** (the CLI's
   `/rename <title>`) gives a task your own title, which a later generated
   title does not replace.
