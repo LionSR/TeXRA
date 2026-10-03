@@ -197,7 +197,7 @@ describe('createTestRunTrace settlement', () => {
       settlementSeqNo: 3,
       log: {
         status: 'failed',
-        error: 'The run ended before this tool completed.',
+        error: 'The task ended before this tool completed.',
       },
     });
 
@@ -220,7 +220,7 @@ describe('createTestRunTrace settlement', () => {
       settlementSeqNo: 3,
       log: {
         status: 'failed',
-        error: 'The run ended before this tool completed.',
+        error: 'The task ended before this tool completed.',
       },
     });
 

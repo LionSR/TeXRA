@@ -25,7 +25,7 @@ import {
 import { isActivePhase } from '@shared/runs/runStatus';
 import { formatLoopPositionLabel } from '@shared/runs/runStatusDisplay';
 import type { RunView, SessionView } from '@shared/session/sessionView';
-import { RUNNING_SESSION, SESSION_LIST, SUBAGENT } from '@ui/copy/nestedRuns';
+import { AGENT_LIST, NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { APPROVAL_BYPASS_BADGE } from '@ui/copy/approvalBypass';
 import { assertNever, filterNotNullish, unique } from '@utils/core';
 import {
@@ -123,7 +123,7 @@ export interface StatusBarChrome {
   readonly turn?: StatusBarTurnInput;
   readonly transientNotice: TransientNotice | undefined;
   readonly commandName?: string;
-  /** Visible child sessions still in flight (see RUNNING_SESSION copy). */
+  /** Visible agents still in flight. */
   readonly runningSessions: number;
   readonly approvalDepth: number;
   readonly approvalKind?: ApprovalQueueStatusKind;
@@ -556,10 +556,10 @@ function statusBarBindingsText(
   maxColumns: number | undefined,
 ): string {
   const parentBack = parentNavigationAvailable
-    ? keyHintText({ key: 'Esc', action: SESSION_LIST.parentAction })
+    ? keyHintText({ key: 'Esc', action: AGENT_LIST.parentAction })
     : undefined;
   const childList = childNavigationAvailable
-    ? keyHintText({ key: 'Tab', action: SESSION_LIST.openAction })
+    ? keyHintText({ key: 'Tab', action: AGENT_LIST.openAction })
     : undefined;
   const fullOutput = transcriptAvailable
     ? keyHintText({ key: 'Ctrl-T', action: 'transcript' })
@@ -744,7 +744,7 @@ function resolveStatusBarBindings(input: StatusBarChrome): string {
     input.transientNotice?.kind === 'exit' &&
     input.transientNotice.resumeId
   ) {
-    return `Resume this session with: ${formatResumeCommand(
+    return `${TASK_ACTIONS.resumeHint} ${formatResumeCommand(
       input.commandName,
       input.transientNotice.resumeId,
       { approvalPolicy: input.approvalPolicy },
@@ -909,7 +909,7 @@ export function buildStatusBarDisplay(
         subagents > 0
           ? {
               text: formatResultCount(subagents, 'agent'),
-              compactText: `${subagents} ${SUBAGENT.compactCountSuffix}`,
+              compactText: `${subagents} ${NESTED_AGENT.compactCountSuffix}`,
               color: 'dim',
               compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
             }
@@ -917,7 +917,7 @@ export function buildStatusBarDisplay(
         input.runningSessions > 0
           ? {
               text: `${input.runningSessions} active`,
-              compactText: `${input.runningSessions} ${RUNNING_SESSION.compactCountSuffix}`,
+              compactText: `${input.runningSessions} ${NESTED_AGENT.compactLiveSuffix}`,
               color: 'dim',
               compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
             }

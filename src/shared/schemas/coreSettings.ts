@@ -111,7 +111,7 @@ export const CHILD_RUN_CONCURRENCY_BUDGET_SETTING = Object.freeze({
   min: 0,
   max: 100,
   description:
-    "Maximum number of detached child runs one session may run at once; a script's agent() calls also run at most this many at once. 0 (the default) sizes it to this machine's CPU count. Detached subagents beyond the budget wait for a slot to free.",
+    "Maximum number of agents one task may run at once in the background; a script's agent() calls also run at most this many at once. 0 (the default) sizes it to this machine's CPU count. Agents beyond the budget wait for a slot to free.",
 } as const);
 
 /**

@@ -302,12 +302,9 @@ function buildExecutionsSections(ctx: SectionContext): ToolSection[] {
 function buildAcceptRunFilesSections(ctx: SectionContext): ToolSection[] {
   const { input } = ctx;
   if (!isObject(input)) return [];
+  // The files name what is accepted; the source agent's raw id is left out
+  // (ids are for bug reports, not the card).
   const sections: ToolSection[] = [];
-  const runId = asString(input.execution_id);
-  if (runId) {
-    sections.push({ kind: 'identifier', label: 'Run:', value: runId });
-  }
-
   const raw = Array.isArray(input.files) ? input.files : [];
   if (raw.length === 0) return sections;
   const edits = outputEdits<{

@@ -420,7 +420,7 @@ export function registerBuiltinSlashCommands(options: {
         },
         {
           name: 'clear',
-          description: 'Start a fresh chat session',
+          description: 'Start a new task',
           category: 'session',
           echo: 'ifPersists',
           handler: (_remainder, context) =>
@@ -491,14 +491,14 @@ export function registerBuiltinSlashCommands(options: {
       commands: [
         {
           name: 'status',
-          description: 'Show session details',
+          description: 'Show task details and cost',
           category: 'session',
           echo: 'ifPersists',
           handler: (_remainder, context) => showCliSessionStatus(context),
         },
         {
           name: 'plan',
-          description: 'Read the focused session work plan',
+          description: "Read the focused agent's work plan",
           category: 'session',
           echo: 'never',
           handler: () =>
@@ -506,7 +506,7 @@ export function registerBuiltinSlashCommands(options: {
         },
         {
           name: 'resume',
-          description: 'Resume a previous session',
+          description: 'Resume a previous task',
           category: 'session',
           echo: 'ifPersists',
           handler: (remainder, context) =>
@@ -514,7 +514,7 @@ export function registerBuiltinSlashCommands(options: {
               const id = parseCliHistoryId(remainder);
               if (!id)
                 return yield* Effect.fail(
-                  new Error(`Invalid run id: ${remainder}`),
+                  new Error(`Invalid task id: ${remainder}`),
                 );
               yield* context.resumeRun(id);
             }),

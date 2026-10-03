@@ -366,7 +366,7 @@ export class AgentsTab extends LitElement {
           checked: this.worktreeSupport,
         })}
         ${renderSettingsNumberRow({
-          label: 'Child-run concurrency budget',
+          label: 'Agents at once',
           description: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description,
           value: this.childRunConcurrencyBudget,
           min: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.min,

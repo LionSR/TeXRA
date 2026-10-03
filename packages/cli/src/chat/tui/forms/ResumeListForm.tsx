@@ -54,8 +54,8 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
         }))
       }
       availableRows={props.availableRows}
-      description={<Text dimColor>Choose a previous session to continue.</Text>}
-      emptyMessage="Nothing to resume yet. Sessions appear here once you run an agent."
+      description={<Text dimColor>Choose a task to continue.</Text>}
+      emptyMessage="Nothing to resume yet. Tasks appear here once you start one."
       selectMarginTop={1}
       action="resume"
       onSelect={props.onSelect}

@@ -402,7 +402,7 @@ const CORE_SETTING_ROWS: Record<
   },
   childRunConcurrencyBudget: {
     schema: ChildRunConcurrencyBudgetSchema,
-    title: 'Child-run concurrency budget',
+    title: 'Agents at once',
     description: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description,
     category: 'agents',
     surfaces: { settingsView: 'agents', cliConfig: true },
@@ -809,9 +809,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   surfacedSetting({
     key: GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
     schema: z.boolean().prefault(true),
-    title: 'Allow orchestrator cancellation',
+    title: 'Let a task stop its agents',
     description:
-      'Allow the orchestrator to stop subagents that are no longer needed.',
+      'Allow a task to stop the agents it started once they are no longer needed.',
     category: 'agents',
     slot: 'globalState',
     surfaces: { settingsView: 'agents', cliConfig: true },
@@ -819,9 +819,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   surfacedSetting({
     key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
     schema: z.boolean().prefault(false),
-    title: 'Keep subagents running',
-    description:
-      'Let active subagents continue when the orchestrator is stopped.',
+    title: 'Keep agents running',
+    description: "Let a task's agents continue when the task is stopped.",
     category: 'agents',
     slot: 'globalState',
     surfaces: { settingsView: 'agents', cliConfig: true },

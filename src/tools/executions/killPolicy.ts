@@ -31,7 +31,7 @@ export const orchestratorKillDenial = Effect.fn('orchestratorKillDenial')(
     );
     if (policy.kind === 'invalid') {
       const denial =
-        `Killing subagents is denied: the stored "Allow orchestrator cancellation" ` +
+        `Killing subagents is denied: the stored "Let a task stop its agents" ` +
         `setting (${GlobalStateKey.ALLOW_ORCHESTRATOR_KILL}) is invalid ` +
         `(${policy.cause}). Set it again in Settings > Agents > Advanced.`;
       yield* Effect.logWarning(denial).pipe(withLogChannel(CHANNEL));

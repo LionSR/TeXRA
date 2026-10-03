@@ -64,7 +64,7 @@ describe('proposal-request-panel file-name keyboard activation', () => {
     );
 
     expect(grant?.textContent?.trim()).toBe(
-      'Approve all agent work in this run',
+      'Approve all agent work in this task',
     );
     element.shadowRoot?.querySelector('.request-grant-menu')?.dispatchEvent(
       new CustomEvent('wa-select', {

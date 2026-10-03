@@ -1,87 +1,73 @@
 /**
- * Canonical user-facing vocabulary for nested work under a run (#9798).
- *
- * Three concepts, three names, everywhere:
+ * Canonical user-facing vocabulary for a task and the work nested under it
+ * (GUI design 2026-10-02, ruling GQ4: "task" and "agent" are the only nouns).
  *
  * | Concept | Term | Never say |
  * | --- | --- | --- |
- * | Anything nested under a run (delegated agent, agent CLI, background command) | background task | child run |
- * | A delegated TeXRA agent specifically | subagent | child |
+ * | What the user started | task | run, session |
+ * | Anything a task started (an agent, a background script or command) | agent | subagent, background task, child run |
  * | The internal run-tree relationship | child run — code only | in any UI string |
  *
- * The persistent CLI list of those rows is the **session list**: Tab opens it,
- * Enter focuses a session, Esc returns to the prompt. Do not call that list
- * "children" (run-tree jargon) or "tasks" (collides with the todo pane).
- *
- * Status-bar count exception: the compact chip stays "N sub" / "N subagents"
- * because the rows are overwhelmingly delegated agents and "N bg" is less
- * legible in the footer. Full sentences and disabled-input copy still use
- * "background task" when the focused row might not be an agent.
+ * The CLI's Tab list of those rows is the **agent list**: Tab opens it,
+ * Enter focuses an agent, Esc returns to the prompt.
  *
  * Hosts import these strings instead of paraphrasing run-tree or agent list
  * vocabulary. Wire identifiers (`childRunId`, `parentRun`, …) stay
- * internal and never reach the screen.
+ * internal and never reach the screen; a raw run id appears only in
+ * "Copy diagnostics" output, which is for bug reports.
  */
 
-/** Anything nested under a run. */
-const BACKGROUND_TASK_INLINE = 'background task';
-const BACKGROUND_TASK_INLINE_PLURAL = 'background tasks';
-
-export const BACKGROUND_TASK = {
-  /** Standalone display name, e.g. a section heading. */
-  label: 'Background task',
-  /** Same name inside a sentence. */
-  inline: BACKGROUND_TASK_INLINE,
-  /** Plural inside a sentence. */
-  inlinePlural: BACKGROUND_TASK_INLINE_PLURAL,
-  /** Compact status-bar / aria count noun (singular; pair with a formatter). */
-  countNoun: BACKGROUND_TASK_INLINE,
+/** Anything a task started. */
+export const NESTED_AGENT = {
+  /** Count noun (singular; pair with a formatter): "3 agents". */
+  countNoun: 'agent',
+  /** The CLI status bar's narrow count suffix: "3 agt". */
+  compactCountSuffix: 'agt',
+  /** The CLI status bar's narrow suffix for agents still working: "2 live". */
+  compactLiveSuffix: 'live',
   /** Expand-toggle aria when the tree is open. */
-  collapseAction: `Collapse ${BACKGROUND_TASK_INLINE_PLURAL}`,
-} as const;
-
-/** A delegated TeXRA agent specifically — not a background command. */
-export const SUBAGENT = {
-  label: 'Subagent',
-  inline: 'subagent',
-  inlinePlural: 'subagents',
-  /**
-   * Status-bar count noun. Deliberately "subagent" rather than
-   * {@link BACKGROUND_TASK.countNoun}: see the module docstring.
-   */
-  countNoun: 'subagent',
-  /** Compact status-bar chip suffix, e.g. `3 sub`. */
-  compactCountSuffix: 'sub',
-} as const;
-
-/** Status-bar count for child sessions still in flight, e.g. `3 running
- *  sessions`. */
-export const RUNNING_SESSION = {
-  countNoun: 'running session',
-  /** Compact status-bar chip suffix, e.g. `3 run`. */
-  compactCountSuffix: 'run',
+  collapseAction: 'Collapse agents',
+  /** The dispatch card's heading while any of them is still working. */
+  workingSummary: (count: string) => `${count} working in the background`,
+  /** The same heading once all of them have settled. */
+  settledSummary: (count: string) => `${count} in the background`,
 } as const;
 
 /**
- * CLI session-list navigation. The list shows background tasks (and the root);
- * the user-facing noun for "a row I can focus" is session.
+ * CLI agent-list navigation. The list shows the task and the agents it
+ * started.
  */
-export const SESSION_LIST = {
-  /** Status-bar Tab action: `Tab sessions`. */
-  openAction: 'sessions',
+export const AGENT_LIST = {
+  /** Status-bar Tab action: `Tab agents`. */
+  openAction: 'agents',
   /** Help / prose for the same Tab binding. */
-  openHelp: 'selects sessions',
+  openHelp: 'lists the agents of this task',
   /**
    * Input-bar placeholder while the list owns keys. Esc here only returns
-   * typing to this view — it does not walk to the parent session.
+   * typing to this view — it does not walk to the parent.
    */
   choosing:
-    'Session list. Enter opens a session. Esc stays here and returns to typing.',
-  /** Status-bar Esc action while a nested session is focused: walk to its parent. */
+    'Agent list. Enter opens an agent. Esc stays here and returns to typing.',
+  /** Status-bar Esc action while a nested agent is focused: walk to its parent. */
   parentAction: 'parent',
 } as const;
 
-/** Follow-up rejection copy when the focused nested run has already finished. */
-export const FOCUSED_BACKGROUND_TASK = {
-  selectedNoLongerAccepting: `The selected ${BACKGROUND_TASK_INLINE} is no longer accepting follow-ups.`,
+/** Follow-up rejection copy when the focused agent has already finished. */
+export const FOCUSED_AGENT = {
+  selectedNoLongerAccepting:
+    'The selected agent has finished and no longer takes messages.',
+} as const;
+
+/** The task-level actions every host names the same way. */
+export const TASK_ACTIONS = {
+  /** The header menu's destructive item and the desktop rail's ×. */
+  delete: 'Delete task',
+  /** The header menu's clipboard item: the task's facts for a bug report. */
+  copyDiagnostics: 'Copy diagnostics',
+  /** The header menu's folder item. */
+  openFolder: 'Open task folder',
+  /** The header's breadcrumb of the tasks above an agent. */
+  ancestors: 'Started by',
+  /** The CLI's exit line before the `texra resume …` command. */
+  resumeHint: 'Resume this task with:',
 } as const;

@@ -1,12 +1,13 @@
 /**
  * The dispatch card (board E2): what a run has fanned out, in its
- * conversation prelude. A `<wa-details>` headed "Dispatched N subagents"
+ * conversation prelude. A `<wa-details>` headed "N agents working in the
+ * background" (or "N agents in the background" once all have settled)
  * with the `rollup` of the children it lists as badges and "since <time>"
  * from the earliest child still running (the fold clears `runStartedAt` when
  * a run ends, so a settled fan-out carries no since), one row per dispatched
  * child run (`dispatchedChildren`: a script's calls are listed by its stage;
  * nested children indented under theirs), the inquiry threads the run opened, and a
- * "Waiting on N subagents" line while any run. The `inquiries` scope is the
+ * "Waiting on N agents" line while any run. The `inquiries` scope is the
  * same card over the inquiry threads alone (the workflow body, whose run
  * board already lists every call). Every row is a child of the fold: label,
  * status, tone, latest line, and clock facts come from `view.runs`; the
@@ -42,7 +43,7 @@ import type { TeXRAIconName } from '@shared/iconNames';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { dispatchedChildren } from '@ui/transcript';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { BACKGROUND_TASK } from '@ui/copy/nestedRuns';
+import { NESTED_AGENT } from '@ui/copy/nestedRuns';
 import {
   formatCompactDuration,
   formatResultCount,
@@ -305,8 +306,12 @@ export class BackgroundTasksPanel extends LitElement {
             <wa-badge variant="neutral" appearance="outlined" pill
               >${inquiries.length}</wa-badge
             >`
-        : html`${waIcon('diagram-project')} Dispatched
-          ${formatResultCount(rollup.total, BACKGROUND_TASK.countNoun)}${
+        : html`${waIcon('diagram-project')}
+          ${(rollup.running > 0
+            ? NESTED_AGENT.workingSummary
+            : NESTED_AGENT.settledSummary)(
+            formatResultCount(rollup.total, NESTED_AGENT.countNoun),
+          )}${
             rollup.running > 0
               ? html`<wa-badge variant="success" pill
                   >${rollup.running} running</wa-badge
@@ -355,7 +360,7 @@ export class BackgroundTasksPanel extends LitElement {
           this.scope === 'all' && rollup.running > 0
             ? html`<div class="task-wait">
                 ${waIcon('clock')} Waiting on
-                ${formatResultCount(rollup.running, BACKGROUND_TASK.countNoun)}
+                ${formatResultCount(rollup.running, NESTED_AGENT.countNoun)}
               </div>`
             : nothing
         }

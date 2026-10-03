@@ -136,7 +136,7 @@ export function sessionRequests(
       return yield* Effect.fail(
         new Unavailable({
           runId,
-          reason: 'The run changed after it was listed.',
+          reason: 'The task changed after it was listed.',
         }),
       );
     }
@@ -200,7 +200,7 @@ function admit(
         return Effect.fail(
           new Unavailable({
             runId,
-            reason: 'The run is no longer open.',
+            reason: 'The task is no longer open.',
           }),
         );
       }
@@ -272,7 +272,7 @@ function decide(
         new Unavailable({
           runId: req.runId,
           reason:
-            'The run that asked is no longer running: resume it to answer this request.',
+            'The task that asked is no longer running: resume it to answer this request.',
         }),
       );
     }
@@ -331,7 +331,7 @@ function deleteAdmittedRun(
       return yield* Effect.fail(
         new Unavailable({
           runId,
-          reason: 'The run has no recorded start.',
+          reason: 'The task has no recorded start.',
         }),
       );
     }
@@ -342,7 +342,7 @@ function deleteAdmittedRun(
       return yield* Effect.fail(
         new Unavailable({
           runId,
-          reason: 'The run start could not be read.',
+          reason: 'The task start could not be read.',
         }),
       );
     }
@@ -356,7 +356,7 @@ function deleteAdmittedRun(
           if (error instanceof RunLive)
             return new Unavailable({
               runId,
-              reason: 'Stop the run before deleting it.',
+              reason: 'Stop the task before deleting it.',
             });
           if (
             error instanceof DatabaseWriteFailed &&
@@ -371,7 +371,7 @@ function deleteAdmittedRun(
           }
           return new Unavailable({
             runId,
-            reason: 'The run could not be removed from the listing.',
+            reason: 'The task could not be removed from the listing.',
           });
         }),
       );
@@ -411,7 +411,7 @@ function handle(
           (error): RequestError =>
             new Unavailable({
               runId: req.runId,
-              reason: `The run could not be stopped: ${toErrorMessage(error)}`,
+              reason: `The task could not be stopped: ${toErrorMessage(error)}`,
             }),
         ),
         Effect.as(done),
@@ -429,7 +429,7 @@ function handle(
             return Effect.fail(
               new Unavailable({
                 runId: req.runId,
-                reason: 'No active tool-use session found for this run.',
+                reason: 'This task has no conversation to compact.',
               }),
             );
         }

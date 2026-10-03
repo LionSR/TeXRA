@@ -128,8 +128,8 @@ export class DependencyBanner extends LitElement {
           ${renderIconActionButton({
             id: 'dependencyDismissButton',
             icon: 'xmark',
-            label: 'Dismiss for this session',
-            tooltip: 'Dismiss for this session',
+            label: 'Hide for now',
+            tooltip: 'Hide for now',
             onClick: () =>
               this.dispatchEvent(
                 SessionUiEvents.host({

@@ -40,6 +40,7 @@ import {
   LAUNCH_FILE_LISTS,
 } from '@shared/launcher/fileSelectConfigs';
 import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
+import { agentName } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
@@ -53,6 +54,21 @@ import { registerTeXRAWebAwesomeIcons } from '@ui/wa/webAwesomeIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { ONBOARDING_SETUP_HANDOFF } from '@ui/copy/onboarding';
 import { getBasename } from '@utils/core';
+
+/** A workflow task's planned pass count: its agent's catalog entry, by the
+ *  key the launch recorded or, for a plain name only, the agent name. A
+ *  source-qualified key names one agent exactly, so a same-named agent from
+ *  another source never lends it its count. */
+function plannedPassesOf(run: RunView, host: HostSnapshot): number | undefined {
+  if (run.category !== 'workflow' || run.identity.kind !== 'agent') {
+    return undefined;
+  }
+  const id = run.identity.agent;
+  return host.agentOptions.workflow?.find(
+    (option) =>
+      option.value === id || (agentName(id) === id && option.label === id),
+  )?.rounds;
+}
 
 // Local imports - progress view frontend
 import { progressAppStyles } from './progressAppStyles';
@@ -120,7 +136,7 @@ export class ProgressApp extends LitElement {
         : {
             value: 'popOut',
             icon: 'picture-in-picture',
-            label: 'Open sessions in editor',
+            label: 'Open tasks in editor',
             activate: host('popOut'),
           },
       {
@@ -202,7 +218,7 @@ export class ProgressApp extends LitElement {
         message = error.reason;
         break;
       case 'NotOwner':
-        message = 'This run is controlled by another TeXRA window.';
+        message = 'This task is controlled by another TeXRA window.';
         break;
       case 'Internal':
         message = 'The request failed. See the TeXRA log for details.';
@@ -249,8 +265,8 @@ export class ProgressApp extends LitElement {
     const sessions = renderIconActionButtonParts({
       id: 'shell-sessions',
       icon: 'list-ul',
-      label: 'Sessions',
-      tooltip: 'Sessions',
+      label: 'Tasks',
+      tooltip: 'Tasks',
       className: 'sessions-button',
       slot: 'start',
       pressed: surface.drawerOpen,
@@ -290,6 +306,7 @@ export class ProgressApp extends LitElement {
                     .run=${run}
                     .view=${view}
                     .menuItems=${this.windowItems()}
+                    .plannedPasses=${plannedPassesOf(run, host)}
                     >${onDesktop ? nothing : sessions.button}${end.map((b) => b.button)}</run-header
                   >${onDesktop ? nothing : sessions.tooltip}${end.map((b) => b.tooltip)}`
               : html`${sessions.button}${sessions.tooltip}
@@ -353,12 +370,12 @@ export class ProgressApp extends LitElement {
     surface: Surface,
   ): TemplateResult {
     return html`
-      <aside class="dock" aria-label="Sessions">
+      <aside class="dock" aria-label="Tasks">
         <div class="dock-search">
           <wa-input
             size="s"
-            placeholder="Filter sessions"
-            aria-label="Filter sessions"
+            placeholder="Filter tasks"
+            aria-label="Filter tasks"
             .value=${live(surface.search)}
             @input=${this.handleSearchInput}
           >

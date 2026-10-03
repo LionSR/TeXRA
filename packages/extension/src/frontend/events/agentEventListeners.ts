@@ -168,8 +168,8 @@ function handleRequestEnsureProgressView(
       {
         modal: false,
         detail:
-          'TeXRA agents run in the background; track them under Sessions in the TeXRA panel.',
-        items: ['Show Sessions'],
+          'TeXRA agents run in the background; track them under Tasks in the TeXRA panel.',
+        items: ['Show Tasks'],
       },
     );
     if (!selection) return;

@@ -28,8 +28,6 @@ import {
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import { goalStateOf } from '@shared/plugins/goal';
 import { AgentCategory, type RunId } from '@shared/schemas';
-import { runRelation } from '@shared/session/runRelation';
-import type { RunView } from '@shared/session/sessionView';
 
 import { formatSlashCommandHelp } from '../helpText';
 import {
@@ -52,7 +50,7 @@ export function showCliSlashCommandHelp(): void {
 export function showCliWorkPlan(session: SessionHandle): void {
   const runId = selectedRunIdSignal.get();
   if (!runId) {
-    setTransientNotice('No focused session.');
+    setTransientNotice('No focused agent.');
     return;
   }
   clearTransientNotice();
@@ -64,7 +62,7 @@ export function showCliWorkPlan(session: SessionHandle): void {
     openWorkPlanReader(runId);
   } else {
     closeForegroundReader();
-    setTransientNotice('The focused session has no work plan.');
+    setTransientNotice('The focused agent has no work plan.');
   }
 }
 
@@ -140,9 +138,7 @@ function requestCliSessionCompaction(
   return Effect.suspend(() => {
     const runId = selectedRunIdSignal.get();
     if (runId === undefined) {
-      setTransientNotice(
-        'No active tool-use session found for context compaction.',
-      );
+      setTransientNotice('No agent to compact.');
       return Effect.void;
     }
     return session.requests.request({ kind: 'run.compact', runId }).pipe(
@@ -159,98 +155,13 @@ function requestCliSessionCompaction(
   });
 }
 
-/** `/ps`: every run in this session, most recent first, marked with where
- *  it stands relative to the focused run and how many messages it has not
- *  read. Any of them can be messaged with `/send`. */
-function showCliRunList(): void {
-  const view = currentView();
-  const focused = selectedRunIdSignal.get();
-  const runs = [...view.runs.values()].toSorted(
-    (left, right) => right.launchedAt - left.launchedAt,
-  );
-  if (runs.length === 0) {
-    openInfoPane('/ps', 'No runs in this session.');
-    return;
-  }
-  const parentOf = (id: RunId) => view.runs.get(id)?.parentId;
-  const relationTo = (run: RunView): string => {
-    if (focused === undefined) return '';
-    if (run.id === focused) return '  (focused)';
-    const relation = runRelation(run.id, focused, parentOf);
-    return relation === 'peer' ? '' : `  (${relation} of focused)`;
-  };
-  const lines = runs.map((run) => {
-    const unread = view.queuedFollowUps.get(run.id)?.length ?? 0;
-    return `${run.id}  ${run.label}  [${run.statusLabel}]${relationTo(run)}${unread > 0 ? `  unread=${unread}` : ''}`;
-  });
-  openInfoPane(
-    '/ps',
-    [...lines, '', 'Message a run with /send <run id> <message>.'].join('\n'),
-  );
-}
-
-/** `/send <run id> <message>`: type into another run's input, as its
- *  composer would. A unique id prefix names the run. */
-function sendCliRunMessage(
-  session: SessionHandle,
-  remainder: string,
-): Effect.Effect<void> {
-  return Effect.suspend(() => {
-    const [target = '', ...words] = remainder.trim().split(/\s+/);
-    const text = words.join(' ');
-    if (!target || !text) {
-      setTransientNotice('Usage: /send <run id> <message>');
-      return Effect.void;
-    }
-    const ids = [...currentView().runs.keys()];
-    const matches = ids.includes(target as RunId)
-      ? [target as RunId]
-      : ids.filter((id) => id.startsWith(target));
-    if (matches.length !== 1) {
-      setTransientNotice(
-        matches.length === 0
-          ? `No run matches '${target}'. Use /ps to list runs.`
-          : `'${target}' matches ${matches.length} runs (${matches.join(', ')}). Type more of the id.`,
-      );
-      return Effect.void;
-    }
-    const runId = matches[0]!;
-    return session.requests
-      .request({ kind: 'followUp.send', runId, text })
-      .pipe(
-        Effect.match({
-          onFailure: (error) => appendLocalRequestRefusal(error, runId),
-          onSuccess: () => appendLocalNotice(`Message sent to ${runId}.`),
-        }),
-      );
-  });
-}
-
-/** The session commands that act on runs: looking at them and messaging
- *  them (`/ps`, `/send`), compacting the focused one, and leaving. */
+/** The task commands: compacting the focused agent's context, and leaving.
+ *  The agent list (Tab) lists and focuses the task's agents; typing to a
+ *  focused agent messages it. */
 export function sessionContributions(
   session: SessionHandle,
 ): SlashCommandContribution[] {
   return [
-    {
-      pluginId: 'run-messaging',
-      commands: [
-        {
-          name: 'ps',
-          description: 'List the runs in this session',
-          category: 'session',
-          echo: 'never',
-          handler: () => Effect.sync(showCliRunList),
-        },
-        {
-          name: 'send',
-          description: 'Send a message to another run: /send <id> <text>',
-          category: 'session',
-          echo: 'ifPersists',
-          handler: (remainder) => sendCliRunMessage(session, remainder),
-        },
-      ],
-    },
     {
       pluginId: 'session-lifecycle',
       commands: [
@@ -263,7 +174,7 @@ export function sessionContributions(
         },
         {
           name: 'exit',
-          description: 'Exit the CLI session',
+          description: 'Exit texra',
           aliases: ['quit'],
           category: 'session',
           echo: 'never',

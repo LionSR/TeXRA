@@ -11,7 +11,8 @@ import type { SessionView, RunView } from '@shared/session/sessionView';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import type { TeXRAIconName } from '@shared/iconNames';
-import { formatWorkflowRunContext } from '@ui/copy/workflowRunContext';
+import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
+import { formatTaskDiagnostics } from '@ui/copy/taskDiagnostics';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { statusIndicatorStyles } from '@ui/styles/statusIndicatorStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
@@ -31,10 +32,7 @@ import {
   RUN_MENU_ACTIONS,
   type RunMenuAction,
 } from '../constants';
-import {
-  renderProgressBadgeContent,
-  getProgressBadgeTitle,
-} from '../formatters/progressBadgeFormatter';
+import { progressBadgeLabel } from '../formatters/progressBadgeFormatter';
 import { renderRunGrantChips, runGrantStyles } from './runGrantChips';
 import type WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
@@ -65,7 +63,7 @@ const TONE_INDICATOR_CLASS: Record<RunView['tone'], string> = {
  * shell slots its own controls around it (the Sessions button at `start`,
  * New task at `end`), so a run never shows two rows of chrome: path and
  * title, status, time, an active run grant, Stop, and one menu holding the
- * run's actions, the shell's window items, and last, Delete session.
+ * run's actions, the shell's window items, and last, Delete task.
  */
 @customElement('run-header')
 export class RunHeader extends LitElement {
@@ -196,16 +194,12 @@ export class RunHeader extends LitElement {
       :dir(rtl) .ancestor-separator {
         transform: scaleX(-1);
       }
-      wa-tag.progress-badge wa-icon {
-        font-size: var(--font-size-xs);
-      }
-
       wa-tag.progress-badge {
         font-variant-numeric: tabular-nums;
       }
 
-      /* A narrow row keeps the title: the status word and the tool-call
-         count move into the menu's status line. */
+      /* A narrow row keeps the title: the status word and the pass chip
+         move into the menu's status line. */
       @container (max-width: 640px) {
         .status-label,
         wa-tag.progress-badge {
@@ -221,31 +215,18 @@ export class RunHeader extends LitElement {
   @property({ attribute: false }) view: SessionView | null = null;
   /** The shell's window items, after the run's actions in its menu. */
   @property({ attribute: false }) menuItems: readonly HeaderMenuItem[] = [];
+  /** A workflow agent's planned pass count, from the agent catalog. */
+  @property({ attribute: false }) plannedPasses: number | undefined;
 
-  private readonly copyRunContext = new CopyButtonController(this, {
+  private readonly copyDiagnostics = new CopyButtonController(this, {
     successTitle: 'Copied!',
   });
-
-  private runContextText(run: RunView): string {
-    if (run.category !== 'workflow') return '';
-    return formatWorkflowRunContext({
-      run: {
-        label: run.label,
-        model: run.model ?? undefined,
-        modelLabel: run.modelLabel ?? undefined,
-        runId: run.id,
-        description: run.description ?? undefined,
-      },
-      files: run.files,
-      compileFailures: run.compileFailures,
-    });
-  }
 
   /** Send what a run action names (see `RunMenuAction.arm`). */
   private dispatchAction(action: RunMenuAction, run: RunView): void {
     const runId = run.id;
-    if (action.arm === 'copyRunContext') {
-      void this.copyRunContext.copy(this.runContextText(run));
+    if (action.arm === 'copyDiagnostics') {
+      void this.copyDiagnostics.copy(formatTaskDiagnostics(run));
     } else if (action.arm === 'run.compact') {
       this.dispatchEvent(
         SessionUiEvents.runtime({ kind: 'run.compact', runId }),
@@ -278,10 +259,7 @@ export class RunHeader extends LitElement {
     // The header offers exactly what the fold's `actions` licenses.
     const canStop = run.actions.includes('stop');
     const canGrant = run.actions.includes('grant');
-    const progressTitle = getProgressBadgeTitle(
-      run.conversationProgress,
-      run.position,
-    );
+    const passLabel = progressBadgeLabel(run.position, this.plannedPasses);
 
     return html`
       <div class="log-header">
@@ -305,7 +283,7 @@ export class RunHeader extends LitElement {
         </wa-tooltip>
         <span class="status-label" aria-hidden="true">${statusLabel}</span>
         ${this.renderRunElapsed(run)} ${this.renderGoalChip(goal)}
-        ${this.renderProgressBadge(run)}
+        ${this.renderPassBadge(passLabel)}
         ${
           canGrant
             ? renderRunGrantChips(
@@ -334,7 +312,7 @@ export class RunHeader extends LitElement {
             : nothing
         }
         <slot name="end"></slot>
-        ${this.renderMenu(run, statusLabel, progressTitle)}
+        ${this.renderMenu(run, statusLabel, passLabel)}
       </div>
     `;
   }
@@ -342,7 +320,7 @@ export class RunHeader extends LitElement {
   private renderMenu(
     run: RunView,
     statusLabel: string,
-    progressTitle: string | undefined,
+    passLabel: string | undefined,
   ): TemplateResult {
     // An agent run's menu lists its category's actions, a process's or a
     // workflow container's the neutral ones, each shown only while the
@@ -353,8 +331,7 @@ export class RunHeader extends LitElement {
         ? RUN_MENU_ACTIONS[run.category]
         : NEUTRAL_RUN_ACTIONS
     ).filter((action) => run.actions.includes(action.action));
-    const runContext = this.runContextText(run);
-    const copied = this.copyRunContext.state.copied;
+    const copied = this.copyDiagnostics.state.copied;
     const canDelete = run.actions.includes('delete');
     return html`
       <wa-dropdown
@@ -387,16 +364,14 @@ export class RunHeader extends LitElement {
           >${waIcon('ellipsis')}</wa-button
         >
         <div class="menu-status">
-          ${statusLabel}${progressTitle ? ` · ${progressTitle}` : ''}
+          ${statusLabel}${passLabel ? ` · ${passLabel}` : ''}
         </div>
         ${repeat(
           actions,
           (action) => action.id,
           (action) => {
-            const isCopy = action.arm === 'copyRunContext';
-            return html`<wa-dropdown-item
-              value=${action.id}
-              ?disabled=${isCopy && runContext === ''}
+            const isCopy = action.arm === 'copyDiagnostics';
+            return html`<wa-dropdown-item value=${action.id}
               >${waIcon(isCopy && copied ? 'check' : action.icon, {
                 slot: 'icon',
               })}${action.label}</wa-dropdown-item
@@ -415,8 +390,7 @@ export class RunHeader extends LitElement {
           canDelete
             ? html`<wa-divider></wa-divider
                 ><wa-dropdown-item value=${DELETE_SESSION} variant="danger"
-                  >${waIcon('trash', { slot: 'icon' })}Delete
-                  session</wa-dropdown-item
+                  >${waIcon('trash', { slot: 'icon' })}${TASK_ACTIONS.delete}</wa-dropdown-item
                 >`
             : nothing
         }
@@ -449,26 +423,17 @@ export class RunHeader extends LitElement {
     return html`<tool-timer .startTime=${run.runStartedAt}></tool-timer>`;
   }
 
-  private renderProgressBadge(run: RunView): TemplateResult | typeof nothing {
-    const { conversationProgress: progress, position } = run;
-    const content = renderProgressBadgeContent(progress, position);
-    if (content === nothing) return nothing;
-    const progressTitle = getProgressBadgeTitle(progress, position);
+  private renderPassBadge(
+    label: string | undefined,
+  ): TemplateResult | typeof nothing {
+    if (label === undefined) return nothing;
     return html`<wa-tag
-        id=${ELEMENT_IDS.PROGRESS_BADGE}
-        class="progress-badge"
-        variant="neutral"
-        size="s"
-      >
-        ${waIcon('chart-line')} ${content}
-      </wa-tag>
-      ${
-        progressTitle
-          ? html`<wa-tooltip for=${ELEMENT_IDS.PROGRESS_BADGE}
-              >${progressTitle}</wa-tooltip
-            >`
-          : nothing
-      }`;
+      id=${ELEMENT_IDS.PROGRESS_BADGE}
+      class="progress-badge"
+      variant="neutral"
+      size="s"
+      ><bdi dir="auto">${label}</bdi></wa-tag
+    >`;
   }
 
   /** The full ancestors path, root first, each segment a link to that
@@ -477,7 +442,7 @@ export class RunHeader extends LitElement {
     if (run.ancestors.length === 0) return nothing;
     const nearestFirst = run.ancestors.toReversed();
     return html`
-      <nav class="ancestors" aria-label="Parent sessions">
+      <nav class="ancestors" aria-label=${TASK_ACTIONS.ancestors}>
         ${repeat(
           nearestFirst,
           (ancestor) => ancestor.id,

@@ -21,7 +21,7 @@ const ROOT = 'root' as RunId;
 function root(usage?: TokenUsageStats): RunView {
   return makeRunView({
     id: ROOT,
-    label: 'main',
+    label: 'task',
     ...(usage ? { usage } : {}),
   });
 }
@@ -30,14 +30,14 @@ function root(usage?: TokenUsageStats): RunView {
 function child(over: Partial<RunView> & { readonly id: string }): RunView {
   return makeRunView({
     parentId: ROOT,
-    ancestors: [{ id: ROOT, label: 'main' }],
+    ancestors: [{ id: ROOT, label: 'task' }],
     ...over,
   });
 }
 
 /** Root plus one subagent: the shared fixture for multi-line hint cases. */
 const TWO_RESUME_TARGETS: readonly ResumeTarget[] = [
-  { runId: 'root', label: 'main', isRoot: true },
+  { runId: 'root', label: 'task', isRoot: true },
   { runId: 'rev', label: 'reviewer', isRoot: false },
 ];
 
@@ -48,7 +48,7 @@ describe('collectResumeTargets', () => {
         view: viewWith([root()]),
         rootRunId: ROOT,
       }),
-    ).toEqual([{ runId: 'root', label: 'main', isRoot: true }]);
+    ).toEqual([{ runId: 'root', label: 'task', isRoot: true }]);
   });
 
   it('lists running and finished plain tool-use subagents', () => {
@@ -83,7 +83,7 @@ describe('collectResumeTargets', () => {
         view,
         rootRunId: ROOT,
       }),
-    ).toEqual([{ runId: 'root', label: 'main', isRoot: true }]);
+    ).toEqual([{ runId: 'root', label: 'task', isRoot: true }]);
   });
 
   it('returns nothing when there is no root run yet', () => {
@@ -156,8 +156,8 @@ describe('formatResumeHint', () => {
   it('renders one resume line per target', () => {
     expect(formatResumeHint(TWO_RESUME_TARGETS)).toBe(
       [
-        'Resume this session with:',
-        '  texra resume root  (main)',
+        'Resume this task with:',
+        '  texra resume root  (task)',
         '  texra resume rev  (reviewer)',
       ].join('\n'),
     );
@@ -165,7 +165,7 @@ describe('formatResumeHint', () => {
 
   it('prepends token usage when available', () => {
     expect(
-      formatResumeHint([{ runId: 'root', label: 'main', isRoot: true }], {
+      formatResumeHint([{ runId: 'root', label: 'task', isRoot: true }], {
         inputTokens: 186_189_742,
         outputTokens: 11_042_600,
         cost: 0,
@@ -175,8 +175,8 @@ describe('formatResumeHint', () => {
     ).toBe(
       [
         'Token usage: total=197,232,342 input=186,189,742 (+ 6,470,327,168 cached) output=11,042,600 (reasoning 3,489,148)',
-        'Resume this session with:',
-        '  texra resume root  (main)',
+        'Resume this task with:',
+        '  texra resume root  (task)',
       ].join('\n'),
     );
   });
@@ -202,10 +202,10 @@ describe('formatResumeHint', () => {
       expected: '$0.300',
     },
   ])(
-    'includes the $usageRoute session cost in the full hint',
+    'includes the $usageRoute task cost in the full hint',
     ({ usageRoute, cost, expected }) => {
       expect(
-        formatResumeHint([{ runId: 'root', label: 'main', isRoot: true }], {
+        formatResumeHint([{ runId: 'root', label: 'task', isRoot: true }], {
           inputTokens: 100,
           outputTokens: 20,
           cost,
@@ -214,9 +214,9 @@ describe('formatResumeHint', () => {
       ).toBe(
         [
           'Token usage: total=120 input=100 output=20',
-          `Session cost: ${expected}`,
-          'Resume this session with:',
-          '  texra resume root  (main)',
+          `Task cost: ${expected}`,
+          'Resume this task with:',
+          '  texra resume root  (task)',
         ].join('\n'),
       );
     },
@@ -236,7 +236,7 @@ describe('collectResumeUsage', () => {
       cacheReadInputTokens: 10,
     };
     const view = viewWith([
-      makeRunView({ id: ROOT, label: 'main', treeUsage }),
+      makeRunView({ id: ROOT, label: 'task', treeUsage }),
       child({ id: 'rev' as RunId }),
     ]);
     expect(collectResumeUsage(view, ROOT)).toEqual(treeUsage);

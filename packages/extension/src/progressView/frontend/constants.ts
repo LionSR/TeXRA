@@ -1,6 +1,7 @@
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { RunAction } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/iconNames';
+import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
 /** One run action in the run header's menu. Stop sits in the row itself. */
 export interface RunMenuAction {
@@ -26,7 +27,7 @@ export interface RunMenuAction {
         | 'clean'
       >
     | 'run.compact'
-    | 'copyRunContext';
+    | 'copyDiagnostics';
 }
 
 /**
@@ -47,7 +48,7 @@ export const ELEMENT_IDS = {
   CLEAN_STREAM_BTN: 'cleanStreamBtn',
   PACK_STREAM_BTN: 'packStreamBtn',
   OPEN_RUN_STORAGE_BTN: 'openRunStorageBtn',
-  COPY_RUN_CONTEXT_BTN: 'copyRunContextBtn',
+  COPY_DIAGNOSTICS_BTN: 'copyDiagnosticsBtn',
   COMPACT_RESPONSE_BTN: 'compactResponseBtn',
 };
 
@@ -62,7 +63,7 @@ const OPEN_RUN_STORAGE_ACTION: RunMenuAction = {
   action: 'openRunStorage',
   arm: 'openRunStorage',
   icon: 'folder-open',
-  label: 'Open run folder',
+  label: TASK_ACTIONS.openFolder,
 };
 
 const EXPORT_TRANSCRIPT_ACTION: RunMenuAction = {
@@ -71,6 +72,15 @@ const EXPORT_TRANSCRIPT_ACTION: RunMenuAction = {
   arm: 'exportTranscript',
   icon: 'file-export',
   label: 'Export conversation…',
+};
+
+/** A task's facts for a bug report: the one place its raw ids are shown. */
+const COPY_DIAGNOSTICS_ACTION: RunMenuAction = {
+  id: ELEMENT_IDS.COPY_DIAGNOSTICS_BTN,
+  action: 'copy',
+  arm: 'copyDiagnostics',
+  icon: 'copy',
+  label: TASK_ACTIONS.copyDiagnostics,
 };
 
 const WORKFLOW_ACTIONS: readonly RunMenuAction[] = [
@@ -90,13 +100,7 @@ const WORKFLOW_ACTIONS: readonly RunMenuAction[] = [
   },
   OPEN_RUN_STORAGE_ACTION,
   EXPORT_TRANSCRIPT_ACTION,
-  {
-    id: ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
-    icon: 'copy',
-    action: 'copy',
-    arm: 'copyRunContext',
-    label: 'Copy run context',
-  },
+  COPY_DIAGNOSTICS_ACTION,
   {
     id: ELEMENT_IDS.DIFF_STREAM_BTN,
     action: 'diff',
@@ -130,6 +134,7 @@ const TOOL_USE_ACTIONS: readonly RunMenuAction[] = [
   },
   OPEN_RUN_STORAGE_ACTION,
   EXPORT_TRANSCRIPT_ACTION,
+  COPY_DIAGNOSTICS_ACTION,
 ];
 
 export const RUN_MENU_ACTIONS = {
@@ -145,4 +150,5 @@ export const RUN_MENU_ACTIONS = {
 export const NEUTRAL_RUN_ACTIONS: readonly RunMenuAction[] = [
   OPEN_RUN_STORAGE_ACTION,
   EXPORT_TRANSCRIPT_ACTION,
+  COPY_DIAGNOSTICS_ACTION,
 ];

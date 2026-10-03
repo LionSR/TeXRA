@@ -4,7 +4,7 @@
 // -Drawer, -Wide, -Tools, -Proposal, -Inline).
 import { html, type TemplateResult } from 'lit';
 
-import type { MissingTool } from '@shared/schemas';
+import { AgentCategory, type MissingTool } from '@shared/schemas';
 import {
   emptyHostSnapshot,
   type HostSnapshot,
@@ -26,9 +26,11 @@ import {
   foldAll,
   GRANDCHILD,
   local,
+  Log,
   OWNER,
   PROCESS,
   ROOT,
+  subscribe,
   T,
   tail,
   withInterruptedChild,
@@ -57,7 +59,7 @@ function host(): HostSnapshot {
       ],
       workflow: [
         { value: 'correct', label: 'correct' },
-        { value: 'review', label: 'review' },
+        { value: 'review', label: 'review', rounds: 3 },
       ],
     },
     modelOptions: [
@@ -194,7 +196,7 @@ function desktopColumn(
 function editorTab(view: SessionView, surfaceRecord: Surface): TemplateResult {
   return html`<div class="h-ext h-ext-wide" id="frame">
     <div class="h-vscode-strip">
-      <span>TeXRA Settings</span><span class="active">TeXRA Sessions</span>
+      <span>TeXRA Settings</span><span class="active">TeXRA Tasks</span>
     </div>
     <progress-app
       .view=${view}
@@ -383,6 +385,34 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     );
     const view = foldAll([...events, ...priced, local({ self: [OWNER] })]);
     return sidebar(view, surface(view, { kind: 'select', runId: ROOT }));
+  },
+  // A workflow task in its second pass: the header's "Pass 2 of 3" chip.
+  'ext-workflow-pass': () => {
+    const log = new Log();
+    log.emit(ROOT, T.root, {
+      type: 'run.start',
+      identity: { kind: 'agent', agent: 'review' },
+      category: AgentCategory.Workflow,
+      worktree: { workingDirectory: '/paper', branch: 'main' },
+      parent: null,
+      provenance: null,
+      userFollowUpSupport: 'unsupported',
+    });
+    log.emit(ROOT, T.root, {
+      type: 'run.activate',
+      category: AgentCategory.Workflow,
+    });
+    log.emit(ROOT, T.root + 1, {
+      type: 'run.position',
+      payload: { family: 'toolUse', at: 'turn.begin', turn: 2 },
+    });
+    const view = foldAll([
+      subscribe(ROOT),
+      ...log.events.map(tail),
+      log.drained(),
+      local({ self: [OWNER] }),
+    ]);
+    return editorTab(view, surface(view, { kind: 'select', runId: ROOT }));
   },
   // The background process stream: its command strip over its raw output.
   'ext-process': () => {

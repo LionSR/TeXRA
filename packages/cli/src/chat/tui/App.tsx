@@ -28,7 +28,7 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import { acceptsFollowUp } from '@shared/session/sessionView';
 import { type RunId } from '@shared/schemas';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
-import { SESSION_LIST } from '@ui/copy/nestedRuns';
+import { AGENT_LIST } from '@ui/copy/nestedRuns';
 import {
   APPROVAL_FOREGROUND_MAX_ROWS,
   approvalVisibleForSelection,
@@ -190,7 +190,7 @@ export function App(props: AppProps): React.JSX.Element {
     : undefined;
   const appInputDisabled = foregroundOpen || childListFocused;
   const inputDisabledMessage = childListFocused
-    ? SESSION_LIST.choosing
+    ? AGENT_LIST.choosing
     : (sessionViewFailure ?? unavailableDetail);
   const inputDisabled =
     appInputDisabled ||

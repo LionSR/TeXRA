@@ -96,14 +96,14 @@ describe('tool-edit-request-panel', () => {
     ).toStrictEqual(['openDiff', 'previewProposed', 'showLatexdiff']);
   });
 
-  it('offers "Approve all edits in this run" and "a" enables it', async () => {
+  it('offers "Approve all edits in this task" and "a" enables it', async () => {
     const element = await mountPanel(
       createPermission({ allowBypass: true, runId: RUN_ID }),
     );
     const actions = recordPermissionActions(element);
 
     expect(tooltipText(element, 'request-grant-trigger')).toBe(
-      'Approve all edits in this run (a)',
+      'Approve all edits in this task (a)',
     );
     expect(element.handleKeyboardShortcut('a')).toBe(true);
     expect(actions.map((request) => request.kind)).toEqual([

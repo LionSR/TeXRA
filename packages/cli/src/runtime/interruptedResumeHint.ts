@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 
 import type { ResumabilityDecision } from '@agent/storage';
 import type { RunId } from '@shared/schemas';
+import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
 import { formatResumeCommand } from '../chat/tui/state/resumeHint';
 import { readCliCwd, type CliContext } from './cliContext';
@@ -72,5 +73,5 @@ export function formatInterruptedResumeHint(
     includeInteropSkills: context.skillSourceOptions.includeInterop,
     skillSourcePaths: context.skillSourceOptions.additionalPaths,
   });
-  return `Resume this ${subject} with: ${resumeCommand}`;
+  return `${TASK_ACTIONS.resumeHint} ${resumeCommand}`;
 }
