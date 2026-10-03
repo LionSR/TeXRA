@@ -109,7 +109,9 @@ export function publishTestRunStart(
       identity: { kind: 'agent', agent: 'chat' },
       userFollowUpSupport: 'unsupported',
       category: 'toolUse',
-      parent: options.parent == null ? null : { id: options.parent },
+      parent:
+        options.parent == null ? null : { id: options.parent, callId: null },
+      provenance: null,
     },
   ]);
   return runId;

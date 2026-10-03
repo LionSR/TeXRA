@@ -31,6 +31,7 @@ beforeEach(async () => {
         userFollowUpSupport: 'unsupported',
         category: 'toolUse',
         parent: null,
+        provenance: null,
       },
     ]),
   );

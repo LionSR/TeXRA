@@ -26,7 +26,8 @@
  * - `golden_chat`, the interactive `texra chat` driven under a PTY: a plan
  *   the user runs as a goal (`r` on the approval, the `goal` plugin fact)
  *   and the goal completed, then `/model` and a message, so the switch is
- *   recorded at the run's next model boundary; then a held turn, a message
+ *   recorded at the run's next model boundary; then `/compact`, whose turn
+ *   commits a `context.edit` replacing the history; then a held turn, a message
  *   typed behind it, and the user's stop, so that follow-up stays queued.
  *   Only the chat makes a goal: the headless policy approves a plan
  *   without one. Each keystroke
@@ -319,7 +320,7 @@ const RUN_OF_AGENT = `SELECT s.logical_id AS id FROM event e
 
 async function generate(root) {
   const cli = scenario(root);
-  cli.run(['tools', 'enable', 'workflow-script', '--print']);
+  cli.run(['tools', 'enable', 'multi-agent', '--print']);
 
   // The parked run: its model call held open, then killed.
   const park = cli.start([
@@ -439,6 +440,11 @@ async function generate(root) {
   await shows('the model switch notice', 'Model switched to gemini38f');
   await send('After the model switch.');
   await waiting(2);
+  // A `/compact` wakes the chat: its turn's request commits the
+  // `context.edit` that replaces the history with its summary.
+  await send('/compact');
+  await shows('the compaction notice', 'Context compaction requested');
+  await waiting(3);
   // A held turn, a message typed behind it, and the user's stop: the
   // follow-up stays queued on the stopped run.
   await send('Hold this turn.');
@@ -454,7 +460,7 @@ async function generate(root) {
     () =>
       chatRows(`e.type = 'run.position'
         AND json_extract(e.data, '$.payload.at') = 'turn.begin'
-        AND json_extract(e.data, '$.payload.turn') = 3`) > 0 &&
+        AND json_extract(e.data, '$.payload.turn') = 4`) > 0 &&
       tty.screen().includes('Ctrl-C stop'),
     tty,
   );
@@ -775,7 +781,14 @@ const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
 const ISO = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g;
 /** Keys whose value is a random 21-character id, alone or behind a prefix
  *  such as `plan-`. */
-const NANO_KEYS = new Set(['id', 'logId', 'stageId', 'attemptId', 'requestId']);
+const NANO_KEYS = new Set([
+  'id',
+  'logId',
+  'stageId',
+  'attemptId',
+  'requestId',
+  'operationId',
+]);
 const NANO = /^(?:[a-z]+-)?([A-Za-z0-9_-]{21})$/;
 /** A goal's random id (`goal_` and 12 hex digits). */
 const GOAL_ID = /goal_[0-9a-f]{12}/g;

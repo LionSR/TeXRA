@@ -1613,8 +1613,10 @@ function startRun(log, { runId, agent, at, parentRunId }) {
       ? {
           id: parentRunId,
           uid: `00000000-0000-4000-8000-${String(parentCreation.commit).padStart(12, '0')}`,
+          callId: null,
         }
       : null,
+    provenance: null,
   });
   log.emit(runId, at, {
     type: 'run.activate',
@@ -1646,6 +1648,7 @@ function conversationEvents({ approval = false } = {}) {
   log.emit(RUN, NOW + 500, {
     type: 'run.description',
     description: 'Check citation coverage and suggest BibTeX entries.',
+    by: 'model',
   });
   log.entry(RUN, NOW, {
     messageType: 'userMessage',

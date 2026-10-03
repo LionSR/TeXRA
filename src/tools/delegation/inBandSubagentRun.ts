@@ -75,6 +75,8 @@ interface InBandSubagentRunBaseOptions extends ChildRunLaunchOptions {
   readonly configPayload: AgentConfigPayload;
   /** The parent's tool card whose call launches the child. */
   readonly parentCard?: string;
+  /** That call's id, which owns the child. */
+  readonly parentCallId?: string;
   /** What the parent's step offered, which the child can only narrow. */
   readonly parentOffered: readonly OfferedTool[];
   /**
@@ -184,6 +186,9 @@ const executeInBand = Effect.fn('executeInBand')(
         parentRunId: options.parentRunId,
         ...(options.parentCard !== undefined && {
           parentCard: options.parentCard,
+        }),
+        ...(options.parentCallId !== undefined && {
+          parentCallId: options.parentCallId,
         }),
       }).pipe(
         Effect.mapError(

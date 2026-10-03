@@ -147,7 +147,7 @@ const append = Effect.gen(function* () {
   const db = yield* Database;
   yield* db.appendAll([{ type: 'run.start', aggregateId: id,
     identity: { kind: 'agent', agent: 'chat' }, userFollowUpSupport: 'unsupported',
-    category: AgentCategory.ToolUse, parent: null }]);
+    category: AgentCategory.ToolUse, parent: null, provenance: null }]);
   while (!existsSync(join(storage, 'go'))) yield* Effect.sleep('1 millis');
   const slow = new DatabaseSync(join(storage, 'texra.db'));
   slow.exec('BEGIN IMMEDIATE');
@@ -240,6 +240,7 @@ const runStart: SessionEventDraft = {
   userFollowUpSupport: 'unsupported',
   category: AgentCategory.ToolUse,
   parent: null,
+  provenance: null,
 };
 
 /** The loop parked on the request below: the phase the fold reads. */
@@ -730,6 +731,7 @@ describe('session events and view', () => {
           { ...runStart, aggregateId: qualifyAggregateId('run', NEWER) },
           {
             type: 'run.description',
+            by: 'model',
             aggregateId: qualifyAggregateId('run', NEWER),
             description: 'the newer run',
           },
@@ -1971,14 +1973,18 @@ describe('the C1 event table and the C6 publisher', () => {
         const db = yield* Database;
         const child: SessionEventDraft = {
           ...olderStart,
-          parent: { id: RUN },
+          parent: { id: RUN, callId: null },
+          provenance: null,
         };
         // A missing parent rejects the complete batch, including the earlier
         // creation and the child's sequence reservation.
         const rejected = yield* Effect.flip(
           db.appendAll([
             runStart,
-            { ...child, parent: { id: RunIdSchema.parse('ffff00') } },
+            {
+              ...child,
+              parent: { id: RunIdSchema.parse('ffff00'), callId: null },
+            },
           ]),
         );
         expect(rejected._tag).toBe('DatabaseWriteFailed');
@@ -2091,6 +2097,7 @@ describe('the C1 event table and the C6 publisher', () => {
               identity: runStart.identity,
               userFollowUpSupport: 'unsupported',
               category: AgentCategory.ToolUse,
+              provenance: null,
               parent: null,
             }),
           },
@@ -2106,6 +2113,7 @@ describe('the C1 event table and the C6 publisher', () => {
               identity: runStart.identity,
               userFollowUpSupport: 'unsupported',
               category: AgentCategory.ToolUse,
+              provenance: null,
               parent: null,
             }),
           },

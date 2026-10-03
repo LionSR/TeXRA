@@ -132,6 +132,8 @@ function pendingRequestLine(payload: PermissionPayload): string {
       return 'Wants an answer to an inquiry';
     case 'userQuestion':
       return 'Wants an answer to a question';
+    case 'toolOutcome':
+      return `Asks whether ${payload.data.toolName} runs again`;
     default:
       return assertNever(payload, 'Unhandled request kind');
   }

@@ -83,7 +83,8 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
         identity: { kind: 'agent', agent: 'draft' },
         category: 'workflow',
         userFollowUpSupport: 'unsupported',
-        parent: { id: parentId },
+        parent: { id: parentId, callId: null },
+        provenance: null,
       },
     ]);
     yield* getRunRecords(session, childRunId).writeResultMeta(

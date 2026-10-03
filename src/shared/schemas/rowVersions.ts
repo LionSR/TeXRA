@@ -73,7 +73,7 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'run.result': V1,
   'followup.closed': V1,
   'model.message': V1,
-  'model.compaction': V1,
+  'context.edit': V1,
   'tool.intent': V1,
   'script.call': V1,
   'tool.binding': V1,

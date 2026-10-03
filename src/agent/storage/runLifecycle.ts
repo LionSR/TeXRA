@@ -129,6 +129,8 @@ interface RegisterRunOptions {
   readonly parentRunId?: RunId;
   /** The parent's tool card whose call launches this run. */
   readonly parentCard?: string;
+  /** That call's id: the call that owns this run until it detaches. */
+  readonly parentCallId?: string;
   readonly category?: AgentCategory;
   /** The run's identity, declared by the launch site — the durable authority. */
   readonly identity: RunIdentity;
@@ -205,7 +207,11 @@ export const registerRun = Effect.fn('registerRun')(function* (
         parent:
           options.parentRunId === undefined
             ? null
-            : { id: options.parentRunId },
+            : {
+                id: options.parentRunId,
+                callId: options.parentCallId ?? null,
+              },
+        provenance: null,
         ...(options.parentCard !== undefined && {
           parentCard: options.parentCard,
         }),
@@ -229,6 +235,7 @@ export const registerRun = Effect.fn('registerRun')(function* (
         type: 'run.description',
         aggregateId: target,
         description: options.description,
+        by: 'model',
       });
     yield* session.commitRegistration(events);
   }).pipe(

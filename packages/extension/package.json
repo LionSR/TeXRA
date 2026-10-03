@@ -630,7 +630,7 @@
       },
       {
         "name": "multi-agent-orchestration",
-        "path": "resources/plugins/workflow-script/skills/multi-agent-orchestration/SKILL.md"
+        "path": "resources/plugins/multi-agent/skills/multi-agent-orchestration/SKILL.md"
       },
       {
         "name": "scientific-presenter",

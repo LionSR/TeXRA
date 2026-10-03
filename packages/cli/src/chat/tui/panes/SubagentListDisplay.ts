@@ -37,6 +37,7 @@ const PENDING_APPROVAL_ROW_LABELS: Record<PendingApprovalKind, string> = {
   proposal: 'proposal',
   retry: 'retry',
   userQuestion: 'question',
+  toolOutcome: 'outcome',
 };
 
 /** Terminal width below which the right-aligned metadata column is dropped

@@ -75,7 +75,7 @@ export type RunLedgerDraft = Live<
 type RunLedgerDraftType =
   | 'run.position'
   | 'model.message'
-  | 'model.compaction'
+  | 'context.edit'
   | 'tool.intent'
   | 'script.call'
   | 'tool.binding'
@@ -187,9 +187,11 @@ export type RunState = RunPosition & {
    *  no waiter has read them. A decision from before the activation was
    *  read by the process that asked, whose body went on with it. */
   readonly decidedSinceActivation: ReadonlySet<string>;
-  /** Derived (D12): the priced usage on every `response` and `model.compaction`
+  /** Derived (D12): the priced usage on every `response` and `context.edit`
    *  row plus `tool.result` `add` operations. No snapshot carries it. */
   readonly usage: RunUsageTotals;
+  /** The latest `context.edit`'s `seq`: the next edit's `base`. */
+  readonly lastEdit: number | null;
   /** The turn the last `context-window` compaction (one per round) hit. */
   readonly overflowRecoveredAtTurn: number | null;
   readonly loop: LoopState | null;
@@ -202,7 +204,7 @@ export type RunState = RunPosition & {
   /** The address of the system text the run's context froze. */
   readonly offeredSystem: string | null;
   /** The address of the context its model has been told; `null` before the
-   *  first step and after a compaction, which each open it anew. */
+   *  first step and after a view edit, which each open it anew. */
   readonly offeredContext: string | null;
   readonly offeredHooks: readonly string[]; // the hooks it pinned
   /** The run's `context.blob` rows: model-facing content by address. */
@@ -283,6 +285,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   decidedSinceActivation: new Set(),
   usage: EMPTY_RUN_USAGE_TOTALS,
   loop: null,
+  lastEdit: null,
   overflowRecoveredAtTurn: null,
   offeredTools: null,
   offeredContinuation: null,
@@ -590,23 +593,36 @@ function foldRow(
       // compile error here, never a silently ignored row.
       return p satisfies never;
     }
-    case 'model.compaction': {
+    case 'context.edit': {
       if (!opened(current)) return beforeOpening(row.type);
       const p = row.payload;
+      const base = current.lastEdit;
+      if (p.base !== base) {
+        return outOfOrder(
+          `an edit computed at ${p.base ?? 'no edit'} lands after ${base ?? 'no edit'}`,
+        );
+      }
+      if (p.range.to > current.messages.length) {
+        return outOfOrder(
+          `an edit of messages [${p.range.from}, ${p.range.to}) over ${current.messages.length}`,
+        );
+      }
       const messages = [
-        ...current.messages.slice(0, p.keepPrefix),
+        ...current.messages.slice(0, p.range.from),
         ...p.messages,
+        ...current.messages.slice(p.range.to),
       ];
       pass.add(messages);
       return Result.succeed({
         ...advance(current),
         messages,
-        continuation: p.continuation,
+        continuation: null,
         // The next step renders the system text anew, every change in it.
         offeredSystem: null,
         offeredContext: null,
         usage: addTurnUsage(current.usage, p.usage),
-        ...(p.cause === 'context-window'
+        lastEdit: row.seq,
+        ...(p.trigger === 'context-window'
           ? { overflowRecoveredAtTurn: current.turn }
           : {}),
       });

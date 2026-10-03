@@ -367,6 +367,7 @@ const seedStartedRun = (session: SessionHandle, runId: string) =>
         category: AgentCategory.Workflow,
         userFollowUpSupport: 'unsupported',
         parent: null,
+        provenance: null,
       },
     ]);
     seededRunIds.add(runId);
@@ -835,6 +836,7 @@ describe('CLI run command, workflow agents', () => {
             category: AgentCategory.Workflow,
             userFollowUpSupport: 'unsupported',
             parent: null,
+            provenance: null,
           },
         ]);
         // The executeCliConfig stub is an Effect port. Its run owns output

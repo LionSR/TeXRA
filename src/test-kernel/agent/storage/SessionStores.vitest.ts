@@ -186,6 +186,7 @@ describe('indexed background-shell cleanup', () => {
               category: 'toolUse',
               userFollowUpSupport: 'unsupported',
               parent: null,
+              provenance: null,
             },
             {
               type: 'run.start',
@@ -194,6 +195,7 @@ describe('indexed background-shell cleanup', () => {
               category: 'toolUse',
               userFollowUpSupport: 'unsupported',
               parent: null,
+              provenance: null,
             },
             {
               type: 'run.start',
@@ -202,6 +204,7 @@ describe('indexed background-shell cleanup', () => {
               category: 'toolUse',
               userFollowUpSupport: 'unsupported',
               parent: null,
+              provenance: null,
             },
           ]);
           publishTestRunStart(session, agent);

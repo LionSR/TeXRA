@@ -115,7 +115,7 @@ describe('tool-use tool resolution', () => {
         yield* Effect.promise(() =>
           installPlatform({
             globalState: {
-              [GlobalStateKey.DISABLED_TOOLS]: ['workflow-script'],
+              [GlobalStateKey.DISABLED_TOOLS]: ['multi-agent'],
             },
           }),
         );

@@ -12,7 +12,6 @@ import { Result } from 'effect';
 
 import {
   CancellationEvidenceSchema,
-  ContinuationSchema,
   MessageSchema,
   ModelOriginSchema,
   RemoteOperationSchema,
@@ -20,7 +19,7 @@ import {
   type RemoteOperation,
 } from '@texra-ai/llm/turn';
 import {
-  ModelCompactionPayloadSchema,
+  ContextEditPayloadSchema,
   ModelMessagePayloadSchema,
   toJsonValue,
   type SessionEvent,
@@ -94,10 +93,10 @@ const storedOperation = ({
 
 /** A ledger row as the store keeps it. */
 export function storedDraft(row: RunLedgerDraft): SessionEventDraft {
-  if (row.type === 'model.compaction')
+  if (row.type === 'context.edit')
     return {
       ...row,
-      payload: ModelCompactionPayloadSchema.parse(stored(row.payload)),
+      payload: ContextEditPayloadSchema.parse(stored(row.payload)),
     };
   if (row.type !== 'model.message') return row;
   const { payload } = row;
@@ -151,18 +150,11 @@ function livePayload(
 }
 
 function liveRow(row: SessionEvent): RunLedgerRow {
-  if (row.type === 'model.compaction') {
-    const { messages, continuation } = row.payload;
+  if (row.type === 'context.edit')
     return {
       ...row,
-      payload: {
-        ...row.payload,
-        messages: liveMessages(messages),
-        continuation:
-          continuation && ContinuationSchema.parse(continuation.data),
-      },
+      payload: { ...row.payload, messages: liveMessages(row.payload.messages) },
     };
-  }
   if (row.type !== 'model.message') return row;
   return { ...row, payload: livePayload(row.payload) };
 }

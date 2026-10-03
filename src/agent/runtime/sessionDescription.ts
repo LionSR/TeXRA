@@ -168,6 +168,7 @@ export const generateSessionDescription = Effect.fn(
         type: 'run.description',
         aggregateId: qualifyAggregateId('run', runId),
         description,
+        by: 'model',
       },
     ]);
     yield* Effect.logInfo(`Generated session description for ${runId}`).pipe(

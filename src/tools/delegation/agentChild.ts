@@ -182,32 +182,17 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
     }
     case 'unknown': {
       const { requests } = call;
-      const question = `Agent run ${earlier} for '${recovery.agentName}' may have done work no result records: ${standing.reason}. Run the call again, or skip it?`;
-      const rerun = 'Run again';
       const decision = yield* requests.open({
-        kind: 'userQuestion',
+        kind: 'toolOutcome',
         data: {
           requestId: requests.nextId('agent-outcome'),
-          allowBypass: false,
           runId: parentRunId,
-          questions: [
-            {
-              question,
-              header: 'Outcome',
-              options: [
-                { label: rerun, description: 'Launch the agent again.' },
-                {
-                  label: 'Skip',
-                  description: 'Fail this call; its outcome stays unknown.',
-                },
-              ],
-            },
-          ],
-          context: `agent: ${recovery.agentName}`,
+          toolName: 'agent',
+          title: `'${recovery.agentName}' may have done work no result records: ${standing.reason}`,
+          childRunId: earlier,
         },
       });
-      return decision.action === 'submit' &&
-        decision.answers[question] === rerun
+      return decision.action === 'retry'
         ? { kind: 'launch' }
         : { kind: 'unknown', runId: earlier, reason: standing.reason };
     }

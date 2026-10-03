@@ -206,13 +206,14 @@ export function scriptedInvokerLayer(
               ...('compactTo' in scripted
                 ? [
                     {
-                      type: 'model.compaction' as const,
+                      type: 'context.edit' as const,
                       aggregateId,
                       payload: {
-                        keepPrefix: 0,
+                        cause: 'compaction' as const,
+                        trigger: 'context-limit' as const,
+                        base: state.lastEdit,
+                        range: { from: 0, to: state.messages.length },
                         messages: scripted.compactTo,
-                        cause: 'context-limit' as const,
-                        continuation: null,
                         usage: null,
                       },
                     },

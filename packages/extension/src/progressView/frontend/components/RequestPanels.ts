@@ -30,6 +30,7 @@ import type { BaseRequestPanel } from './BaseRequestPanel';
 import './ToolEditRequestPanel';
 import './BashRequestPanel';
 import './RetryRequestPanel';
+import './ToolOutcomeRequestPanel';
 import './ProposalRequestPanel';
 import './PlanApprovalRequestPanel';
 import './ExternalInquiryPanel';
@@ -43,6 +44,7 @@ const CARD_TAG: Record<
   toolEdit: literal`tool-edit-request-panel`,
   bash: literal`bash-request-panel`,
   retry: literal`retry-request-panel`,
+  toolOutcome: literal`tool-outcome-request-panel`,
   proposal: literal`proposal-request-panel`,
   planApproval: literal`plan-approval-request-panel`,
   externalInquiry: literal`external-inquiry-panel`,

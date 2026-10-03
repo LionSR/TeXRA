@@ -125,13 +125,13 @@ const APPROVAL = RunIdSchema.parse('a00000000007');
 const SCRIPTED = RunIdSchema.parse('a00000000008');
 const FANOUT = RunIdSchema.parse('a00000000009');
 /** The fan-out's children: the first completed, the second ran at the kill. */
-const FANNED = RunIdSchema.parse('4e835bb7d9867028dba7d6f0');
-const RUNNING = RunIdSchema.parse('72ce0aa804465ea878a1dda3');
+const FANNED = RunIdSchema.parse('fab0b830fe15028fb71663a9');
+const RUNNING = RunIdSchema.parse('bff84dd3e985d3899c2edfca');
 /** The chat that sent a script to the background, the script's run, and
  *  the script's one `agent()` child, which ran at the kill. */
 const BACKGROUND = RunIdSchema.parse('a0000000000c');
-const SCRIPT_RUN = RunIdSchema.parse('105177049434e8a8ab756af5');
-const SCRIPT_CHILD = RunIdSchema.parse('15dc5082e0b4ba50b0121909');
+const SCRIPT_RUN = RunIdSchema.parse('86fd08b3bd174f25f0078221');
+const SCRIPT_CHILD = RunIdSchema.parse('905d6e67bdcf8bef0289b566');
 const TOMBSTONED = RunIdSchema.parse('a0000000000f');
 
 const roots: string[] = [];
@@ -245,20 +245,20 @@ describe('the golden 1.0 store', () => {
       'request.decided',
       'followup.queued',
       'script.call',
+      'context.edit',
       'run.removed',
     ] as const)
       expect(types, type).toContain(type);
-    // The chat's `/model` switch: the compaction it records, and the
-    // snapshots naming the model before and after it.
+    // The chat's `/model` switch: the edit it records, and the snapshots
+    // naming the model before and after it; and its `/compact`.
     const chat = aggregateId('run', CHAT);
     expect(
-      events.filter(
-        (event) =>
-          event.type === 'model.compaction' &&
-          event.aggregateId === chat &&
-          event.payload.cause === 'model-switch',
+      events.flatMap((event) =>
+        event.type === 'context.edit' && event.aggregateId === chat
+          ? [event.payload.trigger]
+          : [],
       ),
-    ).toHaveLength(1);
+    ).toEqual(['model-switch', 'user']);
     expect([
       ...new Set(
         events.flatMap((event) =>
@@ -767,12 +767,9 @@ describe('the interrupted golden runs', () => {
       );
       const asked = autoDecideRequests(session, (opened) => {
         if (opened.payload.kind === 'bash') return { action: 'approve' };
-        if (opened.payload.kind !== 'userQuestion') return null;
-        const [question] = opened.payload.data.questions;
-        return {
-          action: 'submit',
-          answers: { [question?.question ?? '']: 'Run again' },
-        };
+        return opened.payload.kind === 'toolOutcome'
+          ? { action: 'retry' }
+          : null;
       });
       const result = yield* withProcessServices(
         testRuntime(),
@@ -814,7 +811,7 @@ describe('the interrupted golden runs', () => {
         ]);
       // The command the kill interrupted was asked about, then run again.
       expect(
-        asked.opened.filter((opened) => opened.payload.kind === 'userQuestion'),
+        asked.opened.filter((opened) => opened.payload.kind === 'toolOutcome'),
       ).toHaveLength(1);
       expect(settled('validation-script-1/3')).toEqual([
         { attempt: 2, disposition: 'executed' },
@@ -1210,7 +1207,7 @@ describe('the interrupted golden runs', () => {
       );
       expect(delivered).toHaveLength(1);
       const text = String(delivered[0]?.content.text);
-      expect(text).toMatch(/^<script-result id="105177049434e8a8ab756af5"/);
+      expect(text).toMatch(/^<script-result id="86fd08b3bd174f25f0078221"/);
       expect(text).toContain('Background child answer.');
       expect(parseScriptDeliverySummary(text)).toMatchObject({
         name: 'Background',

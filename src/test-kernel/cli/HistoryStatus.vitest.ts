@@ -215,6 +215,7 @@ describe('CLI history status formatting', () => {
           category: AgentCategory.ToolUse,
           userFollowUpSupport: 'unsupported',
           parent: null,
+          provenance: null,
         },
       ]);
       yield* testDefaultSession().commit([
