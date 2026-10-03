@@ -92,7 +92,6 @@ export interface ProjectBindingsOptions {
   /** Recording has one process owner, shared by every project and window. */
   readonly draftRequests: HostDraftRequests;
   readonly onboarding: DesktopOnboardingIpc;
-  readonly showFirstRunWalkthrough: () => void;
   /** Recompute the onboarding funnel when a launch settles. */
   readonly refreshFunnelAfterLaunch: Effect.Effect<void>;
 }
@@ -271,7 +270,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         postToRenderer: host.post,
         postSurfaceAction: (action) => bridge.surfaceAction(action),
         getCustomAgentDirectory: () => options.agentDirectories.custom(),
-        showFirstRunWalkthrough: options.showFirstRunWalkthrough,
         onboarding: options.onboarding,
         openExternalUrl: host.openExternalUrl,
         recheckTools: () =>

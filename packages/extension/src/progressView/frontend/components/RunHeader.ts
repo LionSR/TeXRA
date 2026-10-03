@@ -4,10 +4,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import {
-  APPROVAL_BYPASS_KINDS,
-  type ApprovalBypassKind,
-} from '@shared/approvalBypassKind';
+import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { RunId } from '@shared/schemas';
 import { goalStateOf, type GoalState } from '@shared/plugins/goal';
 import type { SessionView, RunView } from '@shared/session/sessionView';
@@ -38,12 +35,7 @@ import {
   renderProgressBadgeContent,
   getProgressBadgeTitle,
 } from '../formatters/progressBadgeFormatter';
-import {
-  autoApproveStyles,
-  renderAutoApproveMenu,
-  renderAutoApproveRow,
-  WideHeaderController,
-} from './autoApproveSwitches';
+import { renderRunGrantChips, runGrantStyles } from './runGrantChips';
 import type WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
@@ -221,16 +213,14 @@ export class RunHeader extends LitElement {
         }
       }
     `,
-    autoApproveStyles,
+    runGrantStyles,
   ];
 
   @property({ attribute: false }) run: RunView | null = null;
-  /** For the per-run policy snapshot behind the auto-approve switches. */
+  /** For the per-run policy snapshot behind the grant chips. */
   @property({ attribute: false }) view: SessionView | null = null;
   /** The shell's window items, after the run's actions in its menu. */
   @property({ attribute: false }) menuItems: readonly HeaderMenuItem[] = [];
-
-  private readonly width = new WideHeaderController(this);
 
   private readonly copyRunContext = new CopyButtonController(this, {
     successTitle: 'Copied!',
@@ -270,16 +260,12 @@ export class RunHeader extends LitElement {
     return this.view?.policy.get(run.id)?.bypasses[kind] === true;
   }
 
-  /** Set or clear one run grant, as an approval card's grant does. */
-  private setGrant(
-    run: RunView,
-    bypass: ApprovalBypassKind,
-    enabled: boolean,
-  ): void {
+  /** Revoke one run grant; granting is the approval card's. */
+  private revokeGrant(run: RunView, bypass: ApprovalBypassKind): void {
     this.dispatchEvent(
       SessionUiEvents.runtime({
         kind: 'policy.set',
-        change: { field: 'bypass', runId: run.id, bypass, enabled },
+        change: { field: 'bypass', runId: run.id, bypass, enabled: false },
       }),
     );
   }
@@ -322,10 +308,9 @@ export class RunHeader extends LitElement {
         ${this.renderProgressBadge(run)}
         ${
           canGrant
-            ? renderAutoApproveRow(
-                this.width.wide,
+            ? renderRunGrantChips(
                 (kind) => this.grantActive(run, kind),
-                (kind, on) => this.setGrant(run, kind, on),
+                (kind) => this.revokeGrant(run, kind),
               )
             : nothing
         }
@@ -349,7 +334,7 @@ export class RunHeader extends LitElement {
             : nothing
         }
         <slot name="end"></slot>
-        ${this.renderMenu(run, statusLabel, progressTitle, canGrant)}
+        ${this.renderMenu(run, statusLabel, progressTitle)}
       </div>
     `;
   }
@@ -358,7 +343,6 @@ export class RunHeader extends LitElement {
     run: RunView,
     statusLabel: string,
     progressTitle: string | undefined,
-    canGrant: boolean,
   ): TemplateResult {
     // An agent run's menu lists its category's actions, a process's or a
     // workflow container's the neutral ones, each shown only while the
@@ -378,16 +362,7 @@ export class RunHeader extends LitElement {
         @wa-select=${(event: WaSelectEvent) => {
           const { item } = event.detail;
           if (item.localName !== 'wa-dropdown-item') return;
-          const { value, checked, dataset } = item as WaDropdownItem;
-          const bypass = APPROVAL_BYPASS_KINDS.find(
-            (kind) => kind === dataset.bypass,
-          );
-          if (bypass) {
-            // A switch keeps the menu open, so a second one is one click away.
-            event.preventDefault();
-            this.setGrant(run, bypass, checked);
-            return;
-          }
+          const { value } = item as WaDropdownItem;
           if (value === DELETE_SESSION) {
             this.dispatchEvent(
               SessionUiEvents.runtime({ kind: 'run.delete', runId: run.id }),
@@ -414,11 +389,6 @@ export class RunHeader extends LitElement {
         <div class="menu-status">
           ${statusLabel}${progressTitle ? ` · ${progressTitle}` : ''}
         </div>
-        ${
-          canGrant && !this.width.wide
-            ? renderAutoApproveMenu((kind) => this.grantActive(run, kind))
-            : nothing
-        }
         ${repeat(
           actions,
           (action) => action.id,

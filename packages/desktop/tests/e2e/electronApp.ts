@@ -158,53 +158,10 @@ export async function closeTexraApp(launched: LaunchedApp): Promise<void> {
   if (launched.ownsUserData) cleanupDirectory(launched.userDataPath);
 }
 
-/**
- * Dismiss the shell's first-run work-type dialog when one is present. Resolves
- * without acting on profiles that never show it, so callers that only need the
- * launcher can share this step. Pass `required` when the panel is part of what
- * the test asserts, so a missing one fails here instead of silently changing
- * what the rest of the test measures.
- */
-export async function dismissStartupPanel(
-  page: Page,
-  options: { required?: boolean } = {},
-): Promise<void> {
-  const waitForDismissButton = page.waitForFunction(() => {
-    const panel = document.querySelector('wa-dialog.desktop-onboarding');
-    const btn = [...(panel?.querySelectorAll('wa-button') ?? [])].find(
-      (button) => button.textContent?.trim() === 'Skip for now',
-    );
-    return btn instanceof HTMLElement;
-  });
-  if (options.required) {
-    await waitForDismissButton;
-  } else if (
-    !(await waitForDismissButton.then(() => true).catch(() => false))
-  ) {
-    return;
-  }
-
-  await page.evaluate(() => {
-    const panel = document.querySelector('wa-dialog.desktop-onboarding');
-    const btn = [...(panel?.querySelectorAll('wa-button') ?? [])].find(
-      (button) => button.textContent?.trim() === 'Skip for now',
-    );
-    if (btn instanceof HTMLElement) btn.click();
-  });
-  await page.waitForFunction(
-    () => document.querySelector('wa-dialog.desktop-onboarding') == null,
-    undefined,
-    { timeout: 5000 },
-  );
-}
-
 export async function dismissOnboarding(page: Page): Promise<void> {
-  await dismissStartupPanel(page);
-
-  // A fresh profile can also show the credential welcome card inside
-  // <progress-app>'s shadow tree. Skipping it is separate from dismissing the shell
-  // startup panel above; without both, E2E tests exercise onboarding instead of
-  // the launcher and can miss task-composer regressions.
+  // A fresh profile shows the "Connect a model" card inside <progress-app>'s
+  // shadow tree; without skipping it, E2E tests exercise onboarding instead
+  // of the launcher and can miss task-composer regressions.
   await page
     .waitForFunction(
       () => {
@@ -221,8 +178,7 @@ export async function dismissOnboarding(page: Page): Promise<void> {
   const skip = page.locator('onboarding-welcome-card #onboardingSkipButton');
   const canSkip = await skip.isVisible().catch(() => false);
   if (canSkip) {
-    // Programmatic activation avoids a closing walkthrough backdrop briefly
-    // intercepting the pointer between the two independent onboarding steps.
+    // Programmatic activation: the card may sit under a transient overlay.
     await skip.evaluate((button: HTMLElement) => button.click());
     await skip.waitFor({ state: 'detached', timeout: 5000 });
   }

@@ -79,6 +79,6 @@ export function formatSlashCommandHelp(
     ...commandSections(commands),
     keyboardSection(options),
     'Typing while a response is running queues your message as a follow-up.',
-    'Goal mode: press `r` on a plan approval to keep the agent working until it verifies completion. `/approval` sets what it auto-approves.',
+    'Goal mode: press `r` on a plan approval to keep the agent working until it verifies completion, approving commands on its own; `a` also approves edits and agent work.',
   ].join('\n\n');
 }

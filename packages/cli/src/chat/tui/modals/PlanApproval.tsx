@@ -17,10 +17,12 @@ import {
   ScrollableModalText,
   scrollableModalTextRowsBudget,
 } from './ScrollableModalText';
-import { confirmCardCompactChromeRows } from './ConfirmCardState';
+import {
+  confirmCardCompactChromeRows,
+  type ConfirmCardKeyRow,
+} from './ConfirmCardState';
 
 interface PlanApprovalProps {
-  readonly autoApproveAll: boolean;
   readonly availableRows?: number;
   readonly payload: PlanApprovalPermission;
   readonly onDecide: (decision: SurfaceDecision) => void;
@@ -30,10 +32,20 @@ const COMPACT_PLAN_APPROVAL_MAX_ROWS = 7;
 const PLAN_APPROVAL_TITLE = 'Approve plan?';
 const PLAN_APPROVAL_GOAL_NOTICE_ROWS = 2;
 const PLAN_APPROVAL_HIDDEN_NOUN = 'plan rows';
-const PLAN_APPROVAL_GOAL_ACTION = {
-  key: 'r',
-  action: 'run as goal',
-} as const;
+/** Run as goal: `r` auto-approves commands only; `a`, the card grammar's
+ *  "approve broadly" key, also approves edits and agent work. */
+const PLAN_APPROVAL_GOAL_ACTIONS = [
+  {
+    key: 'r',
+    action: 'run as goal',
+    decision: { action: 'approve_and_goal' },
+  },
+  {
+    key: 'a',
+    action: 'goal, approve all',
+    decision: { action: 'approve_and_goal', autoApproveAll: true },
+  },
+] as const satisfies readonly ConfirmCardKeyRow[];
 
 function isCompactPlanApprovalRows(availableRows: number | undefined): boolean {
   return (
@@ -46,18 +58,10 @@ function isCompactPlanApprovalRows(availableRows: number | undefined): boolean {
   );
 }
 
-function planApprovalGoalNoticeLine(
-  width: number,
-  autoApproveAll = false,
-): string {
+function planApprovalGoalNoticeLine(width: number): string {
   const lineWidth = Math.max(1, width);
   return fillRows(
-    truncateToWidth(
-      autoApproveAll
-        ? PLAN_GOAL_COPY.cliAutoApproveAllNotice
-        : PLAN_GOAL_COPY.cliNotice,
-      lineWidth,
-    ),
+    truncateToWidth(PLAN_GOAL_COPY.cliNotice, lineWidth),
     lineWidth,
   );
 }
@@ -73,7 +77,7 @@ function planApprovalCompactBodyRowsBudget({
   const chromeRows = confirmCardCompactChromeRows({
     title: PLAN_APPROVAL_TITLE,
     columns,
-    extraActions: [PLAN_APPROVAL_GOAL_ACTION],
+    extraActions: PLAN_APPROVAL_GOAL_ACTIONS,
   });
   return Math.max(0, availableRows - chromeRows);
 }
@@ -92,7 +96,7 @@ function isPlanApprovalGoalActionVisible({
 
 export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
   const { columns } = useWindowSize();
-  const { autoApproveAll, availableRows, onDecide, payload } = props;
+  const { availableRows, onDecide, payload } = props;
   const compact = isCompactPlanApprovalRows(availableRows);
   const compactBodyRows = compact
     ? planApprovalCompactBodyRowsBudget({
@@ -111,23 +115,10 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
       compact={compact}
       title={PLAN_APPROVAL_TITLE}
       rejectionMode="feedback"
-      extraActions={
-        goalActionVisible
-          ? [
-              {
-                ...PLAN_APPROVAL_GOAL_ACTION,
-                decision: {
-                  action: 'approve_and_goal',
-                  autoApproveAll: autoApproveAll ? true : null,
-                },
-              },
-            ]
-          : []
-      }
+      extraActions={goalActionVisible ? PLAN_APPROVAL_GOAL_ACTIONS : []}
       onDecide={onDecide}
     >
       <PlanApprovalBody
-        autoApproveAll={autoApproveAll}
         availableRows={availableRows}
         compact={compact}
         compactBodyRows={compactBodyRows}
@@ -139,14 +130,12 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
 }
 
 function PlanApprovalBody({
-  autoApproveAll,
   availableRows,
   compact,
   compactBodyRows,
   goalActionVisible,
   objective,
 }: {
-  readonly autoApproveAll: boolean;
   readonly availableRows?: number;
   readonly compact: boolean;
   readonly compactBodyRows: number | undefined;
@@ -176,7 +165,7 @@ function PlanApprovalBody({
   return (
     <>
       {compact && goalNoticeVisible && (
-        <Text>{planApprovalGoalNoticeLine(contentWidth, autoApproveAll)}</Text>
+        <Text>{planApprovalGoalNoticeLine(contentWidth)}</Text>
       )}
       <ScrollableModalText
         hiddenNoun={PLAN_APPROVAL_HIDDEN_NOUN}
@@ -191,9 +180,7 @@ function PlanApprovalBody({
       {!compact && goalNoticeVisible && (
         <Box flexDirection="column">
           <Text> </Text>
-          <Text>
-            {planApprovalGoalNoticeLine(contentWidth, autoApproveAll)}
-          </Text>
+          <Text>{planApprovalGoalNoticeLine(contentWidth)}</Text>
         </Box>
       )}
     </>

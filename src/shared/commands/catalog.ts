@@ -306,12 +306,6 @@ export const commandCatalog = [
     keybinding: { key: 'ctrl+o', mac: 'cmd+o' },
   },
   {
-    id: 'texra.desktop.showFirstRunWalkthrough',
-    host: 'desktop',
-    title: 'Choose Agent Team',
-    category: 'Help',
-  },
-  {
     id: 'texra.desktop.openDesktopDocs',
     host: 'desktop',
     title: 'Desktop Documentation',

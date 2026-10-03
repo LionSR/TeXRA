@@ -112,7 +112,6 @@ interface DesktopHostRequestsOptions {
     AgentDirectoriesFailed,
     GlobalStorageFs | FileSystem.FileSystem
   >;
-  showFirstRunWalkthrough(): void;
   onboarding: Pick<
     DesktopOnboardingIpc,
     'skipOnboarding' | 'skipSetup' | 'runSetup' | 'signInWithChatGpt'
@@ -514,9 +513,11 @@ export function createDesktopHostRequests(
       Effect.sync(() =>
         postDesktopSettingsView(options.postToRenderer, 'tools/tools'),
       ),
+    // The desktop has no walkthrough of its own: its getting-started page
+    // is the desktop docs.
     gettingStarted: (action) =>
       action === 'openWalkthrough'
-        ? Effect.sync(() => options.showFirstRunWalkthrough())
+        ? options.openExternalUrl(DESKTOP_DOCS_URL)
         : Effect.asVoid(
             host.showInfoMessage(vsCodeOnlyGettingStartedMessage(action)),
           ),
@@ -527,9 +528,11 @@ export function createDesktopHostRequests(
       skip: Effect.suspend(() => options.onboarding.skipOnboarding()),
       runSetup: Effect.suspend(() => options.onboarding.runSetup()),
       skipSetup: Effect.suspend(() => options.onboarding.skipSetup()),
-      // The card's "Open walkthrough" opens the in-app walkthrough, the
-      // same one `gettingStarted('openWalkthrough')` above opens.
-      openGettingStarted: Effect.sync(() => options.showFirstRunWalkthrough()),
+      // The card's "Open walkthrough" opens the same page
+      // `gettingStarted('openWalkthrough')` above opens.
+      openGettingStarted: Effect.suspend(() =>
+        options.openExternalUrl(DESKTOP_DOCS_URL),
+      ),
     },
   };
 

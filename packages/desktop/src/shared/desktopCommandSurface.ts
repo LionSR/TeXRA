@@ -28,7 +28,6 @@ export const DESKTOP_LOCAL_COMMANDS = {
   OPEN_LOG_FOLDER: 'texra.desktop.openLogFolder',
   OPEN_WORKSPACE_FOLDER: 'texra.desktop.openWorkspaceFolder',
   SAVE_FILE: 'texra.desktop.saveFile',
-  SHOW_FIRST_RUN_WALKTHROUGH: 'texra.desktop.showFirstRunWalkthrough',
   OPEN_DESKTOP_DOCS: 'texra.desktop.openDesktopDocs',
 } as const;
 
@@ -94,12 +93,10 @@ export const DESKTOP_FILE_COMMANDS = [
 export const DESKTOP_SHELL_IPC_COMMANDS = [
   DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
   DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
-  DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
   DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
 ] as const satisfies readonly DesktopLocalCommandId[];
 
 export const DESKTOP_HELP_COMMANDS = [
-  DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
   DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
 ] as const satisfies readonly DesktopLocalCommandId[];
 
@@ -129,7 +126,6 @@ const DESKTOP_COMMAND_ICONS = {
   'texra.showAgents': 'robot',
   'texra.showTools': 'screwdriver-wrench',
   'texra.showGitSettings': 'code-branch',
-  [DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH]: 'users',
   [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: 'book',
 } as const satisfies Record<DesktopCommandId, TeXRAIconName>;
 
@@ -157,7 +153,6 @@ export interface DesktopCommandActions {
   openLogFolder(): void;
   openWorkspaceFolder(): void;
   saveFile(): void;
-  showFirstRunWalkthrough(): void;
   toggleBottomBar(): void;
   toggleSidePanel(): void;
 }
@@ -226,9 +221,6 @@ const DESKTOP_COMMAND_HANDLERS = {
     a.openWorkspaceFolder(),
   ),
   [DESKTOP_LOCAL_COMMANDS.SAVE_FILE]: action((a) => a.saveFile()),
-  [DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH]: action((a) =>
-    a.showFirstRunWalkthrough(),
-  ),
   [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: action((a) =>
     a.openDesktopDocs(),
   ),

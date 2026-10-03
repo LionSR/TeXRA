@@ -225,7 +225,7 @@ texra run review --input main.tex --instruction "Check the proof." --print
 
 Slash commands inside the session: `/login` signs in and sets which provider
 subscriptions serve their models, `/approval` sets the approval policy and
-turns auto-approval of commands or edits on and off for the session,
+turns off a grant you gave with `a` on an approval card (`/status` lists them),
 `/config` holds settings and integrations, `/model` switches to
 another model from the same provider mid-session (the change applies
 immediately and persists on resume), `/skills` lists available skills and

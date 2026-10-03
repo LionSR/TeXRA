@@ -1,12 +1,7 @@
 import * as vscode from 'vscode';
 
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
-import { CHATGPT_AUTH } from '@ui/copy/accountAuth';
-import {
-  ONBOARDING_CHOICE_API_KEY,
-  ONBOARDING_CHOICE_CHATGPT,
-  ONBOARDING_NARRATIVE,
-} from '@ui/copy/onboarding';
+import { ONBOARDING_CARD_TITLE } from '@ui/copy/onboarding';
 
 /**
  * No-workspace provider for `texra.mainView`. Keeping the same view id across
@@ -14,6 +9,8 @@ import {
  * location (e.g. auxiliary sidebar) — splitting into a separate welcome view
  * id caused the aux-bar position to be lost between sessions. Reloads the
  * window once a single folder is opened so the full activation path runs.
+ * It asks for a folder only: the credential is asked once, by the
+ * "Connect a model" card the TeXRA panel shows when the folder opens.
  */
 class WelcomeWebviewProvider implements vscode.WebviewViewProvider {
   resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -30,8 +27,6 @@ function renderWelcomeHtml(): string {
   const cloneRepo = 'command:git.clone';
   const createSample = `command:${EXTENSION_COMMANDS.CREATE_SAMPLE_PROJECT}`;
   const openWalkthrough = `command:${EXTENSION_COMMANDS.OPEN_GETTING_STARTED}`;
-  const signInChatGpt = 'command:texra.auth.chatgpt.signIn';
-  const setApiKey = `command:${EXTENSION_COMMANDS.SET_API_KEY}`;
   const docs = 'https://texra.ai';
 
   return /* html */ `
@@ -120,17 +115,11 @@ function renderWelcomeHtml(): string {
     specialized agents to edit manuscripts, derive results, draw figures,
     and verify proofs.
   </p>
-  <p>${ONBOARDING_NARRATIVE}</p>
   <ol>
-    <li>Connect a credential: ${ONBOARDING_CHOICE_CHATGPT.label} or a provider API key. You can do that right here.</li>
     <li>Open a single-folder workspace containing your LaTeX project, or start with the sample project.</li>
-    <li>Run setup once to check LaTeX, apply the right team, and launch the first review.</li>
+    <li>${ONBOARDING_CARD_TITLE}: the TeXRA panel asks once the folder is open.</li>
+    <li>Run the setup assistant: it checks LaTeX, picks your agent team, and starts your first task.</li>
   </ol>
-  <p class="section-label">Connect</p>
-  <div class="actions">
-    <a class="button secondary" href="${signInChatGpt}">${CHATGPT_AUTH.signInLabel}</a>
-    <a class="button secondary" href="${setApiKey}">Set API key &mdash; ${ONBOARDING_CHOICE_API_KEY.description}</a>
-  </div>
   <p class="section-label">Open your project</p>
   <div class="actions">
     <a class="button" href="${openFolder}">Open Folder</a>

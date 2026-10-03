@@ -1,9 +1,10 @@
 /**
  * `<session-banners>`: the one warning slot above the launch composer. The
- * host raises up to three warnings (no usable API key, a missing agent
- * file, missing tools); the slot shows the first that is visible, in that
- * order, because each blocks the next: without a key nothing runs, and a
- * missing agent file fails the launch before a tool is ever needed. Each
+ * host raises up to three warnings (a credential that stopped working, a
+ * missing agent file, missing tools); the slot shows the first that is
+ * visible, in that order, because each blocks the next: without a key
+ * nothing runs, and a missing agent file fails the launch before a tool is
+ * ever needed. Each
  * warning dispatches its own `host.request` arm. The onboarding and
  * "no LaTeX files yet" cards are not warnings: they take the hero's place.
  */

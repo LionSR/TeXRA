@@ -60,7 +60,6 @@ import {
   closeForegroundReader,
   foregroundReader as foregroundReaderSignal,
   formProgress as formProgressSignal,
-  goalAutoApproveAll as goalAutoApproveAllSignal,
   infoPane as infoPaneSignal,
   openTranscriptReader,
   openScriptPopup,
@@ -148,7 +147,6 @@ export function App(props: AppProps): React.JSX.Element {
   const sessionViewFailure = useSignal(sessionViewFailureSignal);
   const foregroundForm = useSignal(activeForm);
   const formProgress = useSignal(formProgressSignal);
-  const goalAutoApproveAll = useSignal(goalAutoApproveAllSignal);
   const infoPane = useSignal(infoPaneSignal);
   const foregroundReader = useSignal(foregroundReaderSignal);
   const slashPaletteOpen = useSignal(slashPaletteOpenSignal);
@@ -402,7 +400,6 @@ export function App(props: AppProps): React.JSX.Element {
             runtime={props.runtime}
             session={props.session}
             availableRows={availableRows}
-            goalAutoApproveAll={goalAutoApproveAll}
             pending={pending}
           />
         ) : null,

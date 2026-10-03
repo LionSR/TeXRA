@@ -6,6 +6,21 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **One "Connect a model" card, and one place to grant auto-approval.** The
+  welcome card is now the "Connect a model" card, and it is the one place a
+  first install asks for a credential: the no-folder welcome view, the setup
+  command's picker and the API-key banner no longer repeat it. Running setup
+  without a credential opens the card (or brings it back after "Skip for
+  now"), and the banner now shows only when a credential that worked stops
+  working. The desktop app's startup team dialog and its Help › Choose Agent
+  Team command are gone: the setup assistant picks the team, and Settings ›
+  Agents changes it. The task header's Auto switches are now read-only chips
+  (**Auto: edits**, **Auto: commands**, **Auto: agent work**) whose × turns a
+  grant off; grants are given on the approval card's ▾. In the CLI,
+  `/approval` sets the policy and lists the task's grants only to turn them
+  off, `/status` lists them, and the plan card's `a` runs the plan as a goal
+  that also approves edits and agent work (the old `/approval` "Goal: approve
+  all work" toggle).
 - **The Multi-Agent Workflow switch is named `multi-agent`.** Use
   `texra tools enable multi-agent` (or `disable`, `status`). A stored switch
   under the old `workflow-script` name is dropped once, with a warning in the

@@ -137,6 +137,9 @@ const COMPACT_HINT_ACTIONS: Readonly<Record<string, string>> = {
   'approve edits for session': 'all edits',
   [DELEGATION_APPROVAL_COPY.cliAction]:
     DELEGATION_APPROVAL_COPY.cliCompactAction,
+  // The plan card's two goal keys, so both fit beside y and n.
+  'run as goal': 'goal',
+  'goal, approve all': 'all work',
 };
 
 function isCoreApprovalHint(hint: KeyHint): boolean {

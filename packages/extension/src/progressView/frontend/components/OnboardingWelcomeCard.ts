@@ -9,6 +9,7 @@ import { SessionUiEvents } from '@shared/session/uiEvents';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import {
+  ONBOARDING_CARD_LEDE,
   ONBOARDING_CARD_TITLE,
   ONBOARDING_CHOICE_API_KEY,
   ONBOARDING_CHOICE_CHATGPT,
@@ -19,29 +20,12 @@ import {
 const { openWalkthrough: OPEN_WALKTHROUGH } =
   GETTING_STARTED_ACTION_PRESENTATION;
 
-/** The three steps of the getting-started path, in card order. */
-const WELCOME_PATH_STEPS = [
-  {
-    icon: 'right-to-bracket',
-    label: '1. Connect',
-    copy: 'A ChatGPT subscription or your own provider API key.',
-  },
-  {
-    icon: 'rocket',
-    label: '2. Setup',
-    copy: 'The setup assistant checks LaTeX and applies a starter team.',
-  },
-  {
-    icon: 'code-compare',
-    label: '3. Review',
-    copy: 'Run a polish pass and inspect the diff before accepting changes.',
-  },
-] as const;
-
 /**
- * State 0 welcome card (PRD: agent-native onboarding) — a port of the CLI
+ * State 0 "Connect a model" card (PRD: agent-native onboarding), the one
+ * credential prompt in the extension and the desktop — a port of the CLI
  * first-run picker, not a new design: ChatGPT subscription first, the API-key
- * alternative, and a quiet "Skip for now" link last.
+ * alternative, and a quiet "Skip for now" link last. The setup assistant
+ * that follows picks the agent team.
  * Stateless: renders the shared onboarding copy verbatim and emits the
  * `onboarding` host actions (`signInChatGpt`, `setApiKey`, `skip`, and
  * getting-started navigation); the host owns the funnel state.
@@ -100,42 +84,6 @@ export class OnboardingWelcomeCard extends LitElement {
       .card-copy {
         margin: 0;
         color: var(--wa-color-text-quiet);
-        line-height: var(--line-height-normal, 1.4);
-        overflow-wrap: anywhere;
-      }
-
-      .path {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
-        gap: var(--wa-space-xs);
-        margin: 0 0 var(--wa-space-s);
-      }
-
-      .path-step {
-        min-width: 0;
-        padding: var(--wa-space-xs);
-        border: var(--border-thin) solid var(--wa-color-surface-border);
-        border-radius: var(--wa-border-radius-s, 4px);
-        background: color-mix(
-          in srgb,
-          var(--wa-color-surface-default) 76%,
-          transparent
-        );
-      }
-
-      .path-step__label {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        margin-bottom: var(--wa-space-3xs);
-        font-size: var(--font-size-sm);
-        font-weight: var(--font-weight-semibold, 600);
-      }
-
-      .path-step__copy {
-        margin: 0;
-        color: var(--wa-color-text-quiet);
-        font-size: var(--font-size-sm);
         line-height: var(--line-height-normal, 1.4);
         overflow-wrap: anywhere;
       }
@@ -204,22 +152,6 @@ export class OnboardingWelcomeCard extends LitElement {
           display: none;
         }
 
-        .path {
-          gap: var(--wa-space-2xs);
-          margin-bottom: var(--wa-space-xs);
-        }
-
-        .path-step {
-          display: grid;
-          grid-template-columns: minmax(86px, auto) minmax(0, 1fr);
-          gap: var(--wa-space-xs);
-          padding: var(--wa-space-2xs);
-        }
-
-        .path-step__label {
-          margin-bottom: 0;
-        }
-
         .choices {
           gap: var(--wa-space-xs);
         }
@@ -275,26 +207,8 @@ export class OnboardingWelcomeCard extends LitElement {
             </span>
             <div class="welcome-heading">
               <h1 class="card-title">${ONBOARDING_CARD_TITLE}</h1>
-              <p class="card-copy">
-                ${TEXRA_TAGLINE} Connect a model, and TeXRA checks this project,
-                picks the right agent team, and starts your first edit.
-              </p>
+              <p class="card-copy">${TEXRA_TAGLINE} ${ONBOARDING_CARD_LEDE}</p>
             </div>
-          </div>
-          <div class="path" role="list" aria-label="Getting started path">
-            ${WELCOME_PATH_STEPS.map(
-              (step) => html`
-                <div class="path-step" role="listitem">
-                  <span class="path-step__label">
-                    <span class="icon-surface is-size-s" aria-hidden="true">
-                      ${waIcon(step.icon)}
-                    </span>
-                    <span>${step.label}</span>
-                  </span>
-                  <p class="path-step__copy">${step.copy}</p>
-                </div>
-              `,
-            )}
           </div>
           <div class="choices">
             <div class="choice">
