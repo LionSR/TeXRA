@@ -586,8 +586,8 @@ describe('desktop settings IPC', () => {
       settings: DEFAULT_LATEX_SETTINGS_STATUS,
     });
     expect(
-      findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD),
-    ).toMatchObject({ command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD });
+      findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS),
+    ).toMatchObject({ command: SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS });
 
     expect(findSnapshot(posted, 'approval')).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,

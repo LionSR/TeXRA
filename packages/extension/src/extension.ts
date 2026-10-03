@@ -286,7 +286,7 @@ const WALKTHROUGH_COMMANDS_NEEDING_WORKSPACE = [
   EXTENSION_COMMANDS.DOWNLOAD_ARXIV_SOURCE,
   EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT,
   'texra.showMainView',
-  'texra.showTools',
+  'texra.showApprovalSettings',
 ] as const satisfies readonly CommandId[];
 
 /** Internal command URI used by workspace-bound walkthrough links. */

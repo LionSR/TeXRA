@@ -71,7 +71,7 @@ export {
 export const SETTINGS_TAB_ORDER = [
   'models',
   'agents',
-  'tools',
+  'plugins',
   'latex',
   'memory',
   'general',
@@ -94,10 +94,10 @@ export type SettingsTabPanelName = (typeof SETTINGS_TAB_ORDER)[number];
 export const SETTINGS_PAGE_SECTIONS = {
   models: ['keys', 'subscriptions', 'models'],
   agents: ['library', 'teams', 'skills', 'advanced'],
-  tools: ['approval', 'tools', 'integrations'],
+  plugins: [],
   latex: ['dependencies', 'compile', 'formatting', 'vscode'],
   memory: [],
-  general: ['privacy', 'git'],
+  general: ['approval', 'privacy', 'git'],
   shortcuts: [],
 } as const satisfies Record<SettingsTabPanelName, readonly string[]>;
 
@@ -405,18 +405,47 @@ const ToolDashboardItemSchema = z.strictObject({
 });
 export type ToolDashboardItem = z.infer<typeof ToolDashboardItemSchema>;
 
-/** Outbound: backend → frontend tool dashboard data */
-const UpdateToolDashboardMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD),
-  items: z.array(ToolDashboardItemSchema),
+/**
+ * One row of the Plugins page and the TUI's `/plugins`: everything that adds
+ * tools or agents, built once (`@controllers/settingsView/pluginRows`). A
+ * TeXRA plugin carries its dashboard card, an installed Claude Code or Codex
+ * plugin its listing, and an MCP server from the user's `mcp.json` its name
+ * and command. `usedBy` names the agents whose tool lists reach the row.
+ */
+export const PluginRowSchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('texra'),
+    item: ToolDashboardItemSchema,
+    usedBy: z.array(z.string()),
+  }),
+  z.strictObject({
+    kind: z.literal('installed'),
+    plugin: PluginListItemSchema,
+    usedBy: z.array(z.string()),
+  }),
+  z.strictObject({
+    kind: z.literal('mcp'),
+    name: z.string().min(1),
+    command: z.string().min(1),
+    usedBy: z.array(z.string()),
+  }),
+]);
+export type PluginRow = z.infer<typeof PluginRowSchema>;
+
+/** Outbound: the Plugins page's rows, the MCP config file they read, and
+ *  what that file's invalid entries raise. */
+const UpdatePluginsMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS),
+  rows: z.array(PluginRowSchema),
+  mcpConfigPath: z.string(),
+  mcpWarnings: z.array(z.string()),
 });
 
-/** Outbound: the Skills tab's skills, their issues and installed plugins. */
+/** Outbound: the Skills tab's skills and their issues. */
 const UpdateSkillsListMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST),
   skills: z.array(SkillDisplayItemSchema),
   issues: z.array(SkillDisplayIssueSchema),
-  plugins: z.array(PluginListItemSchema),
 });
 
 /** Outbound: backend → frontend GitHub token status. */
@@ -554,7 +583,7 @@ const SettingsViewOutboundMessageSchema = z.discriminatedUnion('command', [
   UpdateAgentModePresetsMessageSchema,
   UpdateSettingsSnapshotMessageSchema,
   UpdateSkillsListMessageSchema,
-  UpdateToolDashboardMessageSchema,
+  UpdatePluginsMessageSchema,
   UpdateGitHubTokenStatusMessageSchema,
   UpdateSubscriptionAuthStatusMessageSchema,
   UpdateSubscriptionUsageMessageSchema,

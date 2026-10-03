@@ -352,9 +352,9 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
     .toBeLessThanOrEqual(520);
 
   await page.evaluate(() => {
-    window.postMessage({ command: 'setTab', tab: 'tools/tools' }, '*');
+    window.postMessage({ command: 'setTab', tab: 'plugins' }, '*');
   });
-  await expect(page.locator('tools-tab tool-card').first()).toBeVisible({
+  await expect(page.locator('plugins-tab plugin-card').first()).toBeVisible({
     timeout: 5_000,
   });
 
