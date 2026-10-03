@@ -1,4 +1,4 @@
--- LATER step: run ONLY when `log-usage` is redeployed JWT-only (deploy step 4),
+-- LATER step: run ONLY AFTER `log-usage` has been redeployed JWT-only (deploy step 4),
 -- in one transaction, after a released client version posts to log-usage-v2.
 -- It moves the install rows the combined v34-v36 function wrote into the
 -- legacy tables over to install_usage_logs, then restores the legacy tables

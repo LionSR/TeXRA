@@ -61,7 +61,8 @@ anonymous data goes to its own table.
   them from the old tables, drops the `*_one_owner` checks, the `*_install_*`
   indexes and the `install_id` columns, restores `user_id SET NOT NULL`, and
   restores the two original upsert bodies (inlined at the end of the file).
-  Run it only together with deploy step 4. Do not run it earlier: the live
+  Run it as the second half of deploy step 4, after the JWT-only redeploy of
+  `log-usage`. Do not run it earlier: the live
   combined function (v36) still writes install rows into the legacy tables and
   depends on those columns.
 
@@ -85,12 +86,16 @@ header) keeps working for every client.
    malformed ID each expect 401. Then delete the test rows
    (`DELETE FROM public.install_usage_logs WHERE install_id = '00000000-0000-4000-8000-000000000001'`).
 3. Ship the client pointing at `log-usage-v2` (`src/telemetry/UsageLogService.ts`).
-4. Only after a released client version uses v2 (the owner decides when): run
-   `install-usage-logs-retire-legacy.sql`, then redeploy `log-usage` JWT-only
-   from this tree with the same flags
-   (`supabase functions deploy log-usage --no-verify-jwt --use-api --project-ref jntubmcgbhwtcktubelv`),
-   so it serves old releases only. Anonymous clients that still post to
-   `log-usage` get 401 from then on.
+4. Only after a released client version uses v2 (the owner decides when), in
+   this order:
+   1. Redeploy `log-usage` JWT-only from this tree with the same flags
+      (`supabase functions deploy log-usage --no-verify-jwt --use-api --project-ref jntubmcgbhwtcktubelv`),
+      so it serves old releases only. Anonymous clients that still post to
+      `log-usage` get a clean 401 from then on, and install rows stop landing in
+      the legacy tables.
+   2. Then run `install-usage-logs-retire-legacy.sql`. Running it first would
+      drop `install_id` and restore `user_id NOT NULL` under the live combined
+      function, which would 500 on any install request until the redeploy.
 
 The pending llm-zoo 2.0 pricing change (#13602) rides along with whichever
 deploy happens next.
