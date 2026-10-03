@@ -1280,10 +1280,10 @@ const SCENARIOS = [
     keys: ['/', DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN],
     frame: 'viewport',
     expect: [
-      '… 8 previous rows',
-      '› /status   Show task details and cost',
+      '… 5 previous rows',
+      '› /status    Show task details and cost',
       '/memory',
-      '/exit     Exit texra',
+      '… 5 more rows',
       'Esc close',
     ],
   },
