@@ -10,15 +10,15 @@
  * a command), a script whose nested calls run a read, a command and an
  * awaited `agent()` call that owns its child, the echo's answer, then a
  * handoff and a compaction (`context.edit`) and a fork. The pass records
- * the commit each
- * write transaction ended at, from the store's own `observedCommit`: a
- * batch commits whole, so those are the crash points. For each point N the
- * suite copies the clean store, truncates it to commits 1..N (the store a
- * process killed after commit N leaves), hands its claims to a dead owner,
- * opens a fresh session over it and resumes the root run. The handoff, the
- * compaction and the fork are a user's requests, which a crash loses: they
- * are issued again when their rows are not in the prefix. Every request is approved,
- * and an unfinished call whose outcome is unknown is retried.
+ * the commit each write transaction ended at, from the store's own
+ * `observedCommit`: a batch commits whole, so those are the crash points.
+ * For each point N the suite copies the clean store, truncates it to
+ * commits 1..N (the store a process killed after commit N leaves), hands
+ * its claims to a dead owner, opens a fresh session over it and resumes the
+ * root run. The handoff, the compaction and the fork are a user's requests,
+ * which a crash loses: they are issued again when their rows are not in the
+ * prefix. Every request is approved, and an unfinished call whose outcome
+ * is unknown is retried.
  *
  * Failure modes, each checked at every point:
  * - the conversation comes to another end than the clean one: the root's
@@ -175,6 +175,14 @@ const normalized = (text: string) =>
     .replaceAll(/validation-([a-z_]+)-\d+/g, 'validation-$1')
     .replaceAll(/[0-9a-f]{12,}/g, 'ID')
     .replaceAll(/, [\d.]+m?s\)/g, ')');
+/** Every `text` a message's content holds, however its parts nest. */
+const textsOf = (value: unknown): string[] => {
+  if (Array.isArray(value)) return value.flatMap(textsOf);
+  if (value === null || typeof value !== 'object') return [];
+  return Object.entries(value).flatMap(([key, field]) =>
+    key === 'text' && typeof field === 'string' ? [field] : textsOf(field),
+  );
+};
 const isFork = (row: Row) =>
   row.type === 'run.start' && row.data.includes('"kind":"fork"');
 
@@ -247,9 +255,22 @@ function outcome(rows: readonly Row[], root: string) {
           .flatMap((child) => answers(rows, child.run)),
       ),
     ],
+    // A fork's edits, positions, and the view its seed carries: each
+    // message's role and text.
     forks: rows.filter(isFork).map((fork) => ({
       edits: of(fork.run, 'context.edit').map((row) => payload(row).cause),
       positions: of(fork.run, 'run.position').map((row) => payload(row).at),
+      seed: of(fork.run, 'context.edit').flatMap((row) =>
+        (
+          payload(row).messages as readonly {
+            readonly role: string;
+            readonly content?: unknown;
+          }[]
+        ).map(
+          (message) =>
+            `${message.role}: ${normalized(textsOf(message.content).join(''))}`,
+        ),
+      ),
     })),
   };
 }
@@ -731,7 +752,16 @@ export function crashConformanceSuite(plugins: string): void {
             edits: ['handoff', 'compaction'],
             children: 1,
             childAnswers: ['Child result.'],
-            forks: [{ edits: ['fork'], positions: ['waiting'] }],
+            forks: [
+              {
+                edits: ['fork'],
+                positions: ['waiting'],
+                seed: [
+                  'user: [Previous conversation summary]\n\nThe golden chat so far.',
+                  'assistant: Model saw: [Previous conversation summary]\n\nThe golden chat so far.',
+                ],
+              },
+            ],
           });
           // The two calls, the script and its three calls, each settled.
           expect(expected.settled).toHaveLength(6);
