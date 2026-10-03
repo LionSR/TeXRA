@@ -67,7 +67,7 @@ recommended groups at the bottom are a good starting point.
   `working_directory`. Both take `model` (with an `@effort` suffix),
   `memories`, `label`, and `timeoutMs`. Called directly, the child runs in
   the background and its result arrives as a follow-up message (a one-shot
-  run waits). Gated by the "Multi-Agent Workflow" switch in Settings → Tools,
+  run waits). Gated by the "Multi-Agent Workflow" switch in Settings → Plugins,
   which removes it from every agent when off.
 - `script` — run a JavaScript program that calls the agent's other tools.
   `code` is the body of an async function: `await tools.<name>(args)` or

@@ -12,7 +12,7 @@
 import { Context, Data, Effect, Layer } from 'effect';
 
 // Local imports
-import { getCodexStatus } from '@auth/codex';
+import { getCodexStatus } from '@texra-ai/llm/node';
 import type {
   TerminalRunFailed,
   TerminalRunRequest,

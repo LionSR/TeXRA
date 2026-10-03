@@ -37,7 +37,7 @@ import {
   type TurnEvent,
   type TurnRequest,
   type TurnResult,
-} from '@texra-ai/llm/turn';
+} from '@texra-ai/llm';
 
 import { maybeSaveDebugObject } from '@agent/debug/debugMessageSaver';
 import {

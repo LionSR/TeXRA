@@ -11,7 +11,9 @@ import { Effect } from 'effect';
 // Local imports
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
+  ClaudeAgentSessions,
   claudeAgentSessionsLayer,
+  CodexThreads,
   codexThreadsLayer,
 } from '@tools/agentCliSessionStores';
 import { ClaudeAgentTool } from '@tools/claudeAgent';
@@ -32,6 +34,8 @@ import {
   LeanInspectTool,
   LeanProjectTool,
 } from '@tools/lean/LspTools';
+import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
+import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { LEAN4_EXTENSION_ID } from '@tools/lean/leanTypes';
 import {
   CLAUDE_CODE_AVAILABILITY,
@@ -42,7 +46,7 @@ import {
   WOLFRAM_AVAILABILITY,
   ZOTERO_AVAILABILITY,
 } from '@tools/pluginAvailability';
-import type { Plugin } from '@tools/plugins';
+import { definePlugin, type Plugin } from '@tools/plugins';
 import { TexcountTool } from '@tools/texcount/TexcountTool';
 import { ALWAYS_AVAILABLE, preferredInstallCommand } from '@tools/toolProbes';
 import { WOLFRAM_INSTALL_GUIDE, WolframTool } from '@tools/wolfram/WolframTool';
@@ -118,7 +122,7 @@ export const zotero: Plugin = {
   availability: ZOTERO_AVAILABILITY,
 };
 
-export const lean4: Plugin = {
+export const lean4 = definePlugin<LeanLanguageServices>({
   id: 'lean4',
   tools: {
     lean_diagnostics: LeanDiagnosticsTool,
@@ -156,11 +160,14 @@ export const lean4: Plugin = {
       'CLI / desktop builds: requires `lake` on PATH; each Lake project can have its own language server, and idle ones stop after thirty minutes, surfaced below.',
   }),
   availability: LEAN4_AVAILABILITY,
+  // The direct `lake env lean --server` pool; a host with an editor bridge
+  // passes its own (`texraPlugins`).
+  processLayer: { layer: directLeanLanguageServices() },
   skills: true,
   agents: true,
-};
+});
 
-export const githubActivity: Plugin = {
+export const githubActivity = definePlugin<GitHubSubscriptions>({
   // ID kept as `github-pr-subscription` for back-compat with persisted
   // disabled-tool preferences. The user-facing name has expanded to
   // cover repos and issues but the persistence key is stable.
@@ -188,7 +195,7 @@ export const githubActivity: Plugin = {
     drain: Effect.flatMap(GitHubSubscriptions, (s) => s.drainDeliveries),
   },
   availability: GITHUB_AVAILABILITY,
-};
+});
 
 export const externalInquiry: Plugin = {
   id: 'external-inquiry',
@@ -206,7 +213,7 @@ export const externalInquiry: Plugin = {
   availability: ALWAYS_AVAILABLE,
 };
 
-export const codex: Plugin = {
+export const codex = definePlugin<CodexThreads>({
   id: 'codex',
   tools: { codex: CodexTool },
   name: 'OpenAI Codex CLI',
@@ -246,9 +253,9 @@ export const codex: Plugin = {
   toggleable: true,
   sessionLayer: codexThreadsLayer,
   availability: CODEX_AVAILABILITY,
-};
+});
 
-export const claudeAgent: Plugin = {
+export const claudeAgent = definePlugin<ClaudeAgentSessions>({
   // ID kept as `claude-agent` for back-compat with persisted disabled-tool
   // preferences. The user-facing name has been rebranded to "Claude Code CLI"
   // and the tool name string is `claude_code`, but the persistence key is
@@ -293,4 +300,4 @@ export const claudeAgent: Plugin = {
   toggleable: true,
   sessionLayer: claudeAgentSessionsLayer,
   availability: CLAUDE_CODE_AVAILABILITY,
-};
+});

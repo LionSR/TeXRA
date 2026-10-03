@@ -3,11 +3,11 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 import { MODEL_CONFIGS, type ModelRef } from 'llm-zoo';
 
+import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@texra-ai/llm';
 import {
   routeCompatibilityKey,
   type BindableRoute,
 } from '@agent/runtime/modelRoutes';
-import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@model/modelRoute';
 
 const KIMI_CODING = 'moonshot/kimi-for-coding';
 const KIMI3 = 'moonshot/kimi-k3';

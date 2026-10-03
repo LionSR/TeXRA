@@ -8,7 +8,7 @@
  * prompt.
  */
 import { StatusCodes } from 'http-status-codes';
-import { ModelError } from '@texra-ai/llm/turn';
+import { ModelError } from '@texra-ai/llm';
 
 import { isContextWindowError } from '@common/errors/sdkError/errorPatterns';
 import {

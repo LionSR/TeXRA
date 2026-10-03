@@ -98,12 +98,12 @@ export function setCliToolEnabled(
  * the probe itself failed, which is the one case the status carries no yes/no
  * answer about the dependency.
  */
-export function cliToolDetected(item: ToolDashboardItem): boolean | null {
+function cliToolDetected(item: ToolDashboardItem): boolean | null {
   return item.status === 'unknown' ? null : item.status === 'available';
 }
 
 /** The toggle state, or `null` for a group that cannot be toggled. */
-export function cliToolEnabled(item: ToolDashboardItem): boolean | null {
+function cliToolEnabled(item: ToolDashboardItem): boolean | null {
   return item.toggleable === true ? (item.enabled ?? null) : null;
 }
 

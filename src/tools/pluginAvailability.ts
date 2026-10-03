@@ -6,13 +6,12 @@
  */
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Option } from 'effect';
 
 // Local imports
+import { apiKeyEnvName, lookupApiKeyOrigin } from '@texra-ai/llm';
 import { withLogChannel } from '@logger/effectLog';
-import { lookupApiKeyOrigin } from '@model/apiProviders';
 import { Secrets } from '@platform/secrets';
-import { apiKeyEnvName } from '@shared/constants/providers';
 import { importCodexClass, findCodexBinaryPath } from '@tools/codexImport';
 import {
   importClaudeAgentSdk,
@@ -38,6 +37,7 @@ import {
   zoteroProbePort,
   type SdkBinaryStatus,
   type ToolAvailabilityChecks,
+  type ToolProbeServices,
 } from '@tools/toolProbes';
 import { ZOTERO_PORT_KEY } from '@tools/zotero/bbtClient';
 import { isGitRepository } from '@utils/git/isGitRepository';
@@ -93,11 +93,21 @@ function leanReady(prerequisites: Lean4Prerequisites): boolean {
     : prerequisites.lakeAvailable;
 }
 
+/** The Lean plugin's server roster, from its own services while its layer
+ *  is up; none before (a probe never brings the layer up). */
+const leanServers = Effect.map(
+  Effect.serviceOption(LeanLanguageServices),
+  Option.match({
+    onNone: (): readonly LeanServerInfo[] => [],
+    onSome: (lean) => lean.listServers(),
+  }),
+);
+
 export const LEAN4_AVAILABILITY = prerequisitesChecks({
   probe: (inputs) =>
     Effect.gen(function* () {
       const setup = yield* SetupPlatform;
-      const lean = yield* LeanLanguageServices;
+      const servers = yield* leanServers;
       const extensionAvailable =
         setup.extensions?.isInstalled(LEAN4_EXTENSION_ID) ?? false;
       const lakeAvailable = (yield* findToolInCommonPaths('lake')) !== null;
@@ -107,15 +117,15 @@ export const LEAN4_AVAILABILITY = prerequisitesChecks({
         extensionAvailable,
         lakeAvailable,
         requiresExtension,
-        servers: lean.listServers(),
+        servers,
       };
     }),
   fallback: () =>
-    Effect.map(LeanLanguageServices, (lean) => ({
+    Effect.map(leanServers, (servers) => ({
       extensionAvailable: false,
       lakeAvailable: false,
       requiresExtension: false,
-      servers: lean.listServers(),
+      servers,
     })),
   check: leanReady,
   statusLabel: (prerequisites) => {
@@ -222,7 +232,10 @@ const CLAUDE_CODE_SDK_PROBE = {
     'Install via: npm install -g @anthropic-ai/claude-code',
 };
 
-export const CODEX_AVAILABILITY = prerequisitesChecks({
+export const CODEX_AVAILABILITY = prerequisitesChecks<
+  SdkBinaryStatus,
+  ToolProbeServices
+>({
   probe: () => probeSdkBinaryStatus(CODEX_SDK_PROBE),
   fallback: () => probeSdkBinaryStatus(CODEX_SDK_PROBE),
   check: (status) => status.ok,
@@ -234,7 +247,10 @@ export const CODEX_AVAILABILITY = prerequisitesChecks({
     ),
 });
 
-export const CLAUDE_CODE_AVAILABILITY = prerequisitesChecks({
+export const CLAUDE_CODE_AVAILABILITY = prerequisitesChecks<
+  SdkBinaryStatus,
+  ToolProbeServices
+>({
   probe: () => probeSdkBinaryStatus(CLAUDE_CODE_SDK_PROBE),
   fallback: () => probeSdkBinaryStatus(CLAUDE_CODE_SDK_PROBE),
   check: (status) => status.ok,

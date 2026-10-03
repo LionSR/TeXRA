@@ -6,9 +6,9 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
+import { API_PROVIDERS, lookupApiKeyOrigin } from '@texra-ai/llm';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { withLogChannel } from '@logger/effectLog';
-import { API_PROVIDERS, lookupApiKeyOrigin } from '@model/apiProviders';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { Secrets } from '@platform/secrets';
 import { nodeHostEnvironment } from '@platform/defaults/nodeHostEnvironment';

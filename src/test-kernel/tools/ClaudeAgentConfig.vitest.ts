@@ -6,7 +6,7 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - model
-import { apiKeySecretName } from '@model/apiProviders';
+import { apiKeySecretName } from '@texra-ai/llm';
 import type { PlatformSecrets } from '@platform/secrets';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import type * as ChildProcess from 'effect/process/ChildProcess';

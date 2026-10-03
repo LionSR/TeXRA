@@ -1,3 +1,4 @@
+import { codingPlanForUsageRoute } from '@texra-ai/llm';
 import { isSubscriptionRoute } from '@cli/runtime/modelAccessRoute';
 import {
   firstFittingCandidate,
@@ -11,7 +12,6 @@ import {
   texraApprovalPolicyLabel,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { codingPlanForUsageRoute } from '@shared/codingPlanSubscriptions';
 import { contextGaugeBand, roundedContextPercent } from '@shared/contextGauge';
 import {
   type ContextStateData,

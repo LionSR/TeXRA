@@ -4,20 +4,22 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { postMessage } from '@shared/hostBridge';
-import { MODEL_AVAILABILITY_STATUS } from '@shared/schemas';
-import {
-  REASONING_LEVEL_LABELS,
-  REASONING_LEVEL_OPTIONS,
-  type ModelSelectionItem,
-  type ProviderKeyStatus,
-} from '@shared/settingsView/settingsViewMessages';
 import {
   PROVIDER_DISPLAY_NAMES,
   MODEL_SOURCE_ORDER,
   EXPENSIVE_MODEL_HINT,
-} from '@shared/constants/providers';
+} from '@texra-ai/llm';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { postMessage } from '@shared/hostBridge';
+import { MODEL_AVAILABILITY_STATUS } from '@shared/schemas';
+import {
+  type ModelSelectionItem,
+  type ProviderKeyStatus,
+} from '@shared/settingsView/settingsViewMessages';
+import {
+  REASONING_LEVEL_LABELS,
+  REASONING_LEVEL_OPTIONS,
+} from '@shared/model/reasoningLabels';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderKeyStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';

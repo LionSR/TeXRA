@@ -24,13 +24,14 @@ import {
 } from '@platform/interfaces';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import type { LanguageModelPort } from '@platform/languageModel';
-import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
+import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   getCoreSettingDefault,
   type SettingHost,
 } from '@shared/state/stateSettings';
 import type { SetupPlatformShape } from '@tools/setup/platform';
+import type { SecretsFailed } from '@texra-ai/llm';
 
 /**
  * One real temporary directory per worker process, holding both the fake

@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Option } from 'effect';
+import { type Context, Effect, Option } from 'effect';
 
 // Local imports - GitHub subscriptions
 import type { RunId } from '@shared/schemas';
@@ -30,7 +30,11 @@ const whileUp = <A>(
         'github-pr-subscription',
       );
       return Option.isSome(services)
-        ? yield* Effect.provide(read, services.value)
+        ? yield* Effect.provide(
+            read,
+            // The GitHub plugin's own services, which its layer serves.
+            services.value as Context.Context<GitHubSubscriptions>,
+          )
         : none;
     }),
   );

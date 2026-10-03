@@ -260,7 +260,13 @@ describe('tool-use tool resolution', () => {
         expect(events).toEqual(['open', 'close']);
         yield* Scope.close(nextScope, Exit.void);
       }).pipe(
-        Effect.provide(toolTableLayer(table)),
+        Effect.provide(
+          toolTableLayer(table).pipe(
+            Layer.provide(
+              Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
+            ),
+          ),
+        ),
         Effect.provide(nodeSpawnerLayer),
         Effect.ensuring(Effect.promise(() => installPlatform())),
       );

@@ -9,8 +9,8 @@ import { repeat } from 'lit/directives/repeat.js';
 import { isModelOptionAvailable, type SessionType } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { Surface } from '@shared/session/surface';
+import type { TeXRAIconName } from '@shared/iconNames';
 import { TASK_APPROVAL } from '@ui/copy/taskApproval';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
 
 /** The agent menu's sections: the category an agent belongs to is the run
  *  type its launch takes. */

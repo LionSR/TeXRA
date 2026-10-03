@@ -20,7 +20,7 @@ import { AgentCategory, parseDelegationToolInput } from '@shared/schemas';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import { normalizeToolName } from '@shared/tools/toolDisplayName';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
+import type { TeXRAIconName } from '@shared/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type { ToolRow } from '@ui/transcript';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';

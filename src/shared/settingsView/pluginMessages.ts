@@ -1,9 +1,10 @@
 /**
- * The settings view's installed-plugin messages: the list the Skills page
- * shows beside the skills, and the one action message its buttons send.
+ * The settings view's installed-plugin messages: one installed plugin as the
+ * Plugins page lists it, and the one action message its buttons send.
  * Installing, enabling (which asks for trust in a host dialog), disabling,
  * updating and removing all run through `@common/plugins`, the same code
- * `texra plugin` runs, over the same install record.
+ * `texra plugin` runs, over the same install record; `openMcpConfig` opens
+ * the user's MCP config file, which the page lists read-only.
  */
 // Third-party imports
 import { z } from 'zod';
@@ -12,7 +13,7 @@ import { z } from 'zod';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { SkillNameSchema } from '@shared/schemas';
 
-/** One installed plugin as the Skills page lists it. */
+/** One installed plugin as the Plugins page lists it. */
 export const PluginListItemSchema = z.object({
   name: SkillNameSchema,
   source: z.string(),
@@ -32,13 +33,20 @@ export const PluginListItemSchema = z.object({
   /** Why it cannot be read now, when it cannot. */
   problem: z.string().optional(),
 });
-export type PluginListItem = z.infer<typeof PluginListItemSchema>;
 
 /** Inbound: one plugin action. `install` asks the host for a source and
- *  takes no name; every other action names the plugin. */
+ *  `openMcpConfig` opens the MCP config file, neither naming a plugin; every
+ *  other action names one. */
 export const PluginActionMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.PLUGIN_ACTION),
-  action: z.enum(['install', 'enable', 'disable', 'update', 'remove']),
+  action: z.enum([
+    'install',
+    'enable',
+    'disable',
+    'update',
+    'remove',
+    'openMcpConfig',
+  ]),
   name: SkillNameSchema.optional(),
 });
 export type PluginActionMessage = z.infer<typeof PluginActionMessageSchema>;

@@ -17,6 +17,7 @@ import {
   type StateStore,
 } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
+import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   BASH_APPROVAL_CONFIG_KEY,
@@ -28,7 +29,6 @@ import {
   SettingsViewInboundMessageSchema,
   type DerivedSettingsSnapshot,
 } from '@shared/settingsView/settingsViewMessages';
-import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -585,9 +585,13 @@ describe('desktop settings IPC', () => {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
       settings: DEFAULT_LATEX_SETTINGS_STATUS,
     });
-    expect(
-      findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD),
-    ).toMatchObject({ command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD });
+    // The rows post from a detached fiber that reads the install record
+    // and mcp.json from disk, so they can land after the flush.
+    await vi.waitFor(() =>
+      expect(
+        findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS),
+      ).toMatchObject({ command: SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS }),
+    );
 
     expect(findSnapshot(posted, 'approval')).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,

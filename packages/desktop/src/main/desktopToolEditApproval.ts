@@ -18,7 +18,7 @@ import type {
 import { hostFailure } from '@controllers/session/hostCallFailure';
 import { NotificationFailed, type DiffSource } from '@hosts/uiHosts';
 import type { HostRequestFailure } from '@shared/session/requestErrors';
-import type { BuildDisplayFn } from '@tools/approval/latexPreview';
+import type { BuildDisplayFn } from '@tools/latex/latexPreview';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 

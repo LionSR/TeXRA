@@ -1,13 +1,15 @@
 /**
- * The Skills page's installed-plugin actions, over the one install record
- * `texra plugin` shares (`@common/plugins`): install from a source the host
- * asks for, enable (showing what the plugin declares in a host dialog and
- * recording the trust the user gives), disable, update and remove. Each
- * repaints the page and reloads the agent catalog, which lists the plugin's
- * agents; a run picks the change up at its next step.
+ * The Plugins page's installed-plugin actions, over the one install record
+ * `texra plugin` shares (`@common/plugins`): install from a GitHub URL, a
+ * repository URL or a folder the host asks for, enable (showing what the
+ * plugin declares in a host dialog and recording the trust the user gives),
+ * disable, update and remove; and opening the user's `mcp.json`, which the
+ * page lists read-only. Each change repaints the page and reloads the agent
+ * catalog, which lists the plugin's agents; a run picks the change up at its
+ * next step.
  */
 // Third-party imports
-import { Effect, Result } from 'effect';
+import { Effect, FileSystem, Result } from 'effect';
 
 // Local imports - agent runtime
 import {
@@ -21,14 +23,11 @@ import { PluginRequestError } from '@common/plugins/pluginManifest';
 import {
   disablePlugin,
   enablePlugin,
-  listPlugins,
   type PluginReview,
 } from '@common/plugins/pluginTrust';
 import type { ProcessServices } from '@platform/processRuntime';
-import type {
-  PluginActionMessage,
-  PluginListItem,
-} from '@shared/settingsView/pluginMessages';
+import type { PluginActionMessage } from '@shared/settingsView/pluginMessages';
+import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 // Local imports - this module's neighbours
@@ -37,12 +36,12 @@ import type {
   SettingsPresentation,
 } from './settingsHostBindings';
 
-/** The installed-plugin arm of the settings body and the list it shows. */
+/** The installed-plugin arm of the settings body. */
 export function settingsPluginCommands(ports: {
   readonly roots: PluginEnv & { readonly workspace: string | undefined };
   readonly bindings: SettingsHostBindings;
   readonly present: SettingsPresentation;
-  /** Repaint the Skills page, whose list this arm's changes feed. */
+  /** Repaint the Plugins page, whose rows this arm's changes feed. */
   readonly repaint: Effect.Effect<void, Error, ProcessServices>;
 }) {
   const { roots, bindings, present } = ports;
@@ -60,7 +59,7 @@ export function settingsPluginCommands(ports: {
   const install = Effect.gen(function* () {
     const source = (yield* bindings.prompt.input({
       prompt:
-        'Install a Claude Code or Codex plugin: github.com/<owner>/<repo>[@ref], a git URL, or a local directory',
+        'Add a Claude Code or Codex plugin: github.com/<owner>/<repo>[@ref], a git URL, or a folder',
       placeHolder: 'github.com/owner/repo',
     }))?.trim();
     if (!source) return;
@@ -76,7 +75,22 @@ export function settingsPluginCommands(ports: {
     );
   });
 
-  const act = (message: PluginActionMessage) => {
+  /** The file is the one editor of the servers: a missing one is named,
+   *  never created, so the page is no second writer of it. */
+  const openMcpConfig = Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    if (yield* fs.exists(USER_MCP_CONFIG_PATH))
+      return yield* bindings.openPath(USER_MCP_CONFIG_PATH);
+    yield* present.notice(
+      `No MCP servers are configured. Create ${USER_MCP_CONFIG_PATH} as { "mcpServers": { "<name>": { "command": "…", "args": [] } } }, the shape Claude Code's .mcp.json uses.`,
+    );
+  });
+
+  const act = (
+    message: PluginActionMessage & {
+      readonly action: Exclude<PluginActionMessage['action'], 'openMcpConfig'>;
+    },
+  ) => {
     if (message.action === 'install') return install;
     const { name } = message;
     if (name === undefined)
@@ -104,31 +118,22 @@ export function settingsPluginCommands(ports: {
   };
 
   return {
-    /** The installed plugins as the Skills page lists them. */
-    list: Effect.map(listPlugins(roots), (plugins) =>
-      plugins.map((plugin): PluginListItem => ({
-        name: plugin.name,
-        source: plugin.source,
-        commit: plugin.commit,
-        version: plugin.version,
-        enabled: plugin.enabled,
-        trusted: plugin.trusted,
-        code: [...plugin.code],
-        skillCount: plugin.skillCount,
-        commandCount: plugin.commandCount,
-        agentCount: plugin.agentCount,
-        mcpServers: [...plugin.mcpServers],
-        problem: plugin.problem,
-      })),
-    ),
     handlers: {
       pluginAction: (message: PluginActionMessage) =>
-        present
-          .reported(`Plugin ${message.action} failed`, act(message))
-          .pipe(
-            Effect.andThen(bindings.refreshCatalogs()),
-            Effect.andThen(ports.repaint),
-          ),
+        message.action === 'openMcpConfig'
+          ? present.reported(
+              'Could not open the MCP config file',
+              openMcpConfig,
+            )
+          : present
+              .reported(
+                `Plugin ${message.action} failed`,
+                act({ ...message, action: message.action }),
+              )
+              .pipe(
+                Effect.andThen(bindings.refreshCatalogs()),
+                Effect.andThen(ports.repaint),
+              ),
     },
   };
 }

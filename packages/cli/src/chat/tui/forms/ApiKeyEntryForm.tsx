@@ -2,12 +2,12 @@
 
 import { Text } from 'ink';
 
-import type { ApiProvider } from '@model/apiProviders';
 import {
-  PROVIDER_URLS,
   apiKeyEnvName,
+  type ApiProvider,
+  PROVIDER_URLS,
   providerDisplayName,
-} from '@shared/constants/providers';
+} from '@texra-ai/llm';
 
 import { TextEntryForm } from './_shared/TextEntryForm';
 

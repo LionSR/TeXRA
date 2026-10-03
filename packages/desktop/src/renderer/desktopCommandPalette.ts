@@ -12,7 +12,7 @@ import {
   type DesktopPlatform,
 } from '@shared/commands/accelerators';
 import type { DesktopShortcutEntry } from '@shared/commands/shortcutPreferences';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
+import type { TeXRAIconName } from '@shared/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { isThenable } from '@utils/core';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';

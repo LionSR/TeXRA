@@ -1,15 +1,14 @@
 import { Effect } from 'effect';
 
+import { type ApiProvider, codingPlanForApiProvider } from '@texra-ai/llm';
 import { loadCliDetailedAccountStatusLines } from '@cli/runtime/apiStatus';
 import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import { type CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import { updateCliModelAccess } from '@cli/runtime/modelAccessSelection';
 
-import type { ApiProvider } from '@model/apiProviders';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { codingPlanForApiProvider } from '@shared/codingPlanSubscriptions';
 import {
   type SlashCommandOutput,
   type SlashCommandContext,

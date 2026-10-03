@@ -40,12 +40,10 @@ import {
   selectedPanel,
   selectedSections,
   skillLoadIssues,
-  installedPlugins,
   skillsList,
   subscriptionAuth,
   subscriptionUsage,
-  toolDashboardItems,
-  toolDashboardLoaded,
+  pluginsPage,
 } from './settingsState';
 
 export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
@@ -118,7 +116,6 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST]: (data) => {
     skillsList.set(data.skills);
     skillLoadIssues.set(data.issues);
-    installedPlugins.set(data.plugins);
   },
 
   // Catalog-derived settings snapshots.
@@ -137,10 +134,9 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
     activePresetId.set(data.activePresetId);
   },
 
-  // Tool dashboard.
-  [SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD]: (data) => {
-    toolDashboardItems.set(data.items);
-    toolDashboardLoaded.set(true);
+  // Plugins page.
+  [SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS]: ({ command: _command, ...page }) => {
+    pluginsPage.set(page);
   },
 
   // Git and integration auth.

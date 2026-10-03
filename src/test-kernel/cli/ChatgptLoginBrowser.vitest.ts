@@ -14,11 +14,11 @@ const mocks = vi.hoisted(() => ({
   tryOpenBrowser: vi.fn(),
 }));
 
-vi.mock('@auth/codex', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@auth/codex')>()),
+vi.mock('@texra-ai/llm/node', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@texra-ai/llm/node')>()),
   codexCoordinator: mocks.codexCoordinator,
-  loginWithDeviceCode: mocks.loginWithDeviceCode,
-  loginWithLoopback: mocks.loginWithLoopback,
+  codexLoginWithDeviceCode: mocks.loginWithDeviceCode,
+  codexLoginWithLoopback: mocks.loginWithLoopback,
 }));
 
 vi.mock('@cli/runtime/browser', () => ({

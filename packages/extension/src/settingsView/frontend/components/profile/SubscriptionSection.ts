@@ -11,8 +11,7 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared auth
-import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
-import { xaiAccountLabel } from '@auth/xai/xaiSessionTypes';
+import { codexAccountLabel, xaiAccountLabel } from '@texra-ai/llm';
 
 // Local imports - shared styles
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -21,9 +20,9 @@ import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   type SubscriptionUsageSnapshot,
 } from '@shared/schemas';
-import { type SubscriptionAuthStatus } from '@shared/settingsView/settingsViewMessages';
+import type { SubscriptionAuthStatus } from '@shared/model/subscriptionAuth';
+import { CHATGPT_AUTH, GROK_AUTH } from '@shared/model/accountAuth';
 import { commonViewStyles, designTokens } from '@ui/styles';
-import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import {
   renderSettingsNumberRow,

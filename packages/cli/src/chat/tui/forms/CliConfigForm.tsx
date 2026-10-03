@@ -1,8 +1,8 @@
 import { Effect } from 'effect';
 
+import { API_PROVIDERS, loadApiKeyStatusMap } from '@texra-ai/llm';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import { storeCredential } from '@common/secrets/storeCredential';
-import { API_PROVIDERS, loadApiKeyStatusMap } from '@model/apiProviders';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
@@ -36,7 +36,6 @@ import {
   ProviderApiKeyForm,
   type ProviderApiKeyStatusView,
 } from './ProviderApiKeyForm';
-import { ToolsListForm } from './ToolsListForm';
 import { SkillsSettingsForm } from './SkillsSettingsForm';
 
 export interface CliConfigFormProps {
@@ -244,15 +243,6 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             }
             onDone={onBack}
             onCancel={onBack}
-          />
-        ),
-        tools: (onBack) => (
-          <ToolsListForm
-            availableRows={props.availableRows}
-            stores={stores}
-            runtime={props.runtime}
-            workspaceRoot={props.workspaceRoot}
-            onClose={onBack}
           />
         ),
         skills: (onBack) => (

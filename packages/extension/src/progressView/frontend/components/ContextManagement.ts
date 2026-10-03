@@ -11,8 +11,8 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
+import type { TeXRAIconName } from '@shared/iconNames';
 import { designTokens, commonViewStyles } from '@ui/styles';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - progress view helpers

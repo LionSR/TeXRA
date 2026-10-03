@@ -55,11 +55,21 @@ const PLUGIN_SERVICES: readonly {
   },
   { tag: 'CodexThreads', users: /^src\/tools\/codex\.ts$/ },
   { tag: 'ClaudeAgentSessions', users: /^src\/tools\/claudeAgent\.ts$/ },
+  // The Lean 4 plugin's port: its tools and probe, and the VS Code host's
+  // bridge, which that host passes as the plugin's layer.
+  {
+    tag: 'LeanLanguageServices',
+    users:
+      /^src\/tools\/(?:lean\/|pluginAvailability\.ts$)|^packages\/extension\/src\/(?:extension\.ts|frontend\/lean\/VscodeIntegration\.ts)$/,
+  },
+  // The `core` plugin's Comments UI port: its tool.
+  { tag: 'InlineComments', users: /^src\/tools\/comment\// },
 ];
 /** Where the services are declared, typed and built. */
 const SERVICE_HOMES = new Set([
   'src/tools/agentCliSessionStores.ts',
   'src/tools/integrationPlugins.ts',
+  'src/tools/registry.ts',
   'src/platform/processRuntime.ts',
 ]);
 
@@ -131,10 +141,7 @@ describe('plugin rosters', () => {
       ['arxiv', ['arxiv_search', 'arxiv_metadata', 'download_arxiv_source']],
       ['crossref', ['crossref_search']],
       ['web', ['web_search', 'web_fetch']],
-      [
-        'memory-workflow',
-        ['memory', 'todo_write', 'executions', 'accept_run_files'],
-      ],
+      ['memory-workflow', ['memory', 'todo_write', 'executions']],
       ['goal', ['plan']],
       ['texcount', ['texcount']],
       ['wolfram', ['wolfram']],
@@ -172,7 +179,7 @@ describe('plugin rosters', () => {
         ],
       ],
       ['copilot', []],
-      ['documents', []],
+      ['documents', ['accept_run_files']],
     ]);
   });
 
@@ -197,10 +204,7 @@ describe('plugin rosters', () => {
           ['bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep'],
         ],
         ['web', ['web_search', 'web_fetch']],
-        [
-          'memory-workflow',
-          ['memory', 'todo_write', 'executions', 'accept_run_files'],
-        ],
+        ['memory-workflow', ['memory', 'todo_write', 'executions']],
         ['goal', ['plan']],
         ['multi-agent', ['agent']],
         ['codemode', ['script']],

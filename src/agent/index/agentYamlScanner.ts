@@ -17,7 +17,7 @@ import {
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
 import type { AgentSource } from '@shared/schemas';
-import type { AgentScanIssue } from '@shared/settingsView/settingsViewMessages';
+import type { AgentScanIssue } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';

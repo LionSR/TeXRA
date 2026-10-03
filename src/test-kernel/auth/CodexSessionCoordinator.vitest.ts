@@ -7,17 +7,17 @@ import { Deferred, Effect, Exit, Fiber } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import { SubscriptionOAuthError } from '@auth/oauth/subscriptionOAuthError';
-import { CodexSessionCoordinator } from '@auth/codex/CodexSessionCoordinator';
+import { SubscriptionOAuthError } from '@texra-ai/llm/node';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { CodexSessionCoordinator } from '../../../packages/llm/src/oauth/codex/CodexSessionCoordinator.js';
 import type {
   SubscriptionOAuthClient,
   SubscriptionSessionStorage,
-} from '@auth/oauth/SubscriptionOAuthCoordinator';
+} from '../../../packages/llm/src/oauth/SubscriptionOAuthCoordinator.js';
 import type {
   CodexSession,
   CodexTokenResponseSchema,
-} from '@auth/codex/codexSessionTypes';
-import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+} from '../../../packages/llm/src/oauth/codex/codexSessionTypes.js';
 import type { HttpClient } from 'effect/http';
 import type { z } from 'zod';
 

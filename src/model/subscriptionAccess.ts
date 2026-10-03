@@ -6,7 +6,7 @@
  * The switches are off by default (experimental, opt-in). When one is on AND
  * the user is signed in, the provider's eligible models route through the
  * subscription instead of the user's API key. The OAuth machinery lives
- * outside the model layer (`@auth/*`), so the model layer holds only the
+ * outside the model layer (`@texra-ai/llm/node`), so the model layer holds only the
  * sign-in answer, not the plumbing: an app that supports subscription sign-in
  * installs a probe at startup, and an embedder that does not simply never
  * signs in. Signed out is the honest default — it routes model selection to
@@ -19,7 +19,7 @@ import {
   readConfigSetting,
   type SettingsStores,
 } from '@shared/config/settingsAccess';
-import type { SubscriptionAuthStatus } from '@shared/settingsView/settingsViewMessages';
+import type { SubscriptionAuthStatus } from '@shared/model/subscriptionAuth';
 import { settingByKey } from '@shared/state/stateSettings';
 import { writeSettingTo } from '@utils/config/platformSettings';
 

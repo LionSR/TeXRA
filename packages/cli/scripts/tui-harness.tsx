@@ -20,14 +20,14 @@ import { Effect, Fiber, SubscriptionRef } from 'effect';
 import { nanoid } from 'nanoid';
 import React from 'react';
 
+import { apiKeySecretName } from '@texra-ai/llm';
 import { refresh } from '@agent/index';
 import { tryDefaultSession } from '@agent/runtime';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
-import { apiKeySecretName } from '@model/apiProviders';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
+import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import {
   formatTexraApprovalPolicy,
   parseTexraApprovalPolicy,

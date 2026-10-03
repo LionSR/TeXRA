@@ -31,8 +31,10 @@ import {
   Context,
   Effect,
   Exit,
+  FileSystem,
   Layer,
   Option,
+  Path,
   RcMap,
   Scope,
   Semaphore,
@@ -40,7 +42,8 @@ import {
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
-import type { PluginServices } from '@platform/processRuntime';
+import { AppState } from '@platform/interfaces';
+import type { PluginContext } from '@platform/processRuntime';
 import type { AgentCategory } from '@shared/schemas';
 import {
   makeRegistry,
@@ -51,6 +54,7 @@ import {
 import {
   ToolRegistry,
   type InstalledToolReader,
+  type PluginLayerServices,
   type PluginLoader,
   type PromptContribution,
   type ToolTable,
@@ -65,7 +69,7 @@ import { makeServerHolds, type InstalledLoad } from '@tools/serverHolds';
 import { buildPluginLayer } from '@tools/pluginLayers';
 
 /** The services a pin serves: its plugins' layers'. */
-type Services = Context.Context<PluginServices>;
+type Services = PluginContext;
 
 export class LiveTools extends Context.Service<
   LiveTools,
@@ -127,12 +131,24 @@ const liveToolsLayer = (
   loader: PluginLoader,
   closed: ReadonlySet<string>,
   installedReader: InstalledToolReader,
-): Layer.Layer<LiveTools, never, ToolRegistry | ChildProcessSpawner> =>
+): Layer.Layer<
+  LiveTools,
+  never,
+  ToolRegistry | Exclude<PluginLayerServices, LiveTools>
+> =>
   Layer.effect(
     LiveTools,
     Effect.gen(function* () {
       const table: ToolTable = yield* ToolRegistry;
       const spawner = yield* ChildProcessSpawner;
+      // What a plugin's process layer is built over, beside this catalog:
+      // exactly these services, never the build's scope with them.
+      const process = Context.pick(
+        FileSystem.FileSystem,
+        Path.Path,
+        ChildProcessSpawner,
+        AppState,
+      )(yield* Effect.context<Exclude<PluginLayerServices, LiveTools>>());
       const scope = yield* Effect.scope;
       // Each plugin's process layer, in its map entry's scope: its switch and
       // each generation that includes it hold a reference. It may read this
@@ -144,6 +160,7 @@ const liveToolsLayer = (
         lookup: (id: string) =>
           buildPluginLayer(id, table.processLayers.get(id)!.layer).pipe(
             Effect.provideService(LiveTools, self.service!),
+            Effect.provide(process),
             Effect.tap(() =>
               Effect.acquireRelease(
                 Effect.sync(() => up.add(id)),
@@ -423,7 +440,11 @@ export const toolTableLayer = (
   loader: PluginLoader = () => NONE,
   closed: ReadonlySet<string> = new Set(),
   installed: InstalledToolReader = NONE,
-): Layer.Layer<LiveTools | ToolRegistry, never, ChildProcessSpawner> =>
+): Layer.Layer<
+  LiveTools | ToolRegistry,
+  never,
+  Exclude<PluginLayerServices, LiveTools>
+> =>
   liveToolsLayer(loader, closed, installed).pipe(
     Layer.provideMerge(Layer.succeed(ToolRegistry)(table)),
   );

@@ -1,123 +1,117 @@
 # Anonymous install-id usage logging (runbook)
 
-Internal. Schema and RPCs applied to the live project on 2026-09-30 (steps 1-2
-below), the function deployed and smoke-tested (steps 3-4, 2026-09-30), and
-redeployed as version 35 on 2026-10-01 with only the subscription list-price
-change (llm-zoo 1.41.0 long-context tiers). All steps are complete. Lets
-TeXRA clients without an account send usage batches to the
-`log-usage` edge function, identified by a random install ID instead of a
-login. Steps 1-2 are done: do not rerun the migration SQL below (its
-`ADD COLUMN`, `ADD CONSTRAINT` and `CREATE INDEX` statements are not
-idempotent).
+Internal. TeXRA clients without an account send usage batches identified by a
+random install ID instead of a login. Two edge functions serve usage logging;
+anonymous data goes to its own table.
 
-## Contract
+## Layout
 
-- The client sends `X-TeXRA-Install-Id: <lowercase UUIDv4>` and no
-  `Authorization` header. The batch body schema is unchanged.
-- `log-usage` still accepts a login JWT (released clients). A bearer token that
-  fails authentication is a 401; it never falls back to the install header.
-- Without a JWT, a well-formed install ID is accepted and rows are written with
-  `user_id` NULL and `install_id` set. A missing or malformed credential is a
-  401, as before. Exactly one owner per row.
-- Code: `supabase/functions/log-usage/usageOwner.ts` (`resolveOwner`) and
-  `index.ts`.
+| Function       | Owner                                   | Writes to                                     | Callers                    |
+| -------------- | --------------------------------------- | --------------------------------------------- | -------------------------- |
+| `log-usage-v2` | `X-TeXRA-Install-Id` (lowercase UUIDv4) | `install_usage_logs` (append-only, one table) | current clients, anonymous |
+| `log-usage`    | `Authorization: Bearer` login JWT       | `usage_logs`, `subscription_usage_logs`       | already-released clients   |
 
-## Migration SQL (private migrations repo)
+- Shared: `supabase/functions/_shared/logUsage.ts` (CORS, method, owner
+  resolution, JSON parse, batch validation and the 1000-entry cap, response
+  shapes), `usageValidation.ts`, `equivalentCost.ts` (including `storedCost`:
+  a subscription round with client cost 0 stores its llm-zoo list-price
+  equivalent). Per function: `index.ts` (one `serveLogUsage(resolver, store)`
+  call), `usageOwner.ts` (the resolver), the store (`log-usage-v2/installStore.ts`,
+  `log-usage/legacyStore.ts`), `deno.json` and `deno.lock` (same pins; keep both
+  in step, see the releasing skill).
+- `log-usage-v2`: a stray `Authorization` header is ignored; a missing or
+  malformed install ID is a 401.
+- `log-usage`: the bearer token must authenticate (else 401) and the install
+  header is never read.
+- The sign-in system is gone, so `log-usage` is a legacy path that shrinks to
+  nothing; delete it, and the legacy tables, when the owner retires old
+  releases.
 
-```sql
-ALTER TABLE public.usage_logs              ADD COLUMN install_id uuid;
-ALTER TABLE public.subscription_usage_logs ADD COLUMN install_id uuid;
-ALTER TABLE public.usage_logs              ALTER COLUMN user_id DROP NOT NULL;
-ALTER TABLE public.subscription_usage_logs ALTER COLUMN user_id DROP NOT NULL;
+## Why a separate append-only table
 
-ALTER TABLE public.usage_logs ADD CONSTRAINT usage_logs_one_owner
-  CHECK ((user_id IS NULL) <> (install_id IS NULL));
-ALTER TABLE public.subscription_usage_logs
-  ADD CONSTRAINT subscription_usage_logs_one_owner
-  CHECK ((user_id IS NULL) <> (install_id IS NULL));
+- The legacy tables have an FK to `auth.users` (ON DELETE CASCADE), a "users
+  can read own" RLS policy, and 18 dependent views (`byok_spending_*`,
+  `relay_spending_*`, `subscription_usage_*`, `editor_usage_*`) that assume every
+  row has a `user_id`. 861 install rows had already leaked into them through
+  the combined v34-v36 function. A separate table keeps those views correct,
+  gives anonymous data no account link, deletes by `install_id`, and lets the
+  legacy tables drop whole later.
+- The client sends one entry per model call (`reportUsage` in
+  `src/agent/runtime/run/modelCall.ts`, called once per call with that call's
+  usage): deltas, never cumulative snapshots. So the table is an event log:
+  one row per entry, `UNIQUE (install_id, batch_id, entry_index)` makes a retry
+  a no-op (`INSERT ... ON CONFLICT DO NOTHING`), and the function does a plain
+  batched insert with the service client. No upsert RPC, no SECURITY DEFINER
+  function, no aggregation SQL. Per-stream totals are a `GROUP BY stream_id`
+  query.
+- Deliberately not carried over from the legacy tables: the upsert RPCs and
+  their `GREATEST`/`SUM` snapshot-or-delta split (`is_relay_delta_client`, which
+  exists for old snapshot clients), `used_relay`, `is_multiple_output`,
+  `call_count` (every row is one call), and the usage_logs /
+  subscription_usage_logs split (the route is the `usage_route` column). An
+  optional reporting view over `install_usage_logs` is not included.
 
--- Per-stream aggregation for install rows (a NULL user_id never conflicts on
--- the existing (user_id, stream_id) key).
-CREATE UNIQUE INDEX usage_logs_install_stream_key
-  ON public.usage_logs (install_id, stream_id)
-  WHERE install_id IS NOT NULL AND stream_id IS NOT NULL;
-CREATE UNIQUE INDEX subscription_usage_logs_install_stream_key
-  ON public.subscription_usage_logs (install_id, source, stream_id)
-  WHERE install_id IS NOT NULL AND stream_id IS NOT NULL;
+## SQL
 
--- Batch dedup lookup (the function filters by install_id and batch_id).
-CREATE INDEX usage_logs_install_batch_idx
-  ON public.usage_logs (install_id, batch_id) WHERE install_id IS NOT NULL;
-CREATE INDEX subscription_usage_logs_install_batch_idx
-  ON public.subscription_usage_logs (install_id, batch_id)
-  WHERE install_id IS NOT NULL;
-```
+- `docs/supabase/install-usage-logs.sql`: the additive migration (table, unique
+  constraint, index, RLS with no policies). Apply first.
+- `docs/supabase/install-usage-logs-retire-legacy.sql`: a LATER step, in one
+  transaction. It copies the install rows the combined function left in
+  `usage_logs` / `subscription_usage_logs` into `install_usage_logs`, deletes
+  them from the old tables, drops the `*_one_owner` checks, the `*_install_*`
+  indexes and the `install_id` columns, restores `user_id SET NOT NULL`, and
+  restores the two original upsert bodies (inlined at the end of the file).
+  Run it as the second half of deploy step 4, after the JWT-only redeploy of
+  `log-usage`. Do not run it earlier: the live
+  combined function (v36) still writes install rows into the legacy tables and
+  depends on those columns.
 
-### Upsert RPCs
+Neither file has been applied; nothing in this change touches the database or
+the live functions.
 
-`usage_logs_upsert(p_rows)` and `subscription_usage_logs_upsert(p_rows)` must
-read `install_id` from each row, insert it, and split the conflict target by
-owner:
+## Deploy order
 
-- rows with `user_id`: the existing `ON CONFLICT (user_id, stream_id)` path
-  (`(user_id, source, stream_id)` for `subscription_usage_logs_upsert`);
-- rows with `install_id`: `ON CONFLICT (install_id, stream_id) WHERE
-install_id IS NOT NULL AND stream_id IS NOT NULL` for `usage_logs_upsert`,
-  and `ON CONFLICT (install_id, source, stream_id) WHERE install_id IS NOT
-NULL AND stream_id IS NOT NULL` for `subscription_usage_logs_upsert`
-  (matching its install index), with the same aggregation (`DO UPDATE`)
-  expressions as the user path.
+Until step 4 the live `log-usage` (the combined version, v36: JWT or install
+header) keeps working for every client.
 
-**Applied.** The live bodies were rewritten from `pg_get_functiondef` of the
-then-current definitions: each keeps its parse/aggregate CTEs and its `DO UPDATE`
-expressions, adds `install_id` to the parse, group and insert lists, and runs
-two data-modifying CTEs over one materialized `agg` (user rows on the
-`(user_id[, source], stream_id)` key, install rows on the
-`(install_id[, source], stream_id)` key); the return value is the sum of both
-upserts. The subscription table's key includes `source`, so its install index does too. A `p_rows` batch holds one
-owner (the function builds it from one request), but rows without a
-`stream_id` must keep whatever plain-insert behavior the live bodies have.
+1. Apply `install-usage-logs.sql` (additive).
+2. Deploy `log-usage-v2` from a clean checkout:
+   `supabase functions deploy log-usage-v2 --no-verify-jwt --use-api --project-ref jntubmcgbhwtcktubelv`.
+   `--no-verify-jwt` is required: without it the gateway rejects requests that
+   carry no `Authorization` header before the function runs. Then smoke test
+   `/functions/v1/log-usage-v2` with a throwaway UUID (no credentials beyond
+   the public function URL):
+   `curl -i -X POST "$URL/functions/v1/log-usage-v2" -H 'Content-Type: application/json' -H 'X-TeXRA-Install-Id: 00000000-0000-4000-8000-000000000001' -d '{"batchId":"<uuid>","entries":[{"timestamp":"<iso>","model":"x","provider":"x","inputTokens":1,"outputTokens":1,"cost":0}]}'`
+   expects 200 `accepted: 1`; repeat for `deduplicated`; no header and a
+   malformed ID each expect 401. Then delete the test rows
+   (`DELETE FROM public.install_usage_logs WHERE install_id = '00000000-0000-4000-8000-000000000001'`).
+3. Ship the client pointing at `log-usage-v2` (`src/telemetry/UsageLogService.ts`).
+4. Only after a released client version uses v2 (the owner decides when), in
+   this order:
+   1. Redeploy `log-usage` JWT-only from this tree with the same flags
+      (`supabase functions deploy log-usage --no-verify-jwt --use-api --project-ref jntubmcgbhwtcktubelv`),
+      so it serves old releases only. Anonymous clients that still post to
+      `log-usage` get a clean 401 from then on, and install rows stop landing in
+      the legacy tables.
+   2. Then run `install-usage-logs-retire-legacy.sql`. Running it first would
+      drop `install_id` and restore `user_id NOT NULL` under the live combined
+      function, which would 500 on any install request until the redeploy.
 
-RLS is unchanged: both tables are written only by the service role.
-
-## Deploy checklist
-
-1. **Done (2026-09-30).** Write and review the RPC bodies against the live definitions.
-2. **Done (2026-09-30).** Apply the migration (columns, constraints, indexes, both RPCs) in one
-   transaction. The old function keeps working: it writes `user_id` rows and
-   leaves `install_id` NULL.
-3. **Done (2026-09-30; redeployed 2026-10-01 as version 35, `verify_jwt` false).** Deploy the function with the same flags as today:
-   `supabase functions deploy log-usage --no-verify-jwt`. Confirm the live
-   function is already `--no-verify-jwt`; if the gateway verifies JWTs, a
-   request with no `Authorization` header is rejected before the function runs.
-4. Smoke test with a throwaway UUID (no credentials in the command beyond the
-   public function URL):
-   `curl -i -X POST "$URL/functions/v1/log-usage" -H 'Content-Type: application/json' -H 'X-TeXRA-Install-Id: 00000000-0000-4000-8000-000000000001' -d '{"batchId":"<uuid>","entries":[{"timestamp":"<iso>","model":"x","provider":"x","inputTokens":1,"outputTokens":1,"cost":0}]}'`
-   expects 200 `accepted: 1`; repeat for `deduplicated`; no header expects 401.
-   Then delete the test rows (`DELETE ... WHERE install_id = '0000...0001'`).
-   **Done (2026-09-30, version 34):** a throwaway install ID got 200
-   `accepted: 1`, the repeat got 200 `deduplicated`, no header and a malformed
-   ID each got 401, the row landed in `usage_logs` with `install_id` set, and
-   the test rows were deleted. Version 35 was re-checked read-only only (no
-   header gets 401; an invalid install-id batch gets `BATCH_REJECTED`); it
-   changes no write path, so the write test was not repeated on it.
-5. Ship the client only after steps 2-4. **Done:** the anonymous client is on
-   `main`, and real install-id rows are arriving.
+The pending llm-zoo 2.0 pricing change (#13602) rides along with whichever
+deploy happens next.
 
 ## Rollback
 
-Redeploy the previous function revision (it only writes `user_id`). The schema
-change is additive and can stay. To revert it fully, first delete install rows
-(`DELETE FROM ... WHERE install_id IS NOT NULL`), then drop the constraints and
-indexes, drop `install_id`, restore `user_id SET NOT NULL`, and restore the old
-RPC bodies.
+Redeploy the previous revision of the affected function. The new table is
+additive and can stay; drop it only after deleting its rows is acceptable.
+After step 4, rolling `log-usage` back to the combined version would need the
+install columns and RPC bodies restored first.
 
 ## Open risks
 
 - This is an unauthenticated service-role write. No per-install rate limit is
-  implemented: the function has no rate-limit store, and a count over the rows
-  table cannot bound request rate because `logged_at` is client-supplied and
-  aggregated rows do not record arrival. Add a limit at the edge/gateway if
+  implemented: the function has no rate-limit store, and `logged_at` is
+  client-supplied. Add a limit at the edge/gateway if volume warrants it. A batch
+  is capped at 1000 entries (the client's queue size).
+- Append-only means rows grow per model call, not per run; add retention if
   volume warrants it.
-- `UsageBatchSchema` has no upper bound on `entries`; with anonymous callers,
-  consider capping it once the client's largest batch is known.

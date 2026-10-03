@@ -18,6 +18,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { SurfaceAction } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
+import type { TeXRAIconName } from '@shared/iconNames';
 import { buttonStyles } from '@ui/styles/controlStyles';
 import { compactFormControlStyles, designTokens } from '@ui/styles';
 import { readSelectValue } from '@ui/wa/selectTemplates';
@@ -25,7 +26,6 @@ import {
   renderIconActionButton,
   renderLabeledActionButtonParts,
 } from '@ui/wa/actionButtons';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { fileSelectLayoutStyles } from '../fileSelectStyles';
 
 type LatexDiffsAction = Extract<HostRequest, { kind: 'latexdiffs' }>['action'];

@@ -30,11 +30,12 @@ import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
 import {
-  type AgentScanIssue,
   type AgentSelectionItem,
   type SettingsSectionName,
 } from '@shared/settingsView/settingsViewMessages';
+import type { AgentScanIssue } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import type { TeXRAIconName } from '@shared/iconNames';
 import {
   commonViewStyles,
   designTokens,
@@ -49,7 +50,6 @@ import {
   renderSettingsNumberRow,
   renderSettingsSectionHeading,
 } from '@ui/wa/settingsSection';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { pluralize } from '@utils/text/stringUtils';
 import {

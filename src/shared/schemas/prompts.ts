@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-import { API_KEY_PROVIDER_IDS } from '../constants/providers';
 import { AgentCategory } from './agent';
 import { RetryErrorInfoSchema } from './errors';
 import { RunSelectionSchema, RunIdSchema } from './identifiers';
@@ -16,7 +15,6 @@ import {
   WorkflowSpecificFieldsSchema,
 } from './proposalFields';
 import { DeclinableUsageRouteSchema } from './usage';
-import type { ApiKeyProviderId } from '../constants/modelProviderPlugins';
 
 /** Common permission request fields */
 const PermissionBaseSchema = z.strictObject({
@@ -41,9 +39,26 @@ export const BashPermissionSchema = PermissionBaseSchema.extend({
 });
 export type BashPermission = z.infer<typeof BashPermissionSchema>;
 
-const ApiKeyProviderIdSchema = z.enum(
-  API_KEY_PROVIDER_IDS as readonly [ApiKeyProviderId, ...ApiKeyProviderId[]],
-);
+/**
+ * The API-key providers a stored retry offer names. Storage owns the enum
+ * (the llm catalog's `ApiKeyProviderId` must stay assignable to it, which
+ * `routeCredentialSwitch` checks where it builds an offer), so a catalog
+ * change is never a silent stored format change.
+ */
+const ApiKeyProviderIdSchema = z.enum([
+  'openai',
+  'anthropic',
+  'google',
+  'xai',
+  'deepseek',
+  'moonshot',
+  'dashscope',
+  'minimax',
+  'glm',
+  'meta',
+  'openRouter',
+  'kimiCode',
+]);
 
 /**
  * The move onto the user's own credential a failed model request offers,

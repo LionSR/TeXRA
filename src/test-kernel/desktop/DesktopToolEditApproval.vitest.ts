@@ -493,10 +493,10 @@ describe('desktop tool edit approval', () => {
     () =>
       Effect.gen(function* () {
         const runLatexdiff = vi.fn(() => Effect.void);
-        mocks.doMock('@tools/approval/latexPreview', async () => {
+        mocks.doMock('@tools/latex/latexPreview', async () => {
           const actual = await vi.importActual<
-            typeof import('@tools/approval/latexPreview')
-          >('@tools/approval/latexPreview');
+            typeof import('@tools/latex/latexPreview')
+          >('@tools/latex/latexPreview');
           return { ...actual, runLatexdiff };
         });
 

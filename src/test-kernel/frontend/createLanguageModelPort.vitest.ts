@@ -7,7 +7,7 @@ import {
   completedTurn,
   type TurnRequest,
   type VscodeLanguageModelConfiguration,
-} from '@texra-ai/llm/turn';
+} from '@texra-ai/llm';
 import { setLogSink } from '@logger/logSink';
 
 class LanguageModelTextPart {

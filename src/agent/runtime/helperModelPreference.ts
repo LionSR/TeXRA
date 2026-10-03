@@ -10,6 +10,7 @@
 
 import { Effect } from 'effect';
 
+import { modelConfig } from '@texra-ai/llm';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -19,7 +20,6 @@ import {
 } from '@model/computeModelOptions';
 
 import { AgentCategory } from '@shared/schemas';
-import { modelConfig } from '@shared/model/modelSelection';
 import { getHelperModelName } from './helperModelName';
 
 const CHANNEL = 'helperModelPreference';

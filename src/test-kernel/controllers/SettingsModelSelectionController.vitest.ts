@@ -3,15 +3,18 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 import { MODEL_CONFIGS, lookup } from 'llm-zoo';
 
+import { buildBaseModelOption } from '@texra-ai/llm';
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import {
   getEnabledModels,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
-import { buildBaseModelOption, DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import type { CopilotModelRoute } from '@model/copilotRouting';
+import {
+  DEFAULT_HELPER_MODEL,
+  DEFAULT_MODELS,
+} from '@shared/constants/defaultModels';
 import type { ModelOptionData } from '@shared/schemas';
-import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';

@@ -1,8 +1,10 @@
 import { Effect, type Scope } from 'effect';
 
+import {
+  LoopbackTransportUnavailableError,
+  type SubscriptionDeviceCodePrompt,
+} from '@texra-ai/llm/node';
 import type { SessionHandle } from '@agent/runtime';
-import type { SubscriptionDeviceCodePrompt } from '@auth/oauth/deviceAuthorization';
-import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
 import {
   subscriptionProvider,
   type SubscriptionProviderId,
@@ -21,9 +23,9 @@ import type { StorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import { SettingsViewInboundMessageSchema } from '@shared/settingsView/settingsViewMessages';
 import { unsupported } from '@shared/utils/dispatcher';
+import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
-import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
 import type { DesktopSpawn } from './desktopWindows.js';

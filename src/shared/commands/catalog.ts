@@ -176,10 +176,18 @@ export const commandCatalog = [
   {
     id: 'texra.showTools',
     extensionRegistry: true,
-    title: 'Tool Settings',
+    title: 'Plugin Settings',
     category: 'TeXRA',
-    icon: '$(tools)',
-    settingsTab: 'tools/tools',
+    icon: '$(extensions)',
+    settingsTab: 'plugins',
+  },
+  {
+    id: 'texra.showApprovalSettings',
+    extensionRegistry: true,
+    title: 'Approval Settings',
+    category: 'TeXRA',
+    icon: '$(shield)',
+    settingsTab: 'general/approval',
   },
   {
     id: 'texra.showTeamSettings',

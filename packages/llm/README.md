@@ -1,12 +1,32 @@
 # @texra-ai/llm
 
-TeXRA's own provider layer: one contract over four HTTP wire protocols and the editor's `vscode-lm`. A
+TeXRA's complete model package: the model catalog over `llm-zoo`, the
+provider catalog, the route decision, the subscription sign-in flows, and one
+contract over four HTTP wire protocols and the editor's `vscode-lm`. A
 `Model` is a configured executable value. It owns the wire — lowering a turn,
 decoding the stream, classifying the failure — and nothing else. Conversation,
 retry, pricing, approval, budgets and persistence are the runtime's, and the
 package is pure: no `platform()`, no `Effect.run*`, no `AbortController`, no
-`vscode`. Its only dependencies are the provider SDKs, `ws`, and `effect` and
-`zod` as peers.
+`vscode`. It reads no settings and imports nothing else in the repo: the host
+passes configuration in (`RouteFacts`) and credentials through one port,
+`CredentialStore`. Its only dependencies are `llm-zoo`, the provider SDKs,
+`ws`, and `effect` and `zod` as peers.
+
+## The entries
+
+The package is split by where its code runs, not by topic.
+
+| Entry    | What it holds                                                                                                                                                                                                     | Runs in      |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `.`      | the turn contract (`turn.ts`), the provider catalog and key lookup (`providers/`), the route decision, `routeConfig`, the route endpoint, the reasoning choice (`models/`), `CredentialStore`, the account labels | browser-safe |
+| `./node` | `bindModel(configuration, credential, transport) → Model`, the ChatGPT and Grok sign-in flows and their coordinators (`oauth/`), `SharedAttempt`                                                                  | Node         |
+
+The protocols (`api/`), the prefix fingerprint and the upload cache are
+internal: `bindModel` loads the chosen protocol with a literal
+`import('./api/<protocol>.js')`, so a run loads only its provider's SDK.
+ESLint holds the rest: nothing under `src/` imports another repo module, and
+outside `api/`, `oauth/` and `node.ts` nothing imports a Node built-in or a
+vendor SDK.
 
 Private workspace package, built from source through the workspace, not
 published.
@@ -37,26 +57,30 @@ covers, which the operation handle deliberately does not copy.
 
 ## The tree
 
-| File                          | What it owns                                                                                                                                              |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `turn.ts`                     | the subpath's public entry: the `Model` interface, the request, configuration, result and event contract, the tool and reasoning schemas, `completedTurn` |
-| `protocol.ts`                 | the protocol enum, binding identity (`BindingSchema`, `OriginSchema`, `ModelOriginSchema`) and JSON materialization                                       |
-| `message.ts`                  | the wire message and history schemas, the content parts, and the continuation prefixes                                                                    |
-| `errors.ts`                   | `ModelError` and the failure classification along it, `RemoteOperation` included                                                                          |
-| `transport.ts`                | stream pull, tool-argument parsing, the abort-safe request helper                                                                                         |
-| `openaiResponses.ts`          | `openaiResponsesModel`, and the subpath's re-exports of the continuation and the WebSocket model                                                          |
-| `openaiResponsesCodec.ts`     | the response-side schemas and normalization, content lowering, event decoding                                                                             |
-| `openaiResponsesUsage.ts`     | the usage receipt schema and its normalization, xAI's settled cost included                                                                               |
-| `openaiResponsesLower.ts`     | input lowering and the continuation anchor                                                                                                                |
-| `openaiResponsesRequest.ts`   | preparing a turn, its parameters, the abort classification                                                                                                |
-| `openaiResponsesWebSocket.ts` | the experimental WebSocket transport                                                                                                                      |
-| `anthropicMessages.ts`        | `anthropicMessagesModel`                                                                                                                                  |
-| `googleInteractions.ts`       | `googleInteractionsModel`                                                                                                                                 |
-| `openrouterChat.ts`           | `openrouterChatModel`                                                                                                                                     |
-| `chatStream.ts`               | the Chat delta accumulator and usage counts `openrouterChat.ts` builds a turn from                                                                        |
-| `uploadCache.ts`              | the digest-keyed, model-scoped upload cache behind `uploadFile`                                                                                           |
-| `prefixFingerprint.ts`        | the admitted-history fingerprint a background completion anchors on                                                                                       |
-| `openaiError.ts`              | SDK error classification into `ModelError`                                                                                                                |
+| File                              | What it owns                                                                                                                                                 |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `turn.ts`                         | the `.` entry's turn contract: the `Model` interface, the request, configuration, result and event contract, the tool and reasoning schemas, `completedTurn` |
+| `protocol.ts`                     | the protocol enum, binding identity (`BindingSchema`, `OriginSchema`, `ModelOriginSchema`) and JSON materialization                                          |
+| `message.ts`                      | the wire message and history schemas, the content parts, and the continuation prefixes                                                                       |
+| `errors.ts`                       | `ModelError` and the failure classification along it, `RemoteOperation` included                                                                             |
+| `api/transport.ts`                | stream pull, tool-argument parsing, the abort-safe request helper                                                                                            |
+| `api/openaiResponses.ts`          | `openaiResponsesModel`                                                                                                                                       |
+| `api/openaiResponsesCodec.ts`     | the response-side schemas and normalization, content lowering, event decoding                                                                                |
+| `api/openaiResponsesUsage.ts`     | the usage receipt schema and its normalization, xAI's settled cost included                                                                                  |
+| `api/openaiResponsesLower.ts`     | input lowering and the continuation anchor                                                                                                                   |
+| `api/openaiResponsesRequest.ts`   | preparing a turn, its parameters, the abort classification                                                                                                   |
+| `api/openaiResponsesWebSocket.ts` | the experimental WebSocket transport                                                                                                                         |
+| `api/anthropicMessages.ts`        | `anthropicMessagesModel`                                                                                                                                     |
+| `api/googleInteractions.ts`       | `googleInteractionsModel`                                                                                                                                    |
+| `api/openrouterChat.ts`           | `openrouterChatModel`                                                                                                                                        |
+| `api/chatStream.ts`               | the Chat delta accumulator and usage counts `openrouterChat.ts` builds a turn from                                                                           |
+| `api/uploadCache.ts`              | the digest-keyed, model-scoped upload cache behind `uploadFile`                                                                                              |
+| `api/prefixFingerprint.ts`        | the admitted-history fingerprint a background completion anchors on                                                                                          |
+| `api/openaiError.ts`              | SDK error classification into `ModelError`                                                                                                                   |
+| `node.ts`                         | the `./node` entry: `bindModel`, the protocol choice, and the sign-in exports                                                                                |
+| `providers/`                      | the provider plugins, the API-key providers and `CredentialStore`, the coding plans                                                                          |
+| `models/`                         | model selection over llm-zoo, the route decision and its config and endpoint, OpenRouter routing, the reasoning choice, the picker's base option             |
+| `oauth/`                          | the ChatGPT (`codex/`) and Grok (`xai/`) sign-in flows over the shared OAuth coordinator, loopback and device flows                                          |
 
 The `vscode-lm` protocol cannot live here: it is acquired from the
 editor. `packages/extension/src/frontend/lm/acquireVscodeLanguageModel.ts`
@@ -72,14 +96,16 @@ route, helper, tool-use turn and workflow round included. Retry has two owners
 inside `ModelInvoker` (an automatic route-scoped batch under the session's
 `ModelRetryGate`, and a durable human permit); none of it is in this package.
 
-Every consumer imports `@texra-ai/llm/<subpath>`, so `package.json`'s
-`exports` map is the boundary the resolver enforces: a module this package
-does not export cannot be reached from outside it. The `@llm/*` tsconfig
-alias that used to expand to a filesystem path and bypass the map is gone.
-Inside the package a module imports the file that defines a symbol, in one
-acyclic direction — `protocol` ← `message` ← `errors` ← `transport` ← `turn`,
-with each protocol's own modules below its entry — and the only files that
-re-export are the subpath entries, whose published names are contract.
+Every consumer imports `@texra-ai/llm` or `@texra-ai/llm/node`, so
+`package.json`'s `exports` map is the boundary the resolver enforces: a module
+this package does not export cannot be reached from outside it. Tests are the
+one exception: the protocol suites in `src/test-kernel/llm/` reach `src/api/`
+and the sign-in suites in `src/test-kernel/auth/` reach `src/oauth/` by
+relative path, as `test-live/` does. Inside the package a module imports the file that defines a
+symbol, in one acyclic direction — `protocol` ← `message` ← `errors` ←
+`api/transport` ← `turn`, with each protocol's own modules below its entry —
+and the only files that re-export are the two entries, whose published names
+are contract.
 
 ## What it deliberately does not do
 

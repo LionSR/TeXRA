@@ -8,6 +8,7 @@ import { it } from '@effect/vitest';
 import { Effect, Layer, SynchronizedRef } from 'effect';
 import { afterAll, assert, beforeAll, describe, expect, vi } from 'vitest';
 
+import { apiKeyEnvName, apiKeySecretName } from '@texra-ai/llm';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   AgentPromptSchema,
@@ -20,13 +21,11 @@ import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { stepFor } from '@agent/runtime/loop/step';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { AgentRun, agentRunLayer } from '@agent/runtime/run/AgentRun';
-import { apiKeySecretName } from '@model/apiProviders';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
 import { AppState } from '@platform/interfaces';
-import { apiKeyEnvName } from '@shared/constants/providers';
 import { AgentCategory } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -452,6 +451,10 @@ describe('run-scoped tool resolution', () => {
                 },
               },
             ]),
+          ).pipe(
+            Layer.provide(
+              Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
+            ),
           ),
         ),
         Effect.provide(nodeSpawnerLayer),

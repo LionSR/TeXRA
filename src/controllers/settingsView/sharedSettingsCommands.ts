@@ -14,6 +14,12 @@
  * table is `settingsHostBindings.ts`.
  */
 import { Cause, Effect } from 'effect';
+import {
+  API_PROVIDERS,
+  apiProviderOfSecretName,
+  codingPlanForApiProvider,
+  loadApiKeyStatusMap,
+} from '@texra-ai/llm';
 
 import type { SessionHandle } from '@agent/runtime';
 import { subscriptionAuthStatus } from '@controllers/modelAccess/subscriptionAuthStatus';
@@ -41,22 +47,14 @@ import {
 } from '@controllers/settingsView/settingsViewDispatch';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  API_PROVIDERS,
-  apiProviderOfSecretName,
-  loadApiKeyStatusMap,
-} from '@model/apiProviders';
-import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
+import { codingPlanForUsageSetting } from '@model/codingPlanSubscriptions';
 import { discoverCopilotRoutes } from '@model/copilotRouting';
 import type { ProcessServices } from '@platform/processRuntime';
 import { type StorageFs, withSessionFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
-import {
-  codingPlanForApiProvider,
-  codingPlanForUsageSetting,
-} from '@shared/codingPlanSubscriptions';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SubscriptionUsageProvider } from '@shared/schemas';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
@@ -65,11 +63,11 @@ import {
   type SettingsSnapshotPosters,
 } from '@shared/settingsView/handlers/stateSettingWrite';
 import {
-  SUBSCRIPTION_AUTH_PROVIDERS,
   type DerivedSettingsSnapshot,
   type SettingsViewInboundMessage,
   type SettingsViewOutboundMessage,
 } from '@shared/settingsView/settingsViewMessages';
+import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
 import { UnsupportedCommandError } from '@shared/utils/dispatcher';
 import { GITHUB_TOKEN_CREATE_URL } from '@tools/github/githubAuth';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
@@ -101,7 +99,7 @@ interface SettingsViewBodyPorts {
   readonly skillDisplay: HostEffect<
     Omit<
       Extract<SettingsViewOutboundMessage, { command: 'updateSkillsList' }>,
-      'command' | 'plugins'
+      'command'
     >
   >;
   /** The account copy (`src/ui`), which controllers likewise take from
@@ -141,7 +139,11 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     roots,
     bindings,
     present,
-    repaint: Effect.suspend(() => postSkills),
+    // A plugin's skills are listed on the Skills page as `<plugin>:<name>`.
+    repaint: Effect.andThen(
+      toolsPage.postPlugins,
+      Effect.suspend(() => postSkills),
+    ),
   });
   const agents = settingsAgentCommands({
     roots,
@@ -159,14 +161,10 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
   const postSnapshot = (snapshot: DerivedSettingsSnapshot) =>
     bindings.post(buildSettingsSnapshotMessage(snapshot, roots));
   const postSkills = bindings.post(
-    Effect.map(
-      Effect.all([ports.skillDisplay, pluginsPage.list]),
-      ([result, plugins]) => ({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST,
-        ...result,
-        plugins,
-      }),
-    ),
+    Effect.map(ports.skillDisplay, (result) => ({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST,
+      ...result,
+    })),
   );
   const postUsage = (forceRefresh: boolean) =>
     bindings.post(
@@ -434,8 +432,8 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     signInSubscription,
     /** Settle a repaint nobody awaits, reported as a message's would be. */
     settle,
-    /** The Tools page following its workspace's availability results, for
-     *  the host to hold while the view lives. */
+    /** The Plugins page following its workspace's availability results,
+     *  for the host to hold while the view lives. */
     followToolAvailability: toolsPage.followToolAvailability(settle),
     /**
      * What each app signal this view follows repaints: a run that binds a

@@ -9,31 +9,28 @@
  * a {@link SubscriptionSignInPresenter}. Adding a third provider is one row
  * here, not another descriptor in each host.
  *
- * Lives in `src/controllers/` rather than `src/auth/` because a row binds an
- * auth transport to its model-layer routing preference, and `src/auth/**` is
- * fenced off from `@model` (eslint `AUTH_RESTRICTED_IMPORT_PATTERNS`). This is
- * the same composition `subscriptionAuthStatus.ts` beside it already does.
+ * Lives in `src/controllers/` rather than in `@texra-ai/llm` because a row
+ * binds a sign-in flow to its model-layer routing preference, a setting the
+ * package never reads. This is the same composition
+ * `subscriptionAuthStatus.ts` beside it already does.
  */
 import { Effect } from 'effect';
 
 import {
+  type AuthPortError,
   codexCoordinator,
+  codexLoginWithDeviceCode,
+  codexLoginWithLoopback,
   getCodexStatus,
-  loginWithDeviceCode as codexLoginWithDeviceCode,
-  loginWithLoopback as codexLoginWithLoopback,
-} from '@auth/codex';
-import {
   getXaiStatus,
-  loginWithDeviceCode as xaiLoginWithDeviceCode,
-  loginWithLoopback as xaiLoginWithLoopback,
-  xaiAccountLabel,
+  LoopbackTransportUnavailableError,
+  type SubscriptionDeviceCodePrompt,
+  type SubscriptionSessionStatus,
   xaiCoordinator,
-} from '@auth/xai';
-import type { AuthPortError } from '@auth/authProgram';
-import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
-import type { SubscriptionDeviceCodePrompt } from '@auth/oauth/deviceAuthorization';
-import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
-import type { SubscriptionSessionStatus } from '@auth/oauth/SubscriptionOAuthCoordinator';
+  xaiLoginWithDeviceCode,
+  xaiLoginWithLoopback,
+} from '@texra-ai/llm/node';
+import { codexAccountLabel, xaiAccountLabel } from '@texra-ai/llm';
 import { withLogChannel } from '@logger/effectLog';
 import {
   isPreferSubscription,
@@ -42,7 +39,7 @@ import {
 import type { ConfigWriteFailed } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/settingsView/settingsViewMessages';
+import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { HttpClient } from 'effect/http';
 
@@ -50,7 +47,7 @@ const CHANNEL = 'subscriptionProviders';
 
 /**
  * A provider's id, spelled once: the wire vocabulary in
- * `@shared/schemas/settingsViewMessages` is the same set the catalog keys on.
+ * `@shared/model/subscriptionAuth` is the same set the catalog keys on.
  */
 export type SubscriptionProviderId =
   (typeof SUBSCRIPTION_AUTH_PROVIDERS)[number];
@@ -259,7 +256,7 @@ function defineSubscriptionProvider<
  * user's ChatGPT Plus/Pro/Team subscription instead of an OpenAI API key.
  *
  * Each binding calls through rather than capturing the imported function, so
- * a host suite that swaps `@auth/codex` or `@model/subscriptionAccess`
+ * a host suite that swaps `@texra-ai/llm/node` or `@model/subscriptionAccess`
  * still intercepts the row — the catalog is built once at module load.
  */
 const CHATGPT_PROVIDER = defineSubscriptionProvider({

@@ -16,12 +16,12 @@ import {
   type TokenUsageStats,
 } from '@shared/schemas';
 import { contextGaugeBand, roundedContextPercent } from '@shared/contextGauge';
+import type { TeXRAIconName } from '@shared/iconNames';
 import { designTokens } from '@ui/styles';
 import { usageCostLabel, usageRouteBadge } from '@ui/copy/modelAccess';
 import { focusRingStyles } from '@ui/styles/controlStyles';
 
 // Local imports - shared icons and utils
-import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { clamp } from '@utils/core';
 import {

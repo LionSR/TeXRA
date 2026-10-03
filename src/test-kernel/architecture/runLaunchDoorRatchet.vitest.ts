@@ -47,12 +47,16 @@ const DETACHED_FORK_ALLOWLIST: Readonly<Record<string, number>> = {
 /**
  * `Effect.serviceOption` hides its requirement from `R`, so an inherited
  * run- or session-lifetime tag never shows up in a type (#13348). It stays
- * allowed only for optional process ports.
+ * allowed only for optional ports: a process port a host may omit, and a
+ * plugin's port (its process layer's, never run- or session-scoped) that a
+ * host omits (`InlineComments`) or that its probe reads only while the
+ * layer is up (`LeanLanguageServices`).
  */
 const SERVICE_OPTION = /\bEffect\.serviceOption\(\s*([A-Za-z_$][\w$]*)/g;
 
 const OPTIONAL_PROCESS_PORTS = new Set([
   'InlineComments',
+  'LeanLanguageServices',
   'ToolMissingReporter',
 ]);
 

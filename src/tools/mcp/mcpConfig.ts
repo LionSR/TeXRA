@@ -113,9 +113,9 @@ function parseConfig(
 /**
  * The config file's servers and the warnings its invalid entries raise, or
  * `null` when the file does not exist. Fails on an unreadable file or
- * invalid JSON.
+ * invalid JSON. The Plugins page lists them read-only from here.
  */
-const readMcpConfig = (
+export const readMcpConfig = (
   fs: FileSystem.FileSystem,
   file: string,
 ): Effect.Effect<ReturnType<typeof parseConfig> | null, Error> =>

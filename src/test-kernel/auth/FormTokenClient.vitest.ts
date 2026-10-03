@@ -6,13 +6,13 @@ import { afterEach, describe, expect, vi, type Mock } from 'vitest';
 import { z } from 'zod';
 
 // Local imports
+import { jsonResponse } from '@test/support/fetchTestUtils';
 import {
   exchangeAuthorizationCode,
   refreshOAuthTokens,
   type OAuthFormEndpoint,
-} from '@auth/oauth/formTokenClient';
-import { postOAuth } from '@auth/oauth/oauthRequest';
-import { jsonResponse } from '@test/support/fetchTestUtils';
+} from '../../../packages/llm/src/oauth/formTokenClient.js';
+import { postOAuth } from '../../../packages/llm/src/oauth/oauthRequest.js';
 
 const TokenSchema = z.object({
   access_token: z.string().min(1),

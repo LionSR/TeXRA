@@ -25,7 +25,7 @@ import type {
 } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-import { TOOL_OUTCOME_COPY } from '@ui/copy/toolOutcome';
+import { TOOL_OUTCOME_COPY } from '@ui/transcript/toolOutcome';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   type CliApprovalContent,

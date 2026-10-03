@@ -2,9 +2,25 @@ import { Data, Effect, Result } from 'effect';
 import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
 import { z } from 'zod';
 
+import {
+  type ApiProvider,
+  buildBaseModelOption,
+  decideModelRoute,
+  hasUsableApiKey,
+  type HostRouteFacts,
+  isKimiCodeExclusiveModel,
+  isKimiSubscriptionEligible,
+  isRetiredModel,
+  type ModelRoute,
+  providerDisplayName,
+  resolveModelSource,
+  routeConfig,
+  selectModel,
+} from '@texra-ai/llm';
 import { StateWriteFailed } from '@platform/interfaces';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
+import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   MODEL_AVAILABILITY_STATUS,
@@ -12,32 +28,13 @@ import {
   type ModelOptionData,
   type UsageRoute,
 } from '@shared/schemas';
-import { providerDisplayName } from '@shared/constants/providers';
-import {
-  isKimiCodeExclusiveModel,
-  isKimiSubscriptionEligible,
-} from '@shared/model/kimiCodeRetryGate';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-import { selectModel } from '@shared/model/modelSelection';
-import { hasUsableApiKey, type ApiProvider } from './apiProviders';
 import {
   reasoningEffortOverrides,
   reasoningLevelLabel,
 } from './reasoningLevel';
-import {
-  decideModelRoute,
-  readRouteFacts,
-  routeConfig,
-  type HostRouteFacts,
-  type ModelRoute,
-} from './modelRoute';
-import {
-  buildBaseModelOption,
-  DEFAULT_MODELS,
-  isRetiredModel,
-} from './modelOptionsBasic';
-import { resolveModelSource } from './openRouterRouting';
+import { readRouteFacts } from './modelRoute';
 import {
   copilotRouteUnavailableReason,
   discoverCopilotRoutes,
@@ -206,7 +203,7 @@ interface RoutedModel {
   readonly rawConfig: ModelConfig;
   /** The config the model runs with on its route: the row's cost and window. */
   readonly config: ModelConfig;
-  readonly route: ModelRoute;
+  readonly route: ModelRoute<CopilotModelRoute>;
   readonly gate: RouteGate;
 }
 
@@ -226,7 +223,7 @@ type RoutedModels = ReadonlyMap<string, RoutedModel>;
  */
 function routeGate(
   model: string,
-  route: ModelRoute,
+  route: ModelRoute<CopilotModelRoute>,
   ctx: ModelRouteContext,
 ): RouteGate {
   switch (route.kind) {
@@ -415,7 +412,7 @@ function routeModels(
       });
       routed.set(model, {
         rawConfig,
-        config: yield* routeConfig(stores, rawConfig, route),
+        config: routeConfig(rawConfig, route, ctx.facts),
         route,
         gate: rawConfig.retired
           ? availabilityStatus('retired')

@@ -7,26 +7,12 @@
 import { z } from 'zod';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { MemoryViewItemSchema } from '@shared/tools/memoryView';
 import { commandOnly } from './messageFactories';
 
 // ============================================================
 // Data schemas
 // ============================================================
-
-const MemoryViewItemSchema = z.object({
-  displayPath: z.string(),
-  storagePath: z.string(),
-  size: z.number(),
-  mtime: z.string(),
-  lineCount: z.number().optional(),
-  preview: z.string().optional(),
-  previewError: z.boolean().optional(),
-  /** Agent that last modified this file (from frontmatter attribution). */
-  modifiedBy: z.string().optional(),
-  /** Whether this memory is pinned as a core long-term insight. */
-  pinned: z.boolean().optional(),
-});
-export type MemoryViewItem = z.infer<typeof MemoryViewItemSchema>;
 
 const MemoryPreviewSchema = z.object({
   storagePath: z.string(),

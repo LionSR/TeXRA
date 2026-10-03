@@ -1,5 +1,6 @@
 // Node imports
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
 
 // Third-party imports
 import { it } from '@effect/vitest';
@@ -7,13 +8,20 @@ import { Cause, Deferred, Effect, Fiber, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import {
+  completedTurn,
+  type ModelError,
+  RemoteOperationSchema,
+  type TurnRequest,
+  type TurnResult,
+} from '@texra-ai/llm';
+import { longRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
+import { createDeferred } from '@test/support/asyncTestUtils';
+import {
   GOOGLE_PREFIX_DOMAIN,
   googleInteractionsModel,
-} from '@texra-ai/llm/google-interactions';
-import { admittedFingerprint } from '@texra-ai/llm/prefix-fingerprint';
-import { RemoteOperationSchema, completedTurn } from '@texra-ai/llm/turn';
-import { createDeferred } from '@test/support/asyncTestUtils';
-import type { ModelError, TurnRequest, TurnResult } from '@texra-ai/llm/turn';
+} from '../../../packages/llm/src/api/googleInteractions.js';
+import { admittedFingerprint } from '../../../packages/llm/src/api/prefixFingerprint.js';
+import type { AddressInfo } from 'node:net';
 
 function model(
   store = true,
@@ -492,6 +500,74 @@ describe('canonical Google Interactions protocol', () => {
         '/int_1/cancel',
       );
     }),
+  );
+
+  // The SDK hands fetch a global `Request`; the harness transport is a
+  // different undici, which once stringified it to "[object Request]".
+  it.live('reaches the server through the harness model transport', () =>
+    Effect.gen(function* () {
+      // The transport's proxy agent reads the environment when first built.
+      vi.stubEnv('no_proxy', '127.0.0.1');
+      vi.stubEnv('NO_PROXY', '127.0.0.1');
+      const received = createDeferred<{
+        method: string | undefined;
+        key: string | string[] | undefined;
+        body: string;
+      }>();
+      const server = createServer((req, res) => {
+        let body = '';
+        req.on('data', (chunk) => (body += chunk));
+        req.on('end', () => {
+          received.resolve({
+            method: req.method,
+            key: req.headers['x-goog-api-key'],
+            body,
+          });
+          res.setHeader('content-type', 'application/json');
+          res.end(
+            JSON.stringify({ id: 'int_1', status: 'queued', model: 'g' }),
+          );
+        });
+      });
+      yield* Effect.acquireRelease(
+        Effect.callback<void>((resume) => {
+          server.listen(0, '127.0.0.1', () => resume(Effect.void));
+        }),
+        () => Effect.sync(() => server.close()),
+      );
+      const { port } = server.address() as AddressInfo;
+      const configured = googleInteractionsModel(
+        {
+          protocol: 'google-interactions',
+          requestedModel: 'gemini-test',
+          background: 'supported',
+          deployment: {
+            endpoint: `http://127.0.0.1:${port}`,
+            credentialScope: 'test-account',
+          },
+          defaults: {
+            maxOutputTokens: 2048,
+            store: true,
+            thinkingLevel: 'high',
+          },
+        },
+        { apiKey: 'synthetic-key', fetch: longRunningModelFetch },
+      );
+      const turn = yield* configured.prepareTurn({
+        ...request(),
+        mode: 'background',
+      });
+      assert(
+        turn.mode === 'background' &&
+          turn.protocol === 'google-interactions' &&
+          configured.background,
+      );
+      yield* configured.background.submit(turn);
+      const seen = yield* Effect.promise(() => received.promise);
+      expect(seen.method).toBe('POST');
+      expect(seen.key).toBe('synthetic-key');
+      expect(JSON.parse(seen.body)).toMatchObject({ model: 'gemini-test' });
+    }).pipe(Effect.scoped),
   );
 
   it.effect(

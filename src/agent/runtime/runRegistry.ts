@@ -28,7 +28,7 @@ import type {
   FinalizeRunInput,
   FinalizeRunResult,
 } from '@agent/storage/runLifecycle';
-import type { PluginServices, ProcessServices } from '@platform/processRuntime';
+import type { PluginContext, ProcessServices } from '@platform/processRuntime';
 import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
@@ -139,7 +139,7 @@ export interface RunRegistryInit {
     generation: number,
     on: ReadonlySet<string>,
     used: ReadonlySet<string>,
-  ) => Effect.Effect<Context.Context<PluginServices>, never, Scope.Scope>;
+  ) => Effect.Effect<PluginContext, never, Scope.Scope>;
 }
 
 type AnyFiber = Fiber.Fiber<unknown, unknown>;

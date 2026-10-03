@@ -13,6 +13,7 @@ import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports
 import type { RunView } from '@shared/session/sessionView';
+import { type TeXRAIconName } from '@shared/iconNames';
 import { designTokens } from '@ui/styles';
 import { focusRingStyles } from '@ui/styles/controlStyles';
 import { AGENT_DECORATORS, getAgentCategoryDecorator } from '@ui/wa/icons';
@@ -24,7 +25,7 @@ import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import './WorktreeChip';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { type TeXRAIconName } from '@ui/wa/iconNames';
+import { type TeXRAIconName } from '@shared/iconNames';
 import { NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { getBasename } from '@utils/core';
 import { formatRelativeTime, formatResultCount } from '@utils/text/stringUtils';

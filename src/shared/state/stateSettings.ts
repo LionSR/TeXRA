@@ -13,11 +13,6 @@ import {
   LATEX_FORMATTER_VALUES,
   LATEXDIFF_MATH_MARKUP_VALUES,
 } from '@shared/constants/latexConfig';
-import { MODEL_PROVIDER_PLUGINS } from '@shared/constants/modelProviderPlugins';
-import {
-  DEFAULT_HELPER_MODEL,
-  PROVIDER_ENDPOINT_STATE_ENTRIES,
-} from '@shared/constants/providers';
 import {
   DEFAULT_ENABLED_REGEX_REPLACEMENTS,
   DEFAULT_ENABLED_REPLACEMENTS,
@@ -56,6 +51,11 @@ import {
   QualifiedSkillNameSchema,
   TELEMETRY_ENABLED_DEFAULT,
 } from '@shared/schemas';
+import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
+import {
+  PROVIDER_ENDPOINT_STATE_ENTRIES,
+  PROVIDER_REGION_SETTINGS,
+} from '@shared/state/providerSettings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // ============================================================================
@@ -722,20 +722,16 @@ const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
 );
 
 /**
- * Region toggles resolved by `@model/routeEndpoint`, each also a Models tab
+ * Region toggles resolved into `RouteFacts.endpoints`, each also a Models tab
  * control for its provider: one row per provider plugin `region`.
  */
-const PROVIDER_ROUTING_SETTINGS = MODEL_PROVIDER_PLUGINS.flatMap(
-  ({ id: provider, region }) =>
-    region === undefined
-      ? []
-      : [
-          globalProviderToggle({
-            key: region.key,
-            default: region.default,
-            model: { provider, ...region.control },
-          }),
-        ],
+const PROVIDER_ROUTING_SETTINGS = PROVIDER_REGION_SETTINGS.map(
+  ({ provider, key, default: china, control }) =>
+    globalProviderToggle({
+      key,
+      default: china,
+      model: { provider, ...control },
+    }),
 );
 
 export const STATE_SETTINGS: readonly StateSettingEntry[] = [
@@ -1135,21 +1131,14 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     },
   }),
 
-  // --- External tool integrations ------------------------------------------
-  // This is a list-backed global-state domain. `/config` delegates editing to
-  // the tools form so the catalog owns discoverability while the tool
-  // dashboard remains the single editor for per-integration toggles.
-  surfacedSetting({
+  // --- Plugin switches ------------------------------------------------------
+  // Written and read by the Plugins page and the TUI's `/plugins` over the
+  // plugin rows, which no catalog-driven UI renders.
+  {
     key: GlobalStateKey.DISABLED_TOOLS,
     schema: z.array(z.string()).prefault([]),
-    title: 'Tool integrations',
-    description:
-      'Enable or disable tool plugins. A disabled plugin withholds its tools, its bundled skills and its bundled agents.',
-    category: 'tools',
     slot: 'globalState',
-    openForm: 'tools',
-    surfaces: { cliConfig: true },
-  }),
+  },
   surfacedSetting({
     key: WorkspaceStateKey.DISABLED_SKILLS,
     schema: z.array(QualifiedSkillNameSchema).prefault([]),

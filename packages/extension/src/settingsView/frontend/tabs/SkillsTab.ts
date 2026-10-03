@@ -11,14 +11,7 @@ import {
   type SkillDisplayIssue,
   type SkillDisplayItem,
 } from '@shared/schemas';
-import { postMessage } from '@shared/hostBridge';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type {
-  PluginActionMessage,
-  PluginListItem,
-} from '@shared/settingsView/pluginMessages';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
@@ -61,7 +54,6 @@ export class SkillsTab extends LitElement {
   @property({ attribute: false }) disabledSkills: string[] = [];
   @property({ attribute: false }) disabledSources: ActiveSkillSourceScope[] =
     [];
-  @property({ attribute: false }) plugins: PluginListItem[] = [];
   @property({ attribute: false }) skills: SkillDisplayItem[] = [];
   @property({ attribute: false }) issues: SkillDisplayIssue[] = [];
 
@@ -126,108 +118,6 @@ export class SkillsTab extends LitElement {
     `;
   }
 
-  /** One installed plugin: what it holds, its switch, and its actions.
-   *  Switching one on asks the host to show what it declares and trust it. */
-  private renderPlugin(plugin: PluginListItem): TemplateResult {
-    const act = (action: PluginActionMessage['action']) =>
-      postMessage(SETTINGS_VIEW_COMMANDS.PLUGIN_ACTION, {
-        action,
-        name: plugin.name,
-      });
-    let state = `Skills ${plugin.skillCount}, commands ${plugin.commandCount}, agents ${plugin.agentCount}, MCP servers ${plugin.mcpServers.length}.`;
-    if (plugin.code.length > 0)
-      state = `Ships ${plugin.code.join(', ')}, which TeXRA does not run yet.`;
-    else if (plugin.enabled && !plugin.trusted)
-      state =
-        'Changed since you trusted it: it loads nothing until you review it.';
-    return html`
-      <div class="settings-row">
-        <div class="settings-row-text">
-          <label class="settings-row-label" for=${`plugin-${plugin.name}`}
-            >${plugin.name}${plugin.version ? ` ${plugin.version}` : ''}</label
-          >
-          <span class="settings-row-help"
-            ><code>${plugin.source}</code>${
-              plugin.commit
-                ? html` at <code>${plugin.commit.slice(0, 12)}</code>`
-                : nothing
-            }</span
-          >
-          <span class="settings-row-help">${plugin.problem ?? state}</span>
-        </div>
-        <div class="settings-row-control">
-          ${
-            plugin.enabled && !plugin.trusted
-              ? renderLabeledActionButton({
-                  icon: 'shield',
-                  text: 'Review',
-                  kind: 'secondary',
-                  appearance: 'outlined',
-                  onClick: () => act('enable'),
-                })
-              : nothing
-          }
-          ${renderLabeledActionButton({
-            icon: 'rotate-right',
-            text: 'Update',
-            kind: 'secondary',
-            appearance: 'outlined',
-            onClick: () => act('update'),
-          })}
-          ${renderLabeledActionButton({
-            icon: 'trash',
-            text: 'Remove',
-            kind: 'secondary',
-            appearance: 'outlined',
-            onClick: () => act('remove'),
-          })}
-          <wa-switch
-            id=${`plugin-${plugin.name}`}
-            .checked=${plugin.enabled}
-            ?disabled=${plugin.code.length > 0 || plugin.problem !== undefined}
-            @change=${(event: Event) =>
-              act((event.target as WaSwitch).checked ? 'enable' : 'disable')}
-          ></wa-switch>
-        </div>
-      </div>
-    `;
-  }
-
-  /**
-   * Installed Claude Code and Codex plugins: the one install record the CLI's
-   * `texra plugin` shares. Their skills and commands are listed below with
-   * the user skills, as `<plugin>:<name>`.
-   */
-  private renderPlugins(): TemplateResult {
-    return html`
-      <div class="category-section">
-        ${renderSettingsSectionHeading({
-          icon: 'cube',
-          title: `Plugins (${this.plugins.length})`,
-          description:
-            'Claude Code and Codex plugins: their skills, commands, agents and MCP servers.',
-          actions: renderLabeledActionButton({
-            icon: 'plus',
-            text: 'Install plugin',
-            kind: 'secondary',
-            appearance: 'outlined',
-            onClick: () =>
-              postMessage(SETTINGS_VIEW_COMMANDS.PLUGIN_ACTION, {
-                action: 'install',
-              }),
-          }),
-        })}
-        <div class="settings-section">
-          ${repeat(
-            this.plugins,
-            (plugin) => plugin.name,
-            (plugin) => this.renderPlugin(plugin),
-          )}
-        </div>
-      </div>
-    `;
-  }
-
   override render(): TemplateResult {
     const groups = Map.groupBy(this.skills, (skill) => skill.scope);
     return html`
@@ -244,7 +134,6 @@ export class SkillsTab extends LitElement {
             checked: this.masterEnabled,
           })}
         </div>
-        ${this.renderPlugins()}
         ${
           this.issues.length === 0
             ? nothing

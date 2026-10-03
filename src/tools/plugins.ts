@@ -21,19 +21,25 @@
  */
 
 // Third-party imports
-import { Effect, Result } from 'effect';
+import { Effect, type Layer, Result } from 'effect';
 import { z } from 'zod';
 
 // Local imports
 import type { RoundMode } from '@agent/runtime/loop/rounds';
-import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import type { Runs } from '@agent/runtime/runRegistry';
+import type {
+  RuntimeTool as ITool,
+  RuntimeTool,
+  ToolServices,
+} from '@agent/runtime/ToolServices';
 import { StateReadFailed, type StateStore } from '@platform/interfaces';
-import type { ToolCategory } from '@shared/settingsView/settingsViewMessages';
+import type { ToolCategory } from '@shared/tools/toolPlugin';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingHost } from '@shared/state/stateSettings';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
 import type {
   Continuation,
+  PluginHold,
   ProcessPluginLayer,
   PromptSection,
   SessionPluginLayer,
@@ -98,6 +104,35 @@ export interface Plugin {
    *  `texra tools`; only a probed plugin (one with `availability`) has any. */
   readonly setup?: ToolPluginSetup;
 }
+
+/**
+ * A plugin as its author writes it: its tools, continuation and probe may
+ * require `ROut`, the services its own layers serve, beside the harness's.
+ * `definePlugin` checks that at compile time (a tool that needs a service no
+ * layer of its plugin serves does not compile) and erases it: the table
+ * holds every plugin alike, and the step that pins a plugin provides its
+ * layers' services to its calls.
+ */
+export interface PluginDefinition<ROut> extends Omit<
+  Plugin,
+  'tools' | 'continuation' | 'processLayer' | 'sessionLayer' | 'availability'
+> {
+  readonly tools?: Readonly<
+    Record<string, RuntimeTool<Error, ToolServices | ROut>>
+  >;
+  readonly continuation?: Continuation<ROut>;
+  readonly processLayer?: ProcessPluginLayer<ROut>;
+  readonly sessionLayer?: Layer.Layer<ROut, never, Runs | PluginHold>;
+  /** Probed outside any step, whether or not the plugin is on: it may
+   *  require only the process's probe services. Its own process services
+   *  are offered while its layer is up, read with `Effect.serviceOption`. */
+  readonly availability?: ToolAvailabilityChecks;
+}
+
+/** A plugin value from its definition, its own services erased. */
+export const definePlugin = <ROut = never>(
+  plugin: PluginDefinition<ROut>,
+): Plugin => plugin as unknown as Plugin;
 
 /** How a user gets a probed plugin's dependency installed and signed in. */
 export interface ToolPluginSetup {

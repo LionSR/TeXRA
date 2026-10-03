@@ -5,10 +5,10 @@ import {
   API_PROVIDERS,
   type ApiKeyStatus,
   type ApiProvider,
-} from '@model/apiProviders';
+  codingPlanForApiProvider,
+  providerDisplayName,
+} from '@texra-ai/llm';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import { codingPlanForApiProvider } from '@shared/codingPlanSubscriptions';
-import { providerDisplayName } from '@shared/constants/providers';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { ApiKeyEntryForm } from './ApiKeyEntryForm';

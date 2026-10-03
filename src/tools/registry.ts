@@ -6,10 +6,15 @@
  */
 
 // Third-party imports
+import { Effect, Layer } from 'effect';
 import { z } from 'zod';
 
 // Local imports
 import { documentRoundMode } from '@agent/output/documentRoundPolicy';
+import { isTexFile } from '@common/files/fileTypeUtils';
+import replacementEngine, {
+  logReplacementDiagnostics,
+} from '@replacement/engine';
 import { extractionShorthandToolConfig } from '@shared/schemas';
 import {
   codemode,
@@ -20,6 +25,7 @@ import {
   web,
 } from '@tools/builtinPlugins';
 import type { WorkflowAgentOptions } from '@tools/delegation/AgentTool';
+import type { WriteFilter } from '@tools/WriteTool';
 import {
   claudeAgent,
   codex,
@@ -30,16 +36,22 @@ import {
   wolfram,
   zotero,
 } from '@tools/integrationPlugins';
-import type { Plugin } from '@tools/plugins';
+import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
+import { definePlugin, type Plugin } from '@tools/plugins';
 import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
 import type { ProcessPluginLayer } from '@tools/toolTable';
 
 // Local file imports
+import { AcceptRunFilesTool } from './AcceptRunFilesTool';
 import { ArxivDownloadTool } from './arxiv/ArxivDownloadTool';
 import { ArxivMetadataTool } from './arxiv/ArxivMetadataTool';
 import { ArxivSearchTool } from './arxiv/ArxivSearchTool';
 import { CrossrefSearchTool } from './citation/CrossrefSearchTool';
-import { InlineCommentTool } from './comment/InlineCommentTool';
+import {
+  InlineComments,
+  InlineCommentTool,
+  type InlineCommentProvider,
+} from './comment/InlineCommentTool';
 import { DiagnosticsTool } from './DiagnosticsTool';
 import { ExtractBibliographyTool } from './latex/ExtractBibliographyTool';
 import { ExtractLatexFiguresTool } from './latex/ExtractFiguresTool';
@@ -81,6 +93,18 @@ import { InstallVscodeExtensionTool } from './setup/InstallVscodeExtensionTool';
 import { ReadConfigTool, UpdateConfigTool } from './setup/ConfigTools';
 import { SendToTerminalTool } from './setup/SendToTerminalTool';
 import { ApplyTeamTool } from './setup/ApplyTeamTool';
+
+/** TeXRA's filter on `write_file`: a `.tex` file's content goes through the
+ *  replacement rules of the call's workspace. */
+const texWriteFilter: WriteFilter = (path, content, config) => {
+  if (!isTexFile(path)) return Effect.succeed(content);
+  const replaced = replacementEngine.applyFor(content, 'tex-write', (key) =>
+    config.get(key),
+  );
+  return logReplacementDiagnostics(replaced.diagnostics).pipe(
+    Effect.as(replaced.text),
+  );
+};
 
 /**
  * TeXRA's workflow options on `agent`: the figure-extraction pair, which
@@ -156,26 +180,32 @@ const crossref: Plugin = {
  * prompt section is the configured default bibliography, at every step of
  * every run.
  */
-const core: Plugin = {
-  id: 'core',
-  name: 'Core Tools',
-  category: 'workflow',
-  description:
-    'Review annotations, PDF viewing, user questions, and Loogle search.',
-  tools: {
-    inline_comment: InlineCommentTool,
-    open_pdf: OpenPdfTool,
-    ask_user_question: AskUserQuestionTool,
-    lean_loogle: LeanLoogleTool,
-  },
-  hidden: true,
-  prompt: ({ config }) => {
-    const bibPath = config.get<string>('texra.bib.defaultPath');
-    return bibPath
-      ? `The default bibliography file is ${bibPath}. You can grep or read this file to search for citations and references.`
-      : '';
-  },
-};
+const core = (provider?: InlineCommentProvider) =>
+  definePlugin<InlineComments>({
+    id: 'core',
+    name: 'Core Tools',
+    category: 'workflow',
+    description:
+      'Review annotations, PDF viewing, user questions, and Loogle search.',
+    tools: {
+      inline_comment: InlineCommentTool,
+      open_pdf: OpenPdfTool,
+      ask_user_question: AskUserQuestionTool,
+      lean_loogle: LeanLoogleTool,
+    },
+    hidden: true,
+    prompt: ({ config }) => {
+      const bibPath = config.get<string>('texra.bib.defaultPath');
+      return bibPath
+        ? `The default bibliography file is ${bibPath}. You can grep or read this file to search for citations and references.`
+        : '';
+    },
+    // The host's Comments UI, for the one host that has one; elsewhere the
+    // tool fails naming the missing host wiring.
+    ...(provider !== undefined && {
+      processLayer: { layer: Layer.succeed(InlineComments)(provider) },
+    }),
+  });
 
 /** The onboarding agent's narrow set, one responsibility per tool. */
 const setup: Plugin = {
@@ -199,13 +229,15 @@ const setup: Plugin = {
   hidden: true,
 };
 
-/** A workflow agent's run: the documents plugin's rounds. */
+/** Workflow agents: their rounds, and accepting the documents a run
+ *  produced into the workspace. */
 const documents: Plugin = {
   id: 'documents',
   name: 'Documents',
   category: 'workflow',
   description:
-    'Run workflow agents: rounds that rewrite documents, with diffs and compile checks.',
+    'Run workflow agents: rounds that rewrite documents, with diffs and compile checks, and accept their outputs into the workspace.',
+  tools: { accept_run_files: AcceptRunFilesTool },
   hidden: true,
   rounds: documentRoundMode,
 };
@@ -217,9 +249,16 @@ const documents: Plugin = {
  * it is on (`copilotToolsLayer` in packages/extension).
  */
 export const texraPlugins = (
-  host: { readonly copilot?: ProcessPluginLayer } = {},
+  host: {
+    readonly copilot?: ProcessPluginLayer;
+    /** The host's Lean services in place of the direct `lake` pool (VS
+     *  Code's Lean 4 extension bridge). */
+    readonly lean?: ProcessPluginLayer<LeanLanguageServices>['layer'];
+    /** The host's Comments UI behind `inline_comment`. */
+    readonly inlineComments?: InlineCommentProvider;
+  } = {},
 ): readonly Plugin[] => [
-  fileOps,
+  fileOps({ writeFilter: texWriteFilter }),
   latexExtract,
   latexDiagnostics,
   arxiv,
@@ -230,13 +269,15 @@ export const texraPlugins = (
   texcount,
   wolfram,
   zotero,
-  lean4,
+  host.lean === undefined
+    ? lean4
+    : { ...lean4, processLayer: { layer: host.lean } },
   multiAgent(FIGURE_OPTIONS),
   githubActivity,
   externalInquiry,
   codex,
   claudeAgent,
-  core,
+  core(host.inlineComments),
   codemode,
   setup,
   {

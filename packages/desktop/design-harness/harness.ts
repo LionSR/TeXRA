@@ -26,6 +26,7 @@ import { html, render, type TemplateResult } from 'lit';
 
 import { desktopScenes } from './scenes/desktop';
 import { extensionScenes } from './scenes/extension';
+import { settingsScenes } from './scenes/settings';
 // ── small pieces ────────────────────────────────────────────────────────
 const extFrame = (inner: TemplateResult) =>
   html` <div class="h-ext" id="frame">
@@ -165,6 +166,7 @@ const style = html`<style>
 const scenes: Record<string, () => TemplateResult> = {
   ...extensionScenes,
   ...desktopScenes,
+  ...settingsScenes,
 };
 const scene =
   new URLSearchParams(location.search).get('scene') ?? 'ext-session';

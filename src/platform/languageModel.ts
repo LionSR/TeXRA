@@ -2,7 +2,7 @@ import {
   ModelError,
   type Model,
   type VscodeLanguageModelConfiguration,
-} from '@texra-ai/llm/turn';
+} from '@texra-ai/llm';
 import { Context, Effect, Layer, type Scope } from 'effect';
 
 // Local imports - platform

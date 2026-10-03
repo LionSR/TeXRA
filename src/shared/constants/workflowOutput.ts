@@ -11,8 +11,8 @@
  */
 
 // Local imports
+import { modelFileName } from '@texra-ai/llm';
 import { agentFileName } from '@shared/schemas';
-import { modelFileName } from '@shared/model/modelSelection';
 
 /** The fixed basename of every workflow output file (no extension). */
 export const WORKFLOW_OUTPUT_BASENAME = 'output';

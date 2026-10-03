@@ -31,11 +31,12 @@ import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
 import { z } from 'zod';
 import {
-  TurnResultSchema,
+  chooseReasoning,
   type Model,
   type ModelOrigin,
   type TurnResult,
-} from '@texra-ai/llm/turn';
+  TurnResultSchema,
+} from '@texra-ai/llm';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -60,8 +61,7 @@ import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentTrace } from '@agent/trace';
-import { chooseReasoning } from '@model/reasoningChoice';
-import type { PluginServices } from '@platform/processRuntime';
+import type { PluginContext } from '@platform/processRuntime';
 import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
@@ -354,7 +354,7 @@ const dispatch = (kit: DispatchKit) =>
         definitions: [],
         registry: kit.tools,
         offered: [],
-        services: Context.empty() as Context.Context<PluginServices>,
+        services: Context.empty() as PluginContext,
         stepRoots: [],
         hooks: [],
       }),

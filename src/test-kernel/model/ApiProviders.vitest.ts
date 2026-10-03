@@ -4,19 +4,20 @@ import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
-import { CliSecrets } from '@cli/runtime/cliSecrets';
-import { onAppSignal } from '@eventBus/AppSignals';
-
 import {
+  apiKeyEnvName,
   apiKeySecretName,
   configuredApiKeyProviders,
   getApiKey,
   hasUsableApiKey,
   loadApiKeyStatusMap,
   lookupApiKeyOrigin,
-} from '@model/apiProviders';
-import { SecretsFailed, type PlatformSecrets } from '@platform/secrets';
-import { apiKeyEnvName } from '@shared/constants/providers';
+  SecretsFailed,
+} from '@texra-ai/llm';
+import { CliSecrets } from '@cli/runtime/cliSecrets';
+import { onAppSignal } from '@eventBus/AppSignals';
+
+import type { PlatformSecrets } from '@platform/secrets';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';

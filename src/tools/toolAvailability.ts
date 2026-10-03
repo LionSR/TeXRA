@@ -29,6 +29,7 @@ import {
   Effect,
   Fiber,
   Layer,
+  Option,
   Queue,
   Result,
   Scope,
@@ -53,6 +54,7 @@ import {
   type AvailabilityResults,
   type ExternalToolCheckResult,
 } from '@tools/toolAvailabilityService';
+import { LiveTools } from '@tools/liveTools';
 import { ToolRegistry } from '@tools/toolTable';
 import { forgetToolMisses } from '@utils/system/binaryResolver';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -159,10 +161,11 @@ interface ProbeRound {
 export const toolAvailabilityLayer: Layer.Layer<
   ToolAvailability,
   never,
-  ToolProbeServices | ToolRegistry
+  ToolProbeServices | ToolRegistry | LiveTools
 > = Layer.effect(
   ToolAvailability,
   Effect.gen(function* () {
+    const live = yield* LiveTools;
     // The plugins the layer probes, in list order, and every secret key
     // some plugin's availability answer reads.
     const PROBED_PLUGINS = [...(yield* ToolRegistry).entries.values()].filter(
@@ -194,7 +197,17 @@ export const toolAvailabilityLayer: Layer.Layer<
     const probeRound = (inputs: ToolProbeInputs) =>
       Effect.forEach(
         PROBED_PLUGINS,
-        (plugin) => probeToolGroup(plugin, inputs),
+        // A plugin's probe runs with its own process services while its
+        // layer is up (the Lean plugin's server roster); a probe never
+        // brings a layer up, which could act (Copilot's registers tools).
+        (plugin) =>
+          Effect.scoped(
+            Effect.flatMap(live.processServices(plugin.id), (own) =>
+              Option.isSome(own)
+                ? Effect.provide(probeToolGroup(plugin, inputs), own.value)
+                : probeToolGroup(plugin, inputs),
+            ),
+          ),
         // Every group probes at once and no group's failure cancels a
         // sibling, because each one resolves to a result of its own.
         { concurrency: 'unbounded' },

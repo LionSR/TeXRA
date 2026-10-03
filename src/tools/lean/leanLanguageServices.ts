@@ -106,12 +106,12 @@ export interface LeanLanguageServicesShape {
 }
 
 /**
- * The process-lifetime Lean port, provided once by each composition root
- * through `installProcessRuntime`'s `lean` option: the VS Code extension
- * over its Lean 4 extension bridge, the Node hosts (CLI, desktop, the agent
- * package) over the direct `lake env lean --server` pool. A tool or run
- * program reads it with `yield* LeanLanguageServices`; a host that never
- * provided one fails to type check, not at first use.
+ * The Lean 4 plugin's port, its process layer (`lean4` in
+ * `@tools/integrationPlugins`): the direct `lake env lean --server` pool, or
+ * the VS Code extension's Lean 4 bridge, which that host passes with TeXRA's
+ * plugins (`texraPlugins`). A Lean tool reads it with
+ * `yield* LeanLanguageServices`, served by the step that pinned the plugin;
+ * the plugin's availability probe reads it while the layer is up.
  */
 export class LeanLanguageServices extends Context.Service<
   LeanLanguageServices,

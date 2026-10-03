@@ -11,11 +11,12 @@ import { Effect } from 'effect';
 
 import {
   chooseReasoning,
-  ReasoningChoiceError,
   type ChooseReasoningOptions,
   type ReasoningChoice,
-} from '@model/reasoningChoice';
-import { selectModel, type SelectedModel } from '@shared/model/modelSelection';
+  ReasoningChoiceError,
+  type SelectedModel,
+  selectModel,
+} from '@texra-ai/llm';
 import {
   AgentCliEffortSchema,
   ToolError,

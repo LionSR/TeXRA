@@ -107,13 +107,13 @@ In the CLI, `texra resume <id>` continues a stopped run, a background script run
 
 **Agents.** A tool is only offered to agents whose configuration names it. The `orchestrator` lead (the Physicist, Mathematician, and Computer Scientist teams), `leanOrchestrator` (the Lean Project team), and the `engineer` lead (the Software Engineer team) name both `agent` and `script`; `assistant` names both too, and `creator` and `setup` name `agent`. A [custom agent](./custom-agents.md) can list them in its tools.
 
-**The global switch.** The **Multi-Agent Workflow** switch on the **Tools** tab of Settings gates `agent`: when it is off, `agent` is removed from every agent's tool list, whatever the agent's configuration says, and a script cannot launch agents. It is on by default; from the CLI, the same switch is `texra tools enable multi-agent` or `texra tools disable multi-agent`.
+**The global switch.** The **Multi-Agent Workflow** switch on **Settings → Plugins** gates `agent`: when it is off, `agent` is removed from every agent's tool list, whatever the agent's configuration says, and a script cannot launch agents. It is on by default; from the CLI, the same switch is `texra tools enable multi-agent` or `texra tools disable multi-agent`.
 
 **Hosts.** The VS Code extension, the desktop app, and the CLI show the script request, the calls grouped by phase, and the result. In a headless `texra run`, no approval prompt can be shown, so the approval policy you pass decides the script request and what its child agents may edit or execute.
 
 ## Troubleshooting
 
-**The lead never delegates.** Check the **Multi-Agent Workflow** switch on the Settings **Tools** tab (or `texra tools status multi-agent`). When it is off, `agent` is stripped from every agent. Also confirm the lead is one of the agents listed above.
+**The lead never delegates.** Check the **Multi-Agent Workflow** switch on **Settings → Plugins** (or `texra tools status multi-agent`). When it is off, `agent` is stripped from every agent. Also confirm the lead is one of the agents listed above.
 
 **The script stopped with a wall-clock timeout.** The default limit is 60 minutes, which a large fan-out on a slow model can exceed. Ask the lead to send the script again with a larger `timeoutMs` (up to 24 hours), or with `run_in_background: true`; the calls that finished are reused.
 
@@ -130,5 +130,5 @@ In the CLI, `texra resume <id>` continues a stopped run, a background script run
 - [Built-in agents](./built-in-agents.md#built-in-teams): the teams whose leads run scripts
 - [TeXRA CLI](./texra-cli.md#teams): running a team from the terminal
 - [Workflow agents](./agent-architecture.md): what a single workflow-agent call does
-- [Agent integrations](./agent-integrations.md): the Tools tab and approval settings
+- [Agent integrations](./agent-integrations.md): the Plugins page and approval settings
 - [Custom agents](./custom-agents.md): give your own lead agent these tools

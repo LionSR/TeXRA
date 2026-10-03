@@ -13,22 +13,26 @@ import { createHash } from 'node:crypto';
 
 import { Effect, type Scope } from 'effect';
 import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
-import { anthropicMessagesModel } from '@texra-ai/llm/anthropic-messages';
-import { googleInteractionsModel } from '@texra-ai/llm/google-interactions';
 import {
-  openaiResponsesModel,
-  openaiResponsesWebSocketModel,
-} from '@texra-ai/llm/openai-responses';
-import { openrouterChatModel } from '@texra-ai/llm/openrouter-chat';
-import {
-  originOf,
+  acceptedEfforts,
   type Model,
   type ModelConfiguration,
   type ModelOrigin,
-} from '@texra-ai/llm/turn';
+  type ModelRoute,
+  OPENAI_DEFAULT_ENDPOINT,
+  originOf,
+  type ReasoningChoice,
+  type ReasoningRequest,
+  routeConfig,
+  selectModel,
+  wireEffort,
+} from '@texra-ai/llm';
+import {
+  bindModel as bindWireModel,
+  type ModelCredential,
+} from '@texra-ai/llm/node';
 
 import {
-  bearerTransport,
   resolveModelRoute,
   resolveRouteCredential,
   resolveSubscriptionCredential,
@@ -39,18 +43,9 @@ import {
 } from '@agent/runtime/modelRoutes';
 import { type ModelOptionStores } from '@model/computeModelOptions';
 import { CODEX_ROUTE_EFFORTS, reasoningFor } from '@model/reasoningLevel';
-import {
-  acceptedEfforts,
-  wireEffort,
-  type ReasoningChoice,
-  type ReasoningRequest,
-} from '@model/reasoningChoice';
 import type { CopilotModelRoute } from '@model/copilotRouting';
-import { routeConfig, type ModelRoute } from '@model/modelRoute';
 import { longRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
 import { LanguageModel } from '@platform/languageModel';
-import { selectModel } from '@shared/model/modelSelection';
-import { OPENAI_DEFAULT_ENDPOINT } from '@shared/constants/modelProviderPlugins';
 import {
   AgentCategory,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
@@ -61,7 +56,6 @@ import {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { readSettingFrom } from '@utils/config/platformSettings';
-import { ensureError } from '@utils/errors/errorMessage';
 import { validationModel } from './validationModel';
 import type { HttpClient } from 'effect/http';
 
@@ -206,14 +200,8 @@ function anthropicThinking(
 /** Instructions the Codex backend requires when the request carries none. */
 const CODEX_DEFAULT_INSTRUCTIONS = "Follow the user's instructions.";
 
-type ResponsesAuthentication = Parameters<
-  typeof openaiResponsesWebSocketModel
->[1];
-
-/** The Responses bearer: a subscription token names its account, a key does not. */
-function responsesAuthentication(
-  credential: RouteCredential,
-): ResponsesAuthentication {
+/** The bearer a route sends: a subscription token names its account, a key does not. */
+function modelCredential(credential: RouteCredential): ModelCredential {
   return credential.route === 'chatgpt-subscription'
     ? {
         kind: 'codex',
@@ -270,16 +258,11 @@ type BackgroundRule<P extends HttpProtocol> =
 
 /**
  * What one HTTP protocol contributes: the configuration it binds over the
- * shared facts, the package factory its model comes from, and its background
- * stance. Three facts in one place, so a new provider is one entry instead of
- * an arm in each of three switches.
+ * shared facts, and its background stance. The package's `bindModel` builds
+ * the model from the configuration, so a new provider is one entry here.
  */
 interface ProtocolDescriptor<P extends HttpProtocol> {
   readonly configure: (facts: BindingFacts) => ConfigurationOf<P>;
-  readonly construct: (
-    configuration: ConfigurationOf<P>,
-    credential: RouteCredential,
-  ) => Model;
   readonly background: BackgroundRule<P>;
 }
 
@@ -433,8 +416,6 @@ const PROTOCOL_DESCRIPTORS: {
         stopSequences: [],
       },
     }),
-    construct: (configuration, credential) =>
-      anthropicMessagesModel(configuration, bearerTransport(credential)),
     background: false,
   },
   'openai-responses': {
@@ -528,11 +509,6 @@ const PROTOCOL_DESCRIPTORS: {
         },
       };
     },
-    construct: (configuration, credential) =>
-      openaiResponsesModel(configuration, {
-        authentication: responsesAuthentication(credential),
-        fetch: longRunningModelFetch,
-      }),
     background: (configuration) => configuration.background === 'supported',
   },
   'google-interactions': {
@@ -564,8 +540,6 @@ const PROTOCOL_DESCRIPTORS: {
             : 'high',
       },
     }),
-    construct: (configuration, credential) =>
-      googleInteractionsModel(configuration, bearerTransport(credential)),
     // Google retrieves a background result through server-side state.
     background: (configuration) =>
       configuration.background === 'supported' && configuration.defaults.store,
@@ -596,8 +570,6 @@ const PROTOCOL_DESCRIPTORS: {
         stopSequences: [],
       },
     }),
-    construct: (configuration, credential) =>
-      openrouterChatModel(configuration, bearerTransport(credential)),
     background: false,
   },
 };
@@ -663,22 +635,6 @@ const configurationFor = Effect.fn('configurationFor')(function* (
       )),
   });
 });
-
-/**
- * The model of one bound configuration, from its protocol's own factory; a
- * subscription token is the bearer where an API key would be, and the Codex
- * session additionally names its account. Generic in the protocol so the
- * table entry and the configuration handed to it stay the same arm.
- */
-function constructModel<P extends HttpProtocol>(
-  configuration: ConfigurationOf<P>,
-  credential: RouteCredential,
-): Model {
-  return PROTOCOL_DESCRIPTORS[configuration.protocol].construct(
-    configuration,
-    credential,
-  );
-}
 
 /** Whether a binding's configuration admits background work. */
 function backgroundCapable<P extends HttpProtocol>(
@@ -832,7 +788,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
     request.mode === undefined
       ? yield* withShortModelName(catalog, input.stores)
       : catalog;
-  const route = yield* resolveModelRoute(input.stores, requested, {
+  const { route, facts } = yield* resolveModelRoute(input.stores, requested, {
     ...input,
     mode: request.mode,
   });
@@ -895,7 +851,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
       ),
     );
   }
-  const config = yield* routeConfig(input.stores, requested, route);
+  const config = routeConfig(requested, route, facts);
   const credential: RouteCredential =
     route.kind === 'chatgpt-subscription' || route.kind === 'xai-subscription'
       ? yield* resolveSubscriptionCredential(
@@ -904,7 +860,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
           input.stores.secrets,
         )
       : yield* resolveRouteCredential(
-          input.stores,
+          facts,
           config,
           route,
           input.stores.secrets,
@@ -940,16 +896,16 @@ export const bindModel = Effect.fn('bindModel')(function* (
       input.stores,
     )) &&
     (yield* responsesWebSocketSelected(credential, input.stores));
-  const model =
-    configuration.protocol === 'openai-responses' && onWebSocket
-      ? yield* openaiResponsesWebSocketModel(
-          configuration,
-          responsesAuthentication(credential),
-        ).pipe(Effect.mapError(ensureError))
-      : yield* Effect.try({
-          try: () => constructModel(configuration, credential),
-          catch: ensureError,
-        });
+  // A subscription token is the bearer where an API key would be, and the
+  // Codex session additionally names its account.
+  const model = yield* bindWireModel(
+    configuration,
+    modelCredential(credential),
+    {
+      fetch: longRunningModelFetch,
+      webSocket: onWebSocket,
+    },
+  );
   // Uploads live only in this model's memory: they are deleted when the
   // binding's scope closes. A delete the provider refuses or leaves
   // unanswered is logged and left to the upload's own expiry.

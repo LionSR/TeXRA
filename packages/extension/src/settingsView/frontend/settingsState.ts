@@ -21,6 +21,7 @@
  * replays. A signal declared any other way is silently left out of the reset.
  */
 
+import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
 import { createTrackedSignalRegistry, Signal } from '@shared/signals';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
@@ -44,24 +45,22 @@ import {
   type SkillDisplayItem,
   type SubscriptionUsageSnapshots,
 } from '@shared/schemas';
-import type { PluginListItem } from '@shared/settingsView/pluginMessages';
 import { settingsViewSettingByKey } from '@shared/state/stateSettings';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
-  type AgentScanIssue,
   type AgentSelectionItem,
   type CopilotRouteInfo,
-  type MemoryViewItem,
   type ModelSelectionItem,
   type ProviderKeyStatus,
   type PRSubscriptionEntry,
   type SettingsSectionName,
   type SettingsTabPanelName,
-  type SubscriptionAuthStatuses,
-  type ToolDashboardItem,
+  type SettingsViewOutboundMessage,
 } from '@shared/settingsView/settingsViewMessages';
+import type { AgentScanIssue } from '@shared/schemas';
+import type { MemoryViewItem } from '@shared/tools/memoryView';
+import type { SubscriptionAuthStatuses } from '@shared/model/subscriptionAuth';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
 // ---------------------------------------------------------------------------
 // Reset registry — populated by `trackedSignal` as each signal below is
@@ -238,16 +237,18 @@ export const disabledSkills = settingSignal<string[]>(
 export const disabledSkillSources = settingSignal<string[]>(
   WorkspaceStateKey.DISABLED_SKILL_SOURCES,
 );
-export const installedPlugins = trackedSignal<PluginListItem[]>(() => []);
 export const skillsList = trackedSignal<SkillDisplayItem[]>(() => []);
 export const skillLoadIssues = trackedSignal<SkillDisplayIssue[]>(() => []);
 export const telemetryEnabled = settingSignal<boolean>(TELEMETRY_ENABLED_KEY);
 
 // ---------------------------------------------------------------------------
-// Tool dashboard state
+// Plugins page state: null until the first rows arrive
 // ---------------------------------------------------------------------------
-export const toolDashboardItems = trackedSignal<ToolDashboardItem[]>(() => []);
-export const toolDashboardLoaded = trackedSignal(() => false);
+export type PluginsPageData = Omit<
+  Extract<SettingsViewOutboundMessage, { command: 'updatePlugins' }>,
+  'command'
+>;
+export const pluginsPage = trackedSignal<PluginsPageData | null>(() => null);
 
 // ---------------------------------------------------------------------------
 // Git author settings state

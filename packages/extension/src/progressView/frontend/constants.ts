@@ -1,7 +1,7 @@
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { RunAction } from '@shared/schemas';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
+import type { TeXRAIconName } from '@shared/iconNames';
 
 /** One run action in the run header's menu. Stop sits in the row itself. */
 export interface RunMenuAction {

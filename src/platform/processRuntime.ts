@@ -13,13 +13,13 @@
  */
 import {
   Cause,
+  type Context,
   Effect,
   Exit,
   type FileSystem,
   type ManagedRuntime,
   type Path,
 } from 'effect';
-import type { CodeSandbox } from '@agent/codeSandbox/codeSandbox';
 import type { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { ProcessIdentity } from '@shared/session/sessionEvents';
 import type {
@@ -29,12 +29,6 @@ import type {
 import type { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import type { InquiryRecords } from '@shared/session/inquiryRecords';
 import type { UsageLog } from '@shared/usageLog';
-import type {
-  ClaudeAgentSessions,
-  CodexThreads,
-} from '@tools/agentCliSessionStores';
-import type { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
-import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform } from '@tools/setup/platform';
 import type { LiveTools } from '@tools/liveTools';
 import type { ToolAvailability } from '@tools/toolAvailabilityService';
@@ -50,7 +44,7 @@ import type { Secrets } from './secrets';
 /**
  * The runtime over the process-lifetime services every entry provides: the
  * cohort-A tags beside the records, the
- * language-model bridge, the Lean port and the HTTP client, merged once in
+ * language-model bridge and the HTTP client, merged once in
  * `installProcessRuntime`'s `services` layer, plus the standard library's
  * `FileSystem`, `Path` and `ChildProcessSpawner`, which the same install
  * provides from `@effect/platform-node` so a program that reads a file or
@@ -82,26 +76,20 @@ export type ProcessServices =
   | AgentDirectories
   | SetupPlatform
   | AgentEngine
-  | LeanLanguageServices
   | UsageLog
   | ToolRegistry
   | LiveTools
   | ToolAvailability;
 
 /**
- * The services plugin layers serve (a plugin's `processLayer`
- * and `sessionLayer`). None is a process service:
- * a tool or continuation reaches one only through the step that pinned its
- * plugin, which provides the pinned layers' services to the call.
+ * The services a step pinned from its plugins' layers (a plugin's
+ * `processLayer` and `sessionLayer`), erased: the harness names no plugin's
+ * service. A plugin's own code requires them by name, which `definePlugin`
+ * checks against what its layers serve (`@tools/plugins`), and reaches them
+ * only through the step that pinned the plugin, which provides this context
+ * to the call.
  */
-export type PluginServices =
-  GitHubSubscriptions | CodexThreads | ClaudeAgentSessions | CodeSandbox;
-
-/** No plugin service is a process service (compile-time guard). */
-type AssertNever<T extends never> = T;
-type _PluginServicesAreNotProcessServices = AssertNever<
-  Extract<ProcessServices, PluginServices>
->;
+export type PluginContext = Context.Context<never>;
 
 /**
  * The services an agent catalog load reads: the global and filesystem views

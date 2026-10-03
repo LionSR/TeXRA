@@ -52,7 +52,7 @@ If you don't have elan yet, follow the [Lean community install guide](https://le
 There is **no switch to flip**. Lean support turns on the moment a Lean-capable agent runs a Lean tool on a `.lean` file in a Lake project. Pick a Lean-capable agent (see below) and ask it to work on your proof.
 
 ::: tip Check that it's working
-Open **Settings → Tools** (<wa-icon library="texra" name="tools"></wa-icon>) → **Lean 4 Proof Assistant** (<wa-icon library="texra" name="beaker"></wa-icon>) to confirm your setup is detected. The panel shows whether the Lean 4 extension is available (VS Code) or whether `lake` was found (CLI), and lists any active language servers.
+Open **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>) → **Lean 4 Proof Assistant** (<wa-icon library="texra" name="beaker"></wa-icon>) to confirm your setup is detected. The panel shows whether the Lean 4 extension is available (VS Code) or whether `lake` was found (CLI), and lists any active language servers.
 :::
 
 ## Choosing an agent

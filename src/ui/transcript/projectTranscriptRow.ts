@@ -24,7 +24,7 @@ import {
   hasIncompleteEmbeddedSubagentFollowup,
   summarizeSubagentFollowup,
 } from '@shared/subagentFollowup';
-import { formatWorkflowPhaseHeading } from '@ui/copy/workflowCall';
+import { formatWorkflowPhaseHeading } from '@ui/transcript/workflowCall';
 import { assertNever } from '@utils/core';
 import {
   formatCompactTokenCount,

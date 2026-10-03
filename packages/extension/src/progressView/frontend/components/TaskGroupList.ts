@@ -36,7 +36,7 @@ import { designTokens } from '@ui/styles';
 import {
   formatWorkflowPhaseHeading,
   workflowPhaseHeadingOfGroup,
-} from '@ui/copy/workflowCall';
+} from '@ui/transcript/workflowCall';
 
 // Side-effect imports - register Web Awesome components
 import '@awesome.me/webawesome/dist/components/button/button.js';

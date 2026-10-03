@@ -8,7 +8,6 @@
  * dispatchers.
  */
 import { z } from 'zod';
-import { ReasoningEffort } from 'llm-zoo';
 import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -20,6 +19,7 @@ import {
   AgentCategorySchema,
   AgentMetadataBaseSchema,
   AgentModePresetSchema,
+  AgentScanIssueSchema,
   AgentSourceSchema,
   ModelAvailabilityFieldsSchema,
   RunIdSchema,
@@ -33,6 +33,14 @@ import {
   settingsViewSnapshotEntries,
   type SettingsViewSnapshot,
 } from '@shared/state/stateSettings';
+import {
+  SUBSCRIPTION_AUTH_PROVIDERS,
+  SubscriptionAuthStatusSchema,
+} from '@shared/model/subscriptionAuth';
+import {
+  ToolCategorySchema,
+  ToolDependencyStatusSchema,
+} from '@shared/tools/toolPlugin';
 import { UpdateProfileMessageSchema } from './profileViewMessages';
 import {
   DeleteMemoryMessageSchema,
@@ -53,7 +61,7 @@ import {
 
 // Re-export what settings consumers need from the view-message modules, so
 // they keep one import site; the schemas themselves stay unexported here.
-export { type MemoryViewItem, type MemoryPreview } from './memoryViewMessages';
+export { type MemoryPreview } from './memoryViewMessages';
 
 export {
   type ProviderKeyStatus,
@@ -71,7 +79,7 @@ export {
 export const SETTINGS_TAB_ORDER = [
   'models',
   'agents',
-  'tools',
+  'plugins',
   'latex',
   'memory',
   'general',
@@ -94,10 +102,10 @@ export type SettingsTabPanelName = (typeof SETTINGS_TAB_ORDER)[number];
 export const SETTINGS_PAGE_SECTIONS = {
   models: ['keys', 'subscriptions', 'models'],
   agents: ['library', 'teams', 'skills', 'advanced'],
-  tools: ['approval', 'tools', 'integrations'],
+  plugins: [],
   latex: ['dependencies', 'compile', 'formatting', 'vscode'],
   memory: [],
-  general: ['privacy', 'git'],
+  general: ['approval', 'privacy', 'git'],
   shortcuts: [],
 } as const satisfies Record<SettingsTabPanelName, readonly string[]>;
 
@@ -214,13 +222,6 @@ const AgentSelectionItemSchema = AgentMetadataBaseSchema.extend({
 });
 export type AgentSelectionItem = z.infer<typeof AgentSelectionItemSchema>;
 
-/** A custom-agent YAML file the registry found but could not load. */
-const AgentScanIssueSchema = z.object({
-  path: z.string(),
-  message: z.string(),
-});
-export type AgentScanIssue = z.infer<typeof AgentScanIssueSchema>;
-
 /** Outbound: backend → frontend agent selection data */
 const UpdateAgentSelectionMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION),
@@ -229,28 +230,6 @@ const UpdateAgentSelectionMessageSchema = z.object({
 });
 
 // ==================== Model selection data schema ====================
-
-/**
- * Display labels for llm-zoo's reasoning efforts, written low → high because
- * the picker offers them in that order. The key type keeps the record
- * exhaustive against the registry vocabulary.
- */
-export const REASONING_LEVEL_LABELS: Record<ReasoningEffort, string> = {
-  [ReasoningEffort.NONE]: 'None',
-  [ReasoningEffort.MINIMAL]: 'Minimal',
-  [ReasoningEffort.LOW]: 'Low',
-  [ReasoningEffort.MEDIUM]: 'Medium',
-  [ReasoningEffort.HIGH]: 'High',
-  [ReasoningEffort.XHIGH]: 'Extra High',
-  [ReasoningEffort.MAX]: 'Max',
-};
-export const REASONING_LEVEL_OPTIONS: readonly {
-  readonly value: ReasoningEffort;
-  readonly label: string;
-}[] = Object.entries(REASONING_LEVEL_LABELS).map(([value, label]) => ({
-  value: value as ReasoningEffort,
-  label,
-}));
 
 const ModelSelectionItemSchema = z.object({
   name: z.string(),
@@ -346,27 +325,6 @@ const UpdateAgentModePresetsMessageSchema = z.object({
 // Tool dashboard data schemas
 // ============================================================
 
-/** Availability of a tool dependency (not a tool call's `ToolCallStatus`). */
-const ToolDependencyStatusSchema = z.enum([
-  'available',
-  'not-found',
-  'unknown',
-]);
-export type ToolDependencyStatus = z.infer<typeof ToolDependencyStatusSchema>;
-
-const ToolCategorySchema = z.enum([
-  'file',
-  'latex',
-  'academic',
-  'web',
-  'computation',
-  'lean',
-  'workflow',
-  'system',
-  'ai-agents',
-]);
-export type ToolCategory = z.infer<typeof ToolCategorySchema>;
-
 /** Individual tool within a group — carries an optional description for tooltips. */
 const ToolInfoSchema = z.object({
   name: z.string(),
@@ -405,18 +363,47 @@ const ToolDashboardItemSchema = z.strictObject({
 });
 export type ToolDashboardItem = z.infer<typeof ToolDashboardItemSchema>;
 
-/** Outbound: backend → frontend tool dashboard data */
-const UpdateToolDashboardMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD),
-  items: z.array(ToolDashboardItemSchema),
+/**
+ * One row of the Plugins page and the TUI's `/plugins`: everything that adds
+ * tools or agents, built once (`@controllers/settingsView/pluginRows`). A
+ * TeXRA plugin carries its dashboard card, an installed Claude Code or Codex
+ * plugin its listing, and an MCP server from the user's `mcp.json` its name
+ * and command. `usedBy` names the agents whose tool lists reach the row.
+ */
+const PluginRowSchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('texra'),
+    item: ToolDashboardItemSchema,
+    usedBy: z.array(z.string()),
+  }),
+  z.strictObject({
+    kind: z.literal('installed'),
+    plugin: PluginListItemSchema,
+    usedBy: z.array(z.string()),
+  }),
+  z.strictObject({
+    kind: z.literal('mcp'),
+    name: z.string().min(1),
+    command: z.string().min(1),
+    usedBy: z.array(z.string()),
+  }),
+]);
+export type PluginRow = z.infer<typeof PluginRowSchema>;
+
+/** Outbound: the Plugins page's rows, the MCP config file they read, and
+ *  what that file's invalid entries raise. */
+const UpdatePluginsMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS),
+  rows: z.array(PluginRowSchema),
+  mcpConfigPath: z.string(),
+  mcpWarnings: z.array(z.string()),
 });
 
-/** Outbound: the Skills tab's skills, their issues and installed plugins. */
+/** Outbound: the Skills tab's skills and their issues. */
 const UpdateSkillsListMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST),
   skills: z.array(SkillDisplayItemSchema),
   issues: z.array(SkillDisplayIssueSchema),
-  plugins: z.array(PluginListItemSchema),
 });
 
 /** Outbound: backend → frontend GitHub token status. */
@@ -425,40 +412,6 @@ const UpdateGitHubTokenStatusMessageSchema = z.object({
   /** 'secret' = stored in SecretStorage; 'env' = GITHUB_TOKEN/GH_TOKEN env var; 'none' = missing. */
   status: z.enum(['secret', 'env', 'none']),
 });
-
-/**
- * The OAuth subscription providers a settings view signs in and out of. The
- * wire vocabulary for `SubscriptionProvider.id` in the host-neutral catalog
- * (`@controllers/modelAccess/subscriptionProviders`), which derives its id
- * type from here so a provider is spelled one way everywhere.
- */
-export const SUBSCRIPTION_AUTH_PROVIDERS = ['chatgpt', 'grok'] as const;
-
-/**
- * Outbound: backend → frontend subscription sign-in status, addressed by
- * provider. One shape for every provider — both carry the same session facts
- * and the same routing preference — so the payload names the provider instead
- * of the command doing it.
- */
-const SubscriptionAuthStatusSchema = z.object({
-  provider: z.enum(SUBSCRIPTION_AUTH_PROVIDERS),
-  signedIn: z.boolean(),
-  email: z.string().nullish(),
-  accountId: z.string().nullish(),
-  preferSubscription: z.boolean(),
-});
-export type SubscriptionAuthStatus = z.infer<
-  typeof SubscriptionAuthStatusSchema
->;
-
-/**
- * Sign-in status per provider, as a settings view holds it. Partial because a
- * provider that has not reported yet has no row; its section renders the
- * signed-out state until one lands.
- */
-export type SubscriptionAuthStatuses = Readonly<
-  Partial<Record<SubscriptionAuthStatus['provider'], SubscriptionAuthStatus>>
->;
 
 const UpdateSubscriptionAuthStatusMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_AUTH_STATUS),
@@ -554,7 +507,7 @@ const SettingsViewOutboundMessageSchema = z.discriminatedUnion('command', [
   UpdateAgentModePresetsMessageSchema,
   UpdateSettingsSnapshotMessageSchema,
   UpdateSkillsListMessageSchema,
-  UpdateToolDashboardMessageSchema,
+  UpdatePluginsMessageSchema,
   UpdateGitHubTokenStatusMessageSchema,
   UpdateSubscriptionAuthStatusMessageSchema,
   UpdateSubscriptionUsageMessageSchema,
