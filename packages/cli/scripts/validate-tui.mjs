@@ -1029,10 +1029,10 @@ const SCENARIOS = [
     ],
   },
   {
-    name: 'workflow-script-toggle',
+    name: 'multi-agent-toggle',
     env: {
       HARNESS_ENTRIES: '0',
-      HARNESS_WORKFLOW_SCRIPT_DISABLED: '1',
+      HARNESS_MULTI_AGENT_DISABLED: '1',
     },
     keys: [...CONFIG_TOOLS_FORM_KEYS, '5'],
     frame: 'viewport',

@@ -229,7 +229,7 @@ export const MANIFEST = [
     agents: true,
   },
   {
-    id: 'workflow-script',
+    id: 'multi-agent',
     toolNames: [AGENT_TOOL_NAME],
     name: 'Multi-Agent Workflow',
     category: 'workflow',

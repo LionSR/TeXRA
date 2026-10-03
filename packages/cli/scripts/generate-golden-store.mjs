@@ -320,7 +320,7 @@ const RUN_OF_AGENT = `SELECT s.logical_id AS id FROM event e
 
 async function generate(root) {
   const cli = scenario(root);
-  cli.run(['tools', 'enable', 'workflow-script', '--print']);
+  cli.run(['tools', 'enable', 'multi-agent', '--print']);
 
   // The parked run: its model call held open, then killed.
   const park = cli.start([

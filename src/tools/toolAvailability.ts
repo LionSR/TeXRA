@@ -42,6 +42,7 @@ import { withLogChannel } from '@logger/effectLog';
 import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
+  findToolPlugin,
   storedDisabledTools,
   TOOL_PLUGINS,
   type ToolPlugin,
@@ -111,13 +112,24 @@ export function setToolEnabled(
  * before the user does: an absent value means neither the seed nor the user
  * has ever set the list, and a present one (an empty list included) means the
  * user's choices are already recorded, so re-seeding would silently disable
- * tools they had enabled.
+ * tools they had enabled. A recorded id that names no plugin (a plugin
+ * renamed or removed) is dropped from the record, with one warning.
  */
 export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
   function* (state: StateStore) {
     const stored = yield* state.get(GlobalStateKey.DISABLED_TOOLS);
-    if ((yield* Effect.fromResult(storedDisabledTools(stored))) !== undefined)
-      return;
+    const recorded = yield* Effect.fromResult(storedDisabledTools(stored));
+    if (recorded !== undefined) {
+      const unknown = [...recorded].filter((id) => !findToolPlugin(id));
+      if (unknown.length === 0) return;
+      yield* state.update(
+        GlobalStateKey.DISABLED_TOOLS,
+        [...recorded].filter((id) => findToolPlugin(id)),
+      );
+      return yield* Effect.logWarning(
+        `Dropped switched-off tool plugins that no longer exist: ${unknown.join(', ')}`,
+      ).pipe(withLogChannel(CHANNEL));
+    }
 
     const defaults = TOOL_PLUGINS.filter(
       (plugin) => plugin.toggleable && !plugin.onByDefault,

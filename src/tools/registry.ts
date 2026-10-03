@@ -171,7 +171,7 @@ const PLUGIN_TOOLS = {
     lean_project: LeanProjectTool,
     lean_inspect: LeanInspectTool,
   },
-  'workflow-script': { [AGENT_TOOL_NAME]: AgentTool },
+  'multi-agent': { [AGENT_TOOL_NAME]: AgentTool },
   'github-pr-subscription': { github_subscription: GitHubSubscriptionTool },
   'external-inquiry': { inquiry: ExternalInquiryTool },
   codex: { codex: CodexTool },

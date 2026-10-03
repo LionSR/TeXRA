@@ -113,7 +113,7 @@ In the CLI, `texra resume <id>` continues a stopped run, a background script run
 
 ## Troubleshooting
 
-**The lead never delegates.** Check the **Multi-Agent Workflow** switch on the Settings **Tools** tab (or `texra tools status workflow-script`). When it is off, `agent` is stripped from every agent. Also confirm the lead is one of the agents listed above.
+**The lead never delegates.** Check the **Multi-Agent Workflow** switch on the Settings **Tools** tab (or `texra tools status multi-agent`). When it is off, `agent` is stripped from every agent. Also confirm the lead is one of the agents listed above.
 
 **The script stopped with a wall-clock timeout.** The default limit is 60 minutes, which a large fan-out on a slow model can exceed. Ask the lead to send the script again with a larger `timeoutMs` (up to 24 hours), or with `run_in_background: true`; the calls that finished are reused.
 
