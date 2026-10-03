@@ -58,6 +58,10 @@ export const SCRIPT_CALL_STATUS_LABEL = {
   'not run': 'Not run',
 } as const satisfies Record<ScriptCallStatus, string>;
 
+/** An agent row's one action: open its agent's conversation, the composer
+ *  addressed to it, to steer it while it runs or keep talking after. */
+export const TALK_TO_AGENT = 'Talk to this agent';
+
 const NOT_RUN_NOTE = 'The run ended before this call started.';
 const INTERRUPTED_NOTE = 'Stopped with its run. Resume the run to continue.';
 

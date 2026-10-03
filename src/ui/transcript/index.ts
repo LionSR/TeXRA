@@ -44,6 +44,7 @@ export {
   dispatchedChildren,
   scriptStages,
   SCRIPT_CALL_STATUS_LABEL,
+  TALK_TO_AGENT,
   TOOL_CUT_BY_RUN_END,
   type ScriptCallView,
   type ScriptStageView,

@@ -29,6 +29,7 @@ import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import {
   SCRIPT_CALL_STATUS_LABEL,
   scriptStages,
+  TALK_TO_AGENT,
   type ScriptCallView,
 } from '@ui/transcript';
 
@@ -172,6 +173,12 @@ export function ScriptStagePopup({
     call?.status === 'running' && killableRunId(child) !== undefined;
   const target = call?.askingRunId ?? child?.id;
 
+  // Enter focuses the run: the one asking, else an agent's own stream,
+  // where the input talks to it.
+  let enterAction = 'open';
+  if (call?.askingRunId !== undefined) enterAction = 'review';
+  else if (call?.toolName === 'agent')
+    enterAction = TALK_TO_AGENT.toLowerCase();
   const hints: KeyHint[] = [
     ...(stages.length > 1 ? [{ key: '←/→', action: 'script' }] : []),
     { key: '↑/↓', action: 'select' },
@@ -179,7 +186,7 @@ export function ScriptStagePopup({
       ? [
           {
             key: 'Enter',
-            action: call?.askingRunId !== undefined ? 'review' : 'open',
+            action: enterAction,
           },
         ]
       : []),

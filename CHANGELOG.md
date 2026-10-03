@@ -245,7 +245,9 @@ All notable changes to this project will be documented in this file.
   the raw `<subagent-result>` XML. Stopping a running agent moves from a Skip
   button to "Stop this agent" in the row's menu (`s` in the CLI popup); the
   separate "Call details" list is now a Log link inside the card; a call
-  shows "retried" only when it ran more than once.
+  shows "retried" only when it ran more than once. An agent's row is the way
+  to talk to it: "Talk to this agent" opens its conversation with the
+  composer addressed to it (Enter in the CLI popup focuses it).
 - **Approving a script leads with what it allows.** The request asks "Start
   agents for …?", says that each agent's edits and commands still ask, and
   names the first agent and its instruction; the code and the calls so far

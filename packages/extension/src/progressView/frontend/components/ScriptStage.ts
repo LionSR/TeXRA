@@ -22,6 +22,7 @@ import { SessionUiEvents } from '@shared/session/uiEvents';
 import { designTokens } from '@ui/styles';
 import {
   SCRIPT_CALL_STATUS_LABEL,
+  TALK_TO_AGENT,
   type ScriptCallView,
   type ScriptStageView,
 } from '@ui/transcript';
@@ -284,8 +285,13 @@ export class ScriptStage extends LitElement {
       call.childRunId === undefined
         ? undefined
         : this.view.runs.get(call.childRunId);
-    // A row opens the run that is asking, else its child.
+    // A row opens the run that is asking, else its child: for an agent,
+    // its conversation, where the composer talks to it.
     const target = call.askingRunId ?? child?.id;
+    const talk =
+      call.askingRunId === undefined &&
+      child !== undefined &&
+      call.toolName === 'agent';
     const last = call.summary ?? '';
     const rejected =
       child === undefined ? undefined : this.surface.rejected.get(child.id);
@@ -297,6 +303,7 @@ export class ScriptStage extends LitElement {
         'is-linked': target !== undefined,
       })}
       role="listitem"
+      title=${talk ? TALK_TO_AGENT : nothing}
       data-call-id=${call.id}
       tabindex=${target === undefined ? nothing : '0'}
       @click=${target === undefined ? nothing : () => this.select(target)}
@@ -336,7 +343,13 @@ export class ScriptStage extends LitElement {
           : nothing
       }
       ${this.renderActions(call)}
-      ${target === undefined ? nothing : waIcon('chevron-right')}
+      ${
+        target === undefined
+          ? nothing
+          : waIcon(talk ? 'comments' : 'chevron-right', {
+              label: talk ? TALK_TO_AGENT : undefined,
+            })
+      }
     </div>`;
   }
 
