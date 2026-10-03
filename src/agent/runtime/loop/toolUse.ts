@@ -773,11 +773,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           : runTurn(cell);
         state = turn.state;
         if (turn.outcome === 'cancelled') {
-          // A finished summary lands; one still running stops with the turn.
-          if (compaction !== null)
-            state = yield* cell.adopt(
-              yield* compaction.settle(state, 'the turn stopped'),
-            );
           return finish(state, RUN_OUTCOME.CANCELLED);
         }
         // A summary the turn started lands before the turn ends.
@@ -846,7 +841,29 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         return yield* Effect.acquireUseRelease(
           enter,
           roundPolicy ? roundLoop(roundPolicy, runTurn) : loopBody,
-          (cell, exit) => settleRun(cell, logger, followUps)(exit),
+          (cell, exit) =>
+            // However the run ends, a stop's interruption included, a
+            // finished summary lands before the halt (its usage is the
+            // run's); one still running stops with the run.
+            Effect.andThen(
+              compaction === null
+                ? Effect.void
+                : cell.current.pipe(
+                    Effect.flatMap((at) =>
+                      compaction.settle(at, 'the run stopped'),
+                    ),
+                    Effect.flatMap(cell.adopt),
+                    Effect.catch((error) =>
+                      Effect.sync(() =>
+                        logger.warn(
+                          'A finished background compaction could not be recorded as the run stopped',
+                          { data: error },
+                        ),
+                      ),
+                    ),
+                  ),
+              settleRun(cell, logger, followUps)(exit),
+            ),
         );
       }),
     () => Effect.sync(detach),
