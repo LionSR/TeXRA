@@ -440,7 +440,7 @@ When `texra chat` opens without a task to resume, it looks for tasks a
 closed or crashed TeXRA stopped mid-way. With `"texra.resumeOnOpen":
 "auto"` in `~/.texra/v1/global-storage/config.json` it continues them; the
 default, `ask`, lists them above the input, where `/resume all` continues
-them and anything else you type hides the list. A task whose agent is missing, or
+them and anything else you send hides the list. A task whose agent is missing, or
 comes from a plugin that is off or not trusted, waits until that is fixed
 and then continues by itself. `texra run` never resumes anything on its
 own.

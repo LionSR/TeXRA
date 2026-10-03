@@ -28,7 +28,7 @@ All notable changes to this project will be documented in this file.
   cannot continue says why ("needs the zotero plugin, which is off") with
   **Turn on** or **Review**, which open Settings › Plugins. In the CLI the
   notice sits above the input and is answered with `/resume all` or
-  `/resume`; anything you type hides it. A task's one Resume is now on its
+  `/resume`; anything you send hides it. A task's one Resume is now on its
   ended line: the Resume button on task rows is gone (a row says
   Interrupted and opens the task), the workflow menu's "Resume from saved
   outputs" moved to the ended line, and the CLI agent list's `· Resume`

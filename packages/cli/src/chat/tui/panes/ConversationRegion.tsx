@@ -26,6 +26,7 @@ import { ConversationPane } from './ConversationPane';
 import {
   InterruptedTasksNotice,
   interruptedNoticeRowCount,
+  NOTICE_MIN_ROWS,
 } from './InterruptedTasksNotice';
 import {
   QueuedFollowUpsPanel,
@@ -136,11 +137,12 @@ export function ConversationRegion({
   const noticeHidden = useSignal(interruptedNoticeHiddenSignal);
   const noticeTasks =
     noticeHidden || foregroundOpen ? [] : interruptedTasks(view);
-  const noticeRows = clamp(
+  const noticeBudget = clamp(
     rows - footerRows - queuedFollowUpPanelRows,
     0,
     interruptedNoticeRowCount(noticeTasks),
   );
+  const noticeRows = noticeBudget < NOTICE_MIN_ROWS ? 0 : noticeBudget;
   const aboveFooterRows = queuedFollowUpPanelRows + noticeRows;
   const staticTranscriptRows = scopedTranscript
     ? undefined

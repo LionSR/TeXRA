@@ -67,8 +67,8 @@ export const INTERRUPTED_NOTICE = Object.freeze({
   /** The TUI's lines under the list, in place of buttons. */
   tuiActions: (count: number) =>
     count === 1
-      ? '/resume all continues it · /resume chooses a task · typing anything hides this'
-      : '/resume all continues them · /resume chooses one · typing anything hides this',
+      ? '/resume all continues it · /resume chooses a task · sending anything hides this'
+      : '/resume all continues them · /resume chooses one · sending anything hides this',
 });
 
 /** What a blocked task waits for, in one line: "needs the zotero plugin,

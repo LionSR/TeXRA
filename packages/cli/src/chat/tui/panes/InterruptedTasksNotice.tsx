@@ -3,7 +3,7 @@
 // (`@ui/copy/interruptedTasks`), with what blocks each and where to fix it.
 // It answers through `/resume all` and `/resume`, never through single keys:
 // a key on an input the user types into would fire on the first letter of a
-// message. Anything submitted hides it until the next open.
+// message. Anything sent hides it until the next open.
 
 import { Box, Text } from 'ink';
 
@@ -18,6 +18,8 @@ import { formatRelativeTime, pluralize } from '@utils/text/stringUtils';
 
 /** The heading, the task lines and the actions line, at most this many. */
 const NOTICE_MAX_ROWS = 6;
+/** Fewer rows than the heading, one line and the actions show nothing. */
+export const NOTICE_MIN_ROWS = 3;
 
 /** The rows the notice takes for `tasks`: none when there are none. */
 export function interruptedNoticeRowCount(
@@ -51,8 +53,10 @@ export function InterruptedTasksNotice({
   readonly tasks: readonly InterruptedTask[];
   readonly width: number;
 }): React.JSX.Element | null {
-  if (tasks.length === 0 || maxRows < 2) return null;
+  if (tasks.length === 0 || maxRows < NOTICE_MIN_ROWS) return null;
   const contentWidth = Math.max(0, width - 4);
+  // Between the heading and the actions line: the tasks, the last slot
+  // given to the count of those that do not fit.
   const slots = maxRows - 2;
   const overflow = tasks.length > slots;
   const shown = tasks.slice(0, overflow ? slots - 1 : slots);
