@@ -5,7 +5,6 @@
 import {
   AgentCategory,
   isPlainAgentIdentity,
-  RUN_LIFECYCLE_READY,
   RUN_PHASE,
   RUN_SUBSTATE,
   type RunAction,
@@ -25,8 +24,8 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * agent's run takes approval grants, and a tool-use agent's its compaction
  * and a reset or handoff. Nothing that rewrites or removes a run's files or
  * history is offered while it is live. Any run this process can act on can
- * be renamed, and a started tool-use conversation forked (at its latest
- * settled point, which a run in a turn now has before that turn). After, a
+ * be renamed, and a tool-use conversation whose first turn has ended
+ * forked (at its latest settled point, before any turn it is in now). After, a
  * run can be deleted; a plain agent's can be resumed (an interrupted one,
  * or a workflow from its saved outputs) or run again; a background
  * script's can be resumed unless it completed; a workflow agent's outputs
@@ -35,7 +34,14 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
 export function runActions(
   run: Pick<
     RunView,
-    'readOnly' | 'group' | 'status' | 'substate' | 'identity' | 'category'
+    | 'readOnly'
+    | 'group'
+    | 'status'
+    | 'substate'
+    | 'identity'
+    | 'category'
+    | 'parentId'
+    | 'forkPoint'
   >,
 ): RunAction[] {
   if (run.readOnly) return inspectActions();
@@ -49,7 +55,9 @@ export function runActions(
     return [
       'stop',
       ...(agent ? (['grant'] as const) : []),
-      ...(compact ? (['compact', 'reset'] as const) : []),
+      ...(compact ? (['compact'] as const) : []),
+      // An agent's view is its parent's to edit, never the user's.
+      ...(compact && run.parentId === null ? (['reset'] as const) : []),
       'rename',
       ...(forkable(run) ? (['fork'] as const) : []),
       ...inspectActions(),
@@ -71,13 +79,14 @@ export function runActions(
   return [...actions, ...inspectActions()];
 }
 
-/** A conversation that has started: a plain tool-use agent past `ready`. */
+/** A conversation with a settled point to cut at: a plain tool-use agent
+ *  whose first turn has ended. */
 const forkable = (
-  run: Pick<RunView, 'identity' | 'category' | 'status'>,
+  run: Pick<RunView, 'identity' | 'category' | 'forkPoint'>,
 ): boolean =>
   isPlainAgentIdentity(run.identity) &&
   run.category === AgentCategory.ToolUse &&
-  run.status !== RUN_LIFECYCLE_READY;
+  run.forkPoint !== null;
 
 /** Why a run no longer takes `action`: the refusal every handler words. */
 export function runActionRefusal(

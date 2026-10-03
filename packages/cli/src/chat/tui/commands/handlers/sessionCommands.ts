@@ -241,7 +241,10 @@ function forkCliTask(context: SlashCommandContext): SlashCommandEffect {
       appendLocalRequestRefusal(forked.failure, runId);
       return;
     }
-    if (forked.success.kind !== 'forked') return;
+    if (forked.success.kind !== 'forked')
+      return yield* Effect.die(
+        new Error(`run.fork answered ${forked.success.kind}`),
+      );
     const fork = forked.success.runId;
     // The chat holds one task: the conversation it shows gives way to the
     // fork, as `/clear` gives way to a new task (refused mid-response). The
@@ -254,15 +257,23 @@ function forkCliTask(context: SlashCommandContext): SlashCommandEffect {
       );
       return;
     }
-    yield* SubscriptionRef.changes(context.runtimeSession.view).pipe(
+    const ended = yield* SubscriptionRef.changes(
+      context.runtimeSession.view,
+    ).pipe(
       Stream.takeUntil((view) => {
         const run = view.runs.get(runId);
         return run === undefined || !isLiveRun(run);
       }),
       Stream.runDrain,
       Effect.timeout('10 seconds'),
-      Effect.ignore({ log: 'Warn' }),
+      Effect.result,
     );
+    if (Result.isFailure(ended)) {
+      appendLocalNotice(
+        'The fork is ready in /resume; the task it came from has not finished stopping.',
+      );
+      return;
+    }
     yield* context.resumeRun(fork);
     const title = source ? source.description || source.label : runId;
     appendLocalNotice(

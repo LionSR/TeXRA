@@ -61,6 +61,7 @@ export abstract class BaseRunContent extends LitElement {
   protected renderLog(): TemplateResult {
     return html`<div
       class="conversation-log"
+      style=${this.run?.actions.includes('fork') ? '' : '--texra-fork-from-here: none'}
       @fork-from-here=${(event: CustomEvent<ForkFromHere>) => {
         const run = this.run;
         if (!run?.actions.includes('fork')) return;

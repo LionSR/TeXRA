@@ -153,6 +153,9 @@ export interface TranscriptIndexes {
   /** The `seq` of the run's newest park (a `run.position` at `waiting` or
    *  `halted`): the settled point a user message that follows forks at. */
   lastPark: number | null;
+  /** A user message has been taken: a park before the first one (a fork's
+   *  seed) cuts before nothing. */
+  seenUserMessage: boolean;
 }
 
 const INDEXES = new WeakMap<TranscriptView, TranscriptIndexes>();
@@ -199,6 +202,7 @@ export function emptyTranscript(): TranscriptView {
     spend: EMPTY_TURN_TOTALS,
     model: undefined,
     lastPark: null,
+    seenUserMessage: false,
   });
   return transcript;
 }

@@ -68,16 +68,23 @@ function appendLog(
     case MESSAGE_TYPES.TOOL_USE:
       write(d, { kind: 'tool', base, log: payload.data, call: {} });
       return;
-    case MESSAGE_TYPES.USER_MESSAGE:
-      // A message taken after a park is where "Fork from here" cuts.
+    case MESSAGE_TYPES.USER_MESSAGE: {
+      // The first message a park was followed by is where "Fork from here"
+      // cuts; the rest of a batch taken at that park share its cut, so only
+      // the first offers it, and the first message of all cuts before
+      // nothing.
+      const forkAt = d.ix.seenUserMessage ? d.ix.lastPark : null;
+      d.ix.seenUserMessage = true;
+      d.ix.lastPark = null;
       write(d, {
         kind: 'log',
         base,
         text,
         payload,
-        ...(d.ix.lastPark === null ? {} : { forkAt: d.ix.lastPark }),
+        ...(forkAt === null ? {} : { forkAt }),
       });
       return;
+    }
     default:
       write(d, { kind: 'log', base, text, payload });
   }

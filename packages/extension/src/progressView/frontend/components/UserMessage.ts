@@ -115,6 +115,12 @@ export class UserMessage extends LitElement {
         gap: var(--wa-space-3xs);
       }
 
+      /* Off while the conversation it sits in cannot fork now: the
+         conversation sets the property, which crosses shadow roots. */
+      .user-message-fork {
+        display: var(--texra-fork-from-here, inline-flex);
+      }
+
       .user-message-copy {
         opacity: 0;
         transition: opacity var(--transition-fast);
@@ -329,7 +335,7 @@ export class UserMessage extends LitElement {
                     icon: 'code-branch',
                     label: TASK_ACTIONS.forkFromHere,
                     tooltip: TASK_ACTIONS.forkFromHere,
-                    className: 'user-message-copy',
+                    className: 'user-message-copy user-message-fork',
                     onClick: () => this.forkFromHere(),
                   })
                 : nothing

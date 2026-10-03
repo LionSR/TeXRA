@@ -189,6 +189,10 @@ const RunViewCommonSchema = z.object({
   /** The task this one was forked from and the settled point it was cut at
    *  (`run.start.provenance`); null for a run its own launch began. */
   forkedFrom: z.object({ id: RunIdSchema, at: z.int().positive() }).nullable(),
+  /** The `seq` of the run's newest park (a `run.position` at `waiting` or
+   *  `halted`): the settled point a whole-task fork cuts at; null before
+   *  its first turn ends, when there is nothing to fork. */
+  forkPoint: z.int().positive().nullable(),
   /** The parent's tool card that launched this run (`run.start.parentCard`). */
   parentCard: z.string().nullable(),
   /** Root first. */

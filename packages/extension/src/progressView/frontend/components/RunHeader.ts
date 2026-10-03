@@ -1,5 +1,12 @@
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  css,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -291,6 +298,16 @@ export class RunHeader extends LitElement {
       );
     } else {
       this.dispatchEvent(SessionUiEvents.host({ kind: action.arm, runId }));
+    }
+  }
+
+  /** The rename field and the handoff form belong to the run they were
+   *  opened on: showing another run closes them. */
+  protected override willUpdate(changed: PropertyValues<this>): void {
+    const previous = changed.get('run');
+    if (previous !== undefined && previous?.id !== this.run?.id) {
+      this.renaming = false;
+      this.handingOff = false;
     }
   }
 
