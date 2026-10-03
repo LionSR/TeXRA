@@ -25,7 +25,6 @@ import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import './WorktreeChip';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { type TeXRAIconName } from '@shared/iconNames';
 import { NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { getBasename } from '@utils/core';
 import { formatRelativeTime, formatResultCount } from '@utils/text/stringUtils';
