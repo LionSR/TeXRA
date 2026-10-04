@@ -2,8 +2,7 @@
 import { isObject } from '@utils/core';
 import { isNonEmptyString, truncateSummary } from '@utils/text/stringUtils';
 
-export type LanguageModelResearchToolName =
-  'arxiv_search' | 'crossref_search' | 'web_fetch';
+export type LanguageModelResearchToolName = 'arxiv_search' | 'web_fetch';
 
 const MAX_CONTEXT_LENGTH = 60;
 
@@ -29,13 +28,6 @@ export function buildLanguageModelToolInvocationMessage(
   switch (toolName) {
     case 'arxiv_search':
       return searchMessage('arXiv', input);
-    case 'crossref_search': {
-      const doi = readInputString(input, 'doi');
-      if (doi) {
-        return `Looking up DOI “${truncateSummary(doi, MAX_CONTEXT_LENGTH)}”`;
-      }
-      return searchMessage('Crossref', input);
-    }
     case 'web_fetch': {
       const rawUrl = readInputString(input, 'url');
       const url = rawUrl ? URL.parse(rawUrl) : undefined;

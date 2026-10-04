@@ -8,7 +8,7 @@ import { Box, Text } from 'ink';
 
 import { safeTerminalText } from '@cli/runtime/terminalText';
 import { COLOR_BORDER, COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
-import { CROSS, TODO_PENDING, WARNING } from '@cli/tui/ui/glyphs';
+import { CROSS, PENDING_BOX, WARNING } from '@cli/tui/ui/glyphs';
 import {
   RUN_PHASE,
   fileLocationDisplayPath,
@@ -166,7 +166,7 @@ function workflowRunDetailGroups(
         : `${formatRoundStageLabel({ index: round })} results`;
       lines.push({
         key: `round:${round}`,
-        text: `${TODO_PENDING} ${label}`,
+        text: `${PENDING_BOX} ${label}`,
         color: COLOR_BORDER,
         role: 'lifecycle',
       });

@@ -20,7 +20,6 @@ settings:
     - edit_file
     - glob
     - arxiv_search
-    - arxiv_metadata
     - download_arxiv_source
     - web_fetch
     - web_search
@@ -248,8 +247,8 @@ prompts:
         the project's entry point (e.g. `main.tex`).
       - **arXiv paper:** given an arXiv ID / abs URL, run
         `download_arxiv_source`; or invoke `texra.downloadArXivSource`
-        for the GUI flow. With only a topic, `arxiv_search` first, then
-        `arxiv_metadata` to confirm. Always confirm with the user which
+        for the GUI flow. With only a topic, `arxiv_search` first; its
+        hits carry abstracts to confirm with. Always confirm with the user which
         paper to fetch before downloading.
 
     ## Running the first task (phase I)

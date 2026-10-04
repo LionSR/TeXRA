@@ -396,7 +396,6 @@ function createRun(
       return {
         ...common,
         category: AgentCategory.ToolUse,
-        todos: [],
         plan: null,
         outputs: NO_ROUNDS,
         missingOutputs: NO_ROUNDS,
@@ -917,9 +916,7 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
       const fact = event.fact;
       if (run.category !== AgentCategory.ToolUse)
         return wrongArm(run, `run.fact ${fact.key}`);
-      return fact.key === 'todos'
-        ? { ...run, todos: fact.todos }
-        : { ...run, plan: fact.plan };
+      return { ...run, plan: fact.plan };
     }
     case 'plugin.fact':
       return {

@@ -6,6 +6,20 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Outdated tools are removed: the todo list, Crossref search, DOI lookup,
+  `texcount`, `arxiv_metadata` and `wolfram`.** Agents no longer keep a
+  todo list: the `todo_write` tool is gone, and with it the Todos panel in
+  the progress view, the CLI's todo rows under the conversation (the plan
+  summary stays, and `/plan` shows the objective), the todo summary in
+  `/executions`, and the `todos` view of its history query. A Codex child's
+  own task list is no longer shown either. `crossref_search` and Copilot
+  Chat's `#texra_crossref_search` are gone, and `zotero_add` takes a URL or
+  manual metadata but no longer a DOI. `arxiv_metadata` is gone:
+  `arxiv_search` hits carry each paper's abstract, authors and dates. The
+  `texcount` and `wolfram` tools are gone; agents run `texcount -inc <file>`
+  and `wolframscript -code '…'` through the shell, and the Wolfram card in
+  Settings › Plugins stays with its install guide. Custom agents that list
+  any of these tools should drop them.
 - **"Task" and "agent" are the only nouns, and `/ps` and `/send` are gone.**
   What you start is a task and what it starts is an agent, in all three
   hosts: the CLI's Tab list is the agent list (**Tab agents**), the exit line

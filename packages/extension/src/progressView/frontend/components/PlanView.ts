@@ -1,6 +1,6 @@
 /**
  * PlanView component - renders the plan as a plain objective document
- * inside a collapsible panel. Step tracking lives in the todo tool.
+ * inside a collapsible panel.
  */
 
 // Third-party imports

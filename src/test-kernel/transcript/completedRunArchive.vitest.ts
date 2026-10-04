@@ -29,13 +29,7 @@ import {
   aggregateId,
   RunSnapshotPayloadSchema,
 } from '@shared/schemas';
-import type {
-  JsonValue,
-  LogLevel,
-  MessageType,
-  RunId,
-  TodoItem,
-} from '@shared/schemas';
+import type { JsonValue, LogLevel, MessageType, RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
@@ -79,16 +73,6 @@ async function stampRun(runId: RunId): Promise<void> {
 let taskSession: SessionHandle;
 const readCompletedRunConversation = (id: RunId) =>
   Effect.runPromise(readCompletedRunConversationEffect(id, taskSession));
-/** The run's task list as every surface reads it: off the session fold. */
-const completedRunTodos = (id: RunId) =>
-  Effect.runPromise(
-    taskSession.readView([id]).pipe(
-      Effect.map((view) => {
-        const run = view.runs.get(id);
-        return run?.category === AgentCategory.ToolUse ? run.todos : [];
-      }),
-    ),
-  );
 const loadChatExportInput = (id: RunId) =>
   Effect.runPromise(loadChatExportInputEffect(id, taskSession));
 
@@ -104,19 +88,6 @@ function closeTestSession(session: SessionHandle): Effect.Effect<void, Error> {
           ),
     ),
   );
-}
-
-/** Persist completed tasks as committed run events. */
-async function seedTasks(runId: RunId, todos: TodoItem[]): Promise<void> {
-  publishTestRunStart(taskSession, runId);
-  taskSession.publish([
-    {
-      type: 'run.fact',
-      aggregateId: aggregateId('run', runId),
-      fact: { key: 'todos', todos },
-    },
-  ]);
-  await settleSessionEvents();
 }
 
 /** One `log` fact a fixture publishes. */
@@ -154,11 +125,10 @@ async function appendRows(
   await Effect.runPromise(taskSession.settlePublications());
 }
 
-/** Write transcript rows and committed task events for a completed run. */
+/** Write the transcript rows of a completed run. */
 async function writeArchiveFixture(runId: RunId): Promise<void> {
-  await seedTasks(runId, [
-    { content: 'Fix the bug', status: 'completed', activeForm: 'Fixing' },
-  ]);
+  publishTestRunStart(taskSession, runId);
+  await settleSessionEvents();
 
   await appendRows(runId, [
     logRow(MESSAGE_TYPES.USER_MESSAGE, {
@@ -322,14 +292,6 @@ describe('completedRunArchive facade', () => {
         );
         expect(exportResult.exportInput).not.toBeNull();
         expect(exportResult.exportInput?.nodes).toEqual(conversationResult);
-
-        expect(yield* Effect.promise(() => completedRunTodos(runId))).toEqual([
-          {
-            content: 'Fix the bug',
-            status: 'completed',
-            activeForm: 'Fixing',
-          },
-        ]);
       }),
   );
 
@@ -528,8 +490,6 @@ describe('completedRunArchive facade', () => {
 
     const conversationResult = await readCompletedRunConversation(runId);
     expect(conversationResult).toEqual([]);
-
-    expect(await completedRunTodos(runId)).toEqual([]);
   });
 
   it('reconstructs structured successful and failed tool results as model-facing text', async () => {

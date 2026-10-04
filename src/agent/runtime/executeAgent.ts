@@ -270,7 +270,7 @@ interface SubagentRunOptions {
    * reads the persisted `run.start`.
    */
   parentRunId?: RunId;
-  /** Fires on meaningful progress: todo changes and tool call milestones. */
+  /** Fires on meaningful progress: plan changes and tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
   /**
    * What the parent's step offered when it launched this fresh delegated

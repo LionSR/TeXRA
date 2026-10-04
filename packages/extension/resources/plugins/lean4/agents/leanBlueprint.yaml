@@ -4,7 +4,6 @@ description: Creates and maintains dependency-tracked LeanBlueprint documents th
 settings:
   agentCategory: toolUse
   tools:
-    - todo_write
     - bash
     - read_file
     - write_file
@@ -20,9 +19,7 @@ settings:
     - web_search
     - web_fetch
     - arxiv_search
-    - arxiv_metadata
     - download_arxiv_source
-    - crossref_search
     - zotero_add
     - zotero_search
     - zotero_export
@@ -184,7 +181,6 @@ prompts:
        - grep on .lake/packages/mathlib/ for identifier lookup
        - web_search for Zulip discussions and Mathlib docs
        - arxiv_search + download_arxiv_source when working from a paper
-       - crossref_search with search or doi commands for published references (journal articles, books, proceedings)
        - zotero_search to check if the user's library already has the reference; zotero_add to save new ones; zotero_export to generate BibTeX for references.bib
 
     5. When building a blueprint from a paper: download the LaTeX source, identify all numbered results, trace which results cite which in their proofs, map each to Lean declarations if they exist, then generate the skeleton.
@@ -237,6 +233,6 @@ prompts:
 
     For bash: leanblueprint new (scaffold), leanblueprint checkdecls (verify \lean{} names), leanblueprint web (plasTeX build), leanblueprint pdf (TeX build), leanblueprint all (pdf + web + checkdecls), leanblueprint serve (local preview), lake build, lake exe cache get.
 
-    Use todo_write to plan multi-file work. Use lean_loogle for Mathlib search, lean_inspect for hover/goal info, lean_diagnostics for error/warning checks.
+    Use lean_loogle for Mathlib search, lean_inspect for hover/goal info, lean_diagnostics for error/warning checks.
   userRequest: |
     {{ INSTRUCTION }}

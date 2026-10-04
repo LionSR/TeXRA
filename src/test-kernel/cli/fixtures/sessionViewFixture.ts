@@ -129,7 +129,6 @@ function runViewFields(over: RunViewOverrides): RunView {
   return {
     ...common,
     category: AgentCategory.ToolUse,
-    todos: [],
     plan: null,
     facts: {},
     outputs: {},

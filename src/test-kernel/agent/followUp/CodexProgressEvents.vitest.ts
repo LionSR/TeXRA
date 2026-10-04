@@ -9,9 +9,6 @@ import { CODEX_TURN_TOOL } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import { runStreamedTurn } from '@tools/codex';
-
-// Local file imports
-import { recordingTrace, runFactsOfKey } from '../progressTestUtils';
 import type {
   CommandExecutionItem,
   Thread,
@@ -61,42 +58,6 @@ function toolLogs(store: TestTrace): Record<string, unknown>[] {
 }
 
 describe('codex progress events', () => {
-  it.effect('publishes a todo_list item as run facts', () =>
-    Effect.gen(function* () {
-      const { trace: logger, events } = recordingTrace();
-      const thread = threadOf([
-        {
-          type: 'item.completed',
-          item: {
-            id: 'todo-1',
-            type: 'todo_list',
-            items: [
-              {
-                text: 'Route Codex progress through the runtime host',
-                completed: false,
-              },
-            ],
-          },
-        },
-        turnCompleted(1, 1),
-      ]);
-
-      yield* runStreamedTurn(thread, 'Do the thing', logger);
-
-      expect(runFactsOfKey(events, 'todos')).toMatchObject([
-        {
-          todos: [
-            {
-              content: 'Route Codex progress through the runtime host',
-              status: 'pending',
-              activeForm: 'Route Codex progress through the runtime host',
-            },
-          ],
-        },
-      ]);
-    }),
-  );
-
   it.effect('updates in-flight Codex command items in place', () =>
     Effect.gen(function* () {
       const { store, logger } = yield* Effect.promise(() => createLogger());

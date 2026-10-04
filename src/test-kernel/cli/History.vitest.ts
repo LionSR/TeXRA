@@ -900,7 +900,7 @@ describe('CLI history runtime', () => {
         config,
         meta: null,
         entries: [],
-        snapshot: { todos: [], plan: null, usage: null },
+        snapshot: { plan: null, usage: null },
         terminalStatus: null,
       } as unknown as TraceDocument;
 

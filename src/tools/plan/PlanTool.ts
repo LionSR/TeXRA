@@ -4,8 +4,8 @@
  * `command: 'update'` proposes or replaces the plan: a plain objective
  * document stating what to achieve, the approach, and a verifiable
  * stopping condition. Every update gates on user approval; the user may
- * approve, approve and start an autonomous goal, or reject. Step tracking
- * belongs to the todo tool — the plan has no structured steps.
+ * approve, approve and start an autonomous goal, or reject. The plan has no
+ * structured steps.
  *
  * `command: 'pause'` and `command: 'complete'` drive the lifecycle of the
  * goal pursuing this plan: pause when user input is needed, complete when
@@ -67,7 +67,7 @@ const PlanToolInputSchema = z.discriminatedUnion('command', [
       .describe(
         'The plan document: what to achieve, the intended approach, and a ' +
           'verifiable stopping condition. Plain prose or markdown - no ' +
-          'structured steps (track those with the todo tool).',
+          'structured steps.',
       ),
   }),
   z.looseObject({
@@ -93,7 +93,7 @@ type PlanToolInput = z.infer<typeof PlanToolInputSchema>;
 
 function buildApprovedResult(): ToolResult {
   return executed(
-    'Plan approved by the user. Work toward the objective, tracking concrete steps with the todo tool.',
+    'Plan approved by the user. Work toward the objective.',
     'Plan approved: proceed with implementation',
   );
 }
@@ -125,7 +125,6 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
           `${formatGoalView(active, yield* Clock.currentTimeMillis)}\n\n` +
           `Discipline:\n` +
           `- Drop work that only served the previous objective.\n` +
-          `- Track concrete steps with the todo tool as you work.\n` +
           `- Do not call plan(command="complete") until the stopping condition is verifiably true.\n` +
           `- If you genuinely need user input, call plan(command="pause") with a reason.\n\n` +
           `Objective:\n${objective}`,
@@ -164,7 +163,6 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
       `The user approved this plan and started an autonomous goal ` +
         `(${goal.goalId}) toward its stopping condition.\n\n` +
         `Discipline:\n` +
-        `- Track concrete steps with the todo tool as you work.\n` +
         `- Do not call plan(command="complete") until the stopping condition is verified against current external state (file contents, command output, test results).\n` +
         `- If you genuinely need user input, call plan(command="pause") with a reason describing what you need.\n` +
         `- Otherwise, keep working until the objective is done.\n\n` +
@@ -183,8 +181,7 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
           executed(
             `The user approved this plan and requested autonomous run, but ` +
               `the goal could not be started: ${reason}\n\n` +
-              `Work toward the objective as a normal turn-by-turn workflow, ` +
-              `tracking concrete steps with the todo tool.`,
+              `Work toward the objective as a normal turn-by-turn workflow.`,
             'Plan approved: goal could not be started, proceeding without it',
           ),
         ),

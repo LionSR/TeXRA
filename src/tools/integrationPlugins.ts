@@ -1,5 +1,5 @@
 /**
- * TeXRA's probed integrations: TeXcount, Wolfram, Zotero, Lean 4, GitHub
+ * TeXRA's probed integrations: Wolfram, Zotero, Lean 4, GitHub
  * activity, external inquiries and the two agent CLIs. Each is a plugin
  * value of TeXRA's list (`@tools/registry`), with the install and sign-in
  * copy its dashboard card and `texra tools` show.
@@ -42,49 +42,33 @@ import {
   CODEX_AVAILABILITY,
   GITHUB_AVAILABILITY,
   LEAN4_AVAILABILITY,
-  TEXCOUNT_AVAILABILITY,
   WOLFRAM_AVAILABILITY,
   ZOTERO_AVAILABILITY,
 } from '@tools/pluginAvailability';
 import { definePlugin, type Plugin } from '@tools/plugins';
-import { TexcountTool } from '@tools/texcount/TexcountTool';
 import { ALWAYS_AVAILABLE, preferredInstallCommand } from '@tools/toolProbes';
-import { WOLFRAM_INSTALL_GUIDE, WolframTool } from '@tools/wolfram/WolframTool';
 import { ZoteroAddTool } from '@tools/zotero/ZoteroAddTool';
 import { ZoteroCollectionsTool } from '@tools/zotero/ZoteroCollectionsTool';
 import { ZoteroExportTool } from '@tools/zotero/ZoteroExportTool';
 import { ZoteroSearchTool } from '@tools/zotero/ZoteroSearchTool';
 
-export const texcount: Plugin = {
-  id: 'texcount',
-  tools: { texcount: TexcountTool },
-  name: 'TeXcount',
-  category: 'latex',
-  description:
-    'Count words, headers, figures, and other elements in LaTeX documents.',
-  setup: Object.freeze({
-    installGuide:
-      'TeXcount is a Perl script for counting words in LaTeX files.\n\n' +
-      'Installation:\n' +
-      '  Mac:     brew install texcount\n' +
-      '  Ubuntu:  sudo apt-get install texlive-extra-utils\n' +
-      '  Windows: Install via MiKTeX or TeX Live package manager',
-    installUrl: 'https://app.uio.no/ifi/texcount/',
-    configNotes: 'Part of most TeX Live distributions.',
-  }),
-  hidden: true, // Shown in LaTeX settings tab instead
-  availability: TEXCOUNT_AVAILABILITY,
-};
-
+/** A card without tools: agents run `wolframscript` through `bash`. */
 export const wolfram: Plugin = {
   id: 'wolfram',
-  tools: { wolfram: WolframTool },
   name: 'Wolfram Language',
   category: 'computation',
   description:
-    'Execute Wolfram Language code for symbolic math, computation, and data analysis.',
+    'Wolfram Language through wolframscript, which agents run from the shell for symbolic math, computation, and data analysis.',
   setup: Object.freeze({
-    installGuide: WOLFRAM_INSTALL_GUIDE,
+    installGuide:
+      'Requires the "wolframscript" command-line tool.\n\n' +
+      'Install the free Wolfram Engine:\n' +
+      '  Mac:     brew install --cask wolfram-engine\n' +
+      '  Ubuntu:  Download from wolfram.com/engine\n' +
+      '  Windows: Download from wolfram.com/engine\n\n' +
+      'Note: A Mathematica installation alone is not enough: you\n' +
+      'need WolframScript on your PATH. The Wolfram Engine includes\n' +
+      'it automatically. Free licenses are available for development use.',
     installUrl: 'https://www.wolfram.com/engine/',
     configNotes: 'Requires the free Wolfram Engine (provides wolframscript).',
   }),

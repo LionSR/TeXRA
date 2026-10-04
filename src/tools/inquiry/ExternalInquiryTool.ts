@@ -199,7 +199,7 @@ Follow-up semantics:
 
 When the [inquiry] continuation arrives, its Q is truncated to 400 chars and its A to 2000 chars. If you need the full content, call inquiry { command: 'read', thread_id }.
 
-Do not treat paper-specific claims from the external model as automatically verified: verify with arxiv_search / arxiv_metadata / download_arxiv_source before building on them.`;
+Do not treat paper-specific claims from the external model as automatically verified: verify with arxiv_search / download_arxiv_source before building on them.`;
 
 function executeExternalInquiryTool(input: InquiryInput) {
   return Effect.gen(function* () {

@@ -66,7 +66,7 @@ export interface ToolPolicy {
 }
 
 interface RunCallbacks {
-  /** Fires on meaningful progress: todo changes, tool call milestones. */
+  /** Fires on meaningful progress: plan changes, tool call milestones. */
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
   /** An idle turn boundary, after child delivery. */
   readonly onIdle?: () => void;

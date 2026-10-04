@@ -24,7 +24,7 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
  */
 const TOOL_USE_INSTRUCTIONS = `<tool_use_instructions>
 Working directory: the bash tool already executes every command from {{ CWD }}. You are already in the workspace, so run commands directly with relative paths (e.g., \`ls src/\`, \`find . -name "*.tex"\`, \`cat README.md\`). Scope file searches to \`.\` or a subdirectory, or use the glob/grep tools.
-Explicit user constraints override general workflow guidance elsewhere in the agent prompt. If the user forbids memory, planning, todos, file access, or a tool, do not use it. Report any resulting conflict instead.
+Explicit user constraints override general workflow guidance elsewhere in the agent prompt. If the user forbids memory, planning, file access, or a tool, do not use it. Report any resulting conflict instead.
 
 Prefer using tools over asking the user to take manual actions.
 If you say you will perform an action, immediately call the corresponding tool.

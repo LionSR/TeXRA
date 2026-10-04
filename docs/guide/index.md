@@ -83,12 +83,12 @@ graph TB
     Output --> Diff[Color-Coded Diff]
 
     IA --> Tools[Tool Access]
-    Tools --> Search[arXiv / Crossref / Zotero]
+    Tools --> Search[arXiv / Zotero]
     Tools --> Lean[Lean 4 / Loogle / Mathlib]
-    Tools --> Wolfram[WolframScript]
     Tools --> Compile[LaTeX Compilation]
     Tools --> FileOps[File Operations]
     Tools --> Shell[Shell Commands]
+    Shell --> Wolfram[WolframScript]
 ```
 
 TeXRA's agents come in two classes:

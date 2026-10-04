@@ -40,7 +40,6 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   CodexApprovalPolicy,
   RunId,
-  TodoItem,
   TokenUsageStats,
   ToolResult,
   ToolUseLog,
@@ -80,7 +79,6 @@ import {
   buildCodexFileChangeToolLog,
   buildCodexMcpToolLog,
   buildCodexThreadToolLog,
-  buildCodexTodoToolLog,
   buildCodexTurnToolLog,
 } from './codexShared';
 import type { AgentCliSessionRegistry } from './agentCliSessionRegistry';
@@ -95,7 +93,6 @@ import type {
   ThreadEvent,
   ThreadItem,
   ThreadOptions,
-  TodoListItem,
 } from '@openai/codex-sdk';
 
 // The sandbox-mode schema is imported eagerly from `@shared` (a light,
@@ -127,18 +124,10 @@ const CodexInputSchema = z.strictObject({
 
 export type CodexInput = z.infer<typeof CodexInputSchema>;
 
-function toProgressTodos(item: TodoListItem): TodoItem[] {
-  return item.items.map((t) => ({
-    content: t.text,
-    status: t.completed ? ('completed' as const) : ('pending' as const),
-    activeForm: t.text,
-  }));
-}
-
 /**
  * Log a completed codex thread item that has no tool card, straight to the
  * child stream's logger. Every item type `buildCodexLiveToolLog` renders
- * (command_execution, mcp_tool_call, todo_list, and a file_change carrying at
+ * (command_execution, mcp_tool_call, and a file_change carrying at
  * least one change) is already on screen by the time an item completes: the
  * `item.completed` handler calls this only when `publishCodexItemProgress`
  * reports that it rendered nothing.
@@ -156,6 +145,10 @@ function logCodexItem(item: ThreadItem, logger: AgentTrace): void {
       break;
     case 'error':
       logger.error(item.message);
+      break;
+    case 'todo_list':
+      // Deliberately not projected: Codex's own task list has no TeXRA
+      // surface since the todo tool and its UI were removed.
       break;
   }
 }
@@ -181,8 +174,6 @@ function buildCodexLiveToolLog(
     }
     case 'mcp_tool_call':
       return buildCodexMcpToolLog(item);
-    case 'todo_list':
-      return buildCodexTodoToolLog(item, status);
     default:
       return null;
   }
@@ -210,11 +201,6 @@ function publishCodexItemProgress(params: {
   refs: Map<string, OpenToolUseCard>;
 }): boolean {
   const { item, status, logger, refs } = params;
-
-  if (item.type === 'todo_list') {
-    const todos = toProgressTodos(item);
-    logger.emit({ type: 'run.fact', fact: { key: 'todos', todos } });
-  }
 
   const toolLog = buildCodexLiveToolLog(item, status);
   if (!toolLog) return false;

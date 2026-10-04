@@ -10,7 +10,6 @@ settings:
     - grep
     - bash
     - diagnostics
-    - todo_write
 
 prompts:
   systemPrompt: |
@@ -35,8 +34,7 @@ prompts:
     yet. Then list findings grouped by severity (blocking, should-fix, nit).
     Format each finding as `file:line: problem. Suggested fix: ...`. Be specific
     and actionable. Do not pad with praise or restate the diff. Flag uncertainty
-    honestly rather than inventing problems. Track a long review with
-    `todo_write` so nothing is dropped.
+    honestly rather than inventing problems.
 
   userRequest: |
     {{ INSTRUCTION }}

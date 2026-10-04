@@ -32,7 +32,6 @@ import {
   externalInquiry,
   githubActivity,
   lean4,
-  texcount,
   wolfram,
   zotero,
 } from '@tools/integrationPlugins';
@@ -44,9 +43,7 @@ import type { ProcessPluginLayer } from '@tools/toolTable';
 // Local file imports
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
 import { ArxivDownloadTool } from './arxiv/ArxivDownloadTool';
-import { ArxivMetadataTool } from './arxiv/ArxivMetadataTool';
 import { ArxivSearchTool } from './arxiv/ArxivSearchTool';
-import { CrossrefSearchTool } from './citation/CrossrefSearchTool';
 import {
   InlineComments,
   InlineCommentTool,
@@ -155,22 +152,11 @@ const arxiv: Plugin = {
   id: 'arxiv',
   tools: {
     arxiv_search: ArxivSearchTool,
-    arxiv_metadata: ArxivMetadataTool,
     download_arxiv_source: ArxivDownloadTool,
   },
   name: 'ArXiv Search & Download',
   category: 'academic',
-  description:
-    'Search arXiv papers, retrieve metadata, and download LaTeX source packages.',
-};
-
-const crossref: Plugin = {
-  id: 'crossref',
-  tools: { crossref_search: CrossrefSearchTool },
-  name: 'Crossref Citation Lookup',
-  category: 'academic',
-  description:
-    'Search Crossref for academic publications by query or resolve DOIs to full metadata.',
+  description: 'Search arXiv papers and download LaTeX source packages.',
 };
 
 /**
@@ -262,11 +248,9 @@ export const texraPlugins = (
   latexExtract,
   latexDiagnostics,
   arxiv,
-  crossref,
   web,
   memoryWorkflow,
   goal,
-  texcount,
   wolfram,
   zotero,
   host.lean === undefined
@@ -285,7 +269,7 @@ export const texraPlugins = (
     name: 'Copilot Chat Tools',
     category: 'ai-agents',
     description:
-      'Expose arXiv search, web fetch, and Crossref search to GitHub Copilot Chat and agent mode as #texra_arxiv_search, #texra_web_fetch, and #texra_crossref_search. Each is exposed while its own plugin is on.',
+      'Expose arXiv search and web fetch to GitHub Copilot Chat and agent mode as #texra_arxiv_search and #texra_web_fetch. Each is exposed while its own plugin is on.',
     setup: Object.freeze({
       configNotes:
         'VS Code only. Turning this off removes every TeXRA tool from Copilot.',
