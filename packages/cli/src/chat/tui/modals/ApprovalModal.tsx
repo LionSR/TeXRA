@@ -1,11 +1,7 @@
-// Dispatches the head item of the approval queue to the right modal.
-//
-// The `pending` slot is passed in as a prop so the parent owns the single
-// `useSignal(currentApproval)` subscription — avoids a second store read
-// every render.
+// Renders one pending request with the modal its kind takes. The chat's
+// approval queue and the attached-task view (`/tasks`) both use it, each
+// with its own way of landing the decision.
 
-import type { SessionHandle } from '@agent/runtime';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { assertNever } from '@utils/core';
 import { AgentProposal } from './AgentProposal';
@@ -15,26 +11,17 @@ import { PlanApproval } from './PlanApproval';
 import { RetryRequest } from './RetryRequest';
 import { ToolOutcomeRequest } from './ToolOutcomeRequest';
 import { UserQuestion } from './UserQuestion';
-import type { PendingApproval } from '../state/approvalQueue';
+import type { ApprovalPayload } from '../state/approvalQueue';
 
 export interface ApprovalModalProps {
   readonly availableRows?: number;
-  readonly pending: PendingApproval | undefined;
-  /** The session the answered decision lands on, from the App that holds it. */
-  readonly session: SessionHandle;
-  /** The process runtime the answered decision is issued on, from the App
-   *  that already holds it. */
-  readonly runtime: ProcessRuntime;
+  readonly payload: ApprovalPayload;
+  /** Land the user's decision on the request. */
+  readonly onDecide: (decision: SurfaceDecision) => void;
 }
 
-export function ApprovalModal(
-  props: ApprovalModalProps,
-): React.JSX.Element | null {
-  if (!props.pending) return null;
-  const { payload, decide } = props.pending;
-  const availableRows = props.availableRows;
-  const onDecide = (decision: SurfaceDecision): void =>
-    decide(props.session, props.runtime, decision);
+export function ApprovalModal(props: ApprovalModalProps): React.JSX.Element {
+  const { payload, onDecide, availableRows } = props;
   switch (payload.kind) {
     case 'bash':
       return (

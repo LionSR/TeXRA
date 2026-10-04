@@ -1377,6 +1377,145 @@ async function validateInterruptedTasks() {
 }
 
 /**
+ * `/tasks` in the chat (D1–D4): a task started in the service under the
+ * `ask` policy opens a command approval; `texra chat` lists it with
+ * `/tasks`, attaches, approves the command in place and sends a follow-up,
+ * and the service runs both. The task's request and tool rows, the file
+ * the command wrote and the attached view's last lines are the artifact.
+ */
+async function validateServiceTasksInTui() {
+  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-service-tui-'));
+  const project = echoProject(cwd);
+  writeFileSync(
+    path.join(
+      cwd,
+      'home',
+      '.texra',
+      'v1',
+      'global-storage',
+      'custom_agents',
+      'approval-validation.yaml',
+    ),
+    `name: approval_validation
+description: Run one command once it is approved.
+tools: [bash]
+
+prompt: |
+  GOLDEN-APPROVAL
+`,
+  );
+  const env = {
+    ...project.ptyEnv,
+    TEXRA_NO_TELEMETRY: '1',
+    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+  };
+  const texra = (args, label) => {
+    const result = run(
+      process.execPath,
+      [binaryPath, ...args, '--cwd', project.work],
+      { cwd: project.work, env },
+    );
+    assertSuccess(result, label);
+    return result.stdout.trim();
+  };
+  try {
+    const runId = texra(
+      [
+        'tasks',
+        'start',
+        'approval_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--approval-policy',
+        'ask',
+        '--instruction',
+        'Run the command',
+      ],
+      'texra tasks start approval_validation',
+    );
+    let phase = 'opening';
+    let from = 0;
+    const chat = await runTexraPty(['chat'], {
+      label: 'texra chat, /tasks',
+      cwd: project.work,
+      cols: 160,
+      rows: 40,
+      timeoutMs: 180_000,
+      env,
+      onData: (_data, pty) => {
+        const plain = stripVTControlCharacters(pty.output).slice(from);
+        const step = (next, needle, keys) => {
+          if (phase !== next[0] || !plain.includes(needle)) return;
+          phase = next[1];
+          from += plain.indexOf(needle) + needle.length;
+          keys.forEach((key, index) =>
+            pty.setTimer(() => pty.write(key), 600 + index * 400),
+          );
+        };
+        step(['opening', 'list'], '/ commands', ['/tasks', '\r']);
+        step(['list', 'attach'], 'approval_validation', ['\r']);
+        step(['attach', 'approved'], 'Run command?', ['y']);
+        step(['approved', 'follow'], 'The approved command ran.', [
+          'Ping',
+          '\r',
+        ]);
+        step(['follow', 'done'], 'The approved command ran.', [
+          '\u001b',
+          ETX,
+          ETX,
+        ]);
+      },
+    });
+    // The project's own store: the chat also opens the no-workspace one.
+    const storage = path.join(cwd, 'home', '.texra', 'v1', 'workspace-storage');
+    const db = new DatabaseSync(
+      path.join(
+        storage,
+        readdirSync(storage).find((name) => name.startsWith('work-')),
+        'texra.db',
+      ),
+      { readOnly: true },
+    );
+    let rows;
+    try {
+      rows = db
+        .prepare(
+          `SELECT e.type, e.data LIKE '%Ping%' AS ping FROM event e
+           JOIN event_sequence s ON s.id = e.aggregate
+           WHERE s.logical_id = ? ORDER BY e."commit"`,
+        )
+        .all(runId);
+    } finally {
+      db.close();
+    }
+    const approved = path.join(project.work, 'approved.txt');
+    const artifactPath = writeArtifact('service-tasks-tui.json', {
+      runId,
+      phase,
+      rows: rows.map((row) => row.type),
+      followUpRows: rows.filter((row) => row.ping).map((row) => row.type),
+      approvedFile: existsSync(approved)
+        ? readFileSync(approved, 'utf8')
+        : null,
+      tail: stripVTControlCharacters(chat.output).split('\n').slice(-40),
+    });
+    assert(
+      phase === 'done' &&
+        existsSync(approved) &&
+        rows.some((row) => row.type === 'request.decided') &&
+        rows.some((row) => row.ping),
+      `/tasks should attach to the service task, approve its command and send a follow-up (artifact: ${artifactPath})\noutput:\n${stripVTControlCharacters(chat.output).slice(-3000)}`,
+    );
+  } finally {
+    run(process.execPath, [binaryPath, 'service', 'stop'], {
+      cwd: project.work,
+      env,
+    });
+    rmSync(cwd, { recursive: true, force: true });
+  }
+}
+
+/**
  * The background service (`texra serve`) end to end: `texra tasks start`
  * starts the service on demand and a task in it; two terminals attach to
  * that task at once, a third sends it a follow-up and then stops it. Both
@@ -1837,6 +1976,7 @@ async function validateCliRunArtifacts(options = {}) {
   await validateInterruptedTasks();
   await validateOpenTimePrompt();
   await validateServiceSharedTask();
+  await validateServiceTasksInTui();
   validateScriptFanoutRunCommand();
   validateTeamRunCommand();
   console.log('CLI run validation passed');

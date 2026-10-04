@@ -16,7 +16,6 @@ import {
   Fiber,
   LogLevel,
   Option,
-  type Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -28,10 +27,29 @@ import type { ServiceClient } from '@controllers/server/client';
 import type { TaskSummary } from '@controllers/server/protocol';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { aggregateId, type RunOutcome } from '@shared/schemas';
-import type { EventsFrame } from '@shared/session/sessionFrames';
-import type { RunView } from '@shared/session/sessionView';
+import type {
+  EventsFrame,
+  RequestErrorWire,
+} from '@shared/session/sessionFrames';
+import type { RunView, SessionView } from '@shared/session/sessionView';
 
 import { writeNdjsonStdout, writeTextStdout } from './logSinks';
+
+/** What a refused request says, worded for a terminal. */
+export function describeWireRefusal(error: RequestErrorWire): string {
+  switch (error._tag) {
+    case 'Cancelled':
+      return 'The request was cancelled.';
+    case 'NotOwner':
+      return `Another process owns task ${error.runId}.`;
+    case 'Unavailable':
+    case 'Rejected':
+    case 'Invalid':
+      return error.reason;
+    case 'Internal':
+      return `The request failed inside the TeXRA service (ref ${error.ref}); see its log.`;
+  }
+}
 
 /** The subscription port of this client's fold. */
 const ATTACH_PORT = 'attach';
@@ -79,98 +97,106 @@ function writeProgress(
 }
 
 /**
+ * The live view of `task`'s session, as the service's frames fold it: one
+ * level per change, with `task`'s transcript named so its rows fold. Each
+ * frame is handed to `onFrame` before it folds. The stream fails with
+ * {@link TaskWatchEnded} when the service stops sending; it never ends on
+ * its own. The fold's graph lives as long as the stream.
+ */
+export function watchTask(
+  client: ServiceClient,
+  task: Pick<TaskSummary, 'workspace' | 'runId'>,
+  onFrame: (frame: EventsFrame) => void = () => {},
+): Stream.Stream<SessionView, TaskWatchEnded> {
+  return Stream.unwrap(
+    Effect.gen(function* () {
+      const graph = yield* WebviewSessions.open(task.workspace);
+      const aggregates = [{ id: aggregateId('run', task.runId), fromSeq: 0 }];
+      const generation = 1;
+      // Begin the generation and name the transcript before the first
+      // frame, as a webview shell does before it posts its `Subscribe`.
+      yield* graph.frames.begin(generation);
+      yield* graph.subscriptions.set(ATTACH_PORT, aggregates);
+      const { debug } = yield* SubscriptionRef.get(graph.view.ref);
+      const feeding = yield* client['task.watch']({
+        workspace: task.workspace,
+        subscribe: {
+          kind: 'subscribe',
+          session: task.workspace,
+          generation,
+          debug,
+          cursor: 0,
+          aggregates,
+        },
+      }).pipe(
+        Stream.runForEach((frame) =>
+          Effect.sync(() => onFrame(frame)).pipe(
+            Effect.andThen(graph.frames.feed(frame)),
+          ),
+        ),
+        Effect.forkScoped,
+      );
+      // The watch only ends when the service does: the task did not end.
+      const ended = Fiber.join(feeding).pipe(
+        Effect.matchEffect({
+          onFailure: (error) =>
+            Effect.fail(
+              new TaskWatchEnded({ runId: task.runId, reason: error.message }),
+            ),
+          onSuccess: () =>
+            Effect.fail(
+              new TaskWatchEnded({
+                runId: task.runId,
+                reason: 'the service closed the watch.',
+              }),
+            ),
+        }),
+      );
+      return graph.view.changes.pipe(Stream.interruptWhen(ended));
+    }),
+    // The fold's graph lives as long as the stream, one per watch.
+  ).pipe(Stream.provide(WebviewSessions.layerNoDeps, { local: true }));
+}
+
+/**
  * Follow `task` until it ends, printing it as `output` asks. Returns the
  * task's durable outcome, null when it ended without one.
  */
-export const attachTask = Effect.fn('attachTask')(
-  function* (
-    client: ServiceClient,
-    task: TaskSummary,
-    output: TaskAttachOutput,
-  ): Effect.fn.Return<
-    RunOutcome | null,
-    TaskWatchEnded,
-    WebviewSessions | Scope.Scope
-  > {
-    const includeDebugLogs = yield* LogLevel.isEnabled('Debug');
-    const graph = yield* WebviewSessions.open(task.workspace);
-    const aggregate = aggregateId('run', task.runId);
-    const aggregates = [{ id: aggregate, fromSeq: 0 }];
-    const generation = 1;
-    // Begin the generation and name the transcript before the first frame,
-    // as a webview shell does before it posts its `Subscribe`.
-    yield* graph.frames.begin(generation);
-    yield* graph.subscriptions.set(ATTACH_PORT, aggregates);
-    const { debug } = yield* SubscriptionRef.get(graph.view.ref);
-    const feeding = yield* client['task.watch']({
-      workspace: task.workspace,
-      subscribe: {
-        kind: 'subscribe',
-        session: task.workspace,
-        generation,
-        debug,
-        cursor: 0,
-        aggregates,
-      },
-    }).pipe(
-      Stream.runForEach((frame) =>
-        Effect.sync(() => {
-          if (output.format === 'ndjson')
-            writeProgress(frame, aggregate, includeDebugLogs);
-        }).pipe(Effect.andThen(graph.frames.feed(frame))),
-      ),
-      Effect.forkScoped,
-    );
-
-    let printed = 0;
-    const printSettled = (run: RunView, ended: boolean): void => {
-      if (output.format !== 'text') return;
-      const { rows, settledRows } = run.transcript;
-      const until = ended ? rows.length : settledRows;
-      for (; printed < until; printed += 1) {
-        const { lines } = fullTranscriptEntryLayout(
-          rows[printed],
-          output.columns,
-        );
-        const text = lines.join('\n');
-        writeTextStdout(`${output.color ? text : stripAnsi(text)}\n`);
-      }
-    };
-    const follow = graph.view.changes.pipe(
-      Stream.map((view) => view.runs.get(task.runId)),
-      Stream.filter((run): run is RunView => run !== undefined),
-      Stream.takeUntil((run) => isTerminalOutcomePhase(run.status)),
-      Stream.tap((run) =>
-        Effect.sync(() =>
-          printSettled(run, isTerminalOutcomePhase(run.status)),
-        ),
-      ),
-      Stream.runLast,
-      Effect.map((last) =>
-        Option.match(last, {
-          onNone: () => null,
-          onSome: (run) => run.durableOutcome,
-        }),
-      ),
-    );
-    // The watch only ends when the service does: the task did not end here.
-    const watchEnded = Fiber.join(feeding).pipe(
-      Effect.matchEffect({
-        onFailure: (error) =>
-          Effect.fail(
-            new TaskWatchEnded({ runId: task.runId, reason: error.message }),
-          ),
-        onSuccess: () =>
-          Effect.fail(
-            new TaskWatchEnded({
-              runId: task.runId,
-              reason: 'the service closed the watch.',
-            }),
-          ),
-      }),
-    );
-    return yield* Effect.raceFirst(follow, watchEnded);
-  },
-  Effect.scoped,
-  Effect.provide(WebviewSessions.layerNoDeps),
-);
+export const attachTask = Effect.fn('attachTask')(function* (
+  client: ServiceClient,
+  task: TaskSummary,
+  output: TaskAttachOutput,
+): Effect.fn.Return<RunOutcome | null, TaskWatchEnded> {
+  const includeDebugLogs = yield* LogLevel.isEnabled('Debug');
+  const aggregate = aggregateId('run', task.runId);
+  let printed = 0;
+  const printSettled = (run: RunView, ended: boolean): void => {
+    if (output.format !== 'text') return;
+    const { rows, settledRows } = run.transcript;
+    const until = ended ? rows.length : settledRows;
+    for (; printed < until; printed += 1) {
+      const { lines } = fullTranscriptEntryLayout(
+        rows[printed],
+        output.columns,
+      );
+      const text = lines.join('\n');
+      writeTextStdout(`${output.color ? text : stripAnsi(text)}\n`);
+    }
+  };
+  const last = yield* watchTask(client, task, (frame) => {
+    if (output.format === 'ndjson')
+      writeProgress(frame, aggregate, includeDebugLogs);
+  }).pipe(
+    Stream.map((view) => view.runs.get(task.runId)),
+    Stream.filter((run): run is RunView => run !== undefined),
+    Stream.takeUntil((run) => isTerminalOutcomePhase(run.status)),
+    Stream.tap((run) =>
+      Effect.sync(() => printSettled(run, isTerminalOutcomePhase(run.status))),
+    ),
+    Stream.runLast,
+  );
+  return Option.match(last, {
+    onNone: () => null,
+    onSome: (run) => run.durableOutcome,
+  });
+});

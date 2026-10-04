@@ -398,10 +398,11 @@ export function App(props: AppProps): React.JSX.Element {
       render: (availableRows) =>
         pending ? (
           <ApprovalModal
-            runtime={props.runtime}
-            session={props.session}
             availableRows={availableRows}
-            pending={pending}
+            payload={pending.payload}
+            onDecide={(decision) =>
+              pending.decide(props.session, props.runtime, decision)
+            }
           />
         ) : null,
     },

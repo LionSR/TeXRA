@@ -329,6 +329,13 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **`/tasks` in the chat attaches to a background task (CLI).** The chat
+  lists every project's tasks in the TeXRA service; choosing one shows its
+  transcript live, sends it follow-ups, and answers its approvals (commands,
+  edits with their diff, questions) in place. Esc detaches and the task
+  keeps running. A service task that asks for approval now waits for that
+  answer instead of having the tool withheld.
+
 - **One background TeXRA service runs tasks for every terminal (CLI).**
   `texra tasks start <agent> --instruction "…"` starts a tool-use task in a
   per-user service, which starts on its own the first time it is needed and

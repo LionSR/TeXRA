@@ -39,6 +39,7 @@ import {
   TexraRpcs,
   type ServiceInfo,
   type TaskFailed,
+  type ToolEditPreview,
 } from './protocol';
 import { listTasks } from './taskList';
 
@@ -153,10 +154,51 @@ export const serviceHandlers = TexraRpcs.toLayer(
           failed('The service is shutting down; start the task again.'),
         );
     });
+    // Tool-edit previews the service's runs staged, by request id: what a
+    // window shows beside the durable request, dropped once it settles.
+    const previews = new Map<string, ToolEditPreview>();
+    const presented = new WeakSet<SessionHandle>();
+    /** The service's presentation surface on a project's session, attached
+     *  once: notices go to the service log, and a tool edit's preview is
+     *  held for `request.preview`. Every request is answered by a window
+     *  through `task.request`. */
+    const present = (session: SessionHandle): Effect.Effect<void> =>
+      Effect.suspend(() => {
+        if (presented.has(session)) return Effect.void;
+        presented.add(session);
+        return session.interactions
+          .use({
+            emit: (event, payload) =>
+              Effect.logWarning(`Service notice ${event}`).pipe(
+                Effect.annotateLogs({ data: payload }),
+              ),
+            presentToolEdit: (request) => {
+              previews.set(request.permission.requestId, {
+                originalContent: request.originalContent,
+                proposedContent: request.proposedContent,
+              });
+            },
+            releaseToolEdit: (requestId) =>
+              Effect.sync(() => previews.delete(requestId)),
+          })
+          .pipe(Effect.asVoid);
+      });
+    const openSession = (workspace: string) =>
+      projects.open(workspace).pipe(Effect.tap(present));
     const open = (workspace: string) =>
-      projects
-        .open(workspace)
-        .pipe(Effect.mapError((error) => failed(error.message)));
+      openSession(workspace).pipe(
+        Effect.mapError((error) => failed(error.message)),
+      );
+    /** Drop the previews of requests no open session still lists. */
+    const prunePreviews = Effect.gen(function* () {
+      const pending = new Set<string>();
+      for (const session of (yield* projects.opened).values())
+        for (const request of (yield* SubscriptionRef.get(session.view))
+          .requests)
+          pending.add(request.requestId);
+      for (const id of previews.keys())
+        if (!pending.has(id)) previews.delete(id);
+    });
     return {
       'service.hello': () =>
         Effect.gen(function* () {
@@ -200,8 +242,13 @@ export const serviceHandlers = TexraRpcs.toLayer(
             ).pipe(Stream.ensuring(session.subscriptions.set(port, [])));
           }),
         ),
+      'request.preview': ({ workspace, requestId }) =>
+        open(workspace).pipe(
+          Effect.andThen(prunePreviews),
+          Effect.map(() => previews.get(requestId) ?? null),
+        ),
       'task.request': ({ workspace, request }) =>
-        projects.open(workspace).pipe(
+        openSession(workspace).pipe(
           Effect.mapError((error): RequestErrorWire => ({
             _tag: 'Rejected',
             reason: error.message,

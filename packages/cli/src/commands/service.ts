@@ -44,8 +44,21 @@ function installServiceLogSink(): void {
     {
       write(entry) {
         const channel = entryChannel(entry);
+        const data = entry.annotations.data;
         writeTextStderr(
-          `${new Date().toISOString()} ${String(entry.level)} ${channel ? `[${channel}] ` : ''}${entryMessage(entry)}`,
+          [
+            `${new Date().toISOString()} ${String(entry.level)} ${channel ? `[${channel}] ` : ''}${entryMessage(entry)}`,
+            // The cause and payload a warning carries are what makes a
+            // service log answerable after the fact.
+            ...(entry.cause === undefined
+              ? []
+              : [`  cause: ${String(entry.cause)}`]),
+            ...(data === undefined
+              ? []
+              : [
+                  `  data: ${typeof data === 'string' ? data : JSON.stringify(data)}`,
+                ]),
+          ].join('\n'),
         );
       },
     },

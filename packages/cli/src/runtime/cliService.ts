@@ -146,17 +146,6 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
           TEXRA_APPROVAL_POLICY_CONFIG_KEY,
         ),
       );
-      // Notices a run raises while no window is attached are the service
-      // log's: every client reads the task's state from its rows. No
-      // client answers an approval prompt yet, so a tool that needs one is
-      // withheld rather than left waiting.
-      yield* session.interactions.use({
-        approvalPromptsUnavailable: true,
-        emit: (event, payload) =>
-          Effect.logWarning(`Service notice ${event}`).pipe(
-            Effect.annotateLogs({ data: payload }),
-          ),
-      });
       sessions.set(root, session);
       return session;
     }).pipe(
@@ -231,14 +220,22 @@ export function probeCliService(
 }
 
 /** Connect to the storage root's service, starting it when none answers
- *  and retiring one older than this build (`version`). */
+ *  and retiring one older than this build (`version`). Leaves the process's
+ *  log sink as it is: what the chat uses. */
+export function reachCliService(
+  storageRoot: string,
+  version: string,
+): Effect.Effect<ServiceConnection, Error, Scope.Scope> {
+  return ensureService(storageRoot, version, startCliService(storageRoot));
+}
+
+/** {@link reachCliService} for a client command, whose process prints only
+ *  its own result. */
 export function connectCliService(
   storageRoot: string,
   version: string,
 ): Effect.Effect<ServiceConnection, Error, Scope.Scope> {
   return quietClient.pipe(
-    Effect.andThen(
-      ensureService(storageRoot, version, startCliService(storageRoot)),
-    ),
+    Effect.andThen(reachCliService(storageRoot, version)),
   );
 }
