@@ -91,6 +91,10 @@ import { withProcessServices } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
+  InquiryRecords,
+  inquiryThreadRow,
+} from '@shared/plugins/externalInquiry';
+import {
   aggregateId as qualifyAggregateId,
   AgentConfigFieldsSchema,
   emptyRunEndOutput,
@@ -99,8 +103,8 @@ import {
   RunIdSchema,
   type RunId,
   type SessionEventDraft,
+  type InquiryThreadSummary,
 } from '@shared/schemas';
-import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { Database } from '@shared/session/database';
 import { runActions } from '@shared/session/runActions';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -437,19 +441,20 @@ describe('session events and view', () => {
       const log = yield* Database;
       const threadId = 'ei_012345abcdef';
       const run = qualifyAggregateId('run', RUN);
-      const inquiry = qualifyAggregateId('inquiry', threadId);
+      const inquiry = qualifyAggregateId(
+        'plugin',
+        `external-inquiry:${threadId}`,
+      );
       const committed = yield* events.publish([
         runStart,
-        {
-          type: 'inquiryThreadUpdated',
-          aggregateId: inquiry,
+        inquiryThreadRow({
           threadId,
           parentRunId: null,
           status: 'open',
           lastQuestionPreview: 'Which boundary condition applies?',
           lastActivityIso: '2026-09-06T12:00:00.000Z',
           turnCount: 1,
-        },
+        }),
         { type: 'run.removed', aggregateId: run },
       ]);
       expect(yield* log.readAll(0)).toEqual(committed);
@@ -457,7 +462,7 @@ describe('session events and view', () => {
       expect((yield* log.aggregateState([inquiry]))[0]?.closed).toBe(false);
       const rows = yield* Stream.runCollect(events.aggregate(inquiry, 0));
       expect(rows.map(({ type, seq }) => ({ type, seq }))).toEqual([
-        { type: 'inquiryThreadUpdated', seq: 1 },
+        { type: 'plugin.fact', seq: 1 },
       ]);
     }).pipe(Effect.provide(graph([]))),
   );
@@ -471,10 +476,11 @@ describe('session events and view', () => {
         const oldParent = qualifyAggregateId('run', RUN);
         const newParentId = RunIdSchema.parse('aabbccdd1122');
         const newParent = qualifyAggregateId('run', newParentId);
-        const inquiry = qualifyAggregateId('inquiry', 'ei_012345abcdef');
-        const opened = {
-          type: 'inquiryThreadUpdated' as const,
-          aggregateId: inquiry,
+        const inquiry = qualifyAggregateId(
+          'plugin',
+          'external-inquiry:ei_012345abcdef',
+        );
+        const base = {
           threadId: 'ei_012345abcdef',
           parentRunId: RUN,
           status: 'open' as const,
@@ -482,17 +488,19 @@ describe('session events and view', () => {
           lastActivityIso: '2026-09-07T12:00:00.000Z',
           turnCount: 1,
         };
+        const opened = (patch: Partial<InquiryThreadSummary> = {}) =>
+          inquiryThreadRow({ ...base, ...patch });
         yield* db.appendAll([
           runStart,
           { ...runStart, aggregateId: newParent },
-          opened,
+          opened(),
         ]);
         expect((yield* db.aggregateState([inquiry]))[0]).toMatchObject({
           parentId: oldParent,
           ownerId: null,
         });
         const invalid = yield* Effect.exit(
-          db.appendAll([{ ...opened, parentRunId: newParentId }]),
+          db.appendAll([opened({ parentRunId: newParentId })]),
         );
         expect(invalid._tag).toBe('Failure');
         expect((yield* db.aggregateState([inquiry]))[0]).toMatchObject({
@@ -502,13 +510,11 @@ describe('session events and view', () => {
         expect(
           (yield* db.readAggregate(inquiry, 0)).map((row) => row.seq),
         ).toEqual([1]);
-        yield* db.appendAll([{ ...opened, status: 'answered' }]);
+        yield* db.appendAll([opened({ status: 'answered' })]);
         yield* db.releaseClaims([newParent]);
         expect(
           (yield* Effect.exit(
-            db.appendAll([
-              { ...opened, parentRunId: newParentId, turnCount: 2 },
-            ]),
+            db.appendAll([opened({ parentRunId: newParentId, turnCount: 2 })]),
           ))._tag,
         ).toBe('Failure');
         expect((yield* db.aggregateState([inquiry]))[0]).toMatchObject({
@@ -518,7 +524,7 @@ describe('session events and view', () => {
         expect((yield* db.readAggregate(inquiry, 0)).at(-1)?.seq).toBe(2);
         yield* db.acquireClaims([newParent]);
         yield* db.appendAll([
-          { ...opened, parentRunId: newParentId, turnCount: 2 },
+          opened({ parentRunId: newParentId, turnCount: 2 }),
         ]);
         expect((yield* db.aggregateState([inquiry]))[0]).toMatchObject({
           parentId: newParent,
@@ -540,9 +546,8 @@ describe('session events and view', () => {
         );
         expect((yield* db.aggregateState([inquiry]))[0]?.closed).toBe(true);
         expect(
-          (yield* Effect.exit(
-            db.appendAll([{ ...opened, status: 'answered' }]),
-          ))._tag,
+          (yield* Effect.exit(db.appendAll([opened({ status: 'answered' })])))
+            ._tag,
         ).toBe('Failure');
       }).pipe(Effect.provide(graph([]))),
   );
@@ -2467,10 +2472,11 @@ describe('the C1 event table and the C6 publisher', () => {
       return Effect.gen(function* () {
         const first = yield* Database;
         const root = runStart.aggregateId;
-        const inquiry = qualifyAggregateId('inquiry', 'ei_012345abcdef');
-        const thread = {
-          type: 'inquiryThreadUpdated',
-          aggregateId: inquiry,
+        const inquiry = qualifyAggregateId(
+          'plugin',
+          'external-inquiry:ei_012345abcdef',
+        );
+        const base = {
           threadId: 'ei_012345abcdef',
           parentRunId: RUN,
           status: 'open',
@@ -2478,18 +2484,15 @@ describe('the C1 event table and the C6 publisher', () => {
           lastActivityIso: '2026-09-06T12:00:00.000Z',
           turnCount: 1,
         } as const;
+        const thread = (patch: Partial<InquiryThreadSummary> = {}) =>
+          inquiryThreadRow({ ...base, ...patch });
         const initial = yield* first.appendAll([
           runStart,
           olderStart,
-          { ...thread, status: 'answered' },
-          { ...thread, parentRunId: OLDER, turnCount: 2 },
-          {
-            ...thread,
-            parentRunId: OLDER,
-            status: 'answered',
-            turnCount: 2,
-          },
-          { ...thread, turnCount: 3 },
+          thread({ status: 'answered' }),
+          thread({ parentRunId: OLDER, turnCount: 2 }),
+          thread({ parentRunId: OLDER, status: 'answered', turnCount: 2 }),
+          thread({ turnCount: 3 }),
         ]);
         expect((yield* first.aggregateState([inquiry]))[0]?.parentId).toBe(
           root,
@@ -2497,7 +2500,7 @@ describe('the C1 event table and the C6 publisher', () => {
         expect(
           (yield* Effect.flip(
             first.appendAll([
-              { ...thread, parentRunId: RunIdSchema.parse('ffff00') },
+              thread({ parentRunId: RunIdSchema.parse('ffff00') }),
             ]),
           ))._tag,
         ).toBe('DatabaseWriteFailed');
@@ -2505,18 +2508,11 @@ describe('the C1 event table and the C6 publisher', () => {
         // answer regress state and then admit the former asker's turn-2 open.
         const staleBatches: SessionEventDraft[][] = [
           [
-            { ...thread, status: 'answered' },
-            { ...thread, parentRunId: OLDER, turnCount: 2 },
+            thread({ status: 'answered' }),
+            thread({ parentRunId: OLDER, turnCount: 2 }),
           ],
-          [
-            {
-              ...thread,
-              parentRunId: OLDER,
-              status: 'answered',
-              turnCount: 2,
-            },
-          ],
-          [{ ...thread, parentRunId: OLDER, turnCount: 2 }],
+          [thread({ parentRunId: OLDER, status: 'answered', turnCount: 2 })],
+          [thread({ parentRunId: OLDER, turnCount: 2 })],
         ];
         for (const stale of staleBatches) {
           expect((yield* Effect.flip(first.appendAll(stale)))._tag).toBe(
@@ -2585,18 +2581,15 @@ describe('the C1 event table and the C6 publisher', () => {
             (row) => row.closed,
           ),
         ).toBe(true);
-        // Neither a late update nor a new inquiry can attach to the tombstoned asker.
-        for (const draft of [
-          thread,
-          { ...thread, parentRunId: OLDER },
-          {
-            ...thread,
-            aggregateId: qualifyAggregateId('inquiry', 'ei_abcdef012345'),
-            threadId: 'ei_abcdef012345',
-          },
-        ]) {
+        // Neither a late update nor a new inquiry can attach to the tombstoned
+        // asker: the closed thread refuses its writer, a closed parent the new one.
+        for (const [draft, refusal] of [
+          [thread(), 'DatabaseNotOwner'],
+          [thread({ parentRunId: OLDER }), 'DatabaseNotOwner'],
+          [thread({ threadId: 'ei_abcdef012345' }), 'DatabaseWriteFailed'],
+        ] as const) {
           expect((yield* Effect.flip(first.appendAll([draft])))._tag).toBe(
-            'DatabaseWriteFailed',
+            refusal,
           );
         }
         expect(yield* first.currentCommit).toBe(8);

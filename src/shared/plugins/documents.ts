@@ -53,6 +53,7 @@ export function documentsOutputRow(
     kind: DOCUMENTS_OUTPUT_ARM.kind,
     version: DOCUMENTS_OUTPUT_ARM.version,
     value: DocumentsOutputSchema.parse({ rounds }),
+    parent: null,
   };
 }
 

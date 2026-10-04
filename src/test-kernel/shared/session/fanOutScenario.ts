@@ -100,12 +100,7 @@ export class Log {
     body: DisplaySessionEventBody,
     origin: string | null = OWNER,
   ): DisplaySessionEvent {
-    const key =
-      body.type === 'inquiryThreadUpdated'
-        ? // An inquiry aggregate is keyed by its thread id, a plain logical
-          // id; this scenario threads one per run.
-          qualifyAggregateId('inquiry', runId as string)
-        : qualifyAggregateId('run', runId);
+    const key = qualifyAggregateId('run', runId);
     const seq = (this.seq.get(key) ?? 0) + 1;
     this.seq.set(key, seq);
     this.commit += 1;
@@ -308,6 +303,7 @@ export function buildScenario({ proposal = false } = {}) {
     plugin: DOCUMENTS_OUTPUT_ARM.plugin,
     kind: DOCUMENTS_OUTPUT_ARM.kind,
     version: DOCUMENTS_OUTPUT_ARM.version,
+    parent: null,
     value: {
       rounds: [
         {

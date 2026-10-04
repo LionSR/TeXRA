@@ -42,7 +42,7 @@ import {
   requestParksItsCaller,
 } from '@shared/schemas';
 import type { LocalRuntimeState, RunAction, RunId } from '@shared/schemas';
-import { InquiryRecords } from '@shared/session/inquiryRecords';
+import { InquiryRecords } from '@shared/plugins/externalInquiry';
 import {
   DatabaseClaimRefused,
   DatabaseNotOwner,

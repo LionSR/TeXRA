@@ -475,24 +475,24 @@ export function verdictBook(
       ? Effect.void
       : Effect.fail(failed(new DatabaseAggregateBlocked(verdict)));
   };
-  /** In the caller's transaction: the newer value of plugin kind `name` an
-   *  aggregate (its surrogate) holds, which this build's plugin must not
-   *  write over. */
-  const newerPlugin = (aggregate: number, name: string) =>
+  /** In the caller's transaction: plugin kind `name`'s rows, and any corrupt one. */
+  const pluginRows = (aggregate: number, name: string) =>
     exec(
       `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
-       WHERE e.aggregate = ? AND e.type = 'plugin.fact'`,
+       WHERE e.aggregate = ? AND e.type = 'plugin.fact' ORDER BY e.seq`,
       [aggregate],
     ).pipe(
-      Effect.map(
-        (rows) =>
-          rows
-            .map(decodeRow)
-            .flatMap((v) =>
-              v._tag === 'leftOut' && v.kind === name ? [v] : [],
-            )
-            .find((v) => v.newer !== null)?.newer,
+      Effect.map((rows) =>
+        rows
+          .map(decodeRow)
+          .filter((v) =>
+            v._tag === 'leftOut'
+              ? v.kind === name
+              : v._tag === 'blocked' ||
+                (v.event.type === 'plugin.fact' &&
+                  `${v.event.plugin}/${v.event.kind}` === name),
+          ),
       ),
     );
-  return { blocked, decodeAll, newerPlugin, refresh, refuse, retain, scan };
+  return { blocked, decodeAll, pluginRows, refresh, refuse, retain, scan };
 }

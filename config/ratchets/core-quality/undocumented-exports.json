@@ -171,7 +171,6 @@
   "src/shared/session/historyTurns.ts": 2,
   "src/shared/session/hostRequest.ts": 2,
   "src/shared/session/hostSnapshot.ts": 4,
-  "src/shared/session/inquiryRecords.ts": 1,
   "src/shared/session/openAttempt.ts": 1,
   "src/shared/session/requestErrors.ts": 1,
   "src/shared/session/runHistory.ts": 1,

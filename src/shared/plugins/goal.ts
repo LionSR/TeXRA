@@ -62,6 +62,7 @@ export function goalStateRow(
     plugin: GOAL_STATE_ARM.plugin,
     kind: GOAL_STATE_ARM.kind,
     version: GOAL_STATE_ARM.version,
+    parent: null,
     value: GoalStateSchema.parse(state),
   };
 }

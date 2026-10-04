@@ -42,7 +42,7 @@ import {
   type DatabaseOpenFailed,
 } from '@shared/session/database';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
-import { InquiryRecords } from '@shared/session/inquiryRecords';
+import { InquiryRecords } from '@shared/plugins/externalInquiry';
 import { UsageLog } from '@shared/usageLog';
 import {
   LeanLanguageServices,

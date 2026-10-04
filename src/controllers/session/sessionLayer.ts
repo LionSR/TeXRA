@@ -94,7 +94,7 @@ import {
   type SessionCloseReport,
   type SessionEvent,
 } from '@shared/schemas';
-import { InquiryRecords } from '@shared/session/inquiryRecords';
+import { InquiryRecords } from '@shared/plugins/externalInquiry';
 import { closesRunWindow } from '@shared/session/runRows';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import { SessionInputs } from '@shared/session/sessionInputs';

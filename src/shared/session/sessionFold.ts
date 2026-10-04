@@ -210,12 +210,9 @@ function reconcileExistence(
     // stream a subscription named before its `run.start` committed.
     const target = aggregateTarget(id);
     if (target.kind === 'run') foldRunRemoved(view, target.id);
-    if (
-      target.kind === 'inquiry' &&
-      view.inquiries.some((inquiry) => inquiry.threadId === target.id)
-    ) {
-      view.inquiries = view.inquiries.filter(
-        (inquiry) => inquiry.threadId !== target.id,
+    if (view.pluginFacts.some((fact) => fact.aggregateId === id)) {
+      view.pluginFacts = view.pluginFacts.filter(
+        (fact) => fact.aggregateId !== id,
       );
     }
   }
@@ -824,7 +821,6 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
     case 'response.finalized':
     case 'run.start':
     case 'approval.policy':
-    case 'inquiryThreadUpdated':
     case 'run.removed':
       // Existence cannot become more true (5.2); the rest move session slices.
       return run;
@@ -970,23 +966,20 @@ function applySessionSlices(
       if (runId !== null)
         writableMap(view, 'policy').set(runId, event.snapshot);
       return;
-    case 'inquiryThreadUpdated': {
-      const {
-        type: _type,
-        aggregateId: _aggregateId,
-        seq: _seq,
-        commit: _commit,
-        origin: _origin,
-        at: _at,
-        ...thread
-      } = event;
-      const at = view.inquiries.findIndex(
-        (i) => i.threadId === thread.threadId,
+    case 'plugin.fact': {
+      // A run's own rows fold onto the run (`applyOwnArm`).
+      if (runId !== null) return;
+      const { seq: _s, commit: _c, origin: _o, at: _a, ...fact } = event;
+      const held = view.pluginFacts.findIndex(
+        (old) =>
+          old.aggregateId === fact.aggregateId &&
+          old.plugin === fact.plugin &&
+          old.kind === fact.kind,
       );
-      view.inquiries =
-        at === -1
-          ? [...view.inquiries, thread]
-          : view.inquiries.with(at, thread);
+      view.pluginFacts =
+        held === -1
+          ? [...view.pluginFacts, fact]
+          : view.pluginFacts.with(held, fact);
       return;
     }
     default:
@@ -1117,9 +1110,8 @@ function foldDurable(
   const newest = latest.get(listingKey);
   if (newest !== undefined && event.commit <= newest) return traceChanged;
 
-  // The run the event names: its aggregate, bar an inquiry's thread.
-  const runId =
-    event.type === 'inquiryThreadUpdated' ? null : runIdOf(event.aggregateId);
+  // The run the event names: its aggregate, bar a plugin's own.
+  const runId = runIdOf(event.aggregateId);
   if (runId === null) {
     latest.set(listingKey, event.commit);
     applySessionSlices(view, null, event);
@@ -1230,8 +1222,10 @@ function foldRunRemoved(view: SessionView, runId: RunId): boolean {
   if (view.requests.some((r) => r.runId === run.id)) {
     view.requests = view.requests.filter((r) => r.runId !== run.id);
   }
-  if (view.inquiries.some((i) => i.parentRunId === run.id)) {
-    view.inquiries = view.inquiries.filter((i) => i.parentRunId !== run.id);
+  if (view.pluginFacts.some((fact) => fact.parent === run.id)) {
+    view.pluginFacts = view.pluginFacts.filter(
+      (fact) => fact.parent !== run.id,
+    );
   }
   view.order = withoutId(view.order, run.id);
   const parent =

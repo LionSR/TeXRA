@@ -27,7 +27,7 @@ import type {
   ProjectDatabases,
 } from '@shared/session/database';
 import type { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
-import type { InquiryRecords } from '@shared/session/inquiryRecords';
+import type { InquiryRecords } from '@shared/plugins/externalInquiry';
 import type { UsageLog } from '@shared/usageLog';
 import type { SetupPlatform } from '@tools/setup/platform';
 import type { LiveTools } from '@tools/liveTools';

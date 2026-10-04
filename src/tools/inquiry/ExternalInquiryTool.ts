@@ -22,6 +22,10 @@ import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { withLogChannel } from '@logger/effectLog';
 import {
+  InquiryRecords,
+  inquiryThreadRow,
+} from '@shared/plugins/externalInquiry';
+import {
   type InquiryThreadRecord,
   aggregateId as qualifyAggregateId,
   InquiryThreadIdSchema,
@@ -31,7 +35,6 @@ import {
   type InquiryThreadSummary,
   type ToolResult,
 } from '@shared/schemas';
-import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
@@ -334,13 +337,7 @@ function executeAsk(
     // Background Tasks panel: announce the open thread.
     const summary = yield* records.getThreadSummary(manifest.threadId);
     if (summary) {
-      session.publish([
-        {
-          type: 'inquiryThreadUpdated',
-          aggregateId: qualifyAggregateId('inquiry', summary.threadId),
-          ...summary,
-        },
-      ]);
+      session.publish([inquiryThreadRow(summary)]);
     }
 
     const message =

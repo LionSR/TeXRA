@@ -9,6 +9,7 @@ import {
   type CliNdjsonProgressRecordWriter,
 } from '@cli/runtime/sessionProgressSubscription';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
+import { inquiryThreadRow } from '@shared/plugins/externalInquiry';
 import {
   aggregateId as qualifyAggregateId,
   type SessionEventDraft,
@@ -102,18 +103,19 @@ const PASS_THROUGH_CASES: ReadonlyArray<{
   },
   {
     source: {
-      draft: {
-        type: 'inquiryThreadUpdated',
-        aggregateId: qualifyAggregateId('inquiry', inquiryThread.threadId),
-        ...inquiryThread,
-        parentRunId: runId,
-      },
+      draft: inquiryThreadRow({ ...inquiryThread, parentRunId: runId }),
     },
-    event: 'inquiryThreadUpdated',
+    event: 'plugin.fact',
     payload: {
-      aggregateId: qualifyAggregateId('inquiry', inquiryThread.threadId),
-      ...inquiryThread,
-      parentRunId: runId,
+      aggregateId: qualifyAggregateId(
+        'plugin',
+        `external-inquiry:${inquiryThread.threadId}`,
+      ),
+      plugin: 'external-inquiry',
+      kind: 'thread',
+      version: 1,
+      parent: runId,
+      value: inquiryThread,
     },
   },
   {
