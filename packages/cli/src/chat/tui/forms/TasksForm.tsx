@@ -207,14 +207,17 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     if (asked.current.has(pending.requestId)) return;
     const { requestId } = pending;
     asked.current.add(requestId);
-    act((ready) =>
-      ready
-        .preview(requestId)
-        .pipe(
-          Effect.map((preview) =>
-            setPreviews((held) => new Map(held).set(requestId, preview)),
+    act(
+      (ready) =>
+        ready
+          .preview(requestId)
+          .pipe(
+            Effect.map((preview) =>
+              setPreviews((held) => new Map(held).set(requestId, preview)),
+            ),
           ),
-        ),
+      // No preview to be had: the card shows the edit from its path.
+      () => setPreviews((held) => new Map(held).set(requestId, null)),
     );
   });
 
@@ -231,6 +234,16 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
           ? { kind: 'edit', data: payload.data }
           : { kind: 'modal', payload: { ...payload, tui: preview } };
       }
+      case 'retry':
+        // Switching onto the user's own key is the host's that runs the
+        // task; this view offers retry and stop only.
+        return {
+          kind: 'modal',
+          payload: {
+            ...payload,
+            data: { ...payload.data, credentialSwitch: null },
+          },
+        };
       default:
         return { kind: 'modal', payload };
     }

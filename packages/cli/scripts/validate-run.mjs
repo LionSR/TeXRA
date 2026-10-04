@@ -1418,6 +1418,29 @@ prompt: |
     assertSuccess(result, label);
     return result.stdout.trim();
   };
+  // The task's rows, from the project's own store (the chat also opens
+  // the no-workspace one), each with whether it carries the follow-up.
+  const taskRows = (runId) => {
+    const storage = path.join(cwd, 'home', '.texra', 'v1', 'workspace-storage');
+    const project = readdirSync(storage).find((name) =>
+      name.startsWith('work-'),
+    );
+    if (project === undefined) return [];
+    const db = new DatabaseSync(path.join(storage, project, 'texra.db'), {
+      readOnly: true,
+    });
+    try {
+      return db
+        .prepare(
+          `SELECT e.type, e.data LIKE '%Ping%' AS ping FROM event e
+           JOIN event_sequence s ON s.id = e.aggregate
+           WHERE s.logical_id = ? ORDER BY e."commit"`,
+        )
+        .all(runId);
+    } finally {
+      db.close();
+    }
+  };
   try {
     const runId = texra(
       [
@@ -1444,50 +1467,40 @@ prompt: |
       env,
       onData: (_data, pty) => {
         const plain = stripVTControlCharacters(pty.output).slice(from);
-        const step = (next, needle, keys) => {
-          if (phase !== next[0] || !plain.includes(needle)) return;
-          phase = next[1];
-          from += plain.indexOf(needle) + needle.length;
-          keys.forEach((key, index) =>
-            pty.setTimer(() => pty.write(key), 600 + index * 400),
+        // One step per chunk: each waits for output after the last one's.
+        const steps = [
+          ['opening', 'list', '/ commands', ['/tasks', '\r']],
+          ['list', 'attach', 'approval_validation', ['\r']],
+          ['attach', 'approved', 'Run command?', ['y']],
+          ['approved', 'sent', 'The approved command ran.', ['Ping', '\r']],
+        ];
+        const step = steps.find(([at]) => at === phase);
+        if (step === undefined) return;
+        const [, next, needle, keys] = step;
+        if (!plain.includes(needle)) return;
+        phase = next;
+        from += plain.indexOf(needle) + needle.length;
+        keys.forEach((key, index) =>
+          pty.setTimer(() => pty.write(key), 600 + index * 400),
+        );
+        if (phase !== 'sent') return;
+        // The follow-up's answer is a second finalized response in the
+        // task's own rows; the screen repaints old replies, so it is read
+        // from the store.
+        const poll = () => {
+          const answered = taskRows(runId).filter(
+            (row) => row.type === 'response.finalized',
+          ).length;
+          if (answered < 2) return pty.setTimer(poll, 500);
+          phase = 'done';
+          ['\u001b', ETX, ETX].forEach((key, index) =>
+            pty.setTimer(() => pty.write(key), 1_500 + index * 600),
           );
         };
-        step(['opening', 'list'], '/ commands', ['/tasks', '\r']);
-        step(['list', 'attach'], 'approval_validation', ['\r']);
-        step(['attach', 'approved'], 'Run command?', ['y']);
-        step(['approved', 'follow'], 'The approved command ran.', [
-          'Ping',
-          '\r',
-        ]);
-        step(['follow', 'done'], 'The approved command ran.', [
-          '\u001b',
-          ETX,
-          ETX,
-        ]);
+        pty.setTimer(poll, 1_000);
       },
     });
-    // The project's own store: the chat also opens the no-workspace one.
-    const storage = path.join(cwd, 'home', '.texra', 'v1', 'workspace-storage');
-    const db = new DatabaseSync(
-      path.join(
-        storage,
-        readdirSync(storage).find((name) => name.startsWith('work-')),
-        'texra.db',
-      ),
-      { readOnly: true },
-    );
-    let rows;
-    try {
-      rows = db
-        .prepare(
-          `SELECT e.type, e.data LIKE '%Ping%' AS ping FROM event e
-           JOIN event_sequence s ON s.id = e.aggregate
-           WHERE s.logical_id = ? ORDER BY e."commit"`,
-        )
-        .all(runId);
-    } finally {
-      db.close();
-    }
+    const rows = taskRows(runId);
     const approved = path.join(project.work, 'approved.txt');
     const artifactPath = writeArtifact('service-tasks-tui.json', {
       runId,
@@ -1503,7 +1516,9 @@ prompt: |
       phase === 'done' &&
         existsSync(approved) &&
         rows.some((row) => row.type === 'request.decided') &&
-        rows.some((row) => row.ping),
+        rows.some((row) => row.ping) &&
+        rows.filter((row) => row.type === 'response.finalized').length >= 2 &&
+        stripVTControlCharacters(chat.output).includes('› Ping'),
       `/tasks should attach to the service task, approve its command and send a follow-up (artifact: ${artifactPath})\noutput:\n${stripVTControlCharacters(chat.output).slice(-3000)}`,
     );
   } finally {

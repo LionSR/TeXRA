@@ -11,6 +11,7 @@ import type {
   TaskSummary,
   ToolEditPreview,
 } from '@controllers/server/protocol';
+import { aggregateId } from '@shared/schemas';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import {
   attentionOf,
@@ -79,11 +80,21 @@ export function followAttachedTask(
           ),
         ),
     });
+    const aggregate = aggregateId('run', task.runId);
+    let seen = false;
     yield* Stream.runForEach(watchTask(client, task), (view) =>
-      Effect.sync(() => {
+      Effect.suspend(() => {
+        const run = view.runs.get(task.runId);
+        // Gone: held once and dropped since (deleted), or its history read
+        // and no run in it.
+        if (run === undefined && (seen || view.folded.has(aggregate)))
+          return Effect.fail(
+            new Error('The task is no longer in its project.'),
+          );
+        seen ||= run !== undefined;
         const tree = treeOf(view, task.runId);
         onLevel({
-          run: view.runs.get(task.runId),
+          run,
           // Only what the service can take an answer for now (the rule
           // every window reads): an interrupted run's request waits for a
           // resume, and is not offered here.
@@ -92,6 +103,7 @@ export function followAttachedTask(
           ),
           ended: null,
         });
+        return Effect.void;
       }),
     );
   }).pipe(
