@@ -184,7 +184,7 @@ facts about today's consumers decide the shape.
 | `@texra-ai/llm` entry | Contents                                                                                                                                                                                                                           | Runs in      |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
 | `.`                   | `Model`, the turn types and schemas (today's `./turn`), the model catalog over `llm-zoo` and the provider data, `RouteFacts`, `decideModelRoute`, `routeConfig`, the reasoning choice, the `CredentialStore` port type, the errors | browser-safe |
-| `./node`              | `bindModel(route, facts, { credentials, fetch }) → Model`, the ChatGPT and Grok sign-in flows, their coordinators and session schemas, `SharedAttempt`                                                                             | Node         |
+| `./node`              | `bindModel(route, facts, { credentials, fetch }) → Effect<Model, BindError, Scope>`, the ChatGPT and Grok sign-in flows, their coordinators and session schemas, `SharedAttempt`                                                   | Node         |
 
 **The protocols become internal modules.** `packages/llm/src/api/` holds
 the four protocols, the fingerprint and the upload cache, and nothing
@@ -297,7 +297,12 @@ as an Effect service:
 MCP loader are harness machinery, not a plugin value. `host` carries what a
 host supplies to its plugins and the app cannot import: the extension's Lean,
 inline-comment and Copilot providers. A plugin requires them as ordinary
-services, and `definePlugin` types them in `HostServices`.
+services, and `H`, the host requirement, is a generic threaded through
+`definePlugin`, the plugin's layers and tools. The harness never names an
+app tag; the host's `Layer<HostServices>` must provide every `H` its roster
+declares, which `Sessions.layer` checks at the type level. A session layer
+may consume the plugin's own process output (`POut`), which the step
+provides before building it.
 
 **Per-root execution.** `execution` is a function of the session's roots,
 called at `Session.open(roots)`, so a sandboxed filesystem and spawner are
@@ -320,11 +325,11 @@ and the five `satisfies` tables (`registry.ts:156-283`) and the manifest
 flags that point into them (`plugins.ts:60-110`):
 
 ```ts
-interface Plugin<POut = never, SOut = never, ROut = POut | SOut> {
+interface Plugin<POut = never, SOut = never, H = never, ROut = POut | SOut> {
   readonly id: PluginId;
   readonly revision: string; // 'builtin' for first-party
   readonly requires?: readonly PluginId[]; // first-party only (below)
-  readonly tools?: readonly Tool<HarnessServices | ROut>[]; // defineTool(...)
+  readonly tools?: readonly Tool<HarnessServices | H | ROut>[]; // defineTool(...)
   readonly prompt?: PromptSection;
   readonly continuation?: Continuation<ROut>;
   readonly rounds?: RoundPolicy<ROut>; // per agent category (M1)
@@ -336,13 +341,17 @@ interface Plugin<POut = never, SOut = never, ROut = POut | SOut> {
   readonly project?: PluginProjection<ROut>; // read side of its arms, §4
   readonly runConfig?: PluginRunConfig; // versioned schema and upcasters, §4
   readonly drain?: Effect<void, never, HarnessServices | POut>; // process output only
-  readonly processLayer?: Layer<POut, never, HarnessServices>;
-  readonly sessionLayer?: Layer<SOut, never, HarnessServices | SessionServices>;
+  readonly processLayer?: Layer<POut, never, HarnessServices | H>;
+  readonly sessionLayer?: Layer<
+    SOut,
+    never,
+    HarnessServices | H | POut | SessionServices
+  >;
   readonly agents?: string; // directories, as data
   readonly skills?: string;
 }
-declare const definePlugin: <POut, SOut>(
-  plugin: Plugin<POut, SOut>,
+declare const definePlugin: <POut, SOut, H>(
+  plugin: Plugin<POut, SOut, H>,
 ) => Plugin.Any;
 ```
 
@@ -563,6 +572,13 @@ outputs, compile failures and diffs) move to the app in M3 and read the
 slot. A stored run folds to the same slot, so reopening a session loses
 nothing.
 
+An arm declares its scope, `session` (the project database) or `global`
+(the `GlobalDatabase`), and `PluginState` reads and appends it in that
+store. The inquiry thread arm is `global`, as `InquiryRecords` is today, so a
+follow-up from another project and an answer with the originating project
+closed still reach the thread; the project's `plugin.fact` rows stay display
+notifications for the session view.
+
 Both become `plugin.fact` arms. `output.produced` becomes `documents/output`
 v1: the listing already folds the latest value per (plugin, kind), and the
 run's file list and the sidecars become the documents plugin's read of it.
@@ -663,8 +679,10 @@ in the same PR.
 **Why M5 is not folded into M8.** M8 is reviewed by its shape: every entry
 in `git diff -M` is a pure rename or a codemod's specifier rewrite. About
 1,100 word changes would turn a hundred of those renames into edits to
-read, and M8 does not touch the docs. On its own, the rename lands early,
-so M6 to M8 are written in the new vocabulary.
+read. M5 on its own lands early, so M6 to M8 are written in the new
+vocabulary. M8's one documentation edit is the live guides: `CLAUDE.md` and
+`AGENTS.md` (paths, the SDK boundary, the ratchet names) change in the same
+PR, while historical proposals keep their baseline paths.
 
 **Path aliases.** The alias names stay. `tsconfig.json` maps the harness's
 aliases (`@agent/*`, `@shared/*`, `@tools/*`, `@controllers/*`, `@common/*`,
