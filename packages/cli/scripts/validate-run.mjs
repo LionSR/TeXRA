@@ -234,6 +234,16 @@ function preflightExistingValidationBundle() {
     );
     process.exit(1);
   }
+
+  if (!existsSync(hostHarnessPath)) {
+    console.error(
+      `[validate-run] --no-build requires the service host harness: ${hostHarnessPath}`,
+    );
+    console.error(
+      '[validate-run] omit --no-build once so the validator can build its harness.',
+    );
+    process.exit(1);
+  }
 }
 
 function parseNdjson(stdout, label) {

@@ -71,6 +71,7 @@ interface Window {
   /** The project folder, as the service's notices name it. */
   readonly project: string;
   readonly capabilities: ReadonlySet<HostCapability>;
+  /** When it was attached or last focused, in the service's own order. */
   focusedAt: number;
   readonly frames: Queue.Queue<HostFrame>;
   /** The calls it has not answered yet, by call id. */
@@ -115,6 +116,8 @@ export interface HostWindows {
 
 export const makeHostWindows = Effect.sync((): HostWindows => {
   const windows = new Set<Window>();
+  /** A sequence, not a clock: a later focus always ranks higher. */
+  let focuses = 0;
   /** Every unanswered call's window, by call id. */
   const calls = new Map<string, Window>();
   const staged = new Map<string, Map<string, Staged>>();
@@ -361,7 +364,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
             key: session.roots.storage,
             project: projectOf(session),
             capabilities: new Set(capabilities),
-            focusedAt: Date.now(),
+            focusedAt: (focuses += 1),
             frames: yield* Queue.unbounded<HostFrame>(),
             pending: new Map(),
           };
@@ -378,7 +381,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
     focus: (attachment) =>
       Effect.sync(() => {
         for (const window of windows)
-          if (window.id === attachment) window.focusedAt = Date.now();
+          if (window.id === attachment) window.focusedAt = focuses += 1;
       }),
     answer: (id, answer) =>
       Effect.suspend(() => {

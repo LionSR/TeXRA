@@ -137,24 +137,28 @@ export const attachWindowHost = Effect.fn('server.attachWindowHost')(function* (
       workspace,
       capabilities: capabilitiesOf(host),
     }).pipe(
-      Stream.runForEach((frame) =>
-        frame.kind === 'attached'
-          ? Deferred.succeed(attached, undefined).pipe(
-              Effect.andThen(
-                Effect.forkScoped(
-                  Stream.runForEach(focused, () =>
-                    client['host.focus']({
-                      attachment: frame.attachment,
-                    }).pipe(
-                      Effect.ignore({ log: 'Warn', message: 'Focus not told' }),
-                    ),
+      Stream.runForEach((frame) => {
+        if (frame.kind === 'attached')
+          return Deferred.succeed(attached, undefined).pipe(
+            Effect.andThen(
+              Effect.forkScoped(
+                Stream.runForEach(focused, () =>
+                  client['host.focus']({
+                    attachment: frame.attachment,
+                  }).pipe(
+                    Effect.ignore({ log: 'Warn', message: 'Focus not told' }),
                   ),
                 ),
               ),
-            )
-          : // Each call on its own fiber: a slow build never holds the next.
-            Effect.forkScoped(answer(frame.id, frame.call)),
-      ),
+            ),
+          );
+        // Staged before the next call is read, so a release or an approve
+        // of the request always finds its preview.
+        if (frame.call.kind === 'presentToolEdit')
+          return answer(frame.id, frame.call);
+        // Each other call on its own fiber: a slow build never holds the next.
+        return Effect.forkScoped(answer(frame.id, frame.call));
+      }),
       Effect.matchCauseEffect({
         // The service stopped or restarted: the window goes on with its
         // own process's capabilities.
