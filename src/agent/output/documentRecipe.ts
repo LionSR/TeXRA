@@ -46,10 +46,13 @@ for (let revision = 0; revision < revisions; revision += 1) {
     label: \`Revision \${revision + 1}\`,
   });
   await tools.document_extract({ revision, run: reply.runId });
-  await tools.document_compile({ revision });
+  const compiled = await tools.document_compile({ revision });
   await tools.document_diff({ revision });
   if (context.reflect && revision + 1 < revisions) {
-    const review = await tools.document_review({ revision });
+    const review = await tools.document_review({
+      revision,
+      checked: compiled.checked,
+    });
     const critic = await agent(review.prompt, {
       agentName: 'builtIn:critic',
       label: \`Critique \${revision + 1}\`,

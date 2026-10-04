@@ -20,15 +20,15 @@ import {
 import { renderPrompt } from '@utils/prompt';
 import { reportDiffTimeout, unifiedDiffText } from '@utils/text/unifiedDiff';
 
-/** The most of one output's diff a critic reads: a whole rewrite of a long
- *  document would not fit its model's context. */
-const MAX_DIFF_CHARS = 40_000;
+/** The most diff a critic reads, across all outputs: a whole rewrite of a
+ *  long document would not fit its model's context. */
+const MAX_DIFF_CHARS = 60_000;
 
-/** `text` cut to `MAX_DIFF_CHARS`, saying so. */
-const bounded = (text: string): string =>
-  text.length <= MAX_DIFF_CHARS
+/** `text` cut to the `left` budget, saying so. */
+const bounded = (text: string, left: number): string =>
+  text.length <= left
     ? text
-    : `${text.slice(0, MAX_DIFF_CHARS)}\n… (diff cut at ${MAX_DIFF_CHARS} characters of ${text.length})`;
+    : `${text.slice(0, Math.max(0, left))}\n… (diff cut: ${text.length} characters, over the review's budget)`;
 
 type Round = RoundOutput | undefined;
 
@@ -48,7 +48,9 @@ const missingEvidence = (round: Round, revision: number): string | null => {
 const compileEvidence = Effect.fn('document_review.compile')(function* (
   round: Round,
   logger: Documents['deps']['logger'],
+  checked: boolean,
 ) {
+  if (!checked) return 'No compile check ran: the documents are unverified.';
   const failed = round?.compileFailures ?? [];
   const context = yield* failureContextFromLogs(failed, logger);
   const listed = failed
@@ -68,8 +70,16 @@ export const DocumentReviewTool = defineTool({
     "The evidence a critic reviews for a revision: the user's instruction, the task's requests so far, the diff of each output against the document it started from, and the compile result. Resolves to `{ prompt }`, to pass to the `critic` agent.",
   scriptReturns: '{ prompt: string }',
   replay: 'safe',
-  schema: z.strictObject({ revision: RevisionSchema }),
-  execute: Effect.fn('document_review')(function* ({ revision }) {
+  schema: z.strictObject({
+    revision: RevisionSchema,
+    checked: z
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the revision's compile check ran (`document_compile`).",
+      ),
+  }),
+  execute: Effect.fn('document_review')(function* ({ revision, checked }) {
     const docs = yield* documentsOfCall('document_review');
     const round = docs.state.rounds.get(revision);
     const fs = yield* FileSystem.FileSystem;
@@ -87,6 +97,7 @@ export const DocumentReviewTool = defineTool({
     const missing = missingEvidence(round, revision);
     if (missing) parts.push(missing);
     const mapping = traceFileLineage(docs.state, docs.baseFiles, revision);
+    let left = MAX_DIFF_CHARS;
     for (const output of round?.outputs ?? []) {
       const path = fileLocationDisplayPath(output.location);
       const base = mapping.get(path)?.base;
@@ -98,12 +109,12 @@ export const DocumentReviewTool = defineTool({
       const after = yield* fs.readFileString(output.location.absolutePath);
       const { text, timeout } = unifiedDiffText(before, after);
       yield* reportDiffTimeout(timeout);
-      parts.push(
-        `<diff path="${path}">\n${text === undefined ? '(unchanged)' : bounded(text)}\n</diff>`,
-      );
+      const shown = text === undefined ? '(unchanged)' : bounded(text, left);
+      left -= shown.length;
+      parts.push(`<diff path="${path}">\n${shown}\n</diff>`);
     }
     parts.push(
-      `<compile>\n${yield* compileEvidence(round, docs.deps.logger)}\n</compile>`,
+      `<compile>\n${yield* compileEvidence(round, docs.deps.logger, checked !== false)}\n</compile>`,
     );
     const prompt = parts.join('\n\n');
     return {
