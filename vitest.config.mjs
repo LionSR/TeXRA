@@ -118,6 +118,11 @@ export default defineConfig({
   test: {
     testTimeout: kernelTimeoutMs,
     hookTimeout: kernelTimeoutMs,
+    // A local run shares the machine with the editor and with a second run
+    // (another worktree, a watcher), so it takes half the cores: two runs fill
+    // the machine and no more. CI owns its runner and keeps Vitest's default.
+    // `VITEST_MAX_WORKERS` overrides both.
+    maxWorkers: process.env.CI ? undefined : '50%',
     // The Node child-process spawner is the library's, so the suite that
     // hands it an in-memory child mocks `node:child_process` underneath it.
     // A dependency Vitest externalises imports Node builtins natively and
