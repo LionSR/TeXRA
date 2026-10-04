@@ -1,7 +1,10 @@
 /**
- * The failures the Effect surface names (`@texra-ai/agent`). Four
- * tagged errors, no more: the process the package refuses to compose, the
- * two launch refusals an embedder branches on, and the run's own failure.
+ * The failures the Effect surface names (`@texra-ai/agent`). Four are defined
+ * here — the process the package refuses to compose, the two launch refusals
+ * an embedder branches on, and the run's own failure — and two more reach the
+ * surface re-exported from the session store (`DatabaseOpenFailed`,
+ * `DatabaseReadFailed`, the `SessionOpenError` union in
+ * `@shared/session/database`), for six tagged errors on the surface in all.
  *
  * Request failures are not here. A `session.request` answers with the
  * runtime's own `RequestError` union (`@shared/session/requestErrors`), the

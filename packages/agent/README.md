@@ -215,11 +215,14 @@ is unpublished and the Promise entry had no consumers; and TeXRA 1.0 keeps no
 parallel surfaces. The composition-once-per-process limit went with the
 Promise entry: each `Sessions.layer` scope owns the composition it made.
 
-Failures are `Data.TaggedError`s: `PlatformConflict`, `AgentNotFound`,
-`ToolsRefused`, and `RunFailure`, whose `cause` is exactly what the launch
-path threw. A `session.request` answers with the runtime's own `Outcome` or
-its `RequestError` union, the same values every TeXRA host reads. Nothing
-else is exported: no store, no fold internals, no host widgets.
+Failures are `Data.TaggedError`s. Four come from the package itself —
+`PlatformConflict`, `AgentNotFound`, `ToolsRefused`, and `RunFailure`, whose
+`cause` is exactly what the launch path threw — and two, `DatabaseOpenFailed`
+and `DatabaseReadFailed` (the `SessionOpenError` union), reach the surface from
+the session store when it cannot open or read, for six in all. A
+`session.request` answers with the runtime's own `Outcome` or its
+`RequestError` union, the same values every TeXRA host reads. Beyond these,
+nothing else is exported: no fold internals, no host widgets.
 
 A runnable version of this program against a packed tarball is in
 [`example/`](./example).
