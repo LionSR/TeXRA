@@ -329,6 +329,18 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **One background TeXRA service runs tasks for every terminal (CLI).**
+  `texra tasks start <agent> --instruction "…"` starts a tool-use task in a
+  per-user service, which starts on its own the first time it is needed and
+  keeps the task running after the terminal closes. `texra tasks list` shows
+  the tasks of every project, `texra tasks attach <id>` follows one live from
+  any number of terminals at once (each prints the same transcript; Ctrl-C
+  only detaches), and `texra tasks send` and `texra tasks stop` steer it.
+  `texra service status|stop|restart` manage the service and `texra serve`
+  runs it in the foreground. Clients reach it through a local socket only
+  your user can open, in `~/.texra/run/`, and it exits after ten idle
+  minutes.
+
 - **Interrupted tasks when TeXRA opens.** When the terminal chat, the
   desktop app or the extension opens and finds tasks a closed or crashed
   TeXRA stopped mid-way, Settings › General › Interrupted tasks decides

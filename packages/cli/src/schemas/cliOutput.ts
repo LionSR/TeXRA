@@ -83,6 +83,8 @@ const CliNdjsonRecordSchema = z.discriminatedUnion('kind', [
   z.looseObject({ kind: z.literal('tool-toggle'), tool: payload }),
   z.looseObject({ kind: z.literal('tool-guide'), guide: payload }),
   z.looseObject({ kind: z.literal('version'), version: z.string() }),
+  z.looseObject({ kind: z.literal('service'), service: payload }),
+  z.looseObject({ kind: z.literal('task'), task: payload }),
   z.looseObject({ kind: z.literal('model'), model: payload }),
   z.looseObject({ kind: z.literal('model-catalog'), model: payload }),
   z.looseObject({ kind: z.literal('models-enabled'), models: payload }),

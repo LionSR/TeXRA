@@ -455,6 +455,49 @@ that process's pid and host. A holder that cannot be reached (it ran on another
 machine, or its liveness cannot be proven) counts as holding the run; when you
 are sure it is gone, delete the run from history and start a new one.
 
+## Background service
+
+One TeXRA service per user and machine can run tasks for every terminal.
+It starts on its own the first time a `texra tasks` command needs it, keeps
+running the tasks it started when the terminal that started them closes,
+and exits after ten minutes with no client connected and no task running.
+
+```bash
+texra tasks list                                   # every project's tasks, newest first
+texra tasks start <agent> --instruction "<text>"   # start a tool-use agent in the service; prints its id
+texra tasks attach <id>                            # follow it live until it ends
+texra tasks send <id> "<text>"                     # send it a follow-up
+texra tasks stop <id>                              # stop it; it can be resumed later
+```
+
+`list` marks the tasks the service is running now with `*`. Any number of
+terminals can attach to the same task at once and all of them print the
+same transcript; Ctrl-C detaches one terminal and leaves the task running.
+An id may be shortened to any prefix only one task has. `tasks start` applies its
+approval policy (`--approval-policy`, `--no-input`, or your config) to that
+project in the service before the task starts. No terminal answers an
+approval prompt yet, so a tool that would ask is withheld from service
+tasks unless the policy approves it. With
+`--output-format ndjson`, `attach` writes the task's own rows (not its
+agents') as `progress` records, in the shape `texra run` uses.
+
+Manage the service itself:
+
+```bash
+texra service status    # pid, version, socket, clients, tasks running
+texra service stop      # stop it; its running tasks stop and can be resumed
+texra service restart
+texra serve             # run it in the foreground, logging to stderr
+```
+
+The service listens on a socket in `~/.texra/run/` that only your user can
+open, and writes its log to `~/.texra/run/serve.log`. A newer TeXRA that
+finds an older service asks it to finish its running tasks and exit, and
+starts its own beside it. The service reads provider keys from its
+environment, and your settings, when it starts: after you export or remove
+a key, or edit `config.json`, run `texra service restart`. The service does
+not run on Windows yet.
+
 ## Tools and integrations
 
 The CLI can inspect the same external agent integrations shown in the extension

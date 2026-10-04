@@ -45,6 +45,10 @@ const SEED_CALL_ALLOWLIST = new Set([
   'packages/cli/scripts/tui-harness.tsx',
   'packages/extension/src/extension.ts',
   'packages/desktop/src/main/desktopProjects.ts',
+  // The service seeds each project it opens from that project's settings,
+  // and `project.policy` is a window's settings change reaching it.
+  'packages/cli/src/runtime/cliService.ts',
+  'src/controllers/server/handlers.ts',
 ]);
 
 /**
