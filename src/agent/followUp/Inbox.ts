@@ -7,8 +7,6 @@
  * the only lock. When a row may be read is data on the row (`holdUntil`),
  * evaluated by the fold a take reads (`RunInput`).
  */
-import { randomUUID } from 'node:crypto';
-
 import { Deferred, Effect, Result, type Scope } from 'effect';
 
 import type { ResumeRunResult } from '@agent/runtime/resumeRun';
@@ -16,7 +14,6 @@ import { withLogChannel } from '@logger/effectLog';
 import {
   aggregateId,
   type RunId,
-  type RunRelation,
   type SessionEventDraft,
 } from '@shared/schemas';
 import { heldElsewhereBy } from '@shared/session/database';
@@ -25,6 +22,7 @@ import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { Append } from '@shared/session/sessionEvents';
 import { ensureError } from '@utils/errors/errorMessage';
 import { RunInput } from './RunInput';
+import { queuedRow } from './followUpMessages';
 import type { FollowUpSenderInput } from './followUpSender';
 
 const CHANNEL = 'Inbox';
@@ -84,6 +82,9 @@ export interface SendOptions {
   /** Owe the run a resume when no generation here will read the row. */
   readonly wake?: boolean;
 }
+
+/** A resume's result, and whether this caller joined one in flight. */
+type Resumed = { readonly result: ResumeRunResult; readonly joined: boolean };
 
 /** What observers hear: a run takes no more input, or the inbox closed. */
 export type InboxClosed =
@@ -173,12 +174,11 @@ export class Inbox {
   /**
    * Close the run's input with a `followup.closed` row, under its claim and
    * only while nothing is queued: the publisher job reads the pending rows,
-   * so a message admitted before it keeps the run open.
+   * so a message admitted before it keeps the run open, and its reader and
+   * observers hear nothing.
    */
   closeInput(runId: RunId): void {
     if (this.disposed) return;
-    this.endReader(runId);
-    this.notify({ kind: 'run', runId });
     const run = aggregateId('run', runId);
     this.port.detach((append) =>
       Effect.scoped(
@@ -186,6 +186,8 @@ export class Inbox {
           yield* this.holdClaim(runId);
           if (this.port.pending(runId).length > 0) return;
           yield* append([{ type: 'followup.closed', aggregateId: run }]);
+          this.endReader(runId);
+          this.notify({ kind: 'run', runId });
         }),
       ).pipe(
         Effect.catch((error) =>
@@ -210,14 +212,19 @@ export class Inbox {
     for (const input of this.readers.values()) input.notify();
   }
 
-  /** One resume of `runId` at a time: a second caller joins the first. */
+  /** One resume of `runId` at a time: a second caller joins the first and
+   *  hears its result (`joined`). */
   resumeOnce<R>(
     runId: RunId,
     resume: Effect.Effect<ResumeRunResult, Error, R>,
-  ): Effect.Effect<ResumeRunResult, Error, R> {
-    return Effect.suspend(() => {
+  ): Effect.Effect<Resumed, Error, R> {
+    return Effect.suspend((): Effect.Effect<Resumed, Error, R> => {
       const running = this.resumes.get(runId);
-      if (running !== undefined) return Deferred.await(running);
+      if (running !== undefined)
+        return Effect.map(Deferred.await(running), (result) => ({
+          result,
+          joined: true,
+        }));
       const done = Deferred.makeUnsafe<ResumeRunResult, Error>();
       this.resumes.set(runId, done);
       return resume.pipe(
@@ -227,6 +234,7 @@ export class Inbox {
             Deferred.doneUnsafe(done, exit);
           }),
         ),
+        Effect.map((result) => ({ result, joined: false })),
       );
     });
   }
@@ -373,27 +381,4 @@ export class Inbox {
       }
     }
   }
-}
-
-/** The `followup.queued` row one send writes: its id is the delivery id
- *  when the producer gave one, and a run sender gets its relation to the
- *  recipient. */
-function queuedRow(
-  item: InboxItem,
-  hold: QueuedFollowUp['holdUntil'],
-  relationOf: (sender: RunId) => RunRelation,
-): QueuedFollowUp {
-  const { from, deliveryId, mediaFiles, ...content } = item;
-  return {
-    followUpId: deliveryId ?? randomUUID(),
-    ...(hold ? { holdUntil: hold } : {}),
-    content: {
-      ...content,
-      mediaFiles: mediaFiles?.slice(),
-      from:
-        from.kind === 'run'
-          ? { kind: 'run', runId: from.runId, relation: relationOf(from.runId) }
-          : from,
-    },
-  };
 }

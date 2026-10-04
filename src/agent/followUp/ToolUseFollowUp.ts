@@ -239,7 +239,10 @@ function admitQueued(
   ownerSession: SessionHandle,
 ): Effect.Effect<Exclude<Admission, { status: 'no_session' }>, Error> {
   return Effect.map(
-    ownerSession.followUps.send(runId, item, { wake: mode === 'wake' }),
+    ownerSession.followUps.send(runId, item, {
+      // A user's message whose loop ended while it was admitted still wakes.
+      wake: mode === 'wake' || (mode === 'live' && item.from.kind === 'user'),
+    }),
     (sent) => {
       if (sent.kind === 'duplicate') return { status: 'sent' };
       if (sent.kind === 'refused') {

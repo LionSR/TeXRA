@@ -164,14 +164,16 @@ function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
    *  and a run that took it is live here from then on. */
   const engine = {
     resumeRun: (runId: RunId) =>
-      followUps.resumeOnce(
-        runId,
-        Effect.map(tryResume(runId), (resumed) => {
-          if (!resumed) return { failed: 'not_resumable' as const };
-          live.add(runId);
-          return { started: true as const, delivered: true };
-        }),
-      ),
+      followUps
+        .resumeOnce(
+          runId,
+          Effect.map(tryResume(runId), (resumed) => {
+            if (!resumed) return { failed: 'not_resumable' as const };
+            live.add(runId);
+            return { started: true as const, delivered: true };
+          }),
+        )
+        .pipe(Effect.map(({ result }) => result)),
   } as unknown as AgentEngine['Service'];
   return {
     runs: {

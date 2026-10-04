@@ -8,7 +8,11 @@ import { resumeRun } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
 import { AgentCategory, aggregateId, RUN_OUTCOME } from '@shared/schemas';
-import { DatabaseReadFailed } from '@shared/session/database';
+import {
+  DatabaseClaimRefused,
+  DatabaseReadFailed,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
 import { RunHistoryRefused } from '@shared/session/runHistory';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
 import { closeSessionOf } from '@test/support/sessionEnd';
@@ -517,8 +521,14 @@ describe('resumeRun tool-use queue ownership', () => {
         const session = yield* createSession();
         const markUnreadable = vi.spyOn(session, 'markUnreadable');
         const ownerId = JSON.stringify(['other-host', 4321, 'start-1']);
-        vi.spyOn(session, 'claimOwner').mockReturnValue(
-          Effect.succeed({ ownerId, liveness: 'alive' }),
+        // The claim the host's resume takes is refused by its live owner.
+        vi.spyOn(session, 'borrowRunClaim').mockReturnValue(
+          Effect.fail(
+            new DatabaseWriteFailed({
+              path: ':memory:',
+              cause: new DatabaseClaimRefused({ ownerId, verdict: 'alive' }),
+            }),
+          ),
         );
         const onResumeResolved = vi.fn(() => Effect.void);
 

@@ -1,4 +1,4 @@
-import { Deferred, Effect, Fiber, Result } from 'effect';
+import { Deferred, Effect, Fiber, Result, type Scope } from 'effect';
 
 /**
  * The one resume entry point. Every host continues a persisted run through
@@ -27,7 +27,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
-import { claimStanding, heldElsewhereBy } from '@shared/session/database';
+import { heldElsewhereBy } from '@shared/session/database';
 import { RunHistoryRefused } from '@shared/session/runHistory';
 import { FOLLOW_UP_TYPES, foldRunRows } from '@shared/session/runRows';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -130,17 +130,24 @@ export const resumeRun = Effect.fn('resumeRun')(function* (
     ).pipe(withLogChannel(CHANNEL));
     return yield* resumeRun(owner.parentRunId, options);
   }
-  return yield* session.followUps.resumeOnce(
+  const { result, joined } = yield* session.followUps.resumeOnce(
     runId,
     resumeHere(runId, options).pipe(Effect.provideService(Runs, session.runs)),
   );
+  if (!joined) return result;
+  // A caller that joined a resume already in flight still gets its own
+  // cancellation and its own host step, once that resume has the run.
+  if (cancelled()) return REFUSED;
+  if ('started' in result && options.onResumeResolved)
+    yield* options.onResumeResolved(runId);
+  return result;
 }, Effect.uninterruptible);
 
 /** One resume of a run no generation here holds. */
 const resumeHere = Effect.fn('resumeHere')(function* (
   runId: RunId,
   options: ResumeRunOptions,
-): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices> {
+): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices | Scope.Scope> {
   const session = options.session;
   const cancelled = () => options.isCancellationRequested?.() === true;
   if (session.runs.isLive(runId)) return REFUSED;
@@ -166,18 +173,22 @@ const resumeHere = Effect.fn('resumeHere')(function* (
     };
   }
   const resume = retrieved;
-  const claim = options.onResumeResolved
-    ? yield* session.claimOwner(runId)
-    : undefined;
+  // A host about to rearrange itself holds the run's claim first, until the
+  // launched run holds its own: a claim this process holds, or one whose
+  // owner is provably dead, is taken over; another live TeXRA process's run
+  // is refused before the host changes anything.
+  const heldBy = options.onResumeResolved
+    ? yield* session.borrowRunClaim(runId).pipe(
+        Effect.as(null),
+        Effect.catch((error) => {
+          const holder = heldElsewhereBy(error);
+          return holder === null ? Effect.fail(error) : Effect.succeed(holder);
+        }),
+      )
+    : null;
   yield* session.clearUnreadable(runId);
-  // A claim whose owner is this process, or provably dead, is one the resume
-  // takes over; anything else is another live TeXRA process's run.
-  const standing = claim && claimStanding(claim);
-  if (standing?.kind === 'held') {
-    yield* session.markUnreadable(
-      runId,
-      runHeldMessage(ownerPid(standing.owner)),
-    );
+  if (heldBy !== null) {
+    yield* session.markUnreadable(runId, runHeldMessage(ownerPid(heldBy)));
     return { failed: 'owned_elsewhere' };
   }
   // An agent or plugin this process cannot run now leaves the run
@@ -211,7 +222,7 @@ const resumeHere = Effect.fn('resumeHere')(function* (
   }
   const result = launched.success;
   return { started: true, delivered: true, outcome: result.outcome, result };
-});
+}, Effect.scoped);
 
 /** What every resumed run takes from the resume's caller. */
 const runLaunchOptions = (options: ResumeRunOptions) => ({
