@@ -229,6 +229,25 @@ export const enrichModelError = (
   });
 
 /**
+ * A `ModelError` completed with what an outer scope knows. A field the error
+ * already carries is never overwritten: the scope nearest the failure, such
+ * as the turn assembly that learned the returned model, recorded it first.
+ */
+export const fillModelError = (
+  error: ModelError,
+  known: Partial<ModelErrorFields>,
+): ModelError =>
+  enrichModelError(
+    error,
+    Object.fromEntries(
+      Object.entries(known).filter(
+        ([key, value]) =>
+          value !== undefined && Reflect.get(error, key) === undefined,
+      ),
+    ),
+  );
+
+/**
  * Every provider's failure mapping treats HTTP 401/403 (or the equivalent
  * error code carried in a rejection body) as `authentication` and anything
  * else the provider rejected as `provider-rejection`. Pass every status-like

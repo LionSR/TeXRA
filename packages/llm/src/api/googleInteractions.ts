@@ -13,6 +13,7 @@ import {
   BackgroundEventSchema,
   BackgroundSubmissionSchema,
   CancellationEvidenceSchema,
+  completedTurn,
   ObservationPolicySchema,
   ModelConfigurationSchema,
   ResolvedTurnSchema,
@@ -20,9 +21,9 @@ import {
   type GoogleInteractionsConfiguration,
   type Model,
   type ResolvedTurn,
-  type TurnEvent,
   type TurnResult,
 } from '../turn.js';
+import { assembleTurn } from './assembleTurn.js';
 import { decodeTurnRequest } from './turnInput.js';
 import { systemUpdateText } from '../message.js';
 import { JsonObjectSchema, originOf, sameModelOrigin } from '../protocol.js';
@@ -32,16 +33,16 @@ import {
   sdkModelError,
   boundOperation,
   cancellationStatus,
-  enrichModelError,
+  fillModelError,
   type RemoteOperation,
 } from '../errors.js';
 import {
   ownedAbortSafeRequest,
-  parseInboundToolArguments,
   parseOutboundToolArguments,
   pullStream,
   readerAbortSignal,
 } from './transport.js';
+import type { Part, PartEvent } from './parts.js';
 import type { ModelOrigin } from '../protocol.js';
 
 export const GOOGLE_PREFIX_DOMAIN = 'texra-google-interactions-prefix-v1';
@@ -92,6 +93,8 @@ const WireInteractionSchema = z.object({
 });
 /** Wire statuses that report an interaction still working, not a terminal outcome. */
 const IN_FLIGHT_STATUSES: readonly string[] = ['queued', 'in_progress'];
+/** Wire statuses of a turn that completed, with or without local calls. */
+const COMPLETED_STATUSES: readonly string[] = ['completed', 'requires_action'];
 const WireEventSchema = z.discriminatedUnion('event_type', [
   z.object({
     event_type: z.literal('interaction.created'),
@@ -418,13 +421,212 @@ function createInput(
 }
 
 /**
- * A completed step carrying the exact argument bytes when they were observed.
- * The stream delivers tool arguments as text deltas, so it keeps them; a
- * background snapshot returns only the SDK's parse of them and keeps none.
+ * The canonical part a step opens, from a stream start or a snapshot. A
+ * snapshot hands back the SDK's parse of a call's arguments, with no bytes
+ * behind it, so its text is re-encoded from that parse; a streamed call's
+ * argument deltas replace it.
  */
-type ObservedStep = z.infer<typeof WireCompletedStepSchema> & {
-  readonly argumentsText?: string;
-};
+const stepPart = Effect.fn('llm.google.stepPart')(function* (
+  step: z.infer<typeof WireCompletedStepSchema>,
+): Effect.fn.Return<Part, ModelError> {
+  switch (step.type) {
+    case 'thought':
+      return {
+        kind: 'reasoning',
+        summary: (step.summary ?? []).map(({ text }) => ({
+          kind: 'text',
+          text,
+        })),
+        evidence:
+          step.signature === undefined
+            ? null
+            : {
+                kind: 'google-interactions-thought-signature',
+                signature: step.signature,
+              },
+      };
+    case 'model_output':
+      if ((step.content?.length ?? 0) > 1)
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message: 'Google returned unsupported assistant content.',
+        });
+      return {
+        kind: 'message',
+        content: (step.content ?? []).map(({ text }) => ({
+          kind: 'text',
+          text,
+        })),
+      };
+    case 'function_call':
+      return {
+        kind: 'local-call',
+        providerCallId: step.id,
+        name: step.name,
+        argumentsText:
+          step.arguments === undefined ? '' : JSON.stringify(step.arguments),
+      };
+  }
+});
+
+/** A reported usage receipt; an absent one leaves the last in place. */
+const usageParts = (
+  usage: z.infer<typeof WireUsageSchema> | undefined,
+): PartEvent[] =>
+  usage === undefined
+    ? []
+    : [
+        {
+          kind: 'usage',
+          usage: {
+            inputTokens: usage.total_input_tokens ?? null,
+            outputTokens: usage.total_output_tokens ?? null,
+            totalTokens: usage.total_tokens ?? null,
+            cachedInputTokens: usage.total_cached_tokens ?? null,
+            reasoningTokens: usage.total_thought_tokens ?? null,
+            providerUsage: {
+              kind: 'google',
+              toolUsePromptTokens: usage.total_tool_use_tokens ?? null,
+            },
+          },
+        },
+      ];
+
+/** What a completed interaction reports: its identity, usage and finish. */
+const interactionEnd = (
+  interaction: z.infer<typeof WireInteractionSchema>,
+): PartEvent[] => [
+  { kind: 'identity', id: interaction.id, model: interaction.model ?? null },
+  ...usageParts(interaction.usage),
+  {
+    kind: 'finish',
+    finish: {
+      finishReason:
+        interaction.status === 'requires_action' ? 'tool-calls' : 'stop',
+      // The Interactions resource reports no reason for ending, so the
+      // status is the whole of what Google says about the outcome.
+      finishEvidence: {
+        kind: 'google-interactions',
+        status: interaction.status,
+        terminalReason: null,
+      },
+    },
+  },
+];
+
+/** A step delta as the part it grows: text, summary, signature or arguments. */
+function deltaPart(
+  index: number,
+  delta: Extract<
+    z.infer<typeof WireEventSchema>,
+    { event_type: 'step.delta' }
+  >['delta'],
+): PartEvent {
+  switch (delta.type) {
+    case 'text':
+      return { kind: 'append', index, channel: 'text', text: delta.text };
+    case 'thought_summary':
+      return {
+        kind: 'append',
+        index,
+        channel: 'summary',
+        text: delta.content.text,
+      };
+    case 'arguments_delta':
+      return {
+        kind: 'append',
+        index,
+        channel: 'arguments',
+        text: delta.arguments,
+      };
+    case 'thought_signature':
+      return {
+        kind: 'evidence',
+        index,
+        evidence: {
+          kind: 'google-interactions-thought-signature',
+          signature: delta.signature,
+        },
+      };
+  }
+}
+
+/** One streamed Interactions event as parts; nothing follows completion. */
+function googleWire() {
+  let done = false;
+  const fail = (
+    message: string,
+    kind: ModelError['kind'] = 'malformed-output',
+  ) => Effect.fail(new ModelError({ kind, message }));
+  return (raw: unknown): Effect.Effect<PartEvent[], ModelError> =>
+    Effect.gen(function* () {
+      const decoded = WireEventSchema.safeParse(raw);
+      if (!decoded.success)
+        return yield* new ModelError({
+          kind: 'malformed-output',
+          message: 'Google returned malformed or unsupported stream data.',
+          cause: decoded.error,
+        });
+      const event = decoded.data;
+      if (done)
+        return yield* fail(
+          'Google emitted data after its completed interaction.',
+        );
+      switch (event.event_type) {
+        case 'interaction.created':
+        case 'interaction.completed': {
+          const interaction = event.interaction;
+          // The stream takes content only from complete start/delta/stop cycles.
+          if (interaction.steps !== undefined)
+            return yield* fail(
+              'Google terminal step snapshots are not supported by this streaming codec.',
+              'unsupported',
+            );
+          if (event.event_type === 'interaction.created')
+            return [
+              {
+                kind: 'identity',
+                id: interaction.id,
+                model: interaction.model ?? null,
+              },
+              ...usageParts(interaction.usage),
+            ];
+          done = true;
+          if (!COMPLETED_STATUSES.includes(event.interaction.status))
+            return yield* fail(
+              'Google ended without an authoritative completed turn.',
+            );
+          return interactionEnd(event.interaction);
+        }
+        case 'interaction.status_update':
+          return [{ kind: 'identity', id: event.interaction_id, model: null }];
+        case 'error':
+          return yield* new ModelError({
+            kind: 'provider-rejection',
+            message: 'Google reported a failed interaction.',
+            cause: event,
+          });
+        case 'step.start':
+          return [
+            {
+              kind: 'open',
+              index: event.index,
+              part: yield* stepPart(event.step),
+            },
+          ];
+        case 'step.stop':
+          return [
+            ...usageParts(event.usage),
+            { kind: 'close', index: event.index },
+          ];
+        case 'step.delta':
+          return [
+            ...usageParts(event.metadata?.total_usage),
+            deltaPart(event.index, event.delta),
+          ];
+      }
+    });
+}
 
 /**
  * Builds only the stored anchor a completed turn leaves for its next round.
@@ -461,121 +663,6 @@ const googleContinuation = Effect.fn('llm.google.continuation')(function* (
     },
   };
 });
-
-const normalizeCompleted = Effect.fn('llm.google.normalizeCompleted')(
-  function* (
-    interaction: z.infer<typeof WireInteractionSchema>,
-    responseSteps: readonly ObservedStep[],
-    origin: ModelOrigin,
-  ) {
-    const usage = interaction.usage;
-    const content: TurnResult['content'][number][] = [];
-    const callIds = new Set<string>();
-    for (const step of responseSteps) {
-      if (step.type === 'thought') {
-        const summary = (step.summary ?? []).map(({ text }) => ({
-          kind: 'text' as const,
-          text,
-        }));
-        content.push({
-          kind: 'reasoning',
-          summary,
-          evidence:
-            step.signature === undefined
-              ? null
-              : {
-                  kind: 'google-interactions-thought-signature',
-                  signature: step.signature,
-                },
-        });
-      } else if (step.type === 'model_output') {
-        const text = step.content?.[0];
-        if (step.content?.length !== 1 || text?.type !== 'text') {
-          return yield* new ModelError({
-            kind: 'unsupported',
-            message: 'Google returned unsupported assistant content.',
-          });
-        }
-        content.push({
-          kind: 'message',
-          content: [{ kind: 'text', text: text.text }],
-        });
-      } else if (step.type === 'function_call') {
-        if (
-          (step.argumentsText === undefined && step.arguments === undefined) ||
-          callIds.has(step.id)
-        ) {
-          return yield* new ModelError({
-            kind: 'malformed-output',
-            message:
-              'Google returned missing arguments or duplicate provider call IDs.',
-          });
-        }
-        callIds.add(step.id);
-        content.push({
-          kind: 'local-call',
-          providerCallId: step.id,
-          name: step.name,
-          // A background snapshot hands back the SDK's parse with no bytes
-          // behind it, so its text is re-encoded from that parse.
-          argumentsText: step.argumentsText ?? JSON.stringify(step.arguments),
-        });
-      } else {
-        return yield* new ModelError({
-          kind: 'unsupported',
-          message:
-            'Google returned content outside the implemented canonical vocabulary.',
-        });
-      }
-    }
-    if ((interaction.status === 'requires_action') !== callIds.size > 0) {
-      return yield* new ModelError({
-        kind: 'malformed-output',
-        message: 'Google completion status disagrees with its local calls.',
-        responseId: interaction.id,
-      });
-    }
-    const result = TurnResultSchema.safeParse({
-      kind: 'http',
-      providerResponseId: interaction.id,
-      requestedOrigin: origin,
-      returnedModel: interaction.model ?? null,
-      modelFingerprint: null,
-      content,
-      finishReason:
-        interaction.status === 'requires_action' ? 'tool-calls' : 'stop',
-      finishEvidence: {
-        kind: 'google-interactions',
-        status: interaction.status,
-        // The Interactions resource reports no reason for ending, so the
-        // status is the whole of what Google says about the outcome.
-        terminalReason: null,
-      },
-      usage:
-        usage === undefined
-          ? null
-          : {
-              inputTokens: usage.total_input_tokens ?? null,
-              outputTokens: usage.total_output_tokens ?? null,
-              totalTokens: usage.total_tokens ?? null,
-              cachedInputTokens: usage.total_cached_tokens ?? null,
-              reasoningTokens: usage.total_thought_tokens ?? null,
-              providerUsage: {
-                kind: 'google',
-                toolUsePromptTokens: usage.total_tool_use_tokens ?? null,
-              },
-            },
-    });
-    if (!result.success) {
-      return yield* new ModelError({
-        kind: 'malformed-output',
-        message: 'Google returned invalid canonical output.',
-        cause: result.error,
-      });
-    }
-    return result.data;
-  },
-);
 
 /** Direct Gemini Interactions protocol; it owns neither history nor local tools. */
 export function googleInteractionsModel(
@@ -647,337 +734,51 @@ export function googleInteractionsModel(
   );
 
   const streamTurn: Model['streamTurn'] = (turn) =>
-    Stream.suspend(() => {
-      let responseId: string | undefined;
-      let returnedModel: string | null = null;
-      const enrich = (error: ModelError) =>
-        enrichModelError(error, {
-          responseId,
-          model: returnedModel ?? config.requestedModel,
-        });
-      return Stream.unwrap(
-        Effect.gen(function* () {
-          if (
-            turn.protocol !== 'google-interactions' ||
-            turn.mode !== 'foreground'
-          ) {
-            return yield* new ModelError({
-              kind: 'unsupported',
-              message: 'The prepared Google invocation is unsupported.',
-            });
-          }
-          const inputSteps = yield* invocationInput(turn, origin);
-
-          let reader: ReadableStreamDefaultReader<unknown> | undefined =
-            undefined;
-          const signal = yield* readerAbortSignal(() => reader);
-          const source = yield* Effect.tryPromise({
-            try: () =>
-              client.interactions.create(
-                {
-                  ...createInput(turn, inputSteps),
-                  background: false,
-                  stream: true,
-                },
-                { maxRetries: 0, fetchOptions: { signal } },
-              ),
-            catch: sdkFailure,
+    Stream.unwrap(
+      Effect.gen(function* () {
+        if (
+          turn.protocol !== 'google-interactions' ||
+          turn.mode !== 'foreground'
+        ) {
+          return yield* new ModelError({
+            kind: 'unsupported',
+            message: 'The prepared Google invocation is unsupported.',
           });
-          reader = source.getReader();
-          const body = reader;
-          let completed: z.infer<typeof WireInteractionSchema> | undefined;
-          let usage: z.infer<typeof WireUsageSchema> | undefined;
-          const pending = new Map<
-            number,
-            {
-              step: z.infer<typeof WireStepSchema>;
-              argumentsText?: string;
-              stopped: boolean;
-            }
-          >();
-
-          const events = pullStream(() => body.read(), sdkFailure).pipe(
-            Stream.mapEffect((raw) =>
-              Effect.gen(function* () {
-                const decoded = WireEventSchema.safeParse(raw);
-                if (!decoded.success) {
-                  return yield* new ModelError({
-                    kind: 'malformed-output',
-                    message:
-                      'Google returned malformed or unsupported stream data.',
-                    responseId,
-                    cause: decoded.error,
-                  });
-                }
-                const event = decoded.data;
-                if (completed) {
-                  return yield* new ModelError({
-                    kind: 'malformed-output',
-                    message:
-                      'Google emitted data after its completed interaction.',
-                  });
-                }
-                const progress: TurnEvent[] = [];
-                const hadIdentity = responseId !== undefined;
-                if (
-                  event.event_type === 'interaction.created' ||
-                  event.event_type === 'interaction.completed'
-                ) {
-                  // Codec 1 takes content only from complete start/delta/stop cycles.
-                  if (event.interaction.steps !== undefined) {
-                    return yield* new ModelError({
-                      kind: 'unsupported',
-                      message:
-                        'Google terminal step snapshots are not supported by this streaming codec.',
-                      responseId,
-                    });
-                  }
-                  if (
-                    !event.interaction.id ||
-                    (responseId !== undefined &&
-                      responseId !== event.interaction.id)
-                  ) {
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message:
-                        'Google changed or omitted the interaction identity.',
-                    });
-                  }
-                  responseId = event.interaction.id;
-                  if (
-                    event.interaction.model &&
-                    returnedModel !== null &&
-                    returnedModel !== event.interaction.model
-                  ) {
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message: 'Google changed the returned model identity.',
-                      responseId,
-                    });
-                  }
-                  if (event.interaction.model)
-                    returnedModel = event.interaction.model;
-                  usage = event.interaction.usage ?? usage;
-                  if (event.event_type === 'interaction.completed')
-                    completed = event.interaction;
-                } else if (event.event_type === 'interaction.status_update') {
-                  if (
-                    responseId !== undefined &&
-                    responseId !== event.interaction_id
-                  ) {
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message: 'Google changed the interaction identity.',
-                    });
-                  }
-                  responseId = event.interaction_id;
-                } else if (
-                  responseId === undefined &&
-                  event.event_type !== 'error'
-                ) {
-                  return yield* new ModelError({
-                    kind: 'malformed-output',
-                    message:
-                      'Google emitted content before identifying its interaction.',
-                  });
-                } else if (event.event_type === 'step.start') {
-                  if (pending.has(event.index)) {
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message: 'Google reused an invalid step index.',
-                    });
-                  }
-                  pending.set(event.index, {
-                    step: structuredClone(event.step),
-                    stopped: false,
-                  });
-                  if (
-                    event.step.type === 'thought' ||
-                    event.step.type === 'model_output'
-                  )
-                    progress.push({
-                      kind: 'phase',
-                      part:
-                        event.step.type === 'thought' ? 'reasoning' : 'text',
-                      boundary: 'start',
-                      providerItemIndex: event.index,
-                    });
-                } else if (
-                  event.event_type === 'step.stop' ||
-                  event.event_type === 'step.delta'
-                ) {
-                  const slot = pending.get(event.index);
-                  if (!slot || slot.stopped) {
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message: 'Google changed an absent or completed step.',
-                    });
-                  }
-                  if (event.event_type === 'step.stop') {
-                    slot.stopped = true;
-                    usage = event.usage ?? usage;
-                    if (
-                      slot.step.type === 'thought' ||
-                      slot.step.type === 'model_output'
-                    )
-                      progress.push({
-                        kind: 'phase',
-                        part:
-                          slot.step.type === 'thought' ? 'reasoning' : 'text',
-                        boundary: 'end',
-                        providerItemIndex: event.index,
-                      });
-                  } else {
-                    usage = event.metadata?.total_usage ?? usage;
-                    const delta = event.delta;
-                    if (
-                      delta.type === 'text' &&
-                      slot.step.type === 'model_output'
-                    ) {
-                      const content = (slot.step.content ??= []);
-                      const last = content.at(-1);
-                      if (last?.type === 'text') last.text += delta.text;
-                      else content.push({ type: 'text', text: delta.text });
-                      progress.push({
-                        kind: 'delta',
-                        part: 'text',
-                        text: delta.text,
-                        providerItemIndex: event.index,
-                      });
-                    } else if (
-                      delta.type === 'thought_summary' &&
-                      slot.step.type === 'thought' &&
-                      delta.content?.type === 'text'
-                    ) {
-                      const summary = (slot.step.summary ??= []);
-                      const last = summary.at(-1);
-                      if (last?.type === 'text')
-                        last.text += delta.content.text;
-                      else
-                        summary.push({
-                          type: 'text',
-                          text: delta.content.text,
-                        });
-                      progress.push({
-                        kind: 'delta',
-                        part: 'reasoning',
-                        text: delta.content.text,
-                        providerItemIndex: event.index,
-                      });
-                    } else if (
-                      delta.type === 'thought_signature' &&
-                      slot.step.type === 'thought'
-                    ) {
-                      if (
-                        slot.step.signature !== undefined &&
-                        slot.step.signature !== delta.signature
-                      ) {
-                        return yield* new ModelError({
-                          kind: 'malformed-output',
-                          message:
-                            'Google changed an existing thought signature.',
-                          responseId,
-                        });
-                      }
-                      slot.step.signature = delta.signature;
-                    } else if (
-                      delta.type === 'arguments_delta' &&
-                      slot.step.type === 'function_call'
-                    ) {
-                      slot.argumentsText =
-                        (slot.argumentsText ?? '') + delta.arguments;
-                    } else {
-                      return yield* new ModelError({
-                        kind: 'unsupported',
-                        message:
-                          'Google emitted an unsupported or mismatched content delta.',
-                      });
-                    }
-                  }
-                } else {
-                  return yield* new ModelError({
-                    kind: 'provider-rejection',
-                    message: 'Google reported a failed interaction.',
-                    cause: event,
-                  });
-                }
-                if (!hadIdentity && responseId !== undefined)
-                  progress.unshift({
-                    kind: 'identified',
-                    providerResponseId: responseId,
-                    requestedOrigin: origin,
-                    returnedModel,
-                  });
-                return progress;
-              }),
+        }
+        const inputSteps = yield* invocationInput(turn, origin);
+        let reader: ReadableStreamDefaultReader<unknown> | undefined =
+          undefined;
+        const signal = yield* readerAbortSignal(() => reader);
+        const source = yield* Effect.tryPromise({
+          try: () =>
+            client.interactions.create(
+              {
+                ...createInput(turn, inputSteps),
+                background: false,
+                stream: true,
+              },
+              { maxRetries: 0, fetchOptions: { signal } },
             ),
-            Stream.flattenIterable,
-          );
-
-          const terminal = Stream.fromEffect(
-            Effect.gen(function* () {
-              if (
-                !completed ||
-                !responseId ||
-                (completed.status !== 'completed' &&
-                  completed.status !== 'requires_action')
-              ) {
-                return yield* new ModelError({
-                  kind: 'malformed-output',
-                  message:
-                    'Google ended without an authoritative completed turn.',
-                });
-              }
-              const ordered = [...pending.entries()].toSorted(
-                ([left], [right]) => left - right,
-              );
-              const responseSteps: ObservedStep[] = [];
-              for (const [index, slot] of ordered) {
-                if (!slot.stopped || index !== responseSteps.length) {
-                  return yield* new ModelError({
-                    kind: 'malformed-output',
-                    message: 'Google ended with an incomplete step sequence.',
-                  });
-                }
-                const argumentsText = slot.argumentsText;
-                if (
-                  slot.step.type === 'function_call' &&
-                  argumentsText !== undefined
-                ) {
-                  yield* parseInboundToolArguments(argumentsText, 'Google');
-                  responseSteps.push({ ...slot.step, argumentsText });
-                  continue;
-                }
-                responseSteps.push(slot.step);
-              }
-              const result = yield* normalizeCompleted(
-                {
-                  ...completed,
-                  id: responseId,
-                  model: returnedModel ?? undefined,
-                  usage,
-                },
-                responseSteps,
-                origin,
-              );
-              const continuation = yield* googleContinuation(
-                turn,
-                result,
-                origin,
-              );
-              return {
-                kind: 'completed',
-                result: continuation
-                  ? TurnResultSchema.parse({ ...result, continuation })
-                  : result,
-              } as const;
-            }),
-          );
-          return Stream.concat(events, terminal).pipe(Stream.mapError(enrich));
-        }).pipe(Effect.mapError(enrich)),
-      );
-    });
-
+          catch: sdkFailure,
+        });
+        reader = source.getReader();
+        const body = reader;
+        return assembleTurn(
+          pullStream(() => body.read(), sdkFailure).pipe(
+            Stream.mapEffect(googleWire()),
+          ),
+          {
+            origin,
+            provider: 'Google',
+            finalize: (result) => withContinuation(turn, result),
+          },
+        );
+      }).pipe(
+        Effect.mapError((error) =>
+          fillModelError(error, { model: config.requestedModel }),
+        ),
+      ),
+    );
   const snapshot = Effect.fn('llm.google.snapshot')(function* (
     raw: unknown,
     operation: RemoteOperation,
@@ -1021,18 +822,41 @@ export function googleInteractionsModel(
           cause: steps.error,
         });
       }
-      return yield* normalizeCompleted(interaction, steps.data, origin);
+      const parts = yield* Effect.forEach(steps.data, (step, index) =>
+        Effect.map(stepPart(step), (part): PartEvent[] => [
+          { kind: 'open', index, part },
+          { kind: 'close', index },
+        ]),
+      );
+      // The identity leads, so a failing step names the returned model.
+      const [identity, ...end] = interactionEnd(interaction);
+      const batch = [identity, ...parts.flat(), ...end];
+      return yield* completedTurn(
+        assembleTurn(Stream.make(batch), { origin, provider: 'Google' }),
+      );
     },
   );
+  /** A completed turn with the anchor its next round chains on, if any. */
+  const withContinuation = (
+    turn: Extract<ResolvedTurn, { protocol: 'google-interactions' }>,
+    result: TurnResult,
+  ) =>
+    googleContinuation(turn, result, origin).pipe(
+      Effect.map((continuation) =>
+        continuation
+          ? TurnResultSchema.parse({ ...result, continuation })
+          : result,
+      ),
+    );
   const withOperation = (
     operation: RemoteOperation,
     error: ModelError,
     returnedModel?: string,
   ) =>
-    enrichModelError(error, {
+    fillModelError(error, {
       operation,
       responseId: operation.providerResponseId,
-      model: returnedModel ?? error.model ?? config.requestedModel,
+      model: returnedModel ?? config.requestedModel,
     });
   const submit: NonNullable<Model['background']>['submit'] = Effect.fn(
     'llm.google.submit',
@@ -1088,11 +912,12 @@ export function googleInteractionsModel(
           returnedModel: interaction.model ?? null,
         });
       }
-      const result = yield* completedSnapshot(interaction);
-      const continuation = yield* googleContinuation(turn, result, origin);
       return BackgroundSubmissionSchema.parse({
         kind: 'completed',
-        result: continuation ? { ...result, continuation } : result,
+        result: yield* withContinuation(
+          turn,
+          yield* completedSnapshot(interaction),
+        ),
       });
     }).pipe(
       Effect.catchCause((cause) =>
@@ -1180,13 +1005,10 @@ export function googleInteractionsModel(
                 ...interaction,
                 model: returnedModel,
               });
-              const continuation = chain
-                ? yield* googleContinuation(turn, result, origin)
-                : undefined;
               return BackgroundEventSchema.parse({
                 kind: 'completed',
                 afterSequence: null,
-                result: continuation ? { ...result, continuation } : result,
+                result: chain ? yield* withContinuation(turn, result) : result,
               });
             }
             yield* Effect.sleep(

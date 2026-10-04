@@ -642,14 +642,6 @@ const DeltaEventSchema = z.strictObject({
   kind: z.literal('delta'),
   part: z.enum(['text', 'refusal', 'reasoning']),
   text: z.string(),
-  // Position in this provider response, not a canonical-history or tool-call ordinal.
-  providerItemIndex: z.int().nonnegative().nullable(),
-});
-const PhaseEventSchema = DeltaEventSchema.omit({ text: true }).extend({
-  kind: z.literal('phase'),
-  // Text denotes the assistant output block, including any refusal children.
-  part: DeltaEventSchema.shape.part.exclude(['refusal']),
-  boundary: z.enum(['start', 'end']),
 });
 const CompletedEventSchema = z.strictObject({
   kind: z.literal('completed'),
@@ -661,7 +653,6 @@ const HttpCompletedEventSchema = CompletedEventSchema.extend({
 const TurnEventSchema = z.discriminatedUnion('kind', [
   IdentifiedEventSchema.readonly(),
   DeltaEventSchema.readonly(),
-  PhaseEventSchema.readonly(),
   CompletedEventSchema.readonly(),
 ]);
 export type TurnEvent = z.infer<typeof TurnEventSchema>;
@@ -687,7 +678,6 @@ const SequencedBackgroundEventSchema = z.discriminatedUnion('kind', [
     }).readonly(),
   }).readonly(),
   DeltaEventSchema.extend(SequenceSchema.shape).readonly(),
-  PhaseEventSchema.extend(SequenceSchema.shape).readonly(),
   HttpCompletedEventSchema.extend({
     ...SequenceSchema.shape,
     result: HttpTurnResultSchema.refine(

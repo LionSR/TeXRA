@@ -450,7 +450,6 @@ export const acquireVscodeLanguageModel = Effect.fn(
           });
           textParts = [];
         };
-        let phaseOpen = false;
         let completed = false;
         const callIds = new Set<string>();
         return Stream.fromPull(
@@ -488,13 +487,6 @@ export const acquireVscodeLanguageModel = Effect.fn(
                         'The editor returned an invalid completed response.',
                       cause: result.error,
                     });
-                  if (phaseOpen)
-                    events.push({
-                      kind: 'phase',
-                      part: 'text',
-                      boundary: 'end',
-                      providerItemIndex: null,
-                    });
                   events.push({ kind: 'completed', result: result.data });
                   completed = true;
                 } else if (next.value instanceof vscode.LanguageModelTextPart) {
@@ -505,22 +497,8 @@ export const acquireVscodeLanguageModel = Effect.fn(
                       message: 'The editor returned an invalid text part.',
                     });
                   textParts.push(text);
-                  if (text.length > 0) {
-                    if (!phaseOpen)
-                      events.push({
-                        kind: 'phase',
-                        part: 'text',
-                        boundary: 'start',
-                        providerItemIndex: null,
-                      });
-                    phaseOpen = true;
-                    events.push({
-                      kind: 'delta',
-                      part: 'text',
-                      text,
-                      providerItemIndex: null,
-                    });
-                  }
+                  if (text.length > 0)
+                    events.push({ kind: 'delta', part: 'text', text });
                 } else if (
                   next.value instanceof vscode.LanguageModelToolCallPart
                 ) {
@@ -555,14 +533,6 @@ export const acquireVscodeLanguageModel = Effect.fn(
                     // object is the only representation this source ever had.
                     argumentsText: JSON.stringify(args.data),
                   });
-                  if (phaseOpen)
-                    events.push({
-                      kind: 'phase',
-                      part: 'text',
-                      boundary: 'end',
-                      providerItemIndex: null,
-                    });
-                  phaseOpen = false;
                 } else {
                   return yield* new ModelError({
                     kind: 'unsupported',
