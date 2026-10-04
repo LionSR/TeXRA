@@ -281,16 +281,13 @@ function sessionIndexesOf(view: SessionView): SessionIndexes {
 // Copy on touch (D5): the containers this call owns
 // ---------------------------------------------------------------------------
 
-/**
- * The maps and arrays this `fold` call created: written directly. Any other
- * container belongs to a published level and is copied on its first write,
- * into the envelope being built. Reset at `fold` entry, so a throw mid-fold
- * cannot carry ownership into the next call.
- */
+/** The maps and arrays this `fold` call created: written directly. Any other
+ *  container belongs to a published level and is copied on its first write,
+ *  into the envelope being built. Reset at `fold` entry, so a throw mid-fold
+ *  cannot carry ownership into the next call. */
 let owned = new WeakSet<object>();
 
-/** `map` itself when this call created it, else its copy, owned from now
- *  on: the caller stores it back on the envelope before writing. */
+/** `map` if this call owns it, else an owned copy the caller stores back. */
 function writable<K, V>(map: Map<K, V>): Map<K, V> {
   if (owned.has(map)) return map;
   const copy = new Map(map);
@@ -301,10 +298,8 @@ function writable<K, V>(map: Map<K, V>): Map<K, V> {
 /** `view.runs`, writable; a copy inherits the session's indexes. */
 function writableRuns(view: SessionView): SessionView['runs'] {
   const runs = writable(view.runs);
-  if (runs !== view.runs) {
-    SESSION_INDEXES.set(runs, sessionIndexesOf(view));
-    view.runs = runs;
-  }
+  if (runs !== view.runs) SESSION_INDEXES.set(runs, sessionIndexesOf(view));
+  view.runs = runs;
   return runs;
 }
 

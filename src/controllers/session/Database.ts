@@ -65,7 +65,6 @@ import {
   DatabaseNotOwner,
   DatabaseReadFailed,
   DatabaseWriteFailed,
-  type SqlRow,
 } from '@shared/session/database';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { currentValues } from './currentValues';
@@ -106,6 +105,7 @@ import {
   unreadableKinds,
   verdictBook,
   type EncodedRow,
+  type SqlRow,
 } from './rowCodec';
 import { isBusy, isDamaged, retryBusy } from './storeAside';
 import { assertStoreFormat, openStore, reclaimFreePages } from './storeSchema';

@@ -46,7 +46,7 @@
   "src/shared/schemas/sessionEvent.ts": 2,
   "src/shared/schemas/toolConfig.ts": 1,
   "src/shared/session/runRows.ts": 4,
-  "src/shared/session/sessionFold.ts": 6,
+  "src/shared/session/sessionFold.ts": 1,
   "src/shared/session/sessionFrames.ts": 4,
   "src/shared/session/surface.ts": 3,
   "src/shared/session/transcriptState.ts": 1,

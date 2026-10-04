@@ -39,15 +39,15 @@ import {
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
-import {
-  DatabaseAggregateBlocked,
-  type SqlRow,
-} from '@shared/session/database';
+import { DatabaseAggregateBlocked } from '@shared/session/database';
 import { PLUGIN_ARMS } from '@tools/pluginArms';
 import { isObject } from '@utils/core';
 import type { SqlError } from 'effect/sql/SqlError';
 
 const CHANNEL = 'sessionDatabase';
+
+/** One selected store row, its columns by name, decoded where it is read. */
+export type SqlRow = Readonly<Record<string, unknown>>;
 
 // zstd: Node 22.15+ (the CLI needs 22.19; Electron and VS Code ship 24).
 if (typeof zstdCompressSync !== 'function')
@@ -370,13 +370,11 @@ export function unreadableKinds(
   });
 }
 
-/**
- * One connection's record of what its reads could not decode: the
- * aggregates blocked by the first verdict found (warned once each), and the
- * plugin kinds left out (warned once per kind). `decodeAll` answers a
- * read's events and records the rest; `refresh` adds the aggregates
- * `stored_kind` names; `retain` drops the verdicts of collected ones.
- */
+/** One connection's record of what its reads could not decode: the
+ *  aggregates blocked by the first verdict found (warned once each), and the
+ *  plugin kinds left out (warned once per kind). `decodeAll` answers a read's
+ *  events and records the rest; `refresh` adds the aggregates `stored_kind`
+ *  names; `retain` drops the verdicts of collected ones. */
 export function verdictBook(
   path: string,
   exec: (

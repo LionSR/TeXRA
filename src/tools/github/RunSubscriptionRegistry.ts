@@ -280,9 +280,10 @@ export class RunSubscriptionRegistry<K extends string, Input> {
   }
 
   /**
-   * Remove one binding, pruning the run's map (and, once empty, `perRun` itself) in the same step. The
-   * single place every unbind path shrinks the (runId, key) → binding maps —
-   * callers still own disposing the returned binding's `disposable`.
+   * Remove one binding, pruning the run's map (and, once empty, `perRun`
+   * itself) in the same step. The single place every unbind path shrinks the
+   * (runId, key) → binding maps — callers still own disposing the returned
+   * binding's `disposable`.
    */
   private deleteBoundKey(
     runId: RunId,

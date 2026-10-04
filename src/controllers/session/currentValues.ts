@@ -34,9 +34,9 @@ import {
   type Database,
   type DatabaseReadFailed,
   type DatabaseWriteFailed,
-  type SqlRow,
 } from '@shared/session/database';
 import type { SqlError } from 'effect/sql/SqlError';
+import type { SqlRow } from './rowCodec';
 
 /** Replace one current value in place. */
 const UPSERT_VALUE = `

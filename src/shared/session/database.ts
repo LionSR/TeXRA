@@ -27,10 +27,6 @@ import type {
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-/** One row a store statement selects, its columns by name, decoded where it
- *  is read. */
-export type SqlRow = Readonly<Record<string, unknown>>;
-
 /** Current CLI history rows, ordered oldest first. */
 export const InputHistoryRecordSchema = z.object({
   at: z.number(),

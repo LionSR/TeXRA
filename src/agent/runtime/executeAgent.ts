@@ -118,11 +118,10 @@ function runLayerFor(
  * Run the tool-use loop for a single agent run, fresh or resumed.
  *
  * Owns all tool-use-specific wiring: progress counters and model-change side
- * effects. A failed run arrives as a FAILED result carrying
- * its structured error, so there is nothing to unwrap here.
- * The callers (`executeAgent`, `resumeToolUseFromResumeData`) own lifecycle and
- * stream-status; this function owns only what is specific to the ToolUse
- * category.
+ * effects. A failed run arrives as a FAILED result carrying its structured
+ * error, so there is nothing to unwrap here. The callers (`executeAgent`,
+ * `resumeToolUseFromResumeData`) own lifecycle and stream-status; this
+ * function owns only what is specific to the ToolUse category.
  */
 function launchToolUseRun(
   ctx: AgentLaunchContext,
