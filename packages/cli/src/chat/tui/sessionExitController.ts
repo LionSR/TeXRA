@@ -127,7 +127,7 @@ export function createSessionExitController(
     clearTransientNotice();
   };
   // Persist the reopen hint to native scrollback: the main session plus each
-  // resumable tool-use subagent, so any route can be continued by its own id.
+  // subagent TeXRA drives, so any route can be continued by its own id.
   // Read the runs slice before resetCliState() clears it; the child lists
   // arrive as a snapshot taken while the session adapter was still bound.
   const printResumeHintOnExit = (snapshot: ResumeHintSnapshot): void => {

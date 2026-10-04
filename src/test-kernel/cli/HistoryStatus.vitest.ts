@@ -101,40 +101,23 @@ async function seedSnapshot(
 }
 
 describe('CLI history status formatting', () => {
-  /** A tool-use run's standing: resumable exactly when it has a checkpoint,
-   *  so the frozen status mapping is the only thing under test. */
-  function statusOf(
-    checkpointPresent: boolean,
-    phase?: RunOutcome,
-  ): Promise<string> {
-    return Effect.runPromise(
-      cliRunStanding(
-        {
-          id: 'abc123' as RunId,
-          checkpointPresent,
-          agentCategory: AgentCategory.ToolUse,
-          phase,
-        },
-        testDefaultSession(),
-      ),
-    ).then((standing) => standing.status);
-  }
+  /** The frozen status mapping alone. */
+  const statusOf = (resumable: boolean, phase?: RunOutcome): string =>
+    cliRunStanding({ resumable, phase }).status;
 
-  it('keeps failed terminal outcomes in the frozen status even with a checkpoint', async () => {
-    await expect(statusOf(false, 'failed')).resolves.toBe('failed');
-    // The NDJSON `status` field is frozen; a failed run that kept its
-    // checkpoint is offered through the sibling `resumable` boolean instead.
-    await expect(statusOf(true, 'failed')).resolves.toBe('failed');
+  it('keeps failed terminal outcomes in the frozen status even when resumable', () => {
+    expect(statusOf(false, 'failed')).toBe('failed');
+    // The NDJSON `status` field is frozen; a failed run that can continue is
+    // offered through the sibling `resumable` boolean instead.
+    expect(statusOf(true, 'failed')).toBe('failed');
   });
 
-  it('marks interrupted tool-use sessions with flow records as resumable', async () => {
-    await expect(statusOf(true, 'cancelled')).resolves.toBe(
-      HISTORY_RUN_STATUS.RESUMABLE,
-    );
+  it('marks resumable cancelled runs as resumable', () => {
+    expect(statusOf(true, 'cancelled')).toBe(HISTORY_RUN_STATUS.RESUMABLE);
   });
 
-  it('marks flow records without a terminal outcome as resumable', async () => {
-    await expect(statusOf(true)).resolves.toBe(HISTORY_RUN_STATUS.RESUMABLE);
+  it('marks resumable runs without a terminal outcome as resumable', () => {
+    expect(statusOf(true)).toBe(HISTORY_RUN_STATUS.RESUMABLE);
   });
 
   it('filters history entries by the resumable flag, not the status', () => {
@@ -150,15 +133,14 @@ describe('CLI history status formatting', () => {
     ]);
   });
 
-  it('reports outcome-free entries as unknown when no flow remains', async () => {
+  it('reports outcome-free entries as unknown when they cannot resume', () => {
     // A missing terminal outcome means the terminal write never happened
     // (crash, kill, old build) — reporting 'completed' would mask crashes.
-    await expect(statusOf(false)).resolves.toBe('unknown');
+    expect(statusOf(false)).toBe('unknown');
   });
 
   // `status` is a frozen contract, so `history show` answers it from the same
-  // facts as `history list`: the run's latest snapshot, its config, and the
-  // terminal-rejection filter. A run the resume path later refuses is still
+  // facts as `history list`: `deriveResumability` and the folded status. A run the resume path later refuses is still
   // advertised here and refused, in its own words, on open — what it must
   // never become is 'completed' (the crash-masking guard).
   it.effect(

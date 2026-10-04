@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem, PlatformError, Result, Stream } from 'effect';
 
 import {
-  checkpointExists,
+  deriveResumability,
   getRunRecords,
   isUserVisibleRun,
   listRuns,
@@ -51,8 +51,6 @@ import {
   formatConversationTranscript,
 } from './history/conversationFormat';
 
-const HISTORY_ENTRY_CONCURRENCY = 8;
-
 /** A run's generated files and its edited workspace files render alike.
  *  First group wins on a path collision; generated output precedes workspace. */
 function mergeHistoryFiles(
@@ -73,14 +71,9 @@ export interface CliHistoryEntry {
   readonly agent: string;
   readonly model: string;
   readonly status: HistoryRunStatus;
-  /**
-   * Whether the durable facts say this run can be continued: its run
-   * aggregate carries a `run.snapshot` ({@link cliRunStanding}). Ownership and loadability are settled when the run is opened, not per
-   * listed row, so a run live in another process — or one whose checkpoint
-   * turns out to be unloadable — still lists here and is refused, in its own
-   * words, on open. Independent of `status`, which stays a frozen contract: a
-   * failed run can be resumable.
-   */
+  /** `deriveResumability`'s answer, the one `texra resume` acts on.
+   *  Ownership and loadability are settled when the run is opened.
+   *  Independent of the frozen `status`: a failed run can be resumable. */
   readonly resumable: boolean;
   readonly inputBasename: string;
   readonly category?: string;
@@ -158,18 +151,14 @@ export function parseCliHistoryId(raw: string): RunId | undefined {
  */
 export const listCliHistoryEntries = Effect.fn('cli.listCliHistoryEntries')(
   function* (session: Effect.Effect<SessionHandle, SessionOpenError>) {
-    // Resumability comes from the listing's snapshot probe; only a failed
-    // workflow row reads its state, bounded so a history of them does not
-    // fold every run history at once. `Effect.forEach` keeps input order.
     const opened = yield* session;
-    return yield* Effect.forEach(
-      (yield* listRuns(opened)).filter(isUserVisibleRun),
-      (entry) =>
+    return (yield* listRuns(opened))
+      .filter(isUserVisibleRun)
+      .map((entry) =>
         entry.kind === 'blocked'
-          ? Effect.succeed(blockedHistoryEntry(entry))
-          : toCliHistoryEntry(entry, opened),
-      { concurrency: HISTORY_ENTRY_CONCURRENCY },
-    );
+          ? blockedHistoryEntry(entry)
+          : toCliHistoryEntry(entry),
+      );
   },
 );
 
@@ -189,7 +178,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       conversation,
       persistedWorkspaceFilePaths,
       generatedFiles,
-      checkpointPresent,
+      resumeFrom,
     ] = yield* Effect.all(
       [
         session.readView([]).pipe(Effect.map((view) => view.runs.get(id))),
@@ -199,7 +188,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
         readCompletedRunConversation(id, session),
         store.readWorkspaceFiles(),
         listRunGeneratedFiles(id, session),
-        checkpointExists(id, session),
+        deriveResumability(id, session),
       ],
       { concurrency: 8 },
     );
@@ -208,17 +197,16 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
     // The same rule the listing applies, from the same facts: `status` is a
     // frozen contract, so `history show` must not answer it differently from
     // `history list` for the run in the row the caller just read.
-    const standing = yield* cliRunStanding(
-      {
-        id,
-        checkpointPresent,
-        agentCategory: config === null ? null : config.agentCategory,
-        phase: run?.status,
-        paused: run?.substate === RUN_SUBSTATE.PAUSED,
-        blocked: (run?.blocked ?? null) !== null,
-      },
-      session,
-    );
+    const checkpointPresent = resumeFrom.kind === 'checkpoint';
+    // A run with no config is corrupt: there is nothing to resume it under.
+    const standing = cliRunStanding({
+      resumable:
+        config !== null &&
+        (checkpointPresent || resumeFrom.kind === 'unopened'),
+      phase: run?.status,
+      paused: run?.substate === RUN_SUBSTATE.PAUSED,
+      blocked: (run?.blocked ?? null) !== null,
+    });
     const workspaceFiles = yield* listRunWorkspaceFiles(
       config,
       persistedWorkspaceFilePaths,
@@ -535,24 +523,16 @@ export function formatCliHistoryDetailsText(
   return lines.join('\n');
 }
 
-const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
-  entry: AgentRunListingEntry,
-  session: SessionHandle,
-) {
+function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
   const config = entry.record;
   const firstInputFile = config.inputFiles.at(0);
   const inputBasename = firstInputFile ? path.basename(firstInputFile) : '-';
-  const { status, resumable } = yield* cliRunStanding(
-    {
-      id: entry.id,
-      checkpointPresent: entry.checkpointPresent,
-      agentCategory: config.agentCategory,
-      phase: entry.status,
-      paused: entry.paused,
-      blocked: entry.blocked !== undefined,
-    },
-    session,
-  );
+  const { status, resumable } = cliRunStanding({
+    resumable: entry.resumable,
+    phase: entry.status,
+    paused: entry.paused,
+    blocked: entry.blocked !== undefined,
+  });
   return {
     id: entry.id,
     timestamp: entry.timestamp,
@@ -568,7 +548,7 @@ const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
     teamId: teamIdOf(config),
     parentRunId: entry.parentRunId,
   };
-});
+}
 
 function teamIdOf(config: AgentConfig | null): string | undefined {
   return config?.cli?.teamId?.trim() || undefined;

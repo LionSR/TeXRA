@@ -103,12 +103,9 @@ export function killableRunId(run: RunView | undefined): RunId | undefined {
     : undefined;
 }
 
-/** The interrupted run a native resume picks up, while its `actions` offers
- *  one (the TUI resumes tool-use agents: `resumeEligible`). */
+/** The interrupted run a resume picks up, while its `actions` offers one. */
 export function resumableRunId(run: RunView | undefined): RunId | undefined {
-  return run?.group === 'interrupted' &&
-    run.resumeEligible &&
-    run.actions.includes('resume')
+  return run?.group === 'interrupted' && run.actions.includes('resume')
     ? run.id
     : undefined;
 }

@@ -1117,11 +1117,6 @@ describe('sessionFold', () => {
         type: 'run.detach',
       }),
     ];
-    // The run.start alone states resume eligibility: a plain tool-use agent
-    // and a background script can be resumed; a process child cannot.
-    expect(runView(settled, CHILD).resumeEligible).toBe(true);
-    expect(runView(settled, ROOT).resumeEligible).toBe(true);
-    expect(runView(settled, PROCESS).resumeEligible).toBe(false);
     // A fact alone cannot advance the finite-read cursor, and it mints
     // nothing; severing the edge leaves the child top-level.
     const ignored = fold(settled, facts[0]);

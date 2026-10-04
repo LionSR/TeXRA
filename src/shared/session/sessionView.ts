@@ -179,10 +179,6 @@ const RunViewCommonSchema = z.object({
    *  which carries a phase and no position. */
   position: LoopCoordinateSchema.nullable(),
   followUpSupport: UserFollowUpSupportSchema,
-  /** A native tool-use resume can target this run: a plain agent identity,
-   *  or a background script, in the tool-use category. The rule lives here
-   *  so no host restates it. */
-  resumeEligible: z.boolean(),
   /** Latest `context.state`. */
   context: ContextStateDataSchema.nullable(),
   parentId: RunIdSchema.nullable(),

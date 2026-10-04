@@ -648,6 +648,13 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Every surface agrees on which tasks can resume, workflows included.** In
+  `texra chat`, an interrupted workflow task now offers Resume (Enter on its
+  agent row, or `/resume <id>`) and continues beside the chat instead of
+  pointing you to `texra resume`; the exit line lists workflow agents too.
+  `texra history` marks a task resumable exactly when `texra resume` would
+  continue it: a task that was killed before its first step is now listed
+  as resumable, and a failed workflow is no longer hidden from `/resume`.
 - **Interrupted tasks now resume reliably after a crash at any point.** A
   task, an agent it started or a background script that was killed just
   after it started now resumes from the beginning instead of showing as

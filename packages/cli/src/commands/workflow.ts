@@ -320,8 +320,9 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const recoveryProcessCwd = tryReadCliCwd();
     const recoveryInputIsDurable = options.recoveryInputIsDurable ?? true;
     // Not a run a model failure stopped (`runtime.lastError`), nor one that
-    // only replays a terminal compile rejection: the history rule, read from
-    // the rows, so no verdict held in memory can be missed by an interrupt.
+    // only replays a terminal compile rejection: a resume of either would
+    // fail the same way, so the exit hint is not printed. Read from the rows,
+    // so no verdict held in memory can be missed by an interrupt.
     const canAdvertiseInterruptedRun: CheckpointRefinement = (
       { snapshot },
       runId,

@@ -153,7 +153,7 @@ describe('deriveResumability', () => {
 
         expect(yield* deriveResumability(runId, session)).toEqual({
           kind: 'unreadable',
-          cause: 'run metadata could not be read (corrupt run metadata)',
+          cause: 'run state could not be read (corrupt run metadata)',
         });
       }),
   );
@@ -173,7 +173,7 @@ describe('deriveResumability', () => {
 
       expect(yield* deriveResumability(runId, session)).toEqual({
         kind: 'unreadable',
-        cause: 'checkpoint could not be read (disk offline)',
+        cause: 'run state could not be read (disk offline)',
       });
     }),
   );

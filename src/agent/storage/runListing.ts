@@ -26,7 +26,7 @@ import {
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import { checkpointExists } from './resumability';
+import { deriveResumability } from './resumability';
 const CHANNEL = 'RunListing';
 const RUN_STORAGE_CONCURRENCY = 32;
 
@@ -50,13 +50,9 @@ interface RunListingBase {
   /** The model the run is on, as the view folds it: its latest snapshot's
    *  (`run.model`), else the one it was launched with. */
   model?: string;
-  /**
-   * Whether a `run.snapshot` row exists on the run aggregate — one indexed
-   * read per row, never a fold. This is what a listing needs to advertise
-   * "this run can be continued"; loadability is decided by `RunHistory.load`,
-   * which folds the one run asked for and refuses loudly.
-   */
-  checkpointPresent: boolean;
+  /** `deriveResumability` finds a point to continue from. Ownership and
+   *  loadability are settled when the run is opened. */
+  resumable: boolean;
 }
 
 /** A native or tool-backed agent run: its record is always an AgentConfig. */
@@ -154,7 +150,7 @@ export const listRuns = Effect.fn('listRuns')(function* (
           },
           catch: ensureError,
         });
-        const checkpointPresent = yield* checkpointExists(id, session);
+        const resumeFrom = yield* deriveResumability(id, session);
 
         const base: RunListingBase = {
           id,
@@ -165,7 +161,8 @@ export const listRuns = Effect.fn('listRuns')(function* (
           ...(run.blocked === null ? {} : { blocked: run.blocked }),
           ...(run.description === null ? {} : { description: run.description }),
           ...(run.model === null ? {} : { model: run.model }),
-          checkpointPresent,
+          resumable:
+            resumeFrom.kind === 'checkpoint' || resumeFrom.kind === 'unopened',
         };
         const identity = run.identity;
         // Registration commits `run.config` in the `run.start` batch, so a
