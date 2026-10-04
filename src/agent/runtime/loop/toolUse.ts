@@ -373,7 +373,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       ...snapshotRow(runId, opening, {
         runtime: {
           modelId: bound.modelId,
-          modelCompatibilityKey: bound.compatibilityKey,
+          backend: bound.backend,
         },
         state: {
           ...loopState(opening),

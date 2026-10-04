@@ -94,7 +94,7 @@ export interface SnapshotPatch {
   readonly runtime?: Partial<
     Pick<
       SnapshotRuntime,
-      'modelId' | 'modelCompatibilityKey' | 'lastError' | 'declinedRoutes'
+      'modelId' | 'backend' | 'lastError' | 'declinedRoutes'
     >
   >;
   /** Defaults to the loop state the run last wrote. */
@@ -118,20 +118,18 @@ export function snapshotRow(
   if (loop === null) {
     throw new Error('A run.snapshot presupposes an opened run.');
   }
-  // A snapshot's model id is a required durable fact (resume and every
-  // listing read it back); no caller may reach here without one, so refuse
-  // at the constructor rather than let `appendBatch` reject the batch on a
-  // schema refinement far from whatever lost the binding.
+  // A snapshot's model id and backend are required durable facts (resume
+  // and every listing read them back); no caller may reach here without
+  // them, so refuse at the constructor rather than let `appendBatch` reject
+  // the batch on a schema refinement far from whatever lost the binding.
   const modelId = patch.runtime?.modelId ?? state.modelId;
-  if (modelId === undefined || modelId === null || modelId === '') {
-    throw new Error('A run.snapshot presupposes a bound model id.');
+  const backend = patch.runtime?.backend ?? state.backend;
+  if (!modelId || backend === null) {
+    throw new Error('A run.snapshot presupposes a bound model.');
   }
   const runtime: SnapshotRuntime = {
     modelId,
-    modelCompatibilityKey:
-      patch.runtime !== undefined && 'modelCompatibilityKey' in patch.runtime
-        ? (patch.runtime.modelCompatibilityKey ?? null)
-        : state.modelCompatibilityKey,
+    backend,
     lastError:
       patch.runtime !== undefined && 'lastError' in patch.runtime
         ? (patch.runtime.lastError ?? null)

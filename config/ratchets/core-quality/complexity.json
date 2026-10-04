@@ -16,7 +16,6 @@
   "src/agent/runtime/agentToolResolution.ts": 1,
   "src/agent/runtime/childRunLoop.ts": 2,
   "src/agent/runtime/FollowUps.ts": 1,
-  "src/agent/runtime/loop/rows.ts": 1,
   "src/agent/runtime/loop/step.ts": 2,
   "src/agent/runtime/loop/toolGuard.ts": 1,
   "src/agent/runtime/loop/toolUse.ts": 2,

@@ -300,7 +300,7 @@ function scriptedBoundModel(
     modelId: config.ref,
     config,
     reasoning: chooseReasoning(config),
-    compatibilityKey: 'OpenAI',
+    backend: 'openai',
     model,
     origin,
     route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },

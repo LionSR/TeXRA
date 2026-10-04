@@ -48,7 +48,7 @@ const boundAnthropic: BoundModel = {
     capabilities: { cacheDiscountFactor: CACHE_DISCOUNT },
   }),
   reasoning: { thinking: false, effort: null, mode: null },
-  compatibilityKey: 'Anthropic',
+  backend: 'anthropic',
   model: unusedModel,
   origin: {
     protocol: 'anthropic-messages',

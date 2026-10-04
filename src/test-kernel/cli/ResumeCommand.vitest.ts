@@ -84,7 +84,7 @@ const OPENING_SNAPSHOT: RunSnapshotPayload = {
   family: 'toolUse',
   runtime: {
     modelId: 'openai/gpt-5.4-2026-03-05',
-    modelCompatibilityKey: null,
+    backend: 'openai',
     lastError: null,
     declinedRoutes: [],
   },
@@ -98,12 +98,12 @@ const OPENING_SNAPSHOT: RunSnapshotPayload = {
  */
 const workflowSnapshot = (
   modelId: string,
-  modelCompatibilityKey: RunSnapshotPayload['runtime']['modelCompatibilityKey'] = null,
+  backend: RunSnapshotPayload['runtime']['backend'] = 'openai',
 ): RunSnapshotPayload => ({
   family: 'toolUse',
   runtime: {
     modelId,
-    modelCompatibilityKey,
+    backend,
     lastError: null,
     declinedRoutes: [],
   },
@@ -117,7 +117,7 @@ let seededSession: SessionHandle;
 async function seedRunRecord(seed: {
   readonly config?: AgentConfig | null;
   readonly checkpoint?: boolean;
-  readonly modelCompatibilityKey?: RunSnapshotPayload['runtime']['modelCompatibilityKey'];
+  readonly backend?: RunSnapshotPayload['runtime']['backend'];
 }): Promise<void> {
   const session = await Effect.runPromise(createProcessSession());
   seededSession = session;
@@ -148,7 +148,7 @@ async function seedRunRecord(seed: {
     // refuses a contradiction, so the seed must be one a run could write.
     const snapshot =
       seed.config?.agentCategory === AgentCategory.Workflow
-        ? workflowSnapshot(seed.config.model, seed.modelCompatibilityKey)
+        ? workflowSnapshot(seed.config.model, seed.backend)
         : OPENING_SNAPSHOT;
     await Effect.runPromise(session.runHistory.acquire(RUN_ID));
     await Effect.runPromise(

@@ -21,7 +21,7 @@ function openingSnapshot(runId: RunId): RunHistoryDraft {
       family: 'toolUse',
       runtime: {
         modelId: 'test-model',
-        modelCompatibilityKey: null,
+        backend: 'validation',
         lastError: null,
         declinedRoutes: [],
       },

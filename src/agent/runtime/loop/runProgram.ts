@@ -168,7 +168,7 @@ export const loadRun = (
         ...freshRunState(0),
         family: 'toolUse',
         modelId: bound.modelId,
-        modelCompatibilityKey: bound.compatibilityKey,
+        backend: bound.backend,
         // The launch's own-API-key choice enters the run history with the opening
         // snapshot, so every later binding and every resume reads it back.
         declinedRoutes: run.declinedRoutes,

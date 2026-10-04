@@ -1,6 +1,6 @@
 /**
  * The one decision of which route serves a model's next request. The picker,
- * the run binding, the compatibility key and the Copilot fallback all read
+ * the run binding, the run's backend and the Copilot fallback all read
  * {@link decideModelRoute} over the same {@link RouteFacts}, and carry the
  * decided {@link ModelRoute} instead of re-asking any of its questions.
  *

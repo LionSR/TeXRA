@@ -203,7 +203,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       ...freshRunState(0),
       family: 'toolUse',
       modelId: 'test-model',
-      modelCompatibilityKey: 'DeepSeek',
+      backend: 'deepseek',
     };
     const opened = yield* runHistory.appendBatch(runId, null, [
       appendRow(runId, [

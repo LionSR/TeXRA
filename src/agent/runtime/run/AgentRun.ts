@@ -257,7 +257,7 @@ export const agentRunLayer = (
       // names; a fresh run binds the launch model under today's default route.
       const persisted = snapshot === null ? null : snapshot.payload.runtime;
       const modelId = persisted?.modelId ?? config.model;
-      const compatibilityKey = persisted?.modelCompatibilityKey ?? null;
+      const backend = persisted?.backend;
       const selected = selectModel(modelId);
       const modelConfig =
         modelId === config.model ? ctx.modelConfig : selected?.config;
@@ -282,7 +282,7 @@ export const agentRunLayer = (
         modelId,
         config: modelConfig,
         stores: ctx.stores,
-        compatibilityKey,
+        backend,
         ownApiKeyFallback: ctx.ownApiKeyFallback,
         declinedRoutes,
         agentCategory: config.agentCategory,

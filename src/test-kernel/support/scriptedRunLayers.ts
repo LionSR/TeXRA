@@ -69,7 +69,7 @@ function testBoundModel(overrides: Partial<BoundModel> = {}): BoundModel {
     modelId: 'test-model',
     config: buildTestModelConfig({ capabilities: { supportsVision } }),
     reasoning: { thinking: false, effort: null, mode: null },
-    compatibilityKey: 'DeepSeek',
+    backend: 'deepseek',
     model: unusedModel,
     origin: TEST_ORIGIN,
     route: { kind: 'api-key', provider: 'deepseek', usageRoute: 'api-key' },
