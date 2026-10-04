@@ -44,8 +44,8 @@ A typical week:
 1. **Monday evening.** The researcher says the referee report for the channels paper is due Friday. The orchestrator calls `projects list`. It notices the Lean blueprint has been waiting on a `lake build` approval since Sunday and says so. It calls `wake` for Tuesday 08:00 with a note to itself.
 2. The researcher closes the window. TeXRA stays in the tray.
 3. **Tuesday 08:00.** The wake arrives on the orchestrator's chat as an ordinary message. The orchestrator looks inside the paper project with `executions` and finds no response draft.
-4. It proposes a run in that project: draft `response/referee1.tex` from `reviews/report1.pdf`. The proposal card names the destination project, and the OS notification fires.
-5. It replies with the two things that need the researcher, then calls `wake` for Wednesday.
+4. It calls `wake` for Wednesday and tells the researcher the two things that need them.
+5. Last, it proposes a run in that project: draft `response/referee1.tex` from `reviews/report1.pdf`. The proposal card names the destination project, and the OS notification fires. The orchestrator's run now waits on that proposal.
 6. The researcher approves over coffee. The run executes inside the paper project. When it ends, its report comes back to the orchestrator: seven points answered, two needing the author's call.
 
 The model decided everything in that sequence: when to wake, what to check, what to propose, what to say. The harness delivered the wake, reached into the project and kept the process alive.
@@ -62,6 +62,7 @@ Tools: `delegate_agent`, `delegate_workflow`, `delegate_multi_agents`, `executio
 - **A dispatched run is an ordinary top-level run in the target project.**
   - It carries `origin {sessionRoot, runId}` on its `run.start`.
   - Child lineage is session-local (`registerRun`, `RunRegistry`, `isOwnedBy`), so no parent link crosses two stores.
+  - For `delegate_multi_agents`, that target-local run owns the `workflow.script` checkpoint: it is the checkpoint's `parentRunId` (`src/tools/delegation/WorkflowScriptTool.ts`), so the target store collects the journal when the run is deleted.
   - Its ledger, approvals and resume all live in that project.
 - **Its report comes back.** When the run ends, its report is admitted onto the orchestrator's run as `from: {kind:'run', runId, relation:'dispatched'}`, the same way a subagent report arrives today (`src/agent/runtime/childRunLoop.ts`).
 - **`executions` with `project`** reads and acts on the target session: view, query, send, kill. It keeps the caller's own session for `wait`.
@@ -87,6 +88,7 @@ Tools: `delegate_agent`, `delegate_workflow`, `delegate_multi_agents`, `executio
   - It then calls `submitFollowUp(runId, {text, from: {kind:'wake', wakeId}, deliveryId: wakeId}, {session})`. `deliveryId` makes a replay a no-op.
   - The no-loop branch of `submitFollowUp` (`src/agent/followUp/ToolUseFollowUp.ts`) lets a `wake` follow-up resume a resumable run, as a `user` message can.
 - **Missed wakes.** A wake missed while TeXRA was off arrives when the session next opens, marked late.
+- **A pending proposal holds wakes.** `requestDelegationProposal` waits on `session.openRequest` (`src/tools/delegation/proposalFlow.ts`), so while a proposal is undecided the orchestrator's run is parked on it. A wake that falls due then is queued on that run and arrives after the decision. The open request's OS notification is what reaches the researcher meanwhile. The prompt therefore has the model schedule its next wake before it proposes.
 - **Accepted imperfection.** With the desktop and the CLI both running, a wake cancelled on one may still arrive once from the other. The model sees that it was cancelled and ignores it.
 - **Hosts.** `wake` declares `unavailableHosts: ['vscode', 'sdk']`.
 
@@ -120,7 +122,7 @@ Tools: `delegate_agent`, `delegate_workflow`, `delegate_multi_agents`, `executio
 
 `packages/extension/resources/tool_use_agents/orchestrator.yaml` is rewritten to roughly this and nothing more:
 
-> You look after all of this researcher's projects. Use `projects list` to see them and `executions` to look inside one. Dispatch work with `project` where it helps; ask before anything costly or irreversible. Check back on your own schedule with `wake`. Keep your notes in your folder. When you wake, tell the researcher only what needs them.
+> You look after all of this researcher's projects. Use `projects list` to see them and `executions` to look inside one. Dispatch work with `project` where it helps; ask before anything costly or irreversible. Check back on your own schedule with `wake`, and schedule it before you propose anything. Keep your notes in your folder. When you wake, tell the researcher only what needs them.
 
 The current file is a single-project LaTeX steward prompt. The new one has no routines and no brief format. The orchestrator's reply when it wakes is the brief.
 
@@ -188,3 +190,4 @@ Each check is an E2E through the real desktop app or `texra` CLI, ending in a di
 
 1. Should other agents get `wake`, or only the orchestrator? The recommendation is orchestrator-only at first.
 2. Should `wake` enforce a minimum interval, for example 15 minutes, so a cheap model cannot wake every minute? The recommendation is to watch first and add it only if needed.
+3. Should a proposal stop blocking the orchestrator's run, so a wake can be delivered while one waits? The recommendation is to keep today's blocking proposal and see whether held wakes matter in practice.
