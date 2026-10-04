@@ -330,8 +330,9 @@ describe('completedRunArchive facade', () => {
         launchMocks.resolveAgent.mockReturnValue(
           Effect.succeed({
             path: '/agents/orchestrator.yaml',
-            setting: { agentCategory: AgentCategory.ToolUse },
-            prompt: {},
+            category: AgentCategory.ToolUse,
+            persona: { prompt: '', tools: [], temperature: 1 },
+            task: null,
           }),
         );
 

@@ -6,6 +6,18 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Agent files are flat.** An agent YAML is now `name`, `description`,
+  `tools`, `temperature` and `prompt` at the top level, plus an optional
+  `task` block for an agent that revises documents: `task.prefix` lays out
+  the documents, `task.requests` holds one request per revision (their
+  number is the revision count, so `rounds` is gone), and `task.rewrite`,
+  `task.outputs` and `task.files` replace `isRewrite`, `defaultOutputFiles`
+  and `requiredFilesInternal`. A chat agent has no request template: your
+  message is its task, so the `{{ INSTRUCTION }}` boilerplate is gone. The
+  `settings:`/`prompts:` nesting and `agentCategory` are no longer read; a
+  custom agent in the old format is reported as unloadable, naming the
+  unrecognized keys. Every bundled and Lean agent and both creation
+  templates use the new format.
 - **Outdated tools are removed: the todo list, Crossref search, DOI lookup,
   `texcount`, `arxiv_metadata` and `wolfram`.** Agents no longer keep a
   todo list: the `todo_write` tool is gone, and with it the Todos panel in

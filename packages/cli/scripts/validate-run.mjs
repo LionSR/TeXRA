@@ -877,16 +877,10 @@ function validateHistoryQueryRunCommand() {
       `name: history_query_validation
 description: Ask the run history one SQL question from the headless CLI.
 
-settings:
-  agentCategory: toolUse
-  tools:
-    - executions
-
-prompts:
-  systemPrompt: |
-    Query the run history once, then report what it returned.
-  userRequest: |
-    {{ INSTRUCTION }}
+tools:
+  - executions
+prompt: |
+  Query the run history once, then report what it returned.
 `,
     );
     writeFileSync(validationFlagPath, validationFlagContent);
@@ -963,15 +957,8 @@ function echoProject(cwd, config = null) {
     `name: echo_validation
 description: Say what the model was shown.
 
-settings:
-  agentCategory: toolUse
-  tools: []
-
-prompts:
-  systemPrompt: |
-    Say what you were shown.
-  userRequest: |
-    {{ INSTRUCTION }}
+prompt: |
+  Say what you were shown.
 `,
   );
   writeFileSync(validationFlagPath, validationFlagContent);
@@ -1529,17 +1516,11 @@ function validateScriptFanoutRunCommand() {
       `name: script_fanout_validation
 description: Exercise a script's agent fan-out from the headless CLI.
 
-settings:
-  agentCategory: toolUse
-  tools:
-    - script
-    - agent
-
-prompts:
-  systemPrompt: |
-    Run the requested script exactly once, then finish.
-  userRequest: |
-    {{ INSTRUCTION }}
+tools:
+  - script
+  - agent
+prompt: |
+  Run the requested script exactly once, then finish.
 `,
     );
     writeFileSync(validationFlagPath, validationFlagContent);

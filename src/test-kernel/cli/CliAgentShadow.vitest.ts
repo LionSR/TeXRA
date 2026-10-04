@@ -70,10 +70,9 @@ describe('CLI agent validation with a shadowed name', () => {
       [
         'name: assistant',
         'description: Custom workflow agent that shadows a built-in name.',
-        'settings:',
-        '  agentCategory: workflow',
-        'prompts:',
-        '  systemPrompt: Custom workflow assistant.',
+        'prompt: Custom workflow assistant.',
+        'task:',
+        '  requests: [Revise the documents.]',
         '',
       ].join('\n'),
     );

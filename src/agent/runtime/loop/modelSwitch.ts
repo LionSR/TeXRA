@@ -65,7 +65,7 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
           compatibilityKey: current.compatibilityKey,
           declinedRoutes: state.declinedRoutes,
           agentCategory: run.config.agentCategory,
-          temperature: run.setting.temperature,
+          temperature: run.persona.temperature,
         });
         switched = yield* cell.append([
           {

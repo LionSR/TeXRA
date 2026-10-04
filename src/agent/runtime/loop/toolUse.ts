@@ -319,9 +319,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         const { inputs } =
           run.opening ?? (yield* Effect.die(new Error(`${runId}: no opening`)));
         const prompts = yield* buildInitialToolUsePrompts(
-          run.prompt,
+          run.persona.prompt,
           inputs,
-          logger,
           {
             workspace: session.roots.workspace,
             settings: session.roots,
@@ -332,16 +331,13 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           : prompts.instructionSuffix;
         // The first step renders the prompt, and stores its base text.
         const step = yield* openStep(opening, 'request');
-        const userPrefix = prompts.userPrefix.trim();
-        const userRequest = prompts.userRequest.trim();
-        if (!userPrefix && !userRequest)
+        // The user's task is the user message.
+        const userRequest = run.config.instruction.trim();
+        if (!userRequest)
           return yield* Effect.fail(
-            new Error(
-              'A tool-use run requires a non-empty user prefix or request.',
-            ),
+            new Error('A conversation requires a non-empty task.'),
           );
         const content: InputPart[] = [];
-        if (userPrefix) content.push({ kind: 'text', text: userPrefix });
         const media = yield* Effect.exit(
           run.config.mediaFiles.length
             ? mediaInputParts(
@@ -363,7 +359,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         if (Exit.isFailure(media)) return yield* Effect.failCause(media.cause);
         content.push(...media.value.parts);
-        if (userRequest) content.push({ kind: 'text', text: userRequest });
+        content.push({ kind: 'text', text: userRequest });
         const hooked = yield* openingHooks(run, opening, userRequest);
         content.push(...hooked.parts);
         workspace = AgentWorkspaceState.create();

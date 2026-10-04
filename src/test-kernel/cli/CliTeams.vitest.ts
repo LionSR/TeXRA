@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import {
-  AgentPromptSchema,
-  AgentSettingSchema,
+  DocumentTaskSchema,
+  PersonaSchema,
 } from '@agent/core/definition/AgentDataclass';
 import type { AgentEntry } from '@agent/index';
 import {
@@ -32,8 +32,11 @@ function agent(
       category === AgentCategory.ToolUse ? 'builtInToolUse' : 'builtInWorkflow',
     path: `/agents/${name}.yaml`,
     tools,
-    setting: AgentSettingSchema.parse({ agentCategory: category }),
-    prompt: AgentPromptSchema.parse({}),
+    persona: PersonaSchema.parse({}),
+    task:
+      category === AgentCategory.Workflow
+        ? DocumentTaskSchema.parse({ requests: ['Revise.'] })
+        : null,
   };
 }
 

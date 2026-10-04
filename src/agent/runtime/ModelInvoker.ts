@@ -755,7 +755,7 @@ export const modelInvokerLayer = (): Layer.Layer<
                   compatibilityKey: failed.compatibilityKey,
                   declinedRoutes,
                   agentCategory: run.config.agentCategory,
-                  temperature: run.setting.temperature,
+                  temperature: run.persona.temperature,
                 }),
           )
           .pipe(

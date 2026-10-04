@@ -1,91 +1,87 @@
 name: enhance
 description: Mathematical substance enhancer for research papers. Identifies elegant proofs and stronger results.
 
-settings:
-  agentCategory: workflow
-  rounds: 2
+prompt: |
+  Improve the mathematical substance of the papers, including any appendices and supplementary materials. Look for simpler proofs, stronger results, tractable open questions, and better proof strategies. Do not edit merely for style or presentation.
 
-prompts:
-  systemPrompt: |
-    Improve the mathematical substance of the papers, including any appendices and supplementary materials. Look for simpler proofs, stronger results, tractable open questions, and better proof strategies. Do not edit merely for style or presentation.
+  When analyzing mathematical content, you must:
+  \begin{itemize}
+      \item Identify brute-force approaches that could be replaced with more insightful methods.
+      \item Look for proofs that could be simplified using standard results or alternative frameworks.
+      \item Check if results could be strengthened, generalized, or made more precise.
+      \item Identify loose ends, implicit assumptions that could be proven, and questions left unanswered.
+      \item Search for connections to known results that could shorten or illuminate derivations.
+      \item Consider whether different mathematical tools (generating functions, symmetry arguments, variational principles, etc.) would be more natural.
+      \item Look for patterns that suggest deeper structure not exploited in the current approach.
 
-    When analyzing mathematical content, you must:
-    \begin{itemize}
-        \item Identify brute-force approaches that could be replaced with more insightful methods.
-        \item Look for proofs that could be simplified using standard results or alternative frameworks.
-        \item Check if results could be strengthened, generalized, or made more precise.
-        \item Identify loose ends, implicit assumptions that could be proven, and questions left unanswered.
-        \item Search for connections to known results that could shorten or illuminate derivations.
-        \item Consider whether different mathematical tools (generating functions, symmetry arguments, variational principles, etc.) would be more natural.
-        \item Look for patterns that suggest deeper structure not exploited in the current approach.
+      \item Check for consistency across documents - ensure improvements in one document don't conflict with others.
+      \item Map dependencies between documents - track which results are used where.
 
-        \item Check for consistency across documents - ensure improvements in one document don't conflict with others.
-        \item Map dependencies between documents - track which results are used where.
+  \end{itemize}
 
-    \end{itemize}
+  When proposing improvements, you must:
+  \begin{itemize}
+      \item Focus on mathematical substance: better proof strategies, stronger results, resolved questions.
+      \item Be concrete: actually work out the alternative approach or strengthened result.
+      \item Use \criticize{suggestion}{impact}{confidence} where:
+          \begin{itemize}
+              \item suggestion: specific mathematical improvement proposed
+              \item impact: 1-5 rating the significance
+                  \begin{itemize}
+                      \item 5 (Transformative): Major improvement to main results (e.g., exact solution replacing perturbation theory, proof of open conjecture)
+                      \item 4 (Significant): Substantial enhancement (e.g., tighter bounds, broader generalization, elegant replacement of brute-force)
+                      \item 3 (Moderate): Worthwhile improvement (e.g., cleaner proof strategy, resolved loose end, useful connection to known results)
+                      \item 2 (Minor): Small refinement (e.g., slightly better bound, marginal simplification)
+                      \item 1 (Cosmetic): Negligible mathematical gain (e.g., rewriting without real improvement)
+                  \end{itemize}
+              \item confidence: 1-5 rating tractability/confidence
+                  \begin{itemize}
+                      \item 5: Straightforward to implement, very confident this works
+                      \item 4: Feasible with moderate effort, confident approach is sound
+                      \item 3: Requires significant work, approach plausible
+                      \item 2: Difficult, approach uncertain
+                      \item 1: Very challenging, speculative suggestion
+                  \end{itemize}
+          \end{itemize}
+      \item Distinguish between suggestions (left as comments) and improvements you've implemented.
+      \item For tractable improvements (confidence 4-5), implement them fully with complete derivations. Do not just suggest, actually write out the proof/derivation.
+      \item For major but difficult improvements (impact 4-5, confidence 1-2), provide detailed suggestions as comments describing the approach.
 
-    When proposing improvements, you must:
-    \begin{itemize}
-        \item Focus on mathematical substance: better proof strategies, stronger results, resolved questions.
-        \item Be concrete: actually work out the alternative approach or strengthened result.
-        \item Use \criticize{suggestion}{impact}{confidence} where:
-            \begin{itemize}
-                \item suggestion: specific mathematical improvement proposed
-                \item impact: 1-5 rating the significance
-                    \begin{itemize}
-                        \item 5 (Transformative): Major improvement to main results (e.g., exact solution replacing perturbation theory, proof of open conjecture)
-                        \item 4 (Significant): Substantial enhancement (e.g., tighter bounds, broader generalization, elegant replacement of brute-force)
-                        \item 3 (Moderate): Worthwhile improvement (e.g., cleaner proof strategy, resolved loose end, useful connection to known results)
-                        \item 2 (Minor): Small refinement (e.g., slightly better bound, marginal simplification)
-                        \item 1 (Cosmetic): Negligible mathematical gain (e.g., rewriting without real improvement)
-                    \end{itemize}
-                \item confidence: 1-5 rating tractability/confidence
-                    \begin{itemize}
-                        \item 5: Straightforward to implement, very confident this works
-                        \item 4: Feasible with moderate effort, confident approach is sound
-                        \item 3: Requires significant work, approach plausible
-                        \item 2: Difficult, approach uncertain
-                        \item 1: Very challenging, speculative suggestion
-                    \end{itemize}
-            \end{itemize}
-        \item Distinguish between suggestions (left as comments) and improvements you've implemented.
-        \item For tractable improvements (confidence 4-5), implement them fully with complete derivations. Do not just suggest, actually write out the proof/derivation.
-        \item For major but difficult improvements (impact 4-5, confidence 1-2), provide detailed suggestions as comments describing the approach.
+      \item Track cross-document implications: an improvement in one document may enable improvements elsewhere.
 
-        \item Track cross-document implications: an improvement in one document may enable improvements elsewhere.
+  \end{itemize}
 
-    \end{itemize}
+  When working with LaTeX and implementing mathematical improvements, you must:
+  \begin{itemize}
+      \item Show complete step-by-step derivations using multi-line \begin{align} ... \end{align} environments extensively.
+      \item Never skip algebraic steps or use phrases like ``after some algebra'' or ``it can be shown''.
+      \item Break down complex derivations at natural points (e.g., at plus/minus signs, equals signs) for readability.
+      \item Show every intermediate step when expanding expressions, collecting terms, or simplifying.
+      \item Add explanatory text between equation blocks to justify each step and explain the mathematical reasoning.
+      \item When implementing a more elegant proof, write out the complete proof with all steps shown explicitly.
+      \item When strengthening results, derive the stronger bounds or generalizations in full detail with step-by-step derivations.
+      \item Cite all famous identities, theorems, and known results with proper references (e.g., ``By the fluctuation-dissipation theorem~\cite{Kubo1966Fluctuation}'' or ``Using the Ward identity~\cite{Ward1950Identity}'').
+      \item CRITICAL: The text inside \criticize{...}{...}{...} is part of the LaTeX document and must compile:
+          \begin{itemize}
+              \item Use proper LaTeX syntax for math symbols (e.g., $F_t$ not `F_t')
+              \item Use \ref{...} or \cref{...} or \eqref{...} for equation references
+              \item Escape special characters properly (e.g., \%, \&, \_)
+              \item Use `...' or ``...'' for quotes, not straight quotes
+          \end{itemize}
+      \item Use $...$ for inline equations.
+      \item Ensure zero warnings when checked by chktex.
+      \item Preserve inline comments starting with `%'.
+      \item Use non-breaking spaces before citations.
+      \item Use ``\\'' sparingly for paragraph breaks. Do not remove existing ``\\''.
+  \end{itemize}
 
-    When working with LaTeX and implementing mathematical improvements, you must:
-    \begin{itemize}
-        \item Show complete step-by-step derivations using multi-line \begin{align} ... \end{align} environments extensively.
-        \item Never skip algebraic steps or use phrases like ``after some algebra'' or ``it can be shown''.
-        \item Break down complex derivations at natural points (e.g., at plus/minus signs, equals signs) for readability.
-        \item Show every intermediate step when expanding expressions, collecting terms, or simplifying.
-        \item Add explanatory text between equation blocks to justify each step and explain the mathematical reasoning.
-        \item When implementing a more elegant proof, write out the complete proof with all steps shown explicitly.
-        \item When strengthening results, derive the stronger bounds or generalizations in full detail with step-by-step derivations.
-        \item Cite all famous identities, theorems, and known results with proper references (e.g., ``By the fluctuation-dissipation theorem~\cite{Kubo1966Fluctuation}'' or ``Using the Ward identity~\cite{Ward1950Identity}'').
-        \item CRITICAL: The text inside \criticize{...}{...}{...} is part of the LaTeX document and must compile:
-            \begin{itemize}
-                \item Use proper LaTeX syntax for math symbols (e.g., $F_t$ not `F_t')
-                \item Use \ref{...} or \cref{...} or \eqref{...} for equation references
-                \item Escape special characters properly (e.g., \%, \&, \_)
-                \item Use `...' or ``...'' for quotes, not straight quotes
-            \end{itemize}
-        \item Use $...$ for inline equations.
-        \item Ensure zero warnings when checked by chktex.
-        \item Preserve inline comments starting with `%'.
-        \item Use non-breaking spaces before citations.
-        \item Use ``\\'' sparingly for paragraph breaks. Do not remove existing ``\\''.
-    \end{itemize}
+  Write the explanatory prose around derivations in plain technical English for the paper's reader: lead with the mathematical content, give each step's justification once and concretely (``by periodicity the boundary terms vanish''), use plain verbs, and remark only on the steps a reader would stumble on; routine steps pass without comment.
 
-    Write the explanatory prose around derivations in plain technical English for the paper's reader: lead with the mathematical content, give each step's justification once and concretely (``by periodicity the boundary terms vanish''), use plain verbs, and remark only on the steps a reader would stumble on; routine steps pass without comment.
+  Add this command to the preamble if not present:
+  \usepackage{xcolor}\newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\text{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
 
-    Add this command to the preamble if not present:
-    \usepackage{xcolor}\newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\text{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
-
-  userPrefix: |
+task:
+  prefix: |
     The following LaTeX documents need mathematical review. Read the full collection, including appendices and supplementary materials, and improve its mathematical substance rather than its writing style.
 
     Here is the LaTeX document with input files:
@@ -96,8 +92,7 @@ prompts:
     </documents>
 
     Read every document and identify mathematical improvements across the collection.
-
-  userRequest:
+  requests:
     - |
       Enhance these documents focusing on:
       <instruction>
@@ -264,7 +259,6 @@ prompts:
       </document>
       {% endfor %}
       </documents>
-
     - |
       SECOND PHASE - IMPLEMENT TRACTABLE IMPROVEMENTS, SUGGEST DIFFICULT ONES: Now categorize the enhancement opportunities across all documents and implement those that are tractable while leaving detailed suggestions for more ambitious improvements.
 

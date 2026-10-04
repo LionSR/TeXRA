@@ -1,12 +1,10 @@
 name: golden_parent
 description: The golden store's tool-use parent.
-settings:
-  agentCategory: toolUse
-  tools:
-    - read_file
-    - plan
-    - agent
-    - executions
-prompts:
-  systemPrompt: 'GOLDEN-PARENT: read the notes, plan, delegate.'
-  userRequest: '{{ INSTRUCTION }}'
+tools:
+  - read_file
+  - plan
+  - agent
+  - executions
+
+prompt: |-
+  GOLDEN-PARENT: read the notes, plan, delegate.

@@ -353,15 +353,7 @@ function agentYaml(name: string): string {
   return [
     `name: ${name}`,
     `description: Integration fixture ${name}.`,
-    'settings:',
-    '  agentCategory: toolUse',
-    '  tools: []',
-    // The loop builds the opening user message from the agent's prompts, so
-    // the fixture carries a real request template rather than a transport
-    // override that skipped prompt construction.
-    'prompts:',
-    `  systemPrompt: You are ${name}.`,
-    "  userRequest: '{{ INSTRUCTION }}'",
+    `prompt: You are ${name}.`,
     '',
   ].join('\n');
 }
@@ -371,16 +363,13 @@ function workflowAgentYaml(name: string): string {
   return [
     `name: ${name}`,
     `description: Integration fixture ${name}.`,
-    'settings:',
-    '  agentCategory: workflow',
-    '  rounds: 1',
-    'prompts:',
-    `  systemPrompt: You are ${name}.`,
-    '  userPrefix: |',
+    `prompt: You are ${name}.`,
+    'task:',
+    '  prefix: |',
     '    <documents>',
     '    {{ ALL_INPUTS }}',
     '    </documents>',
-    "  userRequest: '{{ INSTRUCTION }}'",
+    "  requests: ['{{ INSTRUCTION }}']",
     '',
   ].join('\n');
 }

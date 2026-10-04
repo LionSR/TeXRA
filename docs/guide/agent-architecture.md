@@ -15,7 +15,7 @@ Workflow agents are built for **deep, single-shot thinking**: deriving or checki
 If you want a faster turnaround (quick polishes, small corrections), pick a **smaller or faster model** in the model dropdown: output quality drops somewhat, but wall-clock time drops a lot. For short, conversational edits or read-only questions, use a **tool-use agent** (`assistant`, `research`, `review`) instead: those stream back in seconds and skip the full workflow pipeline. For a problem too big for one agent, a team lead can run several workflow agents at once; read [Multi-agent workflows](./multi-agent-workflows.md).
 :::
 
-The `settings.agentCategory` key decides which of these two modes an agent runs in:
+Whether the agent file has a `task` block decides which of these two modes an agent runs in: with `task` it is a workflow agent, without it a tool-use agent.
 
 <AgentModesCompare />
 <p class="hero-caption">Workflow agents reason once and write a versioned, diffable file; tool-use agents converse and call tools turn by turn. This is the first thing to pick for any task. The split maps one-to-one onto the CLI's two entry points: <code>texra run polish …</code> for workflow agents, <code>texra chat --agent research</code> for tool-use agents.</p>
@@ -26,23 +26,23 @@ Each agent is defined in a `.yaml` file that tells TeXRA what to say to the AI m
 
 ## Understanding the YAML structure
 
-These `.yaml` files have two main parts:
+These `.yaml` files are flat. A workflow agent has two main parts:
 
 <AgentYamlHero />
-<p class="hero-caption">A <code>settings</code> block defines how the agent runs; a <code>prompts</code> block holds the templates, and a <code>userRequest</code> array drives Round 0 plus reflection rounds.</p>
+<p class="hero-caption">Top-level fields set the persona (<code>prompt</code>, <code>temperature</code>); a <code>task</code> block holds the document templates, and its <code>requests</code> list drives Round 0 plus reflection rounds.</p>
 
-1.  **`settings`**: Defines how the agent runs. For example:
-    - `agentCategory`: `workflow` (structured chain-of-thought reasoning with XML-wrapped output) or `toolUse` (an interactive conversation that can call tools such as file editing and web search).
-    - _(Other settings control output format, inheritance, and more. See [Configuration](./configuration.md) and [Custom agents](./custom-agents.md) for details.)_
-2.  **`prompts`**: Text templates that TeXRA fills with your context (input files, instruction) to guide the LLM at each stage:
-    - `systemPrompt`: Sets the overall role and high-level instructions for the LLM.
-    - `userPrefix`: Provides the main context, including your input file(s) (available as `{{ INPUT_CONTENT }}`) and the instruction you typed in the UI (available as `{{ INSTRUCTION }}`).
-    - `userRequest`: Asks the LLM to perform the initial task (Round 0). It often instructs the LLM to think within `<scratchpad>` tags and then output the main content wrapped in the fixed `<documents>` container, with one `<document name="...">...</document>` entry per output file. You can also provide an **array** here: the first entry becomes the Round 0 request, and any additional entries drive automatic reflection rounds (Round 1+). When a run uses more rounds than you have entries, the second entry (the first reflection template) is reused; an agent with a single entry reuses that Round 0 entry for every reflection round.
+1.  **The persona** (top-level fields): how the model behaves.
+    - `prompt`: The system prompt. Sets the overall role and high-level instructions for the LLM.
+    - `temperature`, `inherits`, and (for tool-use agents only) `tools`. See [Custom agents](./custom-agents.md) for details.
+2.  **`task`**: Present only on workflow agents. Text templates that TeXRA fills with your context (input files, instruction) to guide the LLM at each stage, plus output settings:
+    - `prefix`: Provides the main context, including your input file(s) (available as `{{ INPUT_CONTENT }}`) and the instruction you typed in the UI (available as `{{ INSTRUCTION }}`).
+    - `requests`: A list with one entry per round. The first entry asks the LLM to perform the initial task (Round 0). It often instructs the LLM to think within `<scratchpad>` tags and then output the main content wrapped in the fixed `<documents>` container, with one `<document name="...">...</document>` entry per output file. Each further entry drives one reflection round (Round 1+).
+    - `rewrite`, `outputs`, and `files`: whether the agent edits its inputs or writes new documents, the default output filenames, and template files kept beside the YAML.
 
 _(Prompts use Nunjucks templating (Jinja2-style syntax). For the list of available variables such as `{{ INPUT_CONTENT }}` and how to use them, read the [Custom agents](./custom-agents.md) guide.)_
 
 ::: tip Transparency & Customization
-These prompts (`systemPrompt`, `userPrefix`, and the rest) are TeXRA's structured approach to guiding the LLM. Because the system is template-based, an agent's behavior is transparent and customizable through its `.yaml` file, not hidden in a black box.
+These prompts (`prompt`, `task.prefix`, and `task.requests`) are TeXRA's structured approach to guiding the LLM. Because the system is template-based, an agent's behavior is transparent and customizable through its `.yaml` file, not hidden in a black box.
 :::
 
 ## Basic execution flow
@@ -60,7 +60,7 @@ sequenceDiagram
     User->>TeXRA UI: Selects Run agent
     TeXRA UI->>Agent Backend: run(config)
     Agent Backend->>Agent Backend: Initialize (Load agent definition, read files)
-    Note over Agent Backend: Constructs prompt from systemPrompt, userPrefix, userRequest templates + User Input
+    Note over Agent Backend: Constructs prompt from prompt, task.prefix, task.requests templates + User Input
     Agent Backend->>LLM API: Create Response (Round 0 Prompt)
     Note over LLM API: Processes request based on prompts
     LLM API-->>Agent Backend: Response (Text + Usage + StopReason)
@@ -71,7 +71,7 @@ sequenceDiagram
 **Key stages:**
 
 1.  **Initialization:** TeXRA loads the agent definition and reads the files you selected.
-2.  **Prompt construction:** TeXRA combines the agent's `systemPrompt`, `userPrefix` (filled with your files and instruction), and `userRequest` templates into a full prompt for the LLM.
+2.  **Prompt construction:** TeXRA combines the agent's `prompt`, `task.prefix` (filled with your files and instruction), and `task.requests` templates into a full prompt for the LLM.
 3.  **LLM interaction (Round 0):** TeXRA sends the prompt to the selected LLM API. The LLM generates a response, typically including reasoning (`<scratchpad>`) and the final answer wrapped in the fixed `<documents><document name="...">...</document></documents>` container.
 4.  **Processing:** TeXRA saves the raw LLM response (often as an `.xml` file, for example `r{round}/output.xml`). It then parses this file and extracts the content of each `<document name="...">` entry into its own file under the round directory in run storage, named after that entry's `name` (a polish run on `paper.tex` produces `r0/paper.tex` for Round 0 and `r1/paper.tex` for the first reflection; a `<document name="chapters/main.tex">` entry lands as `r{round}/chapters/main.tex`; only the raw response uses the fixed `output.xml` stem, and a document literally named `output.tex` is renamed `output_extracted.tex` so it cannot clobber it). You can follow this in the [ProgressBoard](./progress-board.md). For LaTeX files, TeXRA can also generate a `latexdiff` file comparing each output to its input. Read the [LaTeX Diff guide](./latex-diff.md) for details.
 
@@ -102,13 +102,13 @@ TeXRA assembles a conversation from your agent's prompts and the content you sel
 
 **Reflection rounds (Round 1+):**
 
-Reflection runs by default: `settings.rounds` defaults to 2 (Round 0 plus one reflection round), and the total is max(`rounds`, number of `userRequest` entries). An agent with a single `userRequest` entry reuses it for the reflection round. To run only Round 0, set `settings.rounds: 1`, as `correct` and `merge` do. After Round 0 completes, each additional pass works like this:
+The number of rounds is the number of `task.requests` entries. An agent with two entries runs Round 0 plus one reflection round; an agent with one entry runs only Round 0, as `correct` and `merge` do. After Round 0 completes, each additional pass works like this:
 
-1.  **Reflection prompt:** TeXRA renders the reflection template from the next `userRequest` entry to ask the LLM to critique and improve its own Round 0 output (which is included in the conversation history).
+1.  **Reflection prompt:** TeXRA renders the reflection template from the next `task.requests` entry to ask the LLM to critique and improve its own Round 0 output (which is included in the conversation history).
 2.  **LLM interaction (Round 1):** The LLM generates a revised response.
 3.  **Processing:** TeXRA saves the refined output to a separate round path (`r{round}/<name>`, e.g. `r1/paper.tex` for the first reflection, `r2/paper.tex` for the next).
 
-Control how many rounds run by editing the agent YAML: adjust `settings.rounds` for the maximum number of passes, or add more entries to `userRequest`. A run ends earlier only on failure or cancellation.
+Control how many rounds run by editing the agent YAML: add or remove entries in `task.requests`. A run ends earlier only on failure or cancellation.
 
 This flow, with optional reflection rounds, lets TeXRA agents perform targeted tasks based on their definitions and your instructions. For examples of built-in agents, read the [Built-in agent reference](./built-in-agents.md).
 

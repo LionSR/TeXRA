@@ -101,7 +101,7 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
     // that asked for it, before any row records it.
     const refusal = childToolRefusal(
       parentOffered,
-      definition.setting.tools,
+      definition.persona.tools,
       agentName,
     );
     if (refusal !== undefined) {

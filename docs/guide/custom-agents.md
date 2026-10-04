@@ -50,62 +50,65 @@ Open the new `.yaml` file. A starter template is already inserted. An agent is t
 
 <AgentAnatomyHero />
 
-<p class="hero-caption">An agent file is <code>inherits</code> + <code>settings</code> + <code>prompts</code>; the <code>userRequest</code> array maps position-by-position onto rounds (item <code>[0]</code> is Round 0, item <code>[1]</code> the first reflection).</p>
+<p class="hero-caption">An agent file is <code>inherits</code> + a persona (<code>prompt</code>, <code>temperature</code>) + a <code>task</code> block; the <code>task.requests</code> list maps position-by-position onto rounds (item <code>[0]</code> is Round 0, item <code>[1]</code> the first reflection).</p>
 
 Customize it to define your agent's structure. These are the key fields:
 
 ```yaml
-# --- Agent Inheritance (Optional) ---
-# Specify a built-in or other custom agent to inherit settings and prompts from.
-# See guide/built-in-agents.md for potential parents.
-inherits: polish # Or correct, merge, etc.
+name: notation_checker # Lowercase letters, underscores, or dashes.
+description: Standardizes notation across the selected documents.
 
-# --- Agent Settings ---
-# Define the agent's core behavior and operational parameters.
-# Override parent settings here if inheriting.
-settings:
-  # Core Behavior
-  agentCategory: workflow # 'workflow' for structured reasoning with XML-wrapped output, or 'toolUse' for interactive agents that call tools (file editing, web search, etc.)
-  temperature: 0.1 # LLM creativity (0.0 = deterministic, >0 = more random). Can be overridden by user settings.
-  isRewrite: true # Does the agent primarily rewrite existing content (true) or generate new content (false)?
-  rounds: 2 # Number of passes (Round 0 plus reflection rounds). The actual count is max(rounds, number of userRequest entries); a run ends earlier only on failure or cancellation.
+# --- Agent Inheritance (Optional) ---
+# Inherit fields from another agent in the same directory (a custom agent
+# inherits from another custom agent, such as a customized copy of a built-in).
+# The child's fields override the parent's; a `task` block merges field by
+# field, and a list such as `requests` replaces the parent's list.
+# inherits: my_polish
+
+# --- Persona ---
+temperature: 0.1 # Optional, 0 to 1 (default 1.0). Lower is more deterministic.
+
+prompt: |
+  # The system prompt: the AI's role, core instructions, constraints, overall persona.
+  # Sent once at the beginning (for supported models).
+  [Define the AI's role and core instructions]
+
+# --- Document task ---
+# A `task` block makes this a workflow agent. Without it, the file is a
+# tool-use agent (see below). A file with `task` cannot also list `tools`.
+task:
+  rewrite: true # Edit the input documents (true, the default) or write new documents (false).
 
   # File Handling (Optional - Advanced)
-  # requiredFilesInternal:
-  #   STYLE_GUIDE: styles/internal_style.css # Map variable names to files the agent bundles, relative to its YAML file location. Workspace files are attached per run as context files instead.
-  # defaultOutputFiles: # Used when the agent is designed to produce multiple outputs.
+  # files:
+  #   STYLE_GUIDE: styles/internal_style.sty # Map variable names to files the agent bundles, relative to its YAML file location. Workspace files are attached per run as context files instead.
+  # outputs: # Used when the agent writes new files with fixed names.
   #   - 'introduction.tex'
   #   - 'methods.tex'
 
-# --- Agent Prompts ---
-# Define the text templates used to instruct the LLM.
-# Override parent prompts here if inheriting.
-prompts:
-  systemPrompt: |
-    # Defines the AI's role, core instructions, constraints, overall persona.
-    # Sent once at the beginning (for supported models).
-    [Define the AI's role and core instructions]
-
-  userPrefix: |
+  prefix: |
     # Provides introductory text, main context (input files, user instruction).
     # Variables like `{{ INPUT_CONTENT }}`, `{{ INSTRUCTION }}`, `{{ ALL_CONTEXTS }}` are substituted here.
     [Define context, instructions, and input variables like `{{ INPUT_CONTENT }}`]
 
-  userRequest:
+  requests:
     - |
       # The prompt for the AI's first round of work (Round 0).
       # Often includes guidance for thinking (<scratchpad>) and the fixed <documents> output structure.
       [Define the initial task prompt, potentially including scratchpad guidance]
     - |
-      # Optional follow-up prompt for reflection rounds (Round 1+).
-      # Duplicate or remove items to control how many reflections TeXRA schedules automatically.
+      # Optional follow-up prompt for a reflection round (Round 1+).
+      # Each entry is one round: add or remove entries to control how many run.
       [Define how the model should critique or iterate on its previous output]
 ```
 
-> **Reflection tips:** When `userRequest` is an array, TeXRA takes the first
-> entry as the initial request and treats the remaining entries as reflection
-> prompts. If a run requests more reflections than the list provides, the first
-> reflection template is reused.
+The file is flat and strict: a key TeXRA does not know is refused, and the
+older nested `settings:` / `prompts:` layout is not read. There is no `model`
+field; you choose the model when you run the agent.
+
+> **Reflection tips:** TeXRA takes the first `requests` entry as the initial
+> request and each remaining entry as one reflection prompt, in order. The
+> number of entries is the number of rounds.
 
 #### <wa-icon library="texra" name="symbol-variable"></wa-icon> Using variables in prompts (Nunjucks templating)
 
@@ -130,34 +133,35 @@ inlined as text (read [Working with figures](./working-with-figures.md)).
   `{{ INPUT_FILES | join(", ") }}` for a human-readable list. Read
   [Handling multiple files](./multiple-output.md).
 - &#123;&#123; OUTPUT_FILES &#125;&#125;: Array of declared generated output filenames.
-  This is only populated for agents that set `defaultOutputFiles` or receive an
+  This is only populated for agents that set `task.outputs` or receive an
   explicit generated output list.
 
-**Custom variables (from `settings`):**
+**Custom variables (from `task.files`):**
 
-- Files specified in `requiredFilesInternal` are available as `{{ VARNAME_CONTENT }}` (for example `{{ TEMPLATE_CONTENT }}`).
+- Each file bound in `task.files` is available as `{{ VARNAME_FILE }}` (its path) and `{{ VARNAME_CONTENT }}` (its text); a binding `TEMPLATE: template.tex` gives `{{ TEMPLATE_CONTENT }}`.
 - When agents finish, TeXRA captures detected XML segments so orchestrated workflows can reuse them without going through the file picker again (details below).
 
-**Example usage in `userPrefix`:**
+**Example usage in `task.prefix`:**
 
 ```yaml
-userPrefix: |
-  Please process the main document: {{ INPUT_FILE }}
-  <document name="{{ INPUT_FILE }}">
-  {{ INPUT_CONTENT }}
-  </document>
+task:
+  prefix: |
+    Please process the main document: {{ INPUT_FILE }}
+    <document name="{{ INPUT_FILE }}">
+    {{ INPUT_CONTENT }}
+    </document>
 
-  Refer to these context files:
-  {{ ALL_CONTEXTS }}
+    Refer to these context files:
+    {{ ALL_CONTEXTS }}
 
-  Apply the following instruction:
-  <instruction>{{ INSTRUCTION }}</instruction>
+    Apply the following instruction:
+    <instruction>{{ INSTRUCTION }}</instruction>
 ```
 
 **Key considerations:**
 
 - <wa-icon library="texra" name="symbol-structure"></wa-icon> **Architecture overview:** For the execution flow and how prompts and settings interact, read the [Workflow agents: how they work](./agent-architecture.md) guide.
-- <wa-icon library="texra" name="type-hierarchy"></wa-icon> **Inheritance:** Inheriting from a relevant built-in agent (like `correct` or `polish`) saves effort. Define only the settings and prompts you need to change.
+- <wa-icon library="texra" name="type-hierarchy"></wa-icon> **Inheritance:** Inheriting from a related agent in the same directory (for example a customized copy of `correct` or `polish`) saves effort. Define only the fields you need to change.
 - <wa-icon library="texra" name="files"></wa-icon> **Multiple outputs:** If your agent needs to generate multiple distinct files, make sure your prompts generate the required XML structure. Read the [Handling multiple files](./multiple-output.md) guide.
 - <wa-icon library="texra" name="rocket"></wa-icon> **Start simple:** Begin with basic settings and prompts and add complexity incrementally.
 - <wa-icon library="texra" name="debug-alt"></wa-icon> **Test iteratively:** Test often and review logs in the ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>).
@@ -174,7 +178,7 @@ Tool-use agents are interactive: instead of producing a single polished file, th
 
 **Typical user story:** You are writing up results for a conference submission and realize you need three new BibTeX entries, a TikZ architecture diagram, and a consistency pass across four `.tex` files. Rather than juggling browser tabs and terminal windows, you open a `research` agent (<wa-icon library="texra" name="sparkle"></wa-icon>) and describe what you need. The agent reads your project, searches arXiv for the missing references, drafts the TikZ code, and edits the files, all in one session.
 
-To create your own tool-use agent, set `agentCategory: toolUse` and list the tools you want to grant. TeXRA groups tools by the plugin that adds them (listed on **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>)). Each chip below is a token you can put straight into your `tools:` array:
+To create your own tool-use agent, leave out the `task` block and list the tools you want to grant. A tool-use agent has no request template: what you type is sent as the user message. TeXRA groups tools by the plugin that adds them (listed on **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>)). Each chip below is a token you can put straight into your `tools:` array:
 
 <ToolCategoriesHero />
 
@@ -185,15 +189,18 @@ For the exact tool names to list in your YAML, browse any of the built-in tool-u
 Example skeleton:
 
 ```yaml
-settings:
-  agentCategory: toolUse
-  tools:
-    - read_file
-    - write_file
-    - edit_file
-    - glob
-    - grep
-    - web_search
+name: bib_helper
+description: Finds references and edits the bibliography.
+tools:
+  - read_file
+  - write_file
+  - edit_file
+  - glob
+  - grep
+  - web_search
+
+prompt: |
+  [Define the agent's role and how it should use its tools]
 ```
 
 The ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>) logs every tool call and its result, so you can always see what the agent is doing.
@@ -205,32 +212,32 @@ response using the appropriate filename list. Below is a simplified template
 for a workflow agent that writes two generated output files:
 
 ```yaml
-inherits: polish
-settings:
-  agentCategory: workflow
-  defaultOutputFiles:
+name: intro_and_conclusion
+inherits: my_polish
+task:
+  rewrite: false
+  outputs:
     - introduction.tex
     - conclusion.tex
+  requests:
+    - |
+      The output files should be in this order: {{ OUTPUT_FILES | join(", ") }}.
 
-prompts:
-  userRequest: |
-    The output files should be in this order: {{ OUTPUT_FILES | join(", ") }}.
+      <scratchpad>
+      - Plan revisions for each file
+      </scratchpad>
 
-    <scratchpad>
-    - Plan revisions for each file
-    </scratchpad>
-
-    <documents>
-    {% for output in OUTPUT_FILES %}
-    <document name="{{ output }}">
-    % UPDATED_CONTENT_FOR_{{ output }}
-    </document>
-    {% endfor %}
-    </documents>
+      <documents>
+      {% for output in OUTPUT_FILES %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
+      </document>
+      {% endfor %}
+      </documents>
 ```
 
 This structure lets TeXRA save each `<document>` block to the corresponding
-filename from the selected input list or from `settings.defaultOutputFiles`:
+filename from the selected input list or from `task.outputs`:
 
 <OutputMappingHero />
 
