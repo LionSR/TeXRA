@@ -1,7 +1,7 @@
 # GUI lanes G2–G6: what the sweep left for a design call
 
 Date: 2026-10-03
-Status: proposed
+Status: implemented (items 2 and 3 by the pre-freeze cleanup lane; item 1 handed to the R1 lane, which owns `src/tools/registry.ts`)
 Origin: the simplification sweep over the GUI lanes (#13636, #13640, #13645,
 #13647, #13648, #13659, #13661). The sweep's batched PR removed what had no
 consumer and merged the plugin row model the Plugins page and `/plugins`
@@ -30,37 +30,24 @@ Why it was not done here: `src/tools/registry.ts` is the plugin registry,
 which another lane owns this week. Do it in that lane's next PR, or after
 that lane lands.
 
-## 2. `usageCostLabel(...) ?? formatCostUsd(cost)` four times
+## 2. `usageCostLabel(...) ?? formatCostUsd(cost)` four times (done)
 
-There are four call sites:
+`usageCostLabel` now takes the usage record (`cost`, `usageRoute`,
+`usagePlan`) and is total: an unknown route shows the bare amount, even at
+zero. The four fallbacks went, and so did the CLI's local `costLabel`
+wrapper. The one caller that omits the line for a task that never reached
+a model, the CLI resume hint, tests `cost > 0 || usageRoute !== undefined`
+itself, which is the old `undefined` case exactly (`usageRouteBadge`
+returns `undefined` only for an absent route).
 
-- the CLI's `sessionStatus.ts:89`
-- the extension's `extension.ts:613`
-- the progress view's `UsagePanel.ts:279`
-- the progress view's `UsagePanel.ts:355`
+## 3. `deliveredResponse` parses the same output twice per tool row (done)
 
-Each one falls back to the bare amount when `usageCostLabel` has nothing to
-say. A total variant of `usageCostLabel` that takes the `TokenUsageStats`
-and never returns `undefined` would replace all four.
-
-Not done: it adds one exported function and removes none. The four sites
-are the same pattern but not the same caller shape: `extension.ts`
-destructures the fields, and `UsagePanel` passes `this.usage` fields.
-Worth doing only if the next cost-surface change touches three of the
-four anyway.
-
-## 3. `deliveredResponse` parses the same output twice per tool row
-
-In `src/ui/transcript/toolRowSections.ts`, an `agent` call's row parses
-`ctx.outputText` once in the section builder (`:378`) and again when
-`toolRowModel` decides `carriesOutput` (`:685`). That is a redundant parse
-of the same string on every render of an agent row.
-
-The two tests differ: `if (answer)` treats an empty answer as absent, but
-`!== undefined` counts it. Carrying the parse once, by returning it from the
-builder or deciding `carriesOutput` from the presence of the `Result:`
-section, needs that difference settled first. Behaviour-preserving only if
-an empty `<response>` cannot reach here.
+The `agent` row's `carriesOutput` is now read from the section the builder
+built (`AGENT_ANSWER_LABEL`) instead of a second parse. The two tests
+agreed already: `deliveredResponse` never returns an empty string, since a
+present body is decoded non-empty and an absent one falls back to
+`summarizeSubagentFollowup`, which returns the non-empty envelope or its
+summary.
 
 ## Rejected
 
