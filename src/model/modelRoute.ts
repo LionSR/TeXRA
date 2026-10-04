@@ -11,13 +11,11 @@ import {
   type HostRouteFacts,
   type ModelRoute,
 } from '@texra-ai/llm';
+import { getCodexStatus, getXaiStatus } from '@texra-ai/llm/node';
 import { Effect } from 'effect';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
-import {
-  isPreferSubscription,
-  isSubscriptionSignedIn,
-} from '@model/subscriptionAccess';
+import { isPreferSubscription } from '@model/subscriptionAccess';
 import { StateReadFailed } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
@@ -175,7 +173,7 @@ export const readRouteFacts = Effect.fn('readRouteFacts')(function* (
 ): Effect.fn.Return<HostRouteFacts, StateReadFailed> {
   const allowed = (route: DeclinableUsageRoute) =>
     !declinedRoutes.includes(route);
-  // Only worth a sign-in probe when the preference is on. The preference read
+  // Only worth a sign-in read when the preference is on. The preference read
   // is a synchronous catalog read that throws; keep it in the typed channel.
   const subscriptionOn = (
     route: DeclinableUsageRoute,
@@ -193,7 +191,14 @@ export const readRouteFacts = Effect.fn('readRouteFacts')(function* (
             }),
         }).pipe(
           Effect.flatMap((on) =>
-            on ? isSubscriptionSignedIn(provider) : Effect.succeed(false),
+            on
+              ? Effect.map(
+                  (provider === 'chatgpt' ? getCodexStatus : getXaiStatus)(
+                    stores.secrets,
+                  ),
+                  (status) => status.signedIn,
+                )
+              : Effect.succeed(false),
           ),
         )
       : Effect.succeed(false);

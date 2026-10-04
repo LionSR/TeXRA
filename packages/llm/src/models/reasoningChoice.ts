@@ -205,7 +205,9 @@ export function defaultReasoningLevel(
  * The effort values a route may send for a model: the levels it accepts
  * while thinking, plus `none` where `none` is how thinking is turned off.
  */
-export function acceptedEfforts(config: ModelConfig): ReasoningEffort[] {
+export function acceptedEfforts(
+  config: Pick<ModelConfig, 'reasoning'>,
+): ReasoningEffort[] {
   const { reasoning } = config;
   if (reasoning === undefined) return [];
   return [

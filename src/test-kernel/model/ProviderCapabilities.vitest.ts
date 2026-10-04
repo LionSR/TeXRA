@@ -10,7 +10,6 @@ import {
 
 import { Effect } from 'effect';
 import { codexBackendModelId, routeConfig } from '@texra-ai/llm';
-import { installSubscriptionProbes } from '@controllers/modelAccess/installSubscriptionProbes';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import { readRouteFacts } from '@model/modelRoute';
 import { withProcessServices } from '@platform/processRuntime';
@@ -74,8 +73,6 @@ async function installSubscriptionPlatform(options?: {
         ? {}
         : { [CODEX_SESSION_SECRET_KEY]: JSON.stringify(signedInSession) },
   });
-  // Sign-in state reaches the model layer through the seam the hosts install.
-  installSubscriptionProbes(hostStores().secrets);
 }
 
 describe('provider capabilities', () => {

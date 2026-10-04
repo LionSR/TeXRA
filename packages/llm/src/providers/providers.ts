@@ -5,8 +5,7 @@ import {
 } from './providerPlugins.js';
 
 /** OpenAI-compatible base URL for the Kimi Code (Moonshot coding-subscription)
- *  coding endpoint, which the route decision and the host's error detection
- *  both name. */
+ *  coding endpoint, which the route decision and its endpoint both name. */
 export const KIMI_CODE_BASE_URL = 'https://api.kimi.com/coding/v1';
 
 // ============================================================================

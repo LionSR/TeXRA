@@ -11,8 +11,8 @@
  *
  * Lives in `src/controllers/` rather than in `@texra-ai/llm` because a row
  * binds a sign-in flow to its model-layer routing preference, a setting the
- * package never reads. This is the same composition
- * `subscriptionAuthStatus.ts` beside it already does.
+ * package never reads; {@link subscriptionAuthStatus} joins the same two
+ * facts for the settings views.
  */
 import { Effect } from 'effect';
 
@@ -39,7 +39,10 @@ import {
 import type { ConfigWriteFailed } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
+import type {
+  SUBSCRIPTION_AUTH_PROVIDERS,
+  SubscriptionAuthStatus,
+} from '@shared/model/subscriptionAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { HttpClient } from 'effect/http';
 
@@ -302,4 +305,26 @@ export function subscriptionProvider(
   id: SubscriptionProviderId,
 ): SubscriptionProvider {
   return SUBSCRIPTION_PROVIDERS[id];
+}
+
+/**
+ * The subscription sign-in status as the settings views consume it: the
+ * session status plus the current routing preference, tagged with the provider
+ * it belongs to. One composer so the extension and desktop hosts post the
+ * identical payload (the wire shape is validated by
+ * `SubscriptionAuthStatusSchema` at each host's boundary).
+ */
+export function subscriptionAuthStatus(
+  providerId: SubscriptionProviderId,
+  stores: SettingsStores,
+  secrets: PlatformSecrets,
+): Effect.Effect<SubscriptionAuthStatus> {
+  const provider = subscriptionProvider(providerId);
+  return Effect.map(provider.getStatus(secrets), (status) => ({
+    provider: providerId,
+    signedIn: status.signedIn,
+    email: status.email,
+    accountId: status.accountId,
+    preferSubscription: provider.isPreferSubscription(stores),
+  }));
 }
