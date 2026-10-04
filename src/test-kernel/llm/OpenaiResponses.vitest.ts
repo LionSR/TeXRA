@@ -1168,20 +1168,8 @@ describe('native OpenAI Responses protocol', () => {
           afterSequence: 1,
         });
         expect(initial.slice(1)).toEqual([
-          {
-            kind: 'phase',
-            part: 'reasoning',
-            boundary: 'start',
-            providerItemIndex: 0,
-            afterSequence: 2,
-          },
-          {
-            kind: 'phase',
-            part: 'reasoning',
-            boundary: 'end',
-            providerItemIndex: 0,
-            afterSequence: 3,
-          },
+          { kind: 'cursor', afterSequence: 2 },
+          { kind: 'cursor', afterSequence: 3 },
         ]);
         const resumed = yield* Stream.runCollect(
           model.background.observe(
@@ -1197,7 +1185,7 @@ describe('native OpenAI Responses protocol', () => {
           resumed.map((event) => [event.kind, event.afterSequence]),
         ).toEqual([
           ['delta', 4],
-          ['phase', 5],
+          ['cursor', 5],
           ['completed', 6],
         ]);
         expect(resumed.slice(0, 2)).toEqual([
@@ -1205,16 +1193,9 @@ describe('native OpenAI Responses protocol', () => {
             kind: 'delta',
             part: 'text',
             text: 'Progress only',
-            providerItemIndex: 1,
             afterSequence: 4,
           },
-          {
-            kind: 'phase',
-            part: 'text',
-            boundary: 'end',
-            providerItemIndex: 1,
-            afterSequence: 5,
-          },
+          { kind: 'cursor', afterSequence: 5 },
         ]);
         const terminal = resumed.at(-1);
         assert(terminal?.kind === 'completed');
@@ -1774,7 +1755,6 @@ describe('native OpenAI Responses protocol', () => {
               });
         const seen = yield* Stream.runCollect(stream);
         const completed = seen.at(-1);
-        expect(seen.some((event) => event.kind === 'phase')).toBe(false);
         assert(completed?.kind === 'completed');
         expect(completed).toMatchObject({
           kind: 'completed',
@@ -2026,48 +2006,7 @@ describe('native OpenAI Responses protocol', () => {
           returnedModel: 'returned-model',
         });
         expect(collected.slice(1, -1)).toEqual([
-          {
-            kind: 'phase',
-            part: 'reasoning',
-            boundary: 'start',
-            providerItemIndex: 0,
-          },
-          {
-            kind: 'phase',
-            part: 'reasoning',
-            boundary: 'end',
-            providerItemIndex: 0,
-          },
-          {
-            kind: 'phase',
-            part: 'text',
-            boundary: 'start',
-            providerItemIndex: 1,
-          },
-          {
-            kind: 'delta',
-            part: 'text',
-            text: 'I will check.',
-            providerItemIndex: 1,
-          },
-          {
-            kind: 'phase',
-            part: 'text',
-            boundary: 'end',
-            providerItemIndex: 1,
-          },
-          {
-            kind: 'phase',
-            part: 'reasoning',
-            boundary: 'start',
-            providerItemIndex: 4,
-          },
-          {
-            kind: 'phase',
-            part: 'reasoning',
-            boundary: 'end',
-            providerItemIndex: 4,
-          },
+          { kind: 'delta', part: 'text', text: 'I will check.' },
         ]);
         const terminal = collected.at(-1);
         if (terminal?.kind !== 'completed')

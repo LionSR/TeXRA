@@ -392,7 +392,6 @@ export const modelInvokerLayer = (): Layer.Layer<
                   ).slice(-PARTIAL_TEXT_TAIL_MAX);
                 }
                 return;
-              case 'phase':
               case 'cursor':
                 return;
               case 'completed':

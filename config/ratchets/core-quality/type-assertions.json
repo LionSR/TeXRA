@@ -1,6 +1,4 @@
 {
-  "packages/llm/src/api/anthropicMessages.ts": 1,
-  "packages/llm/src/api/chatStream.ts": 1,
   "packages/llm/src/api/openaiResponses.ts": 1,
   "packages/llm/src/api/openaiResponsesRequest.ts": 1,
   "packages/llm/src/api/openaiResponsesWebSocket.ts": 2,

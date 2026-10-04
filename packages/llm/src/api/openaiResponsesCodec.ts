@@ -1,6 +1,5 @@
 // Node imports
 import { Buffer } from 'node:buffer';
-import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
 import { Effect, Stream } from 'effect';
@@ -8,32 +7,23 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 
 // Local imports - canonical model contract
-import {
-  TurnResultSchema,
-  type ResolvedTurn,
-  type TurnEvent,
-  type TurnResult,
-} from '../turn.js';
-import {
-  ModelError,
-  enrichModelError,
-  type RemoteOperation,
-} from '../errors.js';
+import { ModelError, type RemoteOperation } from '../errors.js';
 import { openaiFailure } from './openaiError.js';
 import { parseInboundToolArguments, sdkStream } from './transport.js';
 import {
   ResponsesUsageSchema,
   responsesUsage,
 } from './openaiResponsesUsage.js';
+import { assembleTurn, type AssemblyOptions } from './assembleTurn.js';
+import type { ResolvedTurn, TurnEvent } from '../turn.js';
+import type { HttpTurnResult, Part, PartEvent } from './parts.js';
+
+type Append = Extract<PartEvent, { kind: 'append' }>;
 
 // The codec is the lowest module of this split: the input lowering, the
-// request surface and the entry all name the response origin and the completed
-// HTTP result, so they live with the schemas that produce them.
+// request surface and the entry all name the response origin, so it lives
+// with the schemas that produce it.
 export type ResponseOrigin = RemoteOperation['origin'];
-export type HttpTurnResult = Extract<
-  TurnResult,
-  { providerResponseId: string }
->;
 
 const ItemStatusSchema = z.enum(['in_progress', 'completed', 'incomplete']);
 const ReasoningTextSchema = z.strictObject({
@@ -90,73 +80,6 @@ const OutputItemSchema = z.discriminatedUnion('type', [
 ]);
 type OutputItem = z.infer<typeof OutputItemSchema>;
 
-function itemIdentity(item: OutputItem) {
-  return {
-    type: item.type,
-    id: item.id,
-    callId: item.type === 'function_call' ? item.call_id : undefined,
-    name: item.type === 'function_call' ? item.name : undefined,
-  };
-}
-
-/** A sparse terminal snapshot may omit evidence, but cannot revise a done item. */
-export function agreesWithCompleted(
-  completed: HttpTurnResult['content'][number],
-  candidate: HttpTurnResult['content'][number],
-): boolean {
-  if (completed.kind === 'message' && candidate.kind === 'message') {
-    if (
-      completed.evidence?.kind !== 'openai-responses-message' ||
-      candidate.evidence?.kind !== 'openai-responses-message'
-    )
-      return false;
-    return (
-      isDeepStrictEqual(completed.content, candidate.content) &&
-      completed.evidence?.itemId === candidate.evidence?.itemId &&
-      completed.evidence?.status === candidate.evidence?.status &&
-      (candidate.evidence?.phase === undefined ||
-        completed.evidence?.phase === candidate.evidence.phase)
-    );
-  }
-  if (completed.kind === 'reasoning' && candidate.kind === 'reasoning') {
-    if (
-      completed.evidence?.kind !== 'openai-responses-reasoning' ||
-      candidate.evidence?.kind !== 'openai-responses-reasoning'
-    )
-      return false;
-    return (
-      isDeepStrictEqual(completed.summary, candidate.summary) &&
-      (candidate.content === undefined ||
-        isDeepStrictEqual(completed.content, candidate.content)) &&
-      completed.evidence.itemId === candidate.evidence.itemId &&
-      // No `encryptedContent` check: OpenAI re-encrypts the same reasoning
-      // between the item's done event and the terminal snapshot, so the two
-      // opaque blobs differ byte for byte. The completed item's blob is kept.
-      (candidate.evidence.status === undefined ||
-        completed.evidence.status === candidate.evidence.status)
-    );
-  }
-  if (completed.kind === 'local-call' && candidate.kind === 'local-call') {
-    if (
-      (completed.evidence !== undefined &&
-        completed.evidence.kind !== 'openai-responses-function-call') ||
-      (candidate.evidence !== undefined &&
-        candidate.evidence.kind !== 'openai-responses-function-call')
-    )
-      return false;
-    return (
-      completed.providerCallId === candidate.providerCallId &&
-      completed.name === candidate.name &&
-      completed.argumentsText === candidate.argumentsText &&
-      (candidate.evidence?.itemId === undefined ||
-        completed.evidence?.itemId === candidate.evidence.itemId) &&
-      (candidate.evidence?.status === undefined ||
-        completed.evidence?.status === candidate.evidence.status)
-    );
-  }
-  return false;
-}
-
 export const ResponseSchema = z.object({
   id: z.string().min(1),
   object: z.literal('response'),
@@ -178,133 +101,136 @@ export const ResponseSchema = z.object({
 });
 type ResponseValue = z.infer<typeof ResponseSchema>;
 
-export const normalizeItem = Effect.fn('llm.responses.normalizeItem')(
-  function* (
-    item: OutputItem,
-  ): Effect.fn.Return<HttpTurnResult['content'][number], ModelError> {
-    if (item.status === 'in_progress') {
+/**
+ * An item in canonical shape. An item still in progress opens a part whose
+ * identity is final and whose content is not; it is never a result.
+ */
+const itemPart = (item: OutputItem): Part => {
+  const status = item.status === 'in_progress' ? 'incomplete' : item.status;
+  switch (item.type) {
+    case 'message':
+      return {
+        kind: 'message',
+        content: item.content.map((part) =>
+          part.type === 'output_text'
+            ? { kind: 'text', text: part.text }
+            : { kind: 'refusal', text: part.refusal },
+        ),
+        evidence: {
+          kind: 'openai-responses-message',
+          itemId: item.id,
+          status: status ?? 'completed',
+          ...(item.phase !== undefined ? { phase: item.phase } : {}),
+        },
+      };
+    case 'reasoning':
+      return {
+        kind: 'reasoning',
+        summary: item.summary.map((part) => ({
+          kind: 'text',
+          text: part.text,
+        })),
+        ...(item.content !== undefined
+          ? {
+              content: item.content.map((part) => ({
+                kind: 'text' as const,
+                text: part.text,
+              })),
+            }
+          : {}),
+        evidence: {
+          kind: 'openai-responses-reasoning',
+          itemId: item.id,
+          ...(status !== undefined ? { status } : {}),
+          ...(item.encrypted_content !== undefined
+            ? { encryptedContent: item.encrypted_content }
+            : {}),
+        },
+      };
+    case 'function_call':
+      return {
+        kind: 'local-call',
+        providerCallId: item.call_id,
+        name: item.name,
+        argumentsText: item.arguments,
+        evidence: {
+          kind: 'openai-responses-function-call',
+          ...(item.id !== undefined ? { itemId: item.id } : {}),
+          ...(item.status === 'completed' ? { status: item.status } : {}),
+        },
+      };
+  }
+};
+
+/** A completed item; an unfinished one, or a call without JSON arguments, fails. */
+const normalizeItem = Effect.fn('llm.responses.normalizeItem')(function* (
+  item: OutputItem,
+): Effect.fn.Return<Part, ModelError> {
+  if (item.status === 'in_progress')
+    return yield* new ModelError({
+      kind: 'malformed-output',
+      message: 'Unfinished model items cannot form a completed tool exchange.',
+    });
+  if (item.type === 'function_call') {
+    if (item.status === 'incomplete')
       return yield* new ModelError({
         kind: 'malformed-output',
-        message:
-          'Unfinished model items cannot form a completed tool exchange.',
+        message: 'Incomplete local calls are not dispatchable.',
       });
-    }
-    switch (item.type) {
-      case 'message':
-        return {
-          kind: 'message',
-          content: item.content.map((part) =>
-            part.type === 'output_text'
-              ? { kind: 'text', text: part.text }
-              : { kind: 'refusal', text: part.refusal },
-          ),
-          evidence: {
-            kind: 'openai-responses-message',
-            itemId: item.id,
-            status: item.status,
-            ...(item.phase !== undefined ? { phase: item.phase } : {}),
-          },
-        };
-      case 'reasoning':
-        return {
-          kind: 'reasoning',
-          summary: item.summary.map((part) => ({
-            kind: 'text',
-            text: part.text,
-          })),
-          ...(item.content !== undefined
-            ? {
-                content: item.content.map((part) => ({
-                  kind: 'text' as const,
-                  text: part.text,
-                })),
-              }
-            : {}),
-          evidence: {
-            kind: 'openai-responses-reasoning',
-            itemId: item.id,
-            ...(item.status !== undefined ? { status: item.status } : {}),
-            ...(item.encrypted_content !== undefined
-              ? { encryptedContent: item.encrypted_content }
-              : {}),
-          },
-        };
-      case 'function_call': {
-        if (item.status === 'incomplete') {
-          return yield* new ModelError({
-            kind: 'malformed-output',
-            message: 'Incomplete local calls are not dispatchable.',
-          });
-        }
-        yield* parseInboundToolArguments(item.arguments, 'The model');
-        return {
-          kind: 'local-call',
-          providerCallId: item.call_id,
-          name: item.name,
-          argumentsText: item.arguments,
-          evidence: {
-            kind: 'openai-responses-function-call',
-            ...(item.id !== undefined ? { itemId: item.id } : {}),
-            ...(item.status !== undefined ? { status: item.status } : {}),
-          },
-        };
-      }
-    }
-  },
-);
+    yield* parseInboundToolArguments(item.arguments, 'The model');
+  }
+  return itemPart(item);
+});
 
-export const normalizeResponse = Effect.fn('llm.responses.normalizeResponse')(
-  function* (
-    response: ResponseValue,
-    origin: ResponseOrigin,
-    content: HttpTurnResult['content'],
-  ) {
-    let finishReason: HttpTurnResult['finishReason'];
-    if (response.status === 'completed') {
-      finishReason = content.some((item) => item.kind === 'local-call')
-        ? 'tool-calls'
-        : 'stop';
-    } else if (
-      response.status === 'incomplete' &&
-      response.incomplete_details != null &&
-      !content.some((item) => item.kind === 'local-call')
-    ) {
-      finishReason =
-        response.incomplete_details.reason === 'max_output_tokens'
-          ? 'length'
-          : 'content-filter';
-    } else {
-      return yield* new ModelError({
+/**
+ * A terminal snapshot as parts: its identity, usage and finish, with its
+ * items as the provider's terminal statement of the content.
+ */
+export const terminalParts = Effect.fn('llm.responses.terminalParts')(
+  function* (response: ResponseValue) {
+    const incomplete = response.incomplete_details?.reason;
+    const rejected = () =>
+      new ModelError({
         kind: 'provider-rejection',
         message:
           response.error?.message ??
           `The model response ended with status ${response.status}.`,
         cause: response.error,
       });
-    }
-    const result = TurnResultSchema.safeParse({
-      kind: 'http',
-      providerResponseId: response.id,
-      requestedOrigin: origin,
-      returnedModel: response.model,
-      modelFingerprint: null,
-      content,
-      finishReason,
-      finishEvidence: {
-        kind: 'openai-responses',
-        status: response.status,
-        incompleteReason: response.incomplete_details?.reason ?? null,
+    if (
+      response.status !== 'completed' &&
+      (response.status !== 'incomplete' || incomplete == null)
+    )
+      return yield* rejected();
+    const snapshot = yield* Effect.forEach(response.output, normalizeItem);
+    const calls = snapshot.some((item) => item.kind === 'local-call');
+    // An incomplete response cannot leave a dispatchable call.
+    if (response.status === 'incomplete' && calls) return yield* rejected();
+    let finishReason: HttpTurnResult['finishReason'] = calls
+      ? 'tool-calls'
+      : 'stop';
+    if (response.status === 'incomplete')
+      finishReason =
+        incomplete === 'max_output_tokens' ? 'length' : 'content-filter';
+    return [
+      { kind: 'identity', id: response.id, model: response.model },
+      {
+        kind: 'usage',
+        usage: response.usage ? responsesUsage(response.usage) : null,
       },
-      usage: response.usage ? responsesUsage(response.usage) : null,
-    });
-    if (!result.success || result.data.providerResponseId === null) {
-      return yield* new ModelError({
-        kind: 'malformed-output',
-        message: 'The model returned inconsistent completed content.',
-        cause: result.success ? undefined : result.error,
-      });
-    }
-    return result.data;
+      {
+        kind: 'finish',
+        finish: {
+          finishReason,
+          finishEvidence: {
+            kind: 'openai-responses',
+            status: response.status,
+            incompleteReason: incomplete ?? null,
+          },
+        },
+        snapshot,
+      },
+    ] satisfies PartEvent[];
   },
 );
 
@@ -460,308 +386,160 @@ export interface DocumentAccess {
   readonly fileIdFor: (base64: string) => string | null;
 }
 
-export const EventSchema = z.object({
+const EventSchema = z.object({
   type: z.string(),
   sequence_number: z.int().nonnegative(),
 });
 export const ResponseEventSchema = EventSchema.extend({
   response: ResponseSchema,
 });
-export const ItemEventSchema = EventSchema.extend({
+const ItemEventSchema = EventSchema.extend({
   output_index: z.int().nonnegative(),
   item: OutputItemSchema,
 });
-export const DeltaEventSchema = EventSchema.extend({
+const DeltaEventSchema = EventSchema.extend({
   item_id: z.string().min(1),
   output_index: z.int().nonnegative(),
   delta: z.string(),
   logprobs: z.array(z.never()).nullish(),
 });
 
-/** One canonical foreground decoder for HTTP and WebSocket response events. */
-export function responseEvents(
+const SNAPSHOT_EVENTS = new Set([
+  'response.created',
+  'response.queued',
+  'response.in_progress',
+  'response.completed',
+  'response.incomplete',
+  'response.failed',
+]);
+const TERMINAL_EVENTS = new Set([
+  'response.completed',
+  'response.incomplete',
+  'response.failed',
+]);
+const DELTA_CHANNELS = new Map<string, Append['channel']>([
+  ['response.output_text.delta', 'text'],
+  ['response.refusal.delta', 'refusal'],
+  ['response.reasoning_summary_text.delta', 'summary'],
+  ['response.reasoning_text.delta', 'reasoning'],
+]);
+// Framing that owns no content: output_item.done carries the item.
+const FRAMING_EVENTS = new Set([
+  'response.content_part.added',
+  'response.content_part.done',
+  'response.output_text.done',
+  'response.refusal.done',
+  'response.reasoning_summary_part.added',
+  'response.reasoning_summary_part.done',
+  'response.reasoning_summary_text.done',
+  'response.reasoning_text.done',
+  'response.function_call_arguments.delta',
+  'response.function_call_arguments.done',
+]);
+
+/** One decoded Responses event: its sequence, its parts, whether it settles. */
+export interface ResponseEventParts {
+  readonly sequence: number;
+  readonly parts: readonly PartEvent[];
+  readonly terminal: boolean;
+}
+
+const malformed = (message: string, cause?: unknown) =>
+  new ModelError({ kind: 'malformed-output', message, cause });
+const decoded = <T>(result: z.ZodSafeParseResult<T>, message: string) =>
+  result.success
+    ? Effect.succeed(result.data)
+    : Effect.fail(malformed(message, result.error));
+
+/**
+ * The one Responses event decoder, for HTTP and WebSocket streams and for
+ * observation: each event after `after`, in order, as parts.
+ */
+export function responsesWire(after: number) {
+  let sequence = after;
+  return (raw: unknown): Effect.Effect<ResponseEventParts, ModelError> =>
+    Effect.gen(function* () {
+      const header = EventSchema.safeParse(raw);
+      if (!header.success || header.data.sequence_number <= sequence)
+        return yield* malformed(
+          'The model emitted invalid or out-of-order events.',
+        );
+      sequence = header.data.sequence_number;
+      const type = header.data.type;
+      const at = (parts: readonly PartEvent[], terminal = false) => ({
+        sequence,
+        parts,
+        terminal,
+      });
+      if (SNAPSHOT_EVENTS.has(type)) {
+        const { response } = yield* decoded(
+          ResponseEventSchema.safeParse(raw),
+          'The response snapshot is malformed or unsupported.',
+        );
+        if (!TERMINAL_EVENTS.has(type))
+          return at([
+            { kind: 'identity', id: response.id, model: response.model },
+          ]);
+        if (response.status !== type.slice('response.'.length))
+          return yield* malformed(
+            'The terminal event and response status disagree.',
+          );
+        return at(yield* terminalParts(response), true);
+      }
+      if (
+        type === 'response.output_item.added' ||
+        type === 'response.output_item.done'
+      ) {
+        const { output_index: index, item } = yield* decoded(
+          ItemEventSchema.safeParse(raw),
+          'The model returned unsupported output content.',
+        );
+        return at([
+          type === 'response.output_item.added'
+            ? { kind: 'open', index, part: itemPart(item) }
+            : { kind: 'close', index, content: yield* normalizeItem(item) },
+        ]);
+      }
+      const channel = DELTA_CHANNELS.get(type);
+      if (channel !== undefined) {
+        const delta = yield* decoded(
+          DeltaEventSchema.safeParse(raw),
+          'The model returned malformed progress content.',
+        );
+        return at([
+          {
+            kind: 'append',
+            index: delta.output_index,
+            channel,
+            text: delta.delta,
+            item: delta.item_id,
+          },
+        ]);
+      }
+      if (FRAMING_EVENTS.has(type)) return at([]);
+      return yield* malformed(
+        `The model returned an unsupported event: ${type}.`,
+      );
+    });
+}
+
+/** A foreground Responses stream, HTTP or WebSocket, as turn events. */
+export const responseEvents = (
   chunks: Stream.Stream<unknown, ModelError>,
   origin: ResponseOrigin,
-): Stream.Stream<TurnEvent, ModelError> {
-  return Stream.suspend(() => {
-    let responseId: string | undefined;
-    let returnedModel: string | undefined;
-    const enrich = (error: ModelError) =>
-      enrichModelError(error, {
-        responseId,
-        model: returnedModel ?? origin.requestedModel,
-      });
-    const items = new Map<
-      number,
-      {
-        identity: ReturnType<typeof itemIdentity>;
-        done?: HttpTurnResult['content'][number];
-      }
-    >();
-    let terminal: ResponseValue | undefined;
-    let sequence = -1;
-    const progress = chunks.pipe(
-      Stream.mapEffect((raw) =>
-        Effect.gen(function* (): Effect.fn.Return<
-          readonly TurnEvent[],
-          ModelError
-        > {
-          const header = EventSchema.safeParse(raw);
-          if (!header.success || header.data.sequence_number <= sequence)
-            return yield* new ModelError({
-              kind: 'malformed-output',
-              message: 'The model emitted invalid or out-of-order events.',
-            });
-          sequence = header.data.sequence_number;
-          const type = header.data.type;
-          if (
-            [
-              'response.created',
-              'response.queued',
-              'response.in_progress',
-              'response.completed',
-              'response.incomplete',
-              'response.failed',
-            ].includes(type)
-          ) {
-            const decoded = ResponseEventSchema.safeParse(raw);
-            if (!decoded.success)
-              return yield* new ModelError({
-                kind: 'malformed-output',
-                message: 'The response snapshot is malformed or unsupported.',
-                cause: decoded.error,
-              });
-            const response = decoded.data.response;
-            if (
-              (responseId !== undefined && responseId !== response.id) ||
-              (returnedModel !== undefined && returnedModel !== response.model)
-            )
-              return yield* new ModelError({
-                kind: 'malformed-output',
-                message: 'The model changed its response identity.',
-              });
-            const firstIdentity = responseId === undefined;
-            responseId = response.id;
-            returnedModel = response.model;
-            if (
-              type === 'response.completed' ||
-              type === 'response.incomplete' ||
-              type === 'response.failed'
-            ) {
-              const expected = type.slice('response.'.length);
-              if (response.status !== expected)
-                return yield* new ModelError({
-                  kind: 'malformed-output',
-                  message: 'The terminal event and response status disagree.',
-                });
-              terminal = response;
-            }
-            return firstIdentity
-              ? [
-                  {
-                    kind: 'identified' as const,
-                    providerResponseId: response.id,
-                    requestedOrigin: origin,
-                    returnedModel: response.model,
-                  },
-                ]
-              : [];
-          }
-          if (responseId === undefined)
-            return yield* new ModelError({
-              kind: 'malformed-output',
-              message: 'Model content arrived before response identity.',
-            });
-          if (
-            type === 'response.output_item.added' ||
-            type === 'response.output_item.done'
-          ) {
-            const decoded = ItemEventSchema.safeParse(raw);
-            if (!decoded.success)
-              return yield* new ModelError({
-                kind: 'malformed-output',
-                message: 'The model returned unsupported output content.',
-                cause: decoded.error,
-              });
-            const { output_index: index, item } = decoded.data;
-            const previous = items.get(index);
-            const identity = itemIdentity(item);
-            if (previous && !isDeepStrictEqual(previous.identity, identity))
-              return yield* new ModelError({
-                kind: 'malformed-output',
-                message:
-                  'The model changed an output item identity or completed content.',
-              });
-            if (type === 'response.output_item.done') {
-              const done = yield* normalizeItem(item);
-              if (previous?.done && !agreesWithCompleted(previous.done, done))
-                return yield* new ModelError({
-                  kind: 'malformed-output',
-                  message: 'The model changed completed output content.',
-                });
-              items.set(index, {
-                identity,
-                done: previous?.done ?? done,
-              });
-            } else {
-              if (previous)
-                return yield* new ModelError({
-                  kind: 'malformed-output',
-                  message: 'The model added the same output position twice.',
-                });
-              items.set(index, { identity });
-            }
-            return item.type === 'function_call'
-              ? []
-              : [
-                  {
-                    kind: 'phase',
-                    part: item.type === 'reasoning' ? 'reasoning' : 'text',
-                    boundary:
-                      type === 'response.output_item.added' ? 'start' : 'end',
-                    providerItemIndex: index,
-                  },
-                ];
-          }
-          if (
-            [
-              'response.output_text.delta',
-              'response.refusal.delta',
-              'response.reasoning_summary_text.delta',
-              'response.reasoning_text.delta',
-            ].includes(type)
-          ) {
-            const decoded = DeltaEventSchema.safeParse(raw);
-            if (!decoded.success)
-              return yield* new ModelError({
-                kind: 'malformed-output',
-                message: 'The model returned malformed progress content.',
-                cause: decoded.error,
-              });
-            const item = items.get(decoded.data.output_index);
-            if (
-              !item ||
-              item.done ||
-              item.identity.id !== decoded.data.item_id ||
-              item.identity.type !==
-                (type === 'response.output_text.delta' ||
-                type === 'response.refusal.delta'
-                  ? 'message'
-                  : 'reasoning')
-            )
-              return yield* new ModelError({
-                kind: 'malformed-output',
-                message: 'Progress does not belong to an open output item.',
-              });
-            let part: 'text' | 'refusal' | 'reasoning' = 'reasoning';
-            if (type === 'response.output_text.delta') part = 'text';
-            if (type === 'response.refusal.delta') part = 'refusal';
-            return [
-              {
-                kind: 'delta' as const,
-                part,
-                text: decoded.data.delta,
-                providerItemIndex: decoded.data.output_index,
-              },
-            ];
-          }
-          // These framing events do not own terminal content; output_item.done does.
-          if (
-            [
-              'response.content_part.added',
-              'response.content_part.done',
-              'response.output_text.done',
-              'response.refusal.done',
-              'response.reasoning_summary_part.added',
-              'response.reasoning_summary_part.done',
-              'response.reasoning_summary_text.done',
-              'response.reasoning_text.done',
-              'response.function_call_arguments.delta',
-              'response.function_call_arguments.done',
-            ].includes(type)
-          )
-            return [];
-          return yield* new ModelError({
-            kind: 'malformed-output',
-            message: `The model returned an unsupported event: ${type}.`,
-          });
-        }),
+  finalize?: AssemblyOptions['finalize'],
+): Stream.Stream<TurnEvent, ModelError> =>
+  Stream.suspend(() =>
+    assembleTurn(
+      chunks.pipe(
+        Stream.mapEffect(responsesWire(-1)),
+        // The terminal snapshot settles the response; HTTP EOF is not a condition.
+        Stream.takeUntil((event) => event.terminal),
+        Stream.map((event) => event.parts),
       ),
-      Stream.takeUntil(() => terminal !== undefined),
-      Stream.flattenIterable,
-    );
-    const completion = Stream.fromEffect(
-      Effect.gen(function* () {
-        if (!terminal)
-          return yield* new ModelError({
-            kind: 'malformed-output',
-            message: 'The model stream ended without a terminal response.',
-          });
-        if (terminal.status === 'failed')
-          return yield* new ModelError({
-            kind: 'provider-rejection',
-            message: terminal.error?.message ?? 'The model response failed.',
-            cause: terminal.error,
-          });
-        const output: HttpTurnResult['content'][number][] = [];
-        if (items.size > 0) {
-          const ordered = [...items].toSorted(
-            ([left], [right]) => left - right,
-          );
-          for (const [ordinal, [index]] of ordered.entries()) {
-            if (ordinal !== index)
-              return yield* new ModelError({
-                kind: 'malformed-output',
-                message: 'The model omitted an output position.',
-              });
-          }
-          let previousIndex = -1;
-          for (const item of terminal.output) {
-            const match = ordered.find(([, candidate]) =>
-              item.id !== undefined
-                ? candidate.identity.id === item.id
-                : candidate.identity.type === 'function_call' &&
-                  item.type === 'function_call' &&
-                  candidate.identity.callId === item.call_id,
-            );
-            const normalized = yield* normalizeItem(item);
-            if (
-              !match ||
-              match[0] <= previousIndex ||
-              match[1].identity.type !== item.type ||
-              (item.type === 'function_call' &&
-                (match[1].identity.callId !== item.call_id ||
-                  match[1].identity.name !== item.name)) ||
-              (match[1].done && !agreesWithCompleted(match[1].done, normalized))
-            )
-              return yield* new ModelError({
-                kind: 'malformed-output',
-                message:
-                  'The terminal snapshot conflicts with completed output items.',
-              });
-            previousIndex = match[0];
-            match[1].done ??= normalized;
-          }
-          for (const [, item] of ordered) {
-            if (!item.done)
-              return yield* new ModelError({
-                kind: 'malformed-output',
-                message: 'The model left an output item unfinished.',
-              });
-            output.push(item.done);
-          }
-        } else {
-          output.push(
-            ...(yield* Effect.forEach(terminal.output, normalizeItem)),
-          );
-        }
-        const result = yield* normalizeResponse(terminal, origin, output);
-        return { kind: 'completed' as const, result };
-      }),
-    );
-    return Stream.concat(progress, completion).pipe(Stream.mapError(enrich));
-  });
-}
+      { origin, provider: 'The model', finalize },
+    ),
+  );
 
 /** The Responses SDK's event stream: its failures classified the way both create and retrieve report them. */
 export const sdkEvents = (
