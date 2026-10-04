@@ -7,9 +7,11 @@
 // hooks is `./hookConfig`'s.
 
 // Third-party imports
+import { Result } from 'effect';
 import { z } from 'zod';
 
-// Local imports - shared contracts
+// Local imports
+import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { HookEvent, HookStatus } from '@shared/schemas';
 
 // --------------------------------------------------------------------- input
@@ -322,14 +324,11 @@ export function interpretHookRun(event: HookEvent, run: HookRun): HookVerdict {
   let parsed: HookOutput | undefined;
   let malformed: string | undefined;
   if (text.startsWith('{') && text.endsWith('}')) {
-    let json: unknown;
-    try {
-      json = JSON.parse(text);
-    } catch (error) {
-      malformed = `its output is not valid JSON (${error instanceof Error ? error.message : String(error)})`;
-    }
-    if (malformed === undefined) {
-      const result = HookOutputSchemas[event].safeParse(json);
+    const json = safeParseJson(text);
+    if (Result.isFailure(json)) {
+      malformed = `its output is not valid JSON (${json.failure.message})`;
+    } else {
+      const result = HookOutputSchemas[event].safeParse(json.success);
       if (result.success) parsed = result.data;
       else
         malformed = `its output does not match the ${event} output: ${z.prettifyError(result.error)}`;

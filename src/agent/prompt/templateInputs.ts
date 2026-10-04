@@ -380,25 +380,17 @@ const getFileVars = Effect.fn('userVars.getFileVars')(function* (
 
   for (const prefix of FILE_VAR_CATEGORIES) {
     const allFiles = getCategoryFiles(agentConfig, prefix);
-    const { xml, readableFiles, skipped } =
+    const { xml, readable, skipped } =
       allFiles.length > 0
         ? yield* getXmlFormatFromReadableFiles(workspaceRoot, allFiles)
-        : { xml: null, readableFiles: [], skipped: [] };
-    const primaryFile = readableFiles[0];
-    const primaryFileResult =
-      primaryFile == null
-        ? null
-        : yield* setVarFromFile(primaryFile, prefix, workspaceRoot);
-    const primaryFileOk = primaryFileResult != null;
-    if (primaryFile != null && !primaryFileOk) {
-      logger.warn(
-        `Failed to load primary file into prompt variables: ${primaryFile}`,
-        { stageId },
-      );
-    }
-    if (primaryFileResult != null) {
-      userVars[`${prefix}_FILE`] = primaryFileResult.file;
-      userVars[`${prefix}_CONTENT`] = primaryFileResult.content;
+        : { xml: null, readable: [], skipped: [] };
+    const readableFiles = readable.map(({ file }) => file);
+    // The first readable file fills the `*_FILE`/`*_CONTENT` pair from the
+    // same read that built the list vars.
+    const primary = readable[0];
+    if (primary != null) {
+      userVars[`${prefix}_FILE`] = primary.file;
+      userVars[`${prefix}_CONTENT`] = primary.content;
     }
 
     // A dropped file changes what the model sees, so report it on the run's own
@@ -410,20 +402,17 @@ const getFileVars = Effect.fn('userVars.getFileVars')(function* (
       );
     }
 
-    // The list rows use the read that fills the list vars. The primary row also
-    // reflects the second read that fills its `*_FILE`/`*_CONTENT` pair, so the
-    // card cannot report success while those prompt variables remain null.
-    //
+    // The rows use the read that fills the list vars and the primary pair.
     // Tool-use agents get no card, nor do media files (no user vars).
     const cardLabel = FILE_CATEGORY_CARD_LABEL[prefix];
     if (
       cardLabel != null &&
       agentSetting.agentCategory !== AgentCategory.ToolUse
     ) {
-      const readable = new Set(readableFiles);
+      const readableSet = new Set(readableFiles);
       const entries = allFiles.map((file) => ({
         path: file,
-        ok: file === primaryFile ? primaryFileOk : readable.has(file),
+        ok: readableSet.has(file),
       }));
       logFileCategory(logger, cardLabel, entries, stageId);
     }

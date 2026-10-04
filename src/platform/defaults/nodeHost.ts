@@ -32,7 +32,7 @@ import type { JsonConfigProviderOptions } from './jsonConfigProvider';
 import type { ConfigProvider, StateStore } from '../interfaces';
 
 /** The per-workspace services a Node host opens for one workspace folder. */
-export interface NodeWorkspaceRootsInit {
+interface NodeWorkspaceRootsInit {
   /** The product host opening these roots (`WorkspaceRoots.host`). */
   readonly host: SettingHost;
   /** The canonical workspace root (`canonicalizeWorkspacePath`), decided by the host where it reads it. */

@@ -221,7 +221,6 @@ export const fakeHostAppState: StateStore = {
  * module instance while the host's port is swapped per test.
  */
 export const fakeHostLanguageModel: LanguageModelPort = {
-  isAvailable: () => installedHost().languageModel.isAvailable(),
   selectModels: (selector) =>
     installedHost().languageModel.selectModels(selector),
   onDidChange: (listener) =>

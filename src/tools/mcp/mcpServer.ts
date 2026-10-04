@@ -17,8 +17,6 @@
  * no tools, with a warning in the process log; the run that names it shows
  * the failure in its transcript.
  */
-import { hash } from 'node:crypto';
-
 import { Data, Duration, Effect, Exit, Ref, Scope, Stream } from 'effect';
 import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
 import { z } from 'zod';
@@ -34,6 +32,7 @@ import type { ToolResult } from '@shared/schemas';
 import { makeJsonRpcConnection, type JsonRpcConnection } from '@tools/jsonRpc';
 import { errorResult, executed } from '@tools/core/result';
 import type { LoadedPluginTools } from '@tools/toolTable';
+import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { appendHead, appendTail } from '@utils/text/appendTail';
 
@@ -124,10 +123,7 @@ function mcpToolName(server: string, tool: string): string {
   const normalized = joined.replaceAll(INVALID_NAME_CHARS, '_');
   if (normalized === joined && normalized.length <= MAX_TOOL_NAME_LENGTH)
     return normalized;
-  const suffix = hash('sha256', `${server}\0${tool}`, 'hex').slice(
-    0,
-    NAME_HASH_LENGTH,
-  );
+  const suffix = truncatedHexId(`${server}\0${tool}`, NAME_HASH_LENGTH);
   return `${normalized.slice(0, MAX_TOOL_NAME_LENGTH - NAME_HASH_LENGTH - 1)}_${suffix}`;
 }
 

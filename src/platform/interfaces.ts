@@ -58,7 +58,7 @@ export interface ConfigInspection<T = unknown> {
  */
 export class ConfigWriteFailed extends Data.TaggedError('ConfigWriteFailed')<{
   readonly key: string;
-  readonly target: ConfigTarget | undefined;
+  readonly target: ConfigTarget;
   readonly message: string;
   readonly cause: unknown;
 }> {}

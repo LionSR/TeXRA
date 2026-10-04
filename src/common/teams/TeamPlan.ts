@@ -125,7 +125,7 @@ export function canLaunchTeam<T extends TeamCatalogAgent>(
   return teamLaunchBlockReason(plan) === undefined;
 }
 
-export type TeamPlanStatus = 'available' | 'degraded' | 'unavailable';
+type TeamPlanStatus = 'available' | 'degraded' | 'unavailable';
 
 export function teamPlanStatus(plan: TeamRunPlan): TeamPlanStatus {
   if (teamLaunchBlockReason(plan)) return 'unavailable';
@@ -230,7 +230,7 @@ export function loadTeamOptions<T extends TeamCatalogAgent>(ports: {
   );
 }
 
-export type TeamLaunchResolution =
+type TeamLaunchResolution =
   | {
       readonly status: 'ready';
       readonly fields: ReturnType<typeof teamExecutionFields>;

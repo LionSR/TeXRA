@@ -14,7 +14,6 @@ import {
 import type { DesktopShortcutEntry } from '@shared/commands/shortcutPreferences';
 import type { TeXRAIconName } from '@shared/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { isThenable } from '@utils/core';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 import {
   dispatchDesktopCommand,
@@ -105,8 +104,7 @@ function executeCommandPaletteEntry(
   // devtools-only line; sync handler errors still throw and bubble to the
   // caller.
   const result = onExecute(entry.id);
-  if (isThenable(result)) return true;
-  return result;
+  return typeof result === 'boolean' ? result : true;
 }
 
 export function createDesktopCommandPalette({

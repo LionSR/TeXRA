@@ -44,8 +44,8 @@ export function createLanguageModelPort(
   if (typeof lm?.selectChatModels !== 'function') {
     // Compatible non-VS Code hosts can expose only part of the `vscode.lm`
     // namespace — the same boundary `registerLanguageModelTools` guards.
-    // Report unavailability through `isAvailable()` instead of throwing
-    // during activation.
+    // Answer as a host with no editor models (an empty catalogue) instead of
+    // throwing during activation.
     return UNAVAILABLE_LANGUAGE_MODEL_PORT;
   }
   const lmApi = lm as typeof vscode.lm;
@@ -53,8 +53,6 @@ export function createLanguageModelPort(
   const accessInformation = context.languageModelAccessInformation;
 
   return {
-    isAvailable: () => true,
-
     selectModels: (selector) =>
       Effect.tryPromise({
         try: async () =>

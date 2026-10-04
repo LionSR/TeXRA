@@ -5,7 +5,7 @@ import { normalizeLineEndings } from '@utils/text/stringUtils';
 // matches end-of-string, so a fence line need not be newline-terminated.
 const FENCE_LINE_RE = () => /^---\r?(?:\n|$)/gm;
 
-export type FrontmatterFenceSplit =
+type FrontmatterFenceSplit =
   | { kind: 'ok'; frontmatterText: string; body: string }
   | { kind: 'no-opening-fence' }
   | { kind: 'no-closing-fence' };

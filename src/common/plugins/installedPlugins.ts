@@ -40,7 +40,7 @@ import {
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** Where a plugin comes from, as the user named it. */
-export type PluginOrigin =
+type PluginOrigin =
   | { readonly kind: 'git'; readonly url: string; readonly ref?: string }
   | { readonly kind: 'local'; readonly path: string };
 

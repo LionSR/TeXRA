@@ -80,7 +80,7 @@ export class SettingsProfileKeyController {
         const displayName = yield* this.deps.getProviderDisplayName(provider);
         const confirmed = yield* this.deps.prompt.confirm(
           `Remove the ${displayName} API key? This cannot be undone.`,
-          { confirmLabel: 'Remove', cancelLabel: 'Cancel', modal: false },
+          { confirmLabel: 'Remove', modal: false },
         );
         if (!confirmed) return;
 

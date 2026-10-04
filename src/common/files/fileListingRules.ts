@@ -22,7 +22,7 @@ export interface FileFilterConfig {
   excludeFiles: string[];
 }
 
-export interface PreparedFileFilters extends FileFilterConfig {
+interface PreparedFileFilters extends FileFilterConfig {
   /**
    * `excludeDirs` before case-folding. Matching (`containsExcludedDirectory`)
    * lowercases both sides, but the VS Code glob exclude pattern built in
