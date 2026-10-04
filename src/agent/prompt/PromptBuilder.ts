@@ -8,7 +8,8 @@ import type { TemplateVars } from '@agent/prompt/templateInputs';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { RunContext, SkillCatalogEntry } from '@shared/schemas';
 import { delegationUpdate } from '@tools/delegation/delegationAvailability';
-import type { PromptContribution, PromptSection } from '@tools/toolTable';
+import type { Plugin } from '@tools/plugins';
+import type { PromptSection } from '@tools/toolTable';
 
 // Local imports - utilities
 import { ensureArray } from '@utils/core';
@@ -59,7 +60,7 @@ Call tools sequentially and wait for the output before calling another.`;
  * and a resume rebuilds them.
  */
 export function stepInstructions(
-  prompt: ReadonlyMap<string, PromptContribution>,
+  plugins: readonly Pick<Plugin, 'id' | 'prompt'>[],
   skills: readonly SkillCatalogEntry[],
   ctx: Parameters<PromptSection>[0],
 ): RunContext {
@@ -76,8 +77,8 @@ export function stepInstructions(
           ],
         ]
       : []),
-    ...[...prompt].flatMap(([id, { section }]) => {
-      const text = section?.(ctx);
+    ...plugins.flatMap(({ id, prompt }) => {
+      const text = prompt?.(ctx);
       return text ? [[`${id} plugin`, text]] : [];
     }),
   ]);

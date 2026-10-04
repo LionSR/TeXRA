@@ -55,16 +55,12 @@ import {
 } from '@shared/schemas';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
-import {
-  sha256,
-  toolDigests,
-  type ContinuationEntry,
-} from '@tools/catalogEntries';
+import { sha256, toolDigests } from '@tools/catalogEntries';
 import { LiveTools } from '@tools/liveTools';
 import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { readDisabledTools } from '@tools/plugins';
 import { readDelegationTargets } from '@tools/delegation/delegationAvailability';
-import type { PromptContribution } from '@tools/toolTable';
+import type { Continuation } from '@tools/toolTable';
 import type { StepRoot } from '@utils/files/externalRoots';
 
 import { declaredToolNames, resolveStepTools } from '../agentToolResolution';
@@ -101,16 +97,14 @@ export interface RunSystem {
 }
 
 /** The run's current step, the scope that holds its pin, the tools it
- *  withheld for approval, its continuation, and its prompt contributions by
- *  plugin id, sorted. `holding` while only parks
+ *  withheld for approval, and its continuation. `holding` while only parks
  *  have opened steps in a resumed activation: its hold on the record is not
  *  spent yet. */
 export interface OpenStep {
   readonly tools: StepTools;
   readonly scope: Scope.Closeable;
   readonly withheld: readonly string[];
-  readonly continuation: ContinuationEntry | null;
-  readonly prompt: ReadonlyMap<string, PromptContribution>;
+  readonly continuation: Continuation | null;
   /** The installed plugins it accepted and the plugins whose skills it
    *  draws on: what a skill the user activates meanwhile resolves against
    *  (`resolveActivations`). */
@@ -288,14 +282,22 @@ const openStep = Effect.fn('Step.open')(function* (
       state,
       run.toolInputs.tools,
     );
-    const continuation =
-      pinned.continuations.entries.get(run.config.agentCategory) ?? null;
+    // The plugin on that continues the run's category, if any (the table
+    // rules out two), and those that add a section or skills to its text.
+    const continuing =
+      pinned.plugins.find(
+        ({ continuation }) =>
+          continuation?.category === run.config.agentCategory,
+      ) ?? null;
+    const contributing = pinned.plugins.filter(
+      ({ prompt, skills }) => prompt !== undefined || skills === true,
+    );
     // Only the plugins this step uses hold services: a parked run keeps up
     // nothing it does not offer.
     const used = new Set([
       ...tools.offered.map(({ plugin }) => plugin),
-      ...(continuation === null ? [] : [continuation.plugin]),
-      ...pinned.sections.entries.keys(),
+      ...(continuing === null ? [] : [continuing.id]),
+      ...contributing.map(({ id }) => id),
     ]);
     const services = Context.merge(
       yield* pinned.layersFor(used).pipe(Scope.provide(scope)),
@@ -315,9 +317,7 @@ const openStep = Effect.fn('Step.open')(function* (
     // skill the user activated is resolved either way. The skills a step
     // lists or its user activated are the ones its calls may read.
     const contributors = new Set([
-      ...[...pinned.sections.entries].flatMap(([id, { skills }]) =>
-        skills ? [id] : [],
-      ),
+      ...contributing.flatMap(({ id, skills }) => (skills ? [id] : [])),
       ...pinned.installed.keys(),
     ]);
     const skills = {
@@ -378,13 +378,11 @@ const openStep = Effect.fn('Step.open')(function* (
         ),
       ],
       withheld: resolved.withheldForApproval,
-      continuation,
+      continuing,
       skills,
       listed,
-      prompt: new Map(
-        [...pinned.sections.entries].toSorted(
-          ([a], [b]) => Number(a > b) - Number(a < b),
-        ),
+      contributing: contributing.toSorted(
+        (a, b) => Number(a.id > b.id) - Number(a.id < b.id),
       ),
     };
   }).pipe(Effect.onError(() => Scope.close(scope, Exit.void)));
@@ -393,13 +391,12 @@ const openStep = Effect.fn('Step.open')(function* (
     tools,
     scope,
     withheld: step.withheld,
-    continuation: step.continuation,
-    prompt: step.prompt,
+    continuation: step.continuing?.continuation ?? null,
     skills: step.skills,
     holding,
   });
   if (previous !== null) yield* Scope.close(previous.scope, Exit.void);
-  const continuation = step.continuation?.plugin ?? null;
+  const continuation = step.continuing?.id ?? null;
   // A goal grant is autonomy the run's continuation drives: a step with no
   // continuation (its plugin switched off) ends it, as the plugin's tools
   // leave: from the run's next step.
@@ -412,7 +409,7 @@ const openStep = Effect.fn('Step.open')(function* (
     run.delegationAgentScope ?? undefined,
   );
   const context = {
-    ...stepInstructions(step.prompt, listed, {
+    ...stepInstructions(step.contributing, listed, {
       offered: step.tools.definitions.map(({ name }) => name),
       isChild: runSystem.isChild(),
       isAnthropic: model.config.provider === ModelProvider.ANTHROPIC,
@@ -456,8 +453,7 @@ const openStep = Effect.fn('Step.open')(function* (
     );
   return {
     tools,
-    continuation: step.continuation?.continuation ?? null,
-    prompt: step.prompt,
+    continuation: step.continuing?.continuation ?? null,
     system,
     // The content the set names is stored before the row that names it.
     rows: changed
@@ -513,7 +509,6 @@ export const stepFor = Effect.fn('Step.for')(function* (
     return {
       tools: NO_TOOLS,
       continuation: null,
-      prompt: new Map(),
       system: undefined,
       rows: [],
     };
@@ -521,8 +516,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
   if (open !== null && kind === 'dispatch')
     return {
       tools: open.tools,
-      continuation: open.continuation?.continuation ?? null,
-      prompt: open.prompt,
+      continuation: open.continuation,
       system: undefined,
       rows: [],
     };

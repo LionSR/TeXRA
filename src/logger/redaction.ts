@@ -1,5 +1,5 @@
-import { API_KEY_PROVIDER_IDS } from '@texra-ai/llm';
 import { flattenError } from '@logger/formatLogData';
+import type { ApiKeyProviderId } from '@texra-ai/llm';
 
 const REDACTED = '[redacted]';
 
@@ -13,8 +13,6 @@ const OPENAI_COMPATIBLE_API_KEY_PATTERN = /\bsk-[A-Za-z0-9_-]{12,}\b/g;
 const GOOGLE_STANDARD_API_KEY_PATTERN = /\bAIza[A-Za-z0-9_-]{20,}\b/g;
 const GOOGLE_AUTH_API_KEY_PATTERN = /\bAQ\.[A-Za-z0-9._-]{20,}\b/g;
 const XAI_API_KEY_PATTERN = /\bxai-[A-Za-z0-9_-]{12,}\b/g;
-
-type ApiKeyProviderId = (typeof API_KEY_PROVIDER_IDS)[number];
 
 const OPENAI_COMPATIBLE_PATTERNS = [OPENAI_COMPATIBLE_API_KEY_PATTERN];
 

@@ -4,7 +4,7 @@ import { Text } from 'ink';
 
 import {
   apiKeyEnvName,
-  type ApiProvider,
+  type ApiKeyProviderId,
   PROVIDER_URLS,
   providerDisplayName,
 } from '@texra-ai/llm';
@@ -12,7 +12,7 @@ import {
 import { TextEntryForm } from './_shared/TextEntryForm';
 
 interface ApiKeyEntryFormProps {
-  readonly provider: ApiProvider;
+  readonly provider: ApiKeyProviderId;
   /** Optional error from a failed save, shown so the user can retry in place. */
   readonly error?: string;
   /** Whether a save is in flight (input stays mounted but a hint shows). */

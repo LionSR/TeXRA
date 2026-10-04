@@ -2,9 +2,9 @@ import { Text } from 'ink';
 import { useState } from 'react';
 
 import {
-  API_PROVIDERS,
+  API_KEY_PROVIDER_IDS,
   type ApiKeyStatus,
-  type ApiProvider,
+  type ApiKeyProviderId,
   codingPlanForApiProvider,
   providerDisplayName,
 } from '@texra-ai/llm';
@@ -18,7 +18,7 @@ import { runFormWrite } from './_shared/useAsyncListForm';
 import type { Effect } from 'effect';
 
 type ProviderApiKeyStatuses = Partial<
-  Readonly<Record<ApiProvider, ApiKeyStatus>>
+  Readonly<Record<ApiKeyProviderId, ApiKeyStatus>>
 >;
 
 export interface ProviderApiKeyStatusView {
@@ -38,7 +38,7 @@ function providerApiKeyStatusLabel(
   return 'Status unavailable';
 }
 
-function providerApiKeyFormLabel(provider: ApiProvider): string {
+function providerApiKeyFormLabel(provider: ApiKeyProviderId): string {
   const providerName = providerDisplayName(provider);
   const codingPlan = codingPlanForApiProvider(provider);
   return codingPlan && !codingPlan.exclusiveCredential
@@ -48,8 +48,8 @@ function providerApiKeyFormLabel(provider: ApiProvider): string {
 
 function buildProviderApiKeyItems(
   view: ProviderApiKeyStatusView,
-): Array<{ value: ApiProvider; label: string; description: string }> {
-  return API_PROVIDERS.map((provider) => ({
+): Array<{ value: ApiKeyProviderId; label: string; description: string }> {
+  return API_KEY_PROVIDER_IDS.map((provider) => ({
     value: provider,
     label: providerApiKeyFormLabel(provider),
     description: providerApiKeyStatusLabel(view.statuses?.[provider], view),
@@ -59,7 +59,7 @@ function buildProviderApiKeyItems(
 function configuredProviderApiKeySummary(
   statuses: ProviderApiKeyStatuses,
 ): string {
-  const configured = API_PROVIDERS.filter((provider) => {
+  const configured = API_KEY_PROVIDER_IDS.filter((provider) => {
     const status = statuses[provider];
     return status === 'set' || status === 'env';
   }).map((provider) => providerDisplayName(provider));
@@ -86,13 +86,13 @@ interface ProviderApiKeyFormProps {
   /** The key write as a program; this form owns its one run. It yields the
    *  extra notice a provider needs, if any. */
   readonly onSave: (
-    provider: ApiProvider,
+    provider: ApiKeyProviderId,
     key: string,
   ) => Effect.Effect<string | void, Error>;
   /** The runtime that program settles on, from the surface that mounted this
    *  form — Ink components run no Effect of their own. */
   readonly runtime: ProcessRuntime;
-  readonly onDone: (provider: ApiProvider, modelNotice?: string) => void;
+  readonly onDone: (provider: ApiKeyProviderId, modelNotice?: string) => void;
   readonly onCancel: () => void;
 }
 
@@ -100,7 +100,7 @@ interface ProviderApiKeyFormProps {
 export function ProviderApiKeyForm(
   props: ProviderApiKeyFormProps,
 ): React.JSX.Element {
-  const [provider, setProvider] = useState<ApiProvider>();
+  const [provider, setProvider] = useState<ApiKeyProviderId>();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -112,7 +112,7 @@ export function ProviderApiKeyForm(
         items={
           props.statusView
             ? buildProviderApiKeyItems(props.statusView)
-            : API_PROVIDERS.map((candidate) => ({
+            : API_KEY_PROVIDER_IDS.map((candidate) => ({
                 value: candidate,
                 label: providerApiKeyFormLabel(candidate),
               }))

@@ -33,7 +33,7 @@ import {
   logoutFromChat,
 } from './handlers/loginCommands';
 import { openCliSlashCommandForm } from './slashForms';
-import type { ApiProvider } from '@texra-ai/llm';
+import type { ApiKeyProviderId } from '@texra-ai/llm';
 import type {
   SlashCommandEffect,
   SlashCommandOutput,
@@ -48,7 +48,7 @@ export type FormActionHandler<T> = (
 ) => SlashCommandEffect;
 /** The key write as a program; the form that collects the key runs it. */
 export type ApiKeySaveHandler = (
-  provider: ApiProvider,
+  provider: ApiKeyProviderId,
   key: string,
 ) => Effect.Effect<string | void, Error>;
 

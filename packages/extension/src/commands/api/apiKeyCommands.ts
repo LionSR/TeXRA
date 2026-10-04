@@ -4,8 +4,8 @@ import * as vscode from 'vscode';
 
 // Local imports
 import {
-  API_PROVIDERS,
-  type ApiProvider,
+  API_KEY_PROVIDER_IDS,
+  type ApiKeyProviderId,
   loadApiKeyStatusMap,
   PROVIDER_DISPLAY_NAMES,
 } from '@texra-ai/llm';
@@ -25,7 +25,7 @@ import {
 const CHANNEL = 'ApiKeyCommands';
 
 interface ApiProviderQuickPickItem extends vscode.QuickPickItem {
-  provider: ApiProvider;
+  provider: ApiKeyProviderId;
 }
 
 /**
@@ -56,7 +56,7 @@ function createProfileKeyController(
  * portal without closing the input box, so the user can paste straight away.
  */
 function promptForApiKey(
-  provider: ApiProvider,
+  provider: ApiKeyProviderId,
   keyUrl: string | undefined,
 ): Effect.Effect<string | undefined> {
   const ib = vscode.window.createInputBox();
@@ -91,8 +91,8 @@ function pickApiProvider(
   return Effect.gen(function* () {
     // One batched read of the key statuses: the pick shows each provider's
     // stored/environment state.
-    const statuses = yield* loadApiKeyStatusMap(secrets, API_PROVIDERS);
-    const providerItems = API_PROVIDERS.map((provider) => ({
+    const statuses = yield* loadApiKeyStatusMap(secrets, API_KEY_PROVIDER_IDS);
+    const providerItems = API_KEY_PROVIDER_IDS.map((provider) => ({
       label: provider,
       description: statuses[provider] === 'not-set' ? 'not set' : 'key set',
       provider,
@@ -113,7 +113,7 @@ function pickApiProvider(
 export function setApiKey(
   stores: SettingsStores,
   secrets: PlatformSecrets,
-  provider?: ApiProvider,
+  provider?: ApiKeyProviderId,
 ) {
   return Effect.gen(function* () {
     const target =

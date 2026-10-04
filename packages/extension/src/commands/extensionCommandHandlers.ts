@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports
-import { API_PROVIDERS, type ApiProvider } from '@texra-ai/llm';
+import { API_KEY_PROVIDER_IDS, type ApiKeyProviderId } from '@texra-ai/llm';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
@@ -91,7 +91,7 @@ export interface ExtensionCommandActions {
   cloneOverleafProject(): CommandProgram;
   removeApiKey(): CommandProgram;
   showProgressView(inPlace: boolean): CommandProgram;
-  setApiKey(provider: ApiProvider | undefined): CommandProgram;
+  setApiKey(provider: ApiKeyProviderId | undefined): CommandProgram;
   execute(input: unknown): CommandProgram;
 }
 
@@ -154,8 +154,8 @@ export const EXTENSION_COMMAND_HANDLERS = {
       actions.showProgressView(options?.inPlace ?? false),
   ),
   'texra.setApiKey': definedHandler(
-    z.tuple([z.enum(API_PROVIDERS).optional()]),
-    (actions: ExtensionCommandActions, provider?: ApiProvider) =>
+    z.tuple([z.enum(API_KEY_PROVIDER_IDS).optional()]),
+    (actions: ExtensionCommandActions, provider?: ApiKeyProviderId) =>
       actions.setApiKey(provider),
   ),
   'texra.execute': definedHandler(

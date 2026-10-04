@@ -9,7 +9,7 @@ import { ProgressApiKeyRetryController } from '@controllers/progressView/Progres
 import type { AppState } from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
 import { fakeProcessServices } from '@test/support/setupPlatform';
-import type { ApiProvider } from '@texra-ai/llm';
+import type { ApiKeyProviderId } from '@texra-ai/llm';
 
 /**
  * `it.effect` for this suite. Every controller entry point reads the process
@@ -30,8 +30,8 @@ type ProgressApiKeyRetryControllerDeps = ConstructorParameters<
 >[0];
 
 interface HarnessOptions {
-  keys?: Partial<Record<ApiProvider, string | undefined>>;
-  prompt?(keys: Map<ApiProvider, string | undefined>): void;
+  keys?: Partial<Record<ApiKeyProviderId, string | undefined>>;
+  prompt?(keys: Map<ApiKeyProviderId, string | undefined>): void;
   retryAvailable?: boolean;
   retryPending?: boolean;
   isRetryPending?: ProgressApiKeyRetryControllerDeps['isRetryPending'];
@@ -39,16 +39,16 @@ interface HarnessOptions {
 
 function createHarness(options: HarnessOptions = {}): {
   controller: ProgressApiKeyRetryController;
-  keys: Map<ApiProvider, string | undefined>;
-  prompts: ApiProvider[];
+  keys: Map<ApiKeyProviderId, string | undefined>;
+  prompts: ApiKeyProviderId[];
   retries: string[];
 } {
-  const keys = new Map<ApiProvider, string | undefined>(
+  const keys = new Map<ApiKeyProviderId, string | undefined>(
     Object.entries(options.keys ?? {}) as Array<
-      [ApiProvider, string | undefined]
+      [ApiKeyProviderId, string | undefined]
     >,
   );
-  const prompts: ApiProvider[] = [];
+  const prompts: ApiKeyProviderId[] = [];
   const retries: string[] = [];
 
   return {

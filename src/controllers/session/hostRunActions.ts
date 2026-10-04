@@ -11,7 +11,7 @@ import {
 } from 'effect';
 
 import {
-  type ApiProvider,
+  type ApiKeyProviderId,
   hasUsableApiKey,
   lookupApiKey,
   type SecretsFailed,
@@ -131,7 +131,7 @@ export interface HostRunActionPorts {
    * closes the prompt without entering a key is not a failure.
    */
   promptForApiKey(
-    provider: ApiProvider,
+    provider: ApiKeyProviderId,
   ): Effect.Effect<void, ApiKeyPromptFailed>;
   /** The notification surface, shared with {@link MessageHost}: a host that
    *  could not present fails with `NotificationFailed`, and a user who

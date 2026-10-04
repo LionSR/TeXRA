@@ -1,11 +1,12 @@
 /**
- * The process's live tool catalog: `Registry`s (`@tools/liveRegistry`) of
- * every tool some plugin contributes (by tool name), every continuation (by
- * agent category) and every prompt contribution (by plugin).
+ * The process's live tool catalog: a `Registry` (`@tools/liveRegistry`) of
+ * every tool some plugin contributes, by tool name.
  *
- * - **Built-in plugins** contribute all three while their switch is on.
+ * - **Built-in plugins** contribute their tools while their switch is on.
  *   `pinSwitched` reads the switches, reconciles the contributions with them
- *   and pins the generations that produces, as one serialized step. A run's
+ *   and pins the generation that produces, with the plugins it leaves on
+ *   (whose continuation and prompt section the step reads off their value),
+ *   as one serialized step. A run's
  *   step opens through it (`@agent/runtime/loop/step`), so a switch flipped
  *   by any host, or by `texra tools` from another shell, reaches every open
  *   run at its next step.
@@ -44,24 +45,17 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { AppState } from '@platform/interfaces';
 import type { PluginContext } from '@platform/processRuntime';
-import type { AgentCategory } from '@shared/schemas';
-import {
-  makeRegistry,
-  type Generation,
-  type Pinned,
-  type Registry,
-} from '@tools/liveRegistry';
+import { makeRegistry, type Pinned, type Registry } from '@tools/liveRegistry';
+import type { Plugin } from '@tools/plugins';
 import {
   ToolRegistry,
   type InstalledToolReader,
   type PluginLayerServices,
   type PluginLoader,
-  type PromptContribution,
   type ToolTable,
 } from '@tools/toolTable';
 import {
   entriesOf,
-  type ContinuationEntry,
   type HeldPlugins,
   type ToolEntry,
 } from '@tools/catalogEntries';
@@ -78,7 +72,7 @@ export class LiveTools extends Context.Service<
     /**
      * Read the switches (the ids the user holds off; only a probed plugin's
      * switch counts), contribute exactly the built-in plugins they leave
-     * on, and pin the tool, continuation and prompt generations that produces, as
+     * on, and pin the tool generation that produces and those plugins, as
      * one serialized step: a concurrent step's older read never reverts the
      * catalog under it, and no step pins a generation built from switches
      * it did not read.
@@ -98,9 +92,8 @@ export class LiveTools extends Context.Service<
         readonly layersFor: (
           plugins: ReadonlySet<string>,
         ) => Effect.Effect<Services, never, Scope.Scope>;
-        readonly continuations: Generation<AgentCategory, ContinuationEntry>;
-        /** Each switched-on plugin's prompt contribution, by plugin id. */
-        readonly sections: Generation<string, PromptContribution>;
+        /** The built-in plugins on when it pinned. */
+        readonly plugins: readonly Plugin[];
         /** Why each enabled installed plugin, or one of its servers, offers
          *  no tools; empty unless the installed plugins were loaded. */
         readonly warnings: readonly string[];
@@ -197,20 +190,8 @@ const liveToolsLayer = (
         acquire: holds.pinHolds,
       });
 
-      // Each built-in plugin's continuation, by category; it holds nothing.
-      const continuations = yield* makeRegistry<
-        AgentCategory,
-        ContinuationEntry,
-        void
-      >({ acquire: () => Effect.void });
-      // Each built-in plugin's prompt contribution, by plugin id.
-      const sections = yield* makeRegistry<string, PromptContribution, void>({
-        acquire: () => Effect.void,
-      });
-
-      /** Open and close the built-in contributions (a plugin's tools,
-       *  continuation, prompt contribution and process layer, in one
-       *  scope) to match `off`. */
+      /** Open and close the built-in contributions (a plugin's tools and
+       *  process layer, in one scope) to match `off`. */
       const reconcile = (off: ReadonlySet<string>) =>
         Effect.gen(function* () {
           for (const [id, plugin] of table.entries) {
@@ -220,36 +201,14 @@ const liveToolsLayer = (
             const held = builtIns.get(id);
             if (on && held === undefined) {
               const contribution = yield* Scope.fork(scope);
-              const { continuation } = plugin;
-              // Its section, and whether it ships skills for the catalog.
-              const prompt: PromptContribution = {
-                section: plugin.prompt ?? null,
-                skills: plugin.skills === true,
-              };
               // The table rules out a name two plugins share, so a
               // conflict between built-in plugins is a defect.
-              yield* Effect.all([
-                registry.contribute(
+              yield* registry
+                .contribute(
                   id,
                   entriesOf(id, new Map(Object.entries(plugin.tools ?? {}))),
-                ),
-                continuations.contribute(
-                  id,
-                  new Map(
-                    continuation === undefined
-                      ? []
-                      : [[continuation.category, { plugin: id, continuation }]],
-                  ),
-                ),
-                sections.contribute(
-                  id,
-                  new Map(
-                    prompt.section === null && !prompt.skills
-                      ? []
-                      : [[id, prompt]],
-                  ),
-                ),
-              ]).pipe(Scope.provide(contribution), Effect.orDie);
+                )
+                .pipe(Scope.provide(contribution), Effect.orDie);
               // The switch's own hold on the plugin's process services.
               if (plugin.processLayer !== undefined)
                 yield* RcMap.get(layers, id).pipe(Scope.provide(contribution));
@@ -348,8 +307,6 @@ const liveToolsLayer = (
                   }
                 }
                 yield* reconcile(yield* off);
-                const { generation } = yield* continuations.pin;
-                const pinned = yield* sections.pin;
                 // Every on plugin's process layer, held until the step has
                 // pinned the ones it uses: a flip meanwhile drops none of them.
                 const on = [...builtIns.keys()].filter(
@@ -369,8 +326,9 @@ const liveToolsLayer = (
                   ).pipe(Effect.ensuring(Scope.close(bridge, Exit.void)));
                 return {
                   ...(yield* registry.pin),
-                  continuations: generation,
-                  sections: pinned.generation,
+                  plugins: [...builtIns.keys()].map((id) =>
+                    table.entries.get(id)!,
+                  ),
                   layersFor,
                   installed: new Map(
                     loading

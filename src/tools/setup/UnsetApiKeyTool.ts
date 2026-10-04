@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 // Local imports
 import {
-  API_PROVIDERS,
+  API_KEY_PROVIDER_IDS,
   apiKeyEnvName,
   apiKeySecretName,
   hasUsableApiKey,
@@ -34,7 +34,7 @@ const unsetApiKey = Effect.fn('UnsetApiKeyTool.execute')(function* (
   if (!isApiProvider(provider)) {
     return yield* Effect.fail(
       new ToolError(
-        `Unknown provider "${provider}". Supported: ${API_PROVIDERS.join(', ')}.`,
+        `Unknown provider "${provider}". Supported: ${API_KEY_PROVIDER_IDS.join(', ')}.`,
       ),
     );
   }

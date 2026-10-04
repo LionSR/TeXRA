@@ -24,7 +24,7 @@
  */
 import { ModelProvider, type ModelConfig, type ReasoningMode } from 'llm-zoo';
 
-import { isApiProvider, type ApiProvider } from '../providers/apiProviders.js';
+import { isApiProvider } from '../providers/apiProviders.js';
 import {
   isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,
@@ -34,6 +34,7 @@ import {
   shouldRouteModelThroughOpenRouter,
 } from './openRouterRouting.js';
 import { zeroCostAccessOverrides } from './subscriptionAccessOverrides.js';
+import type { ApiKeyProviderId } from '../providers/providerPlugins.js';
 
 /** The facts a route reads, and nothing else. */
 export interface RouteFacts<C = unknown> {
@@ -118,7 +119,7 @@ export type ModelRoute<C = unknown> =
   | { readonly kind: 'openrouter' }
   | {
       readonly kind: 'api-key';
-      readonly provider: ApiProvider;
+      readonly provider: ApiKeyProviderId;
       readonly usageRoute: ApiKeyUsageRoute;
     }
   /** No provider key can serve the model directly. */

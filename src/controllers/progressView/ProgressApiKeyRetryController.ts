@@ -2,13 +2,13 @@ import { Data, Effect, Equal, Redacted } from 'effect';
 
 // Local imports
 import type { RunId } from '@shared/schemas';
-import type { ApiProvider, SecretsFailed } from '@texra-ai/llm';
+import type { ApiKeyProviderId, SecretsFailed } from '@texra-ai/llm';
 
 interface ProgressApiKeyRetryRequest {
   stream: RunId;
   requestId: string;
   /** The key the retry will run on, as the run's offer names it. */
-  provider: ApiProvider;
+  provider: ApiKeyProviderId;
   /** The stored key is the broken credential: only a changed one proceeds. */
   requireNewKey: boolean;
 }
@@ -24,18 +24,20 @@ interface ProgressApiKeyRetryRequest {
  * and answers `false`.
  */
 export class ApiKeyPromptFailed extends Data.TaggedError('ApiKeyPromptFailed')<{
-  readonly provider: ApiProvider;
+  readonly provider: ApiKeyProviderId;
   readonly message: string;
   readonly cause?: unknown;
 }> {}
 
 interface ProgressApiKeyRetryControllerDeps {
   readKey(
-    provider: ApiProvider,
+    provider: ApiKeyProviderId,
   ): Effect.Effect<Redacted.Redacted<string> | undefined, SecretsFailed>;
-  hasUsableKey(provider: ApiProvider): Effect.Effect<boolean, SecretsFailed>;
+  hasUsableKey(
+    provider: ApiKeyProviderId,
+  ): Effect.Effect<boolean, SecretsFailed>;
   promptForApiKey(
-    provider: ApiProvider,
+    provider: ApiKeyProviderId,
   ): Effect.Effect<void, ApiKeyPromptFailed>;
   isRetryPending(stream: RunId, requestId: string): boolean;
   triggerRetry(stream: RunId, requestId: string): Effect.Effect<boolean>;
@@ -87,7 +89,7 @@ export class ProgressApiKeyRetryController {
     'ProgressApiKeyRetryController.ensureOwnApiKey',
   )(function* (
     this: ProgressApiKeyRetryController,
-    provider: ApiProvider,
+    provider: ApiKeyProviderId,
     requireNewKey: boolean,
   ) {
     if (requireNewKey) {

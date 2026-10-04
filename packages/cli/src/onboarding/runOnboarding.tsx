@@ -15,10 +15,10 @@ import { Box, Text, useApp } from 'ink';
 import { useState } from 'react';
 
 import {
-  API_PROVIDERS,
+  API_KEY_PROVIDER_IDS,
   apiKeyEnvName,
   apiKeySecretName,
-  type ApiProvider,
+  type ApiKeyProviderId,
   providerDisplayName,
 } from '@texra-ai/llm';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
@@ -60,7 +60,7 @@ import { isLikelyRemoteSession } from '../runtime/remoteSession';
  * (and the env-var alternative) fixes the opacity other CLIs have about where a
  * pasted key actually went. Never includes the key itself.
  */
-function formatSavedKeySummary(provider: ApiProvider): string {
+function formatSavedKeySummary(provider: ApiKeyProviderId): string {
   return `Saved your ${providerDisplayName(provider)} API key. Stored in TeXRA secrets as \`${apiKeySecretName(provider)}\` (or set ${apiKeyEnvName(provider)} in your environment).`;
 }
 
@@ -221,7 +221,7 @@ interface OnboardingAppProps {
 function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
   const app = useApp();
   const [screen, setScreen] = useState<Screen>('picker');
-  const [keyProvider, setKeyProvider] = useState<ApiProvider>('anthropic');
+  const [keyProvider, setKeyProvider] = useState<ApiKeyProviderId>('anthropic');
   const [error, setError] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
 
@@ -470,8 +470,8 @@ function ChatGptProgressStep(props: {
 }
 
 function KeyProviderStep(props: {
-  readonly activeProvider: ApiProvider;
-  readonly onSelect: (provider: ApiProvider) => void;
+  readonly activeProvider: ApiKeyProviderId;
+  readonly onSelect: (provider: ApiKeyProviderId) => void;
   readonly onCancel: () => void;
 }): React.JSX.Element {
   return (
@@ -484,8 +484,8 @@ function KeyProviderStep(props: {
         { key: 'Esc', action: 'back' },
       ]}
     >
-      <Select<ApiProvider>
-        items={API_PROVIDERS.map((provider) => ({
+      <Select<ApiKeyProviderId>
+        items={API_KEY_PROVIDER_IDS.map((provider) => ({
           value: provider,
           label: providerDisplayName(provider),
         }))}

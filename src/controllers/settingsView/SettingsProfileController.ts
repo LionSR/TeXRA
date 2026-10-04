@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { API_PROVIDERS, PROVIDER_DISPLAY_NAMES } from '@texra-ai/llm';
+import { API_KEY_PROVIDER_IDS, PROVIDER_DISPLAY_NAMES } from '@texra-ai/llm';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { modelsTabSettings } from '@shared/state/stateSettings';
 import {
@@ -64,7 +64,7 @@ export class SettingsProfileController {
   private providerKeyStatuses(
     secretStatuses: Record<string, ProviderKeyStatus['status']>,
   ) {
-    return Effect.forEach(API_PROVIDERS, (provider) =>
+    return Effect.forEach(API_KEY_PROVIDER_IDS, (provider) =>
       Effect.gen({ self: this }, function* () {
         return {
           provider,
