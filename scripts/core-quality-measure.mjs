@@ -387,6 +387,27 @@ const isHidden = (member) =>
   );
 
 /**
+ * The members of a service shape: an inline type literal, or an interface or
+ * type alias the same file declares under that name.
+ */
+function shapeMembers(shape, statement) {
+  if (shape == null) return 0;
+  if (ts.isTypeLiteralNode(shape)) return shape.members.length;
+  if (!ts.isTypeReferenceNode(shape) || !ts.isIdentifier(shape.typeName)) {
+    return 0;
+  }
+  const name = shape.typeName.text;
+  for (const candidate of statement.getSourceFile().statements) {
+    if (candidate.name?.text !== name) continue;
+    if (ts.isInterfaceDeclaration(candidate)) return candidate.members.length;
+    if (ts.isTypeAliasDeclaration(candidate)) {
+      return shapeMembers(candidate.type, statement);
+    }
+  }
+  return 0;
+}
+
+/**
  * An exported class's public member count; for a `Context.Service<Self,
  * Shape>()` class, the members of its shape literal as well.
  */
@@ -402,10 +423,7 @@ function wideRecord(statement, name) {
         ts.isCallExpression(call);
         call = call.expression
       ) {
-        const shape = call.typeArguments?.[1];
-        if (shape != null && ts.isTypeLiteralNode(shape)) {
-          members += shape.members.length;
-        }
+        members += shapeMembers(call.typeArguments?.[1], statement);
       }
     }
   }
@@ -472,6 +490,13 @@ function measureAst(rootDir, files, byRule) {
     }
 
     const visit = (node) => {
+      // `let x!: T` and `field!: T`: the ESLint rule sees only `value!`.
+      if (
+        (ts.isVariableDeclaration(node) || ts.isPropertyDeclaration(node)) &&
+        node.exclamationToken != null
+      ) {
+        site('no-non-null-assertion', node, 'definite assignment `!`');
+      }
       if (
         ts.isParameter(node) &&
         ts
