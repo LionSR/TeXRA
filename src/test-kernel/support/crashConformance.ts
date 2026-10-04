@@ -9,14 +9,15 @@
  * in-process over a persistent store: a response with two calls (a read and
  * a command), a script whose nested calls run a read, a command and an
  * awaited `agent()` call that owns its child, the echo's answer, then a
- * handoff and a compaction (`context.edit`) and a fork. The pass records
- * the commit each write transaction ended at, from the store's own
- * `observedCommit`: a batch commits whole, so those are the crash points.
- * For each point N the suite copies the clean store, truncates it to
- * commits 1..N (the store a process killed after commit N leaves), hands
- * its claims to a dead owner, opens a fresh session over it and resumes the
- * root run. The handoff, the compaction and the fork are a user's requests,
- * which a crash loses: they are issued again when their rows are not in the
+ * handoff and a compaction (`context.edit`) and a fork, and the bash
+ * bypass turned on and off again. The pass records the commit each write
+ * transaction ended at, from the store's own `observedCommit`: a batch
+ * commits whole, so those are the crash points. For each point N the suite
+ * copies the clean store, truncates it to commits 1..N (the store a process
+ * killed after commit N leaves), hands its claims to a dead owner, opens a
+ * fresh session over it and resumes the root run. The handoff, the
+ * compaction, the fork and the bypass changes are a user's requests, which
+ * a crash loses: they are issued again when their rows are not in the
  * prefix. Every request is approved, and an unfinished call whose outcome
  * is unknown is retried.
  *
@@ -33,7 +34,13 @@
  * - an owned child launches again for its call without a person choosing
  *   to retry it, or a child is left without a terminal row;
  * - a fork is left without the history it was registered with;
- * - a text answer any run committed is never finalized for display.
+ * - a text answer any run committed is never finalized for display;
+ * - a run's halt commits apart from its end (a stopped run that reads as
+ *   interrupted, which an automatic resume carries on);
+ * - a person is asked whether to run again an awaited child that had
+ *   ended cleanly before the crash;
+ * - a bypass turned off is acknowledged before its row is durable (a
+ *   resume would restore it on).
  */
 import {
   cpSync,
@@ -358,7 +365,32 @@ const userSteps = (session: SessionHandle, storage: string, root: RunId) =>
         at: null,
       });
     }
+    if (bashBypassOf(rowsOf(storage), root) !== 'off') {
+      for (const enabled of [true, false]) {
+        yield* session.requests.request({
+          kind: 'policy.set',
+          change: { field: 'bypass', runId: root, bypass: 'bash', enabled },
+        });
+        // Acknowledged means durable: a resume restores the bypass from
+        // this row, and an "off" lost to a crash would come back on.
+        const stored = bashBypassOf(rowsOf(storage), root);
+        if (stored !== (enabled ? 'on' : 'off'))
+          return yield* Effect.die(
+            `the bash bypass was acknowledged ${enabled ? 'on' : 'off'} while its row says ${stored}`,
+          );
+      }
+    }
   });
+
+/** The root's own bash bypass, as its newest `approval.policy` row says. */
+const bashBypassOf = (rows: readonly Row[], root: string) => {
+  const row = rows.findLast(
+    (row) => row.run === root && row.type === 'approval.policy',
+  );
+  return row === undefined
+    ? undefined
+    : (json(row).snapshot as { own: { bash?: string } }).own.bash;
+};
 
 /** What broke the contract after a resume from commit `n`. */
 function violations(
@@ -499,6 +531,42 @@ function violations(
           callOf(other) === callOf(child) && other.commit <= child.commit,
       ).length,
   );
+  // An awaited child that ended cleanly answers its call: nobody is asked
+  // whether the work it finished should run again.
+  const cleanlyEnded = new Set(
+    prefix
+      .filter(
+        (row) => row.type === 'run.end' && json(row).outcome === 'completed',
+      )
+      .map((row) => row.run),
+  );
+  const askedAboutEnded = final.some((row) => {
+    if (row.type !== 'request.opened' || row.commit <= n) return false;
+    const opened = json(row) as {
+      readonly payload: {
+        readonly kind: string;
+        readonly data: { readonly childRunId?: string };
+      };
+    };
+    return (
+      opened.payload.kind === 'toolOutcome' &&
+      cleanlyEnded.has(opened.payload.data.childRunId ?? '')
+    );
+  });
+  // A run's halt and its end are one fact: a halt committed without its end
+  // reads as an interrupted run, which an automatic resume carries on. The
+  // prefix ends where a transaction did, so a halt in it has its end too.
+  const haltedApart = prefix.filter(
+    (row) =>
+      row.type === 'run.position' &&
+      payload(row).at === 'halted' &&
+      !prefix.some(
+        (end) =>
+          end.type === 'run.end' &&
+          end.run === row.run &&
+          end.commit > row.commit,
+      ),
+  );
   const got = outcome(final, root);
   // Every run's committed answers, each finalized once.
   const unfinalized = [...new Set(final.map((row) => row.run))].filter(
@@ -540,6 +608,12 @@ function violations(
       ? null
       : 'a child was left without a terminal row',
     unfinalized.length === 0 ? null : 'an answer was never finalized',
+    askedAboutEnded
+      ? 'a person was asked about a child that had ended cleanly'
+      : null,
+    haltedApart.length === 0
+      ? null
+      : 'a run halted in another transaction than its end',
   ].filter((violation) => violation !== null);
 }
 
@@ -756,7 +830,7 @@ export function crashConformanceSuite(plugins: string): void {
           }
           expect(broken).toEqual([]);
         }),
-      300_000,
+      600_000,
     );
   });
 }

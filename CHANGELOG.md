@@ -674,6 +674,15 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A crash no longer undoes a Stop, a finished agent or a bypass turned
+  off.** A task you stopped mid-turn, killed before it finished stopping,
+  came back as interrupted, and with "Always resume" it carried on the turn
+  and paid for more model calls; a stop is now recorded whole or not at
+  all. An agent that had finished its answer when its task was killed no
+  longer asks whether to run it again: the resumed task reads the answer it
+  left. Turning an approval bypass off is confirmed only once it is saved,
+  for a task held by no window too, so a crash right after cannot bring
+  the bypass back on when the task resumes.
 - **Every surface agrees on which tasks can resume, workflows included.** In
   `texra chat`, an interrupted workflow task now offers Resume (Enter on its
   agent row, or `/resume <id>`) and continues beside the chat instead of

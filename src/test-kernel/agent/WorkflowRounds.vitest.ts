@@ -13,7 +13,15 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Layer, SynchronizedRef } from 'effect';
+import {
+  Cause,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  SynchronizedRef,
+} from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -23,6 +31,7 @@ import {
   positionRow,
 } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
+import { finalizeRun } from '@agent/storage/runLifecycle';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { AgentRun } from '@agent/runtime/run/AgentRun';
 import { turnText } from '@agent/runtime/run/turnText';
@@ -321,8 +330,22 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
   );
 }
 
+/** The run program to its exit, ended as its lifecycle ends it: the halt
+ *  commits with the run's `run.end`. */
 function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
   return runToolUse({ resume: init.resume === true }).pipe(
+    Effect.onExit((exit) =>
+      finalizeRun(init.session, {
+        runId: init.runId,
+        outcome: Exit.match(exit, {
+          onSuccess: (result) => result.outcome,
+          onFailure: (cause) =>
+            Cause.hasInterrupts(cause)
+              ? RUN_OUTCOME.CANCELLED
+              : RUN_OUTCOME.FAILED,
+        }),
+      }),
+    ),
     Effect.provide(
       invokerLayer(init, requests).pipe(
         Layer.provideMerge(agentRunTestLayer(init)),

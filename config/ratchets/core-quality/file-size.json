@@ -43,7 +43,7 @@
   "src/controllers/session/rowCodec.ts": 499,
   "src/controllers/session/SessionBridge.ts": 437,
   "src/controllers/session/sessionLayer.ts": 1211,
-  "src/controllers/session/SessionRequests.ts": 567,
+  "src/controllers/session/SessionRequests.ts": 552,
   "src/controllers/session/sharedHostRequests.ts": 444,
   "src/controllers/session/storeSchema.ts": 469,
   "src/shared/schemas/runHistoryEvent.ts": 525,

@@ -29,7 +29,6 @@ import { ensureError } from '@utils/errors/errorMessage';
 import { AgentRun } from '../run/AgentRun';
 import { runHistoryRows } from '../storedTurn';
 import { Runs } from '../runRegistry';
-import { haltedPositionRow } from './rows';
 import type { FollowUps } from '../FollowUps';
 
 /**
@@ -191,54 +190,32 @@ const failureOutcome = (cause: Cause.Cause<unknown>): RunOutcome =>
   Cause.hasInterrupts(cause) ? RUN_OUTCOME.CANCELLED : RUN_OUTCOME.FAILED;
 
 /**
- * The exit protocol, as the release arm of the run's acquireUseRelease: the
- * halt row and, where the run holds one, the input lease. A refused halt
- * write warns; a database write failure reaches the caller. The lease hangs
- * off that write's own exit: a failed halt still frees it, as `recoverable`,
- * because no terminal row landed.
+ * The exit protocol, as the release arm of the run's acquireUseRelease:
+ * the run's input lease, where it holds one. The halt is not written here:
+ * it commits with the run's `run.end` (`finalizeRun`), so no reader ever
+ * sees a stopped run without its end.
  */
 export const settleRun =
   (
     cell: RunCell,
-    logger: AgentTrace,
     /** The run's own input lease, or null for a run that takes no input. */
     lease: FollowUps | null,
   ) =>
-  (
-    exit: Exit.Exit<RunExit, Error>,
-  ): Effect.Effect<void, DatabaseWriteFailed, Runs> => {
+  (exit: Exit.Exit<RunExit, Error>): Effect.Effect<void, never, Runs> => {
+    if (lease === null) return Effect.void;
     // The body's own value when it returned.
     const outcome = Exit.match(exit, {
       onSuccess: (value) => value.outcome,
       onFailure: failureOutcome,
     });
-    const halt = Effect.gen(function* () {
-      const state = yield* cell.current;
-      yield* cell.append([haltedPositionRow(cell.runId, state, outcome)]).pipe(
-        Effect.catchTag('RunHistoryRefused', (error) =>
-          Effect.sync(() =>
-            logger.warn('Failed to record the run halt', {
-              data: error,
-            }),
-          ),
-        ),
+    return Effect.gen(function* () {
+      const runs = yield* Runs;
+      lease.release(
+        outcome === RUN_OUTCOME.COMPLETED && !runs.hasActiveChildren(cell.runId)
+          ? 'terminal'
+          : 'recoverable',
       );
     });
-    return halt.pipe(
-      Effect.onExit((halted) =>
-        lease === null
-          ? Effect.void
-          : Effect.gen(function* () {
-              const runs = yield* Runs;
-              lease.release(
-                outcome === RUN_OUTCOME.COMPLETED &&
-                  !runs.hasActiveChildren(cell.runId)
-                  ? 'terminal'
-                  : 'recoverable',
-              );
-            }),
-      ),
-    );
   };
 
 /**

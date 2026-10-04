@@ -1,9 +1,11 @@
 /**
- * What turning a bypass on settles beside the flag itself: the run's requests
- * already waiting under it, on every host.
+ * A bypass change and what it settles beside the flag itself: its durable
+ * row, and when it turns a bypass on, the run's requests already waiting
+ * under it, on every host.
  */
 import { Effect, SubscriptionRef } from 'effect';
 
+import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { PermissionPayload } from '@shared/schemas';
@@ -13,7 +15,7 @@ import {
   Unavailable,
   type RequestError,
 } from '@shared/session/requestErrors';
-import type { RuntimeRequest } from '@shared/session/runtimeRequest';
+import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 
 type BypassChange = Extract<RuntimeRequest, { kind: 'policy.set' }>['change'];
 
@@ -40,7 +42,7 @@ const COVERED_KINDS: Record<
  * offers no bypass. A request whose opening is still committing is not
  * listed yet and stays pending for the user.
  */
-export function approvePendingUnderBypass(
+function approvePendingUnderBypass(
   session: SessionHandle,
   { runId, bypass, exceptRequestId }: BypassChange,
 ): Effect.Effect<void, RequestError> {
@@ -78,4 +80,38 @@ export function approvePendingUnderBypass(
           }),
     ),
   );
+}
+
+/**
+ * Apply a bypass change, acknowledged once its `approval.policy` row is
+ * durable: a resume restores the bypass from that row, so an "off" lost to
+ * a crash would come back on. The caller holds the run's claim, so the row
+ * the change queues is this process's to write.
+ */
+export function setPolicy(
+  session: SessionHandle,
+  approvals: SessionApprovals,
+  change: BypassChange,
+  heldHere: boolean,
+): Effect.Effect<Outcome, RequestError> {
+  return Effect.gen(function* () {
+    if (change.bypass === 'superYolo')
+      approvals.setDelegatedWorkBypasses(change.runId, change.enabled);
+    else
+      approvals[change.bypass].bypass.setBypass(change.runId, change.enabled);
+    // The change queued its row; this settle is its commit or its refusal.
+    yield* session.settlePublications(change.runId, { consume: false }).pipe(
+      Effect.mapError(
+        (): RequestError =>
+          new Unavailable({
+            runId: change.runId,
+            reason: 'The approval change could not be saved.',
+          }),
+      ),
+    );
+    // A run held elsewhere has no fiber here to act on a decision.
+    if (change.enabled && heldHere)
+      yield* approvePendingUnderBypass(session, change);
+    return { kind: 'done' };
+  });
 }

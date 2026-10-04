@@ -16,6 +16,7 @@ import {
   type PendingRetry,
   type RunId,
   type RunOutcome,
+  type SessionEvent,
   type SessionEventDraft,
   type SnapshotRuntime,
   type ToolBindingPayload,
@@ -61,20 +62,18 @@ export function positionRow(
   };
 }
 
+/** The loop's halt where its newest position left it, with the run's
+ *  outcome: written only with the run's `run.end`, so a stopped run never
+ *  reads as interrupted. */
 export function haltedPositionRow(
-  runId: RunId,
-  state: PositionCoordinates,
+  position: Extract<SessionEvent, { type: 'run.position' }>,
   outcome: RunOutcome,
-): RunHistoryDraft {
+): SessionEventDraft {
+  const { family, turn } = position.payload;
   return {
     type: 'run.position',
-    aggregateId: rowAggregate(runId),
-    payload: {
-      family: familyOf(state),
-      at: 'halted',
-      turn: state.turn,
-      outcome,
-    },
+    aggregateId: position.aggregateId,
+    payload: { family, at: 'halted', turn, outcome },
   };
 }
 

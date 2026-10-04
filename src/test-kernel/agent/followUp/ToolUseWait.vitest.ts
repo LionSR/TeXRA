@@ -27,10 +27,7 @@ import {
   RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
-import {
-  DatabaseWriteFailed,
-  type SessionOpenError,
-} from '@shared/session/database';
+import type { SessionOpenError } from '@shared/session/database';
 import { RunHistory } from '@shared/session/runHistory';
 import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
@@ -421,37 +418,6 @@ describe('a parked root run', () => {
       }),
   );
 
-  it.effect('releases its follow-up owner when the halt write fails', () =>
-    Effect.gen(function* () {
-      const session = yield* quietSession();
-      const runId = startedRun(session);
-      const writeFailed = new DatabaseWriteFailed({
-        path: ':memory:',
-        cause: new Error('disk full'),
-      });
-      const { exit } = yield* runUntilSpent({
-        runId,
-        session,
-        stopAfterCycle: true,
-        script: [textTurn('done')],
-        runHistory: {
-          ...session.runHistory,
-          appendBatch: (id, state, drafts) =>
-            drafts.some(
-              (draft) =>
-                draft.type === 'run.position' && draft.payload.at === 'halted',
-            )
-              ? Effect.fail(writeFailed)
-              : session.runHistory.appendBatch(id, state, drafts),
-        },
-      });
-
-      // The failure stays loud, and the next owner can still claim the run.
-      expect(Exit.isFailure(exit)).toBe(true);
-      expect(session.followUps.hasLiveOwner(runId)).toBe(false);
-    }),
-  );
-
   it.effect('stops a one-cycle child instead of parking it as waiting', () =>
     Effect.gen(function* () {
       const session = yield* quietSession();
@@ -576,8 +542,7 @@ describe('a parked root run', () => {
         yield* Effect.promise(() => recorded.read()),
         'run.position',
       ).map((event) => event.payload.at);
-      // The interrupt that ends the test writes its own halt last.
-      expect(steps.slice(0, -1)).toContain('waiting');
+      expect(steps).toContain('waiting');
       expect(resumed.requests).toHaveLength(0);
     }),
   );
