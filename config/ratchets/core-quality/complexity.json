@@ -23,7 +23,6 @@
   "src/agent/runtime/resumeRun.ts": 1,
   "src/agent/runtime/run/AgentRun.ts": 1,
   "src/agent/runtime/run/modelBinding.ts": 1,
-  "src/agent/runtime/run/modelFailure.ts": 1,
   "src/agent/runtime/run/pricing.ts": 1,
   "src/agent/runtime/run/validationModel.ts": 2,
   "src/agent/runtime/RunHistory.ts": 2,

@@ -1,11 +1,9 @@
+import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it } from 'vitest';
+import { ModelError } from '@texra-ai/llm';
 
-import {
-  describeGlmCodingPlanRateLimit,
-  isGlmCodingPlanRateLimit,
-  parseGlmCodingPlanLimit,
-} from '@common/errors/sdkError/glmCodingPlanDetection';
-import { formatProviderHttpError } from '@common/errors/sdkError/providerErrorFormat';
+import { classifyModelFailure } from '@agent/runtime/run/modelFailure';
+import { judgeFailure } from '../../../packages/llm/src/api/verdict.js';
 
 const WEEKLY_LIMIT_BODY = {
   error: {
@@ -40,102 +38,66 @@ function futureCstTimestampBody(minutesFromNow: number): {
   };
 }
 
-describe('parseGlmCodingPlanLimit', () => {
-  it('parses a GLM Coding Plan weekly-limit error', () => {
-    expect(parseGlmCodingPlanLimit(WEEKLY_LIMIT_BODY)).not.toBeNull();
-  });
+/** A GLM Coding Plan 429 as the binding judges it. */
+function glmFailure(body: unknown, message = 'GLM rejected the request') {
+  return judgeFailure(
+    new ModelError({
+      kind: 'provider-rejection',
+      message,
+      status: 429,
+      cause: Object.assign(new Error(message), { status: 429, error: body }),
+    }),
+    'glm-coding-plan-subscription',
+  );
+}
 
-  it('parses a GLM Coding Plan 5-hour-limit error', () => {
-    expect(parseGlmCodingPlanLimit(FIVE_HOUR_LIMIT_BODY)).not.toBeNull();
-  });
-
-  it('derives the reset window from a UTC+8 China-time timestamp in the message', () => {
-    const limit = parseGlmCodingPlanLimit(futureCstTimestampBody(30));
-    expect(limit).not.toBeNull();
-    // The reset timestamp is ~30 minutes in the future, so a finite seconds
-    // count is set.
-    expect(limit?.resetsInSeconds).toBeTypeOf('number');
-    expect(limit?.resetsInSeconds).toBeGreaterThan(0);
-  });
-
-  it('ignores non-quota error codes', () => {
-    expect(
-      parseGlmCodingPlanLimit({
-        error: { code: '1302', message: 'Rate limit reached' },
-      }),
-    ).toBeNull();
-    expect(
-      parseGlmCodingPlanLimit({
-        error: { code: '1305', message: 'temporarily overloaded' },
-      }),
-    ).toBeNull();
-    expect(
-      parseGlmCodingPlanLimit({
-        error: { code: '1113', message: 'Insufficient balance' },
-      }),
-    ).toBeNull();
-  });
-
-  it('recognizes a GLM Coding Plan rate limit (1302) as retryable, not exhaustion', () => {
-    const rateLimitBody = {
-      error: {
-        code: '1302',
-        message: '您的账户已达到速率限制，请您控制请求频率',
-      },
-    } as const;
-
-    // Not a quota exhaustion — no switch-to-regular-endpoint affordance.
-    expect(parseGlmCodingPlanLimit(rateLimitBody)).toBeNull();
-    // But it IS recognized as a rate limit with a clear retry hint.
-    expect(isGlmCodingPlanRateLimit(rateLimitBody)).toBe(true);
-    const description = describeGlmCodingPlanRateLimit();
-    expect(description).toContain('rate limit');
-    expect(description).toContain('retry');
-  });
-
-  it('recognizes a GLM Coding Plan overload (1305) as a rate limit', () => {
-    const overloadBody = {
-      error: { code: '1305', message: 'temporarily overloaded' },
-    } as const;
-    expect(isGlmCodingPlanRateLimit(overloadBody)).toBe(true);
-  });
-
-  it('does not treat quota exhaustion as a rate limit', () => {
-    expect(isGlmCodingPlanRateLimit(WEEKLY_LIMIT_BODY)).toBe(false);
-  });
-});
-
-describe('formatProviderHttpError for GLM Coding Plan limits', () => {
-  it('classifies a GLM Coding Plan usage-limit error as a switchable credential exhaustion', () => {
-    const error = new Error('Weekly/Monthly Limit Exhausted') as Error & {
-      error: unknown;
-      provider?: string;
-    };
-    error.error = WEEKLY_LIMIT_BODY;
-    error.provider = 'glm';
-
-    const providerError = formatProviderHttpError(error);
-
-    expect(providerError.classification?.kind).toBe('glm-coding-plan');
-    expect(providerError.userRetryable).toBe(true);
-    expect(providerError.message).toContain(
-      'GLM Coding Plan usage limit reached',
+describe('the GLM Coding Plan quota codes', () => {
+  it('read a weekly or five-hour limit as the plan used up', () => {
+    expect(glmFailure(WEEKLY_LIMIT_BODY).quota?.plan).toBe(
+      'glm-coding-plan-subscription',
     );
-    expect(providerError.message).toContain(
-      'Switch to the regular GLM endpoint',
+    expect(glmFailure(FIVE_HOUR_LIMIT_BODY).quota?.plan).toBe(
+      'glm-coding-plan-subscription',
     );
   });
 
-  it('does not classify a GLM rate limit as a coding-plan exhaustion', () => {
-    const error = new Error('Rate limit reached') as Error & {
-      error: unknown;
-      provider?: string;
-    };
-    error.error = { error: { code: '1302', message: 'Rate limit reached' } };
-    error.provider = 'glm';
+  it('derive the reset window from a UTC+8 China-time timestamp in the message', () => {
+    const { quota } = glmFailure(futureCstTimestampBody(30));
+    // The reset timestamp is ~30 minutes in the future.
+    expect(quota?.resetsInMs).toBeGreaterThan(0);
+    expect(quota?.resetsInMs).toBeLessThanOrEqual(30 * 60 * 1000);
+  });
 
-    const providerError = formatProviderHttpError(error);
+  it('ignore non-quota codes', () => {
+    for (const code of ['1302', '1305', '1113'])
+      expect(
+        glmFailure({ error: { code, message: 'not a quota' } }).quota,
+      ).toBe(undefined);
+  });
 
-    expect(providerError.classification?.kind).not.toBe('glm-coding-plan');
+  it('read 1302 and 1305 as a retryable plan rate limit with its own hint', () => {
+    for (const code of ['1302', '1305']) {
+      const judged = glmFailure({
+        error: { code, message: '您的账户已达到速率限制，请您控制请求频率' },
+      });
+      expect(judged).toMatchObject({
+        kind: 'rate-limited',
+        retryable: true,
+        scope: 'route',
+      });
+      expect(judged.message).toContain('rate limit');
+      expect(judged.message).toContain('retry');
+    }
+  });
+
+  it('offer the switch to the regular GLM endpoint on a used-up plan', () => {
+    const { formatted } = classifyModelFailure(glmFailure(WEEKLY_LIMIT_BODY), {
+      config: { provider: ModelProvider.GLM },
+    });
+
+    expect(formatted.classification?.kind).toBe('glm-coding-plan');
+    expect(formatted.userRetryable).toBe(true);
+    expect(formatted.message).toContain('GLM Coding Plan usage limit reached');
+    expect(formatted.message).toContain('Switch to the regular GLM endpoint');
   });
 });

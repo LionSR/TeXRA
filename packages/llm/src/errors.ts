@@ -52,11 +52,25 @@ export const RemoteOperationSchema = z.union([
 ]);
 export type RemoteOperation = z.infer<typeof RemoteOperationSchema>;
 
+/** A subscription plan whose quota a request can exhaust, named by its route. */
+const PlanRouteSchema = z.enum([
+  'chatgpt-subscription',
+  'xai-subscription',
+  'kimi-code-subscription',
+  'glm-coding-plan-subscription',
+]);
+/** A subscription plan, named by the route that bills through it. */
+export type PlanRoute = z.infer<typeof PlanRouteSchema>;
+
 const ModelErrorFieldsSchema = z.strictObject({
   kind: z.enum([
     'invalid-request',
     'unsupported',
     'authentication',
+    'rate-limited',
+    'quota-exhausted',
+    'context-overflow',
+    'continuation-gone',
     'transport',
     'provider-rejection',
     'malformed-output',
@@ -67,12 +81,31 @@ const ModelErrorFieldsSchema = z.strictObject({
   responseId: z.string().optional(),
   model: z.string().optional(),
   status: z.int().optional(),
+  /** Whether repeating the request unchanged can succeed. */
+  retryable: z.boolean(),
+  /**
+   * What the failure is evidence about beyond this request: `model` for a
+   * limit the provider scoped to one model, `route` for the shared provider,
+   * credential and endpoint (an unscoped rate limit, a server failure, the
+   * network). Absent when it says nothing about either.
+   */
+  scope: z.enum(['model', 'route']).optional(),
   /**
    * The provider's own "come back in" delay, in milliseconds, as its
    * response stated it. The retry gate reads this instead of guessing a
    * backoff, so a rate limit waits exactly as long as it was told to.
    */
   retryAfterMs: z.int().nonnegative().optional(),
+  /** What a `quota-exhausted` failure used up: a plan, or the account's credit (`plan: null`). */
+  quota: z
+    .strictObject({
+      plan: PlanRouteSchema.nullable(),
+      /** The plan's tier as the provider names it (ChatGPT's `pro`). */
+      planType: z.string().optional(),
+      resetsInMs: z.int().nonnegative().optional(),
+    })
+    .readonly()
+    .optional(),
   operation: RemoteOperationSchema.optional(),
   providerEvidence: z
     .discriminatedUnion('kind', [
@@ -86,10 +119,62 @@ const ModelErrorFieldsSchema = z.strictObject({
     ])
     .optional(),
 });
-/** Typed provider failure. Fiber interruption remains outside this channel. */
-export class ModelError extends Data.TaggedError('ModelError')<
-  z.infer<typeof ModelErrorFieldsSchema> & { readonly cause?: unknown }
-> {}
+type ModelErrorFields = z.infer<typeof ModelErrorFieldsSchema> & {
+  readonly cause?: unknown;
+};
+
+/** A server failure, a timeout, a conflict or a rate limit: worth repeating. */
+const isRetryableStatus = (status: number): boolean =>
+  status >= 500 || status === 408 || status === 409 || status === 429;
+
+/** Whether a failure of `kind` can succeed when repeated, absent other evidence. */
+function retryableByDefault(
+  kind: ModelErrorFields['kind'],
+  status: number | undefined,
+): boolean {
+  switch (kind) {
+    case 'transport':
+    case 'rate-limited':
+    case 'observation-deadline':
+      return true;
+    case 'provider-rejection':
+    case 'malformed-output':
+      return status === undefined || isRetryableStatus(status);
+    case 'invalid-request':
+    case 'unsupported':
+    case 'authentication':
+    case 'quota-exhausted':
+    case 'context-overflow':
+    case 'continuation-gone':
+      return false;
+  }
+}
+
+/**
+ * Typed provider failure. Fiber interruption remains outside this channel.
+ * `retryable` and `scope` default from the kind and status; the binding that
+ * read the vendor's reply states them where the reply says more.
+ */
+export class ModelError extends Data.TaggedError(
+  'ModelError',
+)<ModelErrorFields> {
+  constructor(
+    fields: Omit<ModelErrorFields, 'retryable'> & {
+      readonly retryable?: boolean;
+    },
+  ) {
+    const { status } = fields;
+    super({
+      ...fields,
+      retryable: fields.retryable ?? retryableByDefault(fields.kind, status),
+      ...(fields.scope === undefined &&
+      status !== undefined &&
+      (status >= 500 || status === 408 || status === 429)
+        ? { scope: 'route' as const }
+        : {}),
+    });
+  }
+}
 
 /** The operation `input` names, provided it belongs to the `origin` binding. */
 export const boundOperation = Effect.fn('llm.boundOperation')(function* (
@@ -134,9 +219,7 @@ export const cancellationStatus = (status: string) =>
  */
 export const enrichModelError = (
   error: ModelError,
-  patch: Partial<
-    z.infer<typeof ModelErrorFieldsSchema> & { readonly cause?: unknown }
-  >,
+  patch: Partial<ModelErrorFields>,
 ): ModelError =>
   new ModelError({
     ...error,

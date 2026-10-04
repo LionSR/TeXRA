@@ -64,10 +64,12 @@ describe('classifyAgentError', () => {
     expect(classifyAgentError(err)).toBe('context-window');
   });
 
-  it('classifies a third-party provider overflow as context-window', () => {
+  it('does not classify a message that merely mentions the context window', () => {
+    // A provider's overflow is the llm package's verdict, marked where the
+    // run reads it; prose quoting the phrase cannot hijack the taxonomy.
     expect(
       classifyAgentError(new Error('maximum context length is 128000')),
-    ).toBe('context-window');
+    ).toBe('unexpected');
   });
 
   it('prefers the credential marker over a context-window message', () => {

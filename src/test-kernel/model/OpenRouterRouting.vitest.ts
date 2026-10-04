@@ -4,12 +4,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { assert, describe, expect } from 'vitest';
 
-import {
-  apiKeySecretName,
-  isOpenRouterRoutingUnsupported,
-  selectModel,
-  shouldRouteModelThroughOpenRouter,
-} from '@texra-ai/llm';
+import { apiKeySecretName, selectModel } from '@texra-ai/llm';
 import { bindModel } from '@agent/runtime/run/modelBinding';
 import {
   LanguageModel,
@@ -19,6 +14,10 @@ import { AgentCategory } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import {
+  isOpenRouterRoutingUnsupported,
+  shouldRouteModelThroughOpenRouter,
+} from '../../../packages/llm/src/models/openRouterRouting.js';
 
 const GPT4O = 'openai/gpt-4o-2024-11-20';
 

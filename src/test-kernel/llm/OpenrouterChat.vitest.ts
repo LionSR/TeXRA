@@ -9,10 +9,10 @@ import {
   ModelError,
   completedTurn,
   type Model,
-  type OpenRouterConfiguration,
   type TurnRequest,
 } from '@texra-ai/llm';
 import { openrouterChatModel } from '../../../packages/llm/src/api/openrouterChat.js';
+import type { OpenRouterConfiguration } from '../../../packages/llm/src/turn.js';
 
 const CONFIG = {
   protocol: 'openrouter-chat',

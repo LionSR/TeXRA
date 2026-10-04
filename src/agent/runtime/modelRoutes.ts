@@ -9,7 +9,6 @@ import {
 } from '@texra-ai/llm/node';
 import {
   type ApiKeyProviderId,
-  codexBackendModelId,
   decideModelRoute,
   exposeApiKey,
   getApiKey,
@@ -76,8 +75,6 @@ type SubscriptionSession =
       /** The ChatGPT plan the session's token names, when it names one. It
        *  is display-only: the backend decides what the plan may call. */
       readonly plan: string | undefined;
-      /** The Codex backend's bare model id, which differs from the API's. */
-      readonly requestedModel: string;
       readonly endpoint: string;
       readonly usageRoute: 'chatgpt-subscription';
     }
@@ -140,7 +137,6 @@ interface SubscriptionRouteRow {
    */
   readonly readSession: (
     secrets: PlatformSecrets,
-    config: ModelConfig,
   ) => Effect.Effect<SubscriptionSession, Error, HttpClient.HttpClient>;
   /** Refresh the session after the provider rejected its access token. */
   readonly refreshRejected: (
@@ -163,7 +159,7 @@ const SUBSCRIPTION_ROUTES: {
 } = {
   'chatgpt-subscription': {
     provider: 'openai',
-    readSession: (secrets, config) =>
+    readSession: (secrets) =>
       Effect.gen(function* () {
         const coordinator = codexCoordinator(secrets);
         const accessToken = yield* coordinator.getFreshAccessToken();
@@ -174,7 +170,6 @@ const SUBSCRIPTION_ROUTES: {
           accessToken,
           accountId,
           plan,
-          requestedModel: codexBackendModelId(config),
           endpoint: CODEX_BACKEND_BASE_URL,
           usageRoute: 'chatgpt-subscription',
         } as const;
@@ -211,13 +206,12 @@ const SUBSCRIPTION_ROUTES: {
 export const resolveSubscriptionCredential = Effect.fn(
   'resolveSubscriptionCredential',
 )(function* (
-  config: ModelConfig,
   route: Extract<ModelRoute, { kind: SubscriptionSession['route'] }>,
   secrets: PlatformSecrets,
 ): Effect.fn.Return<SubscriptionRouteCredential, Error, HttpClient.HttpClient> {
   const row = SUBSCRIPTION_ROUTES[route.kind];
   const session = yield* row
-    .readSession(secrets, config)
+    .readSession(secrets)
     .pipe(Effect.mapError(row.authFailure));
   return { ...session, provider: row.provider };
 });

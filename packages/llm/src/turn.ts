@@ -1,13 +1,9 @@
 /**
- * The turn contract, which the package's `.` entry exports whole.
- *
- * What a caller reads and writes is here: the request, the selected binding,
- * the prepared and resolved turn, its result and its events, and the `Model`
- * interface that executes one. The modules this contract was split into —
- * `protocol.ts`, `message.ts` and `errors.ts` — define the symbols they own,
- * and this module re-exports the ones consumers read, so a consumer never
- * imports the file layout behind it. The protocol helpers in `errors.ts` and
- * `api/transport.ts` stay package-internal.
+ * The turn contract: the request, the protocol configurations the binding
+ * builds, the prepared and resolved turn, its result and its events, and the
+ * `Model` interface that executes one. Origins live in `protocol.ts`,
+ * messages in `message.ts` and failures in `errors.ts`; the package's `.`
+ * entry names what a caller reads from each.
  */
 // Third-party imports
 import { Effect, Stream } from 'effect';
@@ -43,25 +39,6 @@ import {
   RemoteOperationSchema,
   type RemoteOperation,
 } from './errors.js';
-
-// The contract symbols the modules behind this subpath define.
-export {
-  JsonObjectSchema,
-  ModelOriginSchema,
-  originOf,
-  sameModelOrigin,
-  TurnProtocolSchema,
-} from './protocol.js';
-export type { ModelOrigin } from './protocol.js';
-export {
-  ContinuationSchema,
-  MessageSchema,
-  PreparedHistorySchema,
-  systemUpdateText,
-} from './message.js';
-export type { Continuation } from './message.js';
-export { ModelError, RemoteOperationSchema } from './errors.js';
-export type { RemoteOperation } from './errors.js';
 
 const ToolDefinitionSchema = z
   .strictObject({
@@ -218,14 +195,18 @@ function validateEffortDefault<E extends string>(
   }
 }
 
-/** Already-selected protocol binding and defaults, provided by the application. */
-export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
+/** The editor's model: its binding and defaults, which the editor host serves. */
+export const VscodeLanguageModelConfigurationSchema =
   EditorBindingSchema.extend({
     protocol: z.literal('vscode-lm'),
     supportsImageInput: z.boolean(),
     supportsToolCalling: z.boolean(),
     defaults: EditorControlsSchema.omit({ toolChoice: true }).readonly(),
-  }).readonly(),
+  }).readonly();
+
+/** A protocol binding and its defaults, as `bindModel` builds it (or the editor host). */
+export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
+  VscodeLanguageModelConfigurationSchema,
   BindingSchema.extend({
     protocol: z.literal('openrouter-chat'),
     supportsTemperature: z.boolean(),
