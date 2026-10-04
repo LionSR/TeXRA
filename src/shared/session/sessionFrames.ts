@@ -50,7 +50,8 @@ const RequestIdSchema = z.string().min(1);
 
 export type FoldEvent = z.infer<typeof FoldEventSchema>;
 
-const SubscribeSchema = z.object({
+/** A surface's request for one session's frames, up the wire. */
+export const SubscribeSchema = z.object({
   kind: z.literal('subscribe'),
   session: SessionKeySchema,
   /** Chosen by the surface, monotone per view instance. */
@@ -65,7 +66,8 @@ const SubscribeSchema = z.object({
 });
 export type Subscribe = z.infer<typeof SubscribeSchema>;
 
-const EventsFrameSchema = z.object({
+/** One frame of a subscription's rows and text, down the wire. */
+export const EventsFrameSchema = z.object({
   kind: z.literal('events'),
   session: SessionKeySchema,
   generation: GenerationSchema,
@@ -89,7 +91,7 @@ export type EventsFrame = z.infer<typeof EventsFrameSchema>;
  *  for a message it could not parse. `Internal` is a handler defect: the
  *  message stays in the host log under `ref`, the request id, and never
  *  crosses to a renderer (C3). */
-const RequestErrorWireSchema = z.discriminatedUnion('_tag', [
+export const RequestErrorWireSchema = z.discriminatedUnion('_tag', [
   z.object({ _tag: z.literal('NotOwner'), runId: RunIdSchema }),
   z.object({
     _tag: z.literal('Unavailable'),

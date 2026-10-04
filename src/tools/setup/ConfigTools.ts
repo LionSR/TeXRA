@@ -15,10 +15,10 @@ import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { ToolError } from '@shared/schemas';
 import {
-  settingByKey,
   settingSchemaWithoutPrefault,
   type StateSettingEntry,
 } from '@shared/state/stateSettings';
+import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
 
 import { executed } from '@tools/core/result';
 import { defineTool } from '../core/define';
@@ -43,7 +43,7 @@ const UPDATABLE_KEY_LIST = [
 type UpdatableKey = (typeof UPDATABLE_KEY_LIST)[number];
 
 function catalogEntry(key: UpdatableKey): StateSettingEntry {
-  const entry = settingByKey(key);
+  const entry = TEXRA_SETTINGS.byKey(key);
   if (!entry) {
     throw new Error(`update_config allowlist key ${key} is not in the catalog`);
   }
@@ -81,7 +81,7 @@ Accepts any key starting with \`texra.\`. Returns the current resolved value (wo
       const call = yield* ToolCall;
       const value = call.roots.config.get(input.key);
       const json = JSON.stringify(value, null, 2) ?? 'undefined';
-      const description = settingByKey(input.key)?.description;
+      const description = TEXRA_SETTINGS.byKey(input.key)?.description;
       return executed(
         `${input.key}:\n${json}${description ? `\n\n${description}` : ''}`,
         `Read ${input.key}`,

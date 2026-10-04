@@ -23,12 +23,7 @@ import type {
   SubagentProgressUpdate,
   ScriptDeliverySummary,
 } from '@shared/schemas';
-import {
-  countByStatus,
-  planSummaryLine,
-  STATUS_DISPLAY,
-  ScriptDeliverySummarySchema,
-} from '@shared/schemas';
+import { planSummaryLine, ScriptDeliverySummarySchema } from '@shared/schemas';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { formatScriptTally } from '@ui/transcript/workflowCall';
 import {
@@ -137,19 +132,6 @@ function progressDetail(xml: string): string | undefined {
       return status === 'updated' && summary !== undefined
         ? `plan · ${decodeXmlEntities(summary)}`
         : undefined;
-    }
-    case 'todos': {
-      const completed = attr(xml, 'completed');
-      const active = attr(xml, 'active');
-      const pending = attr(xml, 'pending');
-      if (
-        completed === undefined ||
-        active === undefined ||
-        pending === undefined
-      ) {
-        return undefined;
-      }
-      return `todos · ${completed} done, ${active} active, ${pending} pending`;
     }
     default:
       return undefined;
@@ -261,21 +243,6 @@ export function formatSubagentProgress(
   const agentAttr = `agent="${escapeAttr(agentName)}"`;
 
   switch (update.kind) {
-    case 'todos': {
-      const { completed, inProgress, pending } = countByStatus(update.todos);
-      const items = update.todos
-        .map((t) => {
-          const icon = STATUS_DISPLAY[t.status].icon;
-          return `  ${icon} ${escapeText(t.content)}`;
-        })
-        .join('\n');
-      return [
-        `<${tag} ${idAttr} ${agentAttr} type="todos" completed="${completed}" active="${inProgress}" pending="${pending}">`,
-        items,
-        `</${tag}>`,
-      ].join('\n');
-    }
-
     case 'overview': {
       const fileList =
         update.filesChanged.length > 0

@@ -9,11 +9,9 @@
  */
 
 import {
-  AgentCategory,
-  STATUS_DISPLAY,
+  type AgentCategory,
   type RunId,
   type RunIdentity,
-  type TodoItem,
 } from '@shared/schemas';
 import type { RunView, SessionView } from '@shared/session/sessionView';
 import { formatTimestamp } from '@utils/text/stringUtils';
@@ -41,11 +39,6 @@ export function childRunViews(view: SessionView, runId: RunId): RunView[] {
   });
 }
 
-/** A tool-use run's task list; every other run has none. */
-export function runTodos(run: RunView): readonly TodoItem[] {
-  return run.category === AgentCategory.ToolUse ? run.todos : [];
-}
-
 /** Return paths available for a given display category. */
 function getAvailablePaths(
   category: RunDisplayCategory,
@@ -59,7 +52,7 @@ function getAvailablePaths(
   ];
   switch (category) {
     case 'toolUse':
-      return [...common, 'conversation', 'todos', 'workspace-files'];
+      return [...common, 'conversation', 'workspace-files'];
     case 'workflow':
       return [...common, 'files'];
     case 'process':
@@ -104,11 +97,6 @@ export function formatChildLine(child: RunView): string {
   return `${child.id}  ${ts}  ${child.label}  [${formatRunStatus(child)}]${desc}`;
 }
 
-/** Format todo items as a checklist. */
-function formatTodoSection(todos: readonly TodoItem[]): string[] {
-  return todos.map((t) => `${STATUS_DISPLAY[t.status].icon} ${t.content}`);
-}
-
 // ============================================================================
 // /executions/{id} summary
 // ============================================================================
@@ -137,7 +125,7 @@ export function buildSummaryLines(run: RunView): string[] {
 }
 
 /**
- * Build the todo/report/available-paths lines that close the summary.
+ * Build the report/available-paths lines that close the summary.
  * Appended after the children lines, so this only needs whether there were
  * any children, not the rows themselves.
  */
@@ -145,15 +133,10 @@ export function buildSummaryTailLines(
   runId: RunId,
   category: RunDisplayCategory,
   hasChildren: boolean,
-  todos: readonly TodoItem[],
   report: string | null,
   options: { readonly suppressReport?: boolean } = {},
 ): string[] {
   const lines: string[] = [];
-
-  if (todos.length > 0) {
-    lines.push('', ...formatTodoSection(todos));
-  }
 
   if (report && options.suppressReport) {
     lines.push(

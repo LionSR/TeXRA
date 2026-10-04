@@ -82,7 +82,7 @@ For the structure and execution flow common to all agents, read the [agent archi
 Enable it from the **Agents** tab to use it.
 :::
 
-A general-purpose scientific assistant with the broadest toolset of any built-in agent. It can read your project, edit files, run shell commands, search the literature (arXiv, Crossref, web), manage Zotero references, run Wolfram computations, work on Lean 4 proofs, and delegate to specialist agents or external AI coding agents (Codex, Claude Code), all in a back-and-forth conversation.
+A general-purpose scientific assistant with the broadest toolset of any built-in agent. It can read your project, edit files, run shell commands, search the literature (arXiv, web), manage Zotero references, run Wolfram computations, work on Lean 4 proofs, and delegate to specialist agents or external AI coding agents (Codex, Claude Code), all in a back-and-forth conversation.
 
 > **User story:** You just got reviewer comments back. Instead of hunting through a 40-page paper by hand, you open `assistant` and paste the reviewer's feedback: "Address comment 3 about missing error bars in Table 2: add them and update the caption." The agent reads your files, makes the edits, and shows you a diff to approve.
 

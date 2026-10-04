@@ -93,6 +93,7 @@ import {
 import type { CommandId } from '@shared/commands/catalog';
 import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { GlobalDatabase } from '@shared/session/database';
+import { TEXRA_SETTING_ROWS } from '@shared/settingsView/texraSettings';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
@@ -102,7 +103,6 @@ import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
-import { formatCostUsd } from '@utils/text/stringUtils';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -180,6 +180,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         Effect.map(AppState, createVscodeLeanLanguageServices),
       ),
     }),
+    settings: TEXRA_SETTING_ROWS,
     mcpConfigPath: USER_MCP_CONFIG_PATH,
     secrets,
     appState,
@@ -598,8 +599,8 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     if (!statusBarItem) return;
     const policy = runtimeSession.approvalPolicy;
     const policyLine = `Approval policy: ${texraApprovalPolicyLabel(policy)} — ${formatTexraApprovalPolicy(policy)}`;
-    const { cost, inputTokens, outputTokens, usageRoute, usagePlan } =
-      statusBarUsageTracker.totalUsage;
+    const usage = statusBarUsageTracker.totalUsage;
+    const { cost, inputTokens, outputTokens } = usage;
     if (cost === 0 && inputTokens === 0 && outputTokens === 0) {
       statusBarItem.tooltip = `${policyLine}\n\nClick to show TeXRA sessions`;
       return;
@@ -610,7 +611,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
         '',
         '| TeXRA usage | |',
         '| --- | ---: |',
-        `| Cost | ${usageCostLabel(cost, usageRoute, usagePlan) ?? formatCostUsd(cost)} |`,
+        `| Cost | ${usageCostLabel(usage)} |`,
         `| Input tokens | ${inputTokens.toLocaleString()} |`,
         `| Output tokens | ${outputTokens.toLocaleString()} |`,
         '',

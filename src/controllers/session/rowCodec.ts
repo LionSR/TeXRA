@@ -41,6 +41,7 @@ import {
 } from '@shared/schemas';
 import { DatabaseAggregateBlocked } from '@shared/session/database';
 import { PLUGIN_ARMS } from '@tools/pluginArms';
+import { isObject } from '@utils/core';
 import type { SqlError } from 'effect/sql/SqlError';
 
 const CHANNEL = 'sessionDatabase';
@@ -174,9 +175,7 @@ export function encodeDraft(draft: SessionEventDraft): EncodedRow {
       blobs.set(digest, json);
       return { $b: digest };
     }
-    return value !== null && typeof value === 'object' && !Array.isArray(value)
-      ? renameRefShaped(value, (key) => `$${key}`)
-      : value;
+    return isObject(value) ? renameRefShaped(value, (key) => `$${key}`) : value;
   });
   return {
     type,

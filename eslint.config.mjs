@@ -122,6 +122,59 @@ const VSCODE_FREE_ZONE_DIRS = [
   'packages/extension/src/settingsView/frontend',
 ].map((dir) => path.join(__dirname, dir));
 
+// The named runtime entries that may call `Effect.run*` outside a host
+// package (the no-restricted-syntax block below); the core-quality ratchet
+// reads the same list.
+export const EFFECT_RUN_ENTRIES = [
+  'packages/extension/src/progressView/frontend/sessionTransport.ts',
+  'src/shared/signals.ts',
+  'src/platform/processRuntime.ts',
+  // Worker entry: no process runtime exists in the worker.
+  'src/agent/codeSandbox/worker.ts',
+];
+
+// The core the quality bar holds (owner, 2026-10-03: "super high coding
+// quality like pi"): the harness side of the package split (PR #13639,
+// harness-package-split.md §1) plus the model package. `no-explicit-any` is a
+// hard lint error here; the rest is the shrink-only ratchet in
+// scripts/check-core-quality.mjs over config/ratchets/core-quality/. M8
+// re-keys it to packages/harness and packages/llm.
+export const CORE_QUALITY_DIRS = [
+  'src/agent',
+  'src/shared/session',
+  'src/shared/schemas',
+  'src/tools',
+  'src/controllers/session',
+  'src/platform',
+  'packages/agent/src',
+  'packages/llm/src',
+];
+// The app plugins inside src/tools (split doc §3): they leave for
+// packages/texra, so the core bar does not count them.
+export const CORE_QUALITY_APP_PATHS = [
+  // The documents plugin (round mode's output pipeline).
+  'src/agent/output',
+  'src/tools/registry.ts',
+  'src/tools/integrationPlugins.ts',
+  'src/tools/AcceptRunFilesTool.ts',
+  'src/tools/DiagnosticsTool.ts',
+  'src/tools/OpenPdfTool.ts',
+  'src/tools/agentCli*.ts',
+  'src/tools/claudeAgent*.ts',
+  'src/tools/codex*.ts',
+  'src/tools/arxiv',
+  'src/tools/citation',
+  'src/tools/comment',
+  'src/tools/github',
+  'src/tools/inquiry',
+  'src/tools/latex',
+  'src/tools/lean',
+  'src/tools/setup',
+  'src/tools/texcount',
+  'src/tools/wolfram',
+  'src/tools/zotero',
+];
+
 const HOST_LAYER_RESTRICTED_IMPORT_PATHS = [
   {
     name: '@common/webview',
@@ -687,6 +740,19 @@ export default tseslint.config(
     },
   },
 
+  // The core holds no `any` (count 0 at 2026-10-03), so it is a lint error
+  // rather than a ratchet row.
+  {
+    files: CORE_QUALITY_DIRS.map((dir) => `${dir}/**/*.{ts,tsx,mts}`),
+    ignores: [
+      '**/*.vitest.ts',
+      ...CORE_QUALITY_APP_PATHS.map((entry) =>
+        entry.endsWith('.ts') ? entry : `${entry}/**`,
+      ),
+    ],
+    rules: { '@typescript-eslint/no-explicit-any': 'error' },
+  },
+
   // Tests run separately so their application-wide program is not retained
   // alongside the production programs. Both passes keep the same rules.
   {
@@ -993,13 +1059,7 @@ export default tseslint.config(
       message:
         'No new AbortController: the two permanent residents are named in eslint.config.mjs (rulings ledger). Use fiber interruption or Effect.abortSignal.',
     };
-    const entries = [
-      'packages/extension/src/progressView/frontend/sessionTransport.ts',
-      'src/shared/signals.ts',
-      'src/platform/processRuntime.ts',
-      // Worker entry: no process runtime exists in the worker.
-      'src/agent/codeSandbox/worker.ts',
-    ];
+    const entries = EFFECT_RUN_ENTRIES;
     const residents = [
       'src/agent/runtime/childRunLoop.ts',
       'src/tools/claudeAgent.ts',

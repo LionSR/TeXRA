@@ -58,6 +58,7 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { GlobalDatabase } from '@shared/session/database';
+import { TEXRA_SETTING_ROWS } from '@shared/settingsView/texraSettings';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { texraPlugins } from '@tools/registry';
@@ -225,6 +226,7 @@ export function installCliProcessRuntime(
     processStart: nodeProcesses.selfIdentity(),
     globalStorage: globalStoragePath,
     plugins: texraPlugins(),
+    settings: TEXRA_SETTING_ROWS,
     mcpConfigPath: USER_MCP_CONFIG_PATH,
     secrets,
     appState: options?.appState

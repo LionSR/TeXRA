@@ -35,58 +35,38 @@ const scanCustom = (dir: string) =>
   scanDirectory([dir], 'custom').pipe(Effect.provide(nodePlatformLayer));
 
 function toolUseAgent(name: string, systemPrompt: string): string[] {
-  return [
-    `name: ${name}`,
-    'settings:',
-    '  agentCategory: toolUse',
-    'prompts:',
-    `  systemPrompt: ${systemPrompt}`,
-  ];
+  return [`name: ${name}`, `prompt: ${systemPrompt}`];
 }
 
 describe('agent YAML scanner', () => {
   beforeAll(() => installPlatform({}));
 
-  it.live(
-    'derives workflow round counts from inherited settings and prompts',
-    () =>
-      Effect.gen(function* () {
-        const dir = yield* agentDir({
-          'base.yaml': [
-            'name: base',
-            'settings:',
-            '  agentCategory: workflow',
-            '  rounds: 4',
-            'prompts:',
-            '  userRequest: base',
-          ],
-          'child.yaml': [
-            'name: child',
-            'inherits: base',
-            'prompts:',
-            '  userRequest: child',
-          ],
-          'prompt-base.yaml': [
-            'name: prompt-base',
-            'settings:',
-            '  agentCategory: workflow',
-            '  rounds: 1',
-            'prompts:',
-            '  userRequest:',
-            '    - first',
-            '    - second',
-            '    - third',
-          ],
-          'prompt-child.yaml': ['name: prompt-child', 'inherits: prompt-base'],
-        });
+  it.live('derives a task revision count from its inherited request list', () =>
+    Effect.gen(function* () {
+      const dir = yield* agentDir({
+        'base.yaml': [
+          'name: base',
+          'task:',
+          '  rewrite: false',
+          '  requests: [first, second, third]',
+        ],
+        'child.yaml': ['name: child', 'inherits: base'],
+        'override.yaml': [
+          'name: override',
+          'inherits: base',
+          'task:',
+          '  requests: [only]',
+        ],
+      });
 
-        const { entries } = yield* scanCustom(dir);
+      const { entries } = yield* scanCustom(dir);
+      const byName = (name: string) =>
+        entries.find((entry) => entry.name === name);
 
-        expect(entries.find((entry) => entry.name === 'child')?.rounds).toBe(4);
-        expect(
-          entries.find((entry) => entry.name === 'prompt-child')?.rounds,
-        ).toBe(3);
-      }),
+      expect(byName('child')?.rounds).toBe(3);
+      expect(byName('override')?.rounds).toBe(1);
+      expect(byName('override')?.task?.rewrite).toBe(false);
+    }),
   );
 
   it.live(
@@ -152,17 +132,17 @@ describe('agent YAML scanner', () => {
     Effect.gen(function* () {
       const dir = yield* agentDir({
         'broken.yaml': ['name: "unterminated'],
-        'retired.yaml': [
-          'name: retired',
+        // The nested format has no reader.
+        'nested.yaml': [
+          'name: nested',
           'settings:',
-          '  agentCategory: workflow',
-          '  documentTag: documents',
+          '  agentCategory: toolUse',
         ],
-        // A custom agent names its category: none is defaulted, it is reported.
-        'uncategorized.yaml': [
-          'name: uncategorized',
-          'prompts:',
-          '  systemPrompt: hi',
+        'tools-and-task.yaml': [
+          'name: tools-and-task',
+          'tools: [read_file]',
+          'task:',
+          '  requests: [Revise.]',
         ],
         'valid.yaml': toolUseAgent('valid', 'hi'),
       });
@@ -176,12 +156,12 @@ describe('agent YAML scanner', () => {
           message: expect.stringMatching(/unterminated|Nested mappings|YAML/iu),
         }),
         expect.objectContaining({
-          path: 'retired.yaml',
-          message: expect.stringContaining('documentTag'),
+          path: 'nested.yaml',
+          message: expect.stringContaining('settings'),
         }),
         expect.objectContaining({
-          path: 'uncategorized.yaml',
-          message: expect.stringContaining('agentCategory'),
+          path: 'tools-and-task.yaml',
+          message: expect.stringContaining('text-only'),
         }),
       ]);
     }),

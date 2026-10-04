@@ -134,7 +134,7 @@ This works well for:
 
 For workflow agents that edit documents, output filenames are the selected input
 filenames in the same order. Agents that create fixed new files declare those
-names in their YAML with `settings.defaultOutputFiles`.
+names in their YAML with `task.outputs`.
 
 ## File path handling
 

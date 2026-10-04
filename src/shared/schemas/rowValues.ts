@@ -14,20 +14,17 @@ import { z } from 'zod';
 import { InquiryThreadRecordSchema } from './inquiry';
 import { JsonValueSchema } from './jsonValue';
 import { PlanSchema } from './plan';
-import { TodoItemSchema } from './todo';
 import { UpdateCheckRecordSchema } from './updateCheck';
 
 /**
  * One durable run fact: the latest value of one key family on its run. One
- * row type, one aggregate kind (the run), two families. `key` is also what
- * the cold listing groups by beside the row type, so one family's newest row
- * never hides another's and a plan can never be committed under the todos
- * key.
+ * row type, one aggregate kind (the run), one family today: the plan. `key`
+ * is also what the cold listing groups by beside the row type.
  */
-export const RunFactSchema = z.discriminatedUnion('key', [
-  z.object({ key: z.literal('todos'), todos: z.array(TodoItemSchema) }),
-  z.object({ key: z.literal('plan'), plan: PlanSchema.nullable() }),
-]);
+export const RunFactSchema = z.object({
+  key: z.literal('plan'),
+  plan: PlanSchema.nullable(),
+});
 
 /**
  * The families of the current-value table: application state, not history.

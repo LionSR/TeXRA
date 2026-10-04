@@ -13,7 +13,7 @@ import { summarizeSubagentFollowup } from '@shared/subagentFollowup';
 import { getModelLabel } from '@shared/model/modelLabel';
 import { RUN_GRANT_NOUN, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { usageCostLabel } from '@ui/copy/modelAccess';
-import { formatCostUsd, truncateSummary } from '@utils/text/stringUtils';
+import { truncateSummary } from '@utils/text/stringUtils';
 
 import { formatResumeCommand } from './state/resumeHint';
 import type { BypassState } from './panes/statusBarDisplay';
@@ -84,21 +84,14 @@ export function taskCostStatus(
   };
 }
 
-function costLabel(usage: TokenUsageStats): string {
-  return (
-    usageCostLabel(usage.cost, usage.usageRoute, usage.usagePlan) ??
-    formatCostUsd(usage.cost)
-  );
-}
-
 function costStatusLines(cost: CliSessionCostStatus | undefined): string[] {
   if (cost === undefined) return [];
-  if (cost.agents.length === 0) return [`cost: ${costLabel(cost.total)}`];
+  if (cost.agents.length === 0) return [`cost: ${usageCostLabel(cost.total)}`];
   return [
-    `cost: ${costLabel(cost.total)}, agents included`,
-    `  own model calls: ${costLabel(cost.own)}`,
+    `cost: ${usageCostLabel(cost.total)}, agents included`,
+    `  own model calls: ${usageCostLabel(cost.own)}`,
     ...cost.agents.map(
-      (agent) => `  ${agent.label}: ${costLabel(agent.usage)}`,
+      (agent) => `  ${agent.label}: ${usageCostLabel(agent.usage)}`,
     ),
   ];
 }

@@ -46,7 +46,6 @@ import {
   type SkillDisplayItem,
   type SubscriptionUsageSnapshots,
 } from '@shared/schemas';
-import { settingsViewSettingByKey } from '@shared/state/stateSettings';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   type AgentSelectionItem,
@@ -61,6 +60,10 @@ import {
 import type { AgentScanIssue } from '@shared/schemas';
 import type { MemoryViewItem } from '@shared/tools/memoryView';
 import type { SubscriptionAuthStatuses } from '@shared/model/subscriptionAuth';
+import {
+  TEXRA_SETTINGS,
+  TexraStateKey,
+} from '@shared/settingsView/texraSettings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // ---------------------------------------------------------------------------
@@ -95,7 +98,7 @@ const CATALOG_SIGNALS = new Map<string, Signal.State<unknown>>();
 export function settingSignal<T>(key: string): Signal.State<T> {
   const existing = CATALOG_SIGNALS.get(key);
   if (existing) return existing as Signal.State<T>;
-  const entry = settingsViewSettingByKey(key);
+  const entry = TEXRA_SETTINGS.settingsViewByKey(key);
   if (!entry) {
     throw new Error(`No settings-view catalog row for setting "${key}"`);
   }
@@ -295,28 +298,28 @@ export const latexSettingsStatus = trackedSignal(() => ({
 }));
 export const latexSettingsLoaded = trackedSignal(() => false);
 export const workflowAutoCompile = settingSignal<boolean>(
-  WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
+  TexraStateKey.WORKFLOW_AUTO_COMPILE,
 );
 export const workflowAutoOpenPdf = settingSignal<boolean>(
-  WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
+  TexraStateKey.WORKFLOW_AUTO_OPEN_PDF,
 );
 export const workflowRejectOnCompileFailure = settingSignal<boolean>(
-  WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+  TexraStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
 );
 export const latexdiffBetweenRounds = settingSignal<boolean>(
-  WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+  TexraStateKey.LATEXDIFF_BETWEEN_ROUNDS,
 );
 export const latexdiffChangesOnly = settingSignal<boolean>(
-  WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
+  TexraStateKey.LATEXDIFF_CHANGES_ONLY,
 );
 export const latexdiffMathMarkup = settingSignal<string>(
-  WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+  TexraStateKey.LATEXDIFF_MATH_MARKUP,
 );
 export const latexFormatter = settingSignal<string>(
-  WorkspaceStateKey.LATEX_FORMATTER,
+  TexraStateKey.LATEX_FORMATTER,
 );
 export const inlineCriticismEnabled = settingSignal<boolean>(
-  GlobalStateKey.INLINE_CRITICISM_ENABLED,
+  TexraStateKey.INLINE_CRITICISM_ENABLED,
 );
 
 // ---------------------------------------------------------------------------

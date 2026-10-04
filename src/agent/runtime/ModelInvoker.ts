@@ -752,10 +752,10 @@ export const modelInvokerLayer = (): Layer.Layer<
                   // Kimi coding endpoint) and binds the catalog model.
                   config: selection === 'personal' ? undefined : failed.config,
                   stores: run.stores,
-                  compatibilityKey: failed.compatibilityKey,
+                  backend: failed.backend,
                   declinedRoutes,
                   agentCategory: run.config.agentCategory,
-                  temperature: run.setting.temperature,
+                  temperature: run.persona.temperature,
                 }),
           )
           .pipe(
@@ -798,7 +798,6 @@ export const modelInvokerLayer = (): Layer.Layer<
             requestId,
             invocation: failedAttempt,
             failedModelId: failed.modelId,
-            failedCompatibilityKey: failed.compatibilityKey,
             credentialScope:
               failed.origin.protocol === 'vscode-lm'
                 ? 'editor'

@@ -278,7 +278,7 @@ export function formatCliAgentDetails(entry: AgentEntry): string {
   }
   const metadataFields: readonly [string, readonly string[] | undefined][] = [
     ['tools', entry.tools],
-    ['defaultOutputFiles', entry.setting.defaultOutputFiles],
+    ['outputs', entry.task?.outputs],
   ];
   const metadataLines = metadataFields.flatMap(([label, values]) =>
     values?.length ? [`${label}: ${values.join(', ')}`] : [],

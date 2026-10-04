@@ -87,14 +87,13 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
   // `'unknown'`: the executor can name none, so the prompt names none rather
   // than a directory the approved command may not run in, and the call's own
   // directory is not read at all; a call with no command spelling runs in no
-  // directory either. `'workspace'`: the executor runs there whatever working
-  // directory the call was given. Otherwise the call's working directory when
-  // it named one and the workspace otherwise, which is what a shell-shaped
-  // tool runs in.
-  let cwd: string | undefined;
-  if (guard?.cwd === 'workspace') cwd = call.roots.workspace;
-  else if (guard?.bash && guard.cwd !== 'unknown')
-    cwd = call.workingDirectory ?? call.roots.workspace;
+  // directory either. Otherwise the call's working directory when it named
+  // one and the workspace otherwise, which is what a shell-shaped tool runs
+  // in.
+  const cwd =
+    guard?.bash && guard.cwd !== 'unknown'
+      ? (call.workingDirectory ?? call.roots.workspace)
+      : undefined;
 
   // Only the shell's own commands take the run's command grant; every other
   // tool is asked per call, so approving one for the session cannot become

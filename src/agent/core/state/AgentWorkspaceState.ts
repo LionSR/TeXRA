@@ -6,7 +6,6 @@ import {
   type FileLocation,
   type LineChanges,
   type Plan,
-  type TodoItem,
   type WorkPlanSnapshot,
 } from '@shared/schemas';
 
@@ -121,71 +120,37 @@ class MediaAttachmentState {
 }
 
 export class WorkPlanState {
-  private _todos: TodoItem[];
   private _plan: Plan | null;
-  private _onTodosUpdate?: (todos: TodoItem[]) => void;
   private _onPlanUpdate?: (plan: Plan | null) => void;
 
   /** Fresh, or rehydrated from the slice `AgentWorkspaceState` parsed. */
   constructor(snapshot?: WorkPlanSnapshot) {
-    this._todos = [...(snapshot?.todos ?? [])];
     this._plan = snapshot?.plan ?? null;
   }
 
   toSnapshot(): WorkPlanSnapshot {
     return {
-      todos: [...this._todos],
       plan: this._plan ? { ...this._plan } : null,
       planSummary: this._plan ? planSummaryLine(this._plan.objective) : null,
     };
-  }
-
-  get todos(): TodoItem[] {
-    return this._todos;
   }
 
   get plan(): Plan | null {
     return this._plan;
   }
 
-  setOnUpdate(callbacks: {
-    onTodosUpdate?: (todos: TodoItem[]) => void;
-    onPlanUpdate?: (plan: Plan | null) => void;
-  }): void {
-    this._onTodosUpdate = callbacks.onTodosUpdate;
+  setOnUpdate(callbacks: { onPlanUpdate?: (plan: Plan | null) => void }): void {
     this._onPlanUpdate = callbacks.onPlanUpdate;
   }
 
   clearOnUpdate(): void {
-    this._onTodosUpdate = undefined;
     this._onPlanUpdate = undefined;
-  }
-
-  updateTodos(todos: TodoItem[]): void {
-    if (this._todosEqual(this._todos, todos)) return;
-    this._todos = todos;
-    this._onTodosUpdate?.(todos);
   }
 
   updatePlan(plan: Plan | null): void {
     if (this._planEqual(this._plan, plan)) return;
     this._plan = plan;
     this._onPlanUpdate?.(plan);
-  }
-
-  private _todosEqual(a: TodoItem[], b: TodoItem[]): boolean {
-    return (
-      a.length === b.length &&
-      a.every((ai, i) => {
-        const bi = b[i];
-        if (!ai || !bi) return false;
-        return (
-          ai.content === bi.content &&
-          ai.status === bi.status &&
-          ai.activeForm === bi.activeForm
-        );
-      })
-    );
   }
 
   private _planEqual(a: Plan | null, b: Plan | null): boolean {

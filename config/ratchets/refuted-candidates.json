@@ -10,12 +10,12 @@
         {
           "file": "src/platform/interfaces.ts",
           "symbol": "ConfigProvider",
-          "signature": "export interface ConfigProvider { get<T>(key: string, defaultValue?: T): T; update<T>( key: string, value: T, target?: ConfigTarget, ): Effect.Effect<void, ConfigWriteFailed>; inspect<T = unknown>(key: string): ConfigInspection<T> | undefined; }"
+          "signature": "export interface ConfigProvider { get<T>(key: string, defaultValue?: T): T; update<T>( key: string, value: T, target?: ConfigTarget, ): Effect.Effect<void, ConfigWriteFailed>; inspect<T = unknown>(key: string): ConfigInspection<T>; }"
         },
         {
           "file": "src/platform/defaults/jsonConfigProvider.ts",
           "symbol": "JsonConfigProvider",
-          "signature": "export class JsonConfigProvider implements ConfigProvider { private readonly workspaceStore: ConfigStore; private readonly globalStore: ConfigStore; private readonly localStore: ConfigStore; constructor({ workspace, global, local }: JsonConfigProviderOptions) {…} get<T>(key: string, defaultValue?: T): T {…} update<T>( key: string, value: T, target: ConfigTarget = 'workspace', ): Effect.Effect<void, ConfigWriteFailed> {…} inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {…} }"
+          "signature": "export class JsonConfigProvider implements ConfigProvider { private readonly workspaceStore: ConfigStore; private readonly globalStore: ConfigStore; private readonly localStore: ConfigStore; constructor({ workspace, global, local }: JsonConfigProviderOptions) {…} get<T>(key: string, defaultValue?: T): T {…} update<T>( key: string, value: T, target: ConfigTarget = 'workspace', ): Effect.Effect<void, ConfigWriteFailed> {…} inspect<T = unknown>(key: string): ConfigInspection<T> {…} }"
         }
       ]
     },

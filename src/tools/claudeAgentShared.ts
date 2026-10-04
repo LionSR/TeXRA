@@ -14,7 +14,7 @@ import type {
   ToolUseLog,
   ToolCallStatus,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { ClaudeAgentStateKey } from '@shared/settingsView/integrationSettings';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { truncateSummary } from '@utils/text/stringUtils';
 
@@ -120,13 +120,12 @@ export const readClaudeCodeRun = Effect.fn('claudeAgent.readClaudeCodeRun')(
       readonly effort?: AgentCliEffort | null;
     },
   ): Effect.fn.Return<ClaudeCodeRun, ToolError | StateReadFailed> {
-    const { CLAUDE_AGENT_MODEL, CLAUDE_AGENT_EFFORT } = WorkspaceStateKey;
     const modelString =
       input.model ??
-      (yield* readSettingFrom<string>(stores, CLAUDE_AGENT_MODEL));
+      (yield* readSettingFrom<string>(stores, ClaudeAgentStateKey.MODEL));
     const userEffort = yield* readSettingFrom<AgentCliEffort>(
       stores,
-      CLAUDE_AGENT_EFFORT,
+      ClaudeAgentStateKey.EFFORT,
     );
     const run = yield* resolveAgentCliModel(() =>
       claudeCodeRun(modelString, input.effort ?? undefined, userEffort),

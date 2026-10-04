@@ -91,7 +91,7 @@ describe('run metadata updates', () => {
           ...freshRunState(0),
           family: 'toolUse' as const,
           modelId: 'openai/gpt-5.4-2026-03-05',
-          modelCompatibilityKey: 'OpenAI' as const,
+          backend: 'openai' as const,
         };
         const opened = yield* session.runHistory.appendBatch(id, null, [
           appendRow(id, [

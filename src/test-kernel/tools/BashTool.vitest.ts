@@ -5,7 +5,7 @@ import { strict as assert } from 'node:assert';
 import { it } from '@effect/vitest';
 
 // Third-party imports
-import { Deferred, Effect, Exit, Fiber, Schedule } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Schedule, Scope } from 'effect';
 import { beforeEach, afterEach, describe, vi } from 'vitest';
 
 // Local imports
@@ -97,7 +97,7 @@ function detachBackgroundRun(
   recorded: ReturnType<typeof recordSessionEvents>,
   parentRunId: RunId,
 ): void {
-  testDefaultSession().followUps.terminalize(parentRunId);
+  testDefaultSession().followUps.closeInput(parentRunId);
 }
 
 /**
@@ -523,10 +523,11 @@ describe('BashTool', () => {
           });
 
         const parentRunId = startedParentRun();
-        const parentLease = testDefaultSession().followUps.claimLive(
-          parentRunId,
-          'loop',
-        )!;
+        // The parent's own loop reads its input.
+        const parentLoop = yield* Scope.make();
+        yield* testDefaultSession()
+          .followUps.open(parentRunId)
+          .pipe(Scope.provide(parentLoop));
 
         try {
           const launchResult = yield* launchBackgroundBash(parentRunId);
@@ -540,7 +541,7 @@ describe('BashTool', () => {
             'Background bash should deliver a follow-up once the run completes',
           );
         } finally {
-          testDefaultSession().followUps.release(parentLease, 'terminal');
+          yield* Scope.close(parentLoop, Exit.void);
         }
 
         const followUpArg = submitFollowUpSpy.mock.calls[0]?.[1];
@@ -590,14 +591,14 @@ describe('BashTool', () => {
         const parentRunId = startedParentRun();
         const parentWoken = Deferred.makeUnsafe<void>();
         yield* Effect.promise(() => installPlatform(BASH_PLATFORM_OPTIONS));
-        // The resume a wake starts takes the wake's recovery first.
+        // The resume a wake starts is the run's one resume in flight.
         const followUps = testDefaultSession().followUps;
-        const useRecovery = followUps.useRecovery.bind(followUps);
+        const resumeOnce = followUps.resumeOnce.bind(followUps);
         const tryResumeRun = vi
-          .spyOn(followUps, 'useRecovery')
-          .mockImplementation((recovery) => {
+          .spyOn(followUps, 'resumeOnce')
+          .mockImplementation((resumed, resume) => {
             Deferred.doneUnsafe(parentWoken, Effect.void);
-            return useRecovery(recovery);
+            return resumeOnce(resumed, resume);
           });
         yield* Effect.promise(() => parkRunWaiting(parentRunId));
 
@@ -615,7 +616,7 @@ describe('BashTool', () => {
             tryResumeRun.mock.calls.length > 0,
             'Background bash completion should wake the WAITING parent run',
           );
-          assert.equal(tryResumeRun.mock.calls[0]?.[0].runId, parentRunId);
+          assert.equal(tryResumeRun.mock.calls[0]?.[0], parentRunId);
         } finally {
           detachBackgroundRun(recorded, parentRunId);
         }
@@ -654,15 +655,15 @@ describe('BashTool', () => {
         let runId = '' as RunId;
         const wakeReached = Deferred.makeUnsafe<void>();
         yield* Effect.promise(() => installPlatform(BASH_PLATFORM_OPTIONS));
-        // The resume a wake starts takes the wake's recovery first.
+        // The resume a wake starts is the run's one resume in flight.
         const followUps = testDefaultSession().followUps;
-        const useRecovery = followUps.useRecovery.bind(followUps);
+        const resumeOnce = followUps.resumeOnce.bind(followUps);
         const tryResumeRun = vi
-          .spyOn(followUps, 'useRecovery')
-          .mockImplementation((recovery) => {
+          .spyOn(followUps, 'resumeOnce')
+          .mockImplementation((resumed, resume) => {
             Deferred.doneUnsafe(wakeReached, Effect.void);
             handleAtResumeTime ??= testDefaultSession().runs.getHandle(runId);
-            return useRecovery(recovery);
+            return resumeOnce(resumed, resume);
           });
         yield* Effect.promise(() => parkRunWaiting(parentRunId));
 

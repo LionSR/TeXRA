@@ -176,7 +176,7 @@ function boundModel(): BoundModel {
     modelId: GPT54,
     config: MODEL_CONFIGS[GPT54],
     reasoning: chooseReasoning(MODEL_CONFIGS[GPT54]),
-    compatibilityKey: 'OpenAI',
+    backend: 'openai',
     model,
     origin: ORIGIN,
     route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
@@ -203,7 +203,7 @@ const freshState = (): RunState => ({
   ...freshRunState(0),
   family: 'toolUse',
   modelId: GPT54,
-  modelCompatibilityKey: 'OpenAI',
+  backend: 'openai',
 });
 
 const INVOCATION = {

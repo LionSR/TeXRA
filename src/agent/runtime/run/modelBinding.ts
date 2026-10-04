@@ -15,6 +15,8 @@ import { Effect, type Scope } from 'effect';
 import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 import {
   acceptedEfforts,
+  BACKEND_PROTOCOLS,
+  type BackendProviderId,
   type Model,
   type ModelConfiguration,
   type ModelOrigin,
@@ -38,7 +40,7 @@ import {
   resolveRouteCredential,
   resolveSubscriptionCredential,
   routeBearer,
-  routeCompatibilityKey,
+  routeBackend,
   withShortModelName,
   type RouteCredential,
 } from '@agent/runtime/modelRoutes';
@@ -51,7 +53,7 @@ import {
   AgentCategory,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   type DeclinableUsageRoute,
-  type ModelCompatibilityKey,
+  type ModelBackend,
   type UsageRoute,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -72,7 +74,7 @@ export interface BoundModel {
   readonly reasoning: ReasoningChoice;
   /** The service tier the requests are sent on, which pricing bills. */
   readonly serviceTier?: 'fast';
-  readonly compatibilityKey: ModelCompatibilityKey;
+  readonly backend: ModelBackend;
   readonly model: Model;
   readonly origin: ModelOrigin;
   /** The route decision this binding carries out (the retry offer reads it). */
@@ -108,8 +110,8 @@ interface BindModelInput {
   readonly config?: ModelConfig;
   /** Live settings from this run's session, plus the process secret store. */
   readonly stores: ModelOptionStores;
-  /** A persisted conversation format wins over today's default route. */
-  readonly compatibilityKey?: ModelCompatibilityKey | null;
+  /** A resumed run's backend wins over today's default route. */
+  readonly backend?: ModelBackend;
   /** Own-key quota fallback also declines Copilot; seeds declinedRoutes. */
   readonly ownApiKeyFallback?: boolean;
   /** Declined routes persist on this run's history, not in user preferences. */
@@ -128,25 +130,19 @@ type ConfigurationOf<P extends HttpProtocol> = Extract<
   { protocol: P }
 >;
 
-/** The wire protocol each conversation format binds. */
-export const PROTOCOL_BY_KEY: Readonly<
-  Record<ModelCompatibilityKey, Protocol | 'validation'>
-> = {
-  Validation: 'validation',
-  OpenAIResponse: 'openai-responses',
-  OpenRouterNative: 'openrouter-chat',
-  VscodeLm: 'vscode-lm',
-  Anthropic: 'anthropic-messages',
-  OpenAI: 'openai-responses',
-  GoogleInteractions: 'google-interactions',
-  DeepSeek: 'openai-responses',
-  XAI: 'openai-responses',
-  Kimi: 'openai-responses',
-  DashScope: 'openai-responses',
-  MiniMax: 'openai-responses',
-  GLM: 'openai-responses',
-  Meta: 'openai-responses',
-};
+/** The protocol each backend serves a run on. A stored backend without a
+ *  provider protocol does not compile. */
+export const PROTOCOL_BY_BACKEND: Readonly<
+  Record<ModelBackend, Protocol | 'validation'>
+> = Object.freeze({ validation: 'validation', ...BACKEND_PROTOCOLS });
+
+type AssertNever<T extends never> = T;
+
+/** Every plugin that names a protocol is a stored backend; the error names
+ *  the plugin ids `ModelBackendSchema` lacks. */
+type _EveryBackendProviderIsStored = AssertNever<
+  Exclude<BackendProviderId, ModelBackend>
+>;
 
 /** A binding's {@link BoundModel.wireRouteKey} and model-scoped key. */
 function routeKeys(wire: readonly string[], model: string) {
@@ -707,7 +703,7 @@ export const backgroundDelivery = Effect.fn('backgroundDelivery')(function* (
  *  (exact id, vendor and version), into the caller's scope. */
 const bindEditorModel = Effect.fn('bindEditorModel')(function* (
   modelId: string,
-  compatibilityKey: ModelCompatibilityKey,
+  backend: ModelBackend,
   route: CopilotModelRoute,
   reasoning: ReasoningChoice,
   automaticRetries: number,
@@ -733,7 +729,7 @@ const bindEditorModel = Effect.fn('bindEditorModel')(function* (
     modelId,
     config: routed,
     reasoning,
-    compatibilityKey,
+    backend,
     model,
     origin: {
       protocol: 'vscode-lm',
@@ -760,8 +756,8 @@ const bindEditorModel = Effect.fn('bindEditorModel')(function* (
 
 /**
  * Bind one model for a run. The route is `resolveModelRoute`'s one decision,
- * and only the credential that route names is fetched; the persisted
- * compatibility key of a resumed conversation wins over today's default.
+ * and only the credential that route names is fetched; a resumed run's
+ * backend wins over today's default.
  */
 export const bindModel = Effect.fn('bindModel')(function* (
   input: BindModelInput,
@@ -792,19 +788,18 @@ export const bindModel = Effect.fn('bindModel')(function* (
     ...input,
     mode: request.mode,
   });
-  const compatibilityKey =
-    input.compatibilityKey ?? (yield* routeCompatibilityKey(requested, route));
-  if (compatibilityKey === undefined) {
+  const backend = input.backend ?? (yield* routeBackend(requested, route));
+  if (backend === undefined) {
     return yield* Effect.fail(
       new Error(`Unsupported model provider: ${catalog.provider}`),
     );
   }
-  const protocol = PROTOCOL_BY_KEY[compatibilityKey];
+  const protocol = PROTOCOL_BY_BACKEND[backend];
   if (protocol === 'vscode-lm' && route.kind === 'copilot') {
     // The editor manages its own reasoning; the choice is recorded, not sent.
     return yield* bindEditorModel(
       input.modelId,
-      compatibilityKey,
+      backend,
       route.route,
       yield* reasoningFor(requested, request, input.stores.globalState, {
         protocol,
@@ -824,7 +819,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
         input.stores.globalState,
         { protocol, codexSubscription: false },
       ),
-      compatibilityKey,
+      backend,
       model: bound.model,
       origin: bound.origin,
       route: { kind: 'validation' },
@@ -847,7 +842,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
   ) {
     return yield* Effect.fail(
       new Error(
-        `Model ${input.modelId} routes through ${route.kind}, which the recorded ${compatibilityKey} format cannot bind.`,
+        `Model ${input.modelId} routes through ${route.kind}, which the run's ${backend} backend cannot bind.`,
       ),
     );
   }
@@ -932,7 +927,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
       configuration.defaults.serviceTier === 'fast' && {
         serviceTier: 'fast' as const,
       }),
-    compatibilityKey,
+    backend,
     model,
     origin,
     route,

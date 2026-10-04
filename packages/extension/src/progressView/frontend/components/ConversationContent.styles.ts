@@ -35,7 +35,7 @@ export const conversationContentStyles: CSSResult = css`
   }
 
   /* Pending approvals sit above the transcript and are not height-capped
-     with todos/plans. A shared prelude max-height used to clip the Approve
+     with the plan. A shared prelude max-height used to clip the Approve
      row when command details filled the pane (sticky actions alone could
      not recover once the whole card sat below the fold). */
   .conversation-approval-dock {

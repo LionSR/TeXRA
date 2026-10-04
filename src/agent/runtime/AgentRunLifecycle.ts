@@ -341,7 +341,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
         script == null
           ? { kind: 'agent', agent: agentIdentifier }
           : { kind: 'script', title: script.title },
-      category: ctx.setting.agentCategory,
+      category: ctx.config.agentCategory,
     },
     options?.parentRunId ?? null,
     ctx.logger,

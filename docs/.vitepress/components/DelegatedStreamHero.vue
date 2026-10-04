@@ -1,12 +1,12 @@
 <script setup>
 // The live side-panel a `codex` / `claude_code` hand-off opens on the
 // ProgressBoard: a stream tab labelled `claude_code` that streams the
-// delegated agent's reasoning, the commands it runs, file changes, web
-// searches, and todos — then shows WAITING when the turn ends, with a Stop
+// delegated agent's reasoning, the commands it runs, file changes, and web
+// searches — then shows WAITING when the turn ends, with a Stop
 // control. The final message + token cost hand back to the calling TeXRA agent.
 //
 // Standalone (frameless) — just the stream column, no MockupFrame / dash-nav.
-// Reuses the shared .stream-head / .tcard / .todos vocabulary from theme/
+// Reuses the shared .stream-head / .tcard vocabulary from theme/
 // mockup.css plus the StatusPill primitive for the WAITING tag; the root carries
 // `.mockup` so `--mk-*` tokens resolve and
 // the panel flips with the docs light / dark theme. Static strings only.
@@ -72,30 +72,6 @@ import StatusPill from './StatusPill.vue';
         >
       </div>
 
-      <!-- Compact todos panel -->
-      <div class="ds-panel">
-        <div class="ds-panel-sum">
-          <wa-icon class="chev" library="texra" name="chevron-down"></wa-icon>
-          Todos (2/3)
-        </div>
-        <div class="todos ds-todos">
-          <div class="todo done">
-            <wa-icon class="td-ic" library="texra" name="check"></wa-icon
-            ><span class="td-tx"
-              >Add <code>--dry-run</code> to the arg parser</span
-            >
-          </div>
-          <div class="todo done">
-            <wa-icon class="td-ic" library="texra" name="check"></wa-icon
-            ><span class="td-tx">Guard file writes behind the flag</span>
-          </div>
-          <div class="todo prog">
-            <span class="td-sp"></span
-            ><span class="td-tx">Update the build-script tests</span>
-          </div>
-        </div>
-      </div>
-
       <!-- Turn-end state: WAITING + follow-up affordance -->
       <div class="ds-foot">
         <StatusPill variant="warning">WAITING</StatusPill>
@@ -115,7 +91,7 @@ import StatusPill from './StatusPill.vue';
 </template>
 
 <style scoped>
-/* Frameless stream column. .stream-head / .tcard / .todos primitives come from
+/* Frameless stream column. .stream-head / .tcard primitives come from
    theme/mockup.css (.mockup scope) and the WAITING tag uses StatusPill; this
    file adds only the bits unique to a delegated session. */
 .ds-stream {
@@ -198,35 +174,6 @@ import StatusPill from './StatusPill.vue';
 }
 .ds-del {
   color: var(--mk-del-text);
-}
-
-/* Compact todos panel */
-.ds-panel {
-  background: var(--mk-bg-soft);
-  border: 1px solid var(--mk-border);
-  border-radius: var(--mk-radius-md);
-  padding: var(--mk-space-6) var(--mk-space-10);
-}
-.ds-panel-sum {
-  display: flex;
-  align-items: center;
-  gap: var(--mk-space-6);
-  font-weight: 600;
-  font-size: var(--mk-fs-74);
-  color: var(--wa-color-text-normal);
-}
-.ds-panel-sum .chev {
-  font-size: var(--mk-space-11);
-  color: var(--color-text-tertiary);
-}
-.ds-todos {
-  margin-top: var(--mk-space-5);
-  font-size: var(--mk-fs-74);
-}
-.ds-todos code {
-  font-family: var(--vp-font-family-mono);
-  font-size: var(--mk-fs-68);
-  color: var(--color-text-link);
 }
 
 /* Turn-end state */

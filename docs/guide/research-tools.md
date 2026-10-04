@@ -10,14 +10,14 @@ Whether checking an intricate integral against a computer algebra system, tracki
 
 <wa-callout variant="brand">
   <wa-icon slot="icon" library="texra" name="shield"></wa-icon>
-  Every citation comes from a real <strong>arXiv</strong> or <strong>Crossref</strong> lookup. TeXRA's research agents search grounded sources and never fabricate references.
+  Every citation comes from a real <strong>arXiv</strong> lookup or your <strong>Zotero</strong> library. TeXRA's research agents search grounded sources and never fabricate references.
 </wa-callout>
 
 ## What you can do
 
 ### <wa-icon library="texra" name="mortar-board"></wa-icon> Find papers
 
-Ask a literature-search agent (`search`, `assistant`, `review`, or `presenter`) to find papers. TeXRA queries **arXiv** (preprints) and **Crossref** (published works) automatically:
+Ask a literature-search agent (`search`, `assistant`, `review`, or `presenter`) to find papers. TeXRA searches **arXiv**, the web, and your Zotero library:
 
 ```
 Find recent papers on transformer architectures for document understanding.
@@ -28,7 +28,7 @@ Focus on work from 2023-2024 that handles mathematical equations.
 
 <SearchResultsHero />
 
-<p class="hero-caption">A typical <code>search</code> result set: each preprint carries its title, authors, an arXiv or Crossref source tag, and a one-click <strong>Cite</strong>. Every row is a real lookup, never fabricated.</p>
+<p class="hero-caption">A typical <code>search</code> result set: each preprint carries its title, authors, an arXiv source tag, and a one-click <strong>Cite</strong>. Every row is a real lookup, never fabricated.</p>
 
 The same search streams in a terminal, each lookup surfacing as a tool call
 you can watch:
@@ -36,21 +36,6 @@ you can watch:
 <CliSearchChatHero />
 
 <p class="hero-caption">The postdoc's search in <code>texra chat --agent search</code>: each grounded lookup surfaces as a tool-call row, with results streaming under it.</p>
-
-### <wa-icon library="texra" name="link"></wa-icon> Look up citations
-
-Give a DOI or arXiv ID to get full bibliographic details:
-
-```
-Get the citation info for arxiv:2401.12345
-```
-
-```
-Look up DOI 10.1038/nature12373
-```
-
-Behind the scenes this calls `arxiv_metadata` or the DOI lookup command in
-`crossref_search`.
 
 ### <wa-icon library="texra" name="cloud-download"></wa-icon> Download paper sources
 
@@ -95,7 +80,7 @@ Add this arXiv paper to my Zotero library.
   icon="book"
   :calls="[
     { state: 'done', verb: 'zotero_search', target: 'graph neural networks', effect: 'Finds matching items in your library' },
-    { state: 'done', verb: 'zotero_add', target: 'arxiv:2401.12345', effect: 'Adds the paper to your Zotero library' },
+    { state: 'done', verb: 'zotero_add', target: 'arxiv.org/abs/2401.12345', effect: 'Adds the paper to your Zotero library' },
     { state: 'active', verb: 'zotero_export', target: 'references.bib', effect: 'Writes the selected items as BibTeX' },
   ]"
 />
@@ -108,7 +93,7 @@ Set a default location for Zotero exports so agents always know where to save bi
 
 ### <wa-icon library="texra" name="symbol-operator"></wa-icon> Verify math with Wolfram
 
-The `research` agent can call `wolfram` to run Wolfram Language code and check symbolic algebra, integrals, or limits before you commit them to the manuscript. This requires a local [Wolfram Engine](https://www.wolfram.com/engine/); its status shows on its **Wolfram Language** row under **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>).
+The `research` agent runs Wolfram Language through `wolframscript` in the shell (`wolframscript -code '...'` or `wolframscript -file`) to check symbolic algebra, integrals, or limits before you commit them to the manuscript. This requires a local [Wolfram Engine](https://www.wolfram.com/engine/); its status shows on its **Wolfram Language** row under **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>).
 
 ### <wa-icon library="texra" name="beaker"></wa-icon> Formalize proofs in Lean 4
 
@@ -124,7 +109,7 @@ The `inquiry` tool lets a TeXRA agent ask one question in an external chat (Chat
 
 ## Which agent to use
 
-Specialist research agents are tuned for different stages of the work. Pick one from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>). `search` ships with TeXRA and needs no sign-in; the built-in `assistant` agent carries the same literature toolset (arXiv, Crossref, web, Zotero). For computational derivations, reach for `research`; for formal proof verification, use `lean`:
+Specialist research agents are tuned for different stages of the work. Pick one from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>). `search` ships with TeXRA and needs no sign-in; the built-in `assistant` agent carries the same literature toolset (arXiv, web, Zotero). For computational derivations, reach for `research`; for formal proof verification, use `lean`:
 
 <DropdownMenu
   label="Agent"
@@ -142,17 +127,14 @@ Specialist research agents are tuned for different stages of the work. Pick one 
   min="220px"
   :cards="[
     { icon: 'mortar-board', title: 'search', desc: 'Finding papers, literature reviews, fact-checking. Built in; the assistant agent has the same tools.', chips: [
-      { text: 'arxiv_metadata', variant: 'neutral' },
-      { text: 'crossref_search', variant: 'neutral' },
+      { text: 'arxiv_search', variant: 'neutral' },
       { text: 'web_search', variant: 'neutral' },
       { text: 'web_fetch', variant: 'neutral' },
       { text: 'zotero_search', variant: 'neutral' },
     ] },
-    { icon: 'symbol-operator', title: 'research', desc: 'Computational verification, plus bash, file edits, and local LaTeX analysis.', chips: [
-      { text: 'wolfram', variant: 'info' },
-      { text: 'bash', variant: 'neutral' },
+    { icon: 'symbol-operator', title: 'research', desc: 'Computational verification with wolframscript in the shell, plus file edits and figure extraction.', chips: [
+      { text: 'bash', variant: 'info' },
       { text: 'edit_file', variant: 'neutral' },
-      { text: 'texcount', variant: 'neutral' },
       { text: 'extract_figures', variant: 'neutral' },
     ] },
     { icon: 'beaker', title: 'lean', desc: 'Formal proof engineering in Lean 4 and Mathlib with live diagnostic verification.', chips: [
@@ -169,6 +151,6 @@ Specialist research agents are tuned for different stages of the work. Pick one 
 ## Next steps
 
 - [Lean 4 proofs](./lean.md): formalize proofs, inspect goal states, and search Mathlib
-- [LaTeX tools](./latex-tools.md): formatting, diffs, texcount, figures, bibliography
+- [LaTeX tools](./latex-tools.md): formatting, diffs, document statistics, figures, bibliography
 - [Agent integrations](./agent-integrations.md): delegate long-running code tasks to Codex or Claude Code
 - [Working with figures](./working-with-figures.md): feed figures and PDFs to vision models

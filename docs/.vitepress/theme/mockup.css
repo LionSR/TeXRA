@@ -1047,7 +1047,7 @@
     var(--mk-space-14);
 }
 
-/* Todos */
+/* Checklist rows (QaChecklistCard, Tikz/Install troubleshoot cards) */
 .mockup .todos {
   display: flex;
   flex-direction: column;
@@ -1267,7 +1267,7 @@
   }
 }
 
-/* The Progress hero has the tallest sidebar (todos + tasks + log); give it
+/* The Progress hero has the tallest sidebar (tasks + log); give it
    room so the expanded delegate card isn't clipped by the frame. */
 .mockup.tall .win-body {
   min-height: var(--mk-size-520);

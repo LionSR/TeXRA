@@ -230,12 +230,6 @@
       "name": "packageCommandContributions"
     },
     {
-      "file": "src/shared/state/stateSettings.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "STATE_SETTINGS"
-    },
-    {
       "file": "src/tools/approval/toolEditApproval.ts",
       "category": "production-dead",
       "kind": "exports",

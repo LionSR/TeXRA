@@ -107,7 +107,6 @@ describe('bindModel', () => {
               modelId,
               config: selected.config,
               stores: hostStores(),
-              compatibilityKey: null,
               agentCategory: AgentCategory.Workflow,
               temperature: 0,
             }),

@@ -83,7 +83,10 @@ const standingOf = Effect.fn('agent.childStanding')(function* (
   if (turns.active !== null) {
     // `childRunLoop` commits a turn's acceptance just before the turn runs:
     // one that never settled was cut short, and continues where it stopped.
-    if (end === null || end.outcome === RUN_OUTCOME.CANCELLED)
+    // A completed child ended at its parked boundary, before the driver
+    // settled the turn: resuming it re-parks, finishes at once with the
+    // answer its rows hold and settles, with no model call and no tool run.
+    if (end === null || end.outcome !== RUN_OUTCOME.FAILED)
       return { kind: 'resume' };
     return {
       kind: 'unknown',

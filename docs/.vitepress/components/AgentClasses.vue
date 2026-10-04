@@ -30,15 +30,7 @@ const toolUse = [
   'chat',
   'setup',
 ];
-const tools = [
-  'arXiv',
-  'Crossref',
-  'Lean',
-  'Wolfram',
-  'compile',
-  'files',
-  'shell',
-];
+const tools = ['arXiv', 'Lean', 'Wolfram', 'compile', 'files', 'shell'];
 </script>
 
 <template>

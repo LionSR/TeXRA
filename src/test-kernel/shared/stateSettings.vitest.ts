@@ -13,14 +13,7 @@ import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
-import {
-  CLI_CONFIG_SLOT_KEYS,
-  STATE_SETTINGS,
-  settingEnumOptions,
-  settingByKey,
-  settingsViewSettingByKey,
-  settingsViewSnapshotEntries,
-} from '@shared/state/stateSettings';
+import { settingEnumOptions, settingByKey } from '@shared/state/stateSettings';
 import { dispatchSettingsViewOutbound } from '@shared/settingsView/settingsViewMessages';
 import type {
   SettingHost,
@@ -34,6 +27,10 @@ import {
   writeSetting,
 } from '@shared/config/settingsAccess';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
+import {
+  TEXRA_SETTINGS,
+  TexraStateKey,
+} from '@shared/settingsView/texraSettings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   FakeScopedConfigProvider,
@@ -54,18 +51,12 @@ function entryByKey(key: string): StateSettingEntry {
   return entry;
 }
 
-/** Every canonical `texra.*` key in the state-backed catalog. */
-const STATE_SETTING_KEYS: readonly string[] = STATE_SETTINGS.map(
-  (entry) => entry.key,
-);
-
 describe('state settings catalog', () => {
-  it('uses unique canonical keys', () => {
-    assert.equal(new Set(STATE_SETTING_KEYS).size, STATE_SETTING_KEYS.length);
-  });
-
   it('pairs enum entries with aligned display metadata', () => {
-    for (const entry of STATE_SETTINGS) {
+    const stateRows = TEXRA_SETTINGS.rows.filter(
+      (entry) => entry.slot !== 'config',
+    );
+    for (const entry of stateRows) {
       const options = settingEnumOptions(entry);
       if (!options) {
         assert.equal(
@@ -122,7 +113,7 @@ describe('catalog-derived settings snapshots', () => {
         );
         assert.deepEqual(
           Object.keys(message.values).sort(),
-          settingsViewSnapshotEntries(snapshot)
+          TEXRA_SETTINGS.snapshotEntries(snapshot)
             .map((entry) => entry.key)
             .sort(),
           `${snapshot} payload keys`,
@@ -163,17 +154,14 @@ describe('catalog-derived settings snapshots', () => {
         const logs = captureLogEntries();
         const { stores, workspaceState } = makeFakeSettingsStores();
         yield* workspaceState.update(
-          WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
+          TexraStateKey.WORKFLOW_AUTO_COMPILE,
           false,
         );
         yield* workspaceState.update(
-          WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+          TexraStateKey.LATEXDIFF_MATH_MARKUP,
           'stale-bogus-value',
         );
-        yield* workspaceState.update(
-          WorkspaceStateKey.LATEX_FORMATTER,
-          'tex-fmt',
-        );
+        yield* workspaceState.update(TexraStateKey.LATEX_FORMATTER, 'tex-fmt');
 
         try {
           const message = yield* buildSettingsSnapshotMessage('latex', {
@@ -183,15 +171,15 @@ describe('catalog-derived settings snapshots', () => {
 
           assert.equal(message.snapshot, 'latex');
           assert.equal(
-            message.values[WorkspaceStateKey.WORKFLOW_AUTO_COMPILE],
+            message.values[TexraStateKey.WORKFLOW_AUTO_COMPILE],
             false,
           );
           assert.equal(
-            message.values[WorkspaceStateKey.LATEXDIFF_MATH_MARKUP],
+            message.values[TexraStateKey.LATEXDIFF_MATH_MARKUP],
             LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup,
           );
           assert.equal(
-            message.values[WorkspaceStateKey.LATEX_FORMATTER],
+            message.values[TexraStateKey.LATEX_FORMATTER],
             'tex-fmt',
           );
           assert.equal(logs.at('WARN', 'settingsAccess').length, 1);
@@ -206,7 +194,9 @@ describe('catalog-derived settings snapshots', () => {
  * The set the CLI builds from this same export for its unknown-key walk over
  * `.texra/config.json` (`packages/cli/src/runtime/cliConfig.ts`).
  */
-const KNOWN_TEXRA_KEYS: ReadonlySet<string> = new Set(CLI_CONFIG_SLOT_KEYS);
+const KNOWN_TEXRA_KEYS: ReadonlySet<string> = new Set(
+  TEXRA_SETTINGS.configSlotKeys,
+);
 
 describe('knownKeys derivation', () => {
   it('whitelists config-slot keys, not state.json keys', () => {
@@ -215,7 +205,7 @@ describe('knownKeys derivation', () => {
     // so it must NOT be whitelisted there (a config.json entry is a no-op the
     // unknown-key warning should catch).
     assert.equal(
-      KNOWN_TEXRA_KEYS.has(WorkspaceStateKey.WORKFLOW_AUTO_COMPILE),
+      KNOWN_TEXRA_KEYS.has(TexraStateKey.WORKFLOW_AUTO_COMPILE),
       false,
     );
   });
@@ -271,7 +261,7 @@ describe('settingsAccess', () => {
   it.effect('routes telemetry writes to global configuration', () =>
     Effect.gen(function* () {
       const { stores, config } = makeFakeSettingsStores();
-      const entry = settingsViewSettingByKey('texra.telemetry.enabled');
+      const entry = TEXRA_SETTINGS.settingsViewByKey('texra.telemetry.enabled');
       assert.ok(entry);
 
       yield* writeSetting(entry, false, stores);
@@ -303,7 +293,7 @@ describe('settingsAccess', () => {
   it.effect('reset deletes the key so the default reappears', () =>
     Effect.gen(function* () {
       yield* assertResetRestoresDefault({
-        key: WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
+        key: TexraStateKey.LATEXDIFF_CHANGES_ONLY,
         host: 'vscode',
         storeName: 'workspaceState',
         expectedDefault: LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
@@ -349,7 +339,7 @@ describe('settingsAccess', () => {
         ];
         try {
           for (const { setting, inRange, outOfRange } of reliabilityRows) {
-            const entry = settingsViewSettingByKey(setting.configKey);
+            const entry = TEXRA_SETTINGS.settingsViewByKey(setting.configKey);
             assert.ok(entry, `missing settings-view row ${setting.configKey}`);
             assert.equal(
               entry.configTarget,
@@ -421,7 +411,7 @@ describe('settingsAccess', () => {
       Effect.gen(function* () {
         const logs = captureLogEntries();
         const { stores, workspaceState } = makeFakeSettingsStores();
-        const entry = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
+        const entry = entryByKey(TexraStateKey.LATEX_FORMATTER);
         yield* workspaceState.update(entry.key, 'stale-bogus-value');
         try {
           assert.equal(

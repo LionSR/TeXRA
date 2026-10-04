@@ -2,42 +2,41 @@
 import MockCard from './MockCard.vue';
 
 // Frameless "agent anatomy" map for guide/custom-agents.md, Step 3. The starter
-// template a custom-agent author edits is a ~60-line YAML block; this figure
-// lifts its part-whole structure out of the comments into three labelled bands —
-// inherits / settings / prompts — and draws the one relationship the prose
-// spends a Reflection Tips callout explaining: the `userRequest` array maps
-// position-by-position onto rounds (item [0] = Round 0, item [1] = reflection).
+// template a custom-agent author edits is a ~50-line flat YAML block; this
+// figure lifts its part-whole structure out of the comments into three labelled
+// bands — inherits / persona (prompt, temperature) / task — and draws the one
+// relationship the prose spends a Reflection Tips callout explaining: the
+// `task.requests` list maps position-by-position onto revisions (item [0] = the
+// first revision, item [1] = the second).
 //
 // Standalone (no MockupFrame). The root carries `.mockup` so the shared `--mk-*`
 // colour + dimensional tokens (theme/mockup.css) resolve here and the card flips
 // cleanly between the docs light / dark themes. Keys mirror the YAML on the page
-// verbatim (inherits: polish, agentCategory: workflow, rounds: 2,
-// systemPrompt / userPrefix / userRequest).
+// (inherits: my_polish, prompt, temperature, task: rewrite / prefix / requests).
 
-// The three top-level YAML sections, each captioned by its role.
+// The three parts of the file, each captioned by its role.
 const bands = [
   {
-    key: 'inherits: polish',
-    role: 'starts from a built-in parent',
+    key: 'inherits: my_polish',
+    role: 'starts from another agent in the same folder',
   },
   {
-    key: 'settings:',
-    role: 'how it behaves',
-    fields: ['agentCategory: workflow', 'rounds: 2'],
+    key: 'prompt · temperature',
+    role: 'the persona: how it behaves',
   },
   {
-    key: 'prompts:',
-    role: 'what it says',
-    fields: ['systemPrompt:', 'userPrefix:', 'userRequest:'],
-    // userRequest is the band that wires into the round map on the right.
-    mapsToRounds: true,
+    key: 'task:',
+    role: 'the document task',
+    fields: ['rewrite: true', 'prefix:', 'requests:'],
+    // requests is the field that wires into the revision map on the right.
+    mapsToRevisions: true,
   },
 ];
 
-// The userRequest array → rounds mapping the figure makes explicit.
-const rounds = [
-  { idx: '[0]', title: 'Round 0', sub: 'initial draft' },
-  { idx: '[1]', title: 'Round 1', sub: 'reflection' },
+// The task.requests list → revisions mapping the figure makes explicit.
+const revisions = [
+  { idx: '[0]', title: 'Revision 1', sub: 'first draft' },
+  { idx: '[1]', title: 'Revision 2', sub: 'critique & improve' },
 ];
 </script>
 
@@ -46,7 +45,7 @@ const rounds = [
     class="anat"
     icon="edit"
     title="custom_agent.yaml"
-    sub="three sections, one mapping"
+    sub="three parts, one mapping"
   >
     <div class="anat-grid">
       <ul class="anat-bands">
@@ -60,28 +59,31 @@ const rounds = [
               v-for="(f, j) in b.fields"
               :key="j"
               class="anat-field"
-              :class="{ 'anat-field--map': b.mapsToRounds && j === 2 }"
+              :class="{ 'anat-field--map': b.mapsToRevisions && j === 2 }"
             >
               <code>{{ f }}</code>
-              <span v-if="b.mapsToRounds && j === 2" class="anat-field-note"
-                >array → rounds</span
+              <span v-if="b.mapsToRevisions && j === 2" class="anat-field-note"
+                >list → revisions</span
               >
             </li>
           </ul>
         </li>
       </ul>
 
-      <aside class="anat-rounds" aria-label="userRequest array maps to rounds">
+      <aside
+        class="anat-rounds"
+        aria-label="task.requests list maps to revisions"
+      >
         <ul class="anat-round-list">
-          <li v-for="(r, i) in rounds" :key="i" class="anat-round">
-            <code class="anat-round-idx">userRequest{{ r.idx }}</code>
+          <li v-for="(r, i) in revisions" :key="i" class="anat-round">
+            <code class="anat-round-idx">requests{{ r.idx }}</code>
             <div class="anat-round-body">
               <span class="anat-round-title">{{ r.title }}</span>
               <span class="anat-round-sub">{{ r.sub }}</span>
             </div>
           </li>
         </ul>
-        <p class="anat-rounds-cap">Extra entries add more reflection rounds.</p>
+        <p class="anat-rounds-cap">Each extra entry adds one more revision.</p>
       </aside>
     </div>
   </MockCard>
@@ -169,7 +171,7 @@ const rounds = [
   font-style: italic;
 }
 
-/* Right column: the userRequest array → rounds map. */
+/* Right column: the task.requests list → revisions map. */
 .anat-rounds {
   display: flex;
   flex-direction: column;
@@ -194,7 +196,7 @@ const rounds = [
   background: var(--mk-bg-soft);
   position: relative;
 }
-/* A subtle leader from the userRequest band into each round tile. */
+/* A subtle leader from the requests field into each revision tile. */
 .anat-round::before {
   content: '←';
   position: absolute;
@@ -232,7 +234,7 @@ const rounds = [
   line-height: 1.4;
 }
 
-/* Stack the round map under the bands on narrow screens; drop the ← leaders. */
+/* Stack the revision map under the bands on narrow screens; drop the ← leaders. */
 @media (max-width: 620px) {
   .anat-grid {
     grid-template-columns: minmax(0, 1fr);

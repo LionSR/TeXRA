@@ -26,7 +26,7 @@ import { Effect } from 'effect';
 import type { StateReadFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ClaudeAgentPermissionMode } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { ClaudeAgentStateKey } from '@shared/settingsView/integrationSettings';
 import { readSettingUnlessOverridden } from '@utils/config/platformSettings';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import {
@@ -148,5 +148,5 @@ export const claudeAgentPermissionMode = (
   readSettingUnlessOverridden(
     input.permission_mode,
     stores,
-    WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
+    ClaudeAgentStateKey.PERMISSION_MODE,
   );

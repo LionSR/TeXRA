@@ -17,6 +17,7 @@ import { partitionDuplicateCalls } from '@agent/core/tools/toolCallParsing';
 import type { AgentTrace } from '@agent/trace';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { DispatchFacts, ToolDefinition } from '@shared/schemas';
+import { isObject } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { convertToolSchema } from './toolSchema';
@@ -145,8 +146,7 @@ export const replayable = Effect.fn('toolUse.replayable')(function* (
   const tool = registry.get(fact.toolName);
   if (fact.replay !== 'safe' || tool?.replay !== 'safe') return false;
   const schema = tool.definition.zodSchema;
-  if (schema === undefined)
-    return typeof input === 'object' && input !== null && !Array.isArray(input);
+  if (schema === undefined) return isObject(input);
   const parsed = yield* Effect.tryPromise({
     try: () => schema.safeParseAsync(input),
     catch: ensureError,

@@ -11,6 +11,7 @@ import { render, type Instance as InkInstance } from 'ink';
 import { getVisibleAgents } from '@agent/index';
 import type { AgentConfig } from '@agent/runtime';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
+import { reachCliService } from '@cli/runtime/cliService';
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import { installCliProcessRuntime } from '@cli/runtime/cliProcessRuntime';
@@ -415,6 +416,7 @@ export async function runChat(
 
   // Pre-register the slash commands the input palette uses.
   registerBuiltinSlashCommands({
+    connectService: () => reachCliService(context.storageRoot, context.version),
     onAccountChanged: () =>
       connectChatModel(
         slashCommandContext(),

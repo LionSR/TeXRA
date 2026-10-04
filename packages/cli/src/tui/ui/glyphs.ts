@@ -23,10 +23,8 @@ export const STATUS_DIAMOND = '◆';
 /** Warning marker for inline failure notices (e.g. render-error fallback). */
 export const WARNING = '⚠';
 
-// Todo checklist markers. Completed / in-progress / pending (default).
-export const TODO_DONE = '☑';
-export const TODO_ACTIVE = '☐';
-export const TODO_PENDING = '□';
+/** A step not reached yet (a planned workflow round). */
+export const PENDING_BOX = '□';
 
 /** Terminal-failure marker; the ✗/✓ counterpart to TICK. */
 export const CROSS = '✗';

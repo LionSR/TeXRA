@@ -93,9 +93,9 @@ describe('ConfigTools — update_config allowlist', () => {
         .pipe(Effect.provide(layer));
 
       assert.equal(result.status, 'error');
-      assert.equal(
+      assert.deepEqual(
         config.inspect(key),
-        undefined,
+        { globalValue: undefined, workspaceValue: undefined },
         'must not write rejected settings',
       );
     }),

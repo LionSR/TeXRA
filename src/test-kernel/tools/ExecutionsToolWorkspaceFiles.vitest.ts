@@ -290,13 +290,12 @@ describe('ExecutionsTool', () => {
           mocks.readReport.mockResolvedValue(
             '<subagent-result>full report</subagent-result>',
           );
-          session.followUps.claimLive(parentRunId, 'loop');
           const delivery = {
             text: 'child result',
             from: { kind: 'run' as const, runId: childRunId },
             deliveryId: `${childRunId}:turn:1:delivery`,
           };
-          yield* session.followUps.submit(parentRunId, delivery, 'live_owner');
+          yield* session.followUps.send(parentRunId, delivery);
           expect(
             session.events.pendingFollowUps(aggregateId('run', parentRunId)),
           ).toHaveLength(1);
@@ -319,13 +318,9 @@ describe('ExecutionsTool', () => {
             session.events.pendingFollowUps(aggregateId('run', parentRunId)),
           ).toEqual([]);
           // The child loop's replayed wake finds the row consumed.
-          expect(
-            yield* session.followUps.submit(
-              parentRunId,
-              delivery,
-              'live_owner',
-            ),
-          ).toEqual({ kind: 'duplicate' });
+          expect(yield* session.followUps.send(parentRunId, delivery)).toEqual({
+            kind: 'duplicate',
+          });
           expect(
             session.events.pendingFollowUps(aggregateId('run', parentRunId)),
           ).toEqual([]);
@@ -439,80 +434,6 @@ describe('ExecutionsTool', () => {
     { timeout: 5000 },
   );
 
-  it.live('reads running task lists from session snapshot state', () =>
-    withTempStorage(() =>
-      withSession((session) =>
-        Effect.gen(function* () {
-          const parentRunId = RunIdSchema.parse('ba5e0000000b');
-          const childRunId = RunIdSchema.parse('c41d0000000b');
-          const handle = testRunHandle({
-            runId: childRunId,
-            parent: parentRunId,
-            agent: 'review',
-          });
-
-          publishTestRunStart(session, parentRunId);
-          publishTestRunStart(session, childRunId, { parent: parentRunId });
-          yield* session.settlePublications();
-          session.runs.track(handle);
-          yield* foldRunPhase(
-            session,
-            childRunId,
-            'turn.begin',
-            RUN_PHASE.RUNNING,
-          );
-          session.publish([
-            {
-              type: 'run.fact',
-              aggregateId: aggregateId('run', childRunId),
-              fact: {
-                key: 'todos',
-                todos: [
-                  {
-                    content: 'Read live snapshot state',
-                    status: 'in_progress',
-                    activeForm: 'Reading live snapshot state',
-                  },
-                ],
-              },
-            },
-          ]);
-          yield* session.settlePublications();
-          const [summary, todos] = yield* Effect.all([
-            ExecutionsTool.call({
-              path: `/executions/${childRunId}`,
-            }),
-            ExecutionsTool.call({
-              path: '/executions',
-              action: 'query',
-              sql: 'SELECT content FROM todos WHERE run_id = ?',
-              params: [childRunId],
-            }),
-          ]).pipe(
-            Effect.provide(
-              nativeToolTestLayer({
-                run: { session: session, runId: parentRunId, toolPolicy: {} },
-              }),
-            ),
-          );
-
-          expect(summary.output).toContain('Read live snapshot state');
-          expect(todos.output).toContain('Read live snapshot state');
-        }),
-      ),
-    ).pipe(
-      Effect.provide(
-        nativeToolTestLayer({
-          run: {
-            session: testDefaultSession(),
-            runId: 'tool-test' as RunId,
-            toolPolicy: {},
-          },
-        }),
-      ),
-    ),
-  );
-
   // A completed run has no live handle, so nothing proves the caller is the
   // parent run that already received the report as a follow-up. The wait
   // summary must therefore keep the report inline rather than eliding it.
@@ -601,71 +522,6 @@ describe('ExecutionsTool', () => {
         }),
       ),
     ),
-  );
-
-  // The history query must resolve a task list exactly as the completed
-  // summary does, from the same committed rows.
-  it.live.each([
-    { label: 'completed summary', input: { path: '/executions/abc123' } },
-    {
-      label: 'history query',
-      input: {
-        path: '/executions',
-        action: 'query',
-        sql: 'SELECT content FROM todos WHERE run_id = ?',
-        params: ['abc123'],
-      },
-    },
-  ])(
-    'reads completed todos from committed stream events via the $label',
-    ({ input }) =>
-      Effect.gen(function* () {
-        yield* withTempStorage(() =>
-          withSession((session) =>
-            Effect.gen(function* () {
-              const runId = 'abc123' as RunId;
-              publishTestRunStart(session, runId);
-              session.publish([
-                {
-                  type: 'run.fact',
-                  aggregateId: aggregateId('run', runId),
-                  fact: {
-                    key: 'todos',
-                    todos: [
-                      {
-                        content: 'Read the committed task list',
-                        status: 'in_progress',
-                        activeForm: 'Reading the committed task list',
-                      },
-                    ],
-                  },
-                },
-              ]);
-              yield* session.settlePublications();
-              mocks.readConfig.mockResolvedValue(config);
-              const result = yield* ExecutionsTool.call(input).pipe(
-                Effect.provide(
-                  nativeToolTestLayer({
-                    run: { session: session, runId: runId, toolPolicy: {} },
-                  }),
-                ),
-              );
-
-              expect(result.output).toContain('Read the committed task list');
-            }),
-          ),
-        );
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: {
-              session: testDefaultSession(),
-              runId: 'tool-test' as RunId,
-              toolPolicy: {},
-            },
-          }),
-        ),
-      ),
   );
 
   it.live('refuses unrecorded workspace file reads', () =>

@@ -8,18 +8,6 @@ import {
   TexraApprovalPolicySchema,
 } from '@shared/approvalPolicy';
 import {
-  LATEX_CONFIG_DEFAULTS,
-  LATEX_CONFIG_RANGES,
-  LATEX_FORMATTER_VALUES,
-  LATEXDIFF_MATH_MARKUP_VALUES,
-} from '@shared/constants/latexConfig';
-import {
-  DEFAULT_ENABLED_REGEX_REPLACEMENTS,
-  DEFAULT_ENABLED_REPLACEMENTS,
-  NON_REGEX_REPLACEMENT_CATEGORIES,
-  REGEX_REPLACEMENT_CATEGORIES,
-} from '@shared/constants/replacementCategories';
-import {
   ActiveSkillSourceScopeSchema,
   AGENT_SKILLS_ENABLED_DEFAULT,
   AgentModePresetSchema,
@@ -30,19 +18,8 @@ import {
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
   ChatgptCodexContextWindowSchema,
   ChildRunConcurrencyBudgetSchema,
-  AGENT_CLI_EFFORT_SETTING,
-  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-  CLAUDE_AGENT_MODEL_SETTING,
-  ClaudeAgentPermissionModeSchema,
-  CliOutputFormatSchema,
-  CODEX_APPROVAL_POLICY_DEFAULT,
-  CODEX_MODEL_SETTING,
-  CODEX_SANDBOX_MODE_DEFAULT,
-  CodexApprovalPolicySchema,
-  CodexSandboxModeSchema,
   GOAL_MAX_COST_SETTING,
   GoalMaxCostSchema,
-  LATEXDIFF_TEMP_FILE_LOCATIONS,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelCompactionThresholdPercentSchema,
@@ -51,7 +28,6 @@ import {
   ModelRetryMaxAttemptsSchema,
   INHERITED_WORKSPACE_AGENTS,
   QualifiedSkillNameSchema,
-  TELEMETRY_ENABLED_DEFAULT,
 } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
 import {
@@ -74,7 +50,11 @@ export const DEFAULT_GIT_AUTHOR_EMAIL = 'texra-ai@users.noreply.github.com';
 const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
 
 /**
- * Host-neutral catalog for every TeXRA setting a host can store or render.
+ * The settings catalog, by owner. This module declares the row shape and the
+ * harness's own rows (model, approvals, retries, compaction, concurrency,
+ * skills, logging). An app declares its rows beside its code and each plugin
+ * on its `Plugin` value; `settingsCatalog` concatenates them after these, and
+ * `installProcessRuntime` installs that catalog for the harness's own readers.
  *
  * One row carries the catalog facts:
  *
@@ -216,11 +196,19 @@ export type SettingsViewStateSettingEntry = SurfacedSettingEntry & {
   };
 };
 
+/** A row a plugin declares, with the short label its Plugins-page card shows
+ *  (the card already names the plugin, so 'Model' rather than 'Codex model'). */
+export interface PluginSettingRow {
+  readonly row: SurfacedSettingEntry;
+  readonly label: string;
+}
+
 // ============================================================================
 // Row builders
 // ============================================================================
 
-type SurfacedSettingInput = Omit<
+/** A surfaced row as written: display copy and surfaces are required. */
+export type SurfacedSettingInput = Omit<
   StateSettingEntry,
   'surfaces' | 'description' | 'category'
 > & {
@@ -233,20 +221,10 @@ type SurfacedSettingInput = Omit<
  * A row at least one settings UI renders. Display copy is required at the call
  * site, so a rendered row can never fall back to an empty label.
  */
-function surfacedSetting(entry: SurfacedSettingInput): SurfacedSettingEntry {
-  return entry;
-}
-
-/** An external coding agent's row: repo-scoped, on the approval tab and in `/config`. */
-function agentCliSetting(
-  entry: Omit<SurfacedSettingInput, 'category' | 'slot' | 'surfaces'>,
+export function surfacedSetting(
+  entry: SurfacedSettingInput,
 ): SurfacedSettingEntry {
-  return surfacedSetting({
-    ...entry,
-    category: 'ai-agents',
-    slot: 'repoState',
-    surfaces: { settingsView: 'approval', cliConfig: true },
-  });
+  return entry;
 }
 
 /**
@@ -315,35 +293,6 @@ function globalProviderToggle(opts: {
 // Core (config-tree) rows
 // ============================================================================
 
-/** Standalone preamble used when extracting a TikZ figure for compilation. */
-const DEFAULT_TIKZ_TEMPLATE =
-  '\\documentclass[tikz,border=10pt]{standalone}\n' +
-  '\\usepackage{tikz}\n' +
-  '\\usepackage{pgfplots}\n' +
-  '\\usetikzlibrary{positioning}\n' +
-  '\\usetikzlibrary{patterns}\n' +
-  '\\usetikzlibrary{arrows.meta, shapes.geometric, matrix, calc, decorations.pathreplacing}\n' +
-  '\\usetikzlibrary{shapes, arrows}\n\n' +
-  '\\begin{document}\n' +
-  '{{ tikzpicture }}\n' +
-  '\\end{document}';
-
-// The terminal client's own `.texra/config.json` rows (`agent`, `model`,
-// `chat`, `run`, `outputFormat`): which agent and model a command starts with,
-// and how it prints. Only the CLI runtime reads them; the extension and desktop
-// resolve an agent and a model from their own surfaces.
-
-/** An agent key or name, as typed into `.texra/config.json`. */
-const CliAgentSchema = z.string().trim().min(1).optional();
-
-/** A model id, validated against the model registry where it is used. */
-const CliModelSchema = z.string().trim().min(1).optional();
-
-/** Per-command overrides of the top-level `agent`/`model` rows. */
-const CliCommandDefaultsSchema = z
-  .object({ agent: CliAgentSchema, model: CliModelSchema })
-  .optional();
-
 /**
  * The ChatGPT and Grok subscription routes apply only with OpenRouter off, so
  * preferring one clears the OpenRouter switch on every write path.
@@ -363,45 +312,10 @@ const SUBSCRIPTION_PREFERENCE_WRITE: SettingWriteEffects = {
  * The record's own declaration order is the catalog order, including the
  * Models tab's control order: reordering these keys reorders that UI.
  */
-const CORE_SETTING_ROWS: Record<
+const HARNESS_CONFIG_ROWS: Record<
   string,
   Omit<StateSettingEntry, 'key' | 'slot'>
 > = {
-  agent: {
-    schema: CliAgentSchema,
-    title: 'Default agent',
-    description:
-      'Agent `texra chat` and `texra run` start with when neither `--agent` nor a per-command default names one.',
-  },
-  model: {
-    schema: CliModelSchema,
-    title: 'Default model',
-    description:
-      'Model every `texra` command starts with when neither `--model`, `TEXRA_MODEL`, nor a per-command default names one. A model this machine cannot run falls back to an available one with a notice.',
-  },
-  chat: {
-    schema: CliCommandDefaultsSchema,
-    title: 'Chat defaults',
-    description:
-      'Agent and model `texra chat` starts with, overriding the top-level defaults.',
-  },
-  run: {
-    schema: CliCommandDefaultsSchema,
-    title: 'Run defaults',
-    description:
-      'Agent and model `texra run` starts with, overriding the top-level defaults.',
-  },
-  outputFormat: {
-    schema: CliOutputFormatSchema,
-    title: 'Output format',
-    description:
-      'How `texra` prints results: human text, one JSON object, or NDJSON records. `--output-format` and `TEXRA_OUTPUT_FORMAT` override it.',
-  },
-  'agentOutputs.autoOpenFinal': {
-    schema: z.boolean().prefault(true),
-    description:
-      "When a workflow run completes, automatically preview the final revised file in a new editor tab. Disable for batch runs when you don't want a tab to steal focus.",
-  },
   childRunConcurrencyBudget: {
     schema: ChildRunConcurrencyBudgetSchema,
     title: 'Agents at once',
@@ -515,83 +429,6 @@ const CORE_SETTING_ROWS: Record<
     description:
       'Maximum dimension (width or height) in pixels for images before resizing. Images larger than this will be resized to fit within this dimension while maintaining aspect ratio.',
   },
-  'bib.defaultPath': {
-    schema: z.string().prefault(''),
-    description:
-      'Default path to bibliography file (.bib). This is used by bibliography tools when no explicit path is provided. Supports Zotero auto-exported .bib files.',
-  },
-  'bib.zoteroPort': {
-    schema: z.int().min(1).max(65535).prefault(23119),
-    description:
-      'Port number for Zotero integration (default: 23119). Used by both the Connector API and Better BibTeX JSON-RPC.',
-  },
-  'latex.latexindentConfig': {
-    schema: z.string().prefault(''),
-    description: 'Path to latexindent configuration file',
-  },
-  'latex.texfmtConfig': {
-    schema: z.string().prefault(''),
-    description: 'Path to tex-fmt configuration file',
-  },
-  'latex.tikzInputDirectory': {
-    schema: z.string().prefault(''),
-    description:
-      'Directory where to look for extra input files when compiling extracted TikZ figures. Absolute path is required. Sets TEXINPUTS environment variable for TikZ compilation.',
-  },
-  'latex.includeWorkspaceInTexinputs': {
-    schema: z.boolean().prefault(true),
-    description:
-      'Include the workspace root directory in TEXINPUTS when compiling TikZ figures',
-  },
-  'latex.tikzTemplate': {
-    schema: z.string().prefault(DEFAULT_TIKZ_TEMPLATE),
-    description:
-      'Template used for generating standalone documents when extracting and compiling TikZ figures',
-  },
-  'latex.wrapCritiqueInAlign': {
-    schema: z.boolean().prefault(true),
-    title: 'Wrap criticism in align environments',
-    description:
-      'Wrap bare criticism and comment commands inside align environments with intertext.',
-    category: 'latex',
-  },
-  'latex.enabledReplacements': {
-    schema: z
-      .array(z.enum(NON_REGEX_REPLACEMENT_CATEGORIES))
-      .prefault(DEFAULT_ENABLED_REPLACEMENTS),
-    title: 'Literal replacement groups',
-    description: 'Enabled groups of direct LaTeX cleanup replacements.',
-    category: 'latex',
-  },
-  'latex.enabledReplacementsRegex': {
-    schema: z
-      .array(z.enum(REGEX_REPLACEMENT_CATEGORIES))
-      .prefault(DEFAULT_ENABLED_REGEX_REPLACEMENTS),
-    title: 'Pattern replacement groups',
-    description: 'Enabled groups of pattern-based LaTeX cleanup replacements.',
-    category: 'latex',
-  },
-  'latex.customReplacementsRegex': {
-    schema: z.record(z.string(), z.string()).prefault({}),
-    title: 'Custom pattern replacements',
-    description: 'Custom regular-expression replacements.',
-    category: 'latex',
-  },
-  'latex.customReplacements': {
-    schema: z.record(z.string(), z.string()).prefault({}),
-    title: 'Custom literal replacements',
-    description: 'Custom direct text replacements.',
-    category: 'latex',
-  },
-  'latexdiff.tempFileLocation': {
-    schema: z.enum(LATEXDIFF_TEMP_FILE_LOCATIONS).prefault('sameDirectory'),
-    description:
-      'Where to create temporary files for LaTeX preview and diff operations during tool edit approval.',
-    enumDescriptions: [
-      'Create temp files in the same directory as the original file. Best for resolving \\input{} and relative paths.',
-      'Create temp files in .texra-temp directory at workspace root. Keeps source directories clean but may break relative paths.',
-    ],
-  },
   // The launcher's commit picker reads the count through the host snapshot on
   // both GUI hosts; the CLI only writes it, through the setup assistant's
   // `update_config`.
@@ -608,16 +445,6 @@ const CORE_SETTING_ROWS: Record<
     schema: z.boolean().prefault(false),
     description:
       "Show the transcript's verbose tier: debug-level rows and their payload detail. The log surfaces filter themselves (the Output view's own level filter, the desktop log file, the CLI's --verbose/--quiet).",
-  },
-  'telemetry.enabled': {
-    schema: z.boolean().prefault(TELEMETRY_ENABLED_DEFAULT),
-    title: 'Share usage telemetry',
-    description:
-      'Send anonymous model, agent, token, timing, and host metadata with a random install ID (no account). TeXRA never sends prompt text, document content, or file names. Turning this off stops all reporting.',
-    category: 'privacy',
-    configTarget: 'global',
-    projectMayOptOut: true,
-    surfaces: { settingsView: 'telemetry' },
   },
   'debug.saveModelIO': {
     schema: z.boolean().prefault(false),
@@ -651,68 +478,43 @@ const CORE_SETTING_ROWS: Record<
   },
 };
 
-/** The config-file-backed rows, with their derived key and uniform slot. */
-const CORE_TREE_SETTINGS: readonly StateSettingEntry[] = Object.entries(
-  CORE_SETTING_ROWS,
-).map(([path, row]) => ({
-  ...row,
-  key: `texra.${path}`,
-  slot: 'config',
-}));
-
-const CORE_TREE_SETTINGS_BY_KEY: ReadonlyMap<string, StateSettingEntry> =
-  new Map(CORE_TREE_SETTINGS.map((entry) => [entry.key, entry]));
-
-const coreSettingDefaults = new Map<string, unknown>();
-
 /**
- * Return a fresh copy of a config-tree setting's catalog-owned default, or
- * `undefined` for a key the config tree does not own.
- *
- * This is the resolution step every `ConfigProvider` applies between the stored
- * value and the caller's fallback, so a cataloged key needs no per-call-site
- * default. Parsed defaults are memoized because this sits on the read path of
- * every absent setting; object values are cloned so a caller cannot mutate the
- * catalog's own default.
+ * Config-file-backed rows from a record keyed by dotted path under `texra.`:
+ * the key and the uniform `config` slot are derived, not restated. The
+ * record's declaration order is the catalog order.
  */
-export function getCoreSettingDefault(key: string): unknown {
-  const canonicalKey = key.startsWith('texra.') ? key : `texra.${key}`;
-  const entry = CORE_TREE_SETTINGS_BY_KEY.get(canonicalKey);
-  if (!entry) return undefined;
-  if (!coreSettingDefaults.has(canonicalKey)) {
-    coreSettingDefaults.set(canonicalKey, entry.schema.parse(undefined));
-  }
-  const value = coreSettingDefaults.get(canonicalKey);
-  return value !== null && typeof value === 'object'
-    ? structuredClone(value)
-    : value;
+export function configTreeRows(
+  rows: Readonly<Record<string, Omit<StateSettingEntry, 'key' | 'slot'>>>,
+): StateSettingEntry[] {
+  return Object.entries(rows).map(([path, row]) => ({
+    ...row,
+    key: `texra.${path}`,
+    slot: 'config',
+  }));
 }
 
 /**
- * Config-file-backed rows: the config-tree rows above plus
- * `texra.approvalPolicy`, which stays hand-written because the approval-policy
- * module owns its schema and its legacy-spelling normalization.
+ * `texra.approvalPolicy`, written out beside the config tree because the
+ * approval-policy module owns its schema and its legacy-spelling
+ * normalization.
  */
-const CORE_SETTINGS: readonly StateSettingEntry[] = [
-  ...CORE_TREE_SETTINGS,
-  surfacedSetting({
-    key: TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-    // Strict on purpose: `settingEnumOptions` derives the dropdown from a
-    // `ZodEnum` row, and the tolerant spelling belongs to
-    // `parseTexraApprovalPolicy`, which every reader of typed-in text (the
-    // env var, `--approval-policy`, `/approval`, the dropdown) calls before
-    // a value ever reaches this row.
-    schema: TexraApprovalPolicySchema.prefault(TEXRA_APPROVAL_POLICY_DEFAULT),
-    title: 'Approval policy',
-    description:
-      'Whether agents ask before running shell commands and editing files. Under Ask, the toggles below choose which of the two need your approval.',
-    category: 'tools',
-    slot: 'config',
-    configTarget: 'local',
-    enumLabels: ['Block', 'Ask', 'Auto-approve'],
-    surfaces: { settingsView: 'approval', cliConfig: true },
-  }),
-];
+const APPROVAL_POLICY_SETTING = surfacedSetting({
+  key: TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+  // Strict on purpose: `settingEnumOptions` derives the dropdown from a
+  // `ZodEnum` row, and the tolerant spelling belongs to
+  // `parseTexraApprovalPolicy`, which every reader of typed-in text (the
+  // env var, `--approval-policy`, `/approval`, the dropdown) calls before
+  // a value ever reaches this row.
+  schema: TexraApprovalPolicySchema.prefault(TEXRA_APPROVAL_POLICY_DEFAULT),
+  title: 'Approval policy',
+  description:
+    'Whether agents ask before running shell commands and editing files. Under Ask, the toggles below choose which of the two need your approval.',
+  category: 'tools',
+  slot: 'config',
+  configTarget: 'local',
+  enumLabels: ['Block', 'Ask', 'Auto-approve'],
+  surfaces: { settingsView: 'approval', cliConfig: true },
+});
 
 // ============================================================================
 // State-backed rows
@@ -746,7 +548,7 @@ const PROVIDER_ROUTING_SETTINGS = PROVIDER_REGION_SETTINGS.map(
     }),
 );
 
-export const STATE_SETTINGS: readonly StateSettingEntry[] = [
+const STATE_SETTINGS: readonly StateSettingEntry[] = [
   // --- Git commit author marking ---------------------------------------------
   surfacedSetting({
     key: WorkspaceStateKey.GIT_MARK_COMMITS,
@@ -850,205 +652,6 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'tools',
     slot: 'globalState',
     surfaces: { settingsView: 'memory' },
-  }),
-
-  // --- External coding agent controls ---------------------------------------
-  agentCliSetting({
-    key: WorkspaceStateKey.CODEX_MODEL,
-    ...CODEX_MODEL_SETTING,
-    title: 'Codex model',
-    description: 'OpenAI model selected for Codex agent sessions.',
-  }),
-  agentCliSetting({
-    key: WorkspaceStateKey.CODEX_SANDBOX_MODE,
-    schema: CodexSandboxModeSchema.prefault(CODEX_SANDBOX_MODE_DEFAULT),
-    title: 'Codex sandbox mode',
-    description: 'Filesystem access mode used when TeXRA launches Codex.',
-    enumLabels: ['Read-only', 'Workspace write', 'Full access'],
-  }),
-  agentCliSetting({
-    key: WorkspaceStateKey.CODEX_REASONING_EFFORT,
-    ...AGENT_CLI_EFFORT_SETTING,
-    title: 'Codex reasoning effort',
-    description: 'Reasoning effort for Codex runs, up to what the model takes.',
-  }),
-  agentCliSetting({
-    key: WorkspaceStateKey.CODEX_APPROVAL_POLICY,
-    schema: CodexApprovalPolicySchema.prefault(CODEX_APPROVAL_POLICY_DEFAULT),
-    title: 'Codex approval policy',
-    description: 'When Codex should ask for approval before risky actions.',
-    enumLabels: [
-      'Auto approve',
-      'Ask when requested',
-      'Ask for untrusted',
-      'Ask on failure',
-    ],
-  }),
-  agentCliSetting({
-    key: WorkspaceStateKey.CLAUDE_AGENT_MODEL,
-    ...CLAUDE_AGENT_MODEL_SETTING,
-    title: 'Claude Code model',
-    description: 'Claude model selected for Claude Code agent sessions.',
-  }),
-  agentCliSetting({
-    key: WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
-    schema: ClaudeAgentPermissionModeSchema.prefault(
-      CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-    ),
-    title: 'Claude Code permission mode',
-    description: 'Permission policy used by Claude Code agent sessions.',
-    enumLabels: [
-      'Prompt for risky actions',
-      'Auto-accept edits',
-      'Bypass all (dangerous)',
-      'Plan only (read-only)',
-    ],
-  }),
-  agentCliSetting({
-    key: WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
-    ...AGENT_CLI_EFFORT_SETTING,
-    title: 'Claude Code reasoning effort',
-    description:
-      'Reasoning effort for Claude Code, up to what the model takes.',
-  }),
-
-  // --- Workflow auto-compile -------------------------------------------------
-  surfacedSetting({
-    key: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
-    schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.workflowAutoCompile),
-    title: 'Auto-compile outputs',
-    description:
-      'Compile the LaTeX project automatically after an agent writes its output.',
-    category: 'workflow',
-    slot: 'workspaceState',
-    surfaces: { settingsView: 'latex', cliConfig: true },
-  }),
-  surfacedSetting({
-    key: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-    schema: z
-      .int()
-      .min(LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min)
-      .prefault(LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs),
-    title: 'Auto-compile timeout',
-    description:
-      'Maximum time (in milliseconds) to wait for an automatic post-output compile before giving up.',
-    category: 'workflow',
-    slot: 'workspaceState',
-    surfaces: { cliConfig: true },
-  }),
-  surfacedSetting({
-    key: WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
-    schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.workflowAutoOpenPdf),
-    title: 'Open the compiled PDF',
-    description:
-      'After auto-compile, open the PDF when it succeeds or the LaTeX log when it fails.',
-    category: 'workflow',
-    slot: 'workspaceState',
-    // Read by the documents plugin, but the emitted `requestOpenFile` has no
-    // CLI handler (headless), so the CLI ignores it.
-    surfaces: { settingsView: 'latex' },
-  }),
-  surfacedSetting({
-    key: WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-    schema: z
-      .boolean()
-      .prefault(LATEX_CONFIG_DEFAULTS.workflowRejectOnCompileFailure),
-    title: 'Repair failed compiles',
-    description:
-      'When the automatic compile fails, spend the next planned round repairing the output from the compile log.',
-    category: 'workflow',
-    slot: 'workspaceState',
-    surfaces: { settingsView: 'latex', cliConfig: true },
-  }),
-
-  // --- LaTeXdiff -------------------------------------------------------------
-  // Run by the documents plugin, so every host honors them. The timeout is
-  // kept out of the settings view (an insider knob) and edited from CLI
-  // `/config`; the rest are deferred from `/config` by product decision.
-  surfacedSetting({
-    key: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
-    schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds),
-    title: 'Diff consecutive rounds',
-    description:
-      'Also diff each agent round against the previous one, not only against your original input.',
-    category: 'latexdiff',
-    slot: 'workspaceState',
-    surfaces: { settingsView: 'latex' },
-  }),
-  surfacedSetting({
-    key: WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
-    schema: z
-      .int()
-      .min(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min)
-      .max(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max)
-      .prefault(LATEX_CONFIG_DEFAULTS.latexdiffTimeoutMs),
-    title: 'latexdiff timeout',
-    description:
-      'Maximum time (in milliseconds) to allow a single latexdiff invocation to run.',
-    category: 'latexdiff',
-    slot: 'workspaceState',
-    surfaces: { cliConfig: true },
-  }),
-  surfacedSetting({
-    key: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
-    schema: z
-      .enum(LATEXDIFF_MATH_MARKUP_VALUES)
-      .prefault(LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup),
-    title: 'Math markup in diffs',
-    description: 'How latexdiff marks up changes inside math environments.',
-    category: 'latexdiff',
-    slot: 'workspaceState',
-    enumDescriptions: [
-      'suppress markup',
-      'equation-level',
-      'within equations',
-      'small changes inside equations',
-    ],
-    surfaces: { settingsView: 'latex' },
-  }),
-  surfacedSetting({
-    key: WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
-    schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly),
-    title: 'Only changed pages in diff PDFs',
-    description:
-      'Compile diff PDFs with only the pages that contain edits, instead of the full document.',
-    category: 'latexdiff',
-    slot: 'workspaceState',
-    surfaces: { settingsView: 'latex' },
-  }),
-
-  // --- LaTeX formatter -------------------------------------------------------
-  surfacedSetting({
-    key: WorkspaceStateKey.LATEX_FORMATTER,
-    schema: z
-      .enum(LATEX_FORMATTER_VALUES)
-      .prefault(LATEX_CONFIG_DEFAULTS.latexFormatter),
-    title: 'LaTeX formatter',
-    description: 'Which formatter to run when formatting LaTeX source.',
-    category: 'latex',
-    slot: 'workspaceState',
-    enumLabels: ['latexindent', 'tex-fmt', 'None'],
-    enumDescriptions: [
-      'needs Perl',
-      'standalone Rust binary',
-      'leave formatting unchanged',
-    ],
-    surfaces: { settingsView: 'latex' },
-  }),
-
-  // --- Inline criticism -------------------------------------------------------
-  // Editor squiggles and Problems-panel entries exist only in VS Code. The
-  // shared LaTeX snapshot reads the row on every host; the desktop LaTeX page
-  // hides it.
-  surfacedSetting({
-    key: GlobalStateKey.INLINE_CRITICISM_ENABLED,
-    schema: z.boolean().prefault(false),
-    title: 'Show criticism as editor diagnostics',
-    description:
-      'Show \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files as squiggles and Problems-panel entries.',
-    category: 'latex',
-    slot: 'globalState',
-    surfaces: { settingsView: 'latex' },
   }),
 
   // --- OpenAI WebSocket transport (experimental) -----------------------------
@@ -1184,18 +787,16 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
 ];
 
 // ============================================================================
-// Derived views — every list below is a filter, never hand-maintained
+// The catalog — the harness's rows followed by an app's; every list below is
+// a filter over it, never hand-maintained
 // ============================================================================
 
-/** Every catalog row, config-tree and state-backed. */
-const ALL_SETTINGS: readonly StateSettingEntry[] = [
-  ...CORE_SETTINGS,
+/** The harness's own rows, in catalog order: config-file-backed, then state-backed. */
+const HARNESS_SETTINGS: readonly StateSettingEntry[] = [
+  ...configTreeRows(HARNESS_CONFIG_ROWS),
+  APPROVAL_POLICY_SETTING,
   ...STATE_SETTINGS,
 ];
-
-const SETTINGS_BY_KEY: ReadonlyMap<string, StateSettingEntry> = new Map(
-  ALL_SETTINGS.map((entry) => [entry.key, entry]),
-);
 
 function isSurfaced(entry: StateSettingEntry): entry is SurfacedSettingEntry {
   return (
@@ -1205,84 +806,138 @@ function isSurfaced(entry: StateSettingEntry): entry is SurfacedSettingEntry {
   );
 }
 
-const SURFACED_SETTINGS: readonly SurfacedSettingEntry[] =
-  ALL_SETTINGS.filter(isSurfaced);
+/** One settings catalog and the lookups every settings surface reads from it. */
+export interface SettingsCatalog {
+  /** Every row, in catalog order. */
+  readonly rows: readonly StateSettingEntry[];
+  /** Look up any row, config-file-backed or state-backed, by its key. */
+  readonly byKey: (key: string) => StateSettingEntry | undefined;
+  /** Look up a row the settings view's unified write path owns. */
+  readonly settingsViewByKey: (
+    key: string,
+  ) => SettingsViewStateSettingEntry | undefined;
+  /**
+   * The rows one settings-view snapshot carries, in catalog order: the
+   * outbound payload's Zod shape, the backend's read loop and the webview's
+   * apply step each iterate this list, so adding
+   * `surfaces.settingsView: '<snapshot>'` to a row puts it on the wire.
+   */
+  readonly snapshotEntries: (
+    snapshot: SettingsViewSnapshot,
+  ) => readonly SettingsViewStateSettingEntry[];
+  /** The `/config` panel's rows: `surfaces.cliConfig` is the one predicate. */
+  readonly cliRows: readonly SurfacedSettingEntry[];
+  /** Look up a row the CLI `/config` panel lists, and so may write. */
+  readonly cliByKey: (key: string) => SurfacedSettingEntry | undefined;
+  /** Keys of the config-file-backed rows: the CLI's unknown-key whitelist's catalog half. */
+  readonly configSlotKeys: readonly string[];
+  /** The Models tab's controls for one provider, in catalog order. */
+  readonly modelsTab: (provider: string) => readonly {
+    readonly entry: StateSettingEntry;
+    readonly surface: ModelsTabSurface;
+  }[];
+  /**
+   * A fresh copy of a config-file-backed row's default, or `undefined` for a
+   * key no such row owns: the step every `ConfigProvider` applies between the
+   * stored value and the caller's fallback. Parsed defaults are memoized
+   * because this is on the read path of every absent setting; object values
+   * are cloned so a caller cannot mutate the catalog's own default.
+   */
+  readonly configDefault: (key: string) => unknown;
+}
 
-const SETTINGS_VIEW_SETTINGS_BY_KEY: ReadonlyMap<
-  string,
-  SettingsViewStateSettingEntry
-> = new Map(
-  SURFACED_SETTINGS.filter(
-    (entry): entry is SettingsViewStateSettingEntry =>
-      entry.surfaces.settingsView !== undefined,
-  ).map((entry) => [entry.key, entry]),
-);
+/**
+ * The catalog of the harness's rows, then `appRows` (an app's own), then the
+ * rows each of `plugins` declares. A key declared twice is a defect and throws.
+ */
+export function settingsCatalog(
+  appRows: readonly StateSettingEntry[],
+  plugins: readonly { readonly settings?: readonly PluginSettingRow[] }[] = [],
+): SettingsCatalog {
+  const rows = [
+    ...HARNESS_SETTINGS,
+    ...appRows,
+    ...plugins.flatMap(({ settings = [] }) => settings.map(({ row }) => row)),
+  ];
+  const byKey = new Map<string, StateSettingEntry>();
+  for (const row of rows) {
+    if (byKey.has(row.key)) {
+      throw new Error(`Setting ${row.key} is declared twice.`);
+    }
+    byKey.set(row.key, row);
+  }
+  const surfaced = rows.filter(isSurfaced);
+  const settingsView = new Map(
+    surfaced
+      .filter(
+        (entry): entry is SettingsViewStateSettingEntry =>
+          entry.surfaces.settingsView !== undefined,
+      )
+      .map((entry) => [entry.key, entry]),
+  );
+  const cliRows = surfaced.filter((entry) => entry.surfaces.cliConfig === true);
+  const cliByKey = new Map(cliRows.map((entry) => [entry.key, entry]));
+  const defaults = new Map<string, unknown>();
+  return {
+    rows,
+    byKey: (key) => byKey.get(key),
+    settingsViewByKey: (key) => settingsView.get(key),
+    snapshotEntries: (snapshot) =>
+      [...settingsView.values()].filter(
+        (entry) => entry.surfaces.settingsView === snapshot,
+      ),
+    cliRows,
+    cliByKey: (key) => cliByKey.get(key),
+    configSlotKeys: rows
+      .filter((entry) => entry.slot === 'config')
+      .map((entry) => entry.key),
+    modelsTab: (provider) =>
+      rows.flatMap((entry) =>
+        (entry.surfaces?.models ?? [])
+          .filter((surface) => surface.provider === provider)
+          .map((surface) => ({ entry, surface })),
+      ),
+    configDefault: (key) => {
+      const canonicalKey = key.startsWith('texra.') ? key : `texra.${key}`;
+      const entry = byKey.get(canonicalKey);
+      if (entry?.slot !== 'config') return undefined;
+      if (!defaults.has(canonicalKey)) {
+        defaults.set(canonicalKey, entry.schema.parse(undefined));
+      }
+      const value = defaults.get(canonicalKey);
+      return value !== null && typeof value === 'object'
+        ? structuredClone(value)
+        : value;
+    },
+  };
+}
 
-/** Look up any catalog entry — config-tree or state-backed — by its key. */
+/**
+ * The process's catalog: the harness's rows until `installProcessRuntime`
+ * installs the app's rows and its plugins' beside them, once per process, as
+ * it installs the session owner. The harness reads a setting by key through
+ * it, so it never imports an app's rows.
+ */
+let installed = settingsCatalog([]);
+
+/** Install the process's catalog; `installProcessRuntime` calls it once. */
+export function installSettingsCatalog(catalog: SettingsCatalog): void {
+  installed = catalog;
+}
+
+/** Look up any installed row by its key. */
 export function settingByKey(key: string): StateSettingEntry | undefined {
-  return SETTINGS_BY_KEY.get(key);
+  return installed.byKey(key);
 }
 
-/** Look up a scalar setting owned by the settings view's unified write path. */
-export function settingsViewSettingByKey(
-  key: string,
-): SettingsViewStateSettingEntry | undefined {
-  return SETTINGS_VIEW_SETTINGS_BY_KEY.get(key);
+/** An installed config-file-backed row's default (see `SettingsCatalog.configDefault`). */
+export function getCoreSettingDefault(key: string): unknown {
+  return installed.configDefault(key);
 }
 
-/**
- * The rows one settings-view snapshot carries, in catalog order.
- *
- * This is the whole content of a catalog-derived snapshot: the outbound
- * payload's Zod shape, the backend's read loop, and the webview's apply step
- * each iterate this list instead of re-listing the same fields by hand. Adding
- * `surfaces.settingsView: '<snapshot>'` to a row is therefore all it takes to
- * put that setting on the wire.
- */
-export function settingsViewSnapshotEntries(
-  snapshot: SettingsViewSnapshot,
-): readonly SettingsViewStateSettingEntry[] {
-  return [...SETTINGS_VIEW_SETTINGS_BY_KEY.values()].filter(
-    (entry) => entry.surfaces.settingsView === snapshot,
-  );
-}
-
-/**
- * The `/config` catalog: every row the CLI panel renders, across both catalog
- * tiers. `surfaces.cliConfig` is the single predicate.
- */
-export const CLI_STATE_SETTINGS: readonly SurfacedSettingEntry[] =
-  SURFACED_SETTINGS.filter((entry) => entry.surfaces.cliConfig === true);
-
-const CLI_STATE_SETTINGS_BY_KEY: ReadonlyMap<string, SurfacedSettingEntry> =
-  new Map(CLI_STATE_SETTINGS.map((entry) => [entry.key, entry]));
-
-/** Look up a row the CLI `/config` panel lists, and so may write. */
-export function cliConfigSettingByKey(
-  key: string,
-): SurfacedSettingEntry | undefined {
-  return CLI_STATE_SETTINGS_BY_KEY.get(key);
-}
-
-/**
- * Canonical `texra.*` keys of the config-backed rows — the CLI's unknown-key
- * whitelist's catalog half.
- */
-export const CLI_CONFIG_SLOT_KEYS: readonly string[] = ALL_SETTINGS.filter(
-  (entry) => entry.slot === 'config',
-).map((entry) => entry.key);
-
-/** Models tab controls for one provider, in catalog order. */
-export function modelsTabSettings(provider: string): readonly {
-  readonly entry: StateSettingEntry;
-  readonly surface: ModelsTabSurface;
-}[] {
-  return ALL_SETTINGS.flatMap((entry) =>
-    (entry.surfaces?.models ?? [])
-      .filter((surface) => surface.provider === provider)
-      .map((surface) => ({ entry, surface })),
-  );
-}
+// ============================================================================
+// Row helpers
+// ============================================================================
 
 /** The entry's schema with the outer `.prefault()` wrapper peeled off. */
 export function settingSchemaWithoutPrefault(
