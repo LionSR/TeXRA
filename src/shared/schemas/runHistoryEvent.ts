@@ -1,7 +1,6 @@
 /**
- * Payloads for the run-history arms of `SessionEventDraftSchema`
- * (`2026-09-08-pr1-run-ledger-foundation.md` section 2). Shapes only: the
- * arms themselves live in `sessionEvent.ts`, which is the single vocabulary
+ * Payloads for the run-history arms of `SessionEventDraftSchema`. Shapes
+ * only: the arms themselves live in `sessionEvent.ts`, which is the single vocabulary
  * the publisher and both folds switch over.
  *
  * Every arm nests its payload under one key rather than spreading `.shape`
@@ -284,9 +283,10 @@ export const ModelMessagePayloadSchema = z
  * causes. `base` is the `seq` of the edit the view stood at when this one
  * was computed (`null`: none), and the fold refuses an edit whose base is no
  * longer the latest. `usage` is a summary call's priced usage, folded as a
- * response's (`null` when no model was called). Only `compaction` has a
- * writer; `reset`, `handoff` and `fork` are the durable harness's shapes. Whether the result is preparable is the
- * run history's check (D11), at write and cold load: a payload cannot see the
+ * response's (`null` when no model was called). Compaction (`run/compaction.ts`,
+ * `loop/modelSwitch.ts`), reset and handoff (`FollowUps.ts`) and the fork
+ * seed (`forkRun.ts`) write it. Whether the result is preparable is the run
+ * history's check (D11), at write and cold load: a payload cannot see the
  * history it edits.
  */
 export const ContextEditPayloadSchema = z

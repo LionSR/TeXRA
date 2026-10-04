@@ -384,65 +384,62 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     };
   });
 
-  const consume = Effect.fn('FollowUps.consume')(function* (
-    current: RunState,
-    batch: FollowUpBatch,
-    prepare?: (state: RunState) => Effect.Effect<RunState, Error>,
-  ): Effect.fn.Return<
-    ConsumedFollowUps,
-    Error,
-    FileSystem.FileSystem | ChildProcessSpawner
-  > {
-    const state = prepare === undefined ? current : yield* prepare(current);
-    const joined = yield* batchRows(state, batch);
-    const committed = yield* Effect.uninterruptible(
-      runHistory.appendBatch(runId, state, [
-        ...joined.rows,
-        // The input that recovers a failed run clears the error fact in
-        // the same transaction, so a resume taken between this batch and
-        // the next turn's snapshot does not read the run as still failed.
-        ...(joined.turn
-          ? [
-              ...snapshotRow(runId, state, {
-                runtime: { lastError: null },
-                ...(state.loop
-                  ? { state: { ...state.loop, ...joined.recorded } }
-                  : {}),
-              }),
-              positionRow(runId, state, 'turn.ready'),
-            ]
-          : []),
-      ]),
-    );
-    joined.delivered();
-    return { state: committed, turn: joined.turn };
-  });
-
-  /** {@link consume}, settling a view edit's waiter on every exit: its
+  /** Commit one batch; a view edit's waiter settles on every exit: its
    *  commit, a refusal, or a stop before either. */
-  const consumeSettled = (
-    state: RunState,
-    batch: FollowUpBatch,
-    prepare?: (state: RunState) => Effect.Effect<RunState, Error>,
-  ) =>
-    batch.kind !== 'edit'
-      ? consume(state, batch, prepare)
-      : consume(state, batch, prepare).pipe(
-          Effect.onExit((exit) =>
-            Deferred.done(
-              batch.edit.done,
-              Exit.isSuccess(exit)
-                ? Exit.void
-                : Exit.fail(
-                    Cause.hasInterruptsOnly(exit.cause)
-                      ? new Error(
-                          'The task stopped before its view was edited.',
-                        )
-                      : ensureError(Cause.squash(exit.cause)),
-                  ),
+  const consume = Effect.fn('FollowUps.consume')(
+    function* (
+      current: RunState,
+      batch: FollowUpBatch,
+      prepare?: (state: RunState) => Effect.Effect<RunState, Error>,
+    ): Effect.fn.Return<
+      ConsumedFollowUps,
+      Error,
+      FileSystem.FileSystem | ChildProcessSpawner
+    > {
+      const state = prepare === undefined ? current : yield* prepare(current);
+      const joined = yield* batchRows(state, batch);
+      const committed = yield* Effect.uninterruptible(
+        runHistory.appendBatch(runId, state, [
+          ...joined.rows,
+          // The input that recovers a failed run clears the error fact in
+          // the same transaction, so a resume taken between this batch and
+          // the next turn's snapshot does not read the run as still failed.
+          ...(joined.turn
+            ? [
+                ...snapshotRow(runId, state, {
+                  runtime: { lastError: null },
+                  ...(state.loop
+                    ? { state: { ...state.loop, ...joined.recorded } }
+                    : {}),
+                }),
+                positionRow(runId, state, 'turn.ready'),
+              ]
+            : []),
+        ]),
+      );
+      joined.delivered();
+      return { state: committed, turn: joined.turn };
+    },
+    (effect, _state, batch) =>
+      batch.kind !== 'edit'
+        ? effect
+        : effect.pipe(
+            Effect.onExit((exit) =>
+              Deferred.done(
+                batch.edit.done,
+                Exit.isSuccess(exit)
+                  ? Exit.void
+                  : Exit.fail(
+                      Cause.hasInterruptsOnly(exit.cause)
+                        ? new Error(
+                            'The task stopped before its view was edited.',
+                          )
+                        : ensureError(Cause.squash(exit.cause)),
+                    ),
+              ),
             ),
           ),
-        );
+  );
 
   return {
     hasQueued: () => input.hasQueued(),
@@ -491,6 +488,6 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
       released = true;
       manager.release(lease, next);
     },
-    consume: consumeSettled,
+    consume,
   };
 });
