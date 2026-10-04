@@ -16,6 +16,7 @@ import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 import {
   acceptedEfforts,
   BACKEND_PROTOCOLS,
+  type BackendProviderId,
   type Model,
   type ModelConfiguration,
   type ModelOrigin,
@@ -134,6 +135,14 @@ type ConfigurationOf<P extends HttpProtocol> = Extract<
 export const PROTOCOL_BY_BACKEND: Readonly<
   Record<ModelBackend, Protocol | 'validation'>
 > = { validation: 'validation', ...BACKEND_PROTOCOLS };
+
+type AssertNever<T extends never> = T;
+
+/** Every plugin that names a protocol is a stored backend; the error names
+ *  the plugin ids `ModelBackendSchema` lacks. */
+type _EveryBackendProviderIsStored = AssertNever<
+  Exclude<BackendProviderId, ModelBackend>
+>;
 
 /** A binding's {@link BoundModel.wireRouteKey} and model-scoped key. */
 function routeKeys(wire: readonly string[], model: string) {

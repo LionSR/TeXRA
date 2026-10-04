@@ -120,10 +120,11 @@ export function modelSwitchPort(
       };
     }
     const nextConfig = selected.config;
-    // The routes the run declined, so the preflight decides the route the
-    // bind at the next model boundary will.
+    // The run's backend and declined routes, so the preflight decides the
+    // route the bind at the next model boundary will.
     const { route } = yield* resolveModelRoute(run.stores, nextConfig, {
       mode: selected.request.mode,
+      backend: current.backend,
       declinedRoutes: run.declinedRoutes,
     }).pipe(Effect.provideService(LanguageModel, languageModel));
     const nextBackend = yield* routeBackend(nextConfig, route);

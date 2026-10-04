@@ -275,7 +275,7 @@ export type RegionalProviderId = Extract<
 >['id'];
 
 /** A provider a run's conversation can be bound to: its backend. */
-type BackendProviderId = Extract<
+export type BackendProviderId = Extract<
   ModelProviderPluginEntry,
   { readonly protocol: string }
 >['id'];
