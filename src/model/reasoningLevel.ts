@@ -5,6 +5,7 @@ import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
 import {
+  acceptedEfforts,
   chooseReasoning,
   defaultReasoningLevel,
   type ReasoningRequest,
@@ -52,29 +53,14 @@ export function reasoningEffortOverrides(state: StateStore) {
 }
 
 /**
- * The levels a user can pick for a model: `none` where thinking can be turned
- * off, then the levels it accepts while thinking. Empty or single-valued means
- * there is nothing to choose.
- */
-export function selectableReasoningLevels(
-  config: Pick<ModelConfig, 'reasoning'>,
-): ReasoningEffort[] {
-  const { reasoning } = config;
-  if (reasoning === undefined) return [];
-  return [
-    ...(reasoning.off === undefined ? [] : [ReasoningEffort.NONE]),
-    ...reasoning.efforts,
-  ];
-}
-
-/**
- * Whether the model exposes a user-selectable reasoning level. This is the one
+ * Whether the model exposes a user-selectable reasoning level: more than one
+ * of the efforts it accepts ({@link acceptedEfforts}). This is the one
  * definition behind both the model binding and the model choices.
  */
 export function supportsReasoningLevel(
   config: Pick<ModelConfig, 'reasoning'>,
 ): boolean {
-  return selectableReasoningLevels(config).length > 1;
+  return acceptedEfforts(config).length > 1;
 }
 
 /**

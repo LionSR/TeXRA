@@ -18,8 +18,7 @@ interface OpenRouterRoutingConfig {
  * endpoint (see {@link isKimiCodeExclusiveModel}), so its credential and
  * endpoint stay paired and it always bypasses OpenRouter.
  */
-export type ModelRoutingConfig = OpenRouterRoutingConfig &
-  KimiSubscriptionModelFields;
+type ModelRoutingConfig = OpenRouterRoutingConfig & KimiSubscriptionModelFields;
 
 function isOpenRouterAccessSelected(
   config: ModelRoutingConfig,

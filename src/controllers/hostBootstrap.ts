@@ -42,9 +42,6 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { ToolRegistry } from '@tools/toolTable';
 
-// Local file imports
-import { installSubscriptionProbes } from './modelAccess/installSubscriptionProbes';
-
 /** Secret names the removed TeXRA account wrote (`texra.supabase.session`,
  *  `texra.supabase.gotrue*`, `texra.auth.pendingOAuthState.<nonce>`). */
 const RETIRED_ACCOUNT_SECRET_PREFIXES = [
@@ -84,11 +81,7 @@ export const bootstrapHost = Effect.fn('bootstrapHost')(function* (
   // traffic. Model traffic carries its own transport; this is the host's
   // process, so it may set the global dispatcher an embedder's may not.
   installProcessHttpDispatcher();
-  // ChatGPT / Grok subscription sign-in. Without this the model layer is
-  // bring-your-own-key. See installSubscriptionProbes. The probes
-  // close over the secret store, so the model layer stays secrets-free.
   const secrets = yield* Secrets;
-  installSubscriptionProbes(secrets);
   // The removed TeXRA account left its Supabase session (a refresh token),
   // GoTrue's PKCE verifiers and the pending sign-in records in the secret
   // store. Delete them by name, never reading a value; once gone, the listing

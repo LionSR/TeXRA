@@ -37,9 +37,6 @@ export function apiProviderOfSecretName(
   return isApiProvider(provider) ? provider : undefined;
 }
 
-/** Where a resolved API key came from. */
-export type ApiKeyOrigin = CredentialOrigin;
-
 /** UI-safe provider key status derived from a resolved API key origin. */
 export type ApiKeyStatus = 'set' | 'env' | 'not-set';
 
@@ -51,7 +48,7 @@ interface ResolvedApiKey {
    * provider client unwraps it.
    */
   value: Redacted.Redacted<string> | undefined;
-  origin: ApiKeyOrigin;
+  origin: CredentialOrigin;
 }
 
 /**
@@ -117,14 +114,14 @@ export function lookupApiKey(
 export function lookupApiKeyOrigin(
   credentials: CredentialStore,
   provider: ApiKeyProviderId,
-): Effect.Effect<ApiKeyOrigin, SecretsFailed> {
+): Effect.Effect<CredentialOrigin, SecretsFailed> {
   return Effect.map(
     resolveApiKey(credentials, provider),
     (resolved) => resolved.origin,
   );
 }
 
-const STATUS_BY_ORIGIN: Record<ApiKeyOrigin, ApiKeyStatus> = {
+const STATUS_BY_ORIGIN: Record<CredentialOrigin, ApiKeyStatus> = {
   secret: 'set',
   env: 'env',
   none: 'not-set',

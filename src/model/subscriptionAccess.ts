@@ -1,19 +1,11 @@
 /**
- * The OAuth subscriptions (ChatGPT, Grok) as the model layer sees them: each
- * provider's "prefer my subscription" switch, and whether a session is signed
- * in.
+ * Each OAuth subscription's (ChatGPT, Grok) "prefer my subscription" switch.
  *
  * The switches are off by default (experimental, opt-in). When one is on AND
  * the user is signed in, the provider's eligible models route through the
- * subscription instead of the user's API key. The OAuth machinery lives
- * outside the model layer (`@texra-ai/llm/node`), so the model layer holds only the
- * sign-in answer, not the plumbing: an app that supports subscription sign-in
- * installs a probe at startup, and an embedder that does not simply never
- * signs in. Signed out is the honest default — it routes model selection to
- * API keys rather than to a subscription that cannot be reached.
+ * subscription instead of the user's API key; `readRouteFacts` reads the
+ * sign-in from the session store (`@texra-ai/llm/node`).
  */
-import { Effect } from 'effect';
-
 import type { ConfigTarget, ConfigWriteFailed } from '@platform/interfaces';
 import {
   readConfigSetting,
@@ -22,11 +14,9 @@ import {
 import type { SubscriptionAuthStatus } from '@shared/model/subscriptionAuth';
 import { settingByKey } from '@shared/state/stateSettings';
 import { writeSettingTo } from '@utils/config/platformSettings';
+import type { Effect } from 'effect';
 
 type SubscriptionAuthProvider = SubscriptionAuthStatus['provider'];
-
-/** Reads the current sign-in state. Never fails; never hits the network. */
-type SignedInProbe = () => Effect.Effect<boolean>;
 
 /** Config key of each provider's "prefer my subscription" switch. */
 const PREFER_SUBSCRIPTION_KEYS: Readonly<
@@ -34,13 +24,6 @@ const PREFER_SUBSCRIPTION_KEYS: Readonly<
 > = {
   chatgpt: 'texra.chatgptCodex.preferSubscription',
   grok: 'texra.xaiGrok.preferSubscription',
-};
-
-const SIGNED_OUT: SignedInProbe = () => Effect.succeed(false);
-
-const signedInProbes: Record<SubscriptionAuthProvider, SignedInProbe> = {
-  chatgpt: SIGNED_OUT,
-  grok: SIGNED_OUT,
 };
 
 /** Whether the user has switched on "prefer my subscription" for `provider`. */
@@ -75,22 +58,4 @@ export function setPreferSubscription(
   const target: ConfigTarget =
     inspection?.workspaceValue !== undefined ? 'workspace' : 'global';
   return writeSettingTo(stores, configKey, enabled, target);
-}
-
-/**
- * Install the app's sign-in probe for `provider`. Called once per process
- * from the host composition root.
- */
-export function setSignedInProbe(
-  provider: SubscriptionAuthProvider,
-  probe: SignedInProbe,
-): void {
-  signedInProbes[provider] = probe;
-}
-
-/** Whether a `provider` subscription session is currently signed in. */
-export function isSubscriptionSignedIn(
-  provider: SubscriptionAuthProvider,
-): Effect.Effect<boolean> {
-  return signedInProbes[provider]();
 }

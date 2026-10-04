@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 import { Effect } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
@@ -10,7 +10,6 @@ import {
   OWN_KEY_ROUTE_FACTS,
   SecretsFailed,
 } from '@texra-ai/llm';
-import { installSubscriptionProbes } from '@controllers/modelAccess/installSubscriptionProbes';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import {
@@ -109,9 +108,6 @@ async function installAccessPlatform(
     },
     secrets: options.secrets ?? OPENAI_KEY_SECRETS,
   });
-  // Coordinators are keyed by the secret store, so the reinstalled host's
-  // store is what the probes installed here read.
-  installSubscriptionProbes(hostStores().secrets);
 }
 
 function codexSessionSecrets(): Record<string, string> {
@@ -168,12 +164,6 @@ describe('model availability', () => {
   setupPlatform({
     globalState: { [GlobalStateKey.MODEL_SELECTION]: onlyEnabled([GPT55]) },
     secrets: OPENAI_KEY_SECRETS,
-  });
-
-  beforeEach(() => {
-    // The picker reads subscription sign-in state through the model layer's
-    // seam; install the same probes the three hosts install.
-    installSubscriptionProbes(hostStores().secrets);
   });
 
   it.effect.each([

@@ -77,7 +77,7 @@ export interface RouteFacts<C = unknown> {
 }
 
 /** The facts {@link decideModelRoute} reads. */
-export type RouteDecisionFacts<C = unknown> = Omit<
+type RouteDecisionFacts<C = unknown> = Omit<
   RouteFacts<C>,
   'chatgptContextWindow' | 'endpoints'
 >;
@@ -102,7 +102,7 @@ export type HostRouteFacts = Omit<
 >;
 
 /** What a direct provider key pays through. */
-export type ApiKeyUsageRoute =
+type ApiKeyUsageRoute =
   'api-key' | 'kimi-code-subscription' | 'glm-coding-plan-subscription';
 
 /** The route a model's next request takes, decided by {@link decideModelRoute}. */

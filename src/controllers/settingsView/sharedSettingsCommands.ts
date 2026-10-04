@@ -22,8 +22,8 @@ import {
 } from '@texra-ai/llm';
 
 import type { SessionHandle } from '@agent/runtime';
-import { subscriptionAuthStatus } from '@controllers/modelAccess/subscriptionAuthStatus';
 import {
+  subscriptionAuthStatus,
   subscriptionProvider,
   type SubscriptionProviderId,
 } from '@controllers/modelAccess/subscriptionProviders';

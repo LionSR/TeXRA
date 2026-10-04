@@ -9,6 +9,7 @@ import {
 
 // Local imports
 import {
+  acceptedEfforts,
   defaultReasoningLevel,
   isExpensiveModel,
   isFastFirstResponseModel,
@@ -18,7 +19,6 @@ import {
 import { getHelperModelName } from '@agent/runtime/helperModelName';
 import {
   reasoningEffortOverrides,
-  selectableReasoningLevels,
   supportsReasoningLevel,
 } from '@model/reasoningLevel';
 import {
@@ -264,7 +264,7 @@ export class SettingsModelSelectionController<R = never> {
     if (!supportsReasoningLevel(config)) return;
 
     item.supportsReasoningLevel = true;
-    const supportedLevels = selectableReasoningLevels(config);
+    const supportedLevels = acceptedEfforts(config);
     item.supportedReasoningLevels = supportedLevels;
     item.defaultReasoningLevel = defaultReasoningLevel(config);
 
