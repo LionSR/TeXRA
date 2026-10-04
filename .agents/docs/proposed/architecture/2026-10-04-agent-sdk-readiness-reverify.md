@@ -10,15 +10,15 @@ supersedes the 2026-09-26 pass (`2026-09-26-agent-sdk-readiness-reverify.md`),
 which is now deleted; version control keeps it, per `.agents/docs/README.md`.
 
 Pin: verified against branch `claude/eager-noether-hiwxl7` at `ae953c3`. The
-2026-09-26 pass's pin, `f0811a0` (branch `claude/eager-noether-q6bj0r`), is
-**not reachable in this clone** — that branch merged and was reclaimed — so a
-`git rev-list f0811a0..HEAD` delta cannot be reproduced here, and this pass
-re-verifies the current tree directly instead. The intervening work is visible
-in the merged history ending at `ae953c3`: the audited areas continued to
+2026-09-26 pass's pin, `f0811a0` (#13310), is an ancestor of `ae953c3` —
+306 commits back (`git rev-list --count f0811a0..ae953c3`); it only looks
+unreachable from a shallow clone, which needs deepening first. This pass
+re-verifies the current tree and reads that range for the delta: the audited
+areas continued to
 shrink under the same human-owned simplification program — the chat family
 collapsed onto one codec (`packages/llm/src/api/openaiChat.ts` is gone,
 consolidated into `chatStream.ts`), the model-access residue trimmed
-(`modelBinding.ts` is now 967 lines, down from the 1037 the prior pass cited),
+(`modelBinding.ts` is 966 lines at the pin, down from the 1037 the prior pass cited),
 the run "ledger" became the run "history" (M5), and the workflow round program
 was restructured (`loop/reflection.ts` is gone; the round mode is now
 `loop/rounds.ts`, over `loop/{rows,step,toolUseDispatch,toolGuard,hooks,modelSwitch}.ts`).
@@ -28,12 +28,12 @@ Alignment has **held or improved**, entirely through review, not this routine.
 
 Since the last pass the owner has reframed the target. Per
 `2026-10-02-durable-harness.md` (status: accepted), the deliverable is a
-general, Effect-native, *durable harness* — "TeXRA would just be an example" —
+general, Effect-native, _durable harness_ — "TeXRA would just be an example" —
 whose SDK is its **extend** surface: `Plugin`, `Sessions.layer({ plugins })`,
 `Plugins.contribute` in a `Scope`, and `Session.resume`, built as Effect values
 over the plugin table (that note's H4). This reorients this standing charter:
 "Agent SDK readiness" now means the durable-harness program (H1–H5), not the
-ratification of the 2026-09-10 `@texra-ai/agent` Tier-1 *static-export*
+ratification of the 2026-09-10 `@texra-ai/agent` Tier-1 _static-export_
 manifest. The audited areas and the no-unnecessary-abstraction verdict below
 are unaffected; what changes is the open-work half (§New.1, §Recommendation).
 The package name is still open (durable-harness Q5), so the harness SDK still
@@ -45,7 +45,14 @@ The codebase is still well-aligned, and this audit remains a standing program,
 not a gap. No autonomous refactor is warranted from this charter: every safe
 candidate in these areas is already filed, already landed, or already recorded
 as refused with a ruling (`config/ratchets/refuted-candidates.json`, still the
-authoritative refused set — none of its entries changed shape this pass). Four
+authoritative refused set). Over `f0811a0..ae953c3` that file changed only
+mechanically: symbol signatures re-pinned after their owners moved
+(`jitteredExponentialBackoffMs` gained `unitRandom` in 6f893459,
+`retryTransientFetch` in e8107bc9, `registerExternalRoot` in 0ed64bad,
+`JsonConfigProvider` and `installCliProcessRuntime`), ruling links followed
+their notes to `implemented/`, and two entries retired with their subjects
+(`RT-write-raw-and-wait`; `RT-corrupt-record-tag`, with the 1.0 store in
+e3fb9ca3). No retained refusal was reversed, so none bears on this verdict. Four
 read-only audits — one each over the agent core, the model handler, the logger,
 and the SDK public surface — found **no wrapper layer that only forwards, no
 second run-history writer, no services-bag, no re-export shim**. The loop's
@@ -95,7 +102,7 @@ one of the two `packages/llm` ambient-read sites without this routine.
      consolidation named in the Pin removed a whole file this pass. The `Model`
      interface still takes only a Zod-guarded materialized `TurnRequest` and
      keeps host concerns in `BoundModel`.
-   - **Logger** is reached through a clean host-agnostic *producer* port
+   - **Logger** is reached through a clean host-agnostic _producer_ port
      (`Effect.log*` + `withLogChannel`), render→redact→truncate single-owner.
      The one remaining structural item is the sink→Layer conversion (§New.2),
      still unlanded.
@@ -115,9 +122,10 @@ one of the two `packages/llm` ambient-read sites without this routine.
    workflow-script run plus its `agent()` grandchildren; and (c) the agent-CLI
    children (`claude_code`, `codex`) through `startDetachedChildRunLoop` with
    provider-specific `ChildRunStrategy`. The non-candidates (reflection/round
-   output extraction, `compileCheck`, `LatexDiffManager`, `runAgentCreator`)
-   still have no independent run or model lifecycle, so reifying one buys
-   nothing. No boundary change is warranted.
+   output extraction, `compileCheck`, `LatexDiffManager`) still have no
+   independent run or model lifecycle, so reifying one buys nothing.
+   `runAgentCreator` left the list by deletion: the wizard it served is gone
+   (see §Genuinely open). No boundary change is warranted.
 
 ## New since the 2026-09-26 pass (needs an owner, not a routine)
 
@@ -126,8 +134,8 @@ one of the two `packages/llm` ambient-read sites without this routine.
    entry as "34 (10 values, 24 types)" and names `ToolHost`. The live
    `packages/agent/src/index.ts` now exports **37 bindings (10 values, 27
    types)**:
-   - `ToolHost` is **gone from the package entirely** (`grep ToolHost
-     packages/agent/src` is empty); §3.1 still lists it as a root type.
+   - `ToolHost` is **gone from the package entirely** (a `ToolHost` grep of
+     `packages/agent/src` is empty); §3.1 still lists it as a root type.
    - The root entry also exports `ToolGuard`, `SettingHost`, `Composition`
      (`./effect/runtime.js`) and `Plugin` (`@tools/plugins`), none of which
      §3.1 lists. `Plugin` and `Composition` are **not** accidental drift: they
@@ -138,9 +146,9 @@ one of the two `packages/llm` ambient-read sites without this routine.
      enum reaching the public tool-definition contract via `unavailableHosts`)
      and the `MapToolRegistry`/`IToolRegistry` registry plumbing an embedder on
      the documented `StartInput.tools`/`defineTool` path never constructs.
-   So the 2026-09-10 draft should be retired or rewritten against the harness
-   program rather than ratified as-is: ratifying it would pin a deleted name
-   (`ToolHost`) and omit the very surface (`Plugin`) the pivot is built on.
+     So the 2026-09-10 draft should be retired or rewritten against the harness
+     program rather than ratified as-is: ratifying it would pin a deleted name
+     (`ToolHost`) and omit the very surface (`Plugin`) the pivot is built on.
 
 2. **The logger sink→Layer step is still unlanded.** `src/logger/logSink.ts`
    still holds the mutable module global (`let sink = consoleLogSink`,
@@ -187,8 +195,8 @@ one of the two `packages/llm` ambient-read sites without this routine.
   `'validation'` disjuncts unreachable. On inspection they are not: the `if` at
   :803 returns only for `vscode-lm` **and** `copilot` together, and the `if` at
   :816 returns only for `protocol === 'validation'`, so by :843 the `vscode-lm`
-  disjunct (vscode-lm format, non-copilot route) and the `route.kind ===
-  'validation'` disjunct (validation route, non-validation protocol) are the
+  disjunct (vscode-lm format, non-copilot route) and the
+  `route.kind === 'validation'` disjunct (validation route, non-validation protocol) are the
   live format/route-mismatch cases this guard exists to fail loudly on. Trimming
   would be a silent-degradation regression. Dropped from the cleanup list.
 
@@ -202,10 +210,12 @@ nesting order is load-bearing for finalizer-before-release ordering.
   2026-09-10 static list) — §New.1; belongs to the durable-harness program.
 - **Shrink the `host-agent-import` frozen list** as the manifest ratifies each
   edge; never widen.
-- **Owner ruling on the two agent-creation systems** (`texra.createAgentWithAI`
-  wizard vs. the `creator` tool-use agent), per
-  `2026-09-23-ssot-ownership-survey.md` §2 — reverses two rulings, not a
-  routine's call.
+
+**Resolved since the last pass:** the two agent-creation systems question
+(`2026-09-23-ssot-ownership-survey.md` §2). The `texra.createAgentWithAI`
+wizard and `runAgentCreator` are gone in favor of the `creator` tool-use agent
+(`CHANGELOG.md` records the removal); no ruling is left to make, and that
+survey's §2 is superseded on this point.
 
 ## Recommendation
 
