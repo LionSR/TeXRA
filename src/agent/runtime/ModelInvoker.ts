@@ -544,7 +544,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           if (inputTokens > bound.contextWindow) {
             return yield* failAttempt(
               new ModelError({
-                kind: 'invalid-request',
+                kind: 'context-overflow',
                 message: `Input is ${inputTokens} tokens, which exceeds the model's context window of ${bound.contextWindow} tokens.`,
               }),
               bound,

@@ -1,3 +1,4 @@
+import { ModelProvider } from 'llm-zoo';
 // Third-party imports
 import {
   APIUserAbortError as AnthropicAPIUserAbortError,
@@ -13,23 +14,32 @@ import {
 import { describe, expect, it } from 'vitest';
 
 // Local imports
+import { classifyModelFailure } from '@agent/runtime/run/modelFailure';
 import {
   attachContextWindowError,
   attachMissingApiKeyError,
   attachProviderError,
+  hasContextWindowErrorMarker,
 } from '@common/errors/sdkError/errorMetadata';
-import {
-  isContextWindowError,
-  isUserAbort,
-} from '@common/errors/sdkError/errorPatterns';
+import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
   buildErrorLogData,
   formatProviderHttpError,
   getSdkErrorMessage,
-  isProviderErrorAutoRetryable,
   normalizeProviderError,
 } from '@common/errors/sdkError/providerErrorFormat';
 import type { ProviderError, RetryErrorInfo } from '@shared/schemas';
+import { openaiFailure } from '../../../packages/llm/src/api/openaiError.js';
+import { judgeFailure } from '../../../packages/llm/src/api/verdict.js';
+
+/**
+ * An OpenAI SDK failure as the binding raises and judges it, read the way the
+ * run reads it: the package owns every verdict on a provider's reply.
+ */
+const judged = (cause: unknown) =>
+  classifyModelFailure(judgeFailure(openaiFailure(cause), 'api-key'), {
+    config: { provider: ModelProvider.OPENAI },
+  });
 
 class APIError extends Error {}
 
@@ -102,7 +112,7 @@ describe('formatProviderHttpError', () => {
     };
     const error = new OpenAIAPIError(undefined, body, body.message, undefined);
 
-    const formatted = formatProviderHttpError(error);
+    const { formatted } = judged(error);
 
     expect(formatted.statusCode).toBe(500);
     expect(formatted.userRetryable).toBe(true);
@@ -118,11 +128,11 @@ describe('formatProviderHttpError', () => {
     };
     const error = new OpenAIAPIError(undefined, body, body.message, undefined);
 
-    const formatted = formatProviderHttpError(error);
+    const { formatted } = judged(error);
 
     expect(formatted.statusCode).toBe(503);
     expect(formatted.userRetryable).toBe(true);
-    expect(isProviderErrorAutoRetryable(error)).toBe(true);
+    expect(judged(error).autoRetryable).toBe(true);
     expect(formatted.rawErrorBody).toEqual(body);
 
     const codeOnlyBody = {
@@ -136,7 +146,7 @@ describe('formatProviderHttpError', () => {
       undefined,
     );
 
-    expect(formatProviderHttpError(codeOnlyError).statusCode).toBe(503);
+    expect(judged(codeOnlyError).formatted.statusCode).toBe(503);
   });
 
   it('formats OpenAI HTTP errors with status metadata', () => {
@@ -169,7 +179,7 @@ describe('formatProviderHttpError', () => {
       new Headers(),
     );
 
-    const formatted = formatProviderHttpError(error);
+    const { formatted } = judged(error);
 
     expect(formatted.message).toBe('HTTP 400 Bad Request – Bad Request');
     expect(formatted.message).not.toContain(privatePrompt);
@@ -194,7 +204,7 @@ describe('formatProviderHttpError', () => {
       `400 ${JSON.stringify(reorderedBody, null, 2)}`,
     );
 
-    const formatted = formatProviderHttpError(error);
+    const { formatted } = judged(error);
 
     expect(formatted.message).toBe('HTTP 400 Bad Request – Bad Request');
     expect(formatted.message).not.toContain(privatePrompt);
@@ -208,7 +218,7 @@ describe('formatProviderHttpError', () => {
       'The provider rejected this request because the model is unavailable.',
     );
 
-    const formatted = formatProviderHttpError(error);
+    const { formatted } = judged(error);
 
     expect(formatted.message).toBe(
       'HTTP 400 Bad Request – The provider rejected this request because the model is unavailable.',
@@ -227,7 +237,7 @@ describe('formatProviderHttpError', () => {
     body.self = body;
     Object.assign(error, { error: body });
 
-    const formatted = formatProviderHttpError(error);
+    const { formatted } = judged(error);
 
     expect(formatted.message).toBe(
       'HTTP 400 Bad Request – The provider failed while reporting {"kind":"provider-error"}.',
@@ -242,7 +252,7 @@ describe('formatProviderHttpError', () => {
       'The selected model does not support this response format.',
     );
 
-    const formatted = formatProviderHttpError(error);
+    const { formatted } = judged(error);
 
     expect(formatted.message).toBe(
       'HTTP 400 Bad Request – The selected model does not support this response format.',
@@ -259,7 +269,7 @@ describe('formatProviderHttpError', () => {
       new Headers(),
     );
 
-    const formatted = formatProviderHttpError(error);
+    const { formatted } = judged(error);
 
     expect(formatted.message).toBe('HTTP 400 Bad Request – Bad Request');
     expect(formatted.message).not.toContain(privateBody);
@@ -278,7 +288,7 @@ describe('formatProviderHttpError', () => {
       new Headers(),
     );
 
-    const formatted = formatProviderHttpError(error);
+    const { formatted } = judged(error);
 
     expect(formatted.statusCode).toBe(429);
     expect(formatted.classification).toStrictEqual({ kind: 'upstream-credit' });
@@ -296,7 +306,7 @@ describe('formatProviderHttpError', () => {
       new Headers(),
     );
 
-    const formatted = formatProviderHttpError(error);
+    const { formatted } = judged(error);
 
     expect(formatted.statusCode).toBe(429);
     expect(formatted.classification).toStrictEqual({ kind: 'upstream-credit' });
@@ -310,7 +320,7 @@ describe('formatProviderHttpError', () => {
       code: 'insufficient_quota',
     });
 
-    const formatted = formatProviderHttpError(error);
+    const { formatted } = judged(error);
 
     expect(formatted.statusCode).toBeUndefined();
     expect(formatted.classification).toStrictEqual({ kind: 'upstream-credit' });
@@ -323,7 +333,7 @@ describe('formatProviderHttpError', () => {
       type: 'server_error',
     });
 
-    const formatted = formatProviderHttpError(error);
+    const { formatted } = judged(error);
 
     expect(formatted.statusCode).toBe(500);
     expect(formatted.classification).toBeUndefined();
@@ -382,53 +392,46 @@ describe('provider marker classification', () => {
   });
 });
 
-describe('isContextWindowError', () => {
-  it('recognizes a TeXRA-internal throw via its typed marker, independent of wording', () => {
-    // run/modelFailure.ts tags its own throw with
-    // attachContextWindowError() instead of relying on isContextWindowError
-    // string-matching the exact message it owns.
+describe('context-window overflow', () => {
+  it('is recognized by its marker, independent of wording', () => {
     const err = new Error(
       'Token count of message exceeds context window: 5 > 3',
     );
     attachContextWindowError(err);
 
-    expect(isContextWindowError(err)).toBe(true);
+    expect(hasContextWindowErrorMarker(err)).toBe(true);
     expect(formatProviderHttpError(err).classification).toStrictEqual({
       kind: 'context-window',
     });
   });
 
-  it('still matches third-party provider wording without a marker (fenced patterns)', () => {
-    expect(isContextWindowError(new Error('context length exceeded'))).toBe(
-      true,
-    );
-    expect(
-      isContextWindowError(new Error('Maximum context length is 128000.')),
-    ).toBe(true);
-  });
-
-  it('recognizes the marker through a cause chain (rethrown/wrapped error)', () => {
-    // Errors are frequently rewrapped as they propagate (e.g. `new Error(msg,
-    // { cause })`). The marker must still be found via `findInCauseChain`,
-    // not just on the outermost error.
+  it('is recognized by its marker through a cause chain (rethrown/wrapped error)', () => {
     const inner = new Error(
       'Token count of message exceeds context window: 5 > 3',
     );
     attachContextWindowError(inner);
     const outer = new Error('request failed', { cause: inner });
 
-    expect(isContextWindowError(outer)).toBe(true);
+    expect(hasContextWindowErrorMarker(outer)).toBe(true);
   });
 
-  it('does not misclassify an unrelated error as a context-window violation', () => {
-    expect(isContextWindowError(new Error('rate limit exceeded'))).toBe(false);
+  it('is the package verdict on third-party provider wording', () => {
+    for (const message of [
+      'context length exceeded',
+      'Maximum context length is 128000.',
+    ])
+      expect(judged(new Error(message)).formatted.classification).toStrictEqual(
+        { kind: 'context-window' },
+      );
   });
 
-  it("recognizes OpenAI's native error code even when the message wording is unfamiliar", () => {
-    // The SDK flattens error.code from the JSON body onto the thrown
-    // APIError/BadRequestError instance. A future model generation could
-    // reword the message freely without breaking detection, because this
-    // never inspects `.message`.
+  it('is not read into an unrelated error', () => {
+    expect(
+      judged(new Error('rate limit exceeded')).formatted.classification,
+    ).toBeUndefined();
+  });
+
+  it("is the verdict on OpenAI's native error code even when the message wording is unfamiliar", () => {
     const err = new OpenAIBadRequestError(
       400,
       { code: 'context_length_exceeded', message: 'Some brand-new wording' },
@@ -436,13 +439,12 @@ describe('isContextWindowError', () => {
       new Headers(),
     );
 
-    expect(isContextWindowError(err)).toBe(true);
+    expect(judged(err).formatted.classification).toStrictEqual({
+      kind: 'context-window',
+    });
   });
 
-  it('recognizes a nested error.code (e.g. a WebSocket error wrapper) without a top-level code', () => {
-    // Mirrors OpenAIResponseWebSocketTransport's onFailed wrapper, which
-    // preserves the response's structured `error` object on the thrown
-    // Error instead of just its `.message`.
+  it('is the verdict on a nested error.code (e.g. a WebSocket error wrapper) without a top-level code', () => {
     const err = new Error(
       'OpenAI WebSocket response failed: overflow',
     ) as Error & {
@@ -450,10 +452,13 @@ describe('isContextWindowError', () => {
     };
     err.error = { code: 'context_length_exceeded', message: 'overflow' };
 
-    expect(isContextWindowError(err)).toBe(true);
+    expect(judged(err).autoRetryable).toBe(false);
+    expect(judged(err).formatted.classification).toStrictEqual({
+      kind: 'context-window',
+    });
   });
 
-  it('does not match an unrelated native error code', () => {
+  it('is not read into an unrelated native error code', () => {
     const err = new OpenAIRateLimitError(
       429,
       { code: 'rate_limit_exceeded', message: 'Too many requests' },
@@ -461,7 +466,7 @@ describe('isContextWindowError', () => {
       new Headers(),
     );
 
-    expect(isContextWindowError(err)).toBe(false);
+    expect(judged(err).formatted.classification).toBeUndefined();
   });
 });
 

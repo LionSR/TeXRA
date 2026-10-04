@@ -43,7 +43,8 @@ const gpt55Config: ModelConfig = {
   outputPrice: 30,
   contextWindow: 1_050_000,
   // Codex eligibility comes from the registry's codexSubscription flag
-  // (see providerCapabilities.ts), not from tier/naming heuristics.
+  // (see `isCodexSubscriptionEligible` in models/modelRoute.ts), not from
+  // tier/naming heuristics.
   capabilities: DEFAULT_MODEL_CAPABILITIES,
   reasoning: { efforts: [ReasoningEffort.XHIGH] },
   openRouterOnly: false,

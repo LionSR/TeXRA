@@ -6,7 +6,6 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import {
   apiKeySecretName,
   decideModelRoute,
-  FAST_FIRST_RESPONSE_HINT,
   OWN_KEY_ROUTE_FACTS,
   SecretsFailed,
 } from '@texra-ai/llm';
@@ -33,6 +32,7 @@ import {
   installPlatform,
   setupPlatform,
 } from '@test/support/setupPlatform';
+import { FAST_FIRST_RESPONSE_HINT } from '../../../packages/llm/src/providers/providers.js';
 import { CODEX_SESSION_SECRET_KEY } from '../../../packages/llm/src/oauth/codex/codexConstants.js';
 
 const GPT55 = 'openai/gpt-5.5-2026-04-23';

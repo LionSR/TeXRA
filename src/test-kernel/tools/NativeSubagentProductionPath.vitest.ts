@@ -22,7 +22,6 @@ import {
   ModelError,
   type ModelOrigin,
   type ResolvedTurn,
-  ResolvedTurnSchema,
   type TurnEvent,
   type TurnRequest,
   type TurnResult,
@@ -105,6 +104,7 @@ import type { RunToolCall } from '@tools/core/toolRun';
 import { launchDetachedSubagent } from '@tools/delegation/subagentRun';
 import { readCompletedRunConversation } from '@transcript';
 import { generateRunId } from '@utils/core';
+import { ResolvedTurnSchema } from '../../../packages/llm/src/turn.js';
 
 const PARENT_RUN_ID = 'a9531a9531a9' as RunId;
 const OUTER_RUN_ID = '0a95310a9531' as RunId;

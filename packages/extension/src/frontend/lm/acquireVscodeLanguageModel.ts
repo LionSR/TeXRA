@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 // Third-party imports
 import {
   JsonObjectSchema,
-  ModelConfigurationSchema,
+  VscodeLanguageModelConfigurationSchema,
   ModelError,
   TurnRequestSchema,
   TurnResultSchema,
@@ -223,12 +223,13 @@ export const acquireVscodeLanguageModel = Effect.fn(
   configuration: VscodeLanguageModelConfiguration,
   consentMode: 'require-granted' | 'request-on-send' = 'require-granted',
 ): Effect.fn.Return<Model, ModelError, Scope.Scope> {
-  const parsed = ModelConfigurationSchema.safeParse(configuration);
-  if (!parsed.success || parsed.data.protocol !== 'vscode-lm') {
+  const parsed =
+    VscodeLanguageModelConfigurationSchema.safeParse(configuration);
+  if (!parsed.success) {
     return yield* new ModelError({
       kind: 'invalid-request',
       message: 'The editor model configuration is invalid.',
-      cause: parsed.success ? undefined : parsed.error,
+      cause: parsed.error,
     });
   }
   const config = parsed.data;

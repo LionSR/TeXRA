@@ -1,40 +1,46 @@
 /**
- * The runtime's reading of a failed model attempt. The package raises one
- * `ModelError` over the provider SDK's own failure. Its kind, status, request
- * id and `retry-after` are the classification; the SDK cause it carries is
- * read only for what the package cannot know: the reply body (quota and
- * credit exhaustion, a model-scoped limit, an overflowed window), which the
- * runtime turns into the retry policy, the route verdict and the manual-retry
- * prompt.
+ * The runtime's reading of a failed model attempt. The package judges every
+ * failure its binding raises against the vendor's reply (`ModelError`'s
+ * kind, status, `retryable`, `scope` and `quota`); this module only turns
+ * that verdict into the retry policy, the route verdict and the copy of the
+ * manual-retry prompt. A failure that is not the package's (a credential the
+ * route could not resolve, a cancelled request) is formatted as any error.
  */
 import { StatusCodes } from 'http-status-codes';
 import { ModelError } from '@texra-ai/llm';
 
-import { isContextWindowError } from '@common/errors/sdkError/errorPatterns';
 import {
   attachContextWindowError,
   attachProviderError,
-  attachSdkUsageRoute,
 } from '@common/errors/sdkError/errorMetadata';
 import {
-  getErrorClassNames,
-  isModelScopedRateLimitBody,
+  detectRawErrorBody,
+  safeGetReasonPhrase,
 } from '@common/errors/sdkError/errorInspection';
-import { causeChain } from '@common/errors/errorPredicates';
+import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
+  formatResetDuration,
   isProviderErrorAutoRetryable,
   normalizeProviderError,
+  httpErrorMessage,
 } from '@common/errors/sdkError/providerErrorFormat';
+import { isRetryableStatusCode } from '@common/errors/sdkError/sdkErrorKinds';
+import { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';
 import {
   getExhaustionReason,
   toRetryErrorInfo,
   type ExhaustionReason,
   type ProviderError,
+  type ProviderErrorClassification,
   type RetryErrorInfo,
 } from '@shared/schemas';
+import { capitalize } from '@utils/text/stringUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import type { BoundModel } from './modelBinding';
+
+/** What a failure's reading needs of its binding: the provider it names. */
+type Bound = { readonly config: Pick<BoundModel['config'], 'provider'> };
 
 /**
  * What one failed model call proves about the recovery routes it ran under.
@@ -70,155 +76,170 @@ export interface ModelFailure {
   readonly storedResponseGone: boolean;
 }
 
-/** True when the package reports the input itself exceeded the window. */
-function isPackageContextOverflow(error: ModelError): boolean {
-  return (
-    error.kind === 'invalid-request' &&
-    (isContextWindowError(error) ||
-      /context.?(window|length)|too many tokens|maximum context/i.test(
-        error.message,
-      ))
-  );
+/** The exhaustion reason a quota verdict names: its plan's, else the account's credit. */
+function exhaustionOf(
+  quota: ModelError['quota'],
+): ExhaustionReason | undefined {
+  if (quota === undefined) return undefined;
+  if (quota.plan === null) return 'upstream-credit';
+  return quotaFallbackRouteFor(quota.plan).exhaustionReason;
 }
 
-const NETWORK_ERROR_CODES: ReadonlySet<string> = new Set([
-  'EAI_AGAIN',
-  'ECONNREFUSED',
-  'ECONNRESET',
-  'EHOSTUNREACH',
-  'ENETUNREACH',
-  'ETIMEDOUT',
-  'UND_ERR_BODY_TIMEOUT',
-  'UND_ERR_CONNECT_TIMEOUT',
-  'UND_ERR_HEADERS_TIMEOUT',
-  'UND_ERR_SOCKET',
-]);
+/** The retry panel's classification: an overflowed window, or a used-up credential. */
+function classificationOf(
+  failed: ModelError,
+  exhaustion: ExhaustionReason | undefined,
+): ProviderErrorClassification | undefined {
+  if (failed.kind === 'context-overflow') return { kind: 'context-window' };
+  return exhaustion === undefined ? undefined : { kind: exhaustion };
+}
+
+/** Which route a 429 cools: the model's, where the provider scoped it, else the wire's. */
+function rateLimitScope(
+  failed: ModelError,
+): ModelRouteVerdict['rateLimitScope'] {
+  if (failed.status !== StatusCodes.TOO_MANY_REQUESTS) return undefined;
+  return failed.scope === 'model' ? 'model' : 'wire';
+}
 
 /**
- * The package labels every non-HTTP, non-parse failure `transport`, including
- * local ones (a stale persistent socket, a bug in stream handling). Only a
- * failure whose cause chain shows the network itself (a code in
- * `NETWORK_ERROR_CODES`, an undici `UND_ERR_INFO` timeout) is evidence about
- * the shared route; the rest is the caller's own to retry. A coded cause
- * decides: undici wraps deterministic failures (`UND_ERR_INVALID_ARG`) in the
- * same `fetch failed` as network ones, so the wrapper message and the SDK
- * connection or timeout class count only when no link carries a code.
+ * The copy of a package failure. A used-up plan names the switch the retry
+ * offers, from the same catalog entry; an overflowed window says why a retry
+ * cannot help; anything else is the reply's message under its status.
  */
-function hasNetworkEvidence(error: ModelError): boolean {
-  const chain = causeChain(error.cause) as {
-    code?: unknown;
-    message?: unknown;
-  }[];
-  const coded = chain.filter(({ code }) => typeof code === 'string');
-  if (coded.length > 0) {
-    return coded.some(
-      ({ code, message }) =>
-        NETWORK_ERROR_CODES.has(code as string) ||
-        (code === 'UND_ERR_INFO' &&
-          typeof message === 'string' &&
-          /\b(?:stream )?timeout\b/i.test(message)),
+function failureMessage(error: ModelError): string {
+  const { quota } = error;
+  if (quota !== undefined && quota.plan !== null) {
+    const route = quotaFallbackRouteFor(quota.plan);
+    const plan = quota.planType ? ` (${capitalize(quota.planType)} plan)` : '';
+    const reset =
+      quota.resetsInMs === undefined
+        ? ''
+        : ` Resets in ${formatResetDuration(quota.resetsInMs / 1000)}.`;
+    return (
+      `${route.retrySourceName} usage limit reached${plan}.${reset}` +
+      ` Switch to ${route.retryFallbackName} to keep working, or wait until the limit resets.`
     );
   }
-  return chain.some(
-    (link) =>
-      (typeof link.message === 'string' &&
-        /^(?:fetch failed|failed to fetch)$/i.test(link.message.trim())) ||
-      getErrorClassNames(link).some((name) =>
-        /(?:Connection|Timeout)Error$/.test(name),
-      ),
+  if (error.kind === 'context-overflow')
+    return (
+      `${error.message} Retrying would resend the same oversized request. ` +
+      'Start a new session, or reduce attached files and tool output.'
+    );
+  // An empty message: the reply explained nothing it is safe to show.
+  const reason =
+    error.status === undefined ? undefined : safeGetReasonPhrase(error.status);
+  return httpErrorMessage(
+    error.status,
+    error.message || reason || 'Provider request failed',
   );
 }
 
 /**
- * Reads a failed attempt on `bound`. The bound route is the credential route
- * the attempt ran under: SuperGrok and Kimi Code share their API-key host, so
- * it is the only signal that separates a subscription quota failure from a key
- * rate limit, and the subscription detectors read it back off the error.
- * `partialText` is the tail of the text the attempt had already streamed: the
- * one producer of the field the retry surface shows, now that the loop rather
- * than a provider handler is what watches the stream.
+ * Whether the retry panel offers a retry. A used-up plan does, with its
+ * switch; an overflowed window never does; otherwise the status decides, and
+ * without one only a reply the package could not explain is refused.
+ */
+function offersRetry(error: ModelError): boolean {
+  if (error.kind === 'quota-exhausted') return true;
+  if (error.kind === 'context-overflow') return false;
+  if (error.status !== undefined) return isRetryableStatusCode(error.status);
+  return error.kind === 'provider-rejection' ||
+    error.kind === 'continuation-gone'
+    ? error.retryable
+    : true;
+}
+
+/** The package's verdict on a failure, as the runtime's retry and route policy reads it. */
+function packageFailure(
+  failed: ModelError,
+  bound: Bound,
+  partialText: string | undefined,
+): ModelFailure {
+  const error = failed.cause instanceof Error ? failed.cause : failed;
+  if (failed.kind === 'context-overflow') attachContextWindowError(error);
+  const exhaustionReason = exhaustionOf(failed.quota);
+  const classification = classificationOf(failed, exhaustionReason);
+  const { status } = failed;
+  const statusText =
+    status === undefined ? undefined : safeGetReasonPhrase(status);
+  const rawErrorBody = detectRawErrorBody(error);
+  const formatted: ProviderError = {
+    message: failureMessage(failed),
+    provider: bound.config.provider,
+    userRetryable: offersRetry(failed),
+    ...(status !== undefined ? { statusCode: status } : {}),
+    ...(statusText !== undefined ? { statusText } : {}),
+    ...(classification !== undefined ? { classification } : {}),
+    ...(failed.requestId !== undefined ? { requestId: failed.requestId } : {}),
+    ...(rawErrorBody !== undefined ? { rawErrorBody } : {}),
+    ...(partialText !== undefined && partialText !== '' ? { partialText } : {}),
+  };
+  return {
+    error,
+    formatted,
+    autoRetryable: failed.retryable && !isUserAbort(error),
+    storedResponseGone: failed.kind === 'continuation-gone',
+    verdict: {
+      rateLimitScope: rateLimitScope(failed),
+      exhaustionReason,
+      wireRouteFailure: failed.scope === 'route',
+      retryAfterMs: failed.retryAfterMs,
+    },
+    info: toRetryErrorInfo(formatted),
+  };
+}
+
+/** A failure the package did not raise, formatted as any error. */
+function localFailure(
+  cause: unknown,
+  bound: Bound,
+  partialText: string | undefined,
+): ModelFailure {
+  const error = ensureError(cause);
+  const normalized = normalizeProviderError(error);
+  const formatted: ProviderError = {
+    ...normalized,
+    provider: bound.config.provider,
+    ...(partialText !== undefined && partialText !== '' ? { partialText } : {}),
+  };
+  const { statusCode } = formatted;
+  return {
+    error,
+    formatted,
+    autoRetryable: isProviderErrorAutoRetryable(error),
+    storedResponseGone: false,
+    verdict: {
+      rateLimitScope:
+        statusCode === StatusCodes.TOO_MANY_REQUESTS ? 'wire' : undefined,
+      exhaustionReason: getExhaustionReason(formatted),
+      wireRouteFailure:
+        statusCode === StatusCodes.TOO_MANY_REQUESTS ||
+        statusCode === StatusCodes.REQUEST_TIMEOUT ||
+        (statusCode !== undefined && statusCode >= 500),
+      retryAfterMs: undefined,
+    },
+    info: toRetryErrorInfo(formatted),
+  };
+}
+
+/**
+ * Reads a failed attempt on `bound`. `partialText` is the tail of the text
+ * the attempt had already streamed: the one producer of the field the retry
+ * surface shows, now that the loop rather than a provider handler is what
+ * watches the stream. The classification is cached on the error, so every
+ * later reader (the run lifecycle's terminal classification included)
+ * recovers this same shape.
  */
 export function classifyModelFailure(
   cause: unknown,
-  bound: Pick<BoundModel, 'usageRoute' | 'config'>,
+  bound: Bound,
   partialText?: string,
 ): ModelFailure {
-  const packageError = cause instanceof ModelError ? cause : null;
-  const sdkError =
-    packageError?.cause instanceof Error ? packageError.cause : null;
-  const error = sdkError ?? ensureError(cause);
-  if (packageError !== null && isPackageContextOverflow(packageError)) {
-    attachContextWindowError(error);
-  }
-  attachSdkUsageRoute(error, bound.usageRoute);
-  const formatted = normalizeProviderError(error);
-  // A sub-400 package status (an SSE 200 carrying an error body) never
-  // outranks the status the body resolves to.
-  const packageStatus = packageError?.status;
-  const statusCode =
-    packageStatus !== undefined && packageStatus >= 400
-      ? packageStatus
-      : (formatted.statusCode ?? packageStatus);
-  const withPackageFacts: ProviderError = {
-    ...formatted,
-    provider: bound.config.provider,
-    message:
-      formatted.message.trim() !== ''
-        ? formatted.message
-        : (packageError?.message ?? error.message),
-    ...(statusCode !== undefined ? { statusCode } : {}),
-    ...(packageError?.requestId !== undefined
-      ? { requestId: packageError.requestId }
-      : {}),
-    // A provider reply the SDK surfaced with no status, and none in its body,
-    // is not one to repeat blindly; a status-less transport failure is.
-    ...(packageError?.kind === 'provider-rejection' &&
-    sdkError !== null &&
-    statusCode === undefined &&
-    getExhaustionReason(formatted) === undefined
-      ? { userRetryable: false }
-      : {}),
-    ...(partialText !== undefined && partialText !== '' ? { partialText } : {}),
-  };
-  // Seed the runtime's error cache so every later reader (the run lifecycle's
-  // terminal classification included) recovers this same shape.
-  attachProviderError(error, withPackageFacts);
-  const autoRetryable =
-    packageError?.kind === 'invalid-request' ||
-    packageError?.kind === 'unsupported' ||
-    packageError?.kind === 'authentication'
-      ? false
-      : isProviderErrorAutoRetryable(error);
-  const modelScoped =
-    getExhaustionReason(withPackageFacts) === undefined &&
-    isModelScopedRateLimitBody(withPackageFacts.rawErrorBody);
-  let rateLimitScope: ModelRouteVerdict['rateLimitScope'];
-  if (statusCode === StatusCodes.TOO_MANY_REQUESTS) {
-    rateLimitScope = modelScoped ? 'model' : 'wire';
-  }
-  return {
-    error,
-    formatted: withPackageFacts,
-    info: toRetryErrorInfo(withPackageFacts),
-    autoRetryable,
-    storedResponseGone:
-      withPackageFacts.statusCode === 404 ||
-      ((withPackageFacts.statusCode === 400 ||
-        withPackageFacts.statusCode === undefined) &&
-        /previous[_ ]?(response|interaction)/i.test(withPackageFacts.message) &&
-        /not found|expired|no longer|does not exist/i.test(
-          withPackageFacts.message,
-        )),
-    verdict: {
-      rateLimitScope,
-      exhaustionReason: getExhaustionReason(withPackageFacts),
-      wireRouteFailure:
-        rateLimitScope === 'wire' ||
-        (packageError?.kind === 'transport' &&
-          hasNetworkEvidence(packageError)) ||
-        statusCode === StatusCodes.REQUEST_TIMEOUT ||
-        (statusCode !== undefined && statusCode >= 500),
-      retryAfterMs: packageError?.retryAfterMs,
-    },
-  };
+  const failure =
+    cause instanceof ModelError
+      ? packageFailure(cause, bound, partialText)
+      : localFailure(cause, bound, partialText);
+  attachProviderError(failure.error, failure.formatted);
+  return failure;
 }

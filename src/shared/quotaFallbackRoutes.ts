@@ -13,7 +13,7 @@ import type { DeclinableUsageRoute } from './schemas/usage';
  * this module dependency-free lets the error formatter, the invoker, and the
  * CLI retry copy share one catalog.
  */
-export type QuotaFallbackExhaustionReason = Extract<
+type QuotaFallbackExhaustionReason = Extract<
   ExhaustionReason,
   | 'chatgpt-subscription'
   | 'xai-subscription'
@@ -29,29 +29,28 @@ export interface QuotaFallbackRoute {
 }
 
 /** Canonical catalog of quota-fallback routes supported by every host. */
-export const QUOTA_FALLBACK_ROUTES: readonly QuotaFallbackRoute[] =
-  Object.freeze([
+const QUOTA_FALLBACK_ROUTES: readonly QuotaFallbackRoute[] = Object.freeze([
+  Object.freeze({
+    usageRoute: 'chatgpt-subscription',
+    exhaustionReason: 'chatgpt-subscription',
+    retryFallbackName: 'your own OpenAI API key',
+    retrySourceName: CHATGPT_AUTH.subscriptionLabel,
+  }),
+  Object.freeze({
+    usageRoute: 'xai-subscription',
+    exhaustionReason: 'xai-subscription',
+    retryFallbackName: 'your own xAI API key',
+    retrySourceName: GROK_AUTH.subscriptionLabel,
+  }),
+  ...CODING_PLAN_SUBSCRIPTIONS.map((plan) =>
     Object.freeze({
-      usageRoute: 'chatgpt-subscription',
-      exhaustionReason: 'chatgpt-subscription',
-      retryFallbackName: 'your own OpenAI API key',
-      retrySourceName: CHATGPT_AUTH.subscriptionLabel,
+      usageRoute: plan.usageRoute,
+      exhaustionReason: plan.exhaustionReason,
+      retryFallbackName: plan.retryFallbackName,
+      retrySourceName: plan.retrySourceName,
     }),
-    Object.freeze({
-      usageRoute: 'xai-subscription',
-      exhaustionReason: 'xai-subscription',
-      retryFallbackName: 'your own xAI API key',
-      retrySourceName: GROK_AUTH.subscriptionLabel,
-    }),
-    ...CODING_PLAN_SUBSCRIPTIONS.map((plan) =>
-      Object.freeze({
-        usageRoute: plan.usageRoute,
-        exhaustionReason: plan.exhaustionReason,
-        retryFallbackName: plan.retryFallbackName,
-        retrySourceName: plan.retrySourceName,
-      }),
-    ),
-  ]);
+  ),
+]);
 
 const ROUTE_BY_USAGE = new Map<DeclinableUsageRoute, QuotaFallbackRoute>(
   QUOTA_FALLBACK_ROUTES.map((route) => [route.usageRoute, route]),

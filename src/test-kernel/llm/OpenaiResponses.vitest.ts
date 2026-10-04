@@ -11,15 +11,14 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import {
   type BackgroundEvent,
   completedTurn,
-  ContinuationSchema,
   type ModelError,
-  type OpenAIResponsesConfiguration,
   type RemoteOperation,
   RemoteOperationSchema,
   type TurnEvent,
   type TurnRequest,
 } from '@texra-ai/llm';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { ContinuationSchema } from '../../../packages/llm/src/message.js';
 import { openaiResponsesModel } from '../../../packages/llm/src/api/openaiResponses.js';
 import {
   RESPONSES_PREFIX_DOMAIN,
@@ -27,6 +26,7 @@ import {
 } from '../../../packages/llm/src/api/openaiResponsesLower.js';
 import { openaiResponsesWebSocketModel } from '../../../packages/llm/src/api/openaiResponsesWebSocket.js';
 import { admittedFingerprint } from '../../../packages/llm/src/api/prefixFingerprint.js';
+import type { OpenAIResponsesConfiguration } from '../../../packages/llm/src/turn.js';
 
 const CONFIG: OpenAIResponsesConfiguration = {
   protocol: 'openai-responses',
