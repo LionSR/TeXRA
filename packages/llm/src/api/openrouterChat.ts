@@ -28,6 +28,7 @@ import {
   ModelError,
   authOrRejectionKind,
   enrichModelError,
+  fillModelError,
   hasErrorField,
   parseJsonOrModelError,
   sdkModelError,
@@ -167,9 +168,8 @@ function chatWire(responseId: string | undefined) {
       const events: PartEvent[] = [
         {
           kind: 'identity',
-          // An empty identity is no identity, as the canonical result spells it.
-          id: chunk.id || null,
-          model: chunk.model || null,
+          id: chunk.id,
+          model: chunk.model,
           ...(chunk.systemFingerprint !== undefined && {
             fingerprint: chunk.systemFingerprint,
           }),
@@ -290,9 +290,9 @@ function chatWire(responseId: string | undefined) {
     }).pipe(
       // A chunk that fails still names the response it belongs to.
       Effect.mapError((error) =>
-        enrichModelError(error, {
-          responseId: error.responseId ?? (chunk.id || undefined),
-          model: error.model ?? (chunk.model || undefined),
+        fillModelError(error, {
+          responseId: chunk.id || undefined,
+          model: chunk.model || undefined,
         }),
       ),
     );
@@ -627,10 +627,10 @@ export function openrouterChatModel(
       let responseId: string | undefined;
       let requestId: string | undefined;
       const enrich = (error: ModelError) =>
-        enrichModelError(error, {
-          responseId: error.responseId ?? responseId,
+        fillModelError(error, {
+          responseId,
           requestId,
-          model: error.model ?? config.requestedModel,
+          model: config.requestedModel,
         });
       // The SDK's parse of one streamed event throws a ZodError; anything else
       // a body read raises is the connection.

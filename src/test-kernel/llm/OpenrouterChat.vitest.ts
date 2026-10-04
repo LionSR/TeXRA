@@ -616,6 +616,14 @@ describe('native OpenRouter Chat', () => {
       'changed response',
       [frame({ content: 'first' }), { ...frame({}, 'stop'), id: 'other' }],
     ],
+    [
+      'emptied response',
+      [frame({ content: 'first' }), { ...frame({}, 'stop'), id: '' }],
+    ],
+    [
+      'emptied model',
+      [frame({ content: 'first' }), { ...frame({}, 'stop'), model: '' }],
+    ],
     ['late content', [frame({}, 'stop'), frame({ content: 'late' }, 'stop')]],
     [
       'contradictory usage',

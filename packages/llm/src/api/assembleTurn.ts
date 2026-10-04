@@ -6,7 +6,7 @@ import { Effect, Stream } from 'effect';
 
 // Local imports - canonical model contract
 import { TurnResultSchema, type TurnEvent, type TurnResult } from '../turn.js';
-import { ModelError, enrichModelError } from '../errors.js';
+import { ModelError, fillModelError } from '../errors.js';
 import { parseInboundToolArguments } from './transport.js';
 import {
   grown,
@@ -61,7 +61,11 @@ const fail = (turn: Assembly, what: string) =>
   );
 const none: Folded = Effect.succeed([]);
 
-/** The id, model and fingerprint each fill once and never change. */
+/**
+ * The id, model and fingerprint each fill once and never change. An empty
+ * id or model is observed, so it cannot follow a real one, but identifies
+ * nothing; only `null` means the event did not report the field.
+ */
 function identify(turn: Assembly, event: Of<'identity'>): Folded {
   const pairs = [
     [turn.id, event.id],
@@ -74,8 +78,8 @@ function identify(turn: Assembly, event: Of<'identity'>): Folded {
     )
   )
     return fail(turn, 'changed the response identity');
-  turn.id ??= event.id ?? undefined;
-  turn.model ??= event.model ?? undefined;
+  turn.id ||= event.id || undefined;
+  turn.model ||= event.model || undefined;
   turn.fingerprint ??= event.fingerprint;
   if (turn.announced || turn.id === undefined) return none;
   turn.announced = true;
@@ -341,9 +345,9 @@ export function turnAssembly(options: AssemblyOptions): {
     step: (event) => step(turn, event),
     complete: Effect.suspend(() => complete(turn)),
     enrich: (error) =>
-      enrichModelError(error, {
-        responseId: error.responseId ?? turn.id,
-        model: error.model ?? turn.model ?? options.origin.requestedModel,
+      fillModelError(error, {
+        responseId: turn.id,
+        model: turn.model ?? options.origin.requestedModel,
       }),
   };
 }

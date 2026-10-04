@@ -24,7 +24,7 @@ import { assembleTurn } from './assembleTurn.js';
 import { decodeTurnRequest, fitLimit } from './turnInput.js';
 import { replayableHistory, systemUpdateText } from '../message.js';
 import { JsonObjectSchema, originOf, sameModelOrigin } from '../protocol.js';
-import { ModelError, enrichModelError, sdkModelError } from '../errors.js';
+import { ModelError, fillModelError, sdkModelError } from '../errors.js';
 import { parseOutboundToolArguments, sdkStream } from './transport.js';
 import { filesApiUploads, type UploadCache } from './uploadCache.js';
 import type { PartEvent } from './parts.js';
@@ -742,7 +742,7 @@ export function anthropicMessagesModel(
     providerName: 'Anthropic',
     model: origin.requestedModel,
     failure: (cause) =>
-      enrichModelError(sdkFailure(cause), { model: origin.requestedModel }),
+      fillModelError(sdkFailure(cause), { model: origin.requestedModel }),
     parseUploaded: (raw) => UploadedFileSchema.safeParse(raw),
     create: async (upload, signal) =>
       client.files.upload(
@@ -822,9 +822,7 @@ export function anthropicMessagesModel(
         );
       }).pipe(
         Effect.mapError((error) =>
-          enrichModelError(error, {
-            model: error.model ?? origin.requestedModel,
-          }),
+          fillModelError(error, { model: origin.requestedModel }),
         ),
       ),
     );

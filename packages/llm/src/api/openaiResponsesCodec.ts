@@ -7,7 +7,7 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 
 // Local imports - canonical model contract
-import { ModelError, type RemoteOperation } from '../errors.js';
+import { ModelError, fillModelError, type RemoteOperation } from '../errors.js';
 import { openaiFailure } from './openaiError.js';
 import { parseInboundToolArguments, sdkStream } from './transport.js';
 import {
@@ -101,6 +101,13 @@ export const ResponseSchema = z.object({
 });
 type ResponseValue = z.infer<typeof ResponseSchema>;
 
+const malformed = (message: string, cause?: unknown) =>
+  new ModelError({ kind: 'malformed-output', message, cause });
+const decoded = <T>(result: z.ZodSafeParseResult<T>, message: string) =>
+  result.success
+    ? Effect.succeed(result.data)
+    : Effect.fail(malformed(message, result.error));
+
 /**
  * An item in canonical shape. An item still in progress opens a part whose
  * identity is final and whose content is not; it is never a result.
@@ -130,14 +137,9 @@ const itemPart = (item: OutputItem): Part => {
           kind: 'text',
           text: part.text,
         })),
-        ...(item.content !== undefined
-          ? {
-              content: item.content.map((part) => ({
-                kind: 'text' as const,
-                text: part.text,
-              })),
-            }
-          : {}),
+        ...(item.content && {
+          content: item.content.map(({ text }) => ({ kind: 'text', text })),
+        }),
         evidence: {
           kind: 'openai-responses-reasoning',
           itemId: item.id,
@@ -187,7 +189,11 @@ const normalizeItem = Effect.fn('llm.responses.normalizeItem')(function* (
  * items as the provider's terminal statement of the content.
  */
 export const terminalParts = Effect.fn('llm.responses.terminalParts')(
-  function* (response: ResponseValue) {
+  function* (response: ResponseValue, type: string) {
+    if (response.status !== type.slice('response.'.length))
+      return yield* malformed(
+        'The terminal event and response status disagree.',
+      );
     const incomplete = response.incomplete_details?.reason;
     const rejected = () =>
       new ModelError({
@@ -232,6 +238,11 @@ export const terminalParts = Effect.fn('llm.responses.terminalParts')(
       },
     ] satisfies PartEvent[];
   },
+  // A rejected terminal snapshot still names the response it reports.
+  (effect, response) =>
+    Effect.mapError(effect, (error) =>
+      fillModelError(error, { responseId: response.id, model: response.model }),
+    ),
 );
 
 /** Canonical image detail as the Responses vocabulary names it. */
@@ -404,18 +415,16 @@ const DeltaEventSchema = EventSchema.extend({
   logprobs: z.array(z.never()).nullish(),
 });
 
-const SNAPSHOT_EVENTS = new Set([
-  'response.created',
-  'response.queued',
-  'response.in_progress',
-  'response.completed',
-  'response.incomplete',
-  'response.failed',
-]);
 const TERMINAL_EVENTS = new Set([
   'response.completed',
   'response.incomplete',
   'response.failed',
+]);
+const SNAPSHOT_EVENTS = new Set([
+  'response.created',
+  'response.queued',
+  'response.in_progress',
+  ...TERMINAL_EVENTS,
 ]);
 const DELTA_CHANNELS = new Map<string, Append['channel']>([
   ['response.output_text.delta', 'text'],
@@ -443,13 +452,6 @@ export interface ResponseEventParts {
   readonly parts: readonly PartEvent[];
   readonly terminal: boolean;
 }
-
-const malformed = (message: string, cause?: unknown) =>
-  new ModelError({ kind: 'malformed-output', message, cause });
-const decoded = <T>(result: z.ZodSafeParseResult<T>, message: string) =>
-  result.success
-    ? Effect.succeed(result.data)
-    : Effect.fail(malformed(message, result.error));
 
 /**
  * The one Responses event decoder, for HTTP and WebSocket streams and for
@@ -480,11 +482,7 @@ export function responsesWire(after: number) {
           return at([
             { kind: 'identity', id: response.id, model: response.model },
           ]);
-        if (response.status !== type.slice('response.'.length))
-          return yield* malformed(
-            'The terminal event and response status disagree.',
-          );
-        return at(yield* terminalParts(response), true);
+        return at(yield* terminalParts(response, type), true);
       }
       if (
         type === 'response.output_item.added' ||

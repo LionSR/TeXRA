@@ -33,7 +33,7 @@ import {
   sdkModelError,
   boundOperation,
   cancellationStatus,
-  enrichModelError,
+  fillModelError,
   type RemoteOperation,
 } from '../errors.js';
 import {
@@ -775,7 +775,7 @@ export function googleInteractionsModel(
         );
       }).pipe(
         Effect.mapError((error) =>
-          enrichModelError(error, { model: config.requestedModel }),
+          fillModelError(error, { model: config.requestedModel }),
         ),
       ),
     );
@@ -828,11 +828,11 @@ export function googleInteractionsModel(
           { kind: 'close', index },
         ]),
       );
+      // The identity leads, so a failing step names the returned model.
+      const [identity, ...end] = interactionEnd(interaction);
+      const batch = [identity, ...parts.flat(), ...end];
       return yield* completedTurn(
-        assembleTurn(
-          Stream.make([...parts.flat(), ...interactionEnd(interaction)]),
-          { origin, provider: 'Google', responseId: interaction.id },
-        ),
+        assembleTurn(Stream.make(batch), { origin, provider: 'Google' }),
       );
     },
   );
@@ -853,10 +853,10 @@ export function googleInteractionsModel(
     error: ModelError,
     returnedModel?: string,
   ) =>
-    enrichModelError(error, {
+    fillModelError(error, {
       operation,
       responseId: operation.providerResponseId,
-      model: returnedModel ?? error.model ?? config.requestedModel,
+      model: returnedModel ?? config.requestedModel,
     });
   const submit: NonNullable<Model['background']>['submit'] = Effect.fn(
     'llm.google.submit',

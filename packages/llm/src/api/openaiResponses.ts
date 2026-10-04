@@ -28,6 +28,7 @@ import {
   boundOperation,
   cancellationStatus,
   enrichModelError,
+  fillModelError,
   type RemoteOperation,
 } from '../errors.js';
 import { originOf, sameModelOrigin } from '../protocol.js';
@@ -166,7 +167,7 @@ export function openaiResponsesModel(
         const { turn, opened } = yield* createResponse(input, 'foreground');
         const requestId = opened.request_id ?? undefined;
         const enrich = (error: ModelError) =>
-          enrichModelError(error, { requestId: error.requestId ?? requestId });
+          fillModelError(error, { requestId });
         const chunks = yield* sdkEvents(opened.data, enrich);
         return responseEvents(chunks, origin, (result) =>
           Effect.map(
@@ -179,9 +180,7 @@ export function openaiResponsesModel(
         ).pipe(Stream.mapError(enrich));
       }).pipe(
         Effect.mapError((error) =>
-          enrichModelError(error, {
-            model: error.model ?? config.requestedModel,
-          }),
+          fillModelError(error, { model: config.requestedModel }),
         ),
       ),
     );
@@ -193,10 +192,10 @@ export function openaiResponsesModel(
     let returnedModel: string | undefined;
     let requestId: string | undefined;
     const enrich = (error: ModelError) =>
-      enrichModelError(error, {
+      fillModelError(error, {
         operation,
         responseId: operation?.providerResponseId,
-        requestId: error.requestId ?? requestId,
+        requestId,
         model: returnedModel ?? config.requestedModel,
       });
     return yield* Effect.scoped(
@@ -278,7 +277,7 @@ export function openaiResponsesModel(
           (type === 'response.incomplete' && response.status === 'incomplete')
         ) {
           const result = yield* completedTurn(
-            assembleTurn(Stream.make(yield* terminalParts(response)), {
+            assembleTurn(Stream.make(yield* terminalParts(response, type)), {
               origin,
               provider: 'The model',
             }),
@@ -362,10 +361,10 @@ export function openaiResponsesModel(
         let returnedModel: string | undefined;
         let requestId: string | undefined;
         const enrich = (error: ModelError) =>
-          enrichModelError(error, {
+          fillModelError(error, {
             operation,
             responseId: operation.providerResponseId,
-            requestId: error.requestId ?? requestId,
+            requestId,
             model: returnedModel ?? config.requestedModel,
           });
         return Stream.unwrap(

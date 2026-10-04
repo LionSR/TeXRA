@@ -1578,17 +1578,21 @@ describe('native OpenAI Responses protocol', () => {
       }),
   );
 
-  it.effect.each(['missing', 'failed', 'not-found'] as const)(
+  it.effect.each(['missing', 'failed', 'resumed-failed', 'not-found'] as const)(
     'does not recreate work or advance a terminal cursor after %s observation',
     (outcome) =>
       Effect.gen(function* () {
-        const frames = [
-          {
-            type: 'response.created',
-            response: snapshot([], { status: 'in_progress' }),
-          },
-        ];
-        if (outcome === 'failed')
+        // A resumed observation can begin at the terminal event itself.
+        const frames: object[] =
+          outcome === 'resumed-failed'
+            ? []
+            : [
+                {
+                  type: 'response.created',
+                  response: snapshot([], { status: 'in_progress' }),
+                },
+              ];
+        if (outcome.endsWith('failed'))
           frames.push({
             type: 'response.failed',
             response: snapshot([], {
@@ -1630,10 +1634,13 @@ describe('native OpenAI Responses protocol', () => {
           operation,
           responseId: 'resp_1',
         });
-        if (outcome === 'failed')
+        if (outcome.endsWith('failed')) {
           expect(failure.message).toBe('Original job failure');
+          // The model the terminal snapshot reported, not the requested one.
+          expect(failure.model).toBe('returned-model');
+        }
         expect(observed.map((event) => event.afterSequence)).toEqual(
-          outcome === 'not-found' ? [] : [0],
+          outcome === 'missing' || outcome === 'failed' ? [0] : [],
         );
         expect(fetch).toHaveBeenCalledTimes(1);
         expect(fetch.mock.calls[0]?.[1]?.method).toBe('GET');

@@ -1,8 +1,8 @@
 {
-  "packages/llm/src/api/anthropicMessages.ts": 837,
+  "packages/llm/src/api/anthropicMessages.ts": 835,
   "packages/llm/src/api/googleInteractions.ts": 1089,
-  "packages/llm/src/api/openaiResponses.ts": 557,
-  "packages/llm/src/api/openaiResponsesCodec.ts": 569,
+  "packages/llm/src/api/openaiResponses.ts": 556,
+  "packages/llm/src/api/openaiResponsesCodec.ts": 567,
   "packages/llm/src/api/openaiResponsesWebSocket.ts": 402,
   "packages/llm/src/api/openrouterChat.ts": 771,
   "packages/llm/src/message.ts": 450,
