@@ -24,6 +24,21 @@ was restructured (`loop/reflection.ts` is gone; the round mode is now
 `loop/rounds.ts`, over `loop/{rows,step,toolUseDispatch,toolGuard,hooks,modelSwitch}.ts`).
 Alignment has **held or improved**, entirely through review, not this routine.
 
+## Pivot: the SDK is now the harness
+
+Since the last pass the owner has reframed the target. Per
+`2026-10-02-durable-harness.md` (status: accepted), the deliverable is a
+general, Effect-native, *durable harness* — "TeXRA would just be an example" —
+whose SDK is its **extend** surface: `Plugin`, `Sessions.layer({ plugins })`,
+`Plugins.contribute` in a `Scope`, and `Session.resume`, built as Effect values
+over the plugin table (that note's H4). This reorients this standing charter:
+"Agent SDK readiness" now means the durable-harness program (H1–H5), not the
+ratification of the 2026-09-10 `@texra-ai/agent` Tier-1 *static-export*
+manifest. The audited areas and the no-unnecessary-abstraction verdict below
+are unaffected; what changes is the open-work half (§New.1, §Recommendation).
+The package name is still open (durable-harness Q5), so the harness SDK still
+lives in `packages/agent` today.
+
 ## Verdict (unchanged)
 
 The codebase is still well-aligned, and this audit remains a standing program,
@@ -39,13 +54,15 @@ each is an Effect-native decomposition of one program, not an added indirection
 tier — there is still one `Effect` per run appending one history. The large
 files are large because of irreducible durability/resume/stop invariants.
 
-What makes this pass worth recording — the 2026-09-26 note set the bar as
-"re-running adds no signal until the manifest moves" — is that the Tier-1
-manifest draft has now **drifted a fourth time** against the live surface
-(§New.1), and that the simplification program has, since the last pin, resolved
-one of the three marginal cleanups and shrunk one of the two `packages/llm`
-ambient-read sites (§New.3, §Marginal). The one named open deliverable has
-degraded further; the incidental items moved without this routine.
+What makes this pass worth recording is the **pivot** (§Pivot): the standing
+deliverable has moved from ratifying the 2026-09-10 static-export manifest to
+the accepted durable-harness program, which makes the manifest's growing export
+list (now `Plugin`, `Composition`) intended surface rather than drift to
+reconcile (§New.1). This pass also applied the one consensus doc fix the audit
+carried — the six-error reconcile (§New.3) — and corrected a prior-pass
+misdiagnosis (the `modelBinding` re-guard is reachable, not dead; §Marginal).
+The simplification program, meanwhile, resolved one marginal cleanup and shrank
+one of the two `packages/llm` ambient-read sites without this routine.
 
 ## The four asks, re-mapped to the current pin
 
@@ -86,10 +103,12 @@ degraded further; the incidental items moved without this routine.
      pure-Effect, no in-package `runPromise`) is minimal and clean; the
      redundancy is at the edges (§New.1).
 
-3. **Plan API-surface simplification.** The plan remains the Tier-1 public
-   manifest (`2026-09-10-agent-sdk-tier-1-manifest.md`, still `proposed`) plus
-   the frozen-list shrink AGENTS.md names. The SDK speaks pure Effect
-   end-to-end; the Promise boundary is deliberately gone, not missing.
+3. **Plan API-surface simplification.** Reoriented by the pivot: the plan is now
+   the durable-harness program's "extend" half (`2026-10-02-durable-harness.md`
+   H4 — `Plugin`, `Sessions.layer({ plugins })`, `Plugins.contribute`,
+   `Session.resume`) plus the frozen-list shrink AGENTS.md names, not
+   ratification of the 2026-09-10 static-export manifest (see §New.1). The SDK
+   speaks pure Effect end-to-end; the Promise boundary is deliberately gone.
 
 4. **Design subagent boundaries.** Already first-class, re-confirmed unchanged:
    (a) native subagents via `executeAgent` with an owned `RunId`; (b) the
@@ -102,29 +121,26 @@ degraded further; the incidental items moved without this routine.
 
 ## New since the 2026-09-26 pass (needs an owner, not a routine)
 
-1. **The Tier-1 manifest has drifted a fourth time — re-enumerate before
-   ratifying.** The manifest's §3.1 lists the root entry as "34 (10 values, 24
-   types)" and names `ToolHost`. The live `packages/agent/src/index.ts` now
-   exports **37 bindings (10 values, 27 types)**, and the delta against §3.1 is
-   larger than the prior pass recorded:
-   - `ToolHost` is not merely un-exported — it is **gone from the package
-     entirely** (`grep ToolHost packages/agent/src` is empty). §3.1 still lists
-     it as a root type.
-   - The root entry exports `ToolGuard` and `SettingHost` (flagged 2026-09-26)
-     **and also `Composition`** (`./effect/runtime.js`) **and `Plugin`**
-     (`@tools/plugins`), neither of which §3.1 lists and neither of which the
-     2026-09-26 pass flagged. Whether they were added since `f0811a0` or missed
-     then cannot be disambiguated in this clone; either way the manifest does
-     not reflect them now. `Plugin` is the plugin-contribution surface the
-     2026-09-24 plugin architecture introduced, so it is a deliberate public
-     type, not an accident of re-export.
-   The shed/leak questions the re-enumeration must still weigh are unchanged:
-   `MapToolRegistry`/`IToolRegistry` (registry plumbing an embedder on the
-   documented `StartInput.tools` / `defineTool` path never constructs), and
-   `SettingHost` (TeXRA's internal host enum reaching the public tool-definition
-   contract via `unavailableHosts`). Ratifying the draft as-is would pin a
-   deleted name and omit four live ones, so re-enumeration is a hard
-   prerequisite for ratification.
+1. **The 2026-09-10 static-export manifest is behind the live surface; the
+   pivot reframes what to do about it.** The manifest's §3.1 lists the root
+   entry as "34 (10 values, 24 types)" and names `ToolHost`. The live
+   `packages/agent/src/index.ts` now exports **37 bindings (10 values, 27
+   types)**:
+   - `ToolHost` is **gone from the package entirely** (`grep ToolHost
+     packages/agent/src` is empty); §3.1 still lists it as a root type.
+   - The root entry also exports `ToolGuard`, `SettingHost`, `Composition`
+     (`./effect/runtime.js`) and `Plugin` (`@tools/plugins`), none of which
+     §3.1 lists. `Plugin` and `Composition` are **not** accidental drift: they
+     are the harness **extend** surface the durable-harness pivot makes central
+     (§Pivot, that note's H4), so the move is to re-scope the manifest around
+     the harness SDK, not to re-pin the old static list. The shed/leak
+     questions that survive the pivot are `SettingHost` (TeXRA's internal host
+     enum reaching the public tool-definition contract via `unavailableHosts`)
+     and the `MapToolRegistry`/`IToolRegistry` registry plumbing an embedder on
+     the documented `StartInput.tools`/`defineTool` path never constructs.
+   So the 2026-09-10 draft should be retired or rewritten against the harness
+   program rather than ratified as-is: ratifying it would pin a deleted name
+   (`ToolHost`) and omit the very surface (`Plugin`) the pivot is built on.
 
 2. **The logger sink→Layer step is still unlanded.** `src/logger/logSink.ts`
    still holds the mutable module global (`let sink = consoleLogSink`,
@@ -150,11 +166,14 @@ degraded further; the incidental items moved without this routine.
      `packages/llm/test-live/` callers construct the factories without
      `modelBinding`). Low priority; file into `2026-09-20-llm-package-hardening.md`
      or a fresh tech-debt entry (that note's §0 is closed and owns neither).
-   - **Error-count reconcile, still open.** `packages/agent/src/effect/errors.ts:1`
-     still reads "Four tagged errors, no more," and `README.md` still says
-     "four," while the root entry exports **six** error values (those four plus
-     `DatabaseOpenFailed`, `DatabaseReadFailed` from `@shared/session/database`).
-     Reconcile the count and the "no more" comment during re-enumeration.
+   - **Error-count reconcile — fixed this pass (consensus).**
+     `packages/agent/src/effect/errors.ts` had claimed "Four tagged errors, no
+     more" and the README enumerated four and said "nothing else is exported: no
+     store," while the root entry exports **six** error values (those four plus
+     `DatabaseOpenFailed`, `DatabaseReadFailed` from `@shared/session/database`,
+     the `SessionOpenError` union). Both the header comment and the README now
+     state six and name the two store errors. Flagged by two consecutive passes,
+     so applied directly rather than filed.
 
 ## Marginal cleanups (tech-debt-tier, re-pinned)
 
@@ -163,11 +182,15 @@ degraded further; the incidental items moved without this routine.
   the single-caller-file pass ending `ae953c3`). Dropped from the list.
 - `AgentRunLifecycle.ts:134` `finalizeRunTerminalBody` — one caller (at :132);
   exists only to be wrapped in `Effect.uninterruptible`. Cosmetic split, carried.
-- `modelBinding.ts` ~843–850 — the re-guard whose `protocol === 'vscode-lm'`
-  and `'validation'` disjuncts are unreachable (the dedicated `if` blocks at
-  :803 and :816 already returned); only the `route.kind` mismatch case is live.
-  Re-pinned from the prior :1027–1037 after the file shrank. Trim to the
-  reachable check.
+- `modelBinding.ts` ~843–847 — **prior diagnosis refuted, do not trim.** The
+  2026-09-26 pass called the re-guard's `protocol === 'vscode-lm'` and
+  `'validation'` disjuncts unreachable. On inspection they are not: the `if` at
+  :803 returns only for `vscode-lm` **and** `copilot` together, and the `if` at
+  :816 returns only for `protocol === 'validation'`, so by :843 the `vscode-lm`
+  disjunct (vscode-lm format, non-copilot route) and the `route.kind ===
+  'validation'` disjunct (validation route, non-validation protocol) are the
+  live format/route-mismatch cases this guard exists to fail loudly on. Trimming
+  would be a silent-degradation regression. Dropped from the cleanup list.
 
 **Do not collapse** (unchanged): `executeAgent.ts` `resumeToolUse*` three-level
 chain — each level is a distinct `Effect.scoped`/`acquireRelease` region whose
@@ -175,8 +198,8 @@ nesting order is load-bearing for finalizer-before-release ordering.
 
 ## Genuinely open (carried, still human-owned)
 
-- **Ratify the Tier-1 public manifest** — now gated on the §New.1
-  re-enumeration, which has grown a fourth drift.
+- **Re-scope the Tier-1 manifest around the harness SDK** (not ratify the
+  2026-09-10 static list) — §New.1; belongs to the durable-harness program.
 - **Shrink the `host-agent-import` frozen list** as the manifest ratifies each
   edge; never widen.
 - **Owner ruling on the two agent-creation systems** (`texra.createAgentWithAI`
@@ -186,13 +209,14 @@ nesting order is load-bearing for finalizer-before-release ordering.
 
 ## Recommendation
 
-No refactor to land autonomously from this charter. The single new, concrete
-action for an owner is to **re-enumerate the Tier-1 manifest against `index.ts`
-before ratifying it** (§New.1) — the live root entry now diverges from the
-draft by one deleted name (`ToolHost`) and four live ones (`ToolGuard`,
-`SettingHost`, `Composition`, `Plugin`). The error-count reconcile (§New.3) is
-cheap and should ride that same re-enumeration. The logger sink→Layer step
-(§New.2) is owned by `2026-09-21-effect-design-synchronous-facades.md` and
-should ride it; the two remaining `packages/llm` ambient reads (§New.3) need
-filing before they have an owner. Re-running this audit as a routine will again
-add no signal until the manifest is re-enumerated and moves.
+No refactor to land autonomously from this charter beyond the one consensus doc
+fix already applied this pass (the six-error reconcile, §New.3). The charter has
+pivoted to the durable-harness program (§Pivot): "Agent SDK readiness" now
+tracks that note's H1–H5, and the one owner-level action the surface audit still
+asks for is to **re-scope the Tier-1 manifest around the harness SDK rather than
+ratify the 2026-09-10 static list** (§New.1) — the live root entry already
+carries the harness extend surface (`Plugin`, `Composition`) the old draft
+predates. The logger sink→Layer step (§New.2) rides
+`2026-09-21-effect-design-synchronous-facades.md`; the two remaining
+`packages/llm` ambient reads (§New.3) need filing. Re-running this audit as a
+routine will again add no signal until the harness program moves.
