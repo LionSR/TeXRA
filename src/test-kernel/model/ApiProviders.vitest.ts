@@ -167,9 +167,8 @@ describe('API provider key resolution', () => {
     () =>
       withTempDirEffect('texra-unset-key-', (root) =>
         Effect.gen(function* () {
-          const secrets = new FileSecrets(
-            path.join(root, 'secrets.json'),
-            (key) => emitAppSignal('credentialChanged', { key }),
+          const secrets = new FileSecrets(path.join(root, 'secrets'), (key) =>
+            emitAppSignal('credentialChanged', { key }),
           );
           yield* secrets.set(apiKeySecretName('openai'), 'sk-test');
           yield* Effect.promise(() => setupApiKeyToolPlatform(secrets));

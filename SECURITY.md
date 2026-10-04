@@ -28,7 +28,7 @@ anonymous.
 ## In scope
 
 - **Credential storage and transport** — provider API keys and OAuth tokens
-  in the shared credential file (`~/.texra/secrets.json`).
+  in the shared credential folder (`~/.texra/secrets/`).
 - **Authentication flows** — OAuth callbacks and deep links, the device-code
   flow, and the auth bridge.
 - **Agent tool execution** — shell, file-write, and edit tools, including the
@@ -59,13 +59,13 @@ TeXRA runs agents against model providers using your own API keys or provider
 subscription credentials. Where a key lives depends on how you supplied it:
 
 - **Entered through TeXRA** (`TeXRA: Set API Key`, the desktop credential
-  settings, or `texra auth`) — stored in one file every host shares,
-  `~/.texra/secrets.json`. The file is readable by your user alone (mode 0600,
-  in a 0700 directory), like `~/.ssh` keys or the `gh` CLI's tokens; it is
-  **not** encrypted with the OS keychain. One file is what lets the VS Code
+  settings, or `texra auth`) — stored in one folder every host shares,
+  `~/.texra/secrets/`, one file per key. The files are readable by your user
+  alone (mode 0600, in a 0700 directory), like `~/.ssh` keys or the `gh` CLI's tokens; they are
+  **not** encrypted with the OS keychain. One shared store is what lets the VS Code
   extension, the desktop app, the terminal and the background service
   (`texra serve`) use a key saved in any of them. Anyone who can read files as
-  your user can read it, so protect your account and backups accordingly.
+  your user can read them, so protect your account and backups accordingly.
 - **Supplied through the environment** — an exported variable, or a workspace
   `.env` that the extension loads at activation. These are read straight from
   the environment at request time and never enter any secret store. A `.env` is

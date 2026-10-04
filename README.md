@@ -116,7 +116,7 @@ different model — pair a flagship reasoner for orchestration with
 cheaper, faster models for routine sub-tasks.
 
 In the extension, run **`TeXRA: Set API Key`** (stored in the owner-only
-`~/.texra/secrets.json` every TeXRA host shares) or add a workspace `.env`:
+`~/.texra/secrets/` folder every TeXRA host shares) or add a workspace `.env`:
 
 ```env
 OPENAI_API_KEY=…

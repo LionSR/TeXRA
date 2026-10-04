@@ -5,7 +5,7 @@
 //   1. the command palette with the command highlighted,
 //   2. the quick-input asking for the project URL / 24-char ID,
 //   3. the quick-input asking for the olp_ Git token (masked), with a
-//      "Saved to ~/.texra/secrets.json" footnote.
+//      "Saved to ~/.texra/secrets/" footnote.
 // A numbered 1-2-3 gutter + down-chevrons connect the stages. Standalone
 // (no MockupFrame) — the root carries `.mockup` so the shared `--mk-*`
 // colour + dimensional tokens resolve and the card flips with the docs
@@ -71,7 +71,7 @@
           Overleaf Git token (olp_…)
           <span class="oc-tag">
             <wa-icon class="oc-tag-ic" library="texra" name="shield"></wa-icon>
-            Saved to ~/.texra/secrets.json
+            Saved to ~/.texra/secrets/
           </span>
         </div>
       </div>

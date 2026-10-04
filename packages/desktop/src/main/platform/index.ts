@@ -18,7 +18,7 @@ import { AgentDirectories, AppState } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
-import { FileSecrets, secretsPath } from '@platform/defaults/fileSecrets';
+import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
@@ -105,9 +105,9 @@ export const initializeElectronPlatform = Effect.fn(
         undefined,
         (message) => console.warn(`[desktop] ${message}`),
       );
-      // The one credential store every host shares (`~/.texra/secrets.json`):
+      // The one credential store every host shares (`~/.texra/secrets/`):
       // the background service reads the keys this window saves.
-      const secrets = new FileSecrets(secretsPath(dataRoot), (key) =>
+      const secrets = new FileSecrets(secretsDirectory(dataRoot), (key) =>
         emitAppSignal('credentialChanged', { key }),
       );
       return { mainDir, resourcesPath, configStores, secrets };

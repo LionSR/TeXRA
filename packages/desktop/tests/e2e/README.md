@@ -49,7 +49,7 @@ application smoke use that loader, without duplicating SQL or persisted schemas.
 
 ## Saved keys
 
-The app keeps saved keys in the shared owner-only `secrets.json` under its
+The app keeps saved keys in the shared owner-only `secrets/` folder under its
 data root, which the harness points at a throwaway user-data directory
 (`TEXRA_DESKTOP_E2E_USER_DATA_PATH`), so no run touches the keychain or the
 developer's own keys.

@@ -5,7 +5,7 @@
 // Run start/resume/stop orchestration lives in ../chatSessionController;
 // this module keeps only composition, rendering glue, and the Ink lifecycle.
 
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit, Fiber } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
 import { getVisibleAgents } from '@agent/index';
@@ -66,6 +66,8 @@ import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
 import { announceForegroundApprovals } from './state/subscribeApprovals';
 import { subscribeCliCredentialChanges } from './hosts/cliProviderKeys';
+import { cliSecrets } from '@cli/runtime/cliSecrets';
+import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { createTuiViewportController } from './render/tuiViewportController';
 import {
   selectedRunId as selectedRunIdSignal,
@@ -333,6 +335,13 @@ export async function runChat(
   });
   disposables.add(announceForegroundApprovals());
   disposables.add(subscribeCliCredentialChanges(runtime));
+  // Keys another TeXRA window or the service saves reach this chat too.
+  const watchingKeys = runtime.runFork(
+    cliSecrets(context.storageRoot)
+      .watch()
+      .pipe(Effect.provide(nodeFileServices)),
+  );
+  disposables.add(() => runtime.runFork(Fiber.interrupt(watchingKeys)));
   let subscribedRuns = '';
   const syncTranscriptSubscriptions = (): void => {
     const ids = paintedRunIds.get();

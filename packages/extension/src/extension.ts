@@ -61,7 +61,7 @@ import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { withLogChannel } from '@logger/effectLog';
 import { setLogSink } from '@logger/logSink';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
-import { FileSecrets, secretsPath } from '@platform/defaults/fileSecrets';
+import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
 import { AppState } from '@platform/interfaces';
 import type { ToolMissingHandler } from '@platform/interfaces';
 import {
@@ -149,10 +149,10 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     workspaceRoot,
   );
   const globalStorage = resolveGlobalStoragePath(DEFAULT_NODE_STORAGE_ROOT);
-  // The one credential store every host shares (`~/.texra/secrets.json`):
+  // The one credential store every host shares (`~/.texra/secrets/`):
   // the background service reads the keys this window saves.
   const secrets = new FileSecrets(
-    secretsPath(DEFAULT_NODE_STORAGE_ROOT),
+    secretsDirectory(DEFAULT_NODE_STORAGE_ROOT),
     (key) => emitAppSignal('credentialChanged', { key }),
   );
   const appState = Layer.effect(

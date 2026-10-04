@@ -42,14 +42,14 @@ function outputOf(result: ToolResult): string {
 }
 
 describe('list_api_keys tool', () => {
-  it.effect('reports unsupported enumeration instead of an empty store', () =>
+  it.effect('reports an unreadable store instead of an empty one', () =>
     Effect.gen(function* () {
       vi.spyOn(hostStores().secrets, 'listStoredKeys').mockReturnValue(
         Effect.fail(
           new SecretsFailed({
-            reason: 'enumeration-unsupported',
+            reason: 'io',
             operation: 'listStoredKeys',
-            message: 'SecretStorage key enumeration is not supported',
+            message: 'The credential store could not be read',
           }),
         ),
       );
@@ -59,7 +59,7 @@ describe('list_api_keys tool', () => {
         .pipe(Effect.provide(nativeToolTestLayer()));
 
       assert.equal(result.status, 'error');
-      assert.match(result.error ?? '', /enumeration is not supported/);
+      assert.match(result.error ?? '', /could not be read/);
       assert.doesNotMatch(outputOf(result), /credential store is empty/);
     }),
   );
