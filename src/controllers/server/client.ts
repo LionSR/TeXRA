@@ -109,6 +109,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
       }),
     );
   if (info !== null && info.protocol < PROTOCOL_VERSION) {
+    const retiring = info;
     yield* Effect.logInfo(
       `Retiring the TeXRA service ${info.version} (protocol ${info.protocol}): it finishes its running tasks and exits.`,
     );
@@ -116,7 +117,14 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
       Effect.flatMap(connectService(socket), (client) =>
         client['service.stop']({ drain: true }),
       ),
-    ).pipe(Effect.ignore);
+    ).pipe(
+      Effect.mapError(
+        (error) =>
+          new ServiceUnavailable({
+            reason: `The older TeXRA service (pid ${retiring.pid}) could not be asked to retire: ${error.message}`,
+          }),
+      ),
+    );
     info = null;
   }
   if (info === null) {
@@ -128,12 +136,13 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
           }),
       ),
     );
-    // Not listening yet, or listening but still starting: both wait.
+    // Not listening yet, listening but still starting, or still the
+    // retiring service: all wait for this protocol's own service.
     info = yield* probeService(socket).pipe(
       Effect.flatMap((answer) =>
-        answer === null
-          ? Effect.fail(new ServiceUnavailable({ reason: 'not listening' }))
-          : Effect.succeed(answer),
+        answer?.protocol === PROTOCOL_VERSION
+          ? Effect.succeed(answer)
+          : Effect.fail(new ServiceUnavailable({ reason: 'not yet up' })),
       ),
       Effect.retry(Schedule.spaced('200 millis')),
       Effect.timeout(START_TIMEOUT),

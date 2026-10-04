@@ -130,7 +130,7 @@ function statusText(info: ServiceInfo | null, context: CliContext): string {
 }
 
 function emitStatus(context: CliContext, info: ServiceInfo | null): void {
-  const service = { running: info !== null, ...info };
+  const service = { ...info, online: info !== null };
   emitCliResult(context, {
     json: service,
     ndjson: { kind: 'service', service },
