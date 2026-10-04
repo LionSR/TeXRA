@@ -276,8 +276,18 @@ export const serviceHandlers = TexraRpcs.toLayer(
         }),
       'host.attach': ({ workspace, capabilities }) =>
         Stream.unwrap(
-          Effect.map(open(workspace), (session) =>
-            hosts.attach(session, capabilities),
+          Effect.map(
+            projects
+              .open(workspace)
+              .pipe(Effect.mapError((error) => failed(error.message))),
+            (session) =>
+              hosts.attach(session, capabilities).pipe(
+                // The session's surface is given once the window is held,
+                // so a first attach is never told that no window is.
+                Stream.tap((frame) =>
+                  frame.kind === 'attached' ? present(session) : Effect.void,
+                ),
+              ),
           ),
         ),
       'host.focus': ({ attachment }) => hosts.focus(attachment),

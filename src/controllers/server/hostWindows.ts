@@ -47,7 +47,7 @@ import {
 import type { ToolEditPreview } from './protocol';
 
 /** Why a call a run waited on got no answer from a window. */
-export class HostCallFailed extends Data.TaggedError('HostCallFailed')<{
+export class WindowCallFailed extends Data.TaggedError('WindowCallFailed')<{
   /** `detached`: the window went before it answered; `no-answer`: it did
    *  not answer in time; `failed`: it answered with its own failure. */
   readonly reason: 'detached' | 'no-answer' | 'failed';
@@ -74,7 +74,7 @@ interface Window {
   focusedAt: number;
   readonly frames: Queue.Queue<HostFrame>;
   /** The calls it has not answered yet, by call id. */
-  readonly pending: Map<string, Deferred.Deferred<unknown, HostCallFailed>>;
+  readonly pending: Map<string, Deferred.Deferred<unknown, WindowCallFailed>>;
 }
 
 /** A staged tool edit's preview, and the window that staged it. `seen`
@@ -149,22 +149,25 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
           call,
         }).pipe(Effect.asVoid);
 
-  /** Send a call and wait for its answer, decoded by `schema`. */
+  /** Send a call to `window` (by default the one `key`'s project routes it
+   *  to) and wait for its answer, decoded by `schema`. */
   const ask = <A>(
     key: string,
     call: AnsweredCall,
     schema: z.ZodType<A>,
-  ): Effect.Effect<A, HostCallFailed> =>
+    window = target(key, CALL_CAPABILITY[call.kind]),
+  ): Effect.Effect<A, WindowCallFailed> =>
     Effect.gen(function* () {
       const within = ANSWER_WITHIN[call.kind];
-      const window = target(key, CALL_CAPABILITY[call.kind]);
-      if (window === undefined)
-        return yield* new HostCallFailed({
+      const answered = Deferred.makeUnsafe<unknown, WindowCallFailed>();
+      // Registered in the same step that checks the window is attached, so
+      // a detach either finds this call or came before it.
+      if (window === undefined || !windows.has(window))
+        return yield* new WindowCallFailed({
           reason: 'detached',
           message: 'No TeXRA window of this project is attached.',
         });
       const id = randomUUID();
-      const answered = yield* Deferred.make<unknown, HostCallFailed>();
       window.pending.set(id, answered);
       calls.set(id, window);
       yield* Queue.offer(window.frames, { kind: 'call', id, call });
@@ -173,7 +176,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
           duration: within,
           orElse: () =>
             Effect.fail(
-              new HostCallFailed({
+              new WindowCallFailed({
                 reason: 'no-answer',
                 message: `The TeXRA window did not answer within ${within}.`,
               }),
@@ -188,7 +191,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
       );
       const parsed = schema.safeParse(value);
       if (!parsed.success)
-        return yield* new HostCallFailed({
+        return yield* new WindowCallFailed({
           reason: 'failed',
           message: `The TeXRA window answered ${call.kind} with a value it does not take.`,
         });
@@ -204,7 +207,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
         calls.delete(id);
         yield* Deferred.fail(
           answered,
-          new HostCallFailed({
+          new WindowCallFailed({
             reason: 'detached',
             message: 'The TeXRA window closed before it answered.',
           }),
@@ -326,10 +329,13 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
         Effect.suspend(() => {
           const window = liveWindow(stagedIn(key).get(requestId));
           if (window === undefined) return Effect.succeed(false);
+          // The window that staged it holds the user's edit, whichever
+          // window is focused now.
           return ask(
             key,
             { kind: 'approveToolEdit', requestId },
             CallResultSchemas.approveToolEdit,
+            window,
           ).pipe(
             Effect.catch((failure) =>
               Effect.logWarning(
@@ -382,7 +388,10 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
           ? Deferred.succeed(answered, answer.value)
           : Deferred.fail(
               answered,
-              new HostCallFailed({ reason: 'failed', message: answer.message }),
+              new WindowCallFailed({
+                reason: 'failed',
+                message: answer.message,
+              }),
             );
       }).pipe(Effect.asVoid),
     adopt: (session) =>
