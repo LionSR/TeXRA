@@ -95,7 +95,10 @@ export interface AgentRunShape {
   readonly initialUserMessageForTranscript: string | undefined;
   readonly fileService: RunFileService;
   /** What each step resolves its tools from (`loop/step.ts`). */
-  readonly toolInputs: Omit<StepToolInputs, 'approvalPromptsUnavailable'>;
+  readonly toolInputs: Omit<
+    StepToolInputs,
+    'approvalPromptsUnavailable' | 'hostCapabilities'
+  >;
   /**
    * The run's current step: the tools it offers and the pin that holds its
    * catalog generation, replaced by each new step. A delegated child reads

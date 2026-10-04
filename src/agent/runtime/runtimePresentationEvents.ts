@@ -75,7 +75,9 @@ export type PresentationEventHandlers<
 export class DiagnosticsReadFailed extends Data.TaggedError(
   'DiagnosticsReadFailed',
 )<{
-  readonly reason: 'build-failed' | 'read-failed';
+  /** Also, when another process's window was asked: `detached` (it closed
+   *  before it answered) or `no-answer` (it did not answer in time). */
+  readonly reason: 'build-failed' | 'read-failed' | 'detached' | 'no-answer';
   readonly path: string;
   readonly message: string;
   readonly cause?: unknown;

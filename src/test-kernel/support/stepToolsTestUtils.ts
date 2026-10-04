@@ -20,12 +20,19 @@ import { unprobedToolAvailability } from './toolAvailabilityTestLayer';
 export const resolveTestStep = Effect.fn('resolveTestStep')(function* (
   input: Omit<
     StepToolInputs,
-    'held' | 'runTools' | 'approvalPromptsUnavailable' | 'injectInstalled'
+    | 'held'
+    | 'runTools'
+    | 'approvalPromptsUnavailable'
+    | 'hostCapabilities'
+    | 'injectInstalled'
   > &
     Partial<
       Pick<
         StepToolInputs,
-        'runTools' | 'approvalPromptsUnavailable' | 'injectInstalled'
+        | 'runTools'
+        | 'approvalPromptsUnavailable'
+        | 'hostCapabilities'
+        | 'injectInstalled'
       >
     >,
 ) {
@@ -37,6 +44,8 @@ export const resolveTestStep = Effect.fn('resolveTestStep')(function* (
   const resolved = yield* resolveStepTools(pinned.generation, {
     runTools: [],
     approvalPromptsUnavailable: false,
+    // The extension's own session reads its editor's diagnostics.
+    hostCapabilities: new Set(input.host === 'vscode' ? ['diagnostics'] : []),
     injectInstalled: false,
     ...input,
     held,

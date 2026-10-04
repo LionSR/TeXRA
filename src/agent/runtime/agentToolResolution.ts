@@ -37,7 +37,10 @@
 import { Effect, SubscriptionRef } from 'effect';
 
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
-import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
+import {
+  MapToolRegistry,
+  type HostToolCapability,
+} from '@agent/core/tools/ToolTypes';
 import type { Persona } from '@agent/core/definition/AgentDataclass';
 import { isInstalledPluginId } from '@common/plugins/pluginTrust';
 import type { ModelOptionStores } from '@model/computeModelOptions';
@@ -63,6 +66,9 @@ export interface StepToolInputs {
   readonly tools: Persona['tools'];
   /** When true, approval-gated tools are withheld: read live each step. */
   readonly approvalPromptsUnavailable: boolean;
+  /** What the session's host serves now, read live each step: a tool that
+   *  needs a capability missing here is withheld. */
+  readonly hostCapabilities: ReadonlySet<HostToolCapability>;
   /** The product host the run's roots name; tools excluded from it are dropped. */
   readonly host: SettingHost;
   /** Tools only this run holds, laid over the resolved list (step 4). */
@@ -180,6 +186,11 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     const tool = enabled.get(name)?.tool ?? table.get(name);
     const excluded = tool?.unavailableHosts ?? [];
     if (excluded.includes(input.host)) return false;
+    if (
+      tool?.hostCapability !== undefined &&
+      !input.hostCapabilities.has(tool.hostCapability)
+    )
+      return false;
     if (tool?.requiresApproval && input.approvalPromptsUnavailable) {
       // One whose plugin is off is withheld for that, silently.
       if (enabled.has(name)) withheldForApproval.push(name);

@@ -21,6 +21,8 @@
  * - `task.start` / `task.resume`: launch or continue a task in the service.
  * - `task.model`: switch a running task's model.
  * - `project.policy`: the approval policy of a project's session.
+ * - `host.attach` / `host.focus` / `host.answer`: a window offering its host
+ *   capabilities to its project's tasks (see `hostCalls.ts`).
  * - `request.preview`: a pending tool edit's original and proposed content,
  *   which the durable request does not carry.
  */
@@ -32,6 +34,7 @@ import { z } from 'zod';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import { RunIdSchema } from '@shared/schemas';
+
 import {
   OutcomeSchema,
   RuntimeRequestSchema,
@@ -41,10 +44,15 @@ import {
   RequestErrorWireSchema,
   SubscribeSchema,
 } from '@shared/session/sessionFrames';
+import {
+  HostAnswerSchema,
+  HostCapabilitySchema,
+  HostFrameSchema,
+} from './hostCalls';
 
 /** Bumped whenever a procedure or a payload changes shape. A client newer
  *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 /** `value` as JSON carries it: an absent field (`undefined`) is left out,
  *  which the wire's JSON check otherwise refuses. */
@@ -203,5 +211,18 @@ export const TexraRpcs = RpcGroup.make(
   Rpc.make('project.policy', {
     payload: { workspace, policy: zodWire(TexraApprovalPolicySchema) },
     error: zodWire(TaskFailedSchema),
+  }),
+  Rpc.make('host.attach', {
+    payload: {
+      workspace,
+      capabilities: zodWire(z.array(HostCapabilitySchema)),
+    },
+    success: zodWire(HostFrameSchema),
+    error: zodWire(TaskFailedSchema),
+    stream: true,
+  }),
+  Rpc.make('host.focus', { payload: { attachment: Schema.String } }),
+  Rpc.make('host.answer', {
+    payload: { id: Schema.String, answer: zodWire(HostAnswerSchema) },
   }),
 );

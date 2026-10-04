@@ -42,10 +42,7 @@ describe('DiagnosticsTool', () => {
 
       yield* withSession((session) =>
         Effect.gen(function* () {
-          const addCriticism = vi.fn((entry) => ({
-            accepted: true,
-            resolvedPath: entry.absolutePath,
-          }));
+          const addCriticism = vi.fn(() => Effect.succeed(true));
           yield* session.interactions.use({ addCriticism });
 
           const result = yield* DiagnosticsTool.call(addCriticismCall()).pipe(

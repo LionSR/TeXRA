@@ -165,34 +165,28 @@ const addCriticism = Effect.fn('DiagnosticsTool.addCriticism')(function* (
   // Path resolution shares the sink's failure report: both are the "add"
   // command failing before it could annotate anything.
   const absolutePath = (yield* resolveToolPath(ports.call, path)).absolute;
-  const added = yield* Effect.try({
-    try: () => {
-      return {
-        absolutePath,
-        result: addCriticismSink({
-          absolutePath,
-          line,
-          message,
-          severity,
-          confidence,
-        }),
-      };
-    },
-    catch: (error) =>
-      new ToolError(`Failed to add criticism: ${toErrorMessage(error)}`),
+  const accepted = yield* addCriticismSink({
+    absolutePath,
+    line,
+    message,
+    severity,
+    confidence,
   }).pipe(
+    Effect.mapError(
+      (error) =>
+        new ToolError(`Failed to add criticism: ${toErrorMessage(error)}`),
+    ),
     Effect.tapError((error) =>
       Effect.logError(error.message).pipe(withLogChannel(CHANNEL)),
     ),
   );
-  if (!added.result.accepted) {
+  if (!accepted) {
     return executed(
       'Inline criticism diagnostics are disabled. Enable "texra.inlineCriticism.enabled" in settings to surface critiques as diagnostics.',
       'Criticism not accepted',
     );
   }
-  const where = added.result.resolvedPath || added.absolutePath;
-  const summary = `Added criticism for ${where}:${line} (S${severity}/C${confidence})`;
+  const summary = `Added criticism for ${absolutePath}:${line} (S${severity}/C${confidence})`;
   return executed(summary, summary);
 });
 
@@ -217,8 +211,10 @@ const diagnose = Effect.fn('DiagnosticsTool.call')(function* (
 
 export const DiagnosticsTool = defineTool({
   name: 'diagnostics',
-  // No diagnostics provider is installed on either host.
-  unavailableHosts: ['cli', 'desktop', 'sdk'],
+  // Offered while the session's host reads an editor's diagnostics: the
+  // extension's own session, or a service task with one of its windows.
+  hostCapability: 'diagnostics',
+  unavailableHosts: ['desktop', 'sdk'],
   description:
     'Inspect or annotate diagnostics for a file. Use "list"/"count" to retrieve linter diagnostics; use "add" to push a critique annotation as a VS Code diagnostic (squiggle + Problems panel entry) instead of inserting a literal \\criticize{...}{...}{...} macro. The "add" command requires the experimental "texra.inlineCriticism.enabled" setting and reports "not accepted" if disabled; criticisms pushed this way are read back by "list".',
   schema: DiagnosticsInputSchema,

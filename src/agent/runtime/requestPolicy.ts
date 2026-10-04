@@ -29,6 +29,7 @@ import {
 } from '@shared/schemas';
 import type { RunHistoryDraft } from '@shared/session/runStateFold';
 
+import type { StepToolInputs } from './agentToolResolution';
 import type { SessionHandle } from './SessionHandle';
 
 /** What the session's host can answer, read live: a host attached after a
@@ -41,7 +42,7 @@ const canPresent = (session: SessionHandle): boolean =>
  * the policy applied to what the attached host can answer. One reading for
  * every run of the session, whoever triggers it.
  */
-export function withholdsApprovalTools(session: SessionHandle): boolean {
+function withholdsApprovalTools(session: SessionHandle): boolean {
   return isTexraApprovalDenied(
     decideTexraApproval({
       policy: session.approvalPolicy,
@@ -145,4 +146,17 @@ export function policyDecidedRows(
       decision: answer.decision,
     },
   ];
+}
+
+/** The step's inputs read live from its session: whether approvals can be
+ *  asked, and what its host serves now. */
+export function liveToolGates(
+  session: SessionHandle,
+): Pick<StepToolInputs, 'approvalPromptsUnavailable' | 'hostCapabilities'> {
+  return {
+    approvalPromptsUnavailable: withholdsApprovalTools(session),
+    hostCapabilities: new Set(
+      session.interactions.readDiagnostics ? ['diagnostics'] : [],
+    ),
+  };
 }

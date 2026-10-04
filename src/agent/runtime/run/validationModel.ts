@@ -159,6 +159,13 @@ function goldenTurn(
         ? [call('bash', { command: 'echo approved >> approved.txt' })]
         : text('The approved command ran.'),
     );
+  // A diagnostics read the service forwards to an attached window.
+  if (system.includes('GOLDEN-DIAGNOSTICS'))
+    return Effect.succeed(
+      results.length === 0
+        ? [call('diagnostics', { command: 'list', path: 'main.tex' })]
+        : text('The diagnostics read came back.'),
+    );
   if (system.includes('GOLDEN-CHILD')) {
     if (said.includes('Background child'))
       return gate('golden-background.release').pipe(
@@ -488,23 +495,6 @@ export function validationModel(config: ModelConfig): {
           code: SCRIPT_FANOUT_VALIDATION_SOURCE,
         }),
       ];
-    } else if (scriptFanout && toolNames.has('script')) {
-      // Hand the script's result back verbatim, so the run's report shows
-      // what its children answered.
-      const results = turn.messages.flatMap((message) =>
-        message.role === 'tool' ? message.results : [],
-      );
-      content = [
-        {
-          kind: 'message',
-          content: [
-            {
-              kind: 'text',
-              text: `Script result: ${JSON.stringify(results)}`,
-            },
-          ],
-        },
-      ];
     } else if (historyQuery && !hasToolResult && toolNames.has('executions')) {
       content = [
         call('executions', {
@@ -513,19 +503,20 @@ export function validationModel(config: ModelConfig): {
           sql: 'SELECT name, kind, lifecycle FROM runs ORDER BY started_at',
         }),
       ];
-    } else if (historyQuery) {
-      // Hand the page back verbatim, so the run's result shows what the
-      // query returned.
+    } else if ((scriptFanout && toolNames.has('script')) || historyQuery) {
+      // Hand the result back verbatim, so the run's report shows what the
+      // script's children answered or what the query returned.
       const results = turn.messages.flatMap((message) =>
         message.role === 'tool' ? message.results : [],
       );
+      const what = scriptFanout ? 'Script' : 'History query';
       content = [
         {
           kind: 'message',
           content: [
             {
               kind: 'text',
-              text: `History query result: ${JSON.stringify(results)}`,
+              text: `${what} result: ${JSON.stringify(results)}`,
             },
           ],
         },

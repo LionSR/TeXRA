@@ -161,11 +161,13 @@ function signedEvents(
     {
       event_type: 'step.start',
       index: 2,
+      // gemini-3.8-flash signs the first call after its thought.
       step: {
         type: 'function_call',
         id: 'call_1',
         name: 'search',
         arguments: {},
+        signature: 'sig_call',
       },
     },
     {
@@ -323,6 +325,11 @@ describe('canonical Google Interactions protocol', () => {
             id: 'int_1',
             status: 'requires_action',
             steps: [
+              // A GET echoes the interaction's input, include_input or not.
+              {
+                type: 'user_input',
+                content: [{ type: 'text', text: 'go' }],
+              },
               {
                 type: 'thought',
                 summary: [{ type: 'text', text: 'plan' }],
@@ -337,6 +344,7 @@ describe('canonical Google Interactions protocol', () => {
                 id: 'call_1',
                 name: 'search',
                 arguments: { q: 'one' },
+                signature: 'sig_call',
               },
               {
                 type: 'function_call',

@@ -334,10 +334,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           session,
         ),
         readDiagnostics: getLinterMessages,
-        addCriticism: (payload) => ({
-          accepted: pushManualCriticism(payload),
-          resolvedPath: payload.absolutePath,
-        }),
+        addCriticism: (payload) =>
+          Effect.sync(() => pushManualCriticism(payload)),
         openPdf: ({ location, preserveFocus }) =>
           Effect.tryPromise({
             try: () =>

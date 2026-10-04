@@ -26,7 +26,7 @@
   "src/agent/runtime/modelRoutes.ts": 450,
   "src/agent/runtime/run/compaction.ts": 458,
   "src/agent/runtime/run/modelBinding.ts": 427,
-  "src/agent/runtime/run/validationModel.ts": 618,
+  "src/agent/runtime/run/validationModel.ts": 609,
   "src/agent/runtime/runApprovalQueue.ts": 499,
   "src/agent/runtime/RunHistory.ts": 535,
   "src/agent/runtime/runRegistry.ts": 1018,

@@ -1,7 +1,11 @@
 // Type imports
 import { Cause, Effect, type Scope } from 'effect';
 import { z, ZodError, type ZodType } from 'zod';
-import type { ITool, ToolGuard } from '@agent/core/tools/ToolTypes';
+import type {
+  HostToolCapability,
+  ITool,
+  ToolGuard,
+} from '@agent/core/tools/ToolTypes';
 import type { SettingHost } from '@shared/state/stateSettings';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
@@ -31,6 +35,7 @@ export type DefinedTool<T, R = never> = Omit<ITool<Error, R>, 'call'> & {
   readonly requiresApproval: ITool['requiresApproval'];
   readonly slow: boolean | undefined;
   readonly unavailableHosts: readonly SettingHost[] | undefined;
+  readonly hostCapability: HostToolCapability | undefined;
   readonly guard: ToolGuard<T, R> | undefined;
   readonly describe: ITool['describe'];
 };
@@ -42,6 +47,7 @@ export type DefineToolOptions<T, R = never> = Required<
   Pick<
     ITool,
     | 'unavailableHosts'
+    | 'hostCapability'
     | 'parallelSafe'
     | 'ownsConcurrency'
     | 'scriptGlobal'
@@ -108,6 +114,7 @@ export function defineTool<T, R = never>(
     requiresApproval: def.requiresApproval,
     slow: def.slow,
     unavailableHosts: def.unavailableHosts,
+    hostCapability: def.hostCapability,
     guard: def.guard,
     describe: def.describe,
     // Validate lazily in the caller's fiber; interruption never becomes a
