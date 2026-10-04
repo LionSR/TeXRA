@@ -885,7 +885,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       }
     });
 
-  /** A run that ends here: `settleRun` writes its halt from this outcome. */
+  /** A run that ends here: its halt commits with its `run.end`. */
   const finish = (state: RunState, outcome: RunOutcome): RunExit =>
     ({ state, outcome }) as const;
 
@@ -933,7 +933,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
                       ),
                     ),
                   ),
-              settleRun(cell, logger, followUps)(exit),
+              settleRun(cell, followUps)(exit),
             ),
         );
       }),

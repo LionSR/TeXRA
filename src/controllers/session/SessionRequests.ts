@@ -64,7 +64,7 @@ import { recordInquiryDecision } from '@tools/inquiry/inquiryActions';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { approvePendingUnderBypass } from './pendingUnderBypass';
+import { setPolicy } from './pendingUnderBypass';
 
 const done: Outcome = Object.freeze({ kind: 'done' } as const);
 
@@ -186,14 +186,26 @@ function rename(
       ),
       Effect.as(done),
     );
-  if (heldHere) return commit;
+  return withRunClaim(session, req.runId, heldHere, commit);
+}
+
+/**
+ * `write` under the run's claim: as is when this process holds the run,
+ * else taken and given back around it, so a later resume can still take
+ * the run.
+ */
+function withRunClaim<A, R>(
+  session: SessionHandle,
+  runId: RunId,
+  heldHere: boolean,
+  write: Effect.Effect<A, RequestError, R>,
+): Effect.Effect<A, RequestError, R> {
+  if (heldHere) return write;
   return Effect.acquireUseRelease(
     session
-      .acquireClaims(qualifyAggregateId('run', req.runId))
-      .pipe(
-        Effect.mapError((): RequestError => new NotOwner({ runId: req.runId })),
-      ),
-    () => commit,
+      .acquireClaims(qualifyAggregateId('run', runId))
+      .pipe(Effect.mapError((): RequestError => new NotOwner({ runId }))),
+    () => write,
     (release) => release.pipe(Effect.orDie),
   );
 }
@@ -347,21 +359,7 @@ function decide(
   return withPerKeyLane(
     decisionLanes,
     `${req.runId}/${req.requestId}`,
-  )(
-    heldHere
-      ? answer
-      : Effect.acquireUseRelease(
-          session
-            .acquireClaims(qualifyAggregateId('run', req.runId))
-            .pipe(
-              Effect.mapError(
-                (): RequestError => new NotOwner({ runId: req.runId }),
-              ),
-            ),
-          () => answer,
-          (release) => release.pipe(Effect.orDie),
-        ),
-  );
+  )(withRunClaim(session, req.runId, heldHere, answer));
 }
 
 /** Delete the admitted lifetime after acquiring its inactive run slot. */
@@ -544,24 +542,11 @@ function handle(
     case 'request.decide':
       return decide(session, decisionLanes, req, admitted, heldHere);
     case 'policy.set':
-      return Effect.gen(function* () {
-        const { change } = req;
-        switch (change.bypass) {
-          case 'bash':
-            approvals.bash.bypass.setBypass(change.runId, change.enabled);
-            break;
-          case 'toolEdit':
-            approvals.toolEdit.bypass.setBypass(change.runId, change.enabled);
-            break;
-          case 'superYolo':
-            approvals.setDelegatedWorkBypasses(change.runId, change.enabled);
-            break;
-        }
-        // A run held elsewhere has no fiber here to act on a decision.
-        if (change.enabled && heldHere) {
-          yield* approvePendingUnderBypass(session, change);
-        }
-        return done;
-      });
+      return withRunClaim(
+        session,
+        req.change.runId,
+        heldHere,
+        setPolicy(session, approvals, req.change, heldHere),
+      );
   }
 }
