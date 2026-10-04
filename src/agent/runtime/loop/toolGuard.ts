@@ -12,12 +12,12 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 
+import { assertWritable, resolveToolPath } from '@common/files/pathResolution';
 import type { ToolResult } from '@shared/schemas';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
 } from '@tools/approval/bashApproval';
-import { assertWritable, resolveToolPath } from '@tools/pathResolution';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { ToolCall } from '../ToolCall';

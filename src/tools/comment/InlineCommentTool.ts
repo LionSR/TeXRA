@@ -4,9 +4,9 @@ import { z } from 'zod';
 
 // Internal imports
 import { ToolCall } from '@agent/runtime/ToolCall';
+import { resolveToolPath } from '@common/files/pathResolution';
 import { withLogChannel } from '@logger/effectLog';
 import { ToolError, type ToolResult } from '@shared/schemas';
-import { resolveToolPath } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';

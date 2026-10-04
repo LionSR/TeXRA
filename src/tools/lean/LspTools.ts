@@ -2,12 +2,12 @@ import { Cause, Effect, Scope } from 'effect';
 import { z } from 'zod';
 
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
+import { resolveToolPath } from '@common/files/pathResolution';
 import { withLogChannel } from '@logger/effectLog';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
 import { nullishWithDefault } from '@tools/core/inputSchema';
-import { resolveToolPath } from '@tools/pathResolution';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {

@@ -12,9 +12,10 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 // Local imports - agent runtime
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
-import { entriesOf, sha256, type ToolEntry } from '@tools/catalogEntries';
+import { entriesOf, type ToolEntry } from '@tools/catalogEntries';
 import type { Generation, Registry } from '@tools/liveRegistry';
 import type { InstalledToolPlugin, LoadedPlugin } from '@tools/toolTable';
+import { sha256 } from '@utils/core/idHash';
 
 /** An installed plugin loaded at a key: its servers' tools, which enter the
  *  catalog only when the load is accepted (`publish`), its contribution,

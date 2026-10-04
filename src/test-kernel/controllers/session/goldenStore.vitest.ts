@@ -93,6 +93,7 @@ import {
   type SessionView,
 } from '@shared/session/sessionView';
 import { parseScriptDeliverySummary } from '@shared/subagentFollowup';
+import { dispatchedChildren, scriptStages } from '@shared/transcript';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
@@ -112,7 +113,6 @@ import {
 } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { autoDecideRequests } from '@test/agent/progressTestUtils';
-import { dispatchedChildren, scriptStages } from '@ui/transcript';
 
 /** The host the painted script stages are read for. */
 const CLI_HOST = { terminalBacked: false } as const;

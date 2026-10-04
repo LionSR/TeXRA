@@ -30,7 +30,7 @@ import {
   ScriptDeliverySummarySchema,
 } from '@shared/schemas';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
-import { formatScriptTally } from '@ui/transcript/workflowCall';
+import { formatScriptTally } from '@shared/transcript/workflowCall';
 import {
   formatCompactDuration,
   formatCostUsd,

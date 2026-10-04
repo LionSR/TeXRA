@@ -7,6 +7,7 @@ import { Cause, Effect, FileSystem } from 'effect';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - shared schemas
+import { resolveToolPath } from '@common/files/pathResolution';
 import type { AgentCatalogServices } from '@platform/processRuntime';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, type ToolResult } from '@shared/schemas';
@@ -14,7 +15,6 @@ import { ToolError, type ToolResult } from '@shared/schemas';
 // Local imports - tools
 import { reloadAgentCatalog } from '@tools/agentCatalogFollower';
 import { requireFileReadForEdit } from '@tools/fileInteractions';
-import { resolveToolPath } from '@tools/pathResolution';
 import {
   appendApprovalDiffNote,
   buildApprovalRejectedResult,

@@ -10,6 +10,20 @@ import { Runs } from '@agent/runtime/runRegistry';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
+import {
+  MAX_PINNED_MEMORIES,
+  DIRECTORY_LISTING_DEPTH,
+  MEMORY_DISPLAY_ROOT,
+} from '@common/memory/constants';
+import {
+  displayToStoragePath,
+  toDisplayPath,
+} from '@common/memory/memoryUtils';
+import {
+  createMeta,
+  formatAttribution,
+  type MemoryFileMeta,
+} from '@common/memory/memoryMeta';
 import { withLogChannel } from '@logger/effectLog';
 import { StorageFs } from '@platform/rootedFs';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
@@ -47,17 +61,6 @@ import {
   paginateToolListing,
   ViewRangeSchema,
 } from '../formatting';
-import {
-  MAX_PINNED_MEMORIES,
-  DIRECTORY_LISTING_DEPTH,
-  MEMORY_DISPLAY_ROOT,
-} from './constants';
-import { displayToStoragePath, toDisplayPath } from './memoryUtils';
-import {
-  createMeta,
-  formatAttribution,
-  type MemoryFileMeta,
-} from './memoryMeta';
 
 const CHANNEL = 'MemoryTool';
 

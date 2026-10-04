@@ -17,6 +17,7 @@ import { Effect, FileSystem } from 'effect';
 import { getRunRecords } from '@agent/storage';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
+import { assertNoParentTraversal } from '@common/files/pathResolution';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { WorkspaceFs } from '@platform/rootedFs';
@@ -28,7 +29,6 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import type { RequestRefusal, RunId, FileLocation } from '@shared/schemas';
-import { assertNoParentTraversal } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { requireToolRun } from '@tools/core/toolRun';
 import {

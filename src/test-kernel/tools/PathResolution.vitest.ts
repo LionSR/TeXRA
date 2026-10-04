@@ -6,16 +6,16 @@ import { it } from '@effect/vitest';
 
 import { describe, expect } from 'vitest';
 
+import {
+  assertNoParentTraversal,
+  assertWritable,
+  resolveToolPath,
+} from '@common/files/pathResolution';
 import { StateReadFailed } from '@platform/interfaces';
 import { ToolError } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { installedHost, installPlatform } from '@test/support/setupPlatform';
-import {
-  assertNoParentTraversal,
-  assertWritable,
-  resolveToolPath,
-} from '@tools/pathResolution';
 import { registerExternalRoot } from '@utils/files/externalRoots';
 
 describe('assertNoParentTraversal', () => {

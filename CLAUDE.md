@@ -93,12 +93,11 @@ Things the tree won't tell you:
   surface. Import the file that defines the symbol.
 - **`src/ui/` is the host-neutral UI toolkit** (`@ui/*`): the Web Awesome and
   Lit building blocks (`wa/`), the shared `css` tag blocks (`styles/`), the
-  transcript row model (`transcript/`), the markdown/KaTeX pipeline
-  (`markdown/`) and the user-facing copy tables (`copy/`). All three hosts
+  markdown/KaTeX pipeline (`markdown/`) and the user-facing copy tables (`copy/`). All three hosts
   render from it. It moved out of `src/shared/` because that directory is wire
   contracts and UI-shared message types, which ~9k lines of rendering code is
   not. It is a VS Code-free zone and, like `src/shared/`, takes no
-  `@agent/*` imports. Do not confuse it with `src/transcript/` (`@transcript`),
+  `@agent/*` imports. The transcript row model lives in `src/shared/transcript/` (it is a fold target of `shared/session`, so `shared` owns it). Do not confuse it with `src/transcript/` (`@transcript`),
   the run-transcript persistence layer. **`src/shared/{litControllers,monaco,highlighting}/`
   never made that move** — Lit reactive controllers, a Monaco bootstrap, and a
   highlight.js wrapper. Consumers are webview/renderer UI code, plus one

@@ -8,7 +8,7 @@ import {
   rowHeadline,
   type TranscriptRow,
   type TranscriptRowKind,
-} from '@ui/transcript';
+} from '@shared/transcript';
 
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
 

@@ -55,12 +55,13 @@ import {
 } from '@shared/schemas';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
-import { sha256, toolDigests } from '@tools/catalogEntries';
+import { toolDigests } from '@tools/catalogEntries';
 import { LiveTools } from '@tools/liveTools';
 import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { readDisabledTools } from '@tools/plugins';
 import { readDelegationTargets } from '@tools/delegation/delegationAvailability';
 import type { Continuation } from '@tools/toolTable';
+import { sha256 } from '@utils/core/idHash';
 import type { StepRoot } from '@utils/files/externalRoots';
 
 import { declaredToolNames, resolveStepTools } from '../agentToolResolution';

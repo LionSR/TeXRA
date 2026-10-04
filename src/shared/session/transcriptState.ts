@@ -36,7 +36,7 @@ import {
   type TranscriptRowBase,
   transcriptText,
   type TranscriptText,
-} from '@ui/transcript';
+} from '@shared/transcript';
 
 import type { RunView, TranscriptView } from './sessionView';
 

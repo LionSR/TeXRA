@@ -3,7 +3,7 @@
 import { html } from 'lit';
 
 import type { FormatResult } from '@progressView/frontend/formatters/baseLogFormatter';
-import type { WebSearchRow } from '@ui/transcript';
+import type { WebSearchRow } from '@shared/transcript';
 import { buildToolUseDetails } from './helpers';
 
 export function formatWebSearchTemplate(row: WebSearchRow): FormatResult {

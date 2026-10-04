@@ -8,6 +8,10 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - tools
 import {
+  resolveToolPath,
+  type ToolPathCall,
+} from '@common/files/pathResolution';
+import {
   extractBibliographyContext,
   loadBibliographyEntries,
   summarizeBibliographyEntries,
@@ -16,7 +20,6 @@ import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceFs } from '@platform/rootedFs';
 import type { ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
-import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { toPosixPath } from '@utils/core/pathCore';

@@ -22,10 +22,10 @@ import { z } from 'zod';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
+import { parseWorkingDirectory } from '@common/files/pathResolution';
 import { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
-import { parseWorkingDirectory } from '@tools/pathResolution';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { requireToolRun } from '@tools/core/toolRun';

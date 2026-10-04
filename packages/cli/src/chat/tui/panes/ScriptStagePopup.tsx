@@ -1,5 +1,5 @@
 // The script popup: the calls a run's `script` call issued, painted from the
-// shared script-stage model (`scriptStages` in `@ui/transcript`), the one the
+// shared script-stage model (`scriptStages` in `@shared/transcript`), the one the
 // progress view paints. A foreground surface like the Ctrl-T reader:
 // row-budgeted, and Esc restores the conversation untouched. Its title is
 // the card's summary line; each phase lists its calls in issue order. Enter
@@ -31,7 +31,7 @@ import {
   scriptStages,
   TALK_TO_AGENT,
   type ScriptCallView,
-} from '@ui/transcript';
+} from '@shared/transcript';
 
 // Local imports - TUI state
 import { type ScriptPopupView } from '../state/cliState';

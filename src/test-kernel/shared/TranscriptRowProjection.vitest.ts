@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { MESSAGE_TYPES, type RunId, type ToolUseLog } from '@shared/schemas';
+import {
+  logPayloadRow,
+  toolRow,
+  type TranscriptRowBase,
+} from '@shared/transcript';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
-import { logPayloadRow, toolRow, type TranscriptRowBase } from '@ui/transcript';
 
 const base: TranscriptRowBase = {
   id: 'a',

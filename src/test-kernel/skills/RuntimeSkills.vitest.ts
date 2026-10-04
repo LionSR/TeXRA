@@ -4,6 +4,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect } from 'vitest';
 
+import { resolveToolPath } from '@common/files/pathResolution';
 import { SKILL_CATALOG_MAX_SKILLS, ToolError } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
@@ -16,7 +17,6 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { installTestSkillRoots, writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { resolveToolPath } from '@tools/pathResolution';
 import type { StepRoot } from '@utils/files/externalRoots';
 
 const tempRoots = useTempDirs();

@@ -7,8 +7,11 @@ import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - tools
+import {
+  resolveToolPath,
+  type ToolPathCall,
+} from '@common/files/pathResolution';
 import { ToolError, type ToolResult } from '@shared/schemas';
-import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { executed } from '@tools/core/result';
 import { executeCommand } from '@utils/system/execUtils';

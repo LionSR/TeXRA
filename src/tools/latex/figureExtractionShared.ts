@@ -2,16 +2,16 @@ import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import {
+  resolveToolPath,
+  type WorkspacePathResolution,
+} from '@common/files/pathResolution';
+import {
   ToolError,
   type ToolFileAttachment,
   type ToolResult,
 } from '@shared/schemas';
 import { buildFileAttachment } from '@tools/attachments';
 import { formatToolOutput } from '@tools/formatting';
-import {
-  resolveToolPath,
-  type WorkspacePathResolution,
-} from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { ensureError } from '@utils/errors/errorMessage';

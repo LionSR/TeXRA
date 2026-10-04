@@ -61,10 +61,10 @@ wrong.
 - **`shared/`** — types and schemas that cross a process or wire boundary
   (extension host ↔ webview, main ↔ renderer, client ↔ backend): if both sides
   must agree on the shape, it goes here, together with the host-neutral logic
-  that folds and reads them.
+  that folds and reads them (including the transcript row model in
+  `shared/transcript/`).
 - **`ui/`** — the **shared browser UI kit**: `ui/wa/` (Web Awesome icon and
-  component helpers), `ui/styles/`, `ui/transcript/` (the transcript row
-  model), `ui/markdown/` and `ui/copy/` (user-facing strings). That is runtime
+  component helpers), `ui/styles/`, `ui/markdown/` and `ui/copy/` (user-facing strings). That is runtime
   UI code, not a contract — it imports `lit`. Reusable webview UI belongs here,
   not in a host package and not under `shared/`.
 - **`common/`** — cross-cutting logic with domain meaning that is not a wire

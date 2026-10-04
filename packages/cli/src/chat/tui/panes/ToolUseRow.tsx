@@ -7,7 +7,7 @@ import { Box, Text } from 'ink';
 
 import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import { clipToWidth } from '@cli/runtime/terminalText';
-import type { ToolRow } from '@ui/transcript';
+import type { ToolRow } from '@shared/transcript';
 
 import { DiffView } from '../render/DiffView';
 import {

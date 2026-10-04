@@ -4,11 +4,11 @@ import { imageSize } from 'image-size';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports
-import { ToolError, type ToolFileAttachment } from '@shared/schemas';
 import {
   resolveToolPath,
   type ToolPathResolution,
-} from '@tools/pathResolution';
+} from '@common/files/pathResolution';
+import { ToolError, type ToolFileAttachment } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { entryExists } from '@utils/files/fsEntryExists';

@@ -5,6 +5,7 @@ import { describe, expect } from 'vitest';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { TraceEmitter } from '@agent/trace';
 import { MESSAGE_TYPES } from '@shared/schemas';
+import type { TranscriptRow } from '@shared/transcript';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
@@ -13,7 +14,6 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { readRunTranscript } from '@transcript/runTranscript';
-import type { TranscriptRow } from '@ui/transcript';
 import { generateRunId } from '@utils/core';
 
 describe('session-owned transcripts and follow-up queues', () => {

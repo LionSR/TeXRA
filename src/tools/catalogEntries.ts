@@ -3,17 +3,12 @@
  * the identity a step records and a call is checked against, and the digests
  * that identity is made of.
  */
-// Node imports
-import { hash } from 'node:crypto';
-
-// Third-party imports
-import stableStringify from 'safe-stable-stringify';
-
 // Local imports - agent runtime
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { toolDefinitionsFor } from '@agent/runtime/run/tools';
 import type { Generation } from '@tools/liveRegistry';
 import { withoutSchemaDescriptions } from '@tools/schemaIdentity';
+import { sha256 } from '@utils/core/idHash';
 
 /** One tool in the catalog, with the identity a step records. */
 export interface ToolEntry {
@@ -41,9 +36,6 @@ export interface HeldPlugins {
   readonly warnings: readonly string[];
   readonly loaded: ReadonlyMap<string, string | undefined>;
 }
-
-export const sha256 = (value: unknown): string =>
-  hash('sha256', stableStringify(value) ?? '', 'hex');
 
 /**
  * A tool's identity digest (its name and input schema only, so a reworded

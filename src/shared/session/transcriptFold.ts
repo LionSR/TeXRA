@@ -27,7 +27,7 @@ import { applyCompactionActivityEvent } from '@shared/runs/compactionActivityPro
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { taskGroupOnStage } from '@shared/runs/taskGroupProjection';
 import { decodeToolUseLog } from '@shared/toolUse';
-import { TOOL_CUT_BY_RUN_END } from '@ui/transcript';
+import { TOOL_CUT_BY_RUN_END } from '@shared/transcript';
 import { isObject } from '@utils/core';
 
 import { recordLogRow, STREAMING_TEXT_ROW_KIND } from './transcriptLogRows';

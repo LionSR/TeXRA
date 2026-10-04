@@ -4,10 +4,10 @@ import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - tools
+import { resolveToolPath } from '@common/files/pathResolution';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import type { ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
-import { resolveToolPath } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { unique } from '@utils/core';
 import { pathToLocationIn } from '@utils/files/fileLocation';

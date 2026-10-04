@@ -1,7 +1,7 @@
 // Tool-row rendering: one styled-line model is the single source of truth.
 //
 // The row's *content* is decided once, host-agnostically, by `toolRowModel`
-// (`@ui/transcript`): header label and preview, the structured sections
+// (`@shared/transcript`): header label and preview, the structured sections
 // that describe the call, whether the output block is shown and why not. This
 // module is only the terminal's paint of that model — spans (text +
 // color/dim/bold) plus the head/tail elision the terminal spends its own
@@ -36,7 +36,7 @@ import {
   type ToolSection,
   type ToolSectionFile,
   type TranscriptText,
-} from '@ui/transcript';
+} from '@shared/transcript';
 import { buildDiffHunks } from '@utils/text/unifiedDiff';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 

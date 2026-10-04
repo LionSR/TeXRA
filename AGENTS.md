@@ -181,7 +181,7 @@ Another code budget reached zero and is now a hardcoded rule: `unknownErrorChann
     - `utils/core/perKeyQueue.ts` - `withPerKeyLane`, the one per-key serialization lane (Effect-based; `KeyedMutex` and `async-mutex` were retired by #12696)
 
 - `src/platform/` - Platform abstraction layer: the host ports and the process runtime types. Each host's composition root calls `installProcessRuntime()` once at startup; agnostic code reads the ports from the Effect context that runtime serves.
-- `src/ui/` (`@ui/*`) - The host-neutral UI toolkit all three hosts render from (`ui/wa/`, `ui/styles/`, `ui/transcript/`, `ui/markdown/`, `ui/copy/`); see CLAUDE.md "Layout" for its boundaries, including the `litControllers/`, `monaco/`, `highlighting/` trio that stayed in `src/shared/`. `src/transcript/` (`@transcript`) is the unrelated run-transcript persistence layer.
+- `src/ui/` (`@ui/*`) - The host-neutral UI toolkit all three hosts render from (`ui/wa/`, `ui/styles/`, `ui/markdown/`, `ui/copy/`); see CLAUDE.md "Layout" for its boundaries, including the `litControllers/`, `monaco/`, `highlighting/` trio that stayed in `src/shared/`. `src/transcript/` (`@transcript`) is the unrelated run-transcript persistence layer.
 
 ### Pragmatic implementations
 

@@ -1,6 +1,6 @@
 /**
  * `<script-stage>`: the calls one `script` call issued, painted from the
- * shared script-stage model (`scriptStages` in `@ui/transcript`): the card's
+ * shared script-stage model (`scriptStages` in `@shared/transcript`): the card's
  * summary line, then each phase's calls as plain rows in issue order. An
  * `agent` row opens its child run; Review opens the run that is asking;
  * "Stop this agent", in a running row's menu, stops the call's child, which
@@ -19,13 +19,13 @@ import type { RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import type { Surface, SurfaceRefusal } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { designTokens } from '@ui/styles';
 import {
   SCRIPT_CALL_STATUS_LABEL,
   TALK_TO_AGENT,
   type ScriptCallView,
   type ScriptStageView,
-} from '@ui/transcript';
+} from '@shared/transcript';
+import { designTokens } from '@ui/styles';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { assertNever } from '@utils/core';

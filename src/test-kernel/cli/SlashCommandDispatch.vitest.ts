@@ -63,12 +63,12 @@ import {
   type TodoItem,
 } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
+import type { TranscriptRow } from '@shared/transcript';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import type { TranscriptRow } from '@ui/transcript';
 import {
   bindTestSessionView,
   makeRunView,

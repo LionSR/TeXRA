@@ -6,7 +6,7 @@
 
 import type { RunPhase } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
-import type { TranscriptRow } from '@ui/transcript';
+import type { TranscriptRow } from '@shared/transcript';
 
 import {
   incrementalStaticTranscriptEntries,

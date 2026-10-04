@@ -47,8 +47,8 @@ import {
   type RunHistoryDraft,
   type RunState,
 } from '@shared/session/runStateFold';
-import { sha256 } from '@tools/catalogEntries';
 import { ToolRegistry } from '@tools/toolTable';
+import { sha256 } from '@utils/core/idHash';
 import { generateShortId } from '@utils/core';
 
 import { AgentRun } from '../run/AgentRun';

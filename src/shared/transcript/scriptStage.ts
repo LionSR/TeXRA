@@ -25,8 +25,8 @@ import {
   type SessionView,
 } from '@shared/session/sessionView';
 import { deliveredResponse } from '@shared/subagentFollowup';
-import { TOOL_OUTCOME_COPY } from '@ui/transcript/toolOutcome';
-import { formatWorkflowCallFiles } from '@ui/transcript/workflowCall';
+import { TOOL_OUTCOME_COPY } from '@shared/transcript/toolOutcome';
+import { formatWorkflowCallFiles } from '@shared/transcript/workflowCall';
 import { assertNever, getBasename, isObject } from '@utils/core';
 import {
   formatCompactDuration,

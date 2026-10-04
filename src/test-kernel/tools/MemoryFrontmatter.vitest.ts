@@ -6,7 +6,7 @@ import {
   buildFile,
   parseFrontmatter,
   type MemoryFileMeta,
-} from '@tools/memory/memoryMeta';
+} from '@common/memory/memoryMeta';
 
 describe('memory frontmatter (yaml-backed) (src/tools/memory/memoryMeta.ts)', () => {
   it('round-trips metadata through build and parse', () => {

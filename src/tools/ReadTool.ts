@@ -4,13 +4,13 @@ import { z } from 'zod';
 
 // Local imports
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { ToolError, type ToolResult } from '@shared/schemas';
-import { buildBytesAttachment, buildFileAttachment } from '@tools/attachments';
-import { formatFileView } from '@tools/formatting';
 import {
   resolveToolPath,
   type ToolPathResolution,
-} from '@tools/pathResolution';
+} from '@common/files/pathResolution';
+import { ToolError, type ToolResult } from '@shared/schemas';
+import { buildBytesAttachment, buildFileAttachment } from '@tools/attachments';
+import { formatFileView } from '@tools/formatting';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { parseEml, type EmlImageAttachment } from '@tools/emlParser';
 import {
