@@ -237,8 +237,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     const root = this.root();
     if (!root) return { line: '', state: '' };
     // The fold's turn; a run whose loop has not moved yet carries none.
-    const agentName =
-      root.identity?.kind === 'agent' ? root.identity.agent : undefined;
+    // The agent as the cards name it (`runIdentityDisplayName`): a recipe
+    // launch's `source:name` key reads as its name.
+    const agentName = root.identity?.kind === 'agent' ? root.label : undefined;
     const parts: string[] = [];
     const turnLabel = formatLoopPositionLabel(root.turn);
     if (turnLabel !== undefined) parts.push(`[${turnLabel}]`);

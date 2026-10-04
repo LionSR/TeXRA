@@ -743,6 +743,12 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Document tasks run on a VS Code editor model (Copilot) again.** Since
+  document tasks became a recipe, a task launched with an editor model
+  failed at its first step; its revisions now run on that model as before.
+  A script can also run in the background on an editor model. The terminal's
+  progress line names the agent as the progress cards do (`polish`, not
+  `builtIn:polish`).
 - **Gemini calls work again.** After a change on Google's side, every
   Gemini request failed with a validation error before any output arrived.
 - **Gemini agents can call tools again, and background Gemini runs
