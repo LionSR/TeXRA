@@ -68,6 +68,7 @@ function runServe(context: CliContext, idleSeconds: number) {
         version: context.version,
         idleAfter: `${idleSeconds} seconds`,
         shutdown,
+        settle: closeAllSessions(),
       }).pipe(Effect.provideService(ServiceProjects, projects));
     }).pipe(
       // The sessions close first, their runs stopped and settled; then the

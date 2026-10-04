@@ -36,6 +36,7 @@ import {
   prepareServiceDirectories,
   removeServiceFiles,
   servicePaths,
+  type ServiceOwnership,
   writeServiceRecord,
 } from './discovery';
 import {
@@ -74,7 +75,14 @@ interface ServeOptions {
   readonly idleAfter: Duration.Input;
   /** The host's own stop (a signal): ends the run as a `stop` would. */
   readonly shutdown: Deferred.Deferred<void>;
+  /** Stop and settle every task, run once the service is ending and while
+   *  its clients are still connected, so they see each task's last rows. */
+  readonly settle: Effect.Effect<void>;
 }
+
+/** How long the watch streams get to carry the settled tasks' last rows
+ *  (their framers cut every 16 ms) before the socket closes. */
+const FRAME_FLUSH = '250 millis';
 
 /** How often the idle and takeover checks run. */
 const CHECK_INTERVAL = '1 second';
@@ -107,6 +115,11 @@ export const serve = Effect.fn('server.serve')(function* (
   const ended = yield* Deferred.make<ServeExit>();
   const draining = yield* Ref.make(false);
   let clients: Effect.Effect<number> = Effect.succeed(0);
+  // Known once the socket is bound; until then there is nothing to remove.
+  let own: ServiceOwnership | null = null;
+  const release = Effect.suspend(() =>
+    own === null ? Effect.void : removeServiceFiles(paths, own),
+  ).pipe(Effect.provideService(FileSystem.FileSystem, fs));
   const control: Context.Service.Shape<typeof ServiceControl> = {
     version: options.version,
     socket: paths.socket,
@@ -118,8 +131,7 @@ export const serve = Effect.fn('server.serve')(function* (
         ? Ref.set(draining, true).pipe(
             // Release the name first: a newer service can listen while this
             // one finishes its tasks on the connections it already holds.
-            Effect.andThen(removeServiceFiles(paths, process.pid)),
-            Effect.provideService(FileSystem.FileSystem, fs),
+            Effect.andThen(release),
           )
         : Deferred.succeed(ended, 'stopped').pipe(Effect.asVoid),
   };
@@ -183,6 +195,7 @@ export const serve = Effect.fn('server.serve')(function* (
     ),
   );
   const listening = yield* socketIno;
+  own = { pid: process.pid, socketIno: listening };
   yield* writeServiceRecord(paths, {
     pid: process.pid,
     protocol: PROTOCOL_VERSION,
@@ -194,7 +207,7 @@ export const serve = Effect.fn('server.serve')(function* (
       (cause) => new ServiceListenFailed({ socket: paths.socket, cause }),
     ),
   );
-  yield* Effect.addFinalizer(() => removeServiceFiles(paths, process.pid));
+  yield* Effect.addFinalizer(() => release);
   yield* Effect.logInfo(
     `TeXRA service ${options.version} listening on ${paths.socket}`,
   );
@@ -232,5 +245,7 @@ export const serve = Effect.fn('server.serve')(function* (
   );
   const exit = yield* Deferred.await(ended);
   yield* Effect.logInfo(`TeXRA service exiting: ${exit}`);
+  yield* options.settle;
+  yield* Effect.sleep(FRAME_FLUSH);
   return exit;
 }, Effect.scoped);

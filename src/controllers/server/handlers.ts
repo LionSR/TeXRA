@@ -123,9 +123,15 @@ function admit<A>(
       runs,
       program(admitted).pipe(
         Effect.catchCause((cause) =>
-          Effect.logWarning('A service task ended with a failure', cause).pipe(
-            Effect.andThen(ended(toErrorMessage(Cause.squash(cause)))),
-          ),
+          // The service stopping interrupts its tasks; that is no failure.
+          Cause.hasInterruptsOnly(cause)
+            ? ended('The service stopped before the task started.')
+            : Effect.logWarning(
+                'A service task ended with a failure',
+                cause,
+              ).pipe(
+                Effect.andThen(ended(toErrorMessage(Cause.squash(cause)))),
+              ),
         ),
         Effect.ensuring(ended('The task ended before it started.')),
       ),

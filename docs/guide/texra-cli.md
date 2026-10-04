@@ -478,8 +478,8 @@ approval policy (`--approval-policy`, `--no-input`, or your config) to that
 project in the service before the task starts. No terminal answers an
 approval prompt yet, so a tool that would ask is withheld from service
 tasks unless the policy approves it. With
-`--output-format ndjson`, `attach` writes the task's rows as `progress`
-records, the same projection `texra run` writes.
+`--output-format ndjson`, `attach` writes the task's own rows (not its
+agents') as `progress` records, in the shape `texra run` uses.
 
 Manage the service itself:
 
@@ -493,7 +493,9 @@ texra serve             # run it in the foreground, logging to stderr
 The service listens on a socket in `~/.texra/run/` that only your user can
 open, and writes its log to `~/.texra/run/serve.log`. A newer TeXRA that
 finds an older service asks it to finish its running tasks and exit, and
-starts its own beside it.
+starts its own beside it. The service reads provider keys from its own
+environment when it starts: after you export or remove a key, run `texra
+service restart`.
 
 ## Tools and integrations
 

@@ -4,8 +4,8 @@
  * same frame-driven fold the webviews run (`WebviewSessions`), and this
  * prints what that fold settles. Text output is the task's transcript, one
  * settled row at a time, laid out as the chat TUI prints scrollback; NDJSON
- * output is the task's own rows as `progress` records, the projection
- * `texra run --output-format ndjson` writes.
+ * output is the task's own rows (not its agents') as `progress` records, in
+ * the shape `texra run --output-format ndjson` writes.
  *
  * Attaching never steers the task: it ends when the task reaches a terminal
  * outcome, and an interrupt only detaches this client.

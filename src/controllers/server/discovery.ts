@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
-import { Effect, FileSystem, type PlatformError } from 'effect';
+import { Effect, FileSystem, Option, type PlatformError } from 'effect';
 import { z } from 'zod';
 
 import { absentReason } from '@utils/files/fsEntryExists';
@@ -145,21 +145,33 @@ export function writeServiceRecord(
   });
 }
 
+/** What identifies one service's own files: its pid, and the inode of the
+ *  socket it bound (absent on Windows, whose pipe has no file). */
+export interface ServiceOwnership {
+  readonly pid: number;
+  readonly socketIno: number | undefined;
+}
+
 /**
- * Remove the record and socket a service left, when they are still that
- * service's: a record naming another pid belongs to a successor, which
- * also owns the socket path by then.
+ * Remove the record and socket a service left, each only while it is still
+ * that service's: a record naming another pid, or a socket file that is
+ * not the one it bound, belongs to a successor that took the path over.
  */
 export function removeServiceFiles(
   paths: ServicePaths,
-  pid: number,
+  own: ServiceOwnership,
 ): Effect.Effect<void, never, FileSystem.FileSystem> {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const record = yield* readServiceRecord(paths);
-    if (record !== null && record.pid !== pid) return;
-    yield* fs.remove(paths.record, { force: true });
-    if (process.platform !== 'win32')
+    if (record?.pid === own.pid)
+      yield* fs.remove(paths.record, { force: true });
+    if (process.platform === 'win32' || own.socketIno === undefined) return;
+    const current = yield* fs.stat(paths.socket).pipe(
+      Effect.map((info) => Option.getOrUndefined(info.ino)),
+      Effect.orElseSucceed(() => undefined),
+    );
+    if (current === own.socketIno)
       yield* fs.remove(paths.socket, { force: true });
   }).pipe(
     Effect.catch((error) =>
