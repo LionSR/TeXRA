@@ -21,11 +21,15 @@ export function coreEntries(rootDir) {
     );
     return Object.entries(manifest.exports).map(([subpath, target]) => {
       const spelled = typeof target === 'string' ? target : target.types;
-      const base = path.basename(spelled).replace(/\.d\.ts$|\.ts$/, '');
+      // `./src/foo/bar.ts`, or its built declaration
+      // `./dist/types/packages/<pkg>/src/foo/bar.d.ts`: the path under `src/`.
+      const source = spelled
+        .slice(spelled.lastIndexOf('/src/') + '/src/'.length)
+        .replace(/\.d\.ts$|\.ts$/, '');
       return {
         name: manifest.name,
         subpath,
-        file: path.join(rootDir, dir, 'src', `${base}.ts`),
+        file: path.join(rootDir, dir, 'src', `${source}.ts`),
         report: `${path.basename(dir)}${subpath === '.' ? '' : `.${subpath.slice(2)}`}.api.md`,
       };
     });
@@ -44,6 +48,9 @@ function kindOf(declaration) {
 
 const printer = ts.createPrinter({ removeComments: true });
 
+/** Types print in full: an elided `... 17 more ...` would hide a change. */
+const FULL = ts.TypeFormatFlags.NoTruncation;
+
 function describe(checker, symbol) {
   const target =
     symbol.flags & ts.SymbolFlags.Alias
@@ -59,23 +66,34 @@ function describe(checker, symbol) {
         declaration,
         declaration.getSourceFile(),
       )
-      .replace(/^export (?:declare )?/, '');
-    return text.replaceAll(/\s+/g, ' ');
+      .replace(/^export (?:declare )?/, '')
+      .replaceAll(/\s+/g, ' ');
+    if (kind !== 'type') return text;
+    // An alias to a type the package does not export changes with that
+    // type, so the report carries the resolved shape too.
+    const resolved = checker.typeToString(
+      checker.getDeclaredTypeOfSymbol(target),
+      undefined,
+      FULL,
+    );
+    return `${text} ≡ ${resolved}`;
   }
   if (kind === 'class') {
-    const members = checker
-      .getPropertiesOfType(checker.getTypeOfSymbol(target))
-      .filter((member) => member.name !== 'prototype')
-      .map((member) => member.name)
-      .toSorted();
-    const instance = checker
-      .getPropertiesOfType(checker.getDeclaredTypeOfSymbol(target))
-      .map((member) => member.name)
-      .toSorted();
-    return `class ${symbol.name} { static: ${members.join(', ')}; instance: ${instance.join(', ')} }`;
+    const signatures = (type) =>
+      checker
+        .getPropertiesOfType(type)
+        .filter((member) => member.name !== 'prototype')
+        .map(
+          (member) =>
+            `${member.name}: ${checker.typeToString(checker.getTypeOfSymbolAtLocation(member, declaration), undefined, FULL)}`,
+        )
+        .toSorted();
+    const statics = signatures(checker.getTypeOfSymbol(target));
+    const instance = signatures(checker.getDeclaredTypeOfSymbol(target));
+    return `class ${symbol.name} { static: ${statics.join('; ')}; instance: ${instance.join('; ')} }`;
   }
   const type = checker.getTypeOfSymbolAtLocation(target, declaration);
-  return `${kind} ${symbol.name}: ${checker.typeToString(type)}`;
+  return `${kind} ${symbol.name}: ${checker.typeToString(type, undefined, FULL)}`;
 }
 
 /** Report file name → report text, one per core package entry. */

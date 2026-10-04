@@ -8,7 +8,7 @@
 // erases type-only imports and resolves the tsconfig aliases, so its graph
 // is exactly the runtime module graph.
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 
 import { build } from 'esbuild';
@@ -209,6 +209,9 @@ function runsEffectCode(block) {
   return found;
 }
 
+// `packages/agent/src` counts as core here although the lint block lets a
+// host package run effects: the SDK runs nothing itself (its README), so the
+// ratchet holds it to the stricter core rule.
 const RUN_NAMES = new Set([
   'runPromise',
   'runPromiseExit',
@@ -285,12 +288,20 @@ function declaredNames(statement) {
       ts.isIdentifier(declaration.name) ? [declaration.name.text] : [],
     );
   }
-  return statement.name != null ? [statement.name.getText()] : [];
+  if (statement.name != null) return [statement.name.getText()];
+  // `export default function () {}` and `export default class {}`.
+  return ts
+    .getModifiers(statement)
+    ?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword)
+    ? ['default']
+    : [];
 }
 
-/** Exported declarations, by name, with whether any declaration is documented. */
-function undocumentedExports(sourceFile) {
-  const text = sourceFile.text;
+/**
+ * The file's exported declarations, by exported name: those carrying an
+ * `export` modifier and those a local `export { … }` list names.
+ */
+function exportedDeclarations(sourceFile) {
   const declarations = new Map();
   const exported = new Map();
   for (const statement of sourceFile.statements) {
@@ -325,7 +336,13 @@ function undocumentedExports(sourceFile) {
       if (list != null) exported.set(element.name.getText(), list);
     }
   }
-  return [...exported].flatMap(([name, list]) =>
+  return exported;
+}
+
+/** Exported names none of whose declarations carries a TSDoc comment. */
+function undocumentedExports(sourceFile) {
+  const text = sourceFile.text;
+  return [...exportedDeclarations(sourceFile)].flatMap(([name, list]) =>
     list.some((statement) => hasDocComment(statement, text))
       ? []
       : [{ node: list[0], name }],
@@ -373,16 +390,8 @@ const isHidden = (member) =>
  * An exported class's public member count; for a `Context.Service<Self,
  * Shape>()` class, the members of its shape literal as well.
  */
-function wideRecord(statement) {
-  if (
-    !ts.isClassDeclaration(statement) ||
-    statement.name == null ||
-    !ts
-      .getModifiers(statement)
-      ?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
-  ) {
-    return null;
-  }
+function wideRecord(statement, name) {
+  if (!ts.isClassDeclaration(statement)) return null;
   let members = statement.members.filter((member) => !isHidden(member)).length;
   for (const clause of statement.heritageClauses ?? []) {
     for (const type of clause.types) {
@@ -400,7 +409,7 @@ function wideRecord(statement) {
       }
     }
   }
-  return { name: statement.name.text, members };
+  return { name, members };
 }
 
 function measureAst(rootDir, files, byRule) {
@@ -448,8 +457,8 @@ function measureAst(rootDir, files, byRule) {
         addSite(byRule, 'decision-codes', file, line, code);
       }
     }
-    for (const statement of sourceFile.statements) {
-      const record = wideRecord(statement);
+    for (const [name, [statement]] of exportedDeclarations(sourceFile)) {
+      const record = wideRecord(statement, name);
       if (record != null && record.members > WIDE_RECORD_MEMBERS) {
         // The value is the excess, so a record that widens fails.
         for (let extra = WIDE_RECORD_MEMBERS; extra < record.members; extra++) {
@@ -665,12 +674,7 @@ const packageOf = (specifier) =>
  * Study rule 8: the repo files and external packages each core entry
  * evaluates on import, following value imports and re-exports only.
  */
-function measureEntries(rootDir, byRule) {
-  const parsed = ts.getParsedCommandLineOfConfigFile(
-    path.join(rootDir, 'tsconfig.json'),
-    {},
-    { ...ts.sys, onUnRecoverableConfigFileDiagnostic: () => {} },
-  );
+function measureEntries(rootDir, options, byRule) {
   for (const { name, subpath, file: entryFile } of coreEntries(rootDir)) {
     const entry = subpath === '.' ? name : `${name}/${subpath.slice(2)}`;
     const seen = new Set();
@@ -692,7 +696,7 @@ function measureEntries(rootDir, byRule) {
         const resolved = ts.resolveModuleName(
           specifier,
           file,
-          parsed.options,
+          options,
           ts.sys,
         ).resolvedModule;
         const target = resolved?.resolvedFileName;
@@ -744,19 +748,30 @@ function valueImportOf(statement) {
     statement.moduleSpecifier != null &&
     !statement.isTypeOnly
   ) {
+    const clause = statement.exportClause;
+    if (
+      clause != null &&
+      ts.isNamedExports(clause) &&
+      clause.elements.length > 0 &&
+      clause.elements.every((element) => element.isTypeOnly)
+    ) {
+      return null;
+    }
     return statement.moduleSpecifier.text;
   }
   return null;
 }
 
-/** A core module, by alias or by a relative path that lands in one. */
-const CORE_MODULE =
-  /^(?:@agent\/|@shared\/session\/|@texra-ai\/llm|@texra-ai\/agent)/;
-const CORE_MODULE_PATH =
-  /^(?:src\/agent|src\/shared\/session|packages\/llm\/src|packages\/agent\/src)\//;
+/** A core package, which a test may name directly. */
+const CORE_PACKAGE = /^@texra-ai\/(?:llm|agent)(?:\/|$)/;
 
-/** Study rule 12: `vi.mock` of a core module, per test file. */
-function measureMocks(rootDir, byRule) {
+/**
+ * Study rule 12: `vi.mock` of a core module, per test file. A target is
+ * core when it resolves (alias or relative path) to a measured core file,
+ * so the app-path exclusions apply here too.
+ */
+function measureMocks(rootDir, files, options, byRule) {
+  const core = new Set(files);
   const tests = walkFiles(path.join(rootDir, 'src/test-kernel'), {
     include: (file) => /\.(?:vitest|test)\.tsx?$/.test(file),
   });
@@ -767,15 +782,19 @@ function measureMocks(rootDir, byRule) {
       /\bvi\.(?:mock|doMock)\(\s*['"`]([^'"`]+)/g,
     )) {
       const target = match[1];
-      const relative = target.startsWith('.')
-        ? path
-            .relative(rootDir, path.resolve(path.dirname(absolutePath), target))
-            .replaceAll('\\', '/')
-        : null;
-      if (
-        CORE_MODULE.test(target) ||
-        (relative != null && CORE_MODULE_PATH.test(relative))
-      ) {
+      const resolved = ts.resolveModuleName(
+        target,
+        absolutePath,
+        options,
+        ts.sys,
+      ).resolvedModule?.resolvedFileName;
+      const resolvedFile =
+        resolved == null
+          ? null
+          : path
+              .relative(rootDir, realpathSync(resolved))
+              .replaceAll('\\', '/');
+      if (CORE_PACKAGE.test(target) || core.has(resolvedFile)) {
         const line = text.slice(0, match.index).split('\n').length;
         addSite(byRule, 'core-module-mocks', file, line, target);
       }
@@ -795,7 +814,10 @@ function measureDependencies(rootDir, byRule) {
     const manifest = JSON.parse(
       readFileSync(path.join(rootDir, dir, 'package.json'), 'utf8'),
     );
-    for (const [name, spelled] of Object.entries(manifest.dependencies ?? {})) {
+    for (const [name, spelled] of Object.entries({
+      ...manifest.dependencies,
+      ...manifest.optionalDependencies,
+    })) {
       if (spelled.startsWith('workspace:')) continue;
       const range = spelled === 'catalog:' ? catalog[name] : spelled;
       if (/^\d+\.\d+\.\d+(?:-[\w.]+)?$/.test(range ?? '')) continue;
@@ -872,8 +894,14 @@ export async function measure(rootDir) {
   measureAst(rootDir, files, byRule);
   await measureCycles(rootDir, files, byRule);
   measureReadmes(rootDir, byRule);
-  measureEntries(rootDir, byRule);
-  measureMocks(rootDir, byRule);
+  // The repo's module resolution (its `paths` aliases), for the graph rules.
+  const { options } = ts.getParsedCommandLineOfConfigFile(
+    path.join(rootDir, 'tsconfig.json'),
+    {},
+    { ...ts.sys, onUnRecoverableConfigFileDiagnostic: () => {} },
+  );
+  measureEntries(rootDir, options, byRule);
+  measureMocks(rootDir, files, options, byRule);
   measureDependencies(rootDir, byRule);
   measureInvariants(rootDir, byRule);
   return { files, byRule };

@@ -146,6 +146,16 @@ function checkReports(reports, update) {
   return problems;
 }
 
+/** Rules keyed by something other than a core source file. */
+const NOT_PER_FILE = new Set([
+  'missing-readme',
+  'entry-files',
+  'entry-externals',
+  'core-module-mocks',
+  'ranged-dependencies',
+  'durable-invariants',
+]);
+
 function printReport(files, byRule) {
   const packageOf = (file) =>
     CORE_QUALITY_DIRS.find((dir) => file.startsWith(`${dir}/`));
@@ -155,7 +165,7 @@ function printReport(files, byRule) {
     'package',
     'files',
     'lines',
-    ...Object.keys(RULES).filter((rule) => rule !== 'missing-readme'),
+    ...Object.keys(RULES).filter((rule) => !NOT_PER_FILE.has(rule)),
   ];
   console.log(header.join('\t'));
   for (const dir of CORE_QUALITY_DIRS) {
