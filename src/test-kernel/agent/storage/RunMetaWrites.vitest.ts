@@ -1,8 +1,13 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, SynchronizedRef } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 import { finalizeRun, getRunRecords } from '@agent/storage';
-import { appendRow, rowAggregate, snapshotRow } from '@agent/runtime/loop/rows';
+import {
+  appendRow,
+  handedDown,
+  rowAggregate,
+  snapshotRow,
+} from '@agent/runtime/loop/rows';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { aggregateId, type RunId } from '@shared/schemas';
 import { freshRunState } from '@shared/session/runStateFold';
@@ -156,6 +161,54 @@ describe('run metadata updates', () => {
             totalCost: 0.25,
           },
         });
+      }),
+  );
+  // A document task's recipe is a script's run of the user's model; on an
+  // editor (Copilot) binding its handed-down call still commits, as round
+  // mode's document tasks did before the recipe replaced them.
+  it.effect(
+    "commits a script run's handed-down call on an editor binding",
+    () =>
+      Effect.gen(function* () {
+        yield* session.runHistory.acquire(id);
+        const opened = yield* session.runHistory.appendBatch(id, null, [
+          appendRow(id, [
+            { role: 'user', content: [{ kind: 'text', text: 'polish' }] },
+          ]),
+          ...snapshotRow(
+            id,
+            {
+              ...freshRunState(0),
+              family: 'toolUse',
+              modelId: 'copilot/gpt-test',
+              backend: 'copilot',
+            },
+            { state: { stateSlices: null } },
+          ),
+        ]);
+        const run = {
+          runId: id,
+          model: yield* SynchronizedRef.make({
+            origin: {
+              protocol: 'vscode-lm',
+              codecVersion: 1,
+              requestedModel: 'gpt-test',
+              deployment: { vendor: 'copilot', version: 'gpt-test' },
+            },
+          }),
+          steps: yield* SynchronizedRef.make(null),
+          logger: {},
+        };
+        const rows = yield* handedDown(
+          // The only fields `handedDown` reads: the binding's origin, no step.
+          run as unknown as Parameters<typeof handedDown>[0],
+          opened,
+          { code: 'return 1;', title: 'polish', tools: [], kind: 'recipe' },
+        );
+        const state = yield* session.runHistory.appendBatch(id, opened, rows);
+        expect(state.pendingResponse?.calls.map((c) => c.toolName)).toEqual([
+          'script',
+        ]);
       }),
   );
 });

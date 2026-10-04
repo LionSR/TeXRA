@@ -13,6 +13,12 @@ import { isDeepStrictEqual } from 'node:util';
 import { Effect, SynchronizedRef } from 'effect';
 
 import {
+  originOf,
+  type MessageSchema,
+  type ModelOrigin,
+  type TurnResult,
+} from '@texra-ai/llm';
+import {
   aggregateId as qualifyAggregateId,
   type JsonValue,
   type PositionAt,
@@ -30,7 +36,6 @@ import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import { sha256 } from '@tools/catalogEntries';
 import { generateShortId } from '@utils/core';
 import { dispatchFactsFor } from '../run/tools';
-import type { MessageSchema, TurnResult } from '@texra-ai/llm';
 import type { z } from 'zod';
 
 import type { AgentRunShape } from '../run/AgentRun';
@@ -212,9 +217,28 @@ export function displayRow(
 const SCRIPT_TOOL_NAME = 'script';
 
 /**
- * The rows of a script's run's one response: the call it was handed. Its
- * origin is the run's binding and it carries no usage. Committed once, at
- * its first turn.
+ * The origin a script's handed-down call records: the run's binding, or,
+ * on an editor binding (whose turns dispatch no local calls), a neutral one
+ * on the same model. The call is sent to no model either way, and the run's
+ * `agent()` children still bind the editor model. `.invalid` never resolves.
+ */
+function handedDownOrigin(
+  origin: ModelOrigin,
+): Exclude<ModelOrigin, { protocol: 'vscode-lm' }> {
+  if (origin.protocol !== 'vscode-lm') return origin;
+  return originOf({
+    protocol: 'openai-responses',
+    requestedModel: origin.requestedModel,
+    deployment: {
+      endpoint: 'https://script.invalid/v1',
+      credentialScope: 'script',
+    },
+  });
+}
+
+/**
+ * The rows of a script's run's one response: the call it was handed, at
+ * `handedDownOrigin`, with no usage. Committed once, at its first turn.
  */
 export const handedDown = Effect.fn('rows.handedDown')(function* (
   run: Pick<AgentRunShape, 'model' | 'steps' | 'logger' | 'runId'>,
@@ -222,12 +246,9 @@ export const handedDown = Effect.fn('rows.handedDown')(function* (
   call: NonNullable<AgentRunShape['config']['script']>,
 ) {
   const { runId } = run;
-  const { origin } = yield* SynchronizedRef.get(run.model);
-  // An editor binding's turns carry no calls: its launch refuses it.
-  if (origin.protocol === 'vscode-lm')
-    return yield* Effect.die(
-      new Error(`${runId}: a script cannot run on an editor model binding`),
-    );
+  const origin = handedDownOrigin(
+    (yield* SynchronizedRef.get(run.model)).origin,
+  );
   const invocation = { invocationId: randomUUID(), attempt: 1 };
   const argumentsText = JSON.stringify({
     code: call.code,

@@ -14,7 +14,7 @@ import { offeredBy } from '@agent/runtime/loop/step';
 import { createScriptRunStrategy } from '@agent/runtime/scriptRun';
 import { registerRun } from '@agent/storage/runLifecycle';
 import { withLogChannel } from '@logger/effectLog';
-import { ToolError, USER_FOLLOW_UP_SUPPORT, type RunId } from '@shared/schemas';
+import { USER_FOLLOW_UP_SUPPORT, type RunId } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import { executed } from '@tools/core/result';
 import type { RunToolCall } from '@tools/core/toolRun';
@@ -52,13 +52,6 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
   const earlier = yield* earlierChild(call);
   if (earlier !== null) return receipt(title, earlier, true);
   const bound = yield* SynchronizedRef.get(run.model);
-  // An editor binding's turns carry no calls for the run to open on.
-  if (bound.origin.protocol === 'vscode-lm')
-    return yield* Effect.fail(
-      new ToolError(
-        'A script cannot run in the background on a VS Code language model. Run it in the foreground.',
-      ),
-    );
   const runId = agentChildRunId(call);
   const workingDirectory = call.workingDirectory ?? run.config.workingDirectory;
   const parentOffered = yield* offeredBy(run);
