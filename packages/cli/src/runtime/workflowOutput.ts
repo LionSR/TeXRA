@@ -267,7 +267,7 @@ function commonDirectory(paths: readonly string[]): string {
 
 /**
  * The output names an `--output-dir` run expects when its agent declares no
- * `defaultOutputFiles`: one per input, with a stdin-materialized input
+ * `task.outputs`: one per input, with a stdin-materialized input
  * reported under its stable basename.
  *
  * Computed at launch, while the stdin materialization path is still known, and

@@ -30,20 +30,13 @@ const categories = [
       'extract_tikz_figures',
       'extract_bib_entries',
       'diagnostics',
-      'texcount',
     ],
   },
   {
     icon: 'mortar-board',
     name: 'Academic Research',
-    desc: 'Search arXiv and Crossref, resolve DOIs, manage Zotero',
-    tools: [
-      'arxiv_search',
-      'arxiv_metadata',
-      'download_arxiv_source',
-      'crossref_search',
-      'zotero_*',
-    ],
+    desc: 'Search arXiv, download paper sources, manage Zotero',
+    tools: ['arxiv_search', 'download_arxiv_source', 'zotero_*'],
   },
   {
     icon: 'globe',
@@ -52,10 +45,10 @@ const categories = [
     tools: ['web_search', 'web_fetch'],
   },
   {
-    icon: 'symbol-operator',
-    name: 'Computation',
-    desc: 'Run Wolfram Language, delegate to Codex, consult another chat model',
-    tools: ['wolfram', 'codex', 'inquiry'],
+    icon: 'comment-discussion',
+    name: 'Delegation',
+    desc: 'Delegate to Codex, consult another chat model',
+    tools: ['codex', 'inquiry'],
   },
   {
     icon: 'beaker',
@@ -72,10 +65,9 @@ const categories = [
   {
     icon: 'type-hierarchy',
     name: 'Memory & Workflow',
-    desc: 'Persistent memory, to-do lists, sub-agent delegation',
+    desc: 'Persistent memory, plans, sub-agent delegation',
     tools: [
       'memory',
-      'todo_write',
       'plan',
       'agent',
       'script',

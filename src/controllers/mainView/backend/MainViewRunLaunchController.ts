@@ -106,23 +106,38 @@ function buildLaunchRequest(
 }
 
 /**
- * The run options an Auto-approve launch adds: its run starts with the
+ * The run option an Auto-approve launch adds: its run starts with the
  * delegated-work bypass on, the same state the run header's "agent work"
  * switch writes, so the header shows it and the user can take it back
- * mid-run. `onRun` runs before the run body (AgentRunLifecycle forks it
- * with `startImmediately`) and this write is synchronous, so no approval
- * opens ahead of it. Block still denies: the policy is decided before any
- * bypass.
+ * mid-run. Block still denies: the policy is decided before any bypass.
  */
-export function launchApprovalOptions(
-  { launch }: LaunchRequest,
+export function launchApprovalOptions({ launch }: LaunchRequest): {
+  approveDelegatedWork?: true;
+} {
+  return launch.approval === 'autoApprove'
+    ? { approveDelegatedWork: true }
+    : {};
+}
+
+/**
+ * The `onRun` a launcher hands `runAgent`: an Auto-approve launch's bypass,
+ * then the caller's own. `onRun` runs before the run body
+ * (AgentRunLifecycle forks it with `startImmediately`) and the bypass write
+ * is synchronous, so no approval opens ahead of it.
+ */
+export function launchOnRun<E>(
   approvals: SessionApprovals,
-): { onRun?: (runId: RunId) => Effect.Effect<void> } {
-  if (launch.approval !== 'autoApprove') return {};
-  return {
-    onRun: (runId) =>
-      Effect.sync(() => approvals.setDelegatedWorkBypasses(runId, true)),
-  };
+  options: {
+    readonly approveDelegatedWork?: boolean;
+    readonly onRun?: (runId: RunId) => Effect.Effect<void, E>;
+  },
+): ((runId: RunId) => Effect.Effect<void, E>) | undefined {
+  const { approveDelegatedWork, onRun } = options;
+  if (!approveDelegatedWork) return onRun;
+  return (runId) =>
+    Effect.sync(() => approvals.setDelegatedWorkBypasses(runId, true)).pipe(
+      Effect.andThen(onRun?.(runId) ?? Effect.void),
+    );
 }
 
 /** Both GUI hosts launch the selections carried by the requesting surface. */

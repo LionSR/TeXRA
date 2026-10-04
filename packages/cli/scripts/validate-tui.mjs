@@ -361,15 +361,15 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '2',
       HARNESS_QUEUED_FOLLOWUPS:
-        '<subagent-progress id="child-q" agent="review" category="toolUse" type="todos" completed="6" active="0" pending="0"/>',
+        '<subagent-progress id="child-q" agent="review" category="toolUse" type="plan" status="cleared"/>',
     },
     bootExpect: 'queued 1',
     frame: 'viewport',
     expect: [
       'Queued follow-ups (1)',
-      '1. ⟳ review · todos · 6 done, 0 active, 0 pending',
+      '1. ⟳ review · plan cleared',
       'queued 1',
-      '⟳ review · todos · 6 done, 0 active, 0 pending',
+      '⟳ review · plan cleared',
     ],
     unexpect: ['<subagent-progress'],
   },
@@ -988,7 +988,7 @@ const SCENARIOS = [
   },
   {
     name: 'uninterruptible-running-status-bar',
-    env: { HARNESS_ENTRIES: '4', HARNESS_TODOS: '1' },
+    env: { HARNESS_ENTRIES: '4', HARNESS_PLAN: '1' },
     frame: 'viewport',
     expect: ['Ctrl-C exit'],
     expectPatterns: [RUNNING_STATUS_PATTERN],
@@ -1000,7 +1000,7 @@ const SCENARIOS = [
     // advances the displayed duration beyond zero.
     name: 'single-run-liveness',
     smoke: true,
-    env: { HARNESS_ENTRIES: '4', HARNESS_TODOS: '1' },
+    env: { HARNESS_ENTRIES: '4', HARNESS_PLAN: '1' },
     frame: 'viewport',
     expectPatterns: [
       /◆ [-|\/\\] Running (?:[1-9]\d*s|[1-9]\d*(?:m|h|d)(?: [1-9]\d*(?:s|m|h))?)/,
@@ -2243,14 +2243,14 @@ const SCENARIOS = [
     unexpect: ['reviewer Running'],
   },
   {
-    name: 'subagents-with-todos-compact',
+    name: 'subagents-with-plan-compact',
     frame: 'scrollback',
     rows: 14,
     cols: 80,
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILDREN: '1',
-      HARNESS_TODOS: '1',
+      HARNESS_PLAN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab agents',
@@ -2258,14 +2258,14 @@ const SCENARIOS = [
     expect: ['3 agents', '2 active', 'Tab agents', 'Ctrl-C stop'],
   },
   {
-    name: 'subagents-with-todos-narrow-status',
+    name: 'subagents-with-plan-narrow-status',
     frame: 'scrollback',
     rows: 14,
     cols: 44,
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILDREN: '1',
-      HARNESS_TODOS: '1',
+      HARNESS_PLAN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab agents',
@@ -2611,59 +2611,46 @@ const SCENARIOS = [
     ],
   },
   {
-    name: 'todos',
+    name: 'plan-panel',
     frame: 'scrollback',
-    env: { HARNESS_ENTRIES: '4', HARNESS_TODOS: '1' },
-    expect: [
-      'Split theorem into algebraic and analytic checks',
-      'Coordinate a small math proof through nested CLI work.',
+    env: { HARNESS_ENTRIES: '4', HARNESS_PLAN: '1' },
+    expect: ['Coordinate a small math proof through nested CLI work.'],
+    expectPatterns: [
+      /\n\n Coordinate a small math proof through nested CLI work\./,
     ],
-    expectPatterns: [/\n\n ☑ Split theorem into algebraic and analytic checks/],
   },
   {
-    name: 'completed-plan-visible-while-running',
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_TODOS: '1',
-      HARNESS_TODOS_COMPLETED: '1',
-    },
+    name: 'plan-visible-while-running',
+    env: { HARNESS_ENTRIES: '4', HARNESS_PLAN: '1' },
     frame: 'viewport',
-    expect: [
-      'Split theorem into algebraic and analytic checks',
-      'Coordinate a small math proof through nested CLI work.',
-    ],
+    expect: ['Coordinate a small math proof through nested CLI work.'],
     expectPatterns: [RUNNING_STATUS_PATTERN],
   },
   {
-    name: 'idle-todos-visible',
+    name: 'idle-plan-visible',
     env: {
       HARNESS_ENTRIES: '4',
-      HARNESS_TODOS: '1',
-      HARNESS_TODOS_IDLE: '1',
+      HARNESS_PLAN: '1',
+      HARNESS_PLAN_IDLE: '1',
     },
     frame: 'viewport',
     expect: [
       'Idle',
       'Ctrl-C exit',
-      'Waiting for leanSolver',
       'Coordinate a small math proof through nested CLI work.',
     ],
   },
   {
-    // Todo status labels come from the one shared display table, which spells
-    // them `Pending` / `In progress` / `Completed` in every host.
     name: 'work-plan-reader',
     rows: 18,
     cols: 72,
-    env: { HARNESS_ENTRIES: '4', HARNESS_TODOS: '1' },
+    env: { HARNESS_ENTRIES: '4', HARNESS_PLAN: '1' },
     keys: ['/plan', '\r', PAGE_DOWN],
     frame: 'viewport',
     expect: [
       'Work plan:',
-      'Todos',
-      '[Completed] Split theorem into algebraic and analytic checks',
-      '[In progress] Ask leanSolver to verify the finite case',
-      '[Pending] Merge subagent conclusions into final answer',
+      'Objective',
+      'Have a subagent inspect the Lean-style finite case.',
       'Esc close',
     ],
     unexpect: ['Unknown command: /plan', 'PgUp/PgDn page'],
@@ -2673,7 +2660,7 @@ const SCENARIOS = [
     name: 'work-plan-reader-narrow',
     rows: 14,
     cols: 24,
-    env: { HARNESS_ENTRIES: '4', HARNESS_TODOS: '1' },
+    env: { HARNESS_ENTRIES: '4', HARNESS_PLAN: '1' },
     keys: [
       '/plan',
       '\r',
@@ -2685,13 +2672,13 @@ const SCENARIOS = [
       PAGE_DOWN,
     ],
     frame: 'viewport',
-    expect: ['Work plan', '[Completed]', 'PgUp/PgDn page', 'Esc', 'close'],
+    expect: ['Work plan', 'Objective', 'PgUp/PgDn page', 'Esc', 'close'],
     unexpect: ['Unknown command: /plan'],
     maxLineColumns: 24,
   },
   {
     name: 'work-plan-reader-escape',
-    env: { HARNESS_ENTRIES: '4', HARNESS_TODOS: '1' },
+    env: { HARNESS_ENTRIES: '4', HARNESS_PLAN: '1' },
     keys: ['/plan', '\r', ESC],
     frame: 'viewport',
     expect: [
@@ -2699,7 +2686,7 @@ const SCENARIOS = [
       '/ commands',
       'Ctrl-C exit',
     ],
-    unexpect: ['Work plan:', 'Objective', '[In progress]'],
+    unexpect: ['Work plan:', 'Objective'],
   },
   {
     // Bare Escape only navigates: on the root it stops nothing (Ctrl-C does).

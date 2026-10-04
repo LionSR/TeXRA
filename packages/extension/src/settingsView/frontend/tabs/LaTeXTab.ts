@@ -12,7 +12,7 @@ import { customElement, property } from 'lit/decorators.js';
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import {
   type LatexSettingsStatus,
   type SettingsSectionName,
@@ -497,29 +497,29 @@ export class LaTeXTab extends LitElement {
           icon: 'bolt',
         })}
         ${renderStateSettingToggleRow({
-          key: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
+          key: TexraStateKey.WORKFLOW_AUTO_COMPILE,
           checked: this.autoCompile,
         })}
         ${renderStateSettingToggleRow({
-          key: WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
+          key: TexraStateKey.WORKFLOW_AUTO_OPEN_PDF,
           checked: this.autoOpenPdf,
           disabled: !this.autoCompile,
         })}
         ${renderStateSettingToggleRow({
-          key: WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+          key: TexraStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
           checked: this.rejectOnCompileFailure,
           disabled: !this.autoCompile,
         })}
         ${renderStateSettingToggleRow({
-          key: WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
+          key: TexraStateKey.LATEXDIFF_CHANGES_ONLY,
           checked: this.diffChangesOnly,
         })}
         ${renderStateSettingSelectRow({
-          key: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+          key: TexraStateKey.LATEXDIFF_MATH_MARKUP,
           value: this.diffMathMarkup,
         })}
         ${renderStateSettingToggleRow({
-          key: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+          key: TexraStateKey.LATEXDIFF_BETWEEN_ROUNDS,
           checked: this.diffBetweenRounds,
         })}
       </div>
@@ -534,7 +534,7 @@ export class LaTeXTab extends LitElement {
           icon: 'wand-magic-sparkles',
         })}
         ${renderStateSettingSelectRow({
-          key: WorkspaceStateKey.LATEX_FORMATTER,
+          key: TexraStateKey.LATEX_FORMATTER,
           value: this.formatter,
         })}
         ${
@@ -542,7 +542,7 @@ export class LaTeXTab extends LitElement {
           this.desktopHost
             ? nothing
             : renderStateSettingToggleRow({
-                key: GlobalStateKey.INLINE_CRITICISM_ENABLED,
+                key: TexraStateKey.INLINE_CRITICISM_ENABLED,
                 checked: this.inlineCriticismEnabled,
               })
         }

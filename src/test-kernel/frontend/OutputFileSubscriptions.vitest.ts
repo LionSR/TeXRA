@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
@@ -255,7 +255,7 @@ describe('output-file run fact frontend subscriptions', () => {
         const { stores, globalState } = makeFakeSettingsStores();
         const setEnabled = (enabled: boolean) =>
           globalState
-            .update(GlobalStateKey.INLINE_CRITICISM_ENABLED, enabled)
+            .update(TexraStateKey.INLINE_CRITICISM_ENABLED, enabled)
             .pipe(Effect.andThen(syncInlineCriticism()));
         yield* registerInlineCriticism(
           context as unknown as VSCode.ExtensionContext,

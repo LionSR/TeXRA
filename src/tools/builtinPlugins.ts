@@ -30,7 +30,6 @@ import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
 import { PlanTool } from '@tools/plan/PlanTool';
 import { definePlugin, type Plugin } from '@tools/plugins';
 import { ReadFileTool } from '@tools/ReadTool';
-import { TodoWriteTool } from '@tools/todo/TodoTool';
 import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
 import { WebFetchTool } from '@tools/web/WebFetchTool';
 import { WebSearchTool } from '@tools/web/WebSearchTool';
@@ -84,13 +83,12 @@ export const web: Plugin = {
 
 export const memoryWorkflow: Plugin = {
   id: 'memory-workflow',
-  name: 'Memory & Tasks',
+  name: 'Memory & Executions',
   category: 'workflow',
   description:
-    'Persistent memory across sessions, task tracking with to-do lists, and the executions view of the runs an agent launched.',
+    'Persistent memory across sessions and the executions view of the runs an agent launched.',
   tools: {
     memory: MemoryTool,
-    todo_write: TodoWriteTool,
     executions: ExecutionsTool,
   },
   injectedWhen: { memory: GlobalStateKey.MEMORY_ENABLED },

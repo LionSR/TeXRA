@@ -4,12 +4,8 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import {
-  AgentWorkflowSettingSchema,
-  type AgentSetting,
-} from '@agent/core/definition/AgentDataclass';
+import { DocumentTaskSchema } from '@agent/core/definition/AgentDataclass';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
-import { AgentCategory } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
@@ -27,16 +23,6 @@ const fakeConfig = new FakeConfigProvider();
 
 setupPlatform({}, { config: fakeConfig });
 
-const baseSetting: AgentSetting = {
-  agentCategory: AgentCategory.Workflow,
-  temperature: 1,
-  isRewrite: true,
-  rounds: 1,
-  requiredFilesInternal: {},
-  defaultOutputFiles: [],
-  tools: [],
-};
-
 const baseConfig: AgentConfig = AgentConfigSchema.parse({
   model: 'test',
   agent: 'agent',
@@ -49,15 +35,11 @@ const baseConfig: AgentConfig = AgentConfigSchema.parse({
 // this file.
 function buildVars(
   agentConfig: ReturnType<typeof AgentConfigSchema.parse>,
-  requiredFilesInternal: Record<string, string> = {},
+  files: Record<string, string> = {},
 ): ReturnType<typeof buildOpening> {
-  const agentSetting = AgentWorkflowSettingSchema.parse({
-    agentCategory: AgentCategory.Workflow,
-    requiredFilesInternal,
-  });
   return buildOpening(
     agentConfig,
-    agentSetting,
+    DocumentTaskSchema.parse({ files, requests: ['Revise.'] }),
     fakePath('agents/generic'),
     false,
     noopTrace,
@@ -126,7 +108,7 @@ describe('buildTemplateInputs with missing configured files', () => {
   });
 });
 
-describe('requiredFilesInternal custom variables', () => {
+describe('task.files custom variables', () => {
   const briefPath = fakePath('agents/generic', 'brief.txt');
 
   beforeEach(async () => {

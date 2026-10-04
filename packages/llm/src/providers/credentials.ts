@@ -1,8 +1,8 @@
 /**
  * The one port the package takes credentials through: a named-secret store.
  * API keys (`apiKey.<provider>`) and the subscription sessions are entries of
- * it. The host serves it from its own secure store (VS Code `SecretStorage`,
- * Electron `safeStorage`, the CLI's file); the package never opens one.
+ * it. The host serves it from its own store (TeXRA's hosts share one
+ * owner-only directory); the package never opens one.
  *
  * A credential that may also come from the environment is read through
  * {@link resolveCredential}, the one secret-then-env ladder. The environment
@@ -13,34 +13,21 @@ import { Config, Data, Effect, Option } from 'effect';
 /**
  * Why a secret operation failed, as the host stores can actually fail:
  *
- * - `enumeration-unsupported` — the host's store cannot list its key names
- *   (VS Code's `SecretStorage.keys()` on a host that does not implement it).
- *   Only the host's key listing raises it.
- * - `store-unavailable` — the host has no secure store to write to at all
- *   (Electron `safeStorage` unavailable, or Linux `basic_text` backing).
- *   Only {@link CredentialStore.set} raises it.
- * - `decrypt-failed` — a stored value exists but the OS refused to decrypt it
- *   (a denied keychain prompt, a rotated key, a corrupt entry). It is raised
- *   and recovered inside the desktop store's `get`, which answers "no saved
- *   secret" after logging the cause and warning the user once. That recovery
- *   is the documented rule, not a swallow: every reader of a credential wants
- *   the same answer from a value that cannot be decrypted, and failing the
- *   channel instead would take down surfaces that only ask whether a key
- *   exists. The reason stays in this vocabulary because the store constructs
- *   it to report it.
- * - `io` — the backing file or host API failed: a Node errno, a corrupt JSON
- *   store, a rejected host call.
+ * - `store-unavailable` — the host has no store to write to at all (an
+ *   embedder that persists nothing). Only {@link CredentialStore.set} raises
+ *   it.
+ * - `io` — the backing file or host API failed: a Node errno, a rejected
+ *   host call.
  */
-type SecretsFailureReason =
-  'enumeration-unsupported' | 'store-unavailable' | 'decrypt-failed' | 'io';
+type SecretsFailureReason = 'store-unavailable' | 'io';
 
 /** Which member of a store failed. */
 export type SecretsOperation = 'get' | 'set' | 'delete' | 'listStoredKeys';
 
 /**
  * The one failure of a credential store. Callers match on `reason` rather
- * than on a message: a surface that wants to distinguish "this host cannot
- * list keys" from "the store is broken" reads the tag, and a caller that
+ * than on a message: a surface that wants to distinguish "nothing can be
+ * stored here" from "the store is broken" reads the tag, and a caller that
  * wants neither still sees a typed error instead of `unknown`.
  */
 export class SecretsFailed extends Data.TaggedError('SecretsFailed')<{

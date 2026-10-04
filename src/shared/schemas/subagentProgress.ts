@@ -8,13 +8,6 @@
  */
 
 import type { Plan } from './plan';
-import type { TodoItem } from './todo';
-
-/** Todo state changed in a tool-use subagent. */
-interface TodoProgressUpdate {
-  readonly kind: 'todos';
-  readonly todos: TodoItem[];
-}
 
 /** Periodic overview of tool-use subagent activity. */
 interface OverviewProgressUpdate {
@@ -36,7 +29,4 @@ interface StartedProgressUpdate {
 }
 
 export type SubagentProgressUpdate =
-  | TodoProgressUpdate
-  | PlanProgressUpdate
-  | OverviewProgressUpdate
-  | StartedProgressUpdate;
+  PlanProgressUpdate | OverviewProgressUpdate | StartedProgressUpdate;

@@ -78,7 +78,7 @@ export const groupStyles = css`
     contain-intrinsic-size: auto 200px;
   }
 
-  /* Group banners are <wa-details> (matching Todos / Background Tasks etc.),
+  /* Group banners are <wa-details> (matching Plan / Background Tasks etc.),
      so the disclosure chevron is consistent with every other panel. Strip the
      WA card chrome so the group reads as an inline disclosure rather than a
      boxed panel — our .log-group-header (status rail + padding) and

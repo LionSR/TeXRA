@@ -23,7 +23,7 @@ You need multiple files when:
 The TeXRA UI provides dedicated sections for managing multiple input files.
 
 - **Input Files**: Each Input row is an ordered list. Use **Add files** (<wa-icon library="texra" name="add"></wa-icon>), **Add opened files as input** (<wa-icon library="texra" name="folder-opened"></wa-icon>), or drag-and-drop to append sources. They are concatenated and provided as context to the selected agent. For editing agents, the expected output filenames are the selected input filenames in the same order.
-- **Fixed Outputs**: Agents that create files with names not determined by the inputs declare those filenames in `settings.defaultOutputFiles`.
+- **Fixed Outputs**: Agents that create files with names not determined by the inputs declare those filenames in `task.outputs`.
 
 <MultiInputOrderHero />
 
@@ -53,8 +53,8 @@ When you provide multiple input files, TeXRA typically combines their content (o
 
 This is the part that matters for generating multiple distinct files:
 
-1. **TeXRA determines outputs:** Editing agents use the selected input filenames as the output filenames. Generator agents can declare fixed filenames through `settings.defaultOutputFiles`.
-2. **Agent generates structured XML:** The selected agent must be designed (through its `prompts`) to produce a _single XML response_ containing separate blocks for each intended output file, using a structure like this:
+1. **TeXRA determines outputs:** Editing agents use the selected input filenames as the output filenames. Generator agents can declare fixed filenames through `task.outputs`.
+2. **Agent generates structured XML:** The selected agent must be designed (through its `task.requests` prompts) to produce a _single XML response_ containing separate blocks for each intended output file, using a structure like this:
 
    ```xml
    <documents>  <!-- fixed protocol container, not agent-configurable -->
@@ -84,28 +84,32 @@ that declare generated output filenames.
 
 TeXRA uses the selected input filenames as the output filenames for ordinary
 editing agents. Agents that generate files with fixed names can declare
-`defaultOutputFiles`; those names are exposed as `OUTPUT_FILES`. Prompt rendering
+`task.outputs`; those names are exposed as `OUTPUT_FILES`. Prompt rendering
 and output extraction depend on these filename lists, not on a separate YAML flag
 or a `_multiple` filename convention.
 
 <MultiOutputModesHero />
 
-<p class="hero-caption">Two ways output filenames are determined: editing agents reuse the selected <code>INPUT_FILES</code>, while generator agents emit the fixed names declared in <code>defaultOutputFiles</code> (exposed as <code>OUTPUT_FILES</code>).</p>
+<p class="hero-caption">Two ways output filenames are determined: editing agents reuse the selected <code>INPUT_FILES</code>, while generator agents emit the fixed names declared in <code>task.outputs</code> (exposed as <code>OUTPUT_FILES</code>).</p>
 
 ### Declaring multi-output agents in YAML
 
 Custom workflow agents can declare that they expect multiple outputs by
-setting `settings.defaultOutputFiles` to the expected filenames. This gives
+setting `task.outputs` to the expected filenames, usually with
+`rewrite: false` since they write new documents. This gives
 prompts a fixed `OUTPUT_FILES` list when the filenames are not the input
 filenames.
 
 ```yaml
 name: my_agent
-settings:
-  agentCategory: workflow
-  defaultOutputFiles:
+task:
+  rewrite: false
+  outputs:
     - paper_section.tex
     - appendix.tex
+  requests:
+    - |
+      [Request that emits one <document> per name in OUTPUT_FILES]
 ```
 
 ## Example: multiple-output agent prompts
@@ -115,8 +119,8 @@ multiple outputs within the `<documents>` tag. `INPUT_FILES` is an array
 of selected input filenames, so templates should iterate over it. Use
 `{{ INPUT_FILES | join(", ") }}` when the prompt needs a readable list.
 
-```yaml
-# Inside a workflow agent's userRequest prompt:
+```
+# Inside a workflow agent's task.requests entry:
 # ... instructions ...
 Output one updated document for each input file, using the matching input
 filename as the document name.
@@ -131,7 +135,7 @@ filename as the document name.
 </documents>
 ```
 
-For agents with `settings.defaultOutputFiles`, iterate over `OUTPUT_FILES`
+For agents with `task.outputs`, iterate over `OUTPUT_FILES`
 instead.
 
 This instructs the model to generate the XML structure that TeXRA can parse.
@@ -151,7 +155,7 @@ This instructs the model to generate the XML structure that TeXRA can parse.
 ## Output naming
 
 By default, TeXRA uses the selected input filenames as the output filenames.
-Agents that write fixed new files should declare `settings.defaultOutputFiles`.
+Agents that write fixed new files should declare `task.outputs`.
 Editing prompts should reference `INPUT_FILES`; generated-output prompts should
 reference `OUTPUT_FILES` so the model emits matching `<document name="...">`
 tags.

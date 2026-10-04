@@ -136,7 +136,7 @@ node build/index.js
 Then configure your MCP client to connect to the running server.
 
 ::: tip Use Case
-TeXRA's own agents run Mathematica through the built-in `wolfram` tool, which calls `wolframscript` directly. mcp-server-mathematica brings the same capability to other MCP clients such as Cursor and Claude Desktop. It is useful for physicists and mathematicians who want AI assistants to check symbolic derivations against a computer algebra system rather than rely on LLM arithmetic alone.
+TeXRA's own agents run Mathematica by calling `wolframscript` through the shell. mcp-server-mathematica brings the same capability to other MCP clients such as Cursor and Claude Desktop. It is useful for physicists and mathematicians who want AI assistants to check symbolic derivations against a computer algebra system rather than rely on LLM arithmetic alone.
 :::
 
 [mcp-server-mathematica on GitHub](https://github.com/texra-ai/mcp-server-mathematica)

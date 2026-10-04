@@ -173,7 +173,8 @@ const flush = Effect.fn('JsonStore.flush')(function* (
  */
 export class JsonStore {
   private constructor(
-    private readonly filePath: string,
+    /** The file this store reads and writes; warnings name it. */
+    readonly filePath: string,
     private data: JsonRecord,
     private readonly options: JsonStoreOptions,
   ) {}

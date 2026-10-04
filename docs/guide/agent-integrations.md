@@ -110,12 +110,12 @@ one of them:
 When the tool fires:
 
 1. A new stream tab opens on the ProgressBoard labelled `codex` or `claude_code`.
-2. You see the side agent's reasoning, the commands it runs, the file changes it makes, and any web searches (<wa-icon library="texra" name="globe"></wa-icon>) and todos, all live.
+2. You see the side agent's reasoning, the commands it runs, the file changes it makes, and any web searches (<wa-icon library="texra" name="globe"></wa-icon>), all live.
 3. When the turn ends, the stream's status dot turns blue and its label reads **Idle**. Type into it to send a follow-up, or select <wa-icon library="texra" name="circle-stop"></wa-icon> **Stop** to close the session.
 4. The result (final message and token cost) is handed back to the TeXRA agent that asked for it, which then continues its own work.
 
 <DelegatedStreamHero />
-<p class="hero-caption">The delegated session streams live in its own ProgressBoard tab (reasoning, commands, file changes, web searches, and todos), then shows <strong>Idle</strong> and hands its result back to the calling agent.</p>
+<p class="hero-caption">The delegated session streams live in its own ProgressBoard tab (reasoning, commands, file changes, and web searches), then shows <strong>Idle</strong> and hands its result back to the calling agent.</p>
 
 ## MCP servers
 
@@ -207,4 +207,4 @@ The exact error message is shown inline on the row, below its description. Read 
 
 - [Configuration](./configuration.md): full Settings reference
 - [LaTeX tools](./latex-tools.md): other local tools TeXRA plugs into
-- [Research tools](./research-tools.md): arXiv, Crossref, Zotero, and web search
+- [Research tools](./research-tools.md): arXiv, Zotero, and web search

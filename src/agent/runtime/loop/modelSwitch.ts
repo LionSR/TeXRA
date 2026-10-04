@@ -6,16 +6,13 @@
 import { Effect, SynchronizedRef } from 'effect';
 
 import { selectModel } from '@texra-ai/llm';
-import {
-  resolveModelRoute,
-  routeCompatibilityKey,
-} from '@agent/runtime/modelRoutes';
+import { resolveModelRoute, routeBackend } from '@agent/runtime/modelRoutes';
 import { decideReasoning } from '@model/reasoningLevel';
 import { LanguageModel } from '@platform/languageModel';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
-import { bindModel, PROTOCOL_BY_KEY } from '../run/modelBinding';
+import { bindModel, PROTOCOL_BY_BACKEND } from '../run/modelBinding';
 import { rowAggregate, type SnapshotPatch } from './rows';
 import type { HttpClient } from 'effect/http';
 import type { RunCell } from './runProgram';
@@ -62,10 +59,10 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
           modelId: model,
           config: selected.config,
           stores: run.stores,
-          compatibilityKey: current.compatibilityKey,
+          backend: current.backend,
           declinedRoutes: state.declinedRoutes,
           agentCategory: run.config.agentCategory,
-          temperature: run.setting.temperature,
+          temperature: run.persona.temperature,
         });
         switched = yield* cell.append([
           {
@@ -86,7 +83,7 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
           ...snapshot(state, {
             runtime: {
               modelId: next.modelId,
-              modelCompatibilityKey: next.compatibilityKey,
+              backend: next.backend,
             },
           }),
         ]);
@@ -108,7 +105,7 @@ export function modelSwitchPort(
   run: AgentRunShape,
   languageModel: LanguageModel['Service'],
 ) {
-  /** The switch's route and format, or why it cannot replace the run's. */
+  /** The switch's route and backend, or why it cannot replace the run's. */
   const admission = Effect.fn('toolUse.modelSwitchAdmission')(function* (
     model: string,
   ) {
@@ -123,26 +120,27 @@ export function modelSwitchPort(
       };
     }
     const nextConfig = selected.config;
-    // The routes the run declined, so the preflight decides the route the
-    // bind at the next model boundary will.
+    // The run's backend and declined routes, so the preflight decides the
+    // route the bind at the next model boundary will.
     const { route } = yield* resolveModelRoute(run.stores, nextConfig, {
       mode: selected.request.mode,
+      backend: current.backend,
       declinedRoutes: run.declinedRoutes,
     }).pipe(Effect.provideService(LanguageModel, languageModel));
-    const nextKey = yield* routeCompatibilityKey(nextConfig, route);
-    if (!nextKey) {
+    const nextBackend = yield* routeBackend(nextConfig, route);
+    if (!nextBackend) {
       return {
         reason: `Unsupported model provider: ${nextConfig.provider}`,
         admitted: undefined,
       };
     }
-    if (current.compatibilityKey !== nextKey) {
+    if (current.backend !== nextBackend) {
       return {
         reason: MODEL_SWITCH_DIFFERENT_FORMAT_REASON,
         admitted: undefined,
       };
     }
-    return { reason: undefined, admitted: { selected, route, nextKey } };
+    return { reason: undefined, admitted: { selected, route, nextBackend } };
   });
   const modelSwitchDisabledReason = (model: string) =>
     admission(model).pipe(Effect.map(({ reason }) => reason));
@@ -163,13 +161,13 @@ export function modelSwitchPort(
       // always thinks) is refused here, as the command's error, instead of
       // failing the bind inside the loop and ending the conversation.
       if (admitted.admitted !== undefined) {
-        const { selected, route, nextKey } = admitted.admitted;
+        const { selected, route, nextBackend } = admitted.admitted;
         yield* decideReasoning(
           selected.config,
           selected.request,
           run.stores.globalState,
           {
-            protocol: PROTOCOL_BY_KEY[nextKey],
+            protocol: PROTOCOL_BY_BACKEND[nextBackend],
             codexSubscription: route.kind === 'chatgpt-subscription',
           },
         );

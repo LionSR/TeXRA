@@ -1,4 +1,3 @@
-import { join } from 'node:path';
 import { app } from 'electron';
 import { Effect, Layer, Scope } from 'effect';
 
@@ -11,14 +10,15 @@ import {
 } from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { globalDatabaseLayer } from '@controllers/session/Database';
-import { NotificationFailed } from '@hosts/uiHosts';
+import { emitAppSignal } from '@eventBus/AppSignals';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { AgentDirectoriesPort, StateStore } from '@platform/interfaces';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
-import { JsonStore, nodeFileServices } from '@platform/defaults/jsonStore';
+import { nodeFileServices } from '@platform/defaults/jsonStore';
+import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
@@ -28,21 +28,19 @@ import {
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import { GlobalDatabase } from '@shared/session/database';
+import { TEXRA_SETTING_ROWS } from '@shared/settingsView/texraSettings';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { texraPlugins } from '@tools/registry';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { processEnvConfigLayer } from '@utils/system/envFlags';
 
 // Local file imports
-import { ElectronSecrets } from './electronSecrets.js';
 import { repairLaunchPath } from './pathFix.js';
 import {
   resolveDesktopDataRoot,
   resolveDesktopMainDir,
   resolveResourcesPath,
 } from './paths.js';
-import { showDesktopWarningDialog } from './warningDialog.js';
 interface ElectronPlatformInitResult {
   /**
    * The no-workspace roots: what the window shows before a folder is open,
@@ -102,27 +100,16 @@ export const initializeElectronPlatform = Effect.fn(
     function* () {
       const mainDir = yield* resolveDesktopMainDir(moduleDirname);
       const resourcesPath = yield* resolveResourcesPath(mainDir);
-      const [configStores, secretsStore] = yield* Effect.all(
-        [
-          openTexraConfigStores(dataRoot, undefined, (message) =>
-            console.warn(`[desktop] ${message}`),
-          ),
-          JsonStore.open(join(userDataPath, 'secrets.json')),
-        ],
-        { concurrency: 'unbounded' },
+      const configStores = yield* openTexraConfigStores(
+        dataRoot,
+        undefined,
+        (message) => console.warn(`[desktop] ${message}`),
       );
-      const secrets = new ElectronSecrets(secretsStore, {
-        showWarningMessage: (message) =>
-          Effect.tryPromise({
-            try: () => showDesktopWarningDialog(message),
-            catch: (cause) =>
-              new NotificationFailed({
-                member: 'showWarningMessage',
-                message: toErrorMessage(cause),
-                cause,
-              }),
-          }),
-      });
+      // The one credential store every host shares (`~/.texra/secrets/`):
+      // the background service reads the keys this window saves.
+      const secrets = new FileSecrets(secretsDirectory(dataRoot), (key) =>
+        emitAppSignal('credentialChanged', { key }),
+      );
       return { mainDir, resourcesPath, configStores, secrets };
     },
   ).pipe(Effect.provide(Layer.merge(nodeFileServices, processEnvConfigLayer)));
@@ -146,6 +133,7 @@ export const initializeElectronPlatform = Effect.fn(
     processStart: nodeProcesses.selfIdentity(),
     globalStorage,
     plugins: texraPlugins(),
+    settings: TEXRA_SETTING_ROWS,
     mcpConfigPath: USER_MCP_CONFIG_PATH,
     secrets,
     // Application state is the one the CLI and the extension keep, in the
@@ -192,6 +180,8 @@ export const initializeElectronPlatform = Effect.fn(
       storage,
       undefined,
     ).pipe(Scope.provide(processScope));
+    // Keys another window or the service writes reach this one's surfaces.
+    yield* Effect.forkIn(secrets.watch(), processScope);
     repairLaunchPath();
     const processRoots = createNodeWorkspaceRoots({
       host: 'desktop',

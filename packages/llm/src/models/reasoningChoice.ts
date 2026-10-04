@@ -19,6 +19,16 @@ import {
 /** The effort used when neither the caller nor the user names one. */
 const DEFAULT_EFFORT = ReasoningEffort.MEDIUM;
 
+/**
+ * The Codex subscription backend runs every turn synchronously on one
+ * connection, so an effort above medium risks the client timing out before
+ * it answers: a route ceiling, applied through the one reasoning policy.
+ */
+export const CODEX_ROUTE_EFFORTS: readonly ReasoningEffort[] = [
+  ReasoningEffort.LOW,
+  ReasoningEffort.MEDIUM,
+];
+
 /** What a request asks for, and how that differs from what was selected. */
 export interface ReasoningChoice {
   /** Whether the model thinks on this request. */

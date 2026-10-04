@@ -1,11 +1,12 @@
 <script setup>
 // Frameless code-card for an agent definition file (guide/agent-architecture.md
-// → "Understanding the YAML Structure"). Shows the shape of an agent `.yaml`:
-// a `settings:` block and a `prompts:` block, with a dim annotation pill to the
-// right of each key explaining its role. Standalone (no MockupFrame) — just the
-// focused code card. Keys use --mk-syn-keyword, template vars are --mk-accent
-// chips, values are plain mono text. Mirrors the prose of the YAML-structure
-// section (agentCategory / systemPrompt / userPrefix / userRequest).
+// → "Understanding the YAML Structure"). Shows the shape of a flat agent
+// `.yaml`: top-level persona keys (`prompt`, `temperature`) and a `task:`
+// block, with a dim annotation pill to the right of each key explaining its
+// role. Standalone (no MockupFrame) — just the focused code card. Keys use
+// --mk-syn-keyword, template vars are --mk-accent chips, values are plain mono
+// text. Mirrors the prose of the YAML-structure section (prompt / temperature /
+// task.prefix / task.requests).
 //
 // The root carries `.mockup` so the shared `--mk-*` colour + dimensional tokens
 // resolve here and the card flips cleanly between the docs light / dark themes.
@@ -20,36 +21,30 @@ import MockCard from './MockCard.vue';
     sub="agent definition"
   >
     <div class="yh-body">
-      <!-- settings block -->
+      <!-- persona: top-level keys -->
       <div class="yh-line">
-        <code class="yh-code"><span class="kw">settings</span>:</code>
-        <span class="yh-note">how to run</span>
-      </div>
-      <div class="yh-line indent">
-        <code class="yh-code"
-          ><span class="kw">agentCategory</span>: workflow</code
-        >
-        <span class="yh-note">workflow vs toolUse</span>
-      </div>
-
-      <div class="yh-gap"></div>
-
-      <!-- prompts block -->
-      <div class="yh-line">
-        <code class="yh-code"><span class="kw">prompts</span>:</code>
-        <span class="yh-note">what to say to the LLM</span>
-      </div>
-      <div class="yh-line indent">
-        <code class="yh-code"><span class="kw">systemPrompt</span>: |</code>
+        <code class="yh-code"><span class="kw">prompt</span>: |</code>
         <span class="yh-note">the LLM's role</span>
       </div>
-      <div class="yh-line indent2">
+      <div class="yh-line indent">
         <code class="yh-code"
           ><span class="cmt">You are an expert LaTeX editor…</span></code
         >
       </div>
+      <div class="yh-line">
+        <code class="yh-code"><span class="kw">temperature</span>: 0.2</code>
+        <span class="yh-note">optional</span>
+      </div>
+
+      <div class="yh-gap"></div>
+
+      <!-- task block -->
+      <div class="yh-line">
+        <code class="yh-code"><span class="kw">task</span>:</code>
+        <span class="yh-note">present = a document task</span>
+      </div>
       <div class="yh-line indent">
-        <code class="yh-code"><span class="kw">userPrefix</span>: |</code>
+        <code class="yh-code"><span class="kw">prefix</span>: |</code>
         <span class="yh-note">your files + instruction</span>
       </div>
       <div class="yh-line indent2">
@@ -59,20 +54,20 @@ import MockCard from './MockCard.vue';
         >
       </div>
       <div class="yh-line indent">
-        <code class="yh-code"><span class="kw">userRequest</span>:</code>
-        <span class="yh-note">array → reflection rounds</span>
+        <code class="yh-code"><span class="kw">requests</span>:</code>
+        <span class="yh-note">one entry per revision</span>
       </div>
       <div class="yh-line indent2">
         <code class="yh-code"
-          >- <span class="cmt">Round 0 — write the revision</span></code
+          >- <span class="cmt">Write the revision</span></code
         >
-        <span class="yh-note round">round 0</span>
+        <span class="yh-note round">revision 1</span>
       </div>
       <div class="yh-line indent2">
         <code class="yh-code"
-          >- <span class="cmt">Round 1 — critique & improve</span></code
+          >- <span class="cmt">Critique & improve it</span></code
         >
-        <span class="yh-note round">reflection</span>
+        <span class="yh-note round">revision 2</span>
       </div>
     </div>
   </MockCard>

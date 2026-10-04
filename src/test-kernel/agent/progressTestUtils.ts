@@ -1,7 +1,6 @@
 import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
 
 // Local imports
-import { TraceEmitter, type AgentEvent } from '@agent/trace';
 import {
   SessionHostInteractions,
   type HostInteractions,
@@ -92,38 +91,6 @@ export function recordSessionEvents(
         : events.filter((event) => event.aggregateId === filter.aggregateId);
     },
   };
-}
-
-/** A fresh run trace that records every event it emits. */
-export function recordingTrace(): {
-  readonly trace: TraceEmitter;
-  readonly events: AgentEvent[];
-} {
-  const events: AgentEvent[] = [];
-  const trace = new TraceEmitter((event) => events.push(event));
-  return { trace, events };
-}
-
-function traceEventsOfType<T extends AgentEvent['type']>(
-  events: readonly AgentEvent[],
-  type: T,
-): Array<Extract<AgentEvent, { type: T }>> {
-  return events.filter(
-    (event): event is Extract<AgentEvent, { type: T }> => event.type === type,
-  );
-}
-
-/** The value a `run.fact` row carries, read off the trace arm itself. */
-type RunFact = Extract<AgentEvent, { type: 'run.fact' }>['fact'];
-
-/** The `run.fact` values of one key family, in emission order. */
-export function runFactsOfKey<K extends RunFact['key']>(
-  events: readonly AgentEvent[],
-  key: K,
-): Array<Extract<RunFact, { key: K }>> {
-  return traceEventsOfType(events, 'run.fact')
-    .map((event) => event.fact)
-    .filter((fact): fact is Extract<RunFact, { key: K }> => fact.key === key);
 }
 
 /**

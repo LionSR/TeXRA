@@ -51,6 +51,7 @@ import type { CliLogoutTarget } from '@cli/runtime/loginOptions';
 import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
 import * as cliProviderKeys from '@cli/chat/tui/hosts/cliProviderKeys';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
+import { localSessionBackend } from '@controllers/session/sessionBackend';
 import * as subscriptionAccess from '@model/subscriptionAccess';
 import { withProcessServices } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
@@ -60,7 +61,6 @@ import {
   type Plan,
   type RunIdentity,
   type RunPhase,
-  type TodoItem,
 } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -116,16 +116,11 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 /** The focused run's work plan as the fold states it. */
-function seedWorkPlan(
-  runId: RunId,
-  plan: Plan | null,
-  todos: readonly TodoItem[],
-): void {
+function seedWorkPlan(runId: RunId, plan: Plan | null): void {
   ensureRun(runId);
   seeded.set(runId, {
     ...makeRunView({ id: runId, ownedHere: true }),
     plan,
-    todos: [...todos],
   } as RunView);
   syncSeededView();
 }
@@ -214,6 +209,7 @@ function createContext(
     cliContext: createCliContext(),
     session,
     runtimeSession: services.runtimeSession,
+    backend: localSessionBackend(services.runtimeSession),
     secrets: services.secrets,
     stores: services.stores,
     runtime: testRuntime(),
@@ -341,13 +337,7 @@ describe('handleTuiSlashCommand', () => {
         'The focused agent has no work plan.',
       );
 
-      seedWorkPlan(runId, { objective: 'Check every case.' }, [
-        {
-          content: 'Check the base case',
-          activeForm: 'Checking the base case',
-          status: 'in_progress',
-        },
-      ]);
+      seedWorkPlan(runId, { objective: 'Check every case.' });
       yield* dispatchSlash('/plan', context);
       expect(foregroundReader.get()).toEqual({ kind: 'workPlan', runId });
 

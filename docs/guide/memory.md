@@ -90,7 +90,7 @@ Within a single run, the orchestrator and every subagent it spawns see the **sam
 
 ## When _not_ to use memory
 
-- **Throwaway intermediate work**: that belongs in the agent's todo list or scratch reasoning, not in a saved note.
+- **Throwaway intermediate work**: that belongs in the agent's plan or scratch reasoning, not in a saved note.
 - **Sensitive credentials**: memory files are plain Markdown on disk; treat them like any other workspace file.
 - **Auto-generated logs**: runs already have run storage for artifacts; don't duplicate them as memories.
 

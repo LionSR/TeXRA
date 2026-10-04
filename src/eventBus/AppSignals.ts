@@ -54,10 +54,9 @@ export interface AppSignalPayloads {
    * A write or removal of one secret-store entry settled. Emitted by the
    * store itself, so every writer is covered — the settings controllers, the
    * setup agent's `unset_api_key`, the GitHub token forms — without any of
-   * them remembering to. The file-backed stores (desktop, CLI) emit from
-   * their own commit finalizer; the VS Code store emits from
-   * `SecretStorage.onDidChange`, which also sees writes from other windows.
-   * The file-backed finalizer runs on every exit of the write, failure and
+   * them remembering to. The one file store emits from its own commit
+   * finalizer, and a window's watch of the file (`FileSecrets.watch`)
+   * emits for writes from other processes. The finalizer runs on every exit of the write, failure and
    * interruption included, because an interrupted commit may still have
    * landed; the signal means "re-read this key", never "the value changed".
    * The same stores hold OAuth tokens and Overleaf credentials, so a subscriber filters on `key` and ignores the rest: an

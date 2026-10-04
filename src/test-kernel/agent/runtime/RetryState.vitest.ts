@@ -30,15 +30,12 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { APIError as OpenAIAPIError } from 'openai';
 import { afterEach, describe, expect, vi } from 'vitest';
 import {
-  BackgroundEventSchema,
-  BackgroundSubmissionSchema,
   chooseReasoning,
   type Model,
   ModelError,
   type ModelOrigin,
   RemoteOperationSchema,
   type ResolvedTurn,
-  ResolvedTurnSchema,
   type TurnEvent,
   type TurnResult,
   TurnResultSchema,
@@ -84,6 +81,12 @@ import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
 import { readSettingFrom } from '@utils/config/platformSettings';
+import { judgeFailure } from '../../../../packages/llm/src/api/verdict.js';
+import {
+  BackgroundEventSchema,
+  BackgroundSubmissionSchema,
+  ResolvedTurnSchema,
+} from '../../../../packages/llm/src/turn.js';
 
 // Local file imports
 import {
@@ -199,11 +202,13 @@ function stubModel(outcomes: readonly AttemptOutcome[]): StubModel {
             return Stream.fail(
               outcome.fail instanceof ModelError
                 ? outcome.fail
-                : new ModelError({
-                    kind: 'transport',
-                    message: 'attempt failed',
-                    cause: outcome.fail,
-                  }),
+                : judged(
+                    new ModelError({
+                      kind: 'transport',
+                      message: 'attempt failed',
+                      cause: outcome.fail,
+                    }),
+                  ),
             );
           }
           if ('silent' in outcome) return Stream.empty;
@@ -231,7 +236,7 @@ function boundModel(
     modelId: GPT54,
     config: MODEL_CONFIGS[GPT54],
     reasoning: chooseReasoning(MODEL_CONFIGS[GPT54]),
-    compatibilityKey: 'OpenAI',
+    backend: 'openai',
     model,
     origin: ORIGIN,
     route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
@@ -294,7 +299,7 @@ const freshState = (): RunState => ({
   ...freshRunState(0),
   family: 'toolUse',
   modelId: GPT54,
-  modelCompatibilityKey: 'OpenAI',
+  backend: 'openai',
 });
 
 interface InvokerKit {
@@ -372,6 +377,10 @@ const invokeOn = ({ layer, runId, state }: InvokerKit) =>
     Effect.provide(testHttpClientLayer),
   );
 
+/** A failure as the package's binding raises it: judged against its reply. */
+const judged = (error: ModelError): ModelError =>
+  judgeFailure(error, 'api-key');
+
 /**
  * What the package raises over an SDK reply: its kind, status and
  * `retry-after`, with the SDK error (and its reply body) as the cause.
@@ -387,28 +396,32 @@ function httpError(
   } = {},
 ): ModelError {
   const retryAfter = headers?.['retry-after'];
-  return new ModelError({
-    kind:
-      status === 401 || status === 403
-        ? 'authentication'
-        : 'provider-rejection',
-    message,
-    status,
-    ...(retryAfter === undefined
-      ? {}
-      : { retryAfterMs: Number(retryAfter) * 1000 }),
-    cause: Object.assign(new Error(message), { status, ...body }),
-  });
+  return judged(
+    new ModelError({
+      kind:
+        status === 401 || status === 403
+          ? 'authentication'
+          : 'provider-rejection',
+      message,
+      status,
+      ...(retryAfter === undefined
+        ? {}
+        : { retryAfterMs: Number(retryAfter) * 1000 }),
+      cause: Object.assign(new Error(message), { status, ...body }),
+    }),
+  );
 }
 
 /** A status-less OpenAI server_error response, as the SDK raises it. */
 function statuslessServerError(message: string): ModelError {
   const body = { type: 'server_error', code: 'server_error', message };
-  return new ModelError({
-    kind: 'provider-rejection',
-    message,
-    cause: new OpenAIAPIError(undefined, body, message, undefined),
-  });
+  return judged(
+    new ModelError({
+      kind: 'provider-rejection',
+      message,
+      cause: new OpenAIAPIError(undefined, body, message, undefined),
+    }),
+  );
 }
 
 /** The binding every classification below ran under. */
@@ -487,16 +500,21 @@ describe('model failure classification', () => {
     },
     {
       name: 'an unknown status-less provider reply',
-      error: new ModelError({
-        kind: 'provider-rejection',
-        message: 'Unexpected provider failure.',
-        cause: new OpenAIAPIError(
-          undefined,
-          { type: 'unexpected_error', message: 'Unexpected provider failure.' },
-          'Unexpected provider failure.',
-          undefined,
-        ),
-      }),
+      error: judged(
+        new ModelError({
+          kind: 'provider-rejection',
+          message: 'Unexpected provider failure.',
+          cause: new OpenAIAPIError(
+            undefined,
+            {
+              type: 'unexpected_error',
+              message: 'Unexpected provider failure.',
+            },
+            'Unexpected provider failure.',
+            undefined,
+          ),
+        }),
+      ),
       autoRetryable: false,
     },
     {
@@ -597,24 +615,28 @@ describe('recovery-route verdicts', () => {
   it.each([
     {
       name: 'cools the wire route on a transport failure from long model calls',
-      error: new ModelError({
-        kind: 'transport',
-        message: 'Connection error',
-        cause: new TypeError('fetch failed'),
-      }),
+      error: judged(
+        new ModelError({
+          kind: 'transport',
+          message: 'Connection error',
+          cause: new TypeError('fetch failed'),
+        }),
+      ),
       expected: { retryAfterMs: undefined },
     },
     {
       name: 'keeps a deterministic undici code local despite the fetch-failed wrapper',
-      error: new ModelError({
-        kind: 'transport',
-        message: 'Connection error',
-        cause: new TypeError('fetch failed', {
-          cause: Object.assign(new Error('invalid header'), {
-            code: 'UND_ERR_INVALID_ARG',
+      error: judged(
+        new ModelError({
+          kind: 'transport',
+          message: 'Connection error',
+          cause: new TypeError('fetch failed', {
+            cause: Object.assign(new Error('invalid header'), {
+              code: 'UND_ERR_INVALID_ARG',
+            }),
           }),
         }),
-      }),
+      ),
       expected: undefined,
     },
     {
@@ -624,13 +646,18 @@ describe('recovery-route verdicts', () => {
     },
     {
       name: 'coordinates a status-less server failure from a background response',
-      error: Object.assign(new Error('background response failed'), {
-        provider: 'openai',
-        error: {
-          code: 'server_error',
-          message: 'temporary background failure',
-        },
-      }),
+      error: judged(
+        new ModelError({
+          kind: 'transport',
+          message: 'background response failed',
+          cause: Object.assign(new Error('background response failed'), {
+            error: {
+              code: 'server_error',
+              message: 'temporary background failure',
+            },
+          }),
+        }),
+      ),
       expected: { retryAfterMs: undefined },
     },
     {
@@ -1023,7 +1050,7 @@ describe('ModelInvoker retry', () => {
                 return 'continuation' in turn
                   ? Stream.fail(
                       new ModelError({
-                        kind: 'provider-rejection',
+                        kind: 'continuation-gone',
                         status: 404,
                         message: 'Previous response with id resp-1 not found.',
                       }),

@@ -12,7 +12,7 @@
 import { computed, signal } from '@lit-labs/signals';
 import { Cause, Effect } from 'effect';
 
-import { type SessionHandle } from '@agent/runtime';
+import type { SessionBackend } from '@controllers/session/sessionBackend';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type {
@@ -78,13 +78,16 @@ export type ToolEditApprovalPayload = Extract<
 >;
 export type RetryApprovalPayload = Extract<ApprovalPayload, { kind: 'retry' }>;
 
+/** Where a decision lands: the chat's session, here or in the service. */
+export type SessionRequests = Pick<SessionBackend, 'request'>;
+
 export interface PendingApproval {
   readonly payload: ApprovalPayload;
-  /** Answer this request. The session and runtime come from the surface that
-   *  renders the modal: this entry is a level of a module-level computed, so
-   *  it has neither of its own to close over. */
+  /** Answer this request. Where requests land and the runtime come from the
+   *  surface that renders the modal: this entry is a level of a module-level
+   *  computed, so it has neither of its own to close over. */
   readonly decide: (
-    session: SessionHandle,
+    requests: SessionRequests,
     runtime: ProcessRuntime,
     decision: SurfaceDecision,
   ) => void;
@@ -257,8 +260,8 @@ export const currentApproval = computed<PendingApproval | undefined>(() => {
   if (!first) return undefined;
   return {
     payload: first.payload,
-    decide: (session, runtime, decision) =>
-      decideRequest(session, runtime, first.request, first.payload, decision),
+    decide: (requests, runtime, decision) =>
+      decideRequest(requests, runtime, first.request, first.payload, decision),
   };
 });
 
@@ -352,19 +355,19 @@ export function reopenRequest(requestId: string): void {
  * over a refused decision parks the run on a request nobody answers again.
  */
 function issue(
-  session: SessionHandle,
+  requests: SessionRequests,
   runtime: ProcessRuntime,
   runId: RunId,
   requestId: string,
   onRefused: (() => void) | undefined,
-  ...requests: RuntimeRequest[]
+  ...arms: RuntimeRequest[]
 ): void {
   const reopen = (): void => {
     reopenRequest(requestId);
     onRefused?.();
   };
   void runtime.runPromise(
-    Effect.forEach(requests, (request) => session.requests.request(request), {
+    Effect.forEach(arms, (request) => requests.request(request), {
       discard: true,
     }).pipe(
       Effect.match({
@@ -399,7 +402,7 @@ function issue(
  * decision itself once the credential is in place.
  */
 function decideRequest(
-  session: SessionHandle,
+  requests: SessionRequests,
   runtime: ProcessRuntime,
   request: AttentionRequest,
   payload: PermissionPayload,
@@ -414,7 +417,7 @@ function decideRequest(
   );
   if (runtimeArms.length > 0) {
     issue(
-      session,
+      requests,
       runtime,
       runId,
       request.requestId,
@@ -442,7 +445,7 @@ function decideRequest(
  * capability back to itself and the request would never be answered.
  */
 export function landRequestDecision(
-  session: SessionHandle,
+  requests: SessionRequests,
   runtime: ProcessRuntime,
   runId: RunId,
   requestId: string,
@@ -450,7 +453,7 @@ export function landRequestDecision(
   onRefused?: () => void,
 ): void {
   markDecided(requestId);
-  issue(session, runtime, runId, requestId, onRefused, {
+  issue(requests, runtime, runId, requestId, onRefused, {
     kind: 'request.decide',
     runId,
     requestId,

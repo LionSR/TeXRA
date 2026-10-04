@@ -158,7 +158,7 @@ const executeInBand = Effect.fn('executeInBand')(
       // failed call, refused before any row records it.
       const refusal = childToolRefusal(
         options.parentOffered,
-        launch.definition.setting.tools,
+        launch.definition.persona.tools,
         config.agent,
       );
       if (refusal !== undefined) return yield* Effect.fail(new Error(refusal));
@@ -468,7 +468,7 @@ const launchSubagentInBand = Effect.fn('executeSubagentInBand')(function* (
   if (
     definition.config.agentCategory === AgentCategory.Workflow &&
     definition.config.inputFiles.length === 0 &&
-    definition.setting.defaultOutputFiles.length === 0
+    (definition.task?.outputs.length ?? 0) === 0
   ) {
     return yield* Effect.fail(
       new Error(

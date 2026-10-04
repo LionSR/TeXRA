@@ -5,6 +5,7 @@ import { type CliSignInProgress } from '@cli/runtime/signInUrl';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalNotice } from '@cli/chat/tui/state/transcript';
+import type { SessionBackend } from '@controllers/session/sessionBackend';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -27,6 +28,9 @@ export interface SlashCommandContext {
   /** The chat's runtime session: the session commands read run state and land
    *  requests on it, threaded from the chat entry point that opened it. */
   readonly runtimeSession: SessionHandle;
+  /** Where run requests and resumes land: the chat's session, here or in
+   *  the background service. */
+  readonly backend: SessionBackend;
   /**
    * The process secret store and the three setting slots the account,
    * model-access and model-selection commands read, filled from the

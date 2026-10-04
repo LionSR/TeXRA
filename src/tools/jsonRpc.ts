@@ -33,6 +33,7 @@ import {
 } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
+import { isObject } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'JsonRpcConnection';
@@ -172,7 +173,7 @@ const parseBody = (
       }),
   }).pipe(
     Effect.flatMap((value) =>
-      typeof value === 'object' && value !== null && !Array.isArray(value)
+      isObject(value)
         ? Effect.succeed(value as JsonRpcMessage)
         : Effect.fail(
             new JsonRpcFrameError({

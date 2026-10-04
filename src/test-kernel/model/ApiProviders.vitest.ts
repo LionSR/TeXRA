@@ -14,8 +14,9 @@ import {
   lookupApiKeyOrigin,
   SecretsFailed,
 } from '@texra-ai/llm';
-import { CliSecrets } from '@cli/runtime/cliSecrets';
+import { emitAppSignal } from '@eventBus/AppSignals';
 import { onAppSignal } from '@eventBus/AppSignals';
+import { FileSecrets } from '@platform/defaults/fileSecrets';
 
 import type { PlatformSecrets } from '@platform/secrets';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -166,7 +167,9 @@ describe('API provider key resolution', () => {
     () =>
       withTempDirEffect('texra-unset-key-', (root) =>
         Effect.gen(function* () {
-          const secrets = new CliSecrets(path.join(root, 'secrets.json'));
+          const secrets = new FileSecrets(path.join(root, 'secrets'), (key) =>
+            emitAppSignal('credentialChanged', { key }),
+          );
           yield* secrets.set(apiKeySecretName('openai'), 'sk-test');
           yield* Effect.promise(() => setupApiKeyToolPlatform(secrets));
           expect(yield* lookupApiKeyOrigin(secrets, 'openai')).toBe('secret');

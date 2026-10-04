@@ -50,7 +50,6 @@ export {
   type ScriptStageView,
 } from './scriptStage';
 export {
-  type ToolChecklistSection,
   type ToolFileGroupsSection,
   type ToolFileListSection,
   type ToolFileSection,

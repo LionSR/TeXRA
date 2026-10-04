@@ -51,6 +51,11 @@ export interface RunAgentOptions
    * the CLI, and orchestrator delegations, which all keep the chosen model.
    */
   preferHelperModel?: boolean;
+  /**
+   * The chat's previous root: this run's approval bypasses fall through to
+   * it, so a conversation keeps the grants its earlier rounds made.
+   */
+  continues?: RunId;
 }
 
 /** A fresh launch; a persisted run resumes through `resumeRun`. */
@@ -86,10 +91,13 @@ export const runAgent = Effect.fn('runAgent')(function* (
     onRunClaimed,
     preferHelperModel,
     suppressErrorNotification,
+    continues,
     ...executeAgentOptions
   } = options;
   const runSession = options.session;
   const runId = request.runId ?? generateRunId();
+  if (continues !== undefined && continues !== runId)
+    runSession.approvals.registerRunParent(runId, continues);
   return yield* runSession.runs.launchRun(
     runId,
     Effect.gen(function* () {

@@ -1,7 +1,9 @@
+import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it } from 'vitest';
+import { ModelError } from '@texra-ai/llm';
 
-import { parseChatGptSubscriptionLimit } from '@common/errors/sdkError/chatgptSubscriptionDetection';
-import { formatProviderHttpError } from '@common/errors/sdkError/providerErrorFormat';
+import { classifyModelFailure } from '@agent/runtime/run/modelFailure';
+import { judgeFailure } from '../../../packages/llm/src/api/verdict.js';
 
 const USAGE_LIMIT_BODY = {
   type: 'usage_limit_reached',
@@ -12,66 +14,72 @@ const USAGE_LIMIT_BODY = {
   resets_in_seconds: 159728,
 } as const;
 
-describe('parseChatGptSubscriptionLimit', () => {
-  it('parses a direct Codex usage-limit body', () => {
-    const limit = parseChatGptSubscriptionLimit(USAGE_LIMIT_BODY);
-    expect(limit).toEqual({
-      planType: 'pro',
-      resetsInSeconds: 159728,
-    });
+/** The Codex backend's rejection, as the binding judges it and the run reads it. */
+function codexFailure(body: unknown) {
+  const cause = Object.assign(new Error('codex backend rejected the request'), {
+    error: body,
   });
+  const judged = judgeFailure(
+    new ModelError({
+      kind: 'provider-rejection',
+      message: cause.message,
+      cause,
+    }),
+    'chatgpt-subscription',
+  );
+  return {
+    judged,
+    formatted: classifyModelFailure(judged, {
+      config: { provider: ModelProvider.OPENAI },
+    }).formatted,
+  };
+}
 
-  it('parses the SDK-enveloped { error } form', () => {
+describe('the ChatGPT subscription usage limit', () => {
+  it('is a used-up plan with its tier and reset, direct or enveloped', () => {
+    expect(codexFailure(USAGE_LIMIT_BODY).judged).toMatchObject({
+      kind: 'quota-exhausted',
+      retryable: false,
+      quota: {
+        plan: 'chatgpt-subscription',
+        planType: 'pro',
+        resetsInMs: 159_728_000,
+      },
+    });
     expect(
-      parseChatGptSubscriptionLimit({ error: USAGE_LIMIT_BODY })?.planType,
+      codexFailure({ error: USAGE_LIMIT_BODY }).judged.quota?.planType,
     ).toBe('pro');
   });
 
-  it('ignores unrelated bodies', () => {
-    expect(parseChatGptSubscriptionLimit({ type: 'rate_limit_exceeded' })).toBe(
-      null,
+  it('is not read into an unrelated body', () => {
+    expect(codexFailure({ type: 'rate_limit_exceeded' }).judged.quota).toBe(
+      undefined,
     );
-    expect(parseChatGptSubscriptionLimit(undefined)).toBe(null);
-    expect(parseChatGptSubscriptionLimit({ message: 'nope' })).toBe(null);
+    expect(codexFailure({ message: 'nope' }).judged.quota).toBe(undefined);
   });
-});
 
-/** Codex-shaped error carrying `body` as its SDK error payload. */
-function codexError(body: unknown): Error {
-  const error = new Error('codex backend rejected the request') as Error & {
-    error: unknown;
-    provider?: string;
-  };
-  error.error = body;
-  error.provider = 'openai';
-  return error;
-}
+  it('offers the switch to the OpenAI key', () => {
+    const { formatted } = codexFailure(USAGE_LIMIT_BODY);
 
-describe('formatProviderHttpError for ChatGPT subscription limits', () => {
-  it('classifies a usage-limit error as a switchable credential exhaustion', () => {
-    const providerError = formatProviderHttpError(codexError(USAGE_LIMIT_BODY));
-
-    expect(providerError.classification?.kind).toBe('chatgpt-subscription');
+    expect(formatted.classification?.kind).toBe('chatgpt-subscription');
     // The stored OpenAI key is NOT the broken credential, so no key change is
     // forced (that reason is reserved for upstream credit depletion).
-    expect(providerError.userRetryable).toBe(true);
-    expect(providerError.message).toContain('ChatGPT subscription usage limit');
+    expect(formatted.userRetryable).toBe(true);
+    expect(formatted.message).toContain('ChatGPT subscription usage limit');
     // ChatGPT is the only route with a plan slot.
-    expect(providerError.message).toContain('(Pro plan)');
-    expect(providerError.message).toContain('Resets in 1d 20h');
-    expect(providerError.message).toContain('your own OpenAI API key');
+    expect(formatted.message).toContain('(Pro plan)');
+    expect(formatted.message).toContain('Resets in 1d 20h');
+    expect(formatted.message).toContain('your own OpenAI API key');
   });
 
   it('drops minutes once the reset window reaches a day, even with a zero hour component', () => {
     // 1 day + 58 minutes, 0 whole hours — regression case for the pretty-ms
     // swap: without flooring to the hour once days >= 1, pretty-ms back-fills
     // the zero hour unit with minutes ("1d 58m") instead of "1d".
-    const { message } = formatProviderHttpError(
-      codexError({
-        type: 'usage_limit_reached',
-        resets_in_seconds: 86_400 + 58 * 60,
-      }),
-    );
+    const { message } = codexFailure({
+      type: 'usage_limit_reached',
+      resets_in_seconds: 86_400 + 58 * 60,
+    }).formatted;
     expect(message).toContain('Resets in 1d.');
     expect(message).not.toContain('58m');
   });

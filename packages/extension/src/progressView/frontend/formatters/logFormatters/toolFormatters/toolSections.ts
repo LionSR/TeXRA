@@ -30,7 +30,6 @@ import {
   getLanguageFromPath,
 } from '@progressView/frontend/formatters/constants';
 import type {
-  ToolChecklistSection,
   ToolFileGroupsSection,
   ToolFileListSection,
   ToolFileSection,
@@ -69,7 +68,7 @@ function isCommandInput(language: string): boolean {
   return language === 'shell' || language === 'javascript';
 }
 
-/** The one list shell the file, file-group, and checklist sections share. */
+/** The one list shell the file and file-group sections share. */
 function renderDetailList(label: string, items: unknown): TemplateResult {
   // prettier-ignore
   return buildToolUseSection(label, html`<ul class="detail-list">${items}</ul>`);
@@ -118,12 +117,6 @@ function renderFileListSection(section: ToolFileListSection): TemplateResult {
     return html`<li class="detail-item">${waIcon('file')} ${buildFileLinkSpan(file.path, html`<bdi dir="auto">${file.path}</bdi>`)}${file.from ? html` <span class="file-source">(from <bdi dir="auto">${file.from}</bdi>)</span>` : nothing}${file.note ? html` <span class="file-source">(<bdi dir="auto">${file.note}</bdi>)</span>` : nothing}${diffStats}</li>`;
   })}`;
   return renderDetailList(section.label, fileItems);
-}
-
-function renderChecklistSection(section: ToolChecklistSection): TemplateResult {
-  // prettier-ignore
-  const items = html`${section.items.map((item) => html`<li class="detail-item">${waIcon(item.done ? 'circle-check' : 'circle')} <span class="visually-hidden">${item.done ? 'Completed' : 'Pending'}: </span><bdi dir="auto">${item.text}</bdi></li>`)}`;
-  return renderDetailList(section.label, items);
 }
 
 /** Paint one tool section. `filePath` is the most recent file section's path,
@@ -180,8 +173,6 @@ function renderToolSection(
         section.label,
         buildStatusBadge(triStateStatusIcon(section.status), section.status),
       );
-    case 'checklist':
-      return renderChecklistSection(section);
     default:
       return assertNever(section, 'Unhandled tool section kind');
   }

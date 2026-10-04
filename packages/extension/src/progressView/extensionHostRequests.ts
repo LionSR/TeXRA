@@ -35,6 +35,8 @@ import {
   handleRunLatexdiff,
 } from '@commands/latex/latexdiffCommands';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
+import { launchOnRun } from '@controllers/mainView/backend/MainViewRunLaunchController';
+import { localSessionBackend } from '@controllers/session/sessionBackend';
 import type { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { normalizeMainViewFileExtension } from '@controllers/mainView/MainViewDroppedFilesController';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
@@ -70,10 +72,7 @@ import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { ExternalOpenFailed } from '@hosts/uiHosts';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  modelOptionsFrom,
-  readModelAvailabilityInputs,
-} from '@model/computeModelOptions';
+import { loadModelOptions } from '@model/setupCredentialAccess';
 import {
   AgentDirectories,
   type StateStore,
@@ -238,7 +237,7 @@ export function createExtensionHostRequests(
       session,
       preferHelperModel: runOptions.preferHelperModel ?? false,
       ownApiKeyFallback: runOptions.ownApiKeyFallback,
-      onRun: runOptions.onRun,
+      onRun: launchOnRun(session.approvals, runOptions),
       onRunResolved: options.presentLaunchedRun,
     }).pipe(Effect.flatMap(openFinalOutputIfAvailable(session.roots)));
     return withProcessServices(runtime, launch);
@@ -247,6 +246,7 @@ export function createExtensionHostRequests(
   const runActions = runtime.runSync(
     createHostRunActions({
       session,
+      backend: localSessionBackend(session),
       runValidated,
       openWorkflowOutput: (result) =>
         withProcessServices(
@@ -256,10 +256,7 @@ export function createExtensionHostRequests(
       loadModelOptions: () =>
         withProcessServices(
           runtime,
-          readModelAvailabilityInputs({
-            ...session.roots,
-            secrets,
-          }).pipe(Effect.map(modelOptionsFrom)),
+          loadModelOptions({ ...session.roots, secrets }),
         ),
       // The set-key quick pick is a VS Code command: it either runs or
       // faults, so its rejection is the one failure, as `ApiKeyPromptFailed`.

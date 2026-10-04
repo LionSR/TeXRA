@@ -2,8 +2,6 @@
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - agent
-import type { AgentTrace } from '@agent/trace/AgentTrace';
-import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
 import type { TemplateVars } from '@agent/prompt/templateInputs';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { RunContext, SkillCatalogEntry } from '@shared/schemas';
@@ -12,7 +10,6 @@ import type { Plugin } from '@tools/plugins';
 import type { PromptSection } from '@tools/toolTable';
 
 // Local imports - utilities
-import { ensureArray } from '@utils/core';
 import { renderPrompt } from '@utils/prompt';
 import { loadAgentsMd } from '@utils/files/agentsMd';
 import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
@@ -24,7 +21,7 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
  */
 const TOOL_USE_INSTRUCTIONS = `<tool_use_instructions>
 Working directory: the bash tool already executes every command from {{ CWD }}. You are already in the workspace, so run commands directly with relative paths (e.g., \`ls src/\`, \`find . -name "*.tex"\`, \`cat README.md\`). Scope file searches to \`.\` or a subdirectory, or use the glob/grep tools.
-Explicit user constraints override general workflow guidance elsewhere in the agent prompt. If the user forbids memory, planning, todos, file access, or a tool, do not use it. Report any resulting conflict instead.
+Explicit user constraints override general workflow guidance elsewhere in the agent prompt. If the user forbids memory, planning, file access, or a tool, do not use it. Report any resulting conflict instead.
 
 Prefer using tools over asking the user to take manual actions.
 If you say you will perform an action, immediately call the corresponding tool.
@@ -138,113 +135,16 @@ export const getSystemPromptWithRules = Effect.fn('prompt.systemWithRules')(
   },
 );
 
-/** The rendered round-0 prompts: system prompt, user prefix, and initial request. */
-interface InitialPrompts {
-  systemPrompt: string;
-  userPrefix: string;
-  userRequest: string;
-}
-
 /**
- * Centralises prompt construction logic for multi-round agents.
- *
- * @remarks
- * The builder renders all prompts lazily so callers can defer work until the
- * relevant conversation stage. Rounds use zero-based indexing where round 0
- * is the initial prompt and subsequent rounds continue from the array.
- *
- * @example
- * ```ts
- * const builder = new PromptBuilder(prompt, vars, workspace, logger);
- * const initial = yield* builder.buildInitialPrompts();
- * const firstRoundRequest = yield* builder.buildUserRequest(1);
- * ```
+ * The system text a conversation opens with: its persona's prompt rendered
+ * with the project's rules (`getSystemPromptWithRules`), and the suffix of
+ * tool-use instructions and workspace facts. What each step's plugins add is
+ * appended per request (`stepInstructions`).
  */
-export class PromptBuilder {
-  constructor(
-    private readonly agentPrompt: AgentPrompt,
-    private readonly userVars: TemplateVars,
-    /** The run's workspace root, whose `AGENTS.md` the system prompt gets. */
-    private readonly workspace: string | undefined,
-    private readonly logger?: AgentTrace,
-  ) {}
-
-  /**
-   * Render the initial system, prefix, and request prompts for round 0.
-   */
-  public buildInitialPrompts(): Effect.Effect<
-    InitialPrompts,
-    Error,
-    FileSystem.FileSystem
-  > {
-    return Effect.all(
-      [
-        getSystemPromptWithRules(
-          this.agentPrompt.systemPrompt,
-          this.userVars,
-          this.workspace,
-        ),
-        this.buildUserRequest(0),
-        renderPrompt(this.agentPrompt.userPrefix, this.userVars),
-      ],
-      { concurrency: 'unbounded' },
-    ).pipe(
-      Effect.map(([systemPrompt, userRequest, userPrefix]) => ({
-        systemPrompt,
-        userPrefix,
-        userRequest,
-      })),
-    );
-  }
-
-  /**
-   * Render the user request for the supplied round.
-   *
-   * @param currRound Zero-based round number (round 0 selects the initial template)
-   * @remarks Rounds beyond the configured templates fall back to the second template (index 1).
-   */
-  public buildUserRequest(currRound: number): Effect.Effect<string, Error> {
-    const template = this.getRoundTemplate(currRound);
-
-    if (!template) {
-      this.logger?.warn(
-        currRound === 0
-          ? 'No initial user request configured. Returning empty prompt.'
-          : `No prompt configured for round ${currRound}. Returning empty prompt.`,
-      );
-      return Effect.succeed('');
-    }
-
-    return renderPrompt(template, this.userVars);
-  }
-
-  private getRoundTemplate(currRound: number): string | undefined {
-    const { userRequest } = this.agentPrompt;
-    const templates = userRequest ? ensureArray(userRequest) : [];
-
-    const round = Math.max(0, currRound);
-    if (round < templates.length) return templates[round];
-
-    // For rounds beyond configured templates, fall back to the last template.
-    // Multi-template agents reuse templates[1] (the revision prompt) for all
-    // subsequent rounds. Single-template agents reuse templates[0].
-    if (round > 0 && templates.length >= 1) {
-      const fallbackIndex = Math.min(1, templates.length - 1);
-      this.logger?.debug(
-        `No prompt configured for round ${currRound}. Reusing template at index ${fallbackIndex}.`,
-      );
-      return templates[fallbackIndex];
-    }
-
-    return undefined;
-  }
-}
-
 export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
   function* (
-    agentPrompt: AgentPrompt,
+    personaPrompt: string,
     userVars: TemplateVars,
-    logger: AgentTrace | undefined,
     options: {
       /** The run's workspace root: its `AGENTS.md` and `<workspace_info>`. */
       workspace: string | undefined;
@@ -252,27 +152,21 @@ export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
       settings: SettingsStores;
     },
   ): Effect.fn.Return<
-    InitialPrompts & { instructionSuffix: string },
+    { readonly systemPrompt: string; readonly instructionSuffix: string },
     Error,
     FileSystem.FileSystem | ChildProcessSpawner
   > {
-    const builder = new PromptBuilder(
-      agentPrompt,
+    const systemPrompt = yield* getSystemPromptWithRules(
+      personaPrompt,
       userVars,
       options.workspace,
-      logger,
     );
-    const initial = yield* builder.buildInitialPrompts();
-
-    // The instruction suffix: tool-use instructions and workspace info. What
-    // each step's plugins add is appended per request (`stepInstructions`).
     const suffixParts = [
       TOOL_USE_INSTRUCTIONS,
       yield* buildWorkspaceInfoBlock(options.workspace, options.settings),
     ];
-
     return {
-      ...initial,
+      systemPrompt,
       instructionSuffix: yield* renderPrompt(suffixParts.join('\n'), userVars),
     };
   },

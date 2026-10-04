@@ -76,7 +76,6 @@ describe('tool-use tool resolution', () => {
           'plan',
           'send_to_terminal',
           'update_config',
-          'wolfram',
           'write_file',
         ];
 

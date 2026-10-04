@@ -9,7 +9,10 @@ import { runWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
-import { launchApprovalOptions } from '@controllers/mainView/backend/MainViewRunLaunchController';
+import {
+  launchApprovalOptions,
+  launchOnRun,
+} from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { aggregateId, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { LaunchSurfaceSchema } from '@shared/session/surface';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -149,10 +152,12 @@ describe('terminal result event', () => {
             atFirstStep = approvals.bypassesFor(ctx.runId);
             return completedRun(ctx);
           }),
-        launchApprovalOptions(
-          { kind: 'launch', launch, instruction: '' },
-          approvals,
-        ),
+        {
+          onRun: launchOnRun(
+            approvals,
+            launchApprovalOptions({ kind: 'launch', launch, instruction: '' }),
+          ),
+        },
       );
       expect(atFirstStep).toEqual({
         bash: true,

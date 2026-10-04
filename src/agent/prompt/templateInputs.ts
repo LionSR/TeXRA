@@ -4,10 +4,9 @@ import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 
 import { logFileCategory, logFilesLoaded, type AgentTrace } from '@agent/trace';
-import { AgentSetting } from '@agent/core/definition/AgentDataclass';
+import type { DocumentTask } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AttachedMemoryMiss, FileListEntry } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
@@ -35,7 +34,7 @@ import {
  * what follows the step (the tool-call mechanics, the skills) is rendered
  * per request (`stepInstructions`).
  *
- * Agent-YAML `requiredFilesInternal` variables have user-defined names, so
+ * A task's `files` variables have user-defined names, so
  * they are not in this vocabulary; they ride beside it as custom string keys
  * (see {@link TemplateVars}) and only templates read them.
  */
@@ -83,8 +82,8 @@ type TemplateInputs = z.infer<typeof TemplateInputsSchema>;
 /**
  * The template-variable map accepted at the render boundary (PromptBuilder):
  * fixed variables may be absent (template rendering keeps `throwOnUndefined`
- * off, so templates must tolerate absence), and agent-defined
- * `requiredFilesInternal` variables add custom keys beside the fixed ones.
+ * off, so templates must tolerate absence), and a task's
+ * `files` variables add custom keys beside the fixed ones.
  */
 export type TemplateVars = Partial<TemplateInputs> & Record<string, unknown>;
 
@@ -103,7 +102,7 @@ const FIXED_TEMPLATE_KEYS: ReadonlySet<string> = new Set(TEMPLATE_INPUT_TOKENS);
  * Agent-creation templates render once when a YAML file is produced, then the
  * generated agent renders again at runtime. These tokens must pass through the
  * creation render literally so the runtime render can substitute them later.
- * User-defined `requiredFilesInternal` variables are intentionally not in this
+ * A task's `files` variables are intentionally not in this
  * fixed list; they remain caller-supplied names and `throwOnUndefined` stays
  * disabled until there is a separate validation story for them.
  */
@@ -141,7 +140,7 @@ interface BuildTemplateInputsOptions {
 }
 
 /**
- * Agent-defined `requiredFilesInternal` variables: each YAML-named variable
+ * A task's `files` variables: each YAML-named variable
  * `X` contributes a string `X_FILE`/`X_CONTENT` pair. The names are dynamic
  * by design, so they live outside the fixed {@link TemplateInputs} vocabulary.
  */
@@ -179,7 +178,8 @@ export interface TemplateOpening {
  */
 export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
   agentConfig: AgentConfig,
-  agentSetting: AgentSetting,
+  /** The document task the agent defines, null for a chat agent. */
+  task: DocumentTask | null,
   agentPath: string,
   isAnthropicModel: boolean,
   logger: AgentTrace,
@@ -189,18 +189,18 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
   const [{ vars: requiredVars, files: requiredFiles }, attachedMemories] =
     yield* Effect.all(
       [
-        getRequiredFileVars(agentSetting, agentPath),
+        getRequiredFileVars(task?.files ?? {}, agentPath),
         getAttachedMemories(agentConfig.memories, options.storageRoot),
       ],
       { concurrency: 'unbounded' },
     );
 
-  // The custom `requiredFilesInternal` keys ride beside the fixed vocabulary.
+  // The task's custom `files` keys ride beside the fixed vocabulary.
   const inputs: TemplateInputs & Record<string, unknown> = {
     ...getBasicVars(agentConfig, isAnthropicModel, options),
     ...(yield* getFileVars(
       agentConfig,
-      agentSetting,
+      task !== null,
       logger,
       options.workspacePath,
       options.stageId,
@@ -223,9 +223,7 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
     // What the launch instruction activates (`/skills`): each step resolves
     // the names against its own catalog.
     activated:
-      agentSetting.agentCategory === AgentCategory.ToolUse
-        ? activatedSkillNames([agentConfig.instruction])
-        : [],
+      task === null ? activatedSkillNames([agentConfig.instruction]) : [],
     attachedMemoryMisses: attachedMemories.misses,
   };
 });
@@ -350,7 +348,8 @@ type FileVars = FileCategoryVars & Pick<TemplateInputs, 'MEDIA_FILE'>;
 
 const getFileVars = Effect.fn('userVars.getFileVars')(function* (
   agentConfig: AgentConfig,
-  agentSetting: AgentSetting,
+  /** A document task's run, which lists the files it loaded. */
+  documentTask: boolean,
   logger: AgentTrace,
   workspaceRoot: string | undefined,
   stageId: string | undefined,
@@ -405,10 +404,7 @@ const getFileVars = Effect.fn('userVars.getFileVars')(function* (
     // The rows use the read that fills the list vars and the primary pair.
     // Tool-use agents get no card, nor do media files (no user vars).
     const cardLabel = FILE_CATEGORY_CARD_LABEL[prefix];
-    if (
-      cardLabel != null &&
-      agentSetting.agentCategory !== AgentCategory.ToolUse
-    ) {
+    if (cardLabel != null && documentTask) {
       const readableSet = new Set(readableFiles);
       const entries = allFiles.map((file) => ({
         path: file,
@@ -446,7 +442,7 @@ function assertNoFixedVarCollision(
     if (FIXED_TEMPLATE_KEYS.has(generatedKey)) {
       return Effect.fail(
         new Error(
-          `requiredFilesInternal name "${varName}" generates "${generatedKey}", which collides with a fixed template variable. Rename the required-file variable.`,
+          `task.files name "${varName}" generates "${generatedKey}", which collides with a fixed template variable. Rename the variable.`,
         ),
       );
     }
@@ -460,15 +456,13 @@ function assertNoFixedVarCollision(
  */
 const getRequiredFileVars = Effect.fn('userVars.getRequiredFileVars')(
   function* (
-    agentSetting: AgentSetting,
+    bindings: Readonly<Record<string, string>>,
     agentPath: string,
   ): Effect.fn.Return<FileVarsResult, Error, FileSystem.FileSystem> {
     const vars: RequiredFileVars = {};
     const files: LoadedFileEntry[] = [];
 
-    for (const [varName, filePath] of Object.entries(
-      agentSetting.requiredFilesInternal,
-    )) {
+    for (const [varName, filePath] of Object.entries(bindings)) {
       if (!filePath) continue;
 
       yield* assertNoFixedVarCollision(varName);
@@ -484,7 +478,7 @@ const getRequiredFileVars = Effect.fn('userVars.getRequiredFileVars')(
         path: fullPath,
         ok: result != null,
         varName,
-        source: 'requiredFilesInternal',
+        source: 'task.files',
       });
     }
     return { vars, files };

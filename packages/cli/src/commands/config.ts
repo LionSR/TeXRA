@@ -6,7 +6,7 @@ import {
   InvalidAgentTeamError,
 } from '@agent/index';
 import { agentKeyOf } from '@shared/schemas';
-import { CLI_STATE_SETTINGS } from '@shared/state/stateSettings';
+import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
 import { readSetting } from '@shared/config/settingsAccess';
 import { unique } from '@utils/core';
 
@@ -65,7 +65,7 @@ const showConfig = Effect.fn('showConfig')(function* (
   const stores = services.roots;
   const agents = yield* readCliWorkspaceAgents(stores);
   const settings = Object.fromEntries(
-    yield* Effect.forEach(CLI_STATE_SETTINGS, (entry) =>
+    yield* Effect.forEach(TEXRA_SETTINGS.cliRows, (entry) =>
       Effect.map(readSetting(entry, stores), (value) => [entry.key, value]),
     ),
   );

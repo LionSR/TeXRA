@@ -19,12 +19,7 @@ import {
   truncateSummaryToWidth,
 } from '@cli/runtime/terminalText';
 import { COLOR_ERROR, COLOR_HINT, COLOR_SUCCESS } from '@cli/tui/ui/colors';
-import {
-  STATUS_DOT,
-  TODO_DONE,
-  TODO_PENDING,
-  TOOL_OUTPUT_CORNER,
-} from '@cli/tui/ui/glyphs';
+import { STATUS_DOT, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import { writeLogLine } from '@logger/logSink';
 import { TOOL_CALL_STATUS } from '@shared/schemas';
 import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
@@ -216,13 +211,6 @@ function sectionLines(section: ToolSection, elide: boolean): readonly string[] {
         section.label,
         ...section.files.map((file) => `  ${sectionFileLine(file)}`),
       ];
-    case 'checklist':
-      return [
-        section.label,
-        ...section.items.map(
-          (item) => `  ${item.done ? TODO_DONE : TODO_PENDING} ${item.text}`,
-        ),
-      ];
     case 'fileGroups':
       return [
         section.label,
@@ -345,8 +333,8 @@ function buildStyledLines(
   const sectionRows = model.sections.flatMap((section) =>
     isHeaderRedundantSection(section, headerPreview, isBashKind)
       ? []
-      : // Section values are producer text too (paths, ids, checklist
-        // items); a CR in one opens a row rather than moving the cursor.
+      : // Section values are producer text too (paths, ids); a CR
+        // in one opens a row rather than moving the cursor.
         cornerRows(
           sectionLines(section, elide).flatMap((line) =>
             safeTerminalText(line).split('\n'),

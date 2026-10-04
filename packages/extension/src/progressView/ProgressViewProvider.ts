@@ -24,6 +24,7 @@ import {
   EXTENSION_CATEGORIES,
   getFilterExtensions,
 } from '@common/files/fileTypeUtils';
+import { localSessionBackend } from '@controllers/session/sessionBackend';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import { OnboardingFunnelRefresher } from '@controllers/onboarding/onboardingFunnel';
@@ -205,7 +206,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // Install the recipient before host requests publish the recorder's state.
     this.bridge = this.runtime.runSync(
       SessionBridge.make({
-        session,
+        backend: localSessionBackend(session),
         handleHostRequest: (request, port) =>
           hostRequests.handleHostRequest(request, port),
         onPortClosed: (port) => hostRequests.closePort(port),

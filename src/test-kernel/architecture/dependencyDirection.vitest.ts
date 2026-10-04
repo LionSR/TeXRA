@@ -114,6 +114,9 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // outermost boundary of the process, so there is nothing above it to run on
   // and no runtime left once the drain has disposed the process one.
   'packages/cli/src/bin/texra.ts': 1,
+  // The headless service entry the extension and the desktop app ship: the
+  // same outermost boundary as the CLI's, for `texra serve` alone.
+  'packages/cli/src/bin/texraServe.ts': 1,
   // `defineCliCommand`'s first step, the CLI's pre-runtime context edge: the
   // one program it runs (`contextFromArgs`) builds the whole `CliContext`,
   // which opens the project and user `config.json` stores BEFORE

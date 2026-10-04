@@ -8,8 +8,11 @@ import {
 } from '@shared/schemas';
 
 import { isDiskFullError } from './errorPredicates';
-import { hasMissingApiKeyErrorMarker } from './sdkError/errorMetadata';
-import { isContextWindowError, isUserAbort } from './sdkError/errorPatterns';
+import {
+  hasContextWindowErrorMarker,
+  hasMissingApiKeyErrorMarker,
+} from './sdkError/errorMetadata';
+import { isUserAbort } from './sdkError/errorPatterns';
 
 export type AgentErrorKind = NonNullable<RunEnd['error']>['kind'];
 
@@ -43,16 +46,16 @@ export function primaryAgentError(err: unknown): unknown {
  * Classify agent execution errors for consistent runtime notification policy.
  *
  * Every kind is decided by a typed signal — an SDK/abort predicate, an errno,
- * or a `Symbol.for` marker attached at the throw site. Only
- * `isContextWindowError` still consults message text, and only for the
- * third-party providers whose SDKs expose no error code for the overflow.
+ * or a `Symbol.for` marker attached where the failure was classified (a
+ * window overflow is the llm package's verdict, marked by
+ * `classifyModelFailure`).
  */
 export function classifyAgentError(err: unknown): AgentErrorKind {
   const primary = primaryAgentError(err);
   if (isUserAbort(primary)) return 'abort';
   if (isDiskFullError(primary)) return 'disk-full';
   if (hasMissingApiKeyErrorMarker(primary)) return 'missing-api-key';
-  if (isContextWindowError(primary)) return 'context-window';
+  if (hasContextWindowErrorMarker(primary)) return 'context-window';
 
   return 'unexpected';
 }

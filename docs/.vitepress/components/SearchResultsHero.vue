@@ -7,8 +7,7 @@
 //
 // Each row mirrors MemoryHero's .mem-item / .mem-meta vocabulary: a title, a
 // dimmed authors line, then a dot-separated metadata strip carrying the id and
-// a per-row source badge (arXiv vs Crossref) so the dual arXiv + Crossref
-// sourcing the prose names is visible at a glance, plus a Cite action chip.
+// a per-row arXiv source badge, plus a Cite action chip.
 import MockCard from './MockCard.vue';
 
 const query = 'efficient self-attention for long documents';
@@ -29,8 +28,8 @@ const results = [
   {
     title: 'Rethinking Attention with Performers',
     authors: 'Choromanski et al.',
-    id: '10.48550/arXiv.2009.14794',
-    source: 'Crossref',
+    id: 'arXiv:2009.14794',
+    source: 'arXiv',
   },
 ];
 </script>
@@ -65,7 +64,7 @@ const results = [
 
     <div class="sr-foot">
       <wa-icon library="texra" name="shield"></wa-icon>
-      Every result is a real arXiv or Crossref lookup — never fabricated.
+      Every result is a real arXiv lookup — never fabricated.
     </div>
   </MockCard>
 </template>
@@ -161,10 +160,6 @@ const results = [
 .sr-src--arxiv {
   color: var(--mk-accent);
   background: color-mix(in srgb, var(--mk-accent) 14%, transparent);
-}
-.sr-src--crossref {
-  color: var(--mk-syn-fn);
-  background: color-mix(in srgb, var(--mk-syn-fn) 12%, transparent);
 }
 
 /* Cite action chip */

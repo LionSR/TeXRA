@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { AppState, AgentDirectories } from '@platform/interfaces';
+import type { StateSettingEntry } from '@shared/state/stateSettings';
 import { UsageLog } from '@shared/usageLog';
 import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import type { Plugin } from '@tools/plugins';
@@ -52,9 +53,11 @@ const { globalStorage } = createFakeWorkspaceRoots();
  *  process service, so it builds once however many sessions open. */
 export const identityReads = { count: 0 };
 
-/** Install the harness's process runtime over `plugins` and build it. */
+/** Install the harness's process runtime over `plugins` (and the app's
+ *  setting rows, as a host passes them) and build it. */
 export async function installTestSessionGraph(
   plugins: readonly Plugin[],
+  settings?: readonly StateSettingEntry[],
 ): Promise<void> {
   const runtime = installProcessRuntime({
     processStart: Effect.sync(() => {
@@ -64,6 +67,7 @@ export async function installTestSessionGraph(
     globalStorage,
     // Under the fake global root, never the developer's `~/.texra/mcp.json`.
     plugins,
+    ...(settings ? { settings } : {}),
     mcpConfigPath: mcpConfigPathOf(globalStorage),
     secrets: fakeHostSecrets,
     appState: AppState.layer(fakeHostAppState),

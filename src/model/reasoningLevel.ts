@@ -7,6 +7,7 @@ import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 import {
   acceptedEfforts,
   chooseReasoning,
+  CODEX_ROUTE_EFFORTS,
   defaultReasoningLevel,
   type ReasoningRequest,
 } from '@texra-ai/llm';
@@ -62,16 +63,6 @@ export function supportsReasoningLevel(
 ): boolean {
   return acceptedEfforts(config).length > 1;
 }
-
-/**
- * The Codex subscription backend runs every turn synchronously on one
- * connection, so an effort above medium risks the client timing out before
- * it answers: a route ceiling, applied through the one reasoning policy.
- */
-export const CODEX_ROUTE_EFFORTS: readonly ReasoningEffort[] = [
-  ReasoningEffort.LOW,
-  ReasoningEffort.MEDIUM,
-];
 
 /** The route a request is bound on, as far as reasoning is concerned. */
 export interface ReasoningRoute {

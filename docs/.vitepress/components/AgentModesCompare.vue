@@ -1,8 +1,8 @@
 <script setup>
-// Frameless side-by-side comparison for the workflow-vs-toolUse binary that the
-// page's opening "When to use workflow mode" tip narrates in prose. The two
-// modes are the `settings.agentCategory` values, and the first decision a user
-// makes. This card contrasts them attribute-by-attribute (Best for / Output /
+// Frameless side-by-side comparison for the document-task-vs-chat-agent binary
+// that the page's opening "When to use workflow mode" tip narrates in prose. The
+// agent file decides the mode: a `task:` block makes it a document task, no
+// `task:` block makes it a chat agent. It is the first decision a user makes. This card contrasts them attribute-by-attribute (Best for / Output /
 // Latency / Reflection / Examples) so the reader can compare the modes at a
 // glance instead of re-reading the paragraph.
 //
@@ -32,7 +32,7 @@ const rows = [
   },
   {
     label: 'Reflection',
-    workflow: 'Automatic critique rounds (Round 1+).',
+    workflow: 'Each extra task.requests entry adds a critique revision.',
     tooluse: 'None — you steer it turn by turn.',
   },
 ];
@@ -42,8 +42,8 @@ const tooluseAgents = ['chat', 'research', 'review'];
 </script>
 
 <template>
-  <div class="mockup amc" role="group" aria-label="Workflow vs tool-use agents">
-    <!-- workflow column -->
+  <div class="mockup amc" role="group" aria-label="Document task vs chat agent">
+    <!-- document task column (task block) -->
     <section class="amc-col">
       <header class="amc-head amc-head--workflow">
         <wa-icon
@@ -51,7 +51,8 @@ const tooluseAgents = ['chat', 'research', 'review'];
           library="texra"
           name="diagram-project"
         ></wa-icon>
-        <span class="amc-cat">workflow</span>
+        <span class="amc-cat">document task</span>
+        <span class="amc-sub">task block</span>
       </header>
       <dl class="amc-rows">
         <template v-for="r in rows" :key="r.label">
@@ -67,7 +68,7 @@ const tooluseAgents = ['chat', 'research', 'review'];
       </dl>
     </section>
 
-    <!-- tool-use column -->
+    <!-- chat agent column (no task block) -->
     <section class="amc-col">
       <header class="amc-head amc-head--tooluse">
         <wa-icon
@@ -75,7 +76,8 @@ const tooluseAgents = ['chat', 'research', 'review'];
           library="texra"
           name="screwdriver-wrench"
         ></wa-icon>
-        <span class="amc-cat">toolUse</span>
+        <span class="amc-cat">chat agent</span>
+        <span class="amc-sub">no task block</span>
       </header>
       <dl class="amc-rows">
         <template v-for="r in rows" :key="r.label">
@@ -132,6 +134,13 @@ const tooluseAgents = ['chat', 'research', 'review'];
   font-size: var(--mk-fs-85);
   font-weight: 700;
   color: var(--mk-text);
+}
+
+.amc-sub {
+  margin-left: auto;
+  font-family: var(--vp-font-family-mono);
+  font-size: var(--mk-fs-70);
+  color: var(--mk-text-faint);
 }
 
 .amc-rows {

@@ -10,6 +10,7 @@ import { z } from 'zod';
 import {
   BackgroundSubmissionSchema,
   CancellationEvidenceSchema,
+  completedTurn,
   FILE_UPLOAD_LIFETIME_SECONDS,
   ModelConfigurationSchema,
   ObservationPolicySchema,
@@ -19,6 +20,7 @@ import {
   type Model,
   type OpenAIResponsesConfiguration,
   type ResolvedTurn,
+  type TurnEvent,
 } from '../turn.js';
 import {
   ModelError,
@@ -26,6 +28,7 @@ import {
   boundOperation,
   cancellationStatus,
   enrichModelError,
+  fillModelError,
   type RemoteOperation,
 } from '../errors.js';
 import { originOf, sameModelOrigin } from '../protocol.js';
@@ -38,18 +41,14 @@ import {
   openaiResponsesContinuation,
 } from './openaiResponsesLower.js';
 import {
-  DeltaEventSchema,
-  EventSchema,
-  ItemEventSchema,
   ResponseEventSchema,
   ResponseSchema,
-  agreesWithCompleted,
-  normalizeItem,
-  normalizeResponse,
   responseEvents,
+  responsesWire,
   sdkEvents,
-  type HttpTurnResult,
+  terminalParts,
 } from './openaiResponsesCodec.js';
+import { assembleTurn, turnAssembly } from './assembleTurn.js';
 import {
   ResponseAuthenticationSchema,
   openaiAbortMatch,
@@ -163,47 +162,28 @@ export function openaiResponsesModel(
   });
 
   const streamTurn: Model['streamTurn'] = (input) =>
-    Stream.suspend(() => {
-      let requestId: string | undefined;
-      let responseId: string | undefined;
-      let returnedModel: string | undefined;
-      const enrich = (error: ModelError) =>
-        enrichModelError(error, {
-          requestId: error.requestId ?? requestId,
-          responseId: error.responseId ?? responseId,
-          model: error.model ?? returnedModel ?? config.requestedModel,
-        });
-      return Stream.unwrap(
-        Effect.gen(function* () {
-          const { turn, opened } = yield* createResponse(input, 'foreground');
-          requestId = opened.request_id ?? undefined;
-          const chunks = yield* sdkEvents(opened.data, enrich);
-          return responseEvents(chunks, origin).pipe(
-            Stream.mapEffect((event) =>
-              Effect.gen(function* () {
-                if (event.kind === 'identified') {
-                  responseId = event.providerResponseId;
-                  returnedModel = event.returnedModel ?? undefined;
-                }
-                if (event.kind !== 'completed') return event;
-                const continuation = yield* openaiResponsesContinuation(
-                  config,
-                  turn,
-                  event.result,
-                );
-                return {
-                  ...event,
-                  result: continuation
-                    ? TurnResultSchema.parse({ ...event.result, continuation })
-                    : event.result,
-                };
-              }),
-            ),
-            Stream.mapError(enrich),
-          );
-        }).pipe(Effect.mapError(enrich)),
-      );
-    });
+    Stream.unwrap(
+      Effect.gen(function* () {
+        const { turn, opened } = yield* createResponse(input, 'foreground');
+        const requestId = opened.request_id ?? undefined;
+        const enrich = (error: ModelError) =>
+          fillModelError(error, { requestId });
+        const chunks = yield* sdkEvents(opened.data, enrich);
+        return responseEvents(chunks, origin, (result) =>
+          Effect.map(
+            openaiResponsesContinuation(config, turn, result),
+            (continuation) =>
+              continuation
+                ? TurnResultSchema.parse({ ...result, continuation })
+                : result,
+          ),
+        ).pipe(Stream.mapError(enrich));
+      }).pipe(
+        Effect.mapError((error) =>
+          fillModelError(error, { model: config.requestedModel }),
+        ),
+      ),
+    );
 
   const submit: NonNullable<Model['background']>['submit'] = Effect.fn(
     'llm.responses.submit',
@@ -212,10 +192,10 @@ export function openaiResponsesModel(
     let returnedModel: string | undefined;
     let requestId: string | undefined;
     const enrich = (error: ModelError) =>
-      enrichModelError(error, {
+      fillModelError(error, {
         operation,
         responseId: operation?.providerResponseId,
-        requestId: error.requestId ?? requestId,
+        requestId,
         model: returnedModel ?? config.requestedModel,
       });
     return yield* Effect.scoped(
@@ -296,8 +276,12 @@ export function openaiResponsesModel(
           (type === 'response.completed' && response.status === 'completed') ||
           (type === 'response.incomplete' && response.status === 'incomplete')
         ) {
-          const content = yield* Effect.forEach(response.output, normalizeItem);
-          const result = yield* normalizeResponse(response, origin, content);
+          const result = yield* completedTurn(
+            assembleTurn(Stream.make(yield* terminalParts(response, type)), {
+              origin,
+              provider: 'The model',
+            }),
+          );
           const continuation = yield* openaiResponsesContinuation(
             config,
             turn,
@@ -377,10 +361,10 @@ export function openaiResponsesModel(
         let returnedModel: string | undefined;
         let requestId: string | undefined;
         const enrich = (error: ModelError) =>
-          enrichModelError(error, {
+          fillModelError(error, {
             operation,
             responseId: operation.providerResponseId,
-            requestId: error.requestId ?? requestId,
+            requestId,
             model: returnedModel ?? config.requestedModel,
           });
         return Stream.unwrap(
@@ -414,252 +398,66 @@ export function openaiResponsesModel(
               0,
               parsedPolicy.data.deadlineAtMs - (yield* Clock.currentTimeMillis),
             );
+            // The observation may join mid-item: what it missed, the
+            // terminal snapshot supplies.
+            const assembly = turnAssembly({
+              origin,
+              provider: 'The model',
+              responseId: operation.providerResponseId,
+              partial: true,
+            });
             let sequence = operation.afterSequence ?? -1;
-            const completedItems = new Map<
-              number,
-              HttpTurnResult['content'][number]
-            >();
-            let terminal:
-              | {
-                  readonly result: HttpTurnResult;
-                  readonly afterSequence: number;
-                }
-              | undefined;
+            const sequenced = (event: TurnEvent): BackgroundEvent[] => {
+              if (event.kind === 'delta')
+                return [{ ...event, afterSequence: sequence }];
+              if (event.kind !== 'identified') return [];
+              returnedModel = event.returnedModel ?? undefined;
+              return [
+                {
+                  ...event,
+                  requestedOrigin: origin,
+                  afterSequence: sequence,
+                },
+              ];
+            };
             const progress = events.pipe(
-              Stream.mapEffect((raw) =>
-                Effect.gen(function* (): Effect.fn.Return<
-                  readonly BackgroundEvent[],
-                  ModelError
-                > {
-                  const header = EventSchema.safeParse(raw);
-                  if (
-                    !header.success ||
-                    header.data.sequence_number <= sequence
-                  )
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message:
-                        'Observation emitted invalid or out-of-order events.',
-                    });
-                  const { type, sequence_number: afterSequence } = header.data;
-                  sequence = afterSequence;
-                  if (
-                    [
-                      'response.created',
-                      'response.queued',
-                      'response.in_progress',
-                      'response.completed',
-                      'response.incomplete',
-                      'response.failed',
-                    ].includes(type)
-                  ) {
-                    const parsed = ResponseEventSchema.safeParse(raw);
-                    if (!parsed.success)
-                      return yield* new ModelError({
-                        kind: 'malformed-output',
-                        message: 'The observed response is malformed.',
-                        cause: parsed.error,
-                      });
-                    const response = parsed.data.response;
-                    if (
-                      response.id !== operation.providerResponseId ||
-                      (returnedModel !== undefined &&
-                        returnedModel !== response.model)
-                    )
-                      return yield* new ModelError({
-                        kind: 'malformed-output',
-                        message:
-                          'Observation changed the remote response identity.',
-                      });
-                    const firstIdentity = returnedModel === undefined;
-                    returnedModel = response.model;
-                    if (
-                      [
-                        'response.completed',
-                        'response.incomplete',
-                        'response.failed',
-                      ].includes(type)
-                    ) {
-                      if (response.status !== type.slice('response.'.length))
-                        return yield* new ModelError({
-                          kind: 'malformed-output',
-                          message:
-                            'The observed terminal event and status disagree.',
-                        });
-                      if (response.status === 'failed')
-                        return yield* new ModelError({
-                          kind: 'provider-rejection',
-                          message:
-                            response.error?.message ??
-                            'The background response failed.',
-                          cause: response.error,
-                        });
-                      const content = yield* Effect.forEach(
-                        response.output,
-                        normalizeItem,
-                      );
-                      for (const [index, completed] of completedItems) {
-                        const observed = content[index];
-                        if (
-                          !observed ||
-                          !agreesWithCompleted(completed, observed)
-                        )
-                          return yield* new ModelError({
-                            kind: 'malformed-output',
-                            message:
-                              'The full observed terminal snapshot omits or contradicts completed output.',
-                          });
-                        content[index] = completed;
-                      }
-                      terminal = {
-                        result: yield* normalizeResponse(
-                          response,
-                          origin,
-                          content,
-                        ),
-                        afterSequence,
-                      };
-                      // The terminal cursor is delivered only with its authoritative result below.
-                      return [];
-                    }
-                    return firstIdentity
-                      ? [
-                          {
-                            kind: 'identified',
-                            providerResponseId: response.id,
-                            requestedOrigin: origin,
-                            returnedModel,
-                            afterSequence,
-                          },
-                        ]
-                      : [{ kind: 'cursor', afterSequence }];
-                  }
-                  if (
-                    [
-                      'response.output_text.delta',
-                      'response.refusal.delta',
-                      'response.reasoning_summary_text.delta',
-                      'response.reasoning_text.delta',
-                    ].includes(type)
-                  ) {
-                    const parsed = DeltaEventSchema.safeParse(raw);
-                    if (!parsed.success)
-                      return yield* new ModelError({
-                        kind: 'malformed-output',
-                        message: 'Observed progress is malformed.',
-                        cause: parsed.error,
-                      });
-                    let part: 'text' | 'refusal' | 'reasoning' = 'reasoning';
-                    if (type === 'response.output_text.delta') part = 'text';
-                    if (type === 'response.refusal.delta') part = 'refusal';
-                    return [
-                      {
-                        kind: 'delta',
-                        part,
-                        text: parsed.data.delta,
-                        providerItemIndex: parsed.data.output_index,
-                        afterSequence,
-                      },
-                    ];
-                  }
-                  if (
-                    type === 'response.output_item.added' ||
-                    type === 'response.output_item.done'
-                  ) {
-                    const parsed = ItemEventSchema.safeParse(raw);
-                    if (!parsed.success)
-                      return yield* new ModelError({
-                        kind: 'malformed-output',
-                        message: 'Observed output content is unsupported.',
-                        cause: parsed.error,
-                      });
-                    if (type === 'response.output_item.done') {
-                      const index = parsed.data.output_index;
-                      if (completedItems.has(index))
-                        return yield* new ModelError({
-                          kind: 'malformed-output',
-                          message:
-                            'Observation completed the same output position twice.',
-                        });
-                      completedItems.set(
-                        index,
-                        yield* normalizeItem(parsed.data.item),
-                      );
-                    }
-                    return parsed.data.item.type === 'function_call'
-                      ? [{ kind: 'cursor', afterSequence }]
-                      : [
-                          {
-                            kind: 'phase',
-                            part:
-                              parsed.data.item.type === 'reasoning'
-                                ? 'reasoning'
-                                : 'text',
-                            boundary:
-                              type === 'response.output_item.added'
-                                ? 'start'
-                                : 'end',
-                            providerItemIndex: parsed.data.output_index,
-                            afterSequence,
-                          },
-                        ];
-                  }
-                  if (
-                    [
-                      'response.content_part.added',
-                      'response.content_part.done',
-                      'response.output_text.done',
-                      'response.refusal.done',
-                      'response.reasoning_summary_part.added',
-                      'response.reasoning_summary_part.done',
-                      'response.reasoning_summary_text.done',
-                      'response.reasoning_text.done',
-                      'response.function_call_arguments.delta',
-                      'response.function_call_arguments.done',
-                    ].includes(type)
-                  )
-                    return [{ kind: 'cursor', afterSequence }];
-                  return yield* new ModelError({
-                    kind: 'malformed-output',
-                    message: `Unsupported observation event: ${type}.`,
-                  });
+              Stream.mapEffect(responsesWire(sequence)),
+              Stream.takeUntil((event) => event.terminal),
+              Stream.mapEffect((event) =>
+                Effect.gen(function* () {
+                  sequence = event.sequence;
+                  const turnEvents = yield* Effect.forEach(
+                    event.parts,
+                    assembly.step,
+                  );
+                  // The terminal cursor is delivered only with its result below.
+                  if (event.terminal) return [];
+                  const observed = turnEvents.flat().flatMap(sequenced);
+                  return observed.length > 0
+                    ? observed
+                    : [{ kind: 'cursor' as const, afterSequence: sequence }];
                 }),
               ),
-              Stream.takeUntil(() => terminal !== undefined),
               Stream.flattenIterable,
             );
-            return Stream.concat(
-              progress,
-              Stream.fromEffect(
-                Effect.gen(function* (): Effect.fn.Return<
-                  BackgroundEvent,
-                  ModelError
-                > {
-                  if (!terminal)
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message: 'Observation ended without a terminal response.',
-                    });
-                  // The same anchor the foreground completion builds: an
-                  // observed turn chains on `previous_response_id` too.
-                  const continuation = chains
-                    ? yield* openaiResponsesContinuation(
-                        config,
-                        turn,
-                        terminal.result,
-                      )
-                    : undefined;
-                  return {
-                    kind: 'completed',
-                    afterSequence: terminal.afterSequence,
-                    result: continuation
-                      ? { ...terminal.result, continuation }
-                      : terminal.result,
-                  };
-                }),
-              ),
-            ).pipe(
-              Stream.mapError(enrich),
+            const completion = Effect.gen(function* (): Effect.fn.Return<
+              BackgroundEvent,
+              ModelError
+            > {
+              const result = yield* assembly.complete;
+              // The same anchor the foreground completion builds: an
+              // observed turn chains on `previous_response_id` too.
+              const continuation = chains
+                ? yield* openaiResponsesContinuation(config, turn, result)
+                : undefined;
+              return {
+                kind: 'completed',
+                afterSequence: sequence,
+                result: continuation ? { ...result, continuation } : result,
+              };
+            });
+            return Stream.concat(progress, Stream.fromEffect(completion)).pipe(
+              Stream.mapError((error) => enrich(assembly.enrich(error))),
               Stream.interruptWhen(
                 Effect.sleep(readTimeRemaining).pipe(
                   Effect.andThen(() => Effect.fail(enrich(deadline))),

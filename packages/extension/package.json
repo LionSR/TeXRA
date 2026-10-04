@@ -126,56 +126,6 @@
             "url"
           ]
         }
-      },
-      {
-        "name": "texra_crossref_search",
-        "displayName": "Crossref Search",
-        "modelDescription": "Search Crossref works (journal articles, books, conference papers) and return top matches with bibliographic metadata.",
-        "toolReferenceName": "texra_crossref_search",
-        "canBeReferencedInPrompt": true,
-        "icon": "$(book)",
-        "tags": [
-          "texra",
-          "research",
-          "citation"
-        ],
-        "inputSchema": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "query": {
-              "type": "string",
-              "description": "Bibliographic search query for Crossref works."
-            },
-            "rows": {
-              "type": "integer",
-              "description": "Maximum number of works to return."
-            },
-            "offset": {
-              "type": "integer",
-              "description": "Zero-based result offset for pagination."
-            },
-            "sort": {
-              "type": "string",
-              "description": "Crossref sort field to apply."
-            },
-            "order": {
-              "type": "string",
-              "enum": [
-                "asc",
-                "desc"
-              ],
-              "description": "Crossref sort order."
-            },
-            "filter": {
-              "type": "string",
-              "description": "Crossref filter string, e.g. \"from-pub-date:2023\"."
-            }
-          },
-          "required": [
-            "query"
-          ]
-        }
       }
     ],
     "commands": [

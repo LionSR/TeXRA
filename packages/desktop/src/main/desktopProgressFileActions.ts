@@ -29,7 +29,7 @@ import {
 import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
 import type { RunId } from '@shared/schemas';
 import type { Rejected } from '@shared/session/requestErrors';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -188,7 +188,7 @@ export class DesktopProgressFileActions {
         latexdiffAllFailedMessage(
           yield* readSettingFrom<LatexdiffMathMarkupValue>(
             this.host.session.roots,
-            WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+            TexraStateKey.LATEXDIFF_MATH_MARKUP,
           ),
         ),
       );

@@ -74,7 +74,10 @@ import {
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
-import { attachMissingApiKeyError } from '@common/errors/sdkError/errorMetadata';
+import {
+  attachContextWindowError,
+  attachMissingApiKeyError,
+} from '@common/errors/sdkError/errorMetadata';
 import {
   aggregateId as qualifyAggregateId,
   type AggregateId,
@@ -472,6 +475,8 @@ describe('runAgent run ownership', () => {
             : 'run failed',
         );
         if (kind === 'missing-api-key') attachMissingApiKeyError(primaryError);
+        // The run classified the package's overflow verdict and marked it.
+        if (kind === 'context-window') attachContextWindowError(primaryError);
         const runError = new AgentError(primaryError.message, {
           cause: primaryError,
         });

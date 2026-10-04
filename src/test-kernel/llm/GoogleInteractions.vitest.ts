@@ -125,9 +125,10 @@ function signedEvents(
   return [
     {
       event_type: 'interaction.created',
+      // The live opening event carries no status (gemini-3.8-flash, 2026-10).
       interaction: {
         id: 'int_1',
-        status: 'in_progress',
+        object: 'interaction',
         model: 'gemini-returned',
       },
     },
@@ -902,20 +903,12 @@ describe('canonical Google Interactions protocol', () => {
           events.filter((event) => event.kind === 'identified'),
         ).toHaveLength(1);
         expect(
-          events.flatMap((event) => {
-            if (event.kind === 'phase')
-              return [[event.part, event.boundary, event.providerItemIndex]];
-            if (event.kind === 'delta')
-              return [[event.part, event.text, event.providerItemIndex]];
-            return [];
-          }),
+          events.flatMap((event) =>
+            event.kind === 'delta' ? [[event.part, event.text]] : [],
+          ),
         ).toEqual([
-          ['reasoning', 'start', 0],
-          ...(includeSummary ? [['reasoning', 'plan', 0]] : []),
-          ['reasoning', 'end', 0],
-          ['text', 'start', 1],
-          ['text', 'thinking done', 1],
-          ['text', 'end', 1],
+          ...(includeSummary ? [['reasoning', 'plan']] : []),
+          ['text', 'thinking done'],
         ]);
         const completed = events.at(-1);
         if (completed?.kind !== 'completed')

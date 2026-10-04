@@ -1,7 +1,7 @@
 import { computed, signal } from '@lit-labs/signals';
 
-import type { SessionHandle } from '@agent/runtime';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import type { SessionBackend } from '@controllers/session/sessionBackend';
 import { RUN_PHASE, type RunPhase, type RunId } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
 
@@ -9,9 +9,7 @@ import { registerCliStateResetHook } from './cliState';
 import { runPhaseOf, runViewOf, sessionView } from './sessionView';
 import type { Effect } from 'effect';
 
-type RunControlsOf = (
-  runId: RunId,
-) => NonNullable<ReturnType<SessionHandle['runs']['getHandle']>>['controls'];
+type RunControlsOf = SessionBackend['controls'];
 
 /**
  * The claimed root run's settlement, as the slot holds it: the program that
@@ -64,8 +62,12 @@ export const runStopFacts = computed((): ChatTuiRunStopFacts => {
  * from the session view and the session's tool-use flows.
  */
 export class TuiSession {
-  /** A new session starts with no claim. */
-  constructor(private readonly runControlsOf: RunControlsOf) {
+  /** A new session starts with no claim. `runsElsewhere`: its runs run in
+   *  the background service, so leaving the chat never ends one. */
+  constructor(
+    private readonly runControlsOf: RunControlsOf,
+    private readonly runsElsewhere = false,
+  ) {
     rootRunClaim.set(NO_CLAIM);
   }
 
@@ -161,6 +163,8 @@ export class TuiSession {
    * and its latest `run.snapshot` stay until the run is explicitly deleted.
    */
   isResumableIdle(): boolean {
+    // The service holds the task: the chat leaves it as it is, any time.
+    if (this.runsElsewhere) return true;
     return (
       this.runId !== undefined &&
       chatTuiRunPending(this) &&

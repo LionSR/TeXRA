@@ -12,6 +12,7 @@ import {
   Option,
   Scope,
   Stream,
+  SubscriptionRef,
 } from 'effect';
 
 import { getRunRecords } from '@agent/storage';
@@ -26,6 +27,7 @@ import {
 import {
   describeFollowUpFailure,
   presentFollowUpResult,
+  resumeOnSession,
 } from '@agent/followUp';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -41,6 +43,7 @@ import {
   type TurnOutcome,
 } from '@cli/runtime/terminalStatus';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
+import type { SessionBackend } from '@controllers/session/sessionBackend';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import type { DisposableStore } from '@platform/disposable';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
@@ -98,6 +101,8 @@ import {
   reportRequestDefect,
 } from './tui/state/transcript';
 import type { FollowUpDeliveryQueue } from './followUpDeliveryQueue';
+import type { ChatAgentRuns } from './serviceAgentRuns';
+import type { SessionRequests } from './tui/state/approvalQueue';
 import type { SkillActivation } from './tui/forms/SkillsListForm';
 import type { PastedImageEntry } from './tui/input/draftAttachments';
 
@@ -159,10 +164,6 @@ const recoverRun = <A, E, R>(
         : Effect.sync(() => recover(Cause.squash(cause))),
     ),
   );
-
-/** Workflow runs resume headless, never inside a chat. */
-const workflowResumeRefusal = (runId: RunId): string =>
-  `Run ${runId} is a workflow; resume it with \`texra resume ${runId}\`.`;
 
 /**
  * Narrow commands the chat-session controller exposes to the Ink component.
@@ -248,11 +249,13 @@ export interface ChatSessionControllerInit {
   /** The agent run boundary the controller drives. Composition leaves it
    *  unset and gets the agent runtime's own; a test harness injects its
    *  stand-ins here rather than mocking agent modules. */
-  readonly agentRuns?: {
-    readonly launch: typeof runAgent;
-    readonly resume: typeof resumeRun;
-    readonly records: typeof getRunRecords;
+  readonly agentRuns?: Partial<ChatAgentRuns> & {
+    readonly records?: typeof getRunRecords;
   };
+  /** Where run requests land, edit previews come from and run state is
+   *  read, when the chat is a client of the background service; its own
+   *  session otherwise. */
+  readonly backend?: Pick<SessionBackend, 'request' | 'preview' | 'view'>;
 }
 
 interface PreparedChatInstruction {
@@ -320,9 +323,17 @@ export function createChatSessionController(
   const agentRuns = {
     launch: runAgent,
     resume: resumeRun,
+    resumeBeside: (id: RunId) =>
+      Effect.asVoid(resumeOnSession(id, runtimeSession)),
     records: getRunRecords,
     ...init.agentRuns,
   };
+  const requests: SessionRequests = init.backend ?? runtimeSession.requests;
+  // The fold the chat's runs appear in: the service's, or this session's.
+  const viewChanges =
+    init.backend === undefined
+      ? runtimeSession.viewChanges
+      : SubscriptionRef.changes(init.backend.view);
   // Said in the transcript the controller writes to, not on stderr before
   // Ink mounts, where it would be left above the header.
   if (runtimeSession.storeMovedAside) {
@@ -340,7 +351,7 @@ export function createChatSessionController(
   ): Effect.Effect<RunId | undefined> =>
     runId === undefined
       ? Effect.succeed(undefined)
-      : runtimeSession.viewChanges.pipe(
+      : viewChanges.pipe(
           Stream.filter((view) => view.runs.has(runId)),
           Stream.runHead,
           Effect.map((head) => (Option.isSome(head) ? runId : undefined)),
@@ -349,7 +360,7 @@ export function createChatSessionController(
   /** Issue one request to the session's runtime and read its Effect result
    *  as the response (PRD 7.6): the refusal text, or undefined on success. */
   const request = (req: RuntimeRequest): Effect.Effect<string | undefined> =>
-    runtimeSession.requests.request(req).pipe(
+    requests.request(req).pipe(
       Effect.match({
         onFailure: describeRequestError,
         onSuccess: () => undefined,
@@ -446,6 +457,8 @@ export function createChatSessionController(
       runtimeSession.interactions.use(
         createTuiHostInteractions(presentationHost, sessionContext, {
           session: runtimeSession,
+          requests,
+          preview: init.backend?.preview,
           secrets,
           settings: stores,
           runtime,
@@ -479,26 +492,22 @@ export function createChatSessionController(
             try: () => AgentConfigSchema.parse(config),
             catch: ensureError,
           });
+          // Each chat round mints a fresh root run id, so bash/tool-edit/
+          // super-YOLO bypass, which is keyed per stream, would otherwise
+          // reset every round even though the user is continuing the same
+          // conversation. The new round continues the previous one, so bypass
+          // resolution falls through to whatever the prior round had, unless
+          // this round sets its own explicit value.
+          const previousRootRunId = rootRunId.get();
           const result = yield* agentRuns.launch(
             { config: registeredConfig, runId },
             {
               session: runtimeSession,
               enforceCategory: true,
+              ...(previousRootRunId !== undefined && {
+                continues: previousRootRunId,
+              }),
               onRunResolved: (resolvedRunId) => {
-                // Each chat round mints a fresh root run id, so
-                // bash/tool-edit/super-YOLO bypass, which is
-                // keyed per stream, would otherwise reset every round even
-                // though the user is continuing the same conversation. Link the
-                // new round's stream to the previous one so bypass resolution
-                // (see `registerRunParent`) falls through to whatever the
-                // prior round had, unless this round sets its own explicit value.
-                const previousRootRunId = rootRunId.get();
-                if (previousRootRunId && previousRootRunId !== resolvedRunId) {
-                  runtimeSession.approvals.registerRunParent(
-                    resolvedRunId,
-                    previousRootRunId,
-                  );
-                }
                 rootRunId.set(resolvedRunId);
                 moveLocalTranscriptToRun(resolvedRunId);
                 focusRun(resolvedRunId);
@@ -560,8 +569,6 @@ export function createChatSessionController(
       };
       const attemptResume = Effect.gen(function* () {
         // The durable record carries the config the TUI adopts before the run.
-        // Workflow runs resume headless through `texra resume`, not inside a
-        // chat.
         const store = agentRuns.records(runtimeSession, id);
         const [config, exists] = yield* Effect.all([
           store.readConfig(),
@@ -573,8 +580,13 @@ export function createChatSessionController(
           refuseResume(`Task not found: ${id}`);
           return;
         }
+        // A workflow takes no chat: it resumes beside this one, as
+        // `/resume all` resumes it, and joins the agent list.
         if (config.agentCategory !== AgentCategory.ToolUse) {
-          refuseResume(workflowResumeRefusal(id));
+          endResumeUnstarted(() =>
+            appendLocalNotice(`Resuming workflow ${id}. Tab lists it.`),
+          );
+          yield* Effect.forkDetach(agentRuns.resumeBeside(id));
           return;
         }
 
@@ -774,18 +786,25 @@ export function createChatSessionController(
         if (!previous.has(id) && run?.parentId === null) adoptResumedRoot(run);
       }
     });
-  const resumedRoots = runtime.runFork(
-    Stream.runForEach(runtimeSession.viewChanges, observeResumedRoots),
-  );
-  disposables.add(() => {
-    runtime.runFork(Fiber.interrupt(resumedRoots));
-  });
+  // A chat of the service adopts only the runs it launches or resumes: the
+  // service's view also holds other terminals' conversations.
+  if (init.backend === undefined) {
+    const resumedRoots = runtime.runFork(
+      Stream.runForEach(runtimeSession.viewChanges, observeResumedRoots),
+    );
+    disposables.add(() => {
+      runtime.runFork(Fiber.interrupt(resumedRoots));
+    });
+  }
 
   // -----------------------------------------------------------------------
   // stop
   // -----------------------------------------------------------------------
 
   const stop = (reason: RunStopReason): void => {
+    // A chat of the background service leaves its task running when the
+    // terminal goes: only the user's own stop reaches it.
+    if (reason === 'shutdown' && init.backend !== undefined) return;
     requestStop(reason);
     interruptActiveRun();
   };
@@ -979,7 +998,7 @@ export function createChatSessionController(
       }
       yield* Effect.uninterruptible(
         Effect.gen(function* () {
-          const outcome = yield* runtimeSession.requests
+          const outcome = yield* requests
             .request({
               kind: 'followUp.send',
               runId: followUpTarget,

@@ -15,7 +15,6 @@ import { z } from 'zod';
 /** Synthetic tool names for the native Codex tool-use cards. */
 export const CODEX_FILE_CHANGE_TOOL = 'codex_patch';
 export const CODEX_THREAD_TOOL = 'codex_thread';
-export const CODEX_TODO_TOOL = 'codex_todo';
 export const CODEX_TURN_TOOL = 'codex_turn';
 
 const CodexFileChangeItemSchema = z.object({
@@ -45,19 +44,6 @@ export const CodexThreadToolInputSchema = z.object({
 });
 
 export type CodexThreadToolInput = z.infer<typeof CodexThreadToolInputSchema>;
-
-const CodexTodoItemSchema = z.object({
-  text: z.string(),
-  completed: z.boolean(),
-});
-
-export const CodexTodoToolInputSchema = z.object({
-  items: z.array(CodexTodoItemSchema),
-  completedCount: z.number(),
-  totalCount: z.number(),
-});
-
-export type CodexTodoToolInput = z.infer<typeof CodexTodoToolInputSchema>;
 
 const CodexTurnStateSchema = z.enum(['running', 'completed', 'failed']);
 export type CodexTurnState = z.infer<typeof CodexTurnStateSchema>;

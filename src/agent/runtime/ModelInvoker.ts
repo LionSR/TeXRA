@@ -392,7 +392,6 @@ export const modelInvokerLayer = (): Layer.Layer<
                   ).slice(-PARTIAL_TEXT_TAIL_MAX);
                 }
                 return;
-              case 'phase':
               case 'cursor':
                 return;
               case 'completed':
@@ -544,7 +543,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           if (inputTokens > bound.contextWindow) {
             return yield* failAttempt(
               new ModelError({
-                kind: 'invalid-request',
+                kind: 'context-overflow',
                 message: `Input is ${inputTokens} tokens, which exceeds the model's context window of ${bound.contextWindow} tokens.`,
               }),
               bound,
@@ -752,10 +751,10 @@ export const modelInvokerLayer = (): Layer.Layer<
                   // Kimi coding endpoint) and binds the catalog model.
                   config: selection === 'personal' ? undefined : failed.config,
                   stores: run.stores,
-                  compatibilityKey: failed.compatibilityKey,
+                  backend: failed.backend,
                   declinedRoutes,
                   agentCategory: run.config.agentCategory,
-                  temperature: run.setting.temperature,
+                  temperature: run.persona.temperature,
                 }),
           )
           .pipe(
@@ -798,7 +797,6 @@ export const modelInvokerLayer = (): Layer.Layer<
             requestId,
             invocation: failedAttempt,
             failedModelId: failed.modelId,
-            failedCompatibilityKey: failed.compatibilityKey,
             credentialScope:
               failed.origin.protocol === 'vscode-lm'
                 ? 'editor'

@@ -9,10 +9,9 @@ import { Data, Effect, FileSystem, Result } from 'effect';
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
 import {
   AgentDefinitionSchema,
-  AgentPromptSchema,
-  AgentSettingSchema,
+  DocumentTaskSchema,
+  PersonaSchema,
   type AgentDefinition,
-  type AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
@@ -223,26 +222,33 @@ function formatSchemaIssue(issue: ZodIssue): string {
   return issue.message ? `${prefix}${issue.message}` : '';
 }
 
+/** The fields a file inherits: everything but its identity and its stamp. */
+type InheritedFields = Omit<
+  AgentDefinition,
+  'name' | 'description' | 'inherits' | 'basedOn'
+>;
+
 /**
- * One block of the definition (`settings` or `prompts`) with its `inherits`
- * chain merged in: the parent gives defaults and the child overrides. The
- * chain is looked up by name in the same source's scan, so a parent that is
- * absent or a chain that loops is an error of this file, reported as its
- * issue, never a listed agent that fails at launch.
+ * The definition's own fields with its `inherits` chain merged in: the
+ * parent gives defaults and the child overrides (a `task` block merges field
+ * by field, a list replaces the parent's). The chain is looked up by name in
+ * the same source's scan, so a parent that is absent or a chain that loops
+ * is an error of this file, reported as its issue, never a listed agent that
+ * fails at launch.
  */
-function inheritedDefinitionBlock<B extends 'prompts' | 'settings'>(
+function inheritedFields(
   entry: ParsedAgentYaml,
   definitions: Map<string, ParsedAgentYaml>,
-  block: B,
   seen: readonly string[] = [entry.name],
-): AgentDefinition[B] {
-  // Parameterizing over the block name (not the value type) lets this index
-  // without a cast: `AgentDefinitionSchema` pins `entry.definition[block]` to
-  // exactly `AgentDefinition[B]`, so passing the wrong block name for a given
-  // T is no longer expressible.
-  const ownBlock = entry.definition[block];
-  const parentName = entry.definition.inherits;
-  if (!parentName) return ownBlock;
+): InheritedFields {
+  const {
+    name: _name,
+    description: _description,
+    inherits: parentName,
+    basedOn: _basedOn,
+    ...own
+  } = entry.definition;
+  if (!parentName) return own;
 
   const parent = definitions.get(parentName);
   if (!parent) {
@@ -256,40 +262,17 @@ function inheritedDefinitionBlock<B extends 'prompts' | 'settings'>(
     );
   }
   return mergeInheritedAgentObject(
-    inheritedDefinitionBlock(parent, definitions, block, [
-      ...seen,
-      parent.name,
-    ]),
-    ownBlock,
+    inheritedFields(parent, definitions, [...seen, parent.name]),
+    own,
   );
 }
 
-/** Round floor for a workflow agent: one round per `userRequest` template. */
-export function userRequestTemplateCount(userRequest: unknown): number {
-  if (Array.isArray(userRequest)) return userRequest.length;
-  return typeof userRequest === 'string' && userRequest ? 1 : 0;
-}
-
 /**
- * The tools a workflow agent declares can never run: a workflow run offers
- * the model none. Say so at scan time instead of letting the agent author
- * discover it from a model that keeps asking for a tool that never answers.
- */
-function inertToolsWarning(setting: AgentSetting): string | undefined {
-  return setting.agentCategory === AgentCategory.Workflow &&
-    setting.tools.length > 0
-    ? `Workflow-category agent declares tools: [${setting.tools
-        .map((tool) => tool.name)
-        .join(
-          ', ',
-        )}]. Workflow runs never dispatch tool calls, so these are inert; remove tools: or make the agent toolUse.`
-    : undefined;
-}
-
-/**
- * The entry a definition file makes: its settings and prompts with the
+ * The entry a definition file makes: its persona and task with the
  * inheritance chain merged and the schema's defaults applied, the one
- * validation a launch reads.
+ * validation a launch reads. A task's persona works text-only: the recipe
+ * owns extraction, compilation and the proposal, so a task file that names
+ * tools is refused rather than run with tools it would never be offered.
  */
 function scanYaml(
   entry: ParsedAgentYaml,
@@ -297,39 +280,32 @@ function scanYaml(
   definitions: Map<string, ParsedAgentYaml>,
 ): Effect.Effect<AgentEntry, AgentScanError> {
   return Effect.try({
-    try: () => {
-      const inherited = inheritedDefinitionBlock(
+    try: (): AgentEntry => {
+      const { task: taskFields, ...personaFields } = inheritedFields(
         entry,
         definitions,
-        'settings',
       );
-      const setting = AgentSettingSchema.parse(
-        source === 'builtInToolUse' && !inherited.agentCategory
-          ? { ...inherited, agentCategory: AgentCategory.ToolUse }
-          : inherited,
-      );
-      const prompt = AgentPromptSchema.parse(
-        inheritedDefinitionBlock(entry, definitions, 'prompts'),
-      );
-      const tools = setting.tools.map((tool) => tool.name);
+      const persona = PersonaSchema.parse(personaFields);
+      const task =
+        taskFields === undefined ? null : DocumentTaskSchema.parse(taskFields);
+      if (task !== null && persona.tools.length > 0)
+        throw new Error(
+          'A document task works text-only, so `tools` and `task` cannot be combined: remove one.',
+        );
+      const tools = persona.tools.map((tool) => tool.name);
       return {
         name: entry.name,
         source,
         path: entry.path,
-        category: setting.agentCategory,
+        category:
+          task === null ? AgentCategory.ToolUse : AgentCategory.Workflow,
         description: entry.definition.description,
         tools: tools.length ? tools : undefined,
-        rounds:
-          setting.agentCategory === AgentCategory.Workflow
-            ? Math.max(
-                setting.rounds,
-                userRequestTemplateCount(prompt.userRequest),
-              )
-            : undefined,
+        rounds: task?.requests.length,
         digest: entry.digest,
         basedOn: entry.definition.basedOn,
-        setting,
-        prompt,
+        persona,
+        task,
       };
     },
     catch: (cause) =>
@@ -338,14 +314,5 @@ function scanYaml(
         message: formatScanFailure(cause),
         cause,
       }),
-  }).pipe(
-    Effect.tap(({ setting }) => {
-      const inert = inertToolsWarning(setting);
-      return inert === undefined
-        ? Effect.void
-        : Effect.logWarning(`${entry.path}: ${inert}`).pipe(
-            withLogChannel(CHANNEL),
-          );
-    }),
-  );
+  });
 }

@@ -13,7 +13,7 @@ import {
   hostStores,
   installPlatform,
 } from '@test/support/setupPlatform';
-import { texcount, zotero } from '@tools/integrationPlugins';
+import { wolfram, zotero } from '@tools/integrationPlugins';
 import { texraPlugins } from '@tools/registry';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 
@@ -79,7 +79,7 @@ describe('external tool availability probes', () => {
     Effect.gen(function* () {
       const spawner = scriptedSpawnerLayer(() => 'hang');
       const fiber = yield* Effect.forkChild(
-        texcount
+        wolfram
           .availability!.check()
           .pipe(
             Effect.provide(spawner.layer),

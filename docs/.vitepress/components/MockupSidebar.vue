@@ -31,28 +31,6 @@ const view = defineModel('view', { type: String, default: 'diff' });
     </div>
 
     <div class="board-scroll">
-      <!-- Todos panel -->
-      <div class="panel">
-        <div class="panel-sum">
-          <wa-icon class="chev" library="texra" name="chevron-down"></wa-icon>
-          Todos (2/3)
-        </div>
-        <div class="panel-body todos">
-          <div class="todo done">
-            <wa-icon class="td-ic" library="texra" name="check"></wa-icon
-            ><span class="td-tx">Derive the spectral-gap bound</span>
-          </div>
-          <div class="todo done">
-            <wa-icon class="td-ic" library="texra" name="check"></wa-icon
-            ><span class="td-tx">Verify it in Wolfram and Lean</span>
-          </div>
-          <div class="todo prog">
-            <span class="td-sp"></span
-            ><span class="td-tx">Revising notation in §2–3</span>
-          </div>
-        </div>
-      </div>
-
       <!-- Background Tasks → Subagents -->
       <div class="panel">
         <div class="panel-sum">

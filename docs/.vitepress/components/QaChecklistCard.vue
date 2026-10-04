@@ -2,9 +2,9 @@
 // Frameless "QA checklist" card: the five-item post-run review checklist from
 // guide/best-practices.md ("Always review AI-generated content"), rendered as
 // check-state rows so it reads as "the boxes to tick after every run" rather
-// than a flat bullet list. Reuses the shared progress-board todo vocabulary
+// than a flat bullet list. Reuses the shared checklist-row vocabulary
 // (.todos / .todo / .td-ic check-circle, .td-sp pending dot) from
-// theme/mockup.css, reinforcing product familiarity. The last row is left
+// theme/mockup.css. The last row is left
 // pending so the card reads as an in-progress review pass.
 //
 // Card shell + inline mono header come by COMPOSITION from <MockCard>, so the

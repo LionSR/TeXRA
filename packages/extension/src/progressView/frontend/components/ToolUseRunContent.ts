@@ -4,7 +4,6 @@ import { customElement } from 'lit/decorators.js';
 import { acceptsFollowUp } from '@shared/session/sessionView';
 import { BaseRunContent } from './BaseRunContent';
 import { conversationContentStyles } from './ConversationContent.styles';
-import './TodoList';
 import './PlanView';
 import './BackgroundTasksPanel';
 import './SessionComposer';
@@ -24,11 +23,6 @@ export class ToolUseRunContent extends BaseRunContent {
         ${this.renderApprovalDock()}
         <div class="conversation-column conversation-prelude">
           ${this.renderForkedFrom(run)}
-          <todo-list
-            .todos=${run.todos}
-            .runId=${run.id}
-            .surface=${this.surface}
-          ></todo-list>
           <plan-view
             .plan=${run.plan}
             .runId=${run.id}

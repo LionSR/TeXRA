@@ -1,8 +1,12 @@
+import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it } from 'vitest';
+import { ModelError } from '@texra-ai/llm';
 
-import { attachSdkUsageRoute } from '@common/errors/sdkError/errorMetadata';
-import { formatProviderHttpError } from '@common/errors/sdkError/providerErrorFormat';
-import { type UsageRoute } from '@shared/schemas';
+import { classifyModelFailure } from '@agent/runtime/run/modelFailure';
+import {
+  judgeFailure,
+  type BillingRoute,
+} from '../../../packages/llm/src/api/verdict.js';
 
 const USAGE_LIMIT_BODY = {
   message: "You've reached your weekly usage limit.",
@@ -13,57 +17,56 @@ const RATE_LIMIT_BODY = {
   message: 'Rate limit reached. Too many requests.',
 } as const;
 
-/** Build an xAI error stamped with the credential route the run bound the
- *  attempt to, the way `classifyModelFailure` stamps it. SuperGrok and a
- *  direct xAI key share `api.x.ai`, so the stamp is the only route signal. */
-function xaiError(
-  message: string,
-  body?: unknown,
-  usageRoute: UsageRoute = 'xai-subscription',
-): Error & { error?: unknown; status?: number } {
-  const error = new Error(message) as Error & {
-    error?: unknown;
-    status?: number;
-  };
-  if (body !== undefined) error.error = body;
-  attachSdkUsageRoute(error, usageRoute);
-  return error;
+/**
+ * An xAI rejection judged on the route the binding bills through. SuperGrok
+ * and a direct xAI key share `api.x.ai`, so the route is the only signal.
+ */
+function xaiFailure(
+  body: unknown,
+  route: BillingRoute = 'xai-subscription',
+  status?: number,
+) {
+  const cause = Object.assign(new Error('xAI rejected the request'), {
+    error: body,
+    ...(status === undefined ? {} : { status }),
+  });
+  return classifyModelFailure(
+    judgeFailure(
+      new ModelError({
+        kind: 'provider-rejection',
+        message: cause.message,
+        ...(status === undefined ? {} : { status }),
+        cause,
+      }),
+      route,
+    ),
+    { config: { provider: ModelProvider.XAI } },
+  ).formatted;
 }
 
-describe('formatProviderHttpError for Grok subscription limits', () => {
-  it('classifies a subscription-route usage limit as switchable exhaustion', () => {
-    const providerError = formatProviderHttpError(
-      xaiError('xAI rejected the request', USAGE_LIMIT_BODY),
-    );
+describe('the Grok subscription usage limit', () => {
+  it('is a switchable plan exhaustion on the subscription route', () => {
+    const formatted = xaiFailure(USAGE_LIMIT_BODY);
 
-    expect(providerError.classification?.kind).toBe('xai-subscription');
-    expect(providerError.userRetryable).toBe(true);
-    expect(providerError.message).toContain('Grok subscription usage limit');
+    expect(formatted.classification?.kind).toBe('xai-subscription');
+    expect(formatted.userRetryable).toBe(true);
+    expect(formatted.message).toContain('Grok subscription usage limit');
     // The affordance names the same fallback the preference switch offers.
-    expect(providerError.message).toContain(
+    expect(formatted.message).toContain(
       'Resets in 1h. Switch to your own xAI API key',
     );
   });
 
-  it('does not classify a transient rate limit on the subscription route', () => {
-    const providerError = formatProviderHttpError(
-      xaiError('xAI rejected the request', RATE_LIMIT_BODY),
+  it('is not read into a transient rate limit on the subscription route', () => {
+    expect(xaiFailure(RATE_LIMIT_BODY).classification?.kind).not.toBe(
+      'xai-subscription',
     );
-
-    expect(providerError.classification?.kind).not.toBe('xai-subscription');
   });
 
-  it('does not classify the same body on the API-key route as exhaustion', () => {
-    const error = xaiError(
-      'xAI rejected the request',
-      USAGE_LIMIT_BODY,
-      'api-key',
-    );
-    error.status = 429;
+  it('is not read into the same body on the API-key route', () => {
+    const formatted = xaiFailure(USAGE_LIMIT_BODY, 'api-key', 429);
 
-    const providerError = formatProviderHttpError(error);
-
-    expect(providerError.classification?.kind).not.toBe('xai-subscription');
-    expect(providerError.message).not.toContain('Switch to your own xAI');
+    expect(formatted.classification?.kind).not.toBe('xai-subscription');
+    expect(formatted.message).not.toContain('Switch to your own xAI');
   });
 });

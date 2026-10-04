@@ -3,8 +3,8 @@
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
-  AgentPromptSchema,
-  AgentSettingSchema,
+  DocumentTaskSchema,
+  PersonaSchema,
 } from '@agent/core/definition/AgentDataclass';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
@@ -41,12 +41,14 @@ export function createTestLaunchContext({
     model: 'test-model',
     agentCategory: category,
   });
-  const setting = AgentSettingSchema.parse({ agentCategory: category });
 
   return {
     config,
-    setting,
-    prompt: AgentPromptSchema.parse({}),
+    persona: PersonaSchema.parse({}),
+    task:
+      category === AgentCategory.Workflow
+        ? DocumentTaskSchema.parse({ requests: ['Write the document.'] })
+        : null,
     ownApiKeyFallback: false,
     // The launch stores a real run carries; no fixture reads through them.
     stores: fakeStores(),
