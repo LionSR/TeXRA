@@ -39,6 +39,7 @@ import {
   TexraRpcs,
   type ServiceInfo,
   type TaskFailed,
+  type ToolEditPreview,
 } from './protocol';
 import { listTasks } from './taskList';
 
@@ -146,6 +147,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
     const projects = yield* ServiceProjects;
     const control = yield* ServiceControl;
     const runs = yield* FiberSet.make();
+    const scope = yield* Effect.scope;
     let ports = 0;
     const refuseWhileDraining = Effect.gen(function* () {
       if (yield* control.draining)
@@ -153,10 +155,79 @@ export const serviceHandlers = TexraRpcs.toLayer(
           failed('The service is shutting down; start the task again.'),
         );
     });
+    // Tool-edit previews each session's runs staged, by request id: what a
+    // window shows beside the durable request. `seen` marks one whose
+    // request the session has listed; it is dropped once no longer listed.
+    const previews = new WeakMap<
+      SessionHandle,
+      Map<string, { preview: ToolEditPreview; seen: boolean }>
+    >();
+    const stagedIn = (session: SessionHandle) => {
+      const held = previews.get(session) ?? new Map();
+      previews.set(session, held);
+      return held;
+    };
+    const presented = new WeakSet<SessionHandle>();
+    /** The service's presentation surface on a project's session, attached
+     *  once: notices go to the service log, and a tool edit's preview is
+     *  held for `request.preview`. Every request is answered by a window
+     *  through `task.request`. */
+    const present = (session: SessionHandle): Effect.Effect<void> =>
+      Effect.suspend(() => {
+        if (presented.has(session)) return Effect.void;
+        presented.add(session);
+        // A staged preview whose request the session listed and no longer
+        // lists has settled; one not listed yet is kept, since staging
+        // precedes the request's row.
+        const settle = Stream.runForEach(
+          SubscriptionRef.changes(session.view),
+          (view) =>
+            Effect.sync(() => {
+              const staged = previews.get(session);
+              if (staged === undefined || staged.size === 0) return;
+              const pending = new Set(view.requests.map((r) => r.requestId));
+              for (const [id, entry] of staged) {
+                if (pending.has(id)) entry.seen = true;
+                else if (entry.seen) staged.delete(id);
+              }
+            }),
+        );
+        return Effect.forkIn(settle, scope).pipe(
+          Effect.andThen(
+            session.interactions.use({
+              emit: (event, payload) =>
+                Effect.logWarning(`Service notice ${event}`).pipe(
+                  Effect.annotateLogs({ data: payload }),
+                ),
+              presentToolEdit: (request) => {
+                stagedIn(session).set(request.permission.requestId, {
+                  preview: {
+                    originalContent: request.originalContent,
+                    proposedContent: request.proposedContent,
+                  },
+                  seen: false,
+                });
+              },
+              releaseToolEdit: (requestId) =>
+                Effect.sync(() => stagedIn(session).delete(requestId)),
+            }),
+          ),
+          Effect.asVoid,
+        );
+      });
+    const openSession = (workspace: string) =>
+      projects.open(workspace).pipe(Effect.tap(present));
     const open = (workspace: string) =>
-      projects
-        .open(workspace)
-        .pipe(Effect.mapError((error) => failed(error.message)));
+      openSession(workspace).pipe(
+        Effect.mapError((error) => failed(error.message)),
+      );
+    /** The preview of one of `session`'s pending requests. */
+    const previewOf = (session: SessionHandle, requestId: string) =>
+      Effect.map(SubscriptionRef.get(session.view), (view) =>
+        view.requests.some((request) => request.requestId === requestId)
+          ? (stagedIn(session).get(requestId)?.preview ?? null)
+          : null,
+      );
     return {
       'service.hello': () =>
         Effect.gen(function* () {
@@ -200,8 +271,12 @@ export const serviceHandlers = TexraRpcs.toLayer(
             ).pipe(Stream.ensuring(session.subscriptions.set(port, [])));
           }),
         ),
+      'request.preview': ({ workspace, requestId }) =>
+        open(workspace).pipe(
+          Effect.flatMap((session) => previewOf(session, requestId)),
+        ),
       'task.request': ({ workspace, request }) =>
-        projects.open(workspace).pipe(
+        openSession(workspace).pipe(
           Effect.mapError((error): RequestErrorWire => ({
             _tag: 'Rejected',
             reason: error.message,

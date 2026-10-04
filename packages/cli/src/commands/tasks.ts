@@ -24,7 +24,7 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { getStdoutColumns } from '../runtime/logSinks';
 import { selectCliRunModel } from '../runtime/runModel';
-import { attachTask } from '../runtime/taskAttach';
+import { attachTask, describeWireRefusal } from '../runtime/taskAttach';
 import { runOutcomeExitCode } from '../runtime/terminalStatus';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -41,22 +41,6 @@ const TASK_ID_ARG = {
   required: true,
   description: 'Task id (or a unique prefix) from `texra tasks list`',
 } as const;
-
-/** What a refused request says, worded for the terminal. */
-function describeRefusal(error: RequestErrorWire): string {
-  switch (error._tag) {
-    case 'Cancelled':
-      return 'The request was cancelled.';
-    case 'NotOwner':
-      return `Another process owns task ${error.runId}.`;
-    case 'Unavailable':
-    case 'Rejected':
-    case 'Invalid':
-      return error.reason;
-    case 'Internal':
-      return `The request failed inside the TeXRA service (ref ${error.ref}); see its log.`;
-  }
-}
 
 /** The task `id` names: its full id, or a prefix only one task has. */
 function findTask(client: ServiceClient, id: string) {
@@ -96,7 +80,7 @@ function requestTask(
     }).pipe(
       Effect.catchIf(
         (error): error is RequestErrorWire => error._tag !== 'RpcClientError',
-        (error) => Effect.fail(new CliUsageError(describeRefusal(error))),
+        (error) => Effect.fail(new CliUsageError(describeWireRefusal(error))),
       ),
     );
     return { task, outcome };

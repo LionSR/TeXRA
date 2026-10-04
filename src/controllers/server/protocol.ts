@@ -20,6 +20,8 @@
  * - `task.request`: one `RuntimeRequest` (send, approve, stop, fork, …).
  * - `task.start` / `task.resume`: launch or continue a task in the service.
  * - `project.policy`: the approval policy of a project's session.
+ * - `request.preview`: a pending tool edit's original and proposed content,
+ *   which the durable request does not carry.
  */
 import { Effect, Schema } from 'effect';
 import { Rpc, RpcGroup } from 'effect/rpc';
@@ -41,7 +43,7 @@ import {
 
 /** Bumped whenever a procedure or a payload changes shape. A client newer
  *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 /**
  * A Zod schema as an Effect Schema at the RPC edge: decoding runs the Zod
@@ -107,6 +109,14 @@ const TaskFailedSchema = z.object({
 });
 export type TaskFailed = z.infer<typeof TaskFailedSchema>;
 
+/** What a pending tool edit would change: the preview a window shows
+ *  beside the request's path and line counts. */
+const ToolEditPreviewSchema = z.object({
+  originalContent: z.string(),
+  proposedContent: z.string(),
+});
+export type ToolEditPreview = z.infer<typeof ToolEditPreviewSchema>;
+
 /** The project a call addresses: its folder, as the client spells it. */
 const workspace = Schema.String;
 
@@ -149,6 +159,12 @@ export const TexraRpcs = RpcGroup.make(
     payload: { workspace, runId: zodWire(RunIdSchema) },
     /** The run that resumed: the asked one, or the parent that owns it. */
     success: zodWire(RunIdSchema),
+    error: zodWire(TaskFailedSchema),
+  }),
+  Rpc.make('request.preview', {
+    payload: { workspace, requestId: Schema.String },
+    /** Null once the request is settled, or when the service staged none. */
+    success: zodWire(ToolEditPreviewSchema.nullable()),
     error: zodWire(TaskFailedSchema),
   }),
   Rpc.make('project.policy', {

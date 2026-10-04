@@ -240,6 +240,12 @@ and produces document-oriented outputs. If one name exists in both categories,
 `texra run` refuses it and names both candidates — pass the source-qualified
 form it prints (for example `texra run custom:assistant`) to pick one.
 
+`/tasks` lists the tasks the background service runs, across every project
+(see [Background service](#background-service)). Choosing one attaches to it
+inside the chat: its transcript streams live, Enter sends it a follow-up,
+and a command, edit or question it asks appears as the usual approval card.
+Esc detaches; the task keeps running in the service.
+
 ## Teams
 
 The CLI can list, show, and run the same built-in teams as the
@@ -475,9 +481,9 @@ terminals can attach to the same task at once and all of them print the
 same transcript; Ctrl-C detaches one terminal and leaves the task running.
 An id may be shortened to any prefix only one task has. `tasks start` applies its
 approval policy (`--approval-policy`, `--no-input`, or your config) to that
-project in the service before the task starts. No terminal answers an
-approval prompt yet, so a tool that would ask is withheld from service
-tasks unless the policy approves it. With
+project in the service before the task starts. A service task that asks
+for approval waits for an answer: `texra tasks attach` only watches, so
+answer it from the chat with `/tasks`. With
 `--output-format ndjson`, `attach` writes the task's own rows (not its
 agents') as `progress` records, in the shape `texra run` uses.
 

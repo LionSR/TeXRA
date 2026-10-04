@@ -110,6 +110,22 @@ export function probeService(
 }
 
 /**
+ * Ask the service on `socket` to stop now, or to drain (`drain`). It skips
+ * the protocol check `ensureService` makes, so an older client can still
+ * stop a newer service: `service.stop` keeps its shape across protocols.
+ */
+export function askServiceToStop(
+  socket: string,
+  drain: boolean,
+): Effect.Effect<void, SocketError | RpcClientError.RpcClientError> {
+  return Effect.scoped(
+    Effect.flatMap(connectService(socket), (client) =>
+      client['service.stop']({ drain }),
+    ),
+  );
+}
+
+/**
  * Connect to this storage root's service, starting it with `start` (which
  * spawns the service detached and returns) when none answers, and retiring
  * one that speaks an older protocol or runs an older build than `version`
@@ -139,11 +155,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     yield* Effect.logInfo(
       `Retiring the TeXRA service ${info.version} (protocol ${info.protocol}): it finishes its running tasks and exits.`,
     );
-    yield* Effect.scoped(
-      Effect.flatMap(connectService(socket), (client) =>
-        client['service.stop']({ drain: true }),
-      ),
-    ).pipe(
+    yield* askServiceToStop(socket, true).pipe(
       Effect.mapError(
         (error) =>
           new ServiceUnavailable({
