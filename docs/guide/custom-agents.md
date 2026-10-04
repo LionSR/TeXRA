@@ -50,7 +50,7 @@ Open the new `.yaml` file. A starter template is already inserted. An agent is t
 
 <AgentAnatomyHero />
 
-<p class="hero-caption">An agent file is <code>inherits</code> + a persona (<code>prompt</code>, <code>temperature</code>) + a <code>task</code> block; the <code>task.requests</code> list maps position-by-position onto rounds (item <code>[0]</code> is Round 0, item <code>[1]</code> the first reflection).</p>
+<p class="hero-caption">An agent file is <code>inherits</code> + a persona (<code>prompt</code>, <code>temperature</code>) + a <code>task</code> block; the <code>task.requests</code> list maps position-by-position onto revisions (<code>requests[0]</code> is Revision 1, <code>requests[1]</code> Revision 2).</p>
 
 Customize it to define your agent's structure. These are the key fields:
 
