@@ -26,6 +26,7 @@ import {
 import {
   describeFollowUpFailure,
   presentFollowUpResult,
+  resumeOnSession,
 } from '@agent/followUp';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -159,10 +160,6 @@ const recoverRun = <A, E, R>(
         : Effect.sync(() => recover(Cause.squash(cause))),
     ),
   );
-
-/** Workflow runs resume headless, never inside a chat. */
-const workflowResumeRefusal = (runId: RunId): string =>
-  `Run ${runId} is a workflow; resume it with \`texra resume ${runId}\`.`;
 
 /**
  * Narrow commands the chat-session controller exposes to the Ink component.
@@ -560,8 +557,6 @@ export function createChatSessionController(
       };
       const attemptResume = Effect.gen(function* () {
         // The durable record carries the config the TUI adopts before the run.
-        // Workflow runs resume headless through `texra resume`, not inside a
-        // chat.
         const store = agentRuns.records(runtimeSession, id);
         const [config, exists] = yield* Effect.all([
           store.readConfig(),
@@ -573,8 +568,13 @@ export function createChatSessionController(
           refuseResume(`Task not found: ${id}`);
           return;
         }
+        // A workflow takes no chat: it resumes beside this one, as
+        // `/resume all` resumes it, and joins the agent list.
         if (config.agentCategory !== AgentCategory.ToolUse) {
-          refuseResume(workflowResumeRefusal(id));
+          endResumeUnstarted(() =>
+            appendLocalNotice(`Resuming workflow ${id}. Tab lists it.`),
+          );
+          yield* Effect.forkDetach(resumeOnSession(id, runtimeSession));
           return;
         }
 

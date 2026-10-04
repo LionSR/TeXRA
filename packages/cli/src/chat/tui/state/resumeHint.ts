@@ -3,6 +3,7 @@ import { quote } from 'shell-quote';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   isEmptyUsage,
+  isLoopDriven,
   type CliOutputFormat,
   type RunId,
   type TokenUsageStats,
@@ -106,7 +107,7 @@ export function collectResumeTargets({
     includeRoot: false,
   })) {
     const run = runViewOf(view, runId);
-    if (!run?.resumeEligible) continue;
+    if (run === undefined || !isLoopDriven(run.identity)) continue;
     targets.push({ runId: run.id, label: run.label });
   }
   return targets;

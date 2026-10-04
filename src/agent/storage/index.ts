@@ -23,10 +23,6 @@ export {
   listRuns,
   isUserVisibleRun,
 } from './runListing';
-export {
-  checkpointExists,
-  deriveResumability,
-  type ResumabilityDecision,
-} from './resumability';
+export { deriveResumability, type ResumabilityDecision } from './resumability';
 export { formatConversationMessage } from './conversationFormat';
 export { resolveChildRunOutput } from './childRunOutput';
