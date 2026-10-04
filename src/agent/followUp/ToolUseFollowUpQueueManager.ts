@@ -152,7 +152,7 @@ export class ToolUseFollowUpQueue {
   ): FollowUpConsumerLease | undefined {
     if (this.disposed) return undefined;
     const entry = this.entries.get(runId) ?? this.createEntry(runId);
-    return this.claim(entry, runId, kind);
+    return this.claim(entry, runId, kind)?.lease;
   }
 
   /** Claim a DB-owned child, transferring an exact recovery capability if supplied. */
@@ -161,8 +161,9 @@ export class ToolUseFollowUpQueue {
     recovery?: FollowUpConsumerLease,
   ): FollowUpConsumerLease | undefined {
     if (!recovery) return this.claimLive(runId, 'child');
-    if (recovery.runId !== runId || !this.useRecovery(recovery)) return;
-    const entry = this.entries.get(runId)!;
+    const entry = this.entryForLease(recovery);
+    if (!entry || recovery.runId !== runId || !this.useRecovery(recovery))
+      return;
     const lease: FollowUpConsumerLease = { runId, kind: 'child' };
     entry.slot = { lease, hold: entry.slot?.hold }; // the hold carries over
     return lease;
@@ -178,9 +179,10 @@ export class ToolUseFollowUpQueue {
     const entry =
       this.entries.get(runId) ??
       (createIfMissing ? this.createEntry(runId) : undefined);
-    const slot = entry?.slot;
-    if (entry && !slot) return this.claim(entry, runId, 'recovery');
-    if (!slot?.reserved || entry!.pendingRelease !== undefined) return;
+    if (!entry) return;
+    const slot = entry.slot;
+    if (!slot) return this.claim(entry, runId, 'recovery')?.lease;
+    if (!slot.reserved || entry.pendingRelease !== undefined) return;
     slot.reserved = undefined;
     return slot.lease;
   }
@@ -498,8 +500,11 @@ export class ToolUseFollowUpQueue {
           admission === 'recoverable' &&
           options?.liveOffer !== 'none'
         ) {
-          owner = this.claim(admitted, runId, 'recovery');
-          if (owner) admitted.slot!.reserved = wake = true;
+          const claimed = this.claim(admitted, runId, 'recovery');
+          if (claimed) {
+            claimed.reserved = wake = true;
+            owner = claimed.lease;
+          }
         }
         // A held row is offered by what releases it (`wakeTakes`, ...).
         if (owner !== undefined && holdUntil === undefined)
@@ -707,16 +712,15 @@ export class ToolUseFollowUpQueue {
     return entry;
   }
 
-  /** Mint the entry's single lease. */
+  /** Mint the entry's single lease, returning the slot that holds it. */
   private claim(
     entry: QueueEntry,
     runId: RunId,
     kind: FollowUpConsumerKind,
-  ): FollowUpConsumerLease | undefined {
+  ): Slot | undefined {
     if (entry.slot) return undefined;
-    const lease: FollowUpConsumerLease = { runId, kind };
-    entry.slot = { lease };
-    return lease;
+    entry.slot = { lease: { runId, kind } };
+    return entry.slot;
   }
 
   /** The entry `lease` still owns, or `undefined` if it has gone stale. */

@@ -27,7 +27,7 @@
  * named is removed the way a tombstone removes it.
  *
  * Publication (D5): returned views are immutable; untouched branches retain
- * identity. writableMap and the transcript fold copy each changed container
+ * identity. `writable` and the transcript fold copy each changed container
  * at most once per fold, and writes stop when fold returns. No-op writes keep
  * the previous branch. RunView, TranscriptView, and SessionView are replaced
  * on change, preserving older views and identity-based host comparisons.
@@ -125,10 +125,8 @@ export function fold(
   owned = new WeakSet();
   resetTranscriptOwnership();
   let next = view;
-  for (const each of Array.isArray(input)
-    ? (input as readonly FoldInput[])
-    : [input]) {
-    next = foldWith(next, each as FoldInput);
+  for (const each of '_tag' in input ? [input] : input) {
+    next = foldWith(next, each);
   }
   // A `debug` input starts fresh indexes; the ones it left name `next` too.
   indexes.head = next;
@@ -291,24 +289,23 @@ function sessionIndexesOf(view: SessionView): SessionIndexes {
  */
 let owned = new WeakSet<object>();
 
-type ViewMapKey = 'runs' | 'policy' | 'folded' | 'queuedFollowUps';
-
-/** The view's map under `key`, copied once per call before its first write. */
-function writableMap<K extends ViewMapKey>(
-  view: SessionView,
-  key: K,
-): SessionView[K] {
-  const current = view[key];
-  if (owned.has(current)) return current;
-  const copy = new Map(
-    current as Iterable<readonly [unknown, unknown]>,
-  ) as SessionView[K];
-  if (key === 'runs') {
-    SESSION_INDEXES.set(copy as SessionView['runs'], sessionIndexesOf(view));
-  }
+/** `map` itself when this call created it, else its copy, owned from now
+ *  on: the caller stores it back on the envelope before writing. */
+function writable<K, V>(map: Map<K, V>): Map<K, V> {
+  if (owned.has(map)) return map;
+  const copy = new Map(map);
   owned.add(copy);
-  view[key] = copy;
   return copy;
+}
+
+/** `view.runs`, writable; a copy inherits the session's indexes. */
+function writableRuns(view: SessionView): SessionView['runs'] {
+  const runs = writable(view.runs);
+  if (runs !== view.runs) {
+    SESSION_INDEXES.set(runs, sessionIndexesOf(view));
+    view.runs = runs;
+  }
+  return runs;
 }
 
 // ---------------------------------------------------------------------------
@@ -415,7 +412,7 @@ function createRun(
  */
 function setRun(view: SessionView, run: RunView): void {
   const previous = view.runs.get(run.id);
-  writableMap(view, 'runs').set(run.id, run);
+  writableRuns(view).set(run.id, run);
   if (previous?.ownerId !== run.ownerId) {
     reindexOwner(view, run.id, previous?.ownerId ?? null, run.ownerId);
   }
@@ -424,7 +421,7 @@ function setRun(view: SessionView, run: RunView): void {
 }
 
 function dropRun(view: SessionView, run: RunView): void {
-  writableMap(view, 'runs').delete(run.id);
+  writableRuns(view).delete(run.id);
   reindexOwner(view, run.id, run.ownerId, null);
   sessionIndexesOf(view).ended.delete(run.id);
   countGroups(view, run.group, undefined);
@@ -1000,12 +997,12 @@ function applySessionSlices(
       // `runLifecycle.ts` always stamps it; the trace viewer's synthetic
       // envelope carries none, which is why the field stays optional.
       if (event.approvalPolicy && runId !== null) {
-        writableMap(view, 'policy').set(runId, event.approvalPolicy);
+        view.policy = writable(view.policy).set(runId, event.approvalPolicy);
       }
       return;
     case 'approval.policy':
       if (runId !== null)
-        writableMap(view, 'policy').set(runId, event.snapshot);
+        view.policy = writable(view.policy).set(runId, event.snapshot);
       return;
     case 'inquiryThreadUpdated': {
       const {
@@ -1094,11 +1091,12 @@ function projectRequests(view: SessionView, runId: RunId, rows: RunRows) {
 function projectFollowUps(view: SessionView, runId: RunId, rows: RunRows) {
   if (rows.followUps.length === 0) {
     if (view.queuedFollowUps.has(runId)) {
-      writableMap(view, 'queuedFollowUps').delete(runId);
+      view.queuedFollowUps = writable(view.queuedFollowUps);
+      view.queuedFollowUps.delete(runId);
     }
     return;
   }
-  writableMap(view, 'queuedFollowUps').set(
+  view.queuedFollowUps = writable(view.queuedFollowUps).set(
     runId,
     rows.followUps.map((f) => ({
       followUpId: f.followUpId,
@@ -1250,7 +1248,7 @@ function foldTraceEvent(
       ? { statistics: { model: run.model } }
       : {}),
   });
-  writableMap(view, 'folded').set(event.aggregateId, event.seq);
+  view.folded = writable(view.folded).set(event.aggregateId, event.seq);
   // A filtered fact still advances its source cursor. Keep the run and
   // transcript references stable when that fact produced no presentation.
   if (transcript === run.transcript) return true;
@@ -1274,12 +1272,17 @@ function foldRunRemoved(view: SessionView, runId: RunId): boolean {
   clearLiveText(run.transcript);
   // A map that never held this run is left alone: a delete that removes
   // nothing must not copy the map it publishes.
-  if (view.policy.has(run.id)) writableMap(view, 'policy').delete(run.id);
+  if (view.policy.has(run.id)) {
+    view.policy = writable(view.policy);
+    view.policy.delete(run.id);
+  }
   if (view.queuedFollowUps.has(run.id)) {
-    writableMap(view, 'queuedFollowUps').delete(run.id);
+    view.queuedFollowUps = writable(view.queuedFollowUps);
+    view.queuedFollowUps.delete(run.id);
   }
   sessionIndexesOf(view).rows.delete(run.id);
-  writableMap(view, 'folded').delete(qualifyAggregateId('run', run.id));
+  view.folded = writable(view.folded);
+  view.folded.delete(qualifyAggregateId('run', run.id));
   if (view.requests.some((r) => r.runId === run.id)) {
     view.requests = view.requests.filter((r) => r.runId !== run.id);
   }
@@ -1357,11 +1360,13 @@ function foldSubscriptions(
 ): void {
   const subscribed = new Map(set.map((s) => [s.id, s.fromSeq]));
   for (const [id, fromSeq] of subscribed) {
-    if (!view.folded.has(id)) writableMap(view, 'folded').set(id, fromSeq);
+    if (!view.folded.has(id))
+      view.folded = writable(view.folded).set(id, fromSeq);
   }
   for (const id of [...view.folded.keys()]) {
     if (subscribed.has(id)) continue;
-    writableMap(view, 'folded').delete(id);
+    view.folded = writable(view.folded);
+    view.folded.delete(id);
     const target = aggregateTarget(id);
     const run = target.kind === 'run' ? view.runs.get(target.id) : undefined;
     if (!run) continue;
