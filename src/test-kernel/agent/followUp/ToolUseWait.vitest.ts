@@ -9,7 +9,7 @@ import { Deferred, Effect, Exit, Fiber, FileSystem, Layer } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import type { FollowUpQueueInput } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import type { InboxItem } from '@agent/followUp/Inbox';
 import { type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import {
   appendRow,
@@ -247,11 +247,11 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
 const enqueue = Effect.fn('test.enqueue')(function* (
   session: SessionHandle,
   runId: RunId,
-  items: readonly FollowUpQueueInput[],
+  items: readonly InboxItem[],
 ) {
   yield* session.settlePublications();
   for (const item of items) {
-    yield* session.followUps.submit(runId, item, 'recoverable');
+    yield* session.followUps.send(runId, item);
   }
 });
 
@@ -1047,9 +1047,8 @@ describe('the host wiring a run attaches', () => {
         expect(detach).toHaveBeenCalledTimes(1);
         const state = yield* session.runHistory.load(runId).pipe(Effect.orDie);
         expect(state?.phase ?? null).toBeNull();
-        const lease = session.followUps.claimLive(runId, 'loop');
-        expect(lease).not.toBeNull();
-        if (lease) session.followUps.release(lease, 'recoverable');
+        // Its reader ended: a next generation opens one.
+        yield* Effect.scoped(session.followUps.open(runId));
       }).pipe(Effect.provide(NodeFileSystem.layer)),
   );
 

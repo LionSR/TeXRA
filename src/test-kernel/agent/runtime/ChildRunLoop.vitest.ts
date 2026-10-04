@@ -331,18 +331,16 @@ describe('childRunLoop E2E fixtures', () => {
           Effect.fail(new Error('Engine startup failed')),
         );
         let stop: ReturnType<typeof session.runs.stop> | undefined;
-        // The stop lands inside loop setup, after the queue claim and before
-        // the launch.
-        const claimChildRun = session.followUps.claimChildRun.bind(
-          session.followUps,
-        );
+        // The stop lands inside loop setup, once its target is reserved and
+        // before the launch.
+        const reserve = session.runs.reserveChildActivation.bind(session.runs);
         const claim = vi
-          .spyOn(session.followUps, 'claimChildRun')
-          .mockImplementationOnce((id) => {
-            const lease = claimChildRun(id);
+          .spyOn(session.runs, 'reserveChildActivation')
+          .mockImplementationOnce((activation) => {
+            const release = reserve(activation);
             if (outcome === RUN_OUTCOME.CANCELLED)
               stop = session.runs.stop(runId, { reason: 'user' });
-            return lease;
+            return release;
           });
         const loop = yield* startLoop(runId, {
           ...createTerminalStrategy('Engine startup', launch),
@@ -409,11 +407,16 @@ describe('childRunLoop E2E fixtures', () => {
         const releaseSessionOwnership = vi.fn();
         trackChildHandle(runId, PARENT_RUN_ID);
         const interruptRun = vi.spyOn(session.runs, 'interrupt');
-        const registerLoop = vi
-          .spyOn(session.followUps, 'claimChildRun')
-          .mockImplementationOnce(() => {
-            throw new Error('loop registration failed');
-          });
+        // The setup's own step fails: the handle refuses the process slot.
+        Object.defineProperty(
+          session.runs.getHandle(runId),
+          'backgroundProcess',
+          {
+            set: () => {
+              throw new Error('loop registration failed');
+            },
+          },
+        );
         const { strategy } = createFakeStrategy();
 
         try {
@@ -431,7 +434,7 @@ describe('childRunLoop E2E fixtures', () => {
           expect(error.message).toContain('loop registration failed');
 
           expect(releaseSessionOwnership).toHaveBeenCalledOnce();
-          expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+          expect(session.runs.isLive(runId)).toBe(false);
           // The failed setup left no generation fiber behind, and the
           // shutdown drain reaches nothing of it.
           expect(session.runs.interrupt(runId)).toBe(false);
@@ -440,7 +443,6 @@ describe('childRunLoop E2E fixtures', () => {
           expect(interruptRun).not.toHaveBeenCalled();
           expect(yield* queuedFollowUps(session, runId)).toEqual([]);
         } finally {
-          registerLoop.mockRestore();
           interruptRun.mockRestore();
         }
       }),
@@ -494,7 +496,6 @@ describe('childRunLoop E2E fixtures', () => {
           childRun,
         });
 
-        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
         // The loop body is a generation on the run's lane: it starts once
         // the lane admits it, not inside `startChildRunLoop`.
         yield* Deferred.await(launched);
@@ -504,7 +505,7 @@ describe('childRunLoop E2E fixtures', () => {
         // ends the loop as interrupted and it finalizes CANCELLED.
         yield* Fiber.join(loop);
         expect(aborted).toHaveBeenCalledOnce();
-        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+        expect(session.runs.isLive(runId)).toBe(false);
         expect(releaseSessionOwnership).toHaveBeenCalledOnce();
         expect(session.runs.getHandle(runId)).toBeUndefined();
       }),
@@ -675,7 +676,7 @@ describe('childRunLoop E2E fixtures', () => {
           expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual(progressQueue);
           expect(mocks.submitFollowUp).not.toHaveBeenCalled();
         } finally {
-          session.followUps.terminalize(PARENT_RUN_ID);
+          session.followUps.closeInput(PARENT_RUN_ID);
           yield* session.runs['detachActiveChildren'](PARENT_RUN_ID);
           yield* Deferred.succeed<FakeTurn, Error>(turn, {
             kind: 'terminal',
@@ -712,15 +713,14 @@ describe('childRunLoop E2E fixtures', () => {
     () =>
       Effect.gen(function* () {
         const retryRunId = loopRunId();
-        const parentLease = session.followUps.claimLive(PARENT_RUN_ID, 'loop')!;
+        yield* session.followUps.open(PARENT_RUN_ID);
         const admissions: string[] = [];
         mocks.submitFollowUp.mockImplementation(
           (targetRunId, followUp, options) =>
             Effect.gen(function* () {
-              const admission = yield* options.session.followUps.submit(
+              const admission = yield* options.session.followUps.send(
                 targetRunId,
                 followUp,
-                'live_owner',
               );
               admissions.push(admission.kind);
               return admission.kind === 'duplicate' ||
@@ -733,34 +733,27 @@ describe('childRunLoop E2E fixtures', () => {
             }),
         );
 
-        try {
+        yield* Fiber.join(
+          yield* startLoop(retryRunId, createTerminalStrategy('First attempt')),
+        );
+        expect(session.runs.isLive(retryRunId)).toBe(false);
+
+        expect(
           yield* Fiber.join(
             yield* startLoop(
               retryRunId,
-              createTerminalStrategy('First attempt'),
+              createTerminalStrategy('Retry attempt'),
             ),
-          );
-          expect(session.followUps.hasLiveOwner(retryRunId)).toBe(false);
-
-          expect(
-            yield* Fiber.join(
-              yield* startLoop(
-                retryRunId,
-                createTerminalStrategy('Retry attempt'),
-              ),
-            ),
-          ).toEqual({ kind: 'terminal', value: 'done' });
-          expect(admissions).toEqual(['duplicate', 'duplicate']);
-          const delivered = yield* queuedFollowUps(session, PARENT_RUN_ID);
-          expect(delivered.map((item) => item.text)).toEqual([
-            'delivered:done',
-            'delivered:done',
-          ]);
-          expect(delivered[1]?.followUpId).not.toBe(delivered[0]?.followUpId);
-          expect(session.followUps.hasLiveOwner(retryRunId)).toBe(false);
-        } finally {
-          session.followUps.release(parentLease, 'recoverable');
-        }
+          ),
+        ).toEqual({ kind: 'terminal', value: 'done' });
+        expect(admissions).toEqual(['duplicate', 'duplicate']);
+        const delivered = yield* queuedFollowUps(session, PARENT_RUN_ID);
+        expect(delivered.map((item) => item.text)).toEqual([
+          'delivered:done',
+          'delivered:done',
+        ]);
+        expect(delivered[1]?.followUpId).not.toBe(delivered[0]?.followUpId);
+        expect(session.runs.isLive(retryRunId)).toBe(false);
       }),
   );
 
@@ -784,10 +777,9 @@ describe('childRunLoop E2E fixtures', () => {
         { agentName: 'fake-cli' },
       );
 
-      expect(session.followUps.hasLiveOwner(runId)).toBe(true);
       yield* rejectTurn(1, new Error('initial turn failed'));
       yield* Fiber.join(loop);
-      expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+      expect(session.runs.isLive(runId)).toBe(false);
       expect(releaseSessionOwnership).toHaveBeenCalledOnce();
     }),
   );
@@ -801,7 +793,6 @@ describe('childRunLoop E2E fixtures', () => {
 
         const loop = yield* startLoop(runId, strategy);
 
-        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
         yield* turnStarted(1);
 
         yield* stopChildRun(runId);
@@ -840,7 +831,6 @@ describe('childRunLoop E2E fixtures', () => {
           onTurnSuccess,
         });
 
-        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
 
         yield* Deferred.await(deliveryStarted);
@@ -859,12 +849,11 @@ describe('childRunLoop E2E fixtures', () => {
 
         // Enqueue a follow-up on the same queue the loop is now blocked on.
         expect(
-          yield* session.followUps.submit(
-            runId,
-            { text: 'keep going', from: { kind: 'user' as const } },
-            'live_owner',
-          ),
-        ).toEqual({ kind: 'queued' });
+          yield* session.followUps.send(runId, {
+            text: 'keep going',
+            from: { kind: 'user' as const },
+          }),
+        ).toMatchObject({ kind: 'queued' });
         expect(callCount()).toBe(1);
 
         yield* Deferred.succeed(deliveryCompleted, undefined);
@@ -881,7 +870,7 @@ describe('childRunLoop E2E fixtures', () => {
           expect.objectContaining({ text: 'delivered:final' }),
           expect.anything(),
         );
-        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+        expect(session.runs.isLive(runId)).toBe(false);
       }),
   );
 
@@ -902,7 +891,6 @@ describe('childRunLoop E2E fixtures', () => {
         trackedRunIds.add(runId);
         const loop = yield* startLoop(runId, strategy, { childRun });
 
-        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
 
         // Blocked between turns the run is idle, and the phase row says so: a
@@ -917,11 +905,10 @@ describe('childRunLoop E2E fixtures', () => {
           kind: 'queue',
         });
 
-        yield* session.followUps.submit(
-          runId,
-          { text: 'keep going', from: { kind: 'user' as const } },
-          'live_owner',
-        );
+        yield* session.followUps.send(runId, {
+          text: 'keep going',
+          from: { kind: 'user' as const },
+        });
         yield* turnStarted(2);
         yield* session.settlePublications();
         expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);
@@ -948,11 +935,10 @@ describe('childRunLoop E2E fixtures', () => {
         const loop = yield* startLoop(runId, strategy, { childRun });
 
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
-        yield* session.followUps.submit(
-          runId,
-          { text: 'keep going', from: { kind: 'user' as const } },
-          'live_owner',
-        );
+        yield* session.followUps.send(runId, {
+          text: 'keep going',
+          from: { kind: 'user' as const },
+        });
         yield* turnStarted(2);
 
         mocks.persistChildRunDelivery.mockImplementation(() =>
@@ -962,7 +948,7 @@ describe('childRunLoop E2E fixtures', () => {
 
         expect(Exit.isFailure(yield* Fiber.await(loop))).toBe(true);
         expect(yield* queuedTexts(runId)).toEqual(['keep going']);
-        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+        expect(session.runs.isLive(runId)).toBe(false);
       }),
   );
 
@@ -991,7 +977,6 @@ describe('childRunLoop E2E fixtures', () => {
           { childRun },
         );
 
-        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
         yield* turnStarted(1);
         // Stop the loop, then let the in-flight turn resolve normally (not
         // aborted) — mirrors a turn that was already past its own
@@ -1000,7 +985,7 @@ describe('childRunLoop E2E fixtures', () => {
         yield* resolveTurn(1, { kind: 'terminal', value: 'late' });
 
         yield* Fiber.join(loop);
-        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+        expect(session.runs.isLive(runId)).toBe(false);
         expect(yield* getRunRecords(session, runId).readReport()).toBe(
           'delivered:late',
         );
@@ -1023,7 +1008,6 @@ describe('childRunLoop E2E fixtures', () => {
 
         const loop = yield* startLoop(runId, strategy);
 
-        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
 
         yield* Deferred.await(delivered);
@@ -1036,7 +1020,7 @@ describe('childRunLoop E2E fixtures', () => {
 
         const exit = yield* Fiber.await(loop);
         expect(Exit.isFailure(exit)).toBe(true);
-        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+        expect(session.runs.isLive(runId)).toBe(false);
         // Only the one interim delivery — the kill did not spawn another turn.
         expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
       }),
@@ -1067,8 +1051,6 @@ describe('childRunLoop E2E fixtures', () => {
 
         const loop = yield* startLoop(runId, strategy, { childRun });
 
-        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
-
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
         yield* Deferred.await(delivered);
         expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
@@ -1081,7 +1063,7 @@ describe('childRunLoop E2E fixtures', () => {
 
         const exit = yield* Fiber.await(loop);
         expect(Exit.isFailure(exit)).toBe(true);
-        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+        expect(session.runs.isLive(runId)).toBe(false);
 
         // Metadata failure must not retain the child handle or queue ownership.
         expect(session.runs.getHandle(runId)).toBeUndefined();
@@ -1136,7 +1118,7 @@ describe('childRunLoop E2E fixtures', () => {
         const exit = yield* Fiber.await(loop);
         expect(Exit.isFailure(exit)).toBe(true);
         expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
-        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+        expect(session.runs.isLive(runId)).toBe(false);
         yield* stop.settlement;
       }),
   );
@@ -1188,7 +1170,7 @@ describe('childRunLoop E2E fixtures', () => {
 
         yield* Deferred.succeed(releaseWake, undefined);
         yield* Fiber.join(loop);
-        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+        expect(session.runs.isLive(runId)).toBe(false);
       }),
   );
 
@@ -1208,18 +1190,16 @@ describe('childRunLoop E2E fixtures', () => {
 
         const loop = yield* startLoop(runId, strategy);
 
-        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
         yield* Deferred.await(firstDelivered);
         expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
 
         expect(
-          yield* session.followUps.submit(
-            runId,
-            { text: 'resume please', from: { kind: 'user' as const } },
-            'live_owner',
-          ),
-        ).toEqual({ kind: 'queued' });
+          yield* session.followUps.send(runId, {
+            text: 'resume please',
+            from: { kind: 'user' as const },
+          }),
+        ).toMatchObject({ kind: 'queued' });
 
         const resumeFailure = new Error('resume storage unreadable');
         yield* rejectTurn(2, resumeFailure);
@@ -1231,7 +1211,7 @@ describe('childRunLoop E2E fixtures', () => {
           expect.anything(),
         );
         expect(errors).toContain(resumeFailure);
-        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+        expect(session.runs.isLive(runId)).toBe(false);
       }),
   );
 
@@ -1244,7 +1224,6 @@ describe('childRunLoop E2E fixtures', () => {
 
         const loop = yield* startLoop(runId, strategy);
 
-        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
         yield* resolveTurn(1, { kind: 'error-turn', value: 'oops' });
 
         yield* Fiber.join(loop);
@@ -1253,7 +1232,7 @@ describe('childRunLoop E2E fixtures', () => {
           expect.objectContaining({ text: 'error:oops' }),
           expect.anything(),
         );
-        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+        expect(session.runs.isLive(runId)).toBe(false);
       }),
   );
 
@@ -1290,10 +1269,9 @@ describe('childRunLoop E2E fixtures', () => {
           onTurnSettled: interruptAfterFailure,
         });
 
-        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
         yield* rejectTurn(1, new Error('turn blew up'));
         yield* Fiber.join(loop);
-        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+        expect(session.runs.isLive(runId)).toBe(false);
 
         yield* Effect.all(stopSettlements, { discard: true });
         expect(interruptAfterFailure).toHaveBeenCalledOnce();
@@ -1363,8 +1341,8 @@ describe('childRunLoop E2E fixtures', () => {
 
           yield* Deferred.await(firstStarted);
           // One slot: the second child's turn must not start while the first
-          // holds it — even after its loop has acquired its queue lease.
-          expect(session.followUps.hasLiveOwner(second)).toBe(true);
+          // holds it, although its generation is live.
+          expect(session.runs.isLive(second)).toBe(true);
           // The loop offers no in-fiber hook for "parked on the permit", so one
           // macrotask is the window this negative assertion needs.
           yield* settle;

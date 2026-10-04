@@ -1,18 +1,17 @@
-import { Cause, Deferred, Effect, Exit, Fiber, Result } from 'effect';
+import { Deferred, Effect, Fiber, Result } from 'effect';
 
 /**
  * The one resume entry point. Every host continues a persisted run through
- * it, including implicit follow-up wakes. It claims recovery (the wake an
- * admission reserved, or a fresh one), gives back whatever the launched run
- * did not take over, and launches on the run lane. Recovered children use
- * the same continuous delivery driver as newly launched children and
+ * it, including implicit follow-up wakes, and a second resume of the same
+ * run joins the one in flight (`Inbox.resumeOnce`). It launches on the run
+ * lane; the launched run opens its own reader. Recovered children use the
+ * same continuous delivery driver as newly launched children and
  * acknowledge each resumed turn separately.
  */
 import {
   recordRunRefusal,
   type FollowUpFailureReason,
 } from '@agent/followUp/ToolUseFollowUp';
-import type { FollowUpConsumerLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
   getRunRecords,
   owningCall,
@@ -110,11 +109,10 @@ function namesUnusableCheckpoint(error: unknown): boolean {
 }
 
 /**
- * Resume a stream through the single host entry path. Recovery is claimed
- * when the program starts, before the stream-to-run index performs I/O, and
- * every exit that leaves the run without it gives it back: the resume is the
- * one party that releases what it claimed. The resume is on the session's
- * `Runs`, provided here from that one session.
+ * Resume a stream through the single host entry path. A run live here is
+ * refused before anything is read; one being resumed already is joined.
+ * The resume is on the session's `Runs`, provided here from that one
+ * session.
  */
 export const resumeRun = Effect.fn('resumeRun')(function* (
   runId: RunId,
@@ -132,103 +130,88 @@ export const resumeRun = Effect.fn('resumeRun')(function* (
     ).pipe(withLogChannel(CHANNEL));
     return yield* resumeRun(owner.parentRunId, options);
   }
-  const recovery = session.followUps.claimRecovery(runId, true);
-  if (!recovery) return REFUSED;
-  // Set once a launched run owns the recovery: it gives that back itself.
-  let owned = false;
-  return yield* Effect.gen(function* (): Effect.fn.Return<
-    ResumeRunResult,
-    Error,
-    AgentRunServices
-  > {
-    const store = getRunRecords(session, runId);
-    const [config, exists] = yield* Effect.all([
-      store.readConfig(),
-      store.exists(),
-    ]);
-    if (!config || !exists) {
-      yield* endUnstartedRecovery(session, recovery);
-      return REFUSED;
-    }
-    // A run deleted during those reads took the claim with it.
-    if (cancelled() || !session.followUps.useRecovery(recovery)) return REFUSED;
-    // A workflow run takes no input: no queue to keep, and its resume is its
-    // whole run below.
-    if (config.agentCategory !== AgentCategory.ToolUse)
-      session.followUps.release(recovery, 'terminal');
-    const retrieved = yield* retrieveSessionResumeData(runId, config, session);
-    if (cancelled()) return REFUSED;
-    if (!retrieved) {
-      // Given back before the classification reads the claim it took.
-      session.followUps.release(recovery, 'recoverable');
-      const classification = yield* classifyRun(runId, session);
-      return {
-        failed: yield* recordRunRefusal(runId, session, classification),
-      };
-    }
-    const resume = retrieved;
-    const claim = options.onResumeResolved
-      ? yield* session.claimOwner(runId)
-      : undefined;
-    yield* session.clearUnreadable(runId);
-    // A claim whose owner is this process, or provably dead, is one the resume
-    // takes over; anything else is another live TeXRA process's run.
-    const standing = claim && claimStanding(claim);
-    if (standing?.kind === 'held') {
-      yield* session.markUnreadable(
-        runId,
-        runHeldMessage(ownerPid(standing.owner)),
-      );
-      return { failed: 'owned_elsewhere' };
-    }
-    // An agent or plugin this process cannot run now leaves the run
-    // interrupted with the reason (D5), for the session's follower to
-    // resume once it is back; nothing is launched. Another process's run
-    // is refused as such above, whatever this process lacks.
-    const blocker = yield* resumeBlocker(session, config);
-    yield* session.markResumeBlocked(
-      runId,
-      blocker === null ? null : { reason: blocker, retry: true },
-    );
-    if (blocker !== null) return { failed: 'blocked' };
-    if (options.onResumeResolved) {
-      yield* options.onResumeResolved(runId);
-      if (cancelled()) return REFUSED;
-    }
-    if (config.agentCategory === AgentCategory.ToolUse) {
-      return yield* resumeQueuedToolUse(
-        session,
-        resume,
-        recovery,
-        options,
-        () => {
-          owned = true;
-        },
-      );
-    }
-    if (cancelled()) return REFUSED;
-    const launched = yield* Effect.result(
-      session.runs.launchRun(
-        runId,
-        resumeToolUseFromResumeData(resume, runLaunchOptions(options)),
-      ),
-    );
-    if (Result.isFailure(launched)) {
-      const refused = yield* refusalFor(launched.failure, session, runId);
-      if (refused) return refused;
-      return yield* Effect.fail(launched.failure);
-    }
-    const result = launched.success;
-    return { started: true, delivered: true, outcome: result.outcome, result };
-  }).pipe(
-    Effect.ensuring(
-      Effect.sync(() => {
-        if (!owned) session.followUps.release(recovery, 'recoverable');
-      }),
-    ),
-    Effect.provideService(Runs, session.runs),
+  return yield* session.followUps.resumeOnce(
+    runId,
+    resumeHere(runId, options).pipe(Effect.provideService(Runs, session.runs)),
   );
 }, Effect.uninterruptible);
+
+/** One resume of a run no generation here holds. */
+const resumeHere = Effect.fn('resumeHere')(function* (
+  runId: RunId,
+  options: ResumeRunOptions,
+): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices> {
+  const session = options.session;
+  const cancelled = () => options.isCancellationRequested?.() === true;
+  if (session.runs.isLive(runId)) return REFUSED;
+  const store = getRunRecords(session, runId);
+  const [config, exists] = yield* Effect.all([
+    store.readConfig(),
+    store.exists(),
+  ]);
+  if (!config || !exists) {
+    // A run whose records are gone: with nothing queued its input ends.
+    session.followUps.closeInput(runId);
+    return REFUSED;
+  }
+  // Deleted, or its input closed, while those reads ran.
+  if (cancelled() || session.events.inputClosed(aggregateId('run', runId)))
+    return REFUSED;
+  const retrieved = yield* retrieveSessionResumeData(runId, config, session);
+  if (cancelled()) return REFUSED;
+  if (!retrieved) {
+    const classification = yield* classifyRun(runId, session);
+    return {
+      failed: yield* recordRunRefusal(runId, session, classification),
+    };
+  }
+  const resume = retrieved;
+  const claim = options.onResumeResolved
+    ? yield* session.claimOwner(runId)
+    : undefined;
+  yield* session.clearUnreadable(runId);
+  // A claim whose owner is this process, or provably dead, is one the resume
+  // takes over; anything else is another live TeXRA process's run.
+  const standing = claim && claimStanding(claim);
+  if (standing?.kind === 'held') {
+    yield* session.markUnreadable(
+      runId,
+      runHeldMessage(ownerPid(standing.owner)),
+    );
+    return { failed: 'owned_elsewhere' };
+  }
+  // An agent or plugin this process cannot run now leaves the run
+  // interrupted with the reason (D5), for the session's follower to
+  // resume once it is back; nothing is launched. Another process's run
+  // is refused as such above, whatever this process lacks.
+  const blocker = yield* resumeBlocker(session, config);
+  yield* session.markResumeBlocked(
+    runId,
+    blocker === null ? null : { reason: blocker, retry: true },
+  );
+  if (blocker !== null) return { failed: 'blocked' };
+  if (options.onResumeResolved) {
+    yield* options.onResumeResolved(runId);
+    if (cancelled()) return REFUSED;
+  }
+  if (config.agentCategory === AgentCategory.ToolUse) {
+    return yield* resumeQueuedToolUse(session, resume, options);
+  }
+  if (cancelled()) return REFUSED;
+  const launched = yield* Effect.result(
+    session.runs.launchRun(
+      runId,
+      resumeToolUseFromResumeData(resume, runLaunchOptions(options)),
+    ),
+  );
+  if (Result.isFailure(launched)) {
+    const refused = yield* refusalFor(launched.failure, session, runId);
+    if (refused) return refused;
+    return yield* Effect.fail(launched.failure);
+  }
+  const result = launched.success;
+  return { started: true, delivered: true, outcome: result.outcome, result };
+});
 
 /** What every resumed run takes from the resume's caller. */
 const runLaunchOptions = (options: ResumeRunOptions) => ({
@@ -249,31 +232,6 @@ const queuedFollowUps = (session: SessionHandle, runId: RunId) =>
         catch: ensureError,
       }),
   );
-
-const warnUnreadable = (runId: RunId, failure: unknown): Effect.Effect<void> =>
-  Effect.logWarning(
-    `Run ${runId}: its queued follow-ups could not be read; keeping it recoverable`,
-  ).pipe(Effect.annotateLogs({ data: failure }), withLogChannel(CHANNEL));
-
-/**
- * A run whose records are gone: with nothing queued its input ends; durable
- * queued input or an unreadable fold keeps it recoverable.
- */
-const endUnstartedRecovery = Effect.fn('endUnstartedRecovery')(function* (
-  session: SessionHandle,
-  recovery: FollowUpConsumerLease,
-) {
-  const queued = yield* queuedFollowUps(session, recovery.runId).pipe(
-    Effect.map((followUps) => followUps.length > 0),
-    Effect.catch((failure) =>
-      warnUnreadable(recovery.runId, failure).pipe(Effect.as(true)),
-    ),
-  );
-  const current = session.followUps.useRecovery(recovery);
-  if (!current) return;
-  if (queued) session.followUps.release(current, 'recoverable');
-  else session.followUps.terminalize(current.runId);
-});
 
 /** Classify the expected launch refusals; unexpected failures propagate. */
 function refusalFor(
@@ -305,20 +263,16 @@ function refusalFor(
 }
 
 /**
- * Admit input under recovery, then launch. The launched run owns the queue
- * (a child through its delivery driver, a root through its own exit) and
- * acknowledges this batch at its first idle turn without ending its lifetime;
- * `handOff` tells the caller the run has taken the recovery over.
+ * Launch a conversation with its queued input. The launched run reads that
+ * input itself and acknowledges this batch at its first idle turn without
+ * ending its lifetime.
  */
 const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   session: SessionHandle,
   resume: ResumeData,
-  queueLease: FollowUpConsumerLease,
   options: ResumeRunOptions,
-  handOff: () => void,
 ): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices> {
   const runId = resume.runId;
-  const followUps = session.followUps;
 
   // Do not revive a generation while its stop is settling: a live run registry
   // entry is a run whose fiber has not settled yet.
@@ -329,20 +283,6 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   const isAdmitted = (input: { readonly followUpId: string }): boolean =>
     admitted.has(input.followUpId);
   const queuedInput = queuedFollowUps(session, runId);
-  // A root holds no lease of its own: its exit releases this one by the rows.
-  const releaseRecovery = (exit: Exit.Exit<RunEndResult, Error>) =>
-    queuedInput.pipe(
-      Effect.map((queued) => queued.length > 0),
-      Effect.catchCause((cause) =>
-        warnUnreadable(runId, Cause.squash(cause)).pipe(Effect.as(true)),
-      ),
-      Effect.map((queued) =>
-        followUps.release(
-          queueLease,
-          Exit.isSuccess(exit) && !queued ? 'terminal' : 'recoverable',
-        ),
-      ),
-    );
   const resumed = yield* Effect.result(
     Effect.gen(function* () {
       for (const input of yield* queuedInput) admitted.add(input.followUpId);
@@ -357,15 +297,10 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
       const parentRunId = yield* persistedParentRunId(session, runId);
       let completion: Fiber.Fiber<RunEndResult | undefined, Error>;
       if (parentRunId === undefined) {
-        // Released on the run's own fiber, before it leaves the registry, so a
-        // run no longer live here holds no lease; a refused launch never ran.
         const root = yield* session.runs.launch(
           runId,
-          resumeToolUseFromResumeData(resume, {
-            ...launchOptions,
-            onIdle,
-          }).pipe(Effect.onExit(releaseRecovery)),
-          Effect.onError((cause) => releaseRecovery(Exit.failCause(cause))),
+          resumeToolUseFromResumeData(resume, { ...launchOptions, onIdle }),
+          (admitted) => admitted,
         );
         rootCompletion = Fiber.join(root).pipe(Effect.map((r) => r.outcome));
         completion = root;
@@ -387,7 +322,6 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
           session,
           runId,
           parentRunId,
-          queueLease,
           agentName: resume.agentConfig.agent,
           budgeted: true,
           ...(script === null
@@ -401,9 +335,8 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
               }),
         });
       }
-      // The run owns this queue until termination. Interrupting either
-      // observation below cannot interrupt that transferred run lifetime.
-      handOff();
+      // Interrupting either observation below cannot interrupt the
+      // launched run's lifetime.
       return yield* Effect.raceFirst(
         Deferred.await(idle).pipe(
           Effect.as(RUN_PHASE.WAITING),

@@ -15,7 +15,7 @@ import {
   runHeldMessage,
   runUnreadableMessage,
 } from '@shared/runs/runStatusDisplay';
-import type { FollowUpQueueInput } from './ToolUseFollowUpQueueManager';
+import type { InboxItem } from './Inbox';
 
 /**
  * Why a submission could not be admitted, worded for the user by
@@ -167,17 +167,22 @@ export function resumeOnSession(
 }
 
 /**
- * Wake a run whose follow-up row is already durable: true when the run took
- * the resume ({@link resumeOnSession}), whether or not the caller stays for
- * the answer.
+ * Wake a run whose follow-up row is already durable: true when a generation
+ * here reads it, either one already live (the wake was owed when the row
+ * landed, and another has started since) or the one the resume
+ * ({@link resumeOnSession}) started.
  */
 export function startFollowUpWake(
   runId: RunId,
   session: SessionHandle,
 ): Effect.Effect<boolean> {
-  return Effect.map(
-    resumeOnSession(runId, session),
-    (result) => 'started' in result && result.delivered,
+  return Effect.suspend(() =>
+    session.runs.isLive(runId)
+      ? Effect.succeed(true)
+      : Effect.map(
+          resumeOnSession(runId, session),
+          (result) => 'started' in result && result.delivered,
+        ),
   );
 }
 
@@ -188,15 +193,13 @@ type Admission =
 
 /**
  * Route and admit one submission. Synchronous from the registry snapshot to
- * the admission decision: two submissions to one run cannot interleave
- * between the target lookup and the admission, which is what keeps the
- * recovery claim single-owner without a per-run lock. The row is durable
- * before anything is acknowledged or woken. A resumed model turn completes
- * after this returns, so it cannot block later input from joining its queue.
+ * the send: the row is durable before anything is acknowledged or woken. A
+ * resumed model turn completes after this returns, so it cannot block later
+ * input from joining the run's queue.
  */
 function admitFollowUp(
   runId: RunId,
-  item: FollowUpQueueInput,
+  item: InboxItem,
   options: SubmitFollowUpOptions,
   ownerSession: SessionHandle,
 ): Effect.Effect<Admission, Error> {
@@ -211,67 +214,41 @@ function admitFollowUp(
         Effect.as<Admission>({ status: 'no_session' }),
       );
     }
-
-    if (target.kind === 'active') {
-      // A child loop remains the owner during active inner turns, so input
-      // joins its ordered queue rather than creating a second turn driver.
-      return Effect.map(
-        ownerSession.followUps.submit(runId, item, 'live_owner'),
-        (submission): Admission => {
-          if (submission.kind === 'duplicate') return { status: 'sent' };
-          if (submission.kind === 'delivered_live') {
-            return {
-              status: options.mode === 'live_notification' ? 'queued' : 'sent',
-            };
-          }
-          if (submission.kind === 'queued') return { status: 'queued' };
-          // The queue is the only way in. A refusal here means another process
-          // holds the run, or the session has no entry for it (terminalized by
-          // a run deletion, or terminally released) or is disposed: the run's
-          // controls may still be attached during teardown, but the
-          // continuation boundary that owns it is gone.
-          return {
-            status: 'failed',
-            reason: submission.reason ?? 'not_resumable',
-          };
-        },
-      );
-    }
-
+    // A running loop reads it at its next park; a notification never
+    // revives a persisted run.
+    if (options.mode === 'live_notification')
+      return admitQueued(runId, item, 'quiet', ownerSession);
     return admitQueued(
       runId,
       item,
-      options.mode === 'live_notification' ? 'live_owner' : 'recoverable',
+      target.kind === 'active' ? 'live' : 'wake',
       ownerSession,
     );
   });
 }
 
 /**
- * Queue a submission on a run no running loop here holds: a waiting or resuming
- * run, or one a user's message continues. A `recoverable` admission reserves
- * the run's recovery when no consumer holds it, and that reservation wakes it.
+ * Queue a submission on the run. `live`: a running loop holds it, and one
+ * reading here makes it `sent`. `wake`: a run no generation here holds is
+ * owed a resume, which the caller starts. `quiet`: queued, nothing more.
  */
 function admitQueued(
   runId: RunId,
-  item: FollowUpQueueInput,
-  admission: 'live_owner' | 'recoverable',
+  item: InboxItem,
+  mode: 'live' | 'wake' | 'quiet',
   ownerSession: SessionHandle,
 ): Effect.Effect<Exclude<Admission, { status: 'no_session' }>, Error> {
   return Effect.map(
-    ownerSession.followUps.submit(runId, item, admission),
-    (submission) => {
-      if (submission.kind === 'duplicate') return { status: 'sent' };
-      if (submission.kind === 'refused') {
-        return {
-          status: 'failed',
-          reason: submission.reason ?? 'not_resumable',
-        };
+    ownerSession.followUps.send(runId, item, { wake: mode === 'wake' }),
+    (sent) => {
+      if (sent.kind === 'duplicate') return { status: 'sent' };
+      if (sent.kind === 'refused') {
+        // Another process holds the run, or its input is closed (deleted,
+        // or torn down with nothing queued), or the session is disposed.
+        return { status: 'failed', reason: sent.reason ?? 'not_resumable' };
       }
-      if (submission.kind !== 'queued' || !submission.wake) {
-        return { status: 'queued' };
-      }
-      return { resume: startFollowUpWake(runId, ownerSession) };
+      if (sent.wake) return { resume: startFollowUpWake(runId, ownerSession) };
+      return { status: mode === 'live' && sent.read ? 'sent' : 'queued' };
     },
   );
 }
@@ -333,7 +310,7 @@ export function recordRunRefusal(
 
 export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   runId: RunId,
-  item: FollowUpQueueInput,
+  item: InboxItem,
   options: SubmitFollowUpOptions,
 ): Effect.fn.Return<SubmitFollowUpResult, Error> {
   const ownerSession = options.session;
@@ -356,7 +333,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
         reason: yield* recordRunRefusal(runId, ownerSession, classification),
       };
     }
-    dispatch = yield* admitQueued(runId, item, 'recoverable', ownerSession);
+    dispatch = yield* admitQueued(runId, item, 'wake', ownerSession);
   } else {
     dispatch = routed;
   }

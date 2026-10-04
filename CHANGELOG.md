@@ -690,6 +690,12 @@ show` print the same notice, and the new `texra agents customize`,
   `texra history` marks a task resumable exactly when `texra resume` would
   continue it: a task that was killed before its first step is now listed
   as resumable, and a failed workflow is no longer hidden from `/resume`.
+- **A message to a task that is waking up is no longer refused.** A message
+  sent while a task is being resumed, or a second Resume, joins the resume
+  already under way instead of reporting "This run cannot accept messages
+  right now". A GitHub event or an agent's progress note for a task that is
+  not running in this window is kept for its next turn instead of dropped.
+  A message to an agent that is waiting for input now reports "Sent".
 - **Interrupted tasks now resume reliably after a crash at any point.** A
   task, an agent it started or a background script that was killed just
   after it started now resumes from the beginning instead of showing as

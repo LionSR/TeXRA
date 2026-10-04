@@ -290,13 +290,12 @@ describe('ExecutionsTool', () => {
           mocks.readReport.mockResolvedValue(
             '<subagent-result>full report</subagent-result>',
           );
-          session.followUps.claimLive(parentRunId, 'loop');
           const delivery = {
             text: 'child result',
             from: { kind: 'run' as const, runId: childRunId },
             deliveryId: `${childRunId}:turn:1:delivery`,
           };
-          yield* session.followUps.submit(parentRunId, delivery, 'live_owner');
+          yield* session.followUps.send(parentRunId, delivery);
           expect(
             session.events.pendingFollowUps(aggregateId('run', parentRunId)),
           ).toHaveLength(1);
@@ -319,13 +318,9 @@ describe('ExecutionsTool', () => {
             session.events.pendingFollowUps(aggregateId('run', parentRunId)),
           ).toEqual([]);
           // The child loop's replayed wake finds the row consumed.
-          expect(
-            yield* session.followUps.submit(
-              parentRunId,
-              delivery,
-              'live_owner',
-            ),
-          ).toEqual({ kind: 'duplicate' });
+          expect(yield* session.followUps.send(parentRunId, delivery)).toEqual({
+            kind: 'duplicate',
+          });
           expect(
             session.events.pendingFollowUps(aggregateId('run', parentRunId)),
           ).toEqual([]);

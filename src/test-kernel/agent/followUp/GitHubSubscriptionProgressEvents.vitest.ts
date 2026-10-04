@@ -285,7 +285,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
         const runId = 'stream-a' as RunId;
         const source = new RegistryTestSource();
         const session = yield* createTestSession();
-        session.followUps.claimLive(runId, 'loop');
+        yield* session.followUps.open(runId);
         const registry = createTestRegistry(source);
         yield* Effect.addFinalizer(() => closeSessionOf(session));
 
@@ -315,9 +315,9 @@ describe('GitHub subscription app signals and follow-ups', () => {
         const runId = 'stream-a' as RunId;
         const source = new RegistryTestSource();
         const firstSession = yield* createTestSession();
-        firstSession.followUps.claimLive(runId, 'loop');
+        yield* firstSession.followUps.open(runId);
         const secondSession = yield* createTestSession();
-        secondSession.followUps.claimLive(runId, 'loop');
+        yield* secondSession.followUps.open(runId);
         const registry = createTestRegistry(source);
         yield* Effect.addFinalizer(() => closeSessionOf(secondSession));
         yield* Effect.addFinalizer(() => closeSessionOf(firstSession));

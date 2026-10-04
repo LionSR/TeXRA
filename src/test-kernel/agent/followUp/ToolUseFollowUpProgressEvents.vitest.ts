@@ -83,7 +83,7 @@ describe('tool-use follow-up progress events', () => {
         const session = yield* trackSession();
         publishTestRunStart(session, runId);
         yield* session.settlePublications();
-        const lease = session.followUps.claimLive(runId, 'loop')!;
+        const input = yield* session.followUps.open(runId);
 
         trackRunControls({ session });
 
@@ -96,7 +96,6 @@ describe('tool-use follow-up progress events', () => {
         );
 
         expect(result).toEqual({ status: 'sent' });
-        const input = session.followUps.attachInput(runId, lease)!;
         expect(yield* input.take).toMatchObject({
           followUps: [
             {
@@ -152,7 +151,7 @@ describe('tool-use follow-up progress events', () => {
         );
         yield* Effect.addFinalizer(() =>
           Effect.sync(() =>
-            testDefaultSession().followUps.terminalize(resumingRunId),
+            testDefaultSession().followUps.closeInput(resumingRunId),
           ),
         );
 

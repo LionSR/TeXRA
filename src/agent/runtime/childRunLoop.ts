@@ -13,12 +13,8 @@ import {
   type RunRegistry,
 } from '@agent/runtime/runRegistry';
 import { endRunOutsideLifecycle } from '@agent/runtime/runLaunchGuard';
-import { FollowUpContinuationOwned } from '@agent/followUp/RunInput';
 import type { RunInput } from '@agent/followUp/RunInput';
-import type {
-  FollowUpConsumerLease,
-  FollowUpQueueInput,
-} from '@agent/followUp/ToolUseFollowUpQueueManager';
+import type { InboxItem } from '@agent/followUp/Inbox';
 import {
   startFollowUpWake,
   submitFollowUp,
@@ -236,8 +232,6 @@ export interface ChildRunStrategy<TTurn, R = never> {
 
 export interface ChildRunLoopParams<TTurn, R = never> {
   readonly session: SessionHandle;
-  /** The recovery boundary already claimed this queue before loading its rows. */
-  readonly queueLease?: FollowUpConsumerLease;
   /**
    * Presentation and finalization port for process-backed children (agent
    * CLIs, background bash). Native engines finalize their
@@ -245,8 +239,8 @@ export interface ChildRunLoopParams<TTurn, R = never> {
    */
   readonly childRun?: ChildRunPort;
   readonly parentRunId: RunId;
-  /** The child's run id: what the loop acquires the follow-up queue and
-   *  attaches its interrupt handler under, before the first turn runs. */
+  /** The child's run id: what the loop reads its input and attaches its
+   *  interrupt handler under. */
   readonly runId: RunId;
   readonly agentName: string;
   readonly strategy: ChildRunStrategy<TTurn, R>;
@@ -491,12 +485,11 @@ function commitPark(
  */
 interface PendingChildDelivery {
   readonly parent: RunParent;
-  readonly followUp: FollowUpQueueInput;
+  readonly followUp: InboxItem;
   /**
    * The parent follow-up row is already durable. `wake` means this process
-   * still has to wake the parent after this child's finalize; a deferred
-   * live offer has none, and the resubmit in `submitPendingDelivery` offers
-   * the durable row to the live parent at that same post-finalize point.
+   * still has to wake the parent after this child's finalize; a parent live
+   * here reads the held row once this child's terminal row folds.
    */
   readonly wake?: true;
 }
@@ -580,7 +573,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   const persisted = yield* Effect.exit(
     persistChildRunDelivery(params.session, runId, msg, resultMeta),
   );
-  const followUp: FollowUpQueueInput = {
+  const followUp: InboxItem = {
     text: msg,
     from: { kind: 'run', runId },
     deliveryId:
@@ -596,16 +589,14 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
       // settlement then still leaves the result on the parent, and a crash
       // before it re-executes the prompt under the same delivery id, which
       // admission judges a replay. A turn this loop finalizes after
-      // (failed, terminal, or a strategy with no next turn) defers the live
-      // offer until that finalize has run, so a live parent cannot wake and
-      // wait on a child that still reports RUNNING (#8093); the deferred
-      // resubmit in submitPendingDelivery offers the durable row then.
-      const finalizing = params.finalizing;
-      const submitted = yield* params.session.followUps.submit(
+      // (failed, terminal, or a strategy with no next turn) holds the row
+      // until this child has ended, so a live parent cannot take it and
+      // wait on a child that still reports RUNNING (#8093); the wake
+      // waits for that finalize too (submitPendingDelivery).
+      const submitted = yield* params.session.followUps.send(
         targetRunId,
         followUp,
-        'recoverable',
-        { liveOffer: finalizing ? 'deferred' : 'immediate' },
+        { wake: true, ...(params.finalizing ? { hold: 'senderEnd' } : {}) },
       );
       if (submitted.kind === 'refused') {
         yield* loopLog(
@@ -720,7 +711,6 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
   // The launch's unwind bookkeeping lives beside the generator, not inside
   // it: the `onExit` chained after it runs the same compensation when the
   // launch unwinds before the fork, so these stay in its scope.
-  let queueLease: FollowUpConsumerLease | undefined;
   let sessionStage: StageHandle | undefined;
   let releaseChildActivation: () => void = () => undefined;
   let releaseSessionOwnershipOnce: () => void = () => undefined;
@@ -738,10 +728,6 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
         const cleanupErrors: unknown[] = [];
         const cleanups = [
           () => sessionStage?.end(RUN_OUTCOME.FAILED),
-          () => {
-            if (queueLease)
-              runSession.followUps.release(queueLease, 'terminal');
-          },
           releaseChildActivation,
           releaseSessionOwnershipOnce,
         ];
@@ -791,31 +777,14 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
       strategy.releaseSessionOwnership?.();
     };
 
+    // A process child's driver reads its input; a native child's own
+    // loop does (it opens its reader as any run's loop does).
     let input!: RunInput;
 
-    // Fresh children already own their DB claim. Recovery retains its pending
-    // queue until the run lane acquires the claim and transfers it below.
-    const claimed = yield* Effect.exit(
-      Effect.gen(function* () {
-        // A stop sees the handle only from here, with its target reserved.
-        childRun?.track();
-        queueLease =
-          params.queueLease ?? runSession.followUps.claimChildRun(runId);
-        if (!queueLease)
-          return yield* new FollowUpContinuationOwned({
-            message: `Follow-up continuation already has an owner for child ${runId}.`,
-          });
-        if (!params.queueLease)
-          input = runSession.followUps.attachInput(runId, queueLease)!;
-      }),
-    );
-    if (Exit.isFailure(claimed)) {
-      return yield* Effect.fail(
-        yield* unwindSetup(Cause.squash(claimed.cause)),
-      );
-    }
     const setup = yield* Effect.exit(
       Effect.sync(() => {
+        // A stop sees the handle only from here, with its target reserved.
+        childRun?.track();
         if (strategy.ownsBackgroundProcess === true) {
           // The one handle slot shutdown drain reads (#8155): kill the
           // leaked OS process without touching the loop that reports it.
@@ -850,7 +819,7 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
           runSession.runs.getToolUseFollowUpTarget(targetRunId).kind !==
           'no_session'
         ) {
-          runSession.followUps.submitDetached(targetRunId, {
+          runSession.followUps.sendDetached(targetRunId, {
             text: formatSubagentProgress(runId, agentName, update),
             from: { kind: 'run', runId },
           });
@@ -903,18 +872,15 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
       let result: TTurn | undefined;
       yield* Effect.scoped(
         Effect.gen(function* () {
-          if (params.queueLease) {
-            // Only this lane's driver can adopt recovery, under the claim
-            // the loop took above.
-            queueLease = runSession.followUps.claimChildRun(
-              runId,
-              params.queueLease,
+          if (!strategy.continuous) {
+            const reader = yield* runSession.followUps.open(runId);
+            input = reader;
+            // Its end is the child's: it takes no more input here.
+            yield* Effect.addFinalizer(() =>
+              Effect.sync(() =>
+                runSession.followUps.release(runId, reader, true),
+              ),
             );
-            if (!queueLease)
-              return yield* Effect.fail(
-                new Error(`Child recovery ownership was lost for ${runId}.`),
-              );
-            input = runSession.followUps.attachInput(runId, queueLease)!;
           }
           let consumed: readonly QueuedFollowUp[] = [];
           let turnStart = yield* Clock.currentTimeMillis;
@@ -1135,11 +1101,8 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
                 // Debug-only driver diagnostic (#9531): how the loop ended.
                 yield* loopLog(trace, 'debug', 'childRunLoop loop.terminated', {
                   runId,
-                  ...(queueLease ? { queueOwner: queueLease.kind } : {}),
                   interruptionCause: terminationCause,
                 });
-                if (queueLease)
-                  runSession.followUps.release(queueLease, 'terminal');
                 // Re-read: a stop landing after the body's exit is still the
                 // run's terminal verdict.
                 const stoppedAtExit = stopped || loop.isInterrupted();
@@ -1199,15 +1162,14 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
                         ),
                       ),
                     );
-                    yield* runSession.followUps.submit(
+                    yield* runSession.followUps.send(
                       target,
                       {
                         text,
                         from: { kind: 'run', runId },
                         deliveryId: `${runId}:${attemptId}:stopped`,
                       },
-                      'recoverable',
-                      { liveOffer: 'none' },
+                      { hold: 'instruction' },
                     );
                   }
                 }

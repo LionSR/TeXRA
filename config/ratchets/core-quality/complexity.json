@@ -11,7 +11,6 @@
   "packages/llm/src/models/modelRoute.ts": 1,
   "packages/llm/src/models/reasoningChoice.ts": 1,
   "packages/llm/src/turn.ts": 1,
-  "src/agent/followUp/ToolUseFollowUpQueueManager.ts": 1,
   "src/agent/runtime/AgentLaunchContext.ts": 1,
   "src/agent/runtime/agentToolResolution.ts": 1,
   "src/agent/runtime/childRunLoop.ts": 2,

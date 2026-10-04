@@ -433,15 +433,10 @@ function waitForParentTurns(count: number): Effect.Effect<void> {
  * point while its final delivery wakes the parent, so the claim, not the
  * lane, is the durable boundary these assertions read against.
  */
-/** Queue a user's input on a stopped run: the recovery its admission
- *  reserves, which the next resume claims. */
+/** Queue a user's input on a stopped run, which the next resume reads. */
 function queueRecovery(runId: RunId, text: string) {
   return Effect.asVoid(
-    session.followUps.submit(
-      runId,
-      { text, from: { kind: 'user' } },
-      'recoverable',
-    ),
+    session.followUps.send(runId, { text, from: { kind: 'user' } }),
   );
 }
 
@@ -649,12 +644,12 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     publishTestRunStart(session, OUTER_RUN_ID);
     await Effect.runPromise(session.settlePublications());
     childId = undefined;
-    // Every wake: an admission that reserved the run's recovery.
+    // Every wake: a send that owed the run a resume.
     resumedRuns = [];
     const followUps = session.followUps;
-    const submitBatch = followUps.submitBatch.bind(followUps);
-    vi.spyOn(followUps, 'submitBatch').mockImplementation((runId, ...rest) =>
-      submitBatch(runId, ...rest).pipe(
+    const send = followUps.send.bind(followUps);
+    vi.spyOn(followUps, 'send').mockImplementation((runId, ...rest) =>
+      send(runId, ...rest).pipe(
         Effect.tap((submitted) =>
           Effect.sync(() => {
             if (submitted.kind === 'queued' && submitted.wake)
@@ -701,7 +696,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         const resumed = yield* Effect.promise(() =>
           queueSecondAssertionFollowUp(parentContext, runId),
         );
-        expect(resumed.summary).toContain('Queued message');
+        expect(resumed.summary).toContain('Sent message');
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result B.'));
         yield* waitForParentTurns(2);
@@ -788,7 +783,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         });
         const recoveredHandle = session.runs.getHandle(runId);
         expect(recoveredHandle).toBeDefined();
-        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
+        expect(session.runs.isLive(runId)).toBe(true);
         childTurns.push({ text: 'Recovered result D.' });
         parentTurns.push({ text: 'Parent received recovered result D.' });
         yield* submitFollowUp(
@@ -877,7 +872,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         const resumed = yield* Effect.promise(() =>
           queueSecondAssertionFollowUp(parentContext, runId),
         );
-        expect(resumed.summary).toContain('Queued message');
+        expect(resumed.summary).toContain('Sent message');
 
         // The answerless turn still delivers: its report/result overwrite turn 1's
         // with an explicitly empty response rather than replaying 'Result A.' — and
@@ -1358,7 +1353,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(
           delivery?.messages.at(-1) && messageText(delivery.messages.at(-1)!),
         ).toContain('<subagent-result');
-        expect(session.followUps.hasLiveOwner(PARENT_RUN_ID)).toBe(true);
+        expect(session.runs.isLive(PARENT_RUN_ID)).toBe(true);
         expect(parentTurns).toHaveLength(0);
       }),
     30_000,
