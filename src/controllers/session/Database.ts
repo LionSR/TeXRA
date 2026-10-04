@@ -65,6 +65,7 @@ import {
   DatabaseNotOwner,
   DatabaseReadFailed,
   DatabaseWriteFailed,
+  type SqlRow,
 } from '@shared/session/database';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { currentValues } from './currentValues';
@@ -187,9 +188,7 @@ export const databaseLayer = (
       const observe = (commit: number) =>
         SubscriptionRef.update(observedCommit, (c) => Math.max(c, commit));
       const highWater = "SELECT seq FROM sqlite_sequence WHERE name = 'event'";
-      const commitFromRows = (
-        rows: readonly Readonly<Record<string, unknown>>[],
-      ) => {
+      const commitFromRows = (rows: readonly SqlRow[]) => {
         const row = rows[0];
         return row === undefined ? 0 : z.int().nonnegative().parse(row.seq);
       };

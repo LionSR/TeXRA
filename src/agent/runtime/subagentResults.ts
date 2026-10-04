@@ -108,15 +108,19 @@ function formatWorkflowOutputs(
   ];
 }
 
+/** The run facts a result or error delivery carries beside its body. */
+interface DeliveryContext {
+  readonly wallTimeMs?: number;
+  readonly workingDirectory?: string;
+  readonly memoryMisses?: readonly AttachedMemoryMiss[];
+}
+
 /**
  * Shared context lines for both native delivery and error messages:
  * working-directory, then memory-misses, in that order (rendered right after
  * the builder-owned wall-time).
  */
-function formatDeliveryPreamble(options: {
-  workingDirectory?: string;
-  memoryMisses?: readonly AttachedMemoryMiss[];
-}): string[] {
+function formatDeliveryPreamble(options: DeliveryContext): string[] {
   const lines: string[] = [];
   if (options.workingDirectory) {
     lines.push(
@@ -147,17 +151,9 @@ function formatDeliveryPreamble(options: {
 export function formatSubagentDelivery(
   agentName: string,
   result: { readonly outcome: RunOutcome; readonly output: RunEndOutput },
-  options: {
-    runId: RunId;
-    memoryMisses?: readonly AttachedMemoryMiss[];
-    wallTimeMs?: number;
-    workingDirectory?: string;
-  },
+  options: DeliveryContext & { readonly runId: RunId },
 ): string {
-  const lines = formatDeliveryPreamble({
-    workingDirectory: options.workingDirectory,
-    memoryMisses: options.memoryMisses,
-  });
+  const lines = formatDeliveryPreamble(options);
 
   const { output } = result;
   if (output.category === 'workflow') {
@@ -219,11 +215,7 @@ export function formatSubagentError(
   runId: string,
   agentName: string,
   formatted: Pick<RetryErrorInfo, 'message' | 'userRetryable'>,
-  options?: {
-    wallTimeMs?: number;
-    workingDirectory?: string;
-    memoryMisses?: readonly AttachedMemoryMiss[];
-  },
+  options: DeliveryContext = {},
 ): string {
   return formatDelivery({
     tag: DELIVERY_TAG.subagentError,
@@ -233,13 +225,10 @@ export function formatSubagentError(
       { name: 'retryable', value: formatted.userRetryable },
     ],
     wallTime:
-      options?.wallTimeMs !== undefined
+      options.wallTimeMs !== undefined
         ? formatDuration(options.wallTimeMs)
         : undefined,
-    lines: formatDeliveryPreamble({
-      workingDirectory: options?.workingDirectory,
-      memoryMisses: options?.memoryMisses,
-    }),
+    lines: formatDeliveryPreamble(options),
     message: formatted.message,
   });
 }

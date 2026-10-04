@@ -114,15 +114,14 @@ function describeStored(value: unknown): string {
   if (value === null) return 'null';
   if (value === undefined) return 'undefined';
   if (Array.isArray(value)) return `array(len=${value.length})`;
-  const type = typeof value;
-  if (type === 'object') {
-    const keys = Object.keys(value as Record<string, unknown>);
+  if (typeof value === 'object') {
+    const keys = Object.keys(value);
     const preview = keys.slice(0, 6).join(',');
     const suffix = keys.length > 6 ? `,+${keys.length - 6}` : '';
     return `object{${preview}${suffix}}`;
   }
-  if (type === 'string') return `string(len=${(value as string).length})`;
-  return type;
+  if (typeof value === 'string') return `string(len=${value.length})`;
+  return typeof value;
 }
 
 /** First few zod issues, trimmed so the console stays readable. */

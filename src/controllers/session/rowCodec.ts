@@ -39,7 +39,10 @@ import {
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
-import { DatabaseAggregateBlocked } from '@shared/session/database';
+import {
+  DatabaseAggregateBlocked,
+  type SqlRow,
+} from '@shared/session/database';
 import { PLUGIN_ARMS } from '@tools/pluginArms';
 import type { SqlError } from 'effect/sql/SqlError';
 
@@ -240,9 +243,7 @@ function parseData({ data, blobs }: z.infer<typeof RowSchema>): unknown {
   });
 }
 
-export function decodeRow(
-  input: Readonly<Record<string, unknown>>,
-): RowVerdict {
+export function decodeRow(input: SqlRow): RowVerdict {
   const row = RowSchema.parse(input);
   const aggregateId = aggregateOf(row.kind, row.logicalId);
   const blocked = (
@@ -358,7 +359,7 @@ interface UnreadableKind {
 }
 
 export function unreadableKinds(
-  stored: readonly Readonly<Record<string, unknown>>[],
+  stored: readonly SqlRow[],
 ): readonly UnreadableKind[] {
   return stored.flatMap((input): UnreadableKind[] => {
     const { type, version } = z
@@ -382,7 +383,7 @@ export function verdictBook(
   exec: (
     statement: string,
     params?: readonly unknown[],
-  ) => Effect.Effect<readonly Readonly<Record<string, unknown>>[], SqlError>,
+  ) => Effect.Effect<readonly SqlRow[], SqlError>,
 ) {
   const leftOut = new Set<string>();
   const blocked = new Map<AggregateId, BlockedAggregate>();
@@ -411,7 +412,7 @@ export function verdictBook(
         );
   /** A read's events, and whether it skipped a row of a newer or unknown
    *  kind (a later build can read it; a corrupt row no build can). */
-  const decodeAll = (rows: readonly Readonly<Record<string, unknown>>[]) =>
+  const decodeAll = (rows: readonly SqlRow[]) =>
     Effect.gen(function* () {
       const fresh: string[] = [];
       const events: SessionEvent[] = [];

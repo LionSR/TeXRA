@@ -146,13 +146,12 @@ const liveToolsLayer = (
       // Each plugin's process layer, in its map entry's scope: its switch and
       // each generation that includes it hold a reference. It may read this
       // catalog (Copilot's tools follow it), built by then.
-      const self: { service?: LiveTools['Service'] } = {};
       // The plugins whose process layer is up, however it is held.
       const up = new Set<string>();
       const layers = yield* RcMap.make({
         lookup: (id: string) =>
           buildPluginLayer(id, table.entries.get(id)!.processLayer!.layer).pipe(
-            Effect.provideService(LiveTools, self.service!),
+            Effect.provideService(LiveTools, service),
             Effect.provide(process),
             Effect.tap(() =>
               Effect.acquireRelease(
@@ -380,9 +379,14 @@ const liveToolsLayer = (
             ? Effect.map(RcMap.get(layers, id), Option.some)
             : Effect.succeed(Option.none()),
         );
-      self.service = { registry, pinSwitched, hold, processServices };
+      const service: LiveTools['Service'] = {
+        registry,
+        pinSwitched,
+        hold,
+        processServices,
+      };
       yield* locked(reconcile(closed));
-      return self.service;
+      return service;
     }),
   );
 

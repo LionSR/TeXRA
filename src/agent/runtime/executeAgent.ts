@@ -149,18 +149,19 @@ function launchToolUseRun(
       ? { memoryMisses: ctx.attachedMemoryMisses }
       : {}),
   });
+  const { turns } = shared;
   // A stop asked before the run was reachable is this fiber's interruption,
   // taken before the loop does any work.
   return Effect.suspend(() =>
     variant.kind === 'resume' && variant.isCancellationRequested?.()
       ? Effect.interrupt
       : runToolUse({
-          ...(shared.turns
+          ...(turns
             ? {
                 turns: {
-                  turnPermit: shared.turns.turnPermit,
+                  turnPermit: turns.turnPermit,
                   onTurnBoundary: (result) =>
-                    shared.turns!.onTurnBoundary(toResult(result)),
+                    turns.onTurnBoundary(toResult(result)),
                 },
               }
             : {}),
