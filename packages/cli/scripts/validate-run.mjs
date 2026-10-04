@@ -749,6 +749,19 @@ function validateRunCommand() {
       `a successful text run should not report the cancelled stopped label\nstderr:\n${text.stderr}`,
     );
 
+    // Opt-in reflection: the bundled critic reviews revision 1, and revision
+    // 2 reads its critique.
+    const reflected = run(process.execPath, [...baseArgs, '--reflect'], {
+      cwd: repoRoot,
+      validationModel: true,
+      validationFlagPath,
+    });
+    assertSuccess(reflected, 'texra run --reflect');
+    assert(
+      reflected.stderr.includes('Critique 1 · critic'),
+      `a --reflect run should call the critic between revisions\nstderr:\n${reflected.stderr}`,
+    );
+
     const json = run(
       process.execPath,
       [...baseArgs, '--output-format', 'json'],

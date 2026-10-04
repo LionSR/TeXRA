@@ -351,6 +351,12 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Document tasks can reflect with a critic.** Opt in with
+  `texra run <agent> --reflect` or `reflect: true` on `document_task`: after
+  each revision but the last, the bundled `critic` agent reads the diff and
+  compile result and returns grounded corrections plus one optional
+  improvement, which the next revision's prompt carries. The revision count
+  is unchanged.
 - **A chat shows its project's background-task notices (CLI).** A task the
   TeXRA service runs now tells a window of its own project what it would
   show on screen (a refused resume, an error with its guide link), and a

@@ -106,6 +106,13 @@ texra run polish --input Draft0.tex --input appendices.tex --output-dir polished
 texra run correct --input 'sections/**/*.tex' --output-dir corrected
 ```
 
+Add `--reflect` to have the bundled `critic` agent review each revision but the
+last; the next revision reads its critique. The revision count is unchanged:
+
+```bash
+texra run polish --input paper.tex --output paper.polished.tex --reflect
+```
+
 Document tasks always write generated files into the run's run-storage
 directory first. In text mode, TeXRA prints a filesystem path: the copied path
 when `--output` or `--output-dir` is used, otherwise the final generated file in

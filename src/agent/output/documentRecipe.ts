@@ -4,8 +4,11 @@
  * persona opened on this script (`AgentConfig.script`) instead of a model
  * turn; the script calls the persona once per revision through `agent()`
  * and does everything else with the document tools (`./documentTools`).
- * The agent's name is the one literal the source takes; a run records the
- * source it ran, so a resume replays the same program.
+ * A task launched with `toolConfig.reflect` also has the bundled `critic`
+ * review each revision but the last, and the next revision reads its
+ * critique; the revision count stays the task's. The persona's name is the
+ * one value the source takes; a run records the source it ran, so a resume
+ * replays the same program.
  */
 import { Effect } from 'effect';
 
@@ -23,6 +26,7 @@ const DOCUMENT_TASK_TOOLS = [
   'document_extract',
   'document_compile',
   'document_diff',
+  'document_review',
   'document_propose',
 ] as const;
 
@@ -30,9 +34,10 @@ const DOCUMENT_TASK_TOOLS = [
 function recipeSource(agentName: string): string {
   return `const agentName = ${JSON.stringify(agentName)};
 let revisions = 1;
+let critique = null;
 for (let revision = 0; revision < revisions; revision += 1) {
   phase(\`Revision \${revision + 1}\`);
-  const context = await tools.document_context({ revision });
+  const context = await tools.document_context({ revision, critique });
   revisions = context.revisions;
   const reply = await agent(context.prompt, {
     agentName,
@@ -43,6 +48,14 @@ for (let revision = 0; revision < revisions; revision += 1) {
   await tools.document_extract({ revision, run: reply.runId });
   await tools.document_compile({ revision });
   await tools.document_diff({ revision });
+  if (context.reflect && revision + 1 < revisions) {
+    const review = await tools.document_review({ revision });
+    const critic = await agent(review.prompt, {
+      agentName: 'critic',
+      label: \`Critique \${revision + 1}\`,
+    });
+    critique = critic.response;
+  }
 }
 return (await tools.document_propose({})).documents;`;
 }

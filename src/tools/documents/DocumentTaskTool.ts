@@ -57,6 +57,12 @@ const DocumentTaskInputSchema = z.strictObject({
     .boolean()
     .nullish()
     .describe('Compile the input LaTeX TikZ figures and attach them.'),
+  reflect: z
+    .boolean()
+    .nullish()
+    .describe(
+      'Have the `critic` agent review each revision but the last; the next revision reads its critique.',
+    ),
   ...CALL_FIELDS,
 });
 type DocumentTaskInput = z.infer<typeof DocumentTaskInputSchema>;
@@ -111,6 +117,7 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
         ...(input.extractTikz != null && {
           autoExtractTikzFigure: input.extractTikz,
         }),
+        ...(input.reflect != null && { reflect: input.reflect }),
       },
     },
   });

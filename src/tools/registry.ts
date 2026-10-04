@@ -54,6 +54,7 @@ import {
   DocumentExtractTool,
   DocumentProposeTool,
 } from './documents/documentTools';
+import { DocumentReviewTool } from './documents/DocumentReviewTool';
 import { DocumentTaskTool } from './documents/DocumentTaskTool';
 import { ExtractBibliographyTool } from './latex/ExtractBibliographyTool';
 import { ExtractLatexFiguresTool } from './latex/ExtractFiguresTool';
@@ -213,6 +214,7 @@ const documents: Plugin = {
     document_extract: DocumentExtractTool,
     document_compile: DocumentCompileTool,
     document_diff: DocumentDiffTool,
+    document_review: DocumentReviewTool,
     document_propose: DocumentProposeTool,
   },
   settings: DOCUMENTS_SETTINGS,

@@ -47,6 +47,7 @@ const compilePdfConfig: ToolConfig = {
   autoExtractTikzFigure: false,
   attachTeXCount: false,
   autoCompileInputPdf: true,
+  reflect: false,
 };
 
 const logger: LatexTrace = spiedTrace();
