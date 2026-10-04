@@ -27,7 +27,7 @@ function storageError(error: PlatformError.PlatformError): Error {
   return ensureError(error.reason.cause ?? error);
 }
 
-export interface JsonStoreOptions {
+interface JsonStoreOptions {
   /**
    * POSIX mode for the store file (e.g. `0o600` to restrict a secrets file
    * to its owner). The containing directory is created/chmod'd with the

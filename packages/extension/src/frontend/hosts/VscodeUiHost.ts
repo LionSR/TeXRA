@@ -99,11 +99,10 @@ class VscodeUiHost implements MessageHost, PromptHost {
     options: PromptConfirmOptions,
   ): Effect.Effect<boolean, PromptFailed> {
     const confirmLabel = options.confirmLabel;
-    const cancelLabel = options.cancelLabel ?? 'Cancel';
     return this.showMessage('showWarningMessage', message, {
       detail: options.detail,
       modal: options.modal ?? true,
-      items: [confirmLabel, { label: cancelLabel, isCloseAffordance: true }],
+      items: [confirmLabel, { label: 'Cancel', isCloseAffordance: true }],
     }).pipe(
       Effect.mapError(
         (failure) =>

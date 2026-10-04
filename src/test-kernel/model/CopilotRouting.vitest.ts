@@ -75,7 +75,6 @@ function languageModelPort(
 ): LanguageModelPort {
   return {
     ...UNAVAILABLE_LANGUAGE_MODEL_PORT,
-    isAvailable: () => true,
     selectModels: vi.fn(() => Effect.succeed(models)),
   };
 }

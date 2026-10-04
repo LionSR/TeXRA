@@ -154,7 +154,6 @@ describe('createLanguageModelPort', () => {
         mocks.selectChatModels.mockResolvedValue([fakeModel()]);
         const port = createPort();
 
-        expect(port.isAvailable()).toBe(true);
         expect(yield* port.selectModels({ vendor: 'copilot' })).toEqual([
           {
             id: 'copilot-gpt-4o',

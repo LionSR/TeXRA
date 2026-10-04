@@ -170,7 +170,7 @@ const toList = (paths: string | readonly string[] | undefined) =>
   paths === undefined ? [] : [paths].flat();
 
 /** What stands in for a missing manifest: a name and skill paths. */
-export type PluginFallback = Pick<
+type PluginFallback = Pick<
   PluginManifest,
   'name' | 'version' | 'description' | 'skills'
 >;

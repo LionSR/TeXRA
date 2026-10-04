@@ -11,7 +11,7 @@ import type {
   PromptMessageOptions,
 } from '@hosts/uiHosts';
 
-type PromptEventKind = 'info' | 'warning' | 'error';
+type PromptEventKind = 'info' | 'warning';
 
 interface PromptMessageEvent {
   kind: PromptEventKind;
@@ -70,13 +70,6 @@ class FakePromptHost implements PromptHost {
     options?: PromptMessageOptions<T>,
   ): Effect.Effect<T | undefined> {
     return Effect.sync(() => this.recordMessage('warning', message, options));
-  }
-
-  error<T extends string = string>(
-    message: string,
-    options?: PromptMessageOptions<T>,
-  ): Effect.Effect<T | undefined> {
-    return Effect.sync(() => this.recordMessage('error', message, options));
   }
 
   confirm(

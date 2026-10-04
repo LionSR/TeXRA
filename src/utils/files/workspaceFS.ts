@@ -6,8 +6,16 @@ import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import { normalizeFilePath } from '@utils/core';
 import { escapesRoot } from '@utils/core/pathCore';
 
-// Local file imports
-import { locatePathInRoot, type ResolvedPath } from './workspaceRoot';
+/**
+ * Result of resolving a path against a workspace root.
+ * 'workspace' paths live inside the root; 'external' paths do not. Whether an
+ * external path is admitted is the tool path resolver's question
+ * (`resolveToolPath`), asked of the external-root allowlist for the calling
+ * session's project.
+ */
+type ResolvedPath =
+  | { kind: 'workspace'; absolutePath: string; relativePath: string }
+  | { kind: 'external'; absolutePath: string };
 
 /**
  * The workspace-relative form of `filePath`, symlink-aware. A path outside
@@ -62,6 +70,19 @@ export function locateInWorkspace(
     return { kind: 'external', absolutePath: inputPath };
   }
 
-  // Empty + relative paths: pure path logic
-  return locatePathInRoot(root, inputPath);
+  // Empty + relative paths: pure path logic. Normalize backslashes before
+  // posix.normalize so '..' segments collapse correctly; on POSIX, backslashes
+  // are valid filename chars and path.normalize would preserve them.
+  const relativePath = path.posix.normalize(normalizeFilePath(inputPath));
+  // `startsWith('..')` alone also matches a first segment that merely begins
+  // with two dots (`..notes.tex`), which is a file inside the root. The
+  // normalized path uses '/' on every platform, so match the '..' segment.
+  if (relativePath === '..' || relativePath.startsWith('../')) {
+    return { kind: 'external', absolutePath: path.resolve(root, inputPath) };
+  }
+  return {
+    kind: 'workspace',
+    absolutePath: path.join(root, relativePath),
+    relativePath,
+  };
 }

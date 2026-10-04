@@ -84,8 +84,6 @@ export const discoverCopilotRoutes = Effect.fn(
   LanguageModel
 > {
   const languageModel = yield* LanguageModel;
-  if (!languageModel.isAvailable()) return new Map<string, CopilotModelRoute>();
-
   const discovered = yield* languageModel.selectModels({ vendor: 'copilot' });
   const entries = new Map<string, CopilotModelRoute>();
   for (const info of discovered.toSorted((left, right) =>

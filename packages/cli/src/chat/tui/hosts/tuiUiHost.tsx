@@ -1,9 +1,9 @@
-// The chat TUI's message and dialog surfaces behind the host-neutral
-// {@link MessageHost} and {@link PromptHost}: the third implementation of both
-// ports, beside `VscodeUiHost` and the desktop's `dialog.showMessageBox`.
+// The chat TUI's dialog surface: the members of the host-neutral
+// {@link PromptHost} its settings controllers ask for (`info`, `confirm`,
+// `input`).
 //
 // A message is a local transcript notice — the CLI's fire-and-forget surface,
-// which is why it cannot fail and every member below answers `Effect.sync`.
+// which is why it cannot fail and answers `Effect.sync`.
 // A dialog is a foreground form: it takes the App's one `activeForm` slot, so
 // a host dialog obeys the same one-modal-at-a-time promotion the approval
 // queue does, and a second one waits on this module's lane rather than
@@ -18,7 +18,6 @@ import { Text } from 'ink';
 
 // Local imports
 import type {
-  MessageHost,
   NotificationFailed,
   PromptConfirmOptions,
   PromptFailed,
@@ -31,10 +30,7 @@ import type {
 import { TextEntryForm } from '../forms/_shared/TextEntryForm';
 import { ListForm } from '../forms/_shared/ListForm';
 import { closeActiveForm, openActiveForm } from '../state/formSlot';
-import {
-  appendLocalNotice,
-  appendLocalErrorTranscript,
-} from '../state/transcript';
+import { appendLocalNotice } from '../state/transcript';
 
 /**
  * One host dialog at a time. Two runs asking at once queue here instead of
@@ -111,43 +107,28 @@ function chooseItem<T extends string>(
 }
 
 /**
- * The CLI's own {@link MessageHost} and {@link PromptHost}. Stateless — the
- * transcript and the foreground slot are module-level signals the App reads —
- * so the surfaces that present on it share this one instance, as the VS Code
- * host's surfaces share `vscodeUi`.
+ * The CLI's own {@link PromptHost} members. Stateless — the transcript and
+ * the foreground slot are module-level signals the App reads — so the
+ * surfaces that present on it share this one instance, as the VS Code host's
+ * surfaces share `vscodeUi`.
  */
-class TuiUiHost implements MessageHost, PromptHost {
-  showInfoMessage(message: string): Effect.Effect<void, NotificationFailed> {
-    return Effect.sync(() => appendLocalNotice(message));
-  }
-
-  showWarningMessage(message: string): Effect.Effect<void, NotificationFailed> {
-    return Effect.sync(() => appendLocalNotice(message));
-  }
-
-  showErrorMessage(message: string): Effect.Effect<void, NotificationFailed> {
-    return Effect.sync(() => appendLocalErrorTranscript(message));
-  }
-
+class TuiUiHost implements Pick<PromptHost, 'info' | 'confirm' | 'input'> {
+  /** A message with no items is a transcript notice; one with items is a
+   *  picker whose answer is the label the user chose. */
   info<T extends string = string>(
     message: string,
     options: PromptMessageOptions<T> = {},
   ): Effect.Effect<T | undefined, NotificationFailed> {
-    return this.present(message, options, appendLocalNotice);
-  }
-
-  warning<T extends string = string>(
-    message: string,
-    options: PromptMessageOptions<T> = {},
-  ): Effect.Effect<T | undefined, NotificationFailed> {
-    return this.present(message, options, appendLocalNotice);
-  }
-
-  error<T extends string = string>(
-    message: string,
-    options: PromptMessageOptions<T> = {},
-  ): Effect.Effect<T | undefined, NotificationFailed> {
-    return this.present(message, options, appendLocalErrorTranscript);
+    const items = options.items ?? [];
+    if (items.length === 0) {
+      return Effect.sync(() => {
+        appendLocalNotice(
+          options.detail ? `${message}\n${options.detail}` : message,
+        );
+        return undefined;
+      });
+    }
+    return chooseItem(message, options, items);
   }
 
   /**
@@ -162,10 +143,9 @@ class TuiUiHost implements MessageHost, PromptHost {
     options: PromptConfirmOptions,
   ): Effect.Effect<boolean, PromptFailed> {
     const confirmLabel = options.confirmLabel;
-    const cancelLabel = options.cancelLabel ?? 'Cancel';
     return chooseItem<string>(message, { detail: options.detail }, [
       confirmLabel,
-      cancelLabel,
+      'Cancel',
     ]).pipe(Effect.map((selected) => selected === confirmLabel));
   }
 
@@ -187,23 +167,6 @@ class TuiUiHost implements MessageHost, PromptHost {
         onCancel={() => answer(undefined)}
       />
     ));
-  }
-
-  /** A message with no items is a notice; one with items is a picker whose
-   *  answer is the label the user chose. */
-  private present<T extends string>(
-    message: string,
-    options: PromptMessageOptions<T>,
-    notice: (text: string) => void,
-  ): Effect.Effect<T | undefined> {
-    const items = options.items ?? [];
-    if (items.length === 0) {
-      return Effect.sync(() => {
-        notice(options.detail ? `${message}\n${options.detail}` : message);
-        return undefined;
-      });
-    }
-    return chooseItem(message, options, items);
   }
 }
 

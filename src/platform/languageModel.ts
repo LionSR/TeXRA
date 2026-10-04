@@ -37,7 +37,6 @@ export interface LanguageModelReference {
  * Hosts without such an API use {@link UNAVAILABLE_LANGUAGE_MODEL_PORT}.
  */
 export interface LanguageModelPort {
-  isAvailable(): boolean;
   selectModels(
     selector?: LanguageModelSelector,
   ): Effect.Effect<readonly LanguageModelInfo[], Error>;
@@ -60,7 +59,6 @@ export interface LanguageModelPort {
 /** Shared implementation for CLI, desktop, tests, and unsupported editors. */
 export const UNAVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = Object.freeze(
   {
-    isAvailable: () => false,
     selectModels: () => Effect.succeed([]),
     onDidChange: () => ({ dispose() {} }),
     acquire: () =>

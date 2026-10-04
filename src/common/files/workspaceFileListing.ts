@@ -15,7 +15,7 @@ import {
   type FileFilterConfig,
 } from './fileListingRules';
 
-export interface WorkspaceFileListingOptions {
+interface WorkspaceFileListingOptions {
   root: string;
   config: FileFilterConfig;
 }

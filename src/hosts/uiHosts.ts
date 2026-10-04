@@ -165,7 +165,6 @@ export interface PromptConfirmOptions {
    * every caller must name the action being confirmed.
    */
   confirmLabel: string;
-  cancelLabel?: string;
 }
 
 export interface PromptInputOptions {
@@ -185,7 +184,7 @@ export interface PromptInputOptions {
  * has none (native message boxes). The user's own answer — a dismissal
  * included — is a value, never an error.
  *
- * `info`/`warning`/`error` are {@link MessageHost}'s members with items and an
+ * `info`/`warning` are {@link MessageHost}'s members with items and an
  * answer, so they fail with {@link NotificationFailed}, the same tag that
  * surface raises; `confirm` and `input` open a dialog that is not a
  * `show*Message` call on any host and keep {@link PromptFailed}.
@@ -196,10 +195,6 @@ export interface PromptHost {
     options?: PromptMessageOptions<T>,
   ): Effect.Effect<T | undefined, NotificationFailed>;
   warning<T extends string = string>(
-    message: string,
-    options?: PromptMessageOptions<T>,
-  ): Effect.Effect<T | undefined, NotificationFailed>;
-  error<T extends string = string>(
     message: string,
     options?: PromptMessageOptions<T>,
   ): Effect.Effect<T | undefined, NotificationFailed>;

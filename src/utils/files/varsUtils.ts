@@ -61,7 +61,10 @@ export const setVarFromFile = Effect.fn('varsUtils.setVarFromFile')(function* (
 /** The prompt XML built from a file list, plus what the read dropped. */
 export interface XmlFormatFromFilesResult {
   readonly xml: string | null;
-  readonly readableFiles: string[];
+  /** The files that were read, in input order, each with the content the
+   *  XML carries, so a caller filling a `*_FILE`/`*_CONTENT` pair from one
+   *  of them uses this read rather than reading the file again. */
+  readonly readable: FileVarValue[];
   /**
    * Files dropped from the prompt because they could not be read. Order is
    * unspecified — the reads settle concurrently — so do not build on it; each
@@ -92,7 +95,7 @@ export const getXmlFormatFromReadableFiles = Effect.fn(
   files: string[],
 ): Effect.fn.Return<XmlFormatFromFilesResult, never, FileSystem.FileSystem> {
   if (files.length === 0) {
-    return { xml: null, readableFiles: [], skipped: [] };
+    return { xml: null, readable: [], skipped: [] };
   }
 
   const fs = yield* FileSystem.FileSystem;
@@ -109,10 +112,7 @@ export const getXmlFormatFromReadableFiles = Effect.fn(
       }).pipe(
         Effect.flatMap((absolute) => readNormalizedFile(fs, absolute)),
         Effect.map((content) => ({
-          document: {
-            file,
-            xml: `<document name="${getPromptFileName(workspaceRoot, file)}">\n${content}\n</document>`,
-          },
+          document: { file, content },
           skipped: null,
         })),
         Effect.catch((err) =>
@@ -127,8 +127,16 @@ export const getXmlFormatFromReadableFiles = Effect.fn(
 
   const readable = reads.map((read) => read.document).filter(filterNotNull);
   return {
-    xml: readable.length > 0 ? readable.map((doc) => doc.xml).join('\n') : null,
-    readableFiles: readable.map((doc) => doc.file),
+    xml:
+      readable.length > 0
+        ? readable
+            .map(
+              ({ file, content }) =>
+                `<document name="${getPromptFileName(workspaceRoot, file)}">\n${content}\n</document>`,
+            )
+            .join('\n')
+        : null,
+    readable,
     skipped: reads.map((read) => read.skipped).filter(filterNotNull),
   };
 });

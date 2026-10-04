@@ -22,9 +22,10 @@ import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
 import writeFileAtomicLib from 'write-file-atomic';
 
-import { isNotADirectoryError } from '@common/errors';
 import { withLogChannel } from '@logger/effectLog';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
+
+import { absentReason } from './fsEntryExists';
 
 const CHANNEL = 'fsDurability';
 
@@ -105,17 +106,16 @@ function entryTypeOf(entry: {
 /**
  * `FileSystem.exists` with a path whose parent is not a directory (`ENOTDIR`)
  * counted as absent alongside `ENOENT`; the standard library reports that
- * case as `BadResource`. The predicate names ENOTDIR specifically, so an
- * operational failure (`ELOOP`, `EACCES`) still propagates instead of reading
- * as "absent".
+ * case as `BadResource`. {@link absentReason} names ENOTDIR specifically, so
+ * an operational failure (`ELOOP`, `EACCES`) still propagates instead of
+ * reading as "absent".
  *
  * This probe follows links, so a dangling symlink reads as absent (ENOENT)
  * while a circular one raises ELOOP and propagates, unlike the lstat-backed
  * `entryExists` in `fsEntryExists.ts`. A
  * caller asking whether a dependency, figure, bibliography or input *file* is
  * unusable wants the follow; a caller asking whether the path names an entry
- * wants `readLink` first and this as the fallback (see `existsAt` in
- * `arxivProcessor.ts`).
+ * wants `readLink` first and this as the fallback (`entryExists`).
  *
  * The caller passes the filesystem it probes with, so a rooted view answers
  * for the paths inside its root and the process filesystem answers for the
@@ -125,14 +125,9 @@ export const pathExists = (
   fs: FileSystem.FileSystem,
   target: string,
 ): Effect.Effect<boolean, PlatformError.PlatformError> =>
-  fs.exists(target).pipe(
-    Effect.catchIf(
-      (error) =>
-        error.reason._tag === 'BadResource' &&
-        isNotADirectoryError(error.reason.cause),
-      () => Effect.succeed(false),
-    ),
-  );
+  fs
+    .exists(target)
+    .pipe(Effect.catchIf(absentReason, () => Effect.succeed(false)));
 
 /** The entry type of one path, `lstat`-backed: a link is itself, never what
  * it points at. `FileSystem.stat` follows links, so a containment check that
