@@ -185,7 +185,8 @@ export interface ToolTable {
 
 /**
  * The table over `plugins`, which the app lists in order. A list that
- * repeats a plugin id or a tool name, claims the parked runs'
+ * spells an id other than lowercase letters, digits and dashes, repeats a
+ * plugin id or a tool name, claims the parked runs'
  * continuation twice, or gives a switch to a plugin with no availability
  * probe is a defect of the list, refused when it is built.
  */
@@ -197,6 +198,12 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
     throw new Error(`The plugin list is not valid: ${reason}`);
   };
   for (const plugin of plugins) {
+    // The id names its resources directory and its switch: one plain path
+    // segment, so it can neither escape nor alias another plugin's.
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(plugin.id))
+      refuse(
+        `plugin id ${JSON.stringify(plugin.id)} is not lowercase letters, digits and dashes.`,
+      );
     if (entries.has(plugin.id)) refuse(`plugin ${plugin.id} is listed twice.`);
     entries.set(plugin.id, plugin);
     for (const [name, tool] of Object.entries(plugin.tools ?? {})) {

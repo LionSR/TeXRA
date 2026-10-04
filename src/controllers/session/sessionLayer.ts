@@ -1089,7 +1089,7 @@ export function installProcessRuntime({
     updateCheckRecordsLayer,
     Secrets.layer(secrets),
     LanguageModel.layer(languageModel),
-    // The follower reads which plugins ship agents off the catalog.
+    // The follower registers each plugin's agent directory off the catalog.
     Layer.provideMerge(
       agentCatalogFollower,
       Layer.merge(agentDirectories, catalog),

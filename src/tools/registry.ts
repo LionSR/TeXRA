@@ -140,7 +140,6 @@ const arxiv: Plugin = {
 const core = (provider?: InlineCommentProvider) =>
   definePlugin<InlineComments>({
     id: 'core',
-
     tools: {
       inline_comment: InlineCommentTool,
       open_pdf: OpenPdfTool,
@@ -232,7 +231,6 @@ export const texraPlugins = (
   setup,
   {
     id: 'copilot',
-
     toggle: 'on',
     availability: ALWAYS_AVAILABLE,
     ...(host.copilot !== undefined && { processLayer: host.copilot }),

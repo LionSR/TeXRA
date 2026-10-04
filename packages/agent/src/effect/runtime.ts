@@ -35,6 +35,7 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { UsageLog } from '@shared/usageLog';
+import type { StateSettingEntry } from '@shared/state/stateSettings';
 import type { Plugin } from '@tools/plugins';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 
@@ -98,11 +99,13 @@ interface ProcessHold {
  */
 let holds = 0;
 
-/** What an embedder composes the process from: its platform and its
- *  plugins, the harness's built-ins among them. */
+/** What an embedder composes the process from: its platform, its
+ *  plugins (the harness's built-ins among them), and the setting rows its
+ *  plugins read, installed beside the harness's. */
 export interface Composition {
   readonly platform: AgentPlatform;
   readonly plugins: readonly Plugin[];
+  readonly settings?: readonly StateSettingEntry[];
 }
 
 /**
@@ -122,6 +125,7 @@ const processChanges = Semaphore.makeUnsafe(1);
 export const acquireProcess = ({
   platform,
   plugins,
+  settings = [],
 }: Composition): Effect.Effect<
   Context.Service.Shape<typeof Sessions>,
   PlatformConflict,
@@ -130,7 +134,7 @@ export const acquireProcess = ({
   Effect.acquireRelease(
     processChanges.withPermit(
       Effect.try({
-        try: () => composeProcess(platform, plugins),
+        try: () => composeProcess({ platform, plugins, settings }),
         catch: (thrown) => thrown,
       }).pipe(
         Effect.catch((thrown) =>
@@ -169,30 +173,29 @@ export const acquireProcess = ({
  * package did not install is already there: borrowing a runtime a host built
  * for its own roots would silently serve the host's services to this one.
  */
-/** The same plugin values in the same order, however the list was built. */
-const samePlugins = (
-  composed: readonly Plugin[],
-  asked: readonly Plugin[],
-): boolean =>
+/** The same values in the same order, however the list was built. */
+const sameValues = <A>(composed: readonly A[], asked: readonly A[]): boolean =>
   composed.length === asked.length &&
-  composed.every((plugin, index) => plugin === asked[index]);
+  composed.every((value, index) => value === asked[index]);
 
-function composeProcess(
-  platform: AgentPlatform,
-  plugins: readonly Plugin[],
-): ProcessHold {
+function composeProcess({
+  platform,
+  plugins,
+  settings = [],
+}: Composition): ProcessHold {
   // The owner carries the runtime it runs on; an absent owner is what says
   // this composition must install its own.
   let processRuntime = installedProcessRuntime();
   if (
     composedWith
       ? composedWith.platform !== platform ||
-        !samePlugins(composedWith.plugins, plugins)
+        !sameValues(composedWith.plugins, plugins) ||
+        !sameValues(composedWith.settings ?? [], settings)
       : processRuntime !== undefined
   ) {
     throw new PlatformConflict({
       message:
-        'The agent package is already using another platform or plugin list in this process: compose every hold from the same platform value and the same plugin values.',
+        'The agent package is already using another platform, plugin list or setting list in this process: compose every hold from the same platform value and the same plugin and setting values.',
     });
   }
   const processServices = {
@@ -212,6 +215,7 @@ function composeProcess(
       processStart: nodeProcesses.selfIdentity(),
       globalStorage: platform.roots.globalStorage,
       plugins,
+      settings,
       mcpConfigPath: platform.mcpConfigPath,
       ...processServices,
       // An embedder reports no usage: the package has no version or editor of
@@ -224,7 +228,7 @@ function composeProcess(
       // package speaks at the informational level rather than flooding it.
       minimumLogLevel: 'Info',
     });
-    composedWith = { platform, plugins };
+    composedWith = { platform, plugins, settings };
   }
   const heldRuntime = processRuntime;
   const sessions = makeSessions(
