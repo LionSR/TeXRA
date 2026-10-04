@@ -236,8 +236,9 @@ describe('AgentLaunchContext', () => {
         mocks.resolve.mockReturnValueOnce(
           Effect.succeed({
             path: '/agents/chat.yaml',
-            setting: { agentCategory: AgentCategory.ToolUse },
-            prompt: {},
+            category: AgentCategory.ToolUse,
+            persona: { prompt: '', tools: [], temperature: 1 },
+            task: null,
           }),
         );
 
@@ -292,8 +293,9 @@ describe('AgentLaunchContext', () => {
         mocks.resolve.mockReturnValueOnce(
           Effect.succeed({
             path: '/agents/chat.yaml',
-            setting: { agentCategory: AgentCategory.ToolUse },
-            prompt: {},
+            category: AgentCategory.ToolUse,
+            persona: { prompt: '', tools: [], temperature: 1 },
+            task: null,
           }),
         );
         mocks.buildVars.mockReturnValueOnce(
@@ -340,8 +342,9 @@ describe('AgentLaunchContext', () => {
         mocks.resolve.mockReturnValueOnce(
           Effect.succeed({
             path: '/agents/chat.yaml',
-            setting: { agentCategory: AgentCategory.ToolUse },
-            prompt: {},
+            category: AgentCategory.ToolUse,
+            persona: { prompt: '', tools: [], temperature: 1 },
+            task: null,
           }),
         );
         mocks.buildVars.mockReturnValueOnce(
@@ -402,8 +405,9 @@ describe('AgentLaunchContext', () => {
           mocks.resolve.mockReturnValueOnce(
             Effect.succeed({
               path: '/agents/chat.yaml',
-              setting: { agentCategory: AgentCategory.ToolUse },
-              prompt: {},
+              category: AgentCategory.ToolUse,
+              persona: { prompt: '', tools: [], temperature: 1 },
+              task: null,
             }),
           );
           mocks.buildVars.mockReturnValueOnce(
@@ -483,8 +487,9 @@ describe('AgentLaunchContext', () => {
       mocks.resolve.mockReturnValueOnce(
         Effect.succeed({
           path: '/agents/chat.yaml',
-          setting: { agentCategory: AgentCategory.ToolUse },
-          prompt: {},
+          category: AgentCategory.ToolUse,
+          persona: { prompt: '', tools: [], temperature: 1 },
+          task: null,
         }),
       );
       mocks.buildVars.mockReturnValueOnce(Effect.fail(failure));

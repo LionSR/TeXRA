@@ -123,7 +123,7 @@ export function blobRows(
  * names the request's recorded context and the binding's origin.
  */
 export function attemptRows(
-  run: Pick<AgentRunShape, 'runId' | 'config' | 'setting' | 'prompt'>,
+  run: Pick<AgentRunShape, 'runId' | 'config' | 'persona' | 'task'>,
   state: RunState,
   invocation: InvocationRef,
   origin: ModelOrigin,
@@ -131,8 +131,8 @@ export function attemptRows(
 ): RunHistoryDraft[] {
   const agent = {
     agent: run.config.agent,
-    setting: run.setting,
-    prompt: run.prompt,
+    persona: run.persona,
+    task: run.task,
   };
   const request = {
     mode: resolved.mode,

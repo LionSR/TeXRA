@@ -82,11 +82,7 @@ describe('agent registry load state', () => {
       [
         'name: stateProbe',
         'description: Probe agent for load-state tests.',
-        'settings:',
-        '  agentCategory: toolUse',
-        '  tools: []',
-        'prompts:',
-        '  systemPrompt: Probe.',
+        'prompt: Probe.',
         '',
       ].join('\n'),
     );

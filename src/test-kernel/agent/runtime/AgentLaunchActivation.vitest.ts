@@ -128,8 +128,9 @@ const captureStartedLaunch = Effect.fn(function* (
         mocks.resolve.mockReturnValueOnce(
           Effect.succeed({
             path: '/agents/chat.yaml',
-            setting: { agentCategory: AgentCategory.ToolUse },
-            prompt: {},
+            category: AgentCategory.ToolUse,
+            persona: { prompt: '', tools: [], temperature: 1 },
+            task: null,
           }),
         );
         mocks.buildVars.mockReturnValueOnce(Effect.fail(LAUNCH_FAILURE));
@@ -318,8 +319,9 @@ describe('native agent launch activation', () => {
         mocks.resolve.mockReturnValueOnce(
           Effect.succeed({
             path: '/agents/chat.yaml',
-            setting: { agentCategory: AgentCategory.ToolUse },
-            prompt: {},
+            category: AgentCategory.ToolUse,
+            persona: { prompt: '', tools: [], temperature: 1 },
+            task: null,
           }),
         );
         mocks.buildVars.mockReturnValueOnce(

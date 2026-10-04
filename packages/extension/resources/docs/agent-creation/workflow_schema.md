@@ -1,8 +1,10 @@
 # Workflow Agent Schema & Reference
 
-Workflow agents process LaTeX documents in a fixed number of rounds (1 or 2),
-producing output wrapped in XML tags. Each round uses a chain-of-thought with
-`<scratchpad>` planning before the final output.
+Workflow agents are document tasks: an agent file with a `task` block. They
+process LaTeX documents in a fixed sequence of revisions, one per entry in
+`task.requests` (usually 1 or 2), producing output wrapped in XML tags. Each
+revision uses a chain-of-thought with `<scratchpad>` planning before the
+final output.
 
 ## YAML structure
 
@@ -10,35 +12,38 @@ producing output wrapped in XML tags. Each round uses a chain-of-thought with
 name: agent_name
 description: One-line description.
 # inherits: parent_agent   # optional — inherit and override an existing agent
+temperature: 0.1 # 0.1 for editing, 0.5-0.8 for creative tasks
 
-settings:
-  agentCategory: workflow
-  isRewrite: true # true = editing existing docs, false = creating new
-  rounds: 2 # 1 or 2 (default 2)
-  temperature: 0.1 # 0.1 for editing, 0.5-0.8 for creative tasks
+prompt: |
+  [Role, LaTeX conventions, task instructions — use LaTeX formatting like \begin{itemize}]
 
-prompts:
-  systemPrompt: |
-    [Role, LaTeX conventions, task instructions — use LaTeX formatting like \begin{itemize}]
-  userPrefix: |
+task:
+  rewrite: true # true = editing existing docs (default), false = creating new
+  prefix: |
     <documents>
     {{ ALL_CONTEXTS }}
     {{ ALL_INPUTS }}
     </documents>
     <instruction>{{ INSTRUCTION }}</instruction>
-  userRequest: # MUST be an array with exactly `rounds` entries
+  requests: # one revision per entry, in order
     - |
-      [Round 1: plan in <scratchpad>, then emit output as <documents><document name="output.tex">...</document></documents>]
+      [Revision 1: plan in <scratchpad>, then emit output as <documents><document name="output.tex">...</document></documents>]
     - |
-      [Round 2: reflect in <scratchpad>, then emit the refined <documents><document name="output.tex">...</document></documents>]
+      [Revision 2: reflect in <scratchpad>, then emit the refined <documents><document name="output.tex">...</document></documents>]
 ```
+
+The file is flat: `name`, `description`, `inherits`, `temperature` and
+`prompt` sit at the top level, and the `task` block holds `rewrite`,
+`outputs`, `files`, `prefix` and `requests`. Unknown keys are refused, and
+there is no reader for the old nested `settings:` / `prompts:` format.
 
 ## Critical rules
 
-- `userRequest` MUST have the same number of entries as `rounds`. Round 1
-  → one entry; round 2 → two entries.
-- Always include `{{ INSTRUCTION }}` somewhere so user instructions pass
-  through.
+- `task.requests` needs at least one entry. The number of entries is the
+  number of revisions; there is no separate round count.
+- A `task` file cannot declare `tools`: a document task works text-only.
+- Always include `{{ INSTRUCTION }}` somewhere in `prefix` or `requests` so
+  user instructions pass through.
 - System prompts should use LaTeX formatting (`\begin{itemize}`,
   `\textbf{}`, etc.), not Markdown.
 - Agent names: lowercase with underscores or dashes. No spaces, no YAML
@@ -59,21 +64,25 @@ Workflow agent prompts receive:
   `{{ INPUT_FILES | default([], true) | join(", ") }}` for a human-readable list
   (guards against null/absent `INPUT_FILES` so the prompt renders safely).
 - `{{ OUTPUT_FILES }}` — ordered list of declared generated filenames. This is
-  only populated when the agent has explicit `outputFiles` or
-  `settings.defaultOutputFiles`.
+  only populated when the launch names output files or the agent declares
+  `task.outputs`.
+- `{{ X_FILE }}` and `{{ X_CONTENT }}` — for each `task.files` binding
+  `X: some_file.tex`, the path and text of that file, which lives beside the
+  agent YAML.
 
-Both categories support `{% if IS_ANTHROPIC_MODEL %}...{% endif %}` blocks
+The `prompt` of either kind of agent supports `{% if IS_ANTHROPIC_MODEL %}...{% endif %}` blocks
 for model-specific instructions. It is the only model gate: there is no
 variable for any other provider, and an invented one renders as false.
 
 ## Settings guide
 
-- `isRewrite`: true when the agent edits / revises / corrects existing
-  documents, false when it creates new content from scratch.
-- `temperature`: low (0.1) for editing and correction, higher (0.5–0.8) for
-  creative or generative work.
-- `rounds`: 1 for single-pass tasks, 2 when reflection materially improves
-  the output.
+- `task.rewrite`: true (the default) when the agent edits / revises /
+  corrects existing documents, which are diffed against the inputs; false
+  when it creates new content from scratch.
+- `temperature`: optional, 0 to 1, default 1.0. Low (0.1) for editing and
+  correction, higher (0.5–0.8) for creative or generative work.
+- `task.requests`: one entry for single-pass tasks, two when reflection
+  materially improves the output.
 
 ## Multiple-output agents
 
@@ -85,11 +94,11 @@ they produce one file or many. No separate `_multiple` variant is needed.
 - For editing agents, iterate over `INPUT_FILES` to emit one
   `<document name="filename.tex">` block per selected input file inside
   `<documents>`.
-- Add `defaultOutputFiles` only when the agent produces generated files with
+- Add `task.outputs` only when the agent produces generated files with
   fixed names distinct from the inputs. Those names are exposed as
   `OUTPUT_FILES`.
 
-Example output format in `userRequest`:
+Example output format in a `task.requests` entry:
 
 ```
 <documents>
@@ -103,41 +112,41 @@ Example output format in `userRequest`:
 
 ## Inheritance
 
-Agents can inherit from existing agents via `inherits: parent_name`. Only the
-fields you specify are overridden; everything else comes from the parent.
+Agents can inherit from existing agents via `inherits: parent_name` (from the
+same source). Only the fields you specify are overridden; everything else
+comes from the parent. A child's `task` block merges with the parent's field
+by field, and lists such as `requests` or `outputs` replace the parent's
+list rather than extend it.
 
-## Example: the `polish` agent
+## Example: a `polish` agent
 
 ```yaml
 name: polish
 description: Improves writing quality and clarity based on your instructions.
 
-settings:
-  agentCategory: workflow
+prompt: |
+  You are a professional scientist. Your task is to improve a LaTeX research
+  paper focused solely on the given instructions.
 
-prompts:
-  systemPrompt: |
-    You are a professional scientist. Your task is to improve a LaTeX research
-    paper focused solely on the given instructions.
+  When writing a \LaTeX document, you must:
+  \begin{itemize}
+    \item Follow chktex-friendly conventions.
+    \item Use consistent notation.
+    \item Preserve comments starting with `%'.
+    \item Use `` or '' rather than straight quotes.
+    \item \textbf{IMPORTANT:} Emit the complete output with all sections in
+    original order.
+  \end{itemize}
 
-    When writing a \LaTeX document, you must:
-    \begin{itemize}
-      \item Follow chktex-friendly conventions.
-      \item Use consistent notation.
-      \item Preserve comments starting with `%'.
-      \item Use `` or '' rather than straight quotes.
-      \item \textbf{IMPORTANT:} Emit the complete output with all sections in
-      original order.
-    \end{itemize}
-
-  userPrefix: |
+task:
+  prefix: |
     <documents>
     {{ ALL_CONTEXTS }}
     {{ ALL_INPUTS }}
     </documents>
     <instruction>{{ INSTRUCTION }}</instruction>
 
-  userRequest:
+  requests:
     - |
       Brainstorm in <scratchpad>, then output the revised LaTeX inside
       <documents>

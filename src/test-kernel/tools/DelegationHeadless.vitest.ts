@@ -442,7 +442,7 @@ describe('headless delegation', () => {
     await Effect.runPromise(inBandSession.settlePublications());
     mocks.prepareAgentDefinition.mockImplementation(
       ({ config }: { config: unknown }) =>
-        Effect.succeed({ config, setting: { defaultOutputFiles: [] } }),
+        Effect.succeed({ config, persona: { tools: [] }, task: null }),
     );
     // Production's `registerRun` commits the run's existence fact before it
     // returns, and a child's own rows (`child.turn`, its terminal fact) are
@@ -535,13 +535,10 @@ describe('headless delegation', () => {
     'validates workflow inputs against its once-loaded definition before registration',
     () =>
       Effect.gen(function* () {
-        const setting = {
-          defaultOutputFiles: [] as string[],
-          tools: ['read_file'],
-        };
+        const task = { outputs: [] as string[] };
         mocks.prepareAgentDefinition.mockImplementation(
           ({ config }: { config: unknown }) =>
-            Effect.succeed({ config, setting }),
+            Effect.succeed({ config, persona: { tools: [] }, task }),
         );
         const options = delegationOptions({
           configPayload: {
@@ -566,7 +563,7 @@ describe('headless delegation', () => {
           message: expect.stringContaining('pass options.inputFiles'),
         });
         expect(mocks.registerRun).not.toHaveBeenCalled();
-        setting.defaultOutputFiles = ['generated.tex'];
+        task.outputs = ['generated.tex'];
         mocks.prepareAgentDefinition.mockClear();
         mocks.executeAgent.mockResolvedValue({
           outcome: 'completed',
@@ -580,7 +577,7 @@ describe('headless delegation', () => {
         yield* run();
         expect(mocks.prepareAgentDefinition).toHaveBeenCalledOnce();
         expect(mocks.executeAgent).toHaveBeenCalledWith(
-          expect.objectContaining({ setting }),
+          expect.objectContaining({ task }),
           expect.any(String),
           expect.any(Object),
         );

@@ -8,10 +8,7 @@ import { it } from '@effect/vitest';
 import { afterAll, beforeAll, describe, expect } from 'vitest';
 
 // Local imports
-import {
-  AgentPromptSchema,
-  AgentSettingSchema,
-} from '@agent/core/definition/AgentDataclass';
+import { PersonaSchema } from '@agent/core/definition/AgentDataclass';
 import {
   findAgentByIdentifier,
   getCategoryAgent,
@@ -68,18 +65,15 @@ describe('cross-category agent resolution', () => {
       'assistant.yaml': [
         'name: assistant',
         'description: Custom workflow agent that shadows a built-in name.',
-        'settings:',
-        '  agentCategory: workflow',
-        'prompts:',
-        '  systemPrompt: Custom workflow assistant.',
+        'prompt: Custom workflow assistant.',
+        'task:',
+        '  requests:',
+        '    - Revise the documents.',
       ],
       'review.yaml': [
         'name: review',
         'description: Custom tool-use agent that shadows a built-in name.',
-        'settings:',
-        '  agentCategory: toolUse',
-        'prompts:',
-        '  systemPrompt: Custom review agent.',
+        'prompt: Custom review agent.',
       ],
     };
     const customDir = await makeTempDir('texra-custom-agent-', tempDirs);
@@ -251,10 +245,8 @@ describe('findAgentByIdentifier (shared identity rule)', () => {
       source,
       path: '',
       category: AgentCategory.ToolUse,
-      setting: AgentSettingSchema.parse({
-        agentCategory: AgentCategory.ToolUse,
-      }),
-      prompt: AgentPromptSchema.parse({}),
+      persona: PersonaSchema.parse({}),
+      task: null,
     };
   }
   const entries = [

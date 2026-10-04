@@ -55,8 +55,8 @@ import type {
 } from './runtimePresentationEvents';
 
 /**
- * The launch facts carried by {@link AgentRunShape}. The run narrows `setting`
- * to its resolved tool list; every other fact reaches it unchanged.
+ * The launch facts carried by {@link AgentRunShape}. The run narrows the
+ * persona to its resolved tool list; every other fact reaches it unchanged.
  */
 type LaunchResolvedRunFacts = Pick<
   AgentRunShape,
@@ -65,8 +65,8 @@ type LaunchResolvedRunFacts = Pick<
   | 'workingDirectory'
   | 'delegationAgentScope'
   | 'config'
-  | 'setting'
-  | 'prompt'
+  | 'persona'
+  | 'task'
   | 'logger'
   | 'parentStage'
   | 'toolPolicy'
@@ -258,7 +258,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
         agentEntry,
         yield* readInstalledPluginLoad(input.session.roots),
       );
-    const { setting, prompt } = agentEntry;
+    const { persona, task } = agentEntry;
 
     // A declared tool no plugin registers, and no MCP server could, is a
     // configuration error (a typo, or a tool retired from the table): the
@@ -266,7 +266,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     // still withholds its tools quietly at the step: that is the user's
     // switch, not the file's.
     const table = yield* ToolRegistry;
-    const unknown = declaredToolNames(setting.tools).filter(
+    const unknown = declaredToolNames(persona.tools).filter(
       (name) => !table.get(name) && mcpServerOfToolName(name) === undefined,
     );
     if (unknown.length > 0)
@@ -282,11 +282,11 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     // from a run record. Opt-in: chat roots, the CLI, subagents and resume.
     if (
       input.enforceCategory &&
-      fullConfig.agentCategory !== setting.agentCategory
+      fullConfig.agentCategory !== agentEntry.category
     ) {
       return yield* Effect.fail(
         new AgentError(
-          `Agent '${fullConfig.agent}' is a ${setting.agentCategory} agent but was launched as ${fullConfig.agentCategory}.`,
+          `Agent '${fullConfig.agent}' is a ${agentEntry.category} agent but was launched as ${fullConfig.agentCategory}.`,
         ),
       );
     }
@@ -306,15 +306,15 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     const explicit = fullConfig.outputFiles.filter(Boolean);
     const config: AgentConfig = {
       ...fullConfig,
-      agentCategory: setting.agentCategory,
+      agentCategory: agentEntry.category,
       agentSource: agentEntry.source,
       outputFiles: explicit.some(
         (file) => !fullConfig.inputFiles.includes(file),
       )
         ? explicit
-        : (setting.defaultOutputFiles ?? []).filter(Boolean),
+        : (task?.outputs ?? []).filter(Boolean),
     };
-    return { config, setting, prompt, agentEntry, modelConfig };
+    return { config, persona, task, agentEntry, modelConfig };
   },
   // No run exists yet, so no `result` event will present this failure: the
   // generic toast is its one surface. Once assembly begins, the terminal
@@ -359,8 +359,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     Error,
     Secrets | AppState | FileSystem.FileSystem | Scope.Scope
   > {
-    const { config, setting, prompt, agentEntry, modelConfig } =
-      input.definition;
+    const { config, persona, task, agentEntry, modelConfig } = input.definition;
     // The run's working directory is decided here, once: absolute or absent.
     // Every tool call of the run carries it as `ToolCall.workingDirectory`
     // and trusts it rather than re-validating.
@@ -402,7 +401,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     // and the append is uninterruptible: a stop lands before or after.
     if (input.resumed) {
       yield* Effect.uninterruptible(
-        commitResumedActivation(session, runId, setting.agentCategory),
+        commitResumedActivation(session, runId, config.agentCategory),
       );
     }
 
@@ -414,7 +413,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     const initialInstruction =
       displayInstruction && !input.resumed ? displayInstruction : undefined;
     const supportsMediaInMessage =
-      setting.agentCategory === AgentCategory.ToolUse
+      task === null
         ? modelConfig.capabilities.supportsVision ||
           modelConfig.capabilities.supportsNativeAudio
         : modelConfig.capabilities.supportsVision;
@@ -453,7 +452,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     const buildVars = (stageId?: string) =>
       buildTemplateInputs(
         config,
-        setting,
+        task,
         agentPath,
         modelConfig.provider === ModelProvider.ANTHROPIC,
         agentLogger,
@@ -469,7 +468,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
 
     // A tool-use run whose rows hold its opening renders nothing again.
     const opening = yield* Effect.suspend(() => {
-      if (setting.agentCategory === AgentCategory.ToolUse)
+      if (task === null)
         return recorded === undefined ? buildVars() : Effect.succeed(null);
 
       const initStage = parentStage.child('Init');
@@ -490,8 +489,8 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
       delegationAgentScope: config.delegationAgentScope,
       config,
       resolvedAgentDescription: agentEntry.description,
-      setting,
-      prompt,
+      persona,
+      task,
       modelConfig,
       ownApiKeyFallback: input.ownApiKeyFallback ?? false,
       // Frozen so nothing mutates it mid-run. A background script's run

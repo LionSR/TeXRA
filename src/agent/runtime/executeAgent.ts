@@ -217,7 +217,7 @@ function launchWorkflowRun(
     if (runEnd.error || !options.publishWorkflowOutput) return runEnd;
     const publication = yield* options.publishWorkflowOutput(
       runEnd,
-      ctx.setting.defaultOutputFiles,
+      ctx.task?.outputs ?? [],
     );
     // Output the user asked for and did not get fails the run; a stop still
     // reads as the stop it was.
@@ -306,7 +306,7 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   publishWorkflowOutput?: (
     result: WorkflowRunEndResult,
     /**
-     * The `defaultOutputFiles` declared by the definition this run loaded —
+     * The `task.outputs` declared by the definition this run loaded —
      * the run's own copy, so a host never re-reads a catalog entry that may
      * have been refreshed since the launch.
      */
@@ -356,7 +356,7 @@ export function executeAgent(
         parentOffered: options.parentOffered,
       },
     });
-    const { setting, config, session: runSession } = ctx;
+    const { config, session: runSession } = ctx;
 
     // Start description generation concurrently with the run, and settle
     // it before the run ends (`settleDescriptionOnExit`), so the metadata
@@ -419,7 +419,7 @@ export function executeAgent(
             withLogChannel(CHANNEL),
           );
 
-          if (setting.agentCategory === AgentCategory.ToolUse) {
+          if (config.agentCategory === AgentCategory.ToolUse) {
             return yield* launchToolUseRun(ctx, handle, options, {
               kind: 'fresh',
             });
@@ -510,7 +510,7 @@ export function resumeToolUseFromResumeData(
     return yield* runWithLifecycle(
       ctx,
       (handle) =>
-        ctx.setting.agentCategory === AgentCategory.Workflow
+        ctx.config.agentCategory === AgentCategory.Workflow
           ? launchWorkflowRun(ctx, options, true)
           : launchToolUseRun(ctx, handle, options, {
               kind: 'resume',

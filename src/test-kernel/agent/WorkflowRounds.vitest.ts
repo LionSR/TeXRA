@@ -182,16 +182,6 @@ vi.mock('@agent/output/outputValidation', () => ({
 
 vi.mock('@agent/prompt/PromptBuilder', () => ({
   getSystemPromptWithRules: vi.fn(() => Effect.succeed('system')),
-  PromptBuilder: class {
-    buildInitialPrompts = () =>
-      Effect.succeed({
-        userPrefix: '',
-        userRequest: 'Write the document.',
-      });
-
-    buildUserRequest = (round: number) =>
-      Effect.succeed(`Revise for round ${round}.`);
-  },
 }));
 
 setupPlatform({

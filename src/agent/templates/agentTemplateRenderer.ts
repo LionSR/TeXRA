@@ -26,7 +26,7 @@ export const DEFAULT_AGENT_TEMPLATE_TOOLS_YAML = [
   'glob',
   'grep',
 ]
-  .map((tool) => `    - ${tool}`)
+  .map((tool) => `  - ${tool}`)
   .join('\n');
 
 /**

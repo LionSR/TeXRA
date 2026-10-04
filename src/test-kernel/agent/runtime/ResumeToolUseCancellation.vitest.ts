@@ -92,7 +92,6 @@ import {
   type AggregateId,
   RUN_OUTCOME,
   type RunId,
-  AgentCategory,
 } from '@shared/schemas';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { fakeProcessServices } from '@test/support/setupPlatform';
@@ -160,7 +159,8 @@ function resumeToolUseFromResumeData(
 /** Minimal launch context for a resumed tool-use run that reaches the flow. */
 function buildResumeContext(runId: RunId): AgentLaunchContext {
   return {
-    setting: { agentCategory: AgentCategory.ToolUse },
+    persona: { prompt: '', tools: [], temperature: 1 },
+    task: null,
     runId,
     session: LANE_SESSION,
     config: { agent: 'test-agent', model: 'test-model' },

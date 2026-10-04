@@ -9,17 +9,13 @@ export type {
 } from '@agent/core/definition/AgentConfig';
 export {
   AgentDefinitionSchema,
-  AgentPromptSchema,
-  AgentSettingSchema,
-  AgentToolUseSettingSchema,
-  AgentWorkflowSettingSchema,
+  DocumentTaskSchema,
+  PersonaSchema,
 } from '@agent/core/definition/AgentDataclass';
 export type {
   AgentDefinition,
-  AgentPrompt,
-  AgentSetting,
-  AgentToolUseSetting,
-  AgentWorkflowSetting,
+  DocumentTask,
+  Persona,
 } from '@agent/core/definition/AgentDataclass';
 export {
   ToolUseRunEndResultSchema,
