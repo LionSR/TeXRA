@@ -206,19 +206,21 @@ export const sessionEventsLayer = Layer.effect(
     const track = (rows: readonly SessionEvent[]) => {
       foldLifecycle(rows);
       for (const row of rows) {
-        const state = stateOf(row.aggregateId);
         if (row.type === 'run.removed') {
-          state.open = state.followUps = state.hydrated = undefined;
+          const state = aggregates.get(row.aggregateId);
+          if (state) state.open = state.followUps = state.hydrated = undefined;
           continue;
         }
         if (isFollowUpRow(row)) {
+          const state = stateOf(row.aggregateId);
           const slice = state.followUps ?? freshRunRows();
           const verdict = applyRunRow(slice, row);
           if (verdict.kind === 'applied')
             state.followUps = { ...slice, ...verdict.rows };
           continue;
         }
-        const work = state.open ?? new Map<string, OpenWork>();
+        const work =
+          aggregates.get(row.aggregateId)?.open ?? new Map<string, OpenWork>();
         const close = (kind: OpenWork['kind'], id: string) => {
           if (work.get(id)?.kind === kind) work.delete(id);
         };
@@ -236,7 +238,11 @@ export const sessionEventsLayer = Layer.effect(
         } else {
           continue;
         }
-        state.open = work.size === 0 ? undefined : work;
+        if (work.size > 0) stateOf(row.aggregateId).open = work;
+        else {
+          const state = aggregates.get(row.aggregateId);
+          if (state) state.open = undefined;
+        }
       }
     };
     // Both of `appendAll`'s refusals pass through typed (D6 b): a lost
