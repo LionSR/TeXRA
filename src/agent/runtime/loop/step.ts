@@ -64,7 +64,7 @@ import type { Continuation } from '@tools/toolTable';
 import type { StepRoot } from '@utils/files/externalRoots';
 
 import { declaredToolNames, resolveStepTools } from '../agentToolResolution';
-import { withholdsApprovalTools } from '../requestPolicy';
+import { liveToolGates } from '../requestPolicy';
 import { blobRows, contextAt, stored } from '../run/requestContext';
 import { toolDefinitionsFor } from '../run/tools';
 import { appendRow, rowAggregate } from './rows';
@@ -274,7 +274,7 @@ const openStep = Effect.fn('Step.open')(function* (
     // step's offer.
     const resolved = yield* resolveStepTools(pinned.generation, {
       ...run.toolInputs,
-      approvalPromptsUnavailable: withholdsApprovalTools(run.session),
+      ...liveToolGates(run.session),
     });
     const held = recorded === null ? null : heldToRecord(resolved, recorded);
     const tools = describedAtFreeze(

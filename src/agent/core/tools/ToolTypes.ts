@@ -39,6 +39,10 @@ export interface ToolGuard<T, R = never> {
   readonly cwd?: 'unknown';
 }
 
+/** A host capability a tool needs: `diagnostics` is a file's diagnostics
+ *  from the host's editor. */
+export type HostToolCapability = 'diagnostics';
+
 /**
  * Contract for tool implementations.
  * `defineTool` provides the canonical implementation with Zod validation. Expected
@@ -50,6 +54,9 @@ export interface ITool<E = Error, R = never> {
   readonly definition: ToolDefinition;
   /** Hosts this tool is statically excluded from; an omitted host supports it. */
   readonly unavailableHosts?: readonly SettingHost[];
+  /** What the session's host must serve for this tool to be offered, read
+   *  live each step: a window that attaches mid-run brings it. */
+  readonly hostCapability?: HostToolCapability;
   /**
    * True only for tools that are side-effect-free AND approval-free, so
    * parallel calls in one model response may execute concurrently.

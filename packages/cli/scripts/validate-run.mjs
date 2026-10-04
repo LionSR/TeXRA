@@ -33,6 +33,11 @@ const binaryPath = process.env.TEXRA_CLI_RUN_VALIDATOR_BINARY?.trim()
   ? path.resolve(process.env.TEXRA_CLI_RUN_VALIDATOR_BINARY)
   : defaultValidationBinaryPath;
 const validationRoot = path.dirname(path.dirname(binaryPath));
+// The editor-less window the host-call validation attaches to the service.
+const hostHarnessPath = path.join(
+  path.dirname(binaryPath),
+  'service-host-harness.js',
+);
 const validationResourcesPath = path.join(validationRoot, 'resources');
 const validationEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL';
 const validationFlagEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_FLAG';
@@ -1482,6 +1487,151 @@ async function validateServiceChatsSeeEachOther() {
 }
 
 /**
+ * Host calls (the service's runs reaching a window's editor): an
+ * editor-less window attaches to the service offering `readDiagnostics`,
+ * and a service task's diagnostics tool gets that window's answer. A second
+ * window that never answers is killed mid-call, and the next task's tool
+ * reports the typed failure instead of waiting. Both tool results are the
+ * artifact.
+ */
+async function validateServiceHostCalls() {
+  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-service-host-'));
+  const project = echoProject(cwd);
+  const storageRoot = path.join(cwd, 'home', '.texra');
+  writeFileSync(
+    path.join(
+      storageRoot,
+      'v1',
+      'global-storage',
+      'custom_agents',
+      'diag.yaml',
+    ),
+    `name: diag_validation
+description: Read one file's diagnostics.
+tools: [diagnostics]
+
+prompt: |
+  GOLDEN-DIAGNOSTICS
+`,
+  );
+  writeFileSync(
+    path.join(project.work, 'main.tex'),
+    '\\documentclass{article}\n\\begin{document}\nHello\n\\end{document}\n',
+  );
+  const env = {
+    ...project.ptyEnv,
+    TEXRA_NO_TELEMETRY: '1',
+    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+  };
+  const texra = (args, label) => {
+    const result = run(
+      process.execPath,
+      [binaryPath, ...args, '--cwd', project.work],
+      { cwd: project.work, env },
+    );
+    assertSuccess(result, label);
+    return result.stdout.trim();
+  };
+  const waitFor = async (label, check, timeoutMs = 120_000) => {
+    const deadline = Date.now() + timeoutMs;
+    while (!check()) {
+      assert(Date.now() < deadline, `timed out waiting for ${label}`);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  };
+  // The task's tool results, from the project's store.
+  const toolResults = (runId) => {
+    const storage = path.join(storageRoot, 'v1', 'workspace-storage');
+    const dir = readdirSync(storage).find((name) => name.startsWith('work-'));
+    if (dir === undefined) return [];
+    const db = new DatabaseSync(path.join(storage, dir, 'texra.db'), {
+      readOnly: true,
+    });
+    try {
+      return db
+        .prepare(
+          `SELECT e.data FROM event e
+           JOIN event_sequence s ON s.id = e.aggregate
+           WHERE s.logical_id = ? AND e.type = 'tool.result'
+           ORDER BY e."commit"`,
+        )
+        .all(runId)
+        .map((row) => String(row.data));
+    } finally {
+      db.close();
+    }
+  };
+  const windows = [];
+  const attachWindow = async (mode) => {
+    const child = spawn(
+      process.execPath,
+      [hostHarnessPath, storageRoot, project.work, mode],
+      { cwd: project.work, env: { ...process.env, ...env } },
+    );
+    const state = { child, stdout: '', stderr: '' };
+    child.stdout.on('data', (chunk) => (state.stdout += chunk));
+    child.stderr.on('data', (chunk) => (state.stderr += chunk));
+    state.exited = new Promise((resolve) => child.on('close', resolve));
+    windows.push(state);
+    await waitFor(`the ${mode} window to attach`, () =>
+      state.stdout.includes('ATTACHED'),
+    );
+    return state;
+  };
+  const startTask = () =>
+    texra(
+      [
+        'tasks',
+        'start',
+        'diag_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        'Read the diagnostics',
+      ],
+      'texra tasks start diag_validation',
+    );
+  try {
+    // Any client starts the service; the harness only attaches to one.
+    texra(['tasks', 'list'], 'texra tasks list');
+    const answering = await attachWindow('answer');
+    const answered = startTask();
+    await waitFor('the answered read', () => toolResults(answered).length > 0);
+    answering.child.kill();
+    await answering.exited;
+    const hanging = await attachWindow('hang');
+    const detached = startTask();
+    await waitFor('the hanging window to be asked', () =>
+      hanging.stdout.includes('CALLED'),
+    );
+    hanging.child.kill('SIGKILL');
+    await waitFor('the detached read', () => toolResults(detached).length > 0);
+    const artifactPath = writeArtifact('service-host-calls.json', {
+      answered: toolResults(answered),
+      detached: toolResults(detached),
+    });
+    assert(
+      answering.stdout.includes('CALLED') &&
+        toolResults(answered).some((data) =>
+          data.includes('HARNESS-DIAG in main.tex'),
+        ),
+      `a service task's diagnostics read should get the attached window's answer (artifact: ${artifactPath})`,
+    );
+    assert(
+      toolResults(detached).some((data) => data.includes('(detached)')),
+      `a read whose window detached mid-call should fail as detached (artifact: ${artifactPath})`,
+    );
+  } finally {
+    for (const window of windows) window.child.kill('SIGKILL');
+    run(process.execPath, [binaryPath, 'service', 'stop'], {
+      cwd: project.work,
+      env,
+    });
+    rmSync(cwd, { recursive: true, force: true });
+  }
+}
+
+/**
  * `/tasks` in the chat (D1–D4): a task started in the service under the
  * `ask` policy opens a command approval; `texra chat` lists it with
  * `/tasks`, attaches, approves the command in place and sends a follow-up,
@@ -2121,6 +2271,7 @@ async function validateCliRunArtifacts(options = {}) {
   await validateServiceSharedTask();
   await validateServiceTasksInTui();
   await validateServiceChatsSeeEachOther();
+  await validateServiceHostCalls();
   validateScriptFanoutRunCommand();
   validateTeamRunCommand();
   console.log('CLI run validation passed');
@@ -2144,6 +2295,13 @@ function buildValidationBundle() {
   runCliPackageScript('copy:resources', {
     env: { TEXRA_CLI_RESOURCES_OUTDIR: validationResourcesPath },
   });
+  assertSuccess(
+    run(process.execPath, ['scripts/build-bundle.mjs', '--host-harness'], {
+      cwd: cliRoot,
+      env: { TEXRA_CLI_BUNDLE_OUTFILE: hostHarnessPath },
+    }),
+    'build the service host harness',
+  );
 }
 
 const args = parseArgs(process.argv.slice(2));
