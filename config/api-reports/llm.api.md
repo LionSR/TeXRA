@@ -1,0 +1,120 @@
+# `@texra-ai/llm` API report
+
+Generated from `packages/llm/src/index.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. A diff here is a change to the public surface.
+
+Exports: 114
+
+- `acceptedEfforts` — `function acceptedEfforts: (config: Pick<ModelConfig, "reasoning">) => ReasoningEffort[]`
+- `AnthropicMessagesConfiguration` — `type AnthropicMessagesConfiguration = Extract<ModelConfiguration, { protocol: 'anthropic-messages'; }>;`
+- `API_KEY_ENV_NAMES` — `const API_KEY_ENV_NAMES: readonly string[]`
+- `API_KEY_PROVIDER_IDS` — `const API_KEY_PROVIDER_IDS: readonly ("openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "openRouter" | "kimiCode")[]`
+- `apiKeyEnvName` — `function apiKeyEnvName: (provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "openRouter" | "kimiCode") => string`
+- `ApiKeyProviderId` — `type ApiKeyProviderId = Extract<ModelProviderPluginEntry, { readonly apiKey: true; }>['id'];`
+- `apiKeySecretName` — `function apiKeySecretName: (provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "openRouter" | "kimiCode") => string`
+- `ApiKeyStatus` — `type ApiKeyStatus = 'set' | 'env' | 'not-set';`
+- `apiProviderOfSecretName` — `function apiProviderOfSecretName: (key: string) => "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "openRouter" | "kimiCode" | undefined`
+- `assistantMessageFromResult` — `function assistantMessageFromResult: (result: Readonly<{ modelFingerprint: string | null; content: readonly (Readonly<{ kind: "message"; content: readonly (Readonly<{ kind: "text"; text: string; }> | Readonly<{ kind: "refusal"; text: string; }>)[]; evidence?: Readonly<...> | undefined; }> | Readonly<...> | Readonly<...>)[]; ... 9 more ...; continuation...`
+- `BackgroundEvent` — `type BackgroundEvent = z.infer<typeof BackgroundEventSchema>;`
+- `BackgroundEventSchema` — `const BackgroundEventSchema: ZodUnion<readonly [ZodDiscriminatedUnion<[ZodReadonly<ZodObject<{ providerResponseId: ZodString; returnedModel: ZodNullable<ZodString>; kind: ZodLiteral<"identified">; requestedOrigin: ZodReadonly<...>; afterSequence: ZodInt; }, $strict>>, ZodReadonly<...>, ZodReadonly<...>, ZodReadonly<...>, ZodReadonly<...>], "kin...`
+- `BackgroundSubmission` — `type BackgroundSubmission = z.infer<typeof BackgroundSubmissionSchema>;`
+- `BackgroundSubmissionSchema` — `const BackgroundSubmissionSchema: ZodDiscriminatedUnion<[ZodReadonly<ZodObject<{ kind: ZodLiteral<"accepted">; operation: ZodUnion<readonly [ZodReadonly<ZodObject<{ origin: ZodReadonly<ZodObject<{ requestedModel: ZodString; deployment: ZodReadonly<ZodObject<{ endpoint: ZodURL; credentialScope: ZodString; }, $strict>>; codecVersion: ZodLiteral<...>; ...`
+- `buildBaseModelOption` — `function buildBaseModelOption: (model: string, config: ModelConfig, hintConfig?: ModelConfig, source?: string) => BaseModelOption`
+- `CancellationEvidence` — `type CancellationEvidence = z.infer<typeof CancellationEvidenceSchema>;`
+- `CancellationEvidenceSchema` — `const CancellationEvidenceSchema: ZodDiscriminatedUnion<[ZodReadonly<ZodObject<{ providerResponseId: ZodString; requestedOrigin: ZodReadonly<ZodObject<{ requestedModel: ZodString; deployment: ZodReadonly<ZodObject<{ endpoint: ZodURL; credentialScope: ZodString; }, $strict>>; protocol: ZodEnum<...>; codecVersion: ZodLiteral<...>; }, $strict>>; return...`
+- `chooseReasoning` — `function chooseReasoning: (config: Pick<ModelConfig, "reasoning" | "label" | "modes">, request?: ReasoningRequest, options?: ChooseReasoningOptions) => ReasoningChoice`
+- `ChooseReasoningOptions` — `interface ChooseReasoningOptions { readonly userEffort?: ReasoningEffort; readonly routeEfforts?: readonly ReasoningEffort[]; readonly strict?: boolean; }`
+- `codexAccountLabel` — `function codexAccountLabel: (account: { readonly email?: string | null | undefined; readonly accountId?: string | null | undefined; } | null | undefined) => string`
+- `codexBackendModelId` — `function codexBackendModelId: (config: Pick<ModelConfig, "id" | "ref">) => string`
+- `CODING_PLAN_SUBSCRIPTIONS` — `const CODING_PLAN_SUBSCRIPTIONS: readonly [Readonly<{ id: "kimiCode"; cliProvider: "kimi-code"; apiProvider: "kimiCode"; exclusiveCredential: true; credentialName: "Kimi Code"; credentialSetupUrl: "https://www.kimi.com/code/console"; ... 7 more ...; retrySourceName: "Kimi Code subscription"; }>, Readonly<...>]`
+- `codingPlanForApiProvider` — `function codingPlanForApiProvider: (provider: string) => Readonly<{ id: "kimiCode"; cliProvider: "kimi-code"; apiProvider: "kimiCode"; exclusiveCredential: true; credentialName: "Kimi Code"; credentialSetupUrl: "https://www.kimi.com/code/console"; ... 7 more ...; retrySourceName: "Kimi Code subscription"; }> | Readonly<...> | undefined`
+- `codingPlanForUsageRoute` — `function codingPlanForUsageRoute: (route: string | undefined) => Readonly<{ id: "kimiCode"; cliProvider: "kimi-code"; apiProvider: "kimiCode"; exclusiveCredential: true; credentialName: "Kimi Code"; credentialSetupUrl: "https://www.kimi.com/code/console"; ... 7 more ...; retrySourceName: "Kimi Code subscription"; }> | Readonly<...> | undefined`
+- `CodingPlanSubscription` — `type CodingPlanSubscription = (typeof CODING_PLAN_SUBSCRIPTIONS)[number];`
+- `CodingPlanSubscriptionId` — `type CodingPlanSubscriptionId = CodingPlanSubscription['id'];`
+- `completedTurn` — `const completedTurn: (events: Stream<Readonly<{ providerResponseId: string; requestedOrigin: Readonly<{ requestedModel: string; deployment: Readonly<{ endpoint: string; credentialScope: string; }>; protocol: "google-interactions" | "openai-responses" | "anthropic-messages" | "openrouter-chat"; codecVersion: 1; }>; returnedModel: string ...`
+- `configuredApiKeyProviders` — `function configuredApiKeyProviders: (credentials: CredentialStore) => Effect<("openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "openRouter" | "kimiCode")[], SecretsFailed, never>`
+- `Continuation` — `type Continuation = z.infer<typeof ContinuationSchema>;`
+- `ContinuationSchema` — `const ContinuationSchema: ZodUnion<readonly [ZodReadonly<ZodObject<{ coveredMessages: ZodInt; prefixFingerprint: ZodString; origin: ZodReadonly<ZodObject<{ requestedModel: ZodString; deployment: ZodReadonly<ZodObject<{ endpoint: ZodURL; credentialScope: ZodString; }, $strict>>; codecVersion: ZodLiteral<...>; protocol: ZodLiteral<...>; }, $st...`
+- `CredentialOrigin` — `type CredentialOrigin = 'secret' | 'env' | 'none';`
+- `CredentialStore` — `interface CredentialStore { get(name: string): Effect.Effect<string | undefined, SecretsFailed>; set(name: string, value: string): Effect.Effect<void, SecretsFailed>; delete(name: string): Effect.Effect<void, SecretsFailed>; }`
+- `decideModelRoute` — `function decideModelRoute: <C>(config: ModelConfig, facts: RouteDecisionFacts<C>) => ModelRoute<C>`
+- `defaultReasoningLevel` — `function defaultReasoningLevel: (config: Pick<ModelConfig, "reasoning" | "label" | "modes">) => ReasoningEffort | undefined`
+- `EndpointProviderId` — `type EndpointProviderId = Extract<ModelProviderPluginEntry, { readonly baseUrl: string | RegionalBaseUrl; }>['id'];`
+- `EXPENSIVE_MODEL_HINT` — `const EXPENSIVE_MODEL_HINT: "💸 Premium API pricing — consider the External Inquiry tool to use your own ChatGPT/Claude subscription instead"`
+- `exposeApiKey` — `function exposeApiKey: (key: Redacted<string>) => string`
+- `FAST_FIRST_RESPONSE_HINT` — `const FAST_FIRST_RESPONSE_HINT: "⚡ Fast first response — try this for quick replies"`
+- `FILE_UPLOAD_LIFETIME_SECONDS` — `const FILE_UPLOAD_LIFETIME_SECONDS: 86400`
+- `FileUpload` — `type FileUpload = z.infer<typeof FileUploadSchema>;`
+- `FileUploadSchema` — `const FileUploadSchema: ZodReadonly<ZodObject<{ mimeType: ZodString; filename: ZodString; base64: ZodBase64; }, $strict>>`
+- `findModelProviderPlugin` — `function findModelProviderPlugin: (id: string) => ModelProviderPlugin | undefined`
+- `getApiKey` — `function getApiKey: (credentials: CredentialStore, provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "openRouter" | "kimiCode") => Effect<...>`
+- `GoogleInteractionsConfiguration` — `type GoogleInteractionsConfiguration = Extract<ModelConfiguration, { protocol: 'google-interactions'; }>;`
+- `hasUsableApiKey` — `function hasUsableApiKey: (credentials: CredentialStore, provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "openRouter" | "kimiCode") => Effect<...>`
+- `HostRouteFacts` — `type HostRouteFacts = Omit<RouteFacts, 'validation' | 'prefersCopilot' | 'copilotRoute'>;`
+- `isApiProvider` — `function isApiProvider: (provider: string) => provider is "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "openRouter" | "kimiCode"`
+- `isDeprecatedModel` — `function isDeprecatedModel: (model: string) => boolean`
+- `isExpensiveModel` — `function isExpensiveModel: (outputPrice: number | undefined) => boolean`
+- `isFastFirstResponseModel` — `function isFastFirstResponseModel: (inputPrice: number | undefined) => boolean`
+- `isKimiCodeExclusiveModel` — `function isKimiCodeExclusiveModel: (model: KimiSubscriptionModelFields) => boolean`
+- `isKimiSubscriptionEligible` — `function isKimiSubscriptionEligible: (model: KimiSubscriptionModelFields) => boolean`
+- `isOpenRouterRoutingUnsupported` — `function isOpenRouterRoutingUnsupported: (config: ModelRoutingConfig, useOpenRouter: boolean, mode: "pro" | undefined) => boolean`
+- `isRetiredModel` — `function isRetiredModel: (model: string) => boolean`
+- `JsonObjectSchema` — `const JsonObjectSchema: ZodPipe<ZodUnknown, ZodReadonly<ZodRecord<ZodString, ZodPipe<ZodJSONSchema, ZodTransform<string | number | boolean | JSONType[] | { [key: string]: JSONType; } | null, JSONType>>>>>`
+- `KIMI_CODE_BASE_URL` — `const KIMI_CODE_BASE_URL: "https://api.kimi.com/coding/v1"`
+- `KimiSubscriptionModelFields` — `interface KimiSubscriptionModelFields { readonly provider?: string; readonly kimiSubscription?: boolean; readonly baseUrl?: string; }`
+- `loadApiKeyStatusMap` — `function loadApiKeyStatusMap: <const Provider extends ApiKeyProviderId>(credentials: CredentialStore, providers: readonly Provider[]) => Effect<Record<Provider, ApiKeyStatus>, SecretsFailed, never>`
+- `lookupApiKey` — `function lookupApiKey: (credentials: CredentialStore, provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "openRouter" | "kimiCode") => Effect<...>`
+- `lookupApiKeyOrigin` — `function lookupApiKeyOrigin: (credentials: CredentialStore, provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "openRouter" | "kimiCode") => Effect<...>`
+- `MessageSchema` — `const MessageSchema: ZodDiscriminatedUnion<[ZodReadonly<ZodObject<{ role: ZodLiteral<"user">; content: ZodReadonly<ZodArray<ZodDiscriminatedUnion<[ZodReadonly<ZodObject<{ kind: ZodLiteral<"text">; text: ZodString; }, $strict>>, ZodReadonly<...>, ZodReadonly<...>], "kind">>>; }, $strict>>, ZodReadonly<...>, ZodReadonly<...>, ZodReadonly<...`
+- `Model` — `interface Model { prepareTurn(request: TurnRequest): Effect.Effect<ResolvedTurn, ModelError>; streamTurn(turn: Extract<ResolvedTurn, { mode: 'foreground'; }>): Stream.Stream<TurnEvent, ModelError>; uploadFile?(file: FileUpload): Effect.Effect<void, ModelError>; releaseUploads?(): Effect.Effect<readonly UnreleasedUpload[]>; readonly background?: { submit(turn: Extract<ResolvedTurn, { mode: 'background'; }>): Effect.Effect<BackgroundSubmission, ModelError>; observe(turn: Extract<ResolvedTurn, { mode: 'background'; }>, operation: RemoteOperation, policy: z.infer<typeof ObservationPolicySchema>): Stream.Stream<BackgroundEvent, ModelError>; cancel(operation: RemoteOperation): Effect.Effect<CancellationEvidence, ModelError>; }; }`
+- `MODEL_PROVIDER_PLUGINS` — `const MODEL_PROVIDER_PLUGINS: readonly ModelProviderPlugin[]`
+- `MODEL_SOURCE_ORDER` — `const MODEL_SOURCE_ORDER: readonly string[]`
+- `modelConfig` — `function modelConfig: (id: string) => ModelConfig | undefined`
+- `ModelConfiguration` — `type ModelConfiguration = z.infer<typeof ModelConfigurationSchema>;`
+- `ModelConfigurationSchema` — `const ModelConfigurationSchema: ZodDiscriminatedUnion<[ZodReadonly<ZodObject<{ requestedModel: ZodString; deployment: ZodReadonly<ZodObject<{ vendor: ZodString; version: ZodString; }, $strict>>; protocol: ZodLiteral<...>; supportsImageInput: ZodBoolean; supportsToolCalling: ZodBoolean; defaults: ZodReadonly<...>; }, $strict>>, ZodReadonly<...>, Zo...`
+- `ModelError` — `class ModelError { static: ; instance: __@NodeInspectSymbol@116, __@iterator@97, _tag, cause, kind, message, model, name, operation, pipe, providerEvidence, requestId, responseId, retryAfterMs, stack, status, toJSON, toString, ~effect/Effect, ~effect/ErrorReporter/attributes, ~effect/ErrorReporter/ignore, ~effect/ErrorReporter/severity, ~effect/Runtime/errorExitCode, ~effect/Runtime/errorReported }`
+- `modelFileName` — `function modelFileName: (id: string) => string`
+- `ModelOrigin` — `type ModelOrigin = z.infer<typeof ModelOriginSchema>;`
+- `ModelOriginSchema` — `const ModelOriginSchema: ZodDiscriminatedUnion<[ZodReadonly<ZodObject<{ requestedModel: ZodString; deployment: ZodReadonly<ZodObject<{ endpoint: ZodURL; credentialScope: ZodString; }, $strict>>; protocol: ZodEnum<...>; codecVersion: ZodLiteral<...>; }, $strict>>, ZodReadonly<...>], "protocol">`
+- `modelRefOf` — `function modelRefOf: (id: string) => string | undefined`
+- `ModelRoute` — `type ModelRoute<C = unknown> = { readonly kind: 'validation'; } | { readonly kind: 'copilot'; readonly route: C | undefined; } | { readonly kind: 'openrouter-unsupported'; } | { readonly kind: 'chatgpt-subscription'; } | { readonly kind: 'xai-subscription'; } | { readonly kind: 'openrouter'; } | { readonly kind: 'api-key'; readonly provider: ApiKeyProviderId; readonly usageRoute: ApiKeyUsageRoute; } | { readonly kind: 'no-api-key'; };`
+- `ObservationPolicySchema` — `const ObservationPolicySchema: ZodReadonly<ZodObject<{ deadlineAtMs: ZodInt; }, $strict>>`
+- `OPENAI_DEFAULT_ENDPOINT` — `const OPENAI_DEFAULT_ENDPOINT: "https://api.openai.com/v1"`
+- `OpenAIResponsesConfiguration` — `type OpenAIResponsesConfiguration = Extract<ModelConfiguration, { protocol: 'openai-responses'; }>;`
+- `OpenRouterConfiguration` — `type OpenRouterConfiguration = Extract<ModelConfiguration, { protocol: 'openrouter-chat'; }>;`
+- `originOf` — `const originOf: <P extends z.infer<typeof OriginSchema>["protocol"]>(config: Pick<{ requestedModel: string; deployment: Readonly<{ endpoint: string; credentialScope: string; }>; protocol: "google-interactions" | "openai-responses" | "anthropic-messages" | "openrouter-chat"; codecVersion: 1; }, "requestedModel" | "deployment"> & { ....`
+- `OWN_KEY_ROUTE_FACTS` — `const OWN_KEY_ROUTE_FACTS: RouteDecisionFacts<never>`
+- `PreparedHistorySchema` — `const PreparedHistorySchema: ZodReadonly<ZodArray<ZodDiscriminatedUnion<[ZodReadonly<ZodObject<{ role: ZodLiteral<"user">; content: ZodReadonly<ZodArray<ZodDiscriminatedUnion<[ZodReadonly<ZodObject<{ kind: ZodLiteral<"text">; text: ZodString; }, $strict>>, ZodReadonly<...>, ZodReadonly<...>], "kind">>>; }, $strict>>, ZodReadonly<...>, ZodReadon...`
+- `PROVIDER_DISPLAY_NAMES` — `const PROVIDER_DISPLAY_NAMES: Record<string, string>`
+- `PROVIDER_URLS` — `const PROVIDER_URLS: Record<string, string>`
+- `providerDisplayName` — `function providerDisplayName: (provider: string) => string`
+- `ReasoningChoice` — `interface ReasoningChoice { readonly thinking: boolean; readonly effort: ReasoningEffort | null; readonly mode: ReasoningMode | null; readonly requested?: ReasoningEffort; readonly note?: string; }`
+- `ReasoningChoiceError` — `class ReasoningChoiceError { static: ; instance: __@NodeInspectSymbol@116, __@iterator@97, _tag, cause, message, name, pipe, stack, toJSON, toString, ~effect/Effect, ~effect/ErrorReporter/attributes, ~effect/ErrorReporter/ignore, ~effect/ErrorReporter/severity, ~effect/Runtime/errorExitCode, ~effect/Runtime/errorReported }`
+- `ReasoningRequest` — `type ReasoningRequest = Omit<ModelSelection, 'ref'>;`
+- `RegionalProviderId` — `type RegionalProviderId = Extract<ModelProviderPluginEntry, { readonly baseUrl: RegionalBaseUrl; }>['id'];`
+- `RemoteOperation` — `type RemoteOperation = z.infer<typeof RemoteOperationSchema>;`
+- `RemoteOperationSchema` — `const RemoteOperationSchema: ZodUnion<readonly [ZodReadonly<ZodObject<{ origin: ZodReadonly<ZodObject<{ requestedModel: ZodString; deployment: ZodReadonly<ZodObject<{ endpoint: ZodURL; credentialScope: ZodString; }, $strict>>; codecVersion: ZodLiteral<...>; protocol: ZodLiteral<...>; }, $strict>>; providerResponseId: ZodString; afterSequence: Z...`
+- `resolveCredential` — `function resolveCredential: (store: Pick<CredentialStore, "get">, name: string, envNames: readonly string[]) => Effect<{ readonly value: string | undefined; readonly origin: CredentialOrigin; }, SecretsFailed, never>`
+- `ResolvedTurn` — `type ResolvedTurn = z.infer<typeof ResolvedTurnSchema>;`
+- `ResolvedTurnSchema` — `const ResolvedTurnSchema: ZodDiscriminatedUnion<[ZodDiscriminatedUnion<[ZodReadonly<ZodObject<{ requestedModel: ZodString; deployment: ZodReadonly<ZodObject<{ vendor: ZodString; version: ZodString; }, $strict>>; ... 7 more ...; messages: ZodReadonly<...>; }, $strict>>, ZodReadonly<...>, ZodReadonly<...>, ZodReadonly<...>, ZodReadonly<...>], ...`
+- `resolveModelSource` — `function resolveModelSource: (config: Pick<ModelConfig, "provider" | "kimiSubscription" | "baseUrl">) => string`
+- `resolveRouteEndpoint` — `function resolveRouteEndpoint: (config: Pick<ModelConfig, "provider" | "baseUrl">, route: { readonly kind: "openrouter"; } | { readonly kind: "api-key"; readonly provider: "openai" | "anthropic" | "google" | ... 8 more ... | "kimiCode"; readonly usageRoute: ApiKeyUsageRoute; }, facts: Pick<...>) => string | undefined`
+- `routeConfig` — `function routeConfig: (config: ModelConfig, route: ModelRoute<unknown>, facts: Pick<RouteFacts<unknown>, "chatgptContextWindow">) => ModelConfig`
+- `RouteFacts` — `interface RouteFacts<C = unknown> { readonly validation: boolean; readonly prefersCopilot: boolean; readonly copilotRoute: C | undefined; readonly useOpenRouter: boolean; readonly mode?: ReasoningMode; readonly chatgptSubscription: boolean; readonly xaiSubscription: boolean; readonly kimiCodeKey: boolean; readonly preferKimiCode: boolean; readonly glmCodingPlan: boolean; readonly chatgptContextWindow: number; readonly endpoints: Readonly<Partial<Record<string, string>>>; }`
+- `sameModelOrigin` — `function sameModelOrigin: (left: Readonly<{ requestedModel: string; deployment: Readonly<{ endpoint: string; credentialScope: string; }>; protocol: "google-interactions" | "openai-responses" | "anthropic-messages" | "openrouter-chat"; codecVersion: 1; }> | Readonly<...>, right: Readonly<...> | Readonly<...>) => boolean`
+- `SecretsFailed` — `class SecretsFailed { static: ; instance: __@NodeInspectSymbol@116, __@iterator@97, _tag, cause, key, message, name, operation, pipe, reason, stack, toJSON, toString, ~effect/Effect, ~effect/ErrorReporter/attributes, ~effect/ErrorReporter/ignore, ~effect/ErrorReporter/severity, ~effect/Runtime/errorExitCode, ~effect/Runtime/errorReported }`
+- `SecretsOperation` — `type SecretsOperation = 'get' | 'set' | 'delete' | 'listStoredKeys';`
+- `SelectedModel` — `interface SelectedModel { readonly id: string; readonly config: ModelConfig; readonly request: Omit<ModelSelection, 'ref'>; }`
+- `selectModel` — `function selectModel: (id: string) => SelectedModel | undefined`
+- `shouldRouteModelThroughOpenRouter` — `function shouldRouteModelThroughOpenRouter: (config: ModelRoutingConfig, useOpenRouter: boolean) => boolean`
+- `systemUpdateText` — `const systemUpdateText: (text: string) => string`
+- `TurnEvent` — `type TurnEvent = z.infer<typeof TurnEventSchema>;`
+- `TurnProtocolSchema` — `const TurnProtocolSchema: ZodEnum<{ "google-interactions": "google-interactions"; "openai-responses": "openai-responses"; "anthropic-messages": "anthropic-messages"; "openrouter-chat": "openrouter-chat"; "vscode-lm": "vscode-lm"; }>`
+- `TurnRequest` — `type TurnRequest = z.infer<typeof TurnRequestSchema>;`
+- `TurnRequestSchema` — `const TurnRequestSchema: ZodReadonly<ZodObject<{ mode: ZodOptional<ZodEnum<{ background: "background"; foreground: "foreground"; }>>; system: ZodOptional<ZodString>; messages: ZodReadonly<...>; ... 5 more ...; cacheKey: ZodOptional<...>; }, $strict>>`
+- `TurnResult` — `type TurnResult = z.infer<typeof TurnResultSchema>;`
+- `TurnResultSchema` — `const TurnResultSchema: ZodDiscriminatedUnion<[ZodReadonly<ZodObject<{ modelFingerprint: ZodNullable<ZodString>; content: ZodReadonly<ZodArray<ZodDiscriminatedUnion<[ZodReadonly<ZodObject<{ kind: ZodLiteral<"message">; content: ZodReadonly<ZodArray<ZodDiscriminatedUnion<[ZodReadonly<ZodObject<{ kind: ZodLiteral<"text">; text: ZodString; },...`
+- `UnreleasedUpload` — `interface UnreleasedUpload { readonly fileId: string; readonly reason: string; }`
+- `VscodeLanguageModelConfiguration` — `type VscodeLanguageModelConfiguration = Extract<ModelConfiguration, { protocol: 'vscode-lm'; }>;`
+- `wireEffort` — `function wireEffort: (config: ModelConfig, reasoning: ReasoningChoice) => ReasoningEffort | null`
+- `xaiAccountLabel` — `function xaiAccountLabel: (account: { readonly email?: string | null | undefined; } | null | undefined) => string`
+- `zeroCostAccessOverrides` — `function zeroCostAccessOverrides: (contextWindow: number) => { readonly inputPrice: 0; readonly outputPrice: 0; readonly contextWindow: number; readonly longContextPricing: undefined; readonly tiers: undefined; }`
