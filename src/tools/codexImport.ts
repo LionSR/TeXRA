@@ -28,7 +28,7 @@ import { Effect, type FileSystem } from 'effect';
 import type { StateReadFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { CodexSandboxMode } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { CodexStateKey } from '@shared/settingsView/integrationSettings';
 import { inheritedEnv } from '@utils/system/envFlags';
 import { readSettingUnlessOverridden } from '@utils/config/platformSettings';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
@@ -213,5 +213,5 @@ export const codexSandboxMode = (
   readSettingUnlessOverridden(
     input.sandbox_mode,
     stores,
-    WorkspaceStateKey.CODEX_SANDBOX_MODE,
+    CodexStateKey.SANDBOX_MODE,
   );

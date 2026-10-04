@@ -2,6 +2,8 @@ import {
   HOST_BRIDGE_API_KEY,
   type HostBridgeApi,
 } from '@shared/hostBridgeTypes';
+import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
+import { installSettingsCatalog } from '@shared/state/stateSettings';
 
 import { createFakeHost, installFakeHost } from './setupPlatform';
 
@@ -16,6 +18,10 @@ const testHostBridge: HostBridgeApi = {
 };
 
 (globalThis as Record<string, unknown>)[HOST_BRIDGE_API_KEY] = testHostBridge;
+
+// TeXRA's settings catalog, as every host's `installProcessRuntime` installs
+// it, so a suite that reads a TeXRA or plugin setting by key needs no runtime.
+installSettingsCatalog(TEXRA_SETTINGS);
 
 // Platform and roots only: the session graph family is installed by the
 // test file's own imports (`sessionTestUtils`, `defaultSessionTestSetup`),

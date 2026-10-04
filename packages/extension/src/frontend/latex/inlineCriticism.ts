@@ -31,7 +31,7 @@ import type { StateReadFailed } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { AddOutputFilesPayload, OutputFileInfo } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { hasExtension } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -186,7 +186,7 @@ function disable(): boolean {
 const reconcile = Effect.fnUntraced(function* (current: CriticismRegistration) {
   const enabled = yield* readSettingFrom<boolean>(
     current.stores,
-    GlobalStateKey.INLINE_CRITICISM_ENABLED,
+    TexraStateKey.INLINE_CRITICISM_ENABLED,
   );
   if (enabled ? enable(current) : disable()) {
     yield* Effect.logInfo(

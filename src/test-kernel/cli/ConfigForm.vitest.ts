@@ -21,7 +21,7 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { CLI_STATE_SETTINGS, settingByKey } from '@shared/state/stateSettings';
+import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
 import type { SurfacedSettingEntry } from '@shared/state/stateSettings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -101,7 +101,7 @@ afterEach(() => {
 });
 
 function entryByKey(key: string): SurfacedSettingEntry {
-  const entry = settingByKey(key);
+  const entry = TEXRA_SETTINGS.byKey(key);
   if (entry?.surfaces === undefined) {
     throw new Error(`missing catalog entry ${key}`);
   }
@@ -398,7 +398,7 @@ describe('/config slash command wiring', () => {
 
         const props = yield* Effect.promise(() => renderConfigFormProps());
         expect(props.entries.map((entry) => entry.key)).toEqual(
-          CLI_STATE_SETTINGS.map((entry) => entry.key),
+          TEXRA_SETTINGS.cliRows.map((entry) => entry.key),
         );
 
         const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);

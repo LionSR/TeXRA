@@ -47,7 +47,7 @@ import {
 } from '@shared/constants/workflowOutput';
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runStateFold';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import {
   agentRunTestLayer,
   textTurn,
@@ -188,7 +188,7 @@ setupPlatform({
   storagePath: fakePath('storage'),
   workspacePath: fakePath('workspace'),
   workspaceState: {
-    [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: true,
+    [TexraStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: true,
   },
 });
 
@@ -403,7 +403,7 @@ function startedRun(session: SessionHandle): RunId {
 const setRejectOnCompileFailure = (enabled: boolean) =>
   installedHost()
     .roots.workspaceState.update(
-      WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+      TexraStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
       enabled,
     )
     .pipe(Effect.orDie);
@@ -548,7 +548,7 @@ describe('the workflow round loop', () => {
           storagePath: fakePath('storage'),
           workspacePath: fakePath('workspace'),
           workspaceState: {
-            [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: false,
+            [TexraStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: false,
           },
         }),
       );
@@ -781,7 +781,7 @@ describe('the output facts a workflow round publishes', () => {
           {
             workspaceState: {
               get: (key: string) =>
-                key === WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF
+                key === TexraStateKey.WORKFLOW_AUTO_OPEN_PDF
                   ? Effect.fail(
                       new StateReadFailed({
                         key,

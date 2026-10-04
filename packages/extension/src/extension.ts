@@ -93,6 +93,7 @@ import {
 import type { CommandId } from '@shared/commands/catalog';
 import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { GlobalDatabase } from '@shared/session/database';
+import { TEXRA_SETTING_ROWS } from '@shared/settingsView/texraSettings';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
@@ -179,6 +180,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         Effect.map(AppState, createVscodeLeanLanguageServices),
       ),
     }),
+    settings: TEXRA_SETTING_ROWS,
     mcpConfigPath: USER_MCP_CONFIG_PATH,
     secrets,
     appState,

@@ -18,7 +18,7 @@ import {
   type RoundIndexed,
   type RunStorageFileLocation,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { RunFileService } from '@utils/files/runStorage';
@@ -240,7 +240,7 @@ export class LatexDiffManager {
 
       const generateBetweenRoundDiffs = yield* readSettingFrom<boolean>(
         this.roots,
-        WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+        TexraStateKey.LATEXDIFF_BETWEEN_ROUNDS,
       );
 
       if (generateBetweenRoundDiffs && currRound > 0) {

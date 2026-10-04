@@ -2,7 +2,7 @@ import { Effect, Result } from 'effect';
 
 import { AppState, type ConfigProvider } from '@platform/interfaces';
 import { TELEMETRY_ENABLED_KEY } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import { TexraStateKey } from '@shared/settingsView/texraSettings';
 
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -20,9 +20,9 @@ export const telemetryNoticeIfDue = Effect.fn('telemetryNoticeIfDue')(
   function* (config: ConfigProvider) {
     if (usageLoggingOptOut(config) !== null) return null;
     const state = yield* AppState;
-    if ((yield* state.get(GlobalStateKey.TELEMETRY_NOTICE_SHOWN)) === true)
+    if ((yield* state.get(TexraStateKey.TELEMETRY_NOTICE_SHOWN)) === true)
       return null;
-    yield* state.modify(GlobalStateKey.TELEMETRY_NOTICE_SHOWN, () =>
+    yield* state.modify(TexraStateKey.TELEMETRY_NOTICE_SHOWN, () =>
       Result.succeed(true),
     );
     return TELEMETRY_NOTICE;

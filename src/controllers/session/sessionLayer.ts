@@ -108,6 +108,11 @@ import {
   type SessionOpenError,
 } from '@shared/session/database';
 import type { UsageLog } from '@shared/usageLog';
+import {
+  installSettingsCatalog,
+  settingsCatalog,
+  type StateSettingEntry,
+} from '@shared/state/stateSettings';
 import { releaseRunResources } from '@tools/approval';
 import { LiveTools } from '@tools/liveTools';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
@@ -966,13 +971,7 @@ const closeSession = (root: string) =>
  * program over this runtime's spawner, read once per process as one of the
  * process services below. The owner it installs answers in Effect, on the
  * opener's own fiber; its one synchronous face, `current`, reads the held
- * map and runs nothing.
- *
- * Host values and resource-owning layers are composed here once. Secrets and
- * identity resolve at bootstrap; AppState is acquired in the process scope,
- * and the agent-directory layer captures it before serving any reads. Hosts
- * with externally owned stores supply them through AppState.layer. A CLI
- * entry without application state supplies a refusing store and database.
+ * map and runs nothing. Each host value and layer below is composed once.
  */
 interface ProcessRuntimeOptions {
   readonly processStart: Effect.Effect<string | undefined, never, ProcessProbe>;
@@ -984,6 +983,8 @@ interface ProcessRuntimeOptions {
    * pass `texraPlugins` (`@tools/registry`).
    */
   readonly plugins: readonly Plugin[];
+  /** The app's own setting rows, installed with the harness's and the plugins'. */
+  readonly settings?: readonly StateSettingEntry[];
   /** The MCP config file (`.mcp.json` shape) the catalog reads. */
   readonly mcpConfigPath: string;
   readonly secrets: PlatformSecrets;
@@ -1030,14 +1031,11 @@ interface ProcessRuntimeOptions {
     HttpClient.HttpClient | AppState
   >;
   /**
-   * The process's handle on the global storage root —
-   * `globalDatabaseLayer(globalStorage)` on every entry that has one — built
-   * with this runtime and closed when it is disposed. It is the entry's to pass
-   * for the reason `appState` is: opening the handle creates the global storage
-   * directory and its SQLite file and forks that root's change poll for the
-   * process's life, and the one entry that runs before any platform, on a
-   * possibly read-only root, and that disposes no runtime, must do none of the
-   * three. It hands over a refusing layer beside its refusing store.
+   * The process's handle on the global storage root, built and closed with
+   * this runtime. The entry passes it, as it does `appState`, because opening
+   * it creates the root's SQLite file and forks a change poll: the CLI entry
+   * that runs before any platform, on a possibly read-only root, passes a
+   * refusing layer.
    */
   readonly globalDatabase: Layer.Layer<
     GlobalDatabase,
@@ -1061,6 +1059,7 @@ export function installProcessRuntime({
   processStart,
   globalStorage,
   plugins,
+  settings = [],
   mcpConfigPath,
   secrets,
   appState,
@@ -1073,6 +1072,7 @@ export function installProcessRuntime({
   globalDatabase: globalDatabaseOption,
   minimumLogLevel,
 }: ProcessRuntimeOptions): ProcessRuntime {
+  installSettingsCatalog(settingsCatalog(settings, plugins));
   const catalog = pluginCatalogLayer(plugins, mcpConfigPath);
   // Non-failing: `selfIdentity()` reads an unreadable identity as undefined.
   const identity = Layer.effect(

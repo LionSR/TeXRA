@@ -51,7 +51,7 @@ import {
   ToolError,
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { CodexStateKey } from '@shared/settingsView/integrationSettings';
 import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { formatWallTimeSeconds, previewLabel } from '@utils/text/stringUtils';
@@ -418,7 +418,7 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
     sandboxMode,
     approvalPolicy: yield* readSettingFrom<CodexApprovalPolicy>(
       roots,
-      WorkspaceStateKey.CODEX_APPROVAL_POLICY,
+      CodexStateKey.APPROVAL_POLICY,
     ),
     model: run.slug,
     ...(run.effort && { modelReasoningEffort: run.effort }),

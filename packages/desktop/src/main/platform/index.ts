@@ -28,6 +28,7 @@ import {
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import { GlobalDatabase } from '@shared/session/database';
+import { TEXRA_SETTING_ROWS } from '@shared/settingsView/texraSettings';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { texraPlugins } from '@tools/registry';
@@ -146,6 +147,7 @@ export const initializeElectronPlatform = Effect.fn(
     processStart: nodeProcesses.selfIdentity(),
     globalStorage,
     plugins: texraPlugins(),
+    settings: TEXRA_SETTING_ROWS,
     mcpConfigPath: USER_MCP_CONFIG_PATH,
     secrets,
     // Application state is the one the CLI and the extension keep, in the

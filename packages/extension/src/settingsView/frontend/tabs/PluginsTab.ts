@@ -16,7 +16,7 @@ import '@awesome.me/webawesome/dist/components/select/select.js';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import type { PluginRow } from '@shared/settingsView/settingsViewMessages';
-import { settingsViewSettingByKey } from '@shared/state/stateSettings';
+import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
 import { PLUGINS_PAGE, pluginRowKey } from '@ui/copy/plugins';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
@@ -85,7 +85,7 @@ export class PluginsTab extends LitElement {
     key: string,
     value: string,
   ): TemplateResult {
-    const entry = settingsViewSettingByKey(key);
+    const entry = TEXRA_SETTINGS.settingsViewByKey(key);
     if (!entry) {
       throw new Error(`No settings-view catalog row for setting "${key}"`);
     }
