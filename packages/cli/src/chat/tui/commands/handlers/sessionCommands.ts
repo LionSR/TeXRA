@@ -63,10 +63,7 @@ export function showCliWorkPlan(session: SessionHandle): void {
   }
   clearTransientNotice();
   const run = session.runView(runId);
-  if (
-    run?.category === AgentCategory.ToolUse &&
-    (run.plan !== null || run.todos.length > 0)
-  ) {
+  if (run?.category === AgentCategory.ToolUse && run.plan !== null) {
     openWorkPlanReader(runId);
   } else {
     closeForegroundReader();

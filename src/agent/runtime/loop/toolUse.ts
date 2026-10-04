@@ -505,10 +505,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     let continuedAt: number | null = null;
     let finalToolAttempted = false;
     workspace.workPlan.setOnUpdate({
-      onTodosUpdate: (todos) => {
-        logger.emit({ type: 'run.fact', fact: { key: 'todos', todos } });
-        run.callbacks.onProgress?.({ kind: 'todos', todos });
-      },
       onPlanUpdate: (plan) => {
         logger.emit({ type: 'run.fact', fact: { key: 'plan', plan } });
         run.callbacks.onProgress?.({ kind: 'plan', plan });

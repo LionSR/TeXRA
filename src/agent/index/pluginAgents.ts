@@ -50,7 +50,6 @@ const CLAUDE_CODE_TOOLS: Readonly<Record<string, string>> = {
   Grep: 'grep',
   WebFetch: 'web_fetch',
   WebSearch: 'web_search',
-  TodoWrite: 'todo_write',
 };
 
 /** What a top-level run of a plugin agent that names no tools inherits,

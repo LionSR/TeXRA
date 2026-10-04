@@ -119,18 +119,12 @@ describe('assembleTrace', () => {
         writeRun(runId, { outcome: 'completed' }, runConfigRecord),
       );
       yield* Effect.promise(() => appendLogEntry(runId, 'hello'));
-      const todos = [
-        {
-          content: 'Check the argument',
-          activeForm: 'Checking the argument',
-          status: 'pending' as const,
-        },
-      ];
+      const plan = { objective: 'Check the argument' };
       session.publish([
         {
           type: 'run.fact',
           aggregateId: aggregateId('run', runId),
-          fact: { key: 'todos', todos },
+          fact: { key: 'plan', plan },
         },
       ]);
       yield* Effect.promise(() => settleSessionEvents());
@@ -160,7 +154,7 @@ describe('assembleTrace', () => {
       expect(trace.events).toContainEqual(
         expect.objectContaining({
           type: 'run.fact',
-          fact: { key: 'todos', todos },
+          fact: { key: 'plan', plan },
         }),
       );
     }),

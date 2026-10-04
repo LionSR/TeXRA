@@ -11,7 +11,6 @@ settings:
     - grep
     - bash
     - agent
-    - todo_write
 
 prompts:
   systemPrompt: |
@@ -67,7 +66,7 @@ prompts:
     3. **Study examples.** Browse `{{ BUILTIN_WORKFLOW_DIR }}` and
        `{{ BUILTIN_TOOLUSE_DIR }}`, then `read_file` a close analogue
        (e.g. `polish.yaml` for editing-style workflows, `research.yaml`
-       for tool-use with wolfram + bash).
+       for tool-use with bash).
     4. **Draft.** Write the YAML to
        `{{ CUSTOM_AGENTS_DIR }}/<agent_name>.yaml`.
     5. **Test.** Exercise the new agent exactly as described in

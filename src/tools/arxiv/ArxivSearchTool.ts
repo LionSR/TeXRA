@@ -1,5 +1,5 @@
 // Third-party imports
-import {
+import arxivClient, {
   all,
   and,
   author as authorQuery,
@@ -14,15 +14,9 @@ import { z } from 'zod';
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
 import { withLogChannel } from '@logger/effectLog';
 import { requireNonEmptyString } from '@tools/utils';
-import { ARXIV_CONSTANTS } from '@tools/citation/constants';
 import { rateLimitedApiCall } from '@tools/support/rateLimiter';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
-import {
-  type ArxivSearchResult,
-  createArxivClient,
-  extractBasePaperMetadata,
-} from '@tools/arxiv/arxivShared';
 import { executed } from '@tools/core/result';
 import { pluralize } from '@utils/text/stringUtils';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -30,6 +24,35 @@ import { ensureError } from '@utils/errors/errorMessage';
 type Category = Parameters<typeof catQuery>[0];
 
 const CHANNEL = 'arxiv.search';
+
+const MAX_RESULTS = 50;
+const DEFAULT_RESULTS = 10;
+/** arXiv API rate limit: approximately 1 request per 3 seconds. */
+const RATE_LIMIT_DELAY_MS = 3000;
+/** Deadline for one arXiv request (the client sets no timeout of its own). */
+const TIMEOUT_MS = 30_000;
+
+/** One hit as the tool emits it (built from already-typed arxiv-client
+ *  entries, not a parse boundary). */
+interface ArxivSearchResult {
+  id: string | null;
+  doi: string | null;
+  title: string;
+  published: Date | null;
+  updated: Date | null;
+  authors: string[];
+  primaryCategory: string | null;
+  abstract: string | null;
+  arxivUrl: string | null;
+}
+
+/** A fresh client: the default export is a shared, stateful builder. */
+function createArxivClient(): typeof arxivClient {
+  const ClientCtor = arxivClient.constructor as {
+    new (): typeof arxivClient;
+  };
+  return new ClientCtor();
+}
 
 const SortBySchema = z.enum(['relevance', 'lastUpdatedDate', 'submittedDate']);
 const SortOrderSchema = z.enum(['ascending', 'descending']);
@@ -47,8 +70,8 @@ const ArxivSearchInputSchema = z.strictObject({
     .nullish()
     .describe('Optional arXiv category filters such as "math.NT" or "cs.AI".'),
   maxResults: nullishWithDefault(
-    z.int().positive().max(ARXIV_CONSTANTS.MAX_RESULTS),
-    ARXIV_CONSTANTS.DEFAULT_RESULTS,
+    z.int().positive().max(MAX_RESULTS),
+    DEFAULT_RESULTS,
   ).describe('Maximum number of papers to return.'),
   start: nullishWithDefault(z.int().min(0), 0).describe(
     'Zero-based result offset for pagination.',
@@ -128,20 +151,25 @@ const searchArxiv = Effect.fn('ArxivSearchTool.execute')(function* (
 
   const entries = yield* rateLimitedApiCall(
     'arxiv',
-    ARXIV_CONSTANTS.RATE_LIMIT_DELAY_MS,
-    ARXIV_CONSTANTS.TIMEOUT_MS,
+    RATE_LIMIT_DELAY_MS,
+    TIMEOUT_MS,
     'Failed to query arXiv API',
     () => client.execute(),
   );
 
   const results: ArxivSearchResult[] = entries.map((entry) => {
-    const base = extractBasePaperMetadata(entry);
+    const rawId = entry.id.split('/abs/')[1];
+    const id = rawId ? normaliseArxivIdentifier(rawId) : null;
     return {
-      ...base,
+      id,
+      doi: entry.doi?.id ?? null,
+      title: entry.title.trim(),
+      published: entry.published ?? null,
+      updated: entry.updated ?? null,
+      authors: entry.authors.map((author) => author.name),
+      primaryCategory: entry.primaryCategory ?? null,
       abstract: entry.summary ?? null,
-      arxivUrl: base.id
-        ? `https://arxiv.org/abs/${normaliseArxivIdentifier(base.id) ?? base.id}`
-        : null,
+      arxivUrl: id ? `https://arxiv.org/abs/${id}` : null,
     };
   });
 

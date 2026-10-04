@@ -47,12 +47,8 @@ import { formatResultCount } from '@utils/text/stringUtils';
 
 const CHANNEL = 'pluginAvailability';
 
-// Interruption reaches the spawned `texcount --version`, so an interrupted
-// dashboard refresh kills the probe instead of abandoning it.
-export const TEXCOUNT_AVAILABILITY: ToolAvailabilityChecks = {
-  check: () => checkToolInstalled('texcount', false),
-};
-
+// Interruption reaches the spawned `wolframscript -version`, so an
+// interrupted dashboard refresh kills the probe instead of abandoning it.
 export const WOLFRAM_AVAILABILITY: ToolAvailabilityChecks = {
   check: () => checkToolInstalled('wolframscript', false),
 };

@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 import { PlanSchema } from './plan';
-import { TodoItemSchema } from './todo';
 
 const MARKDOWN_HEADING_RE = /^#{1,6}\s+/;
 
@@ -21,14 +20,12 @@ export function planSummaryLine(objective: string): string {
 
 /** Raw work-plan field types; callers apply their own fallback policy. */
 const WorkPlanSnapshotShape = {
-  todos: z.array(TodoItemSchema),
   plan: PlanSchema.nullable(),
   planSummary: z.string().nullable(),
 } satisfies z.ZodRawShape;
 
-/** Current serializable shape for workspace plan and todo progress state. */
+/** Current serializable shape for workspace plan state. */
 export const WorkPlanSnapshotSchema = z.strictObject({
-  todos: WorkPlanSnapshotShape.todos.prefault([]),
   plan: WorkPlanSnapshotShape.plan.prefault(null),
   planSummary: WorkPlanSnapshotShape.planSummary.prefault(null),
 });

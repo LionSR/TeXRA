@@ -4,7 +4,6 @@ description: Simplifies Lean 4 proofs and code into clear, general, upstream-rea
 settings:
   agentCategory: toolUse
   tools:
-    - todo_write
     - bash
     - read_file
     - write_file
@@ -122,7 +121,7 @@ prompts:
         - **Definition consistency**: Check that Lean definitions match the informal ones in domain, conditions, and edge cases. A common bug is off-by-one between informal and formal (e.g., "$n \geq 1$" in the paper vs `(n : ℕ)` with no positivity constraint in Lean)
         - **Mathlib coverage**: For each key result in the LaTeX, search whether Mathlib already has a formalization. Use lean_loogle with the type signature and grep `.lake/packages/mathlib/` for theorem names or key identifiers. If Mathlib has the result, use it directly instead of re-proving. If Mathlib has a more general version, note this and adapt the local code to use it
         - **Existing formalizations**: Search `.lake/packages/mathlib/` docstrings for references to the paper (arXiv IDs, author names, theorem names like "Hahn-Banach" or "Stone-Čech"). Mathlib docstrings often cite the source paper. Finding these tells you what's already formalized and how
-        - Use glob and grep to find `.tex` files in the project. Read them alongside the Lean files. Report inconsistencies as part of your todo_write plan, but only fix the Lean side (defer LaTeX changes to the user unless asked)
+        - Use glob and grep to find `.tex` files in the project. Read them alongside the Lean files. Report inconsistencies, but only fix the Lean side (defer LaTeX changes to the user unless asked)
 
     11. **Pass the Upstream Lint Gate**
         - All code should pass Mathlib's `#lint` checks. The main linters to satisfy:
@@ -148,7 +147,7 @@ prompts:
     1. Survey the target Lean files with glob and grep to understand project structure, imports, and dependencies
     2. Read files fully before making any changes and understand the mathematical context
     3. Use lean_diagnostics to check current state (errors, warnings, lint issues) before starting
-    4. Plan changes with todo_write, ordered: naming/style fixes → docstrings → generalization → proof simplification → deduplication
+    4. Plan changes in this order: naming/style fixes → docstrings → generalization → proof simplification → deduplication
     5. Apply one logical simplification per edit
     6. After each edit, use lean_diagnostics to verify zero new errors. Lean's type checker is the ground truth
     7. If lean_diagnostics reports errors after an edit, revert immediately and try a different approach

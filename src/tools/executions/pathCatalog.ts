@@ -12,8 +12,7 @@ const EXECUTION_PATH_CATALOG: ReadonlyArray<{ path: string; summary: string }> =
     },
     {
       path: '/executions/{id}',
-      summary:
-        'Execution summary (agent, model, timestamp, status, children, todos)',
+      summary: 'Execution summary (agent, model, timestamp, status, children)',
     },
     { path: '/executions/{id}/config', summary: 'Agent configuration JSON' },
     {

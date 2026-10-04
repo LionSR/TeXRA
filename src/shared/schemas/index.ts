@@ -60,8 +60,6 @@ export {
 export * from './log';
 export * from './logPayload';
 export * from './taskGroup';
-export * from './todo';
-export * from './todoDisplay';
 export * from './plan';
 export * from './workPlan';
 export * from './subagentProgress';

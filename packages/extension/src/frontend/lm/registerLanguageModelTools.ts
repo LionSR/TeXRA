@@ -48,7 +48,6 @@ import {
 const LM_TOOL_NAMES = {
   texra_arxiv_search: 'arxiv_search',
   texra_web_fetch: 'web_fetch',
-  texra_crossref_search: 'crossref_search',
 } as const satisfies Record<string, LanguageModelResearchToolName>;
 
 /** Flatten a TeXRA ToolResult into the plain text VS Code chat expects. */
@@ -104,16 +103,6 @@ const copilotTools = Effect.fnUntraced(function* (
         options: vscode.LanguageModelToolInvocationOptions<unknown>,
         token: vscode.CancellationToken,
       ) {
-        // The LM manifest intentionally exposes the search-only Crossref
-        // surface; adapt that narrower host contract to the canonical
-        // command-dispatched registry tool at this boundary.
-        const input =
-          toolName === 'crossref_search'
-            ? {
-                ...(options.input as Record<string, unknown>),
-                command: 'search',
-              }
-            : options.input;
         const runtime = processRuntime();
         const session = defaultSession();
         if (session === undefined)
@@ -143,7 +132,7 @@ const copilotTools = Effect.fnUntraced(function* (
               // Its plugin's process services, as a step would serve them
               // (the research tools' plugins own none).
               const services = yield* live.processServices(plugin);
-              return yield* tool.call(input).pipe(
+              return yield* tool.call(options.input).pipe(
                 Effect.provide(
                   Option.getOrElse(
                     services,

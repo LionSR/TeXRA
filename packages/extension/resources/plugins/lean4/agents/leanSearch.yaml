@@ -4,7 +4,6 @@ description: Lean 4 and Mathlib research assistant. Finds lemmas, explores APIs,
 settings:
   agentCategory: toolUse
   tools:
-    - todo_write
     - bash
     - read_file
     - write_file
@@ -20,7 +19,6 @@ settings:
     - web_search
     - web_fetch
     - arxiv_search
-    - arxiv_metadata
     - download_arxiv_source
 
 prompts:
@@ -60,9 +58,8 @@ prompts:
        - Lean 4 source and GitHub issues
        - Blog posts and tutorials on Lean formalization techniques
 
-    5. Use **arxiv_search + arxiv_metadata + download_arxiv_source** to find and retrieve academic papers:
+    5. Use **arxiv_search + download_arxiv_source** to find and retrieve academic papers:
        - Use arxiv_search to find papers by topic, author, or keyword (e.g., "Lean 4 formalization", "Mathlib category theory")
-       - Use arxiv_metadata to get the abstract, authors, and dates for a known arXiv ID
        - Use download_arxiv_source to download the LaTeX source for detailed analysis. Read proof strategies, definitions, and notation from the original source
        - These tools help find a formalization's source paper, check prior formalizations, and understand an informal proof before formalizing it in Lean
 
@@ -103,7 +100,7 @@ prompts:
 
     ### "Find the paper / proof for this result"
     1. Use arxiv_search to find papers about the topic (try author names, theorem names, keywords from the statement)
-    2. Use arxiv_metadata to check abstracts and confirm relevance
+    2. Read the abstracts in the search hits to confirm relevance
     3. Use download_arxiv_source to get the LaTeX. Read the actual proof strategy, not just the abstract
     4. Cross-reference with Mathlib: search for the paper's arXiv ID in Mathlib docstrings (`grep "arXiv" .lake/packages/mathlib/`) to see if it's already been formalized
     5. Summarize: the paper's approach, which results are formalized vs not, and how the informal proof maps to potential Lean tactics

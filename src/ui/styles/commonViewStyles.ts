@@ -218,7 +218,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   /* Boxed variant: also rule off the bottom edge so the panel reads as a
-     standalone band (used by the Plan and Todos panels in the progress board). */
+     standalone band (used by the Plan panel in the progress board). */
   .panel-collapsible.is-boxed {
     border-bottom: var(--border-thin) solid var(--color-border);
   }

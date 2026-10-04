@@ -49,7 +49,6 @@ describe('HistoryQuery', () => {
           'messages',
           'tool_calls',
           'usage',
-          'todos',
           'events',
         ]) {
           const page = yield* query(session, `SELECT * FROM ${view}`);

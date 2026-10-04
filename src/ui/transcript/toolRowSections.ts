@@ -8,12 +8,10 @@
 import {
   CODEX_FILE_CHANGE_TOOL,
   CODEX_THREAD_TOOL,
-  CODEX_TODO_TOOL,
   CODEX_TURN_TOOL,
   CodexFileChangeToolInputSchema,
   CodexMcpToolOutputSchema,
   CodexThreadToolInputSchema,
-  CodexTodoToolInputSchema,
   CodexTurnToolInputSchema,
   getProposalFileGroups,
   type ProposalFileGroup,
@@ -480,8 +478,8 @@ function buildMcpSections(ctx: SectionContext): ToolSection[] {
 }
 
 /**
- * The five native Codex cards (`codex`, `codex_patch`, `codex_thread`,
- * `codex_todo`, `codex_turn`). They used to be a webview-only Lit override;
+ * The four native Codex cards (`codex`, `codex_patch`, `codex_thread`,
+ * `codex_turn`). They used to be a webview-only Lit override;
  * expressed as sections they reach the terminal too, and the check marks,
  * change kinds and badges are one derivation instead of two.
  */
@@ -527,28 +525,6 @@ function buildCodexThreadSections(ctx: SectionContext): ToolSection[] {
   return [
     { kind: 'identifier', label: 'Thread ID:', value: parsed.data.threadId },
   ];
-}
-
-function buildCodexTodoSections(ctx: SectionContext): ToolSection[] {
-  const parsed = CodexTodoToolInputSchema.safeParse(ctx.input);
-  if (!parsed.success) return [];
-  const { items, completedCount, totalCount } = parsed.data;
-  const sections: ToolSection[] = [];
-  if (totalCount > 0) {
-    sections.push({
-      kind: 'badges',
-      label: 'Progress:',
-      badges: [`${completedCount}/${totalCount} completed`],
-    });
-  }
-  if (items.length > 0) {
-    sections.push({
-      kind: 'checklist',
-      label: 'Checklist:',
-      items: items.map((item) => ({ text: item.text, done: item.completed })),
-    });
-  }
-  return sections;
 }
 
 function buildCodexTurnSections(ctx: SectionContext): ToolSection[] {
@@ -649,10 +625,6 @@ const SECTION_BUILDERS: readonly {
   {
     match: (ctx) => ctx.toolName === CODEX_THREAD_TOOL,
     build: buildCodexThreadSections,
-  },
-  {
-    match: (ctx) => ctx.toolName === CODEX_TODO_TOOL,
-    build: buildCodexTodoSections,
   },
   {
     match: (ctx) => ctx.toolName === CODEX_TURN_TOOL,

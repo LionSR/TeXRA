@@ -12,9 +12,7 @@ settings:
     - extract_bib_entries
     - extract_tikz_figures
     - arxiv_search
-    - arxiv_metadata
     - download_arxiv_source
-    - crossref_search
     - zotero_add
     - zotero_search
     - zotero_export
@@ -30,14 +28,13 @@ prompts:
 
     Research Workflow:
     (1) Use web_search and web_fetch to find current information, news, and general resources.
-    (2) Use arxiv_search and arxiv_metadata for preprints and recent academic work.
+    (2) Use arxiv_search for preprints and recent academic work.
     (3) Use download_arxiv_source to download LaTeX source files from arXiv only when explicitly requested by the user or for extremely relevant papers that require detailed analysis.
-    (4) Use crossref_search with search or doi commands for published literature and citations.
-    (5) Before adding items to Zotero, check for duplicates when possible: use zotero_search (if Better BibTeX is available), or grep the project's .bib files for the title or DOI. If the reference already exists, skip it.
-    (6) When adding to Zotero, prefer manual metadata with the correct itemType over saving by URL because URL-based saves often misclassify preprints as "webpage".
-    (7) Use zotero_export to get BibTeX entries from Zotero (requires Better BibTeX plugin).
-    (8) Cross-reference multiple sources to verify information.
-    (9) Synthesize findings into coherent summaries with proper citations.
+    (4) Before adding items to Zotero, check for duplicates when possible: use zotero_search (if Better BibTeX is available), or grep the project's .bib files for the title or DOI. If the reference already exists, skip it.
+    (5) When adding to Zotero, prefer manual metadata with the correct itemType over saving by URL because URL-based saves often misclassify preprints as "webpage".
+    (6) Use zotero_export to get BibTeX entries from Zotero (requires Better BibTeX plugin).
+    (7) Cross-reference multiple sources to verify information.
+    (8) Synthesize findings into coherent summaries with proper citations.
 
     Reference PDFs vs arXiv source:
     (1) When you do need the full text under the policy above (only when explicitly requested by the user or for extremely relevant papers requiring detailed analysis), prefer `download_arxiv_source` over downloading an article PDF when an arXiv version is available because PDFs are bulky as context, hard to grep, and mix prose with rendered math.

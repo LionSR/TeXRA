@@ -40,7 +40,6 @@ import {
   RunSubstateSchema,
   RunIdSchema,
   TaskGroupSchema,
-  TodoItemSchema,
   TokenUsageStatsSchema,
   UserFollowUpSupportSchema,
   WorktreeInfoSchema,
@@ -246,7 +245,6 @@ const RunViewCommonSchema = z.object({
 
 const ToolUseRunViewSchema = RunViewCommonSchema.extend({
   category: z.literal(AgentCategory.ToolUse),
-  todos: z.array(TodoItemSchema),
   plan: PlanSchema.nullable(),
   outputs: RoundKeyedOutputSidecarValueSchemas.outputFiles,
 });

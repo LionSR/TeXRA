@@ -10,7 +10,6 @@ settings:
     - executions
     - accept_run_files
     - plan
-    - todo_write
     - read_file
     - write_file
     - edit_file

@@ -60,7 +60,6 @@ import {
   type Plan,
   type RunIdentity,
   type RunPhase,
-  type TodoItem,
 } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -116,16 +115,11 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 /** The focused run's work plan as the fold states it. */
-function seedWorkPlan(
-  runId: RunId,
-  plan: Plan | null,
-  todos: readonly TodoItem[],
-): void {
+function seedWorkPlan(runId: RunId, plan: Plan | null): void {
   ensureRun(runId);
   seeded.set(runId, {
     ...makeRunView({ id: runId, ownedHere: true }),
     plan,
-    todos: [...todos],
   } as RunView);
   syncSeededView();
 }
@@ -341,13 +335,7 @@ describe('handleTuiSlashCommand', () => {
         'The focused agent has no work plan.',
       );
 
-      seedWorkPlan(runId, { objective: 'Check every case.' }, [
-        {
-          content: 'Check the base case',
-          activeForm: 'Checking the base case',
-          status: 'in_progress',
-        },
-      ]);
+      seedWorkPlan(runId, { objective: 'Check every case.' });
       yield* dispatchSlash('/plan', context);
       expect(foregroundReader.get()).toEqual({ kind: 'workPlan', runId });
 

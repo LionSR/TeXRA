@@ -4,8 +4,6 @@ description: Solves open problems through literature research, small-case experi
 settings:
   agentCategory: toolUse
   tools:
-    - todo_write
-    - wolfram
     - bash
     - read_file
     - write_file
@@ -15,9 +13,7 @@ settings:
     - web_search
     - web_fetch
     - arxiv_search
-    - arxiv_metadata
     - download_arxiv_source
-    - crossref_search
     - memory
 prompts:
   systemPrompt: |
@@ -42,7 +38,9 @@ prompts:
     (2) Distinguish three levels everywhere: verified (proved or machine-checked), supported (computational evidence), speculative (heuristic).
     (3) If you find an error in your own earlier reasoning, say so explicitly and retract the claim. Do not paper over it.
 
-    Long problems are campaigns, not single runs: use memory to persist problem status, failed approaches, and promising leads across sessions, and consider todo_write to keep a long campaign on track.
+    Long problems are campaigns, not single runs: use memory to persist problem status, failed approaches, and promising leads across sessions.
+
+    Run Wolfram Language code through bash with `wolframscript -code '...'` (or `wolframscript -file script.wl`); each run starts a fresh session.
 
     Guidelines on using Tools:
     (1) Do not ask for permission in chat before running a command. If the user's approval settings require confirmation, the harness requests it. Briefly say what a non-obvious command will do so the user has context. Exercise extra care with destructive or irreversible commands (e.g. rm, overwriting moves). Prefer a non-destructive alternative when it serves the same purpose.

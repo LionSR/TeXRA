@@ -19,7 +19,7 @@ While TeXRA's agents focus primarily on substantive research—deriving theorems
 | <wa-icon library="texra" name="file-media"></wa-icon> Figure extraction       | Built-in                   |
 | <wa-icon library="texra" name="symbol-structure"></wa-icon> TikZ compilation  | Built-in                   |
 | <wa-icon library="texra" name="book"></wa-icon> Bibliography resolution       | Built-in                   |
-| <wa-icon library="texra" name="symbol-operator"></wa-icon> Symbolic math      | `wolfram`                  |
+| <wa-icon library="texra" name="symbol-operator"></wa-icon> Symbolic math      | `wolframscript`            |
 
 All are configured from **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>) or **Settings → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>), where each tool shows its status.
 
@@ -71,10 +71,7 @@ Read the [LaTeX Diff guide](./latex-diff.md) for the full workflow.
 
 `texcount` reports word counts, heading counts, and math element counts so the model can reason about document scale and structure.
 
-**Enabling `texcount`:**
-
-1. **For context:** toggle <wa-icon library="texra" name="symbol-numeric"></wa-icon> **Attach TeX Count** in the Tool Configuration dropdown. Read the [agent execution settings](./configuration.md#agent-execution-settings-webview-interface).
-2. **As a tool:** tool-use agents can invoke `texcount` directly to analyze files on demand.
+To attach these statistics to the prompt, toggle <wa-icon library="texra" name="symbol-numeric"></wa-icon> **Attach TeX Count** in the Tool Configuration dropdown. Read the [agent execution settings](./configuration.md#agent-execution-settings-webview-interface). Tool-use agents can also run `texcount` themselves through the shell, for example `texcount -inc main.tex`.
 
 **Modes:**
 
@@ -118,7 +115,7 @@ Useful whenever an agent needs exact citation records to edit, format, or valida
 
 ## <wa-icon library="texra" name="symbol-operator"></wa-icon> Symbolic math with Wolfram
 
-The `wolfram` tool executes Wolfram Language code through `wolframscript`, so agents can verify calculations or perform symbolic algebra. It is not LaTeX-specific, but it is useful for validating mathematical content in papers and derivations.
+Agents run Wolfram Language code through `wolframscript` in the shell (`wolframscript -code '...'` or `wolframscript -file`) to verify calculations or perform symbolic algebra. It is not LaTeX-specific, but it is useful for validating mathematical content in papers and derivations.
 
 The Wolfram row sits under **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>). Requires a local [Wolfram Engine](https://www.wolfram.com/engine/) install.
 
@@ -142,5 +139,5 @@ For detailed tool settings (formatter paths, TikZ processing options, etc.), rea
 
 - [TikZ figures](./tikz-figures.md): advanced TikZ workflows
 - [LaTeX Diff](./latex-diff.md): version comparison in detail
-- [Research tools](./research-tools.md): arXiv, Crossref, Zotero, and web search
+- [Research tools](./research-tools.md): arXiv, Zotero, and web search
 - [Agent integrations](./agent-integrations.md): one-click setup for the Codex and Claude Code agents
