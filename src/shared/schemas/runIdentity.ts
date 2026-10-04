@@ -36,6 +36,13 @@ export function isPlainAgentIdentity(
   return identity?.kind === 'agent' && identity.tool === undefined;
 }
 
+/** Whether TeXRA's own loop drives the run, so a resume can continue it: a
+ *  native agent's or a background script's. A process or an external CLI
+ *  drives its own run. */
+export function isLoopDriven(identity: RunIdentity): boolean {
+  return isPlainAgentIdentity(identity) || identity.kind === 'script';
+}
+
 /** The identity's display name — what a listing row or tab label leads with. */
 export function runIdentityName(id: RunIdentity): string {
   switch (id.kind) {

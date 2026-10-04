@@ -41,7 +41,7 @@ export class HelperModelUnavailable extends Data.TaggedError(
  * already holds (a session's `roots` plus the `Secrets` service, or the stores
  * a host root threaded down), so helper resolution, the model toggles and the
  * OpenRouter preference all read the same stores as the run that asked for it.
- * A helper has no persisted conversation format; it never takes the tool-use
+ * A helper has no persisted backend; it never takes the tool-use
  * output haircut.
  */
 const helperModel = Effect.fn('helperModel')(function* (
@@ -65,7 +65,6 @@ const helperModel = Effect.fn('helperModel')(function* (
     modelId: modelName,
     config: selected.config,
     stores,
-    compatibilityKey: null,
     agentCategory: AgentCategory.Workflow,
     // Helper calls are deterministic one-shots, never sampled.
     temperature: 0,

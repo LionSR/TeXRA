@@ -16,8 +16,15 @@ import {
   isClaudeCodeModel,
   isCodexModel,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { settingByKey } from '@shared/state/stateSettings';
+import {
+  ClaudeAgentStateKey,
+  CodexStateKey,
+} from '@shared/settingsView/integrationSettings';
+import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
+import {
+  installSettingsCatalog,
+  settingByKey,
+} from '@shared/state/stateSettings';
 import { selectAgentCliModel } from '@tools/agentCliModel';
 import { readClaudeCodeRun } from '@tools/claudeAgentShared';
 import { CODEX_MODEL_RULE, codexRun } from '@tools/codexConfig';
@@ -30,6 +37,10 @@ const CLAUDE_AGENT_DEFAULT_MODEL = 'anthropic/claude-sonnet-5-5';
 const CODEX_DEFAULT_MODEL = 'openai/gpt-6.1-sol';
 const CodexModelSchema = CODEX_MODEL_SETTING.schema.unwrap();
 
+// The plugins' rows, as a host's `installProcessRuntime` installs them: this
+// suite runs in the pure tier, which has no fake platform to do it.
+installSettingsCatalog(TEXRA_SETTINGS);
+
 describe('agent CLI model settings', () => {
   it('defaults both efforts to medium and both models to registry models', () => {
     const row = (key: string) => {
@@ -37,12 +48,10 @@ describe('agent CLI model settings', () => {
       if (!entry) throw new Error(`no row ${key}`);
       return settingDefault(entry);
     };
-    expect(row(WorkspaceStateKey.CLAUDE_AGENT_EFFORT)).toBe(MEDIUM);
-    expect(row(WorkspaceStateKey.CODEX_REASONING_EFFORT)).toBe(MEDIUM);
-    expect(row(WorkspaceStateKey.CLAUDE_AGENT_MODEL)).toBe(
-      CLAUDE_AGENT_DEFAULT_MODEL,
-    );
-    expect(row(WorkspaceStateKey.CODEX_MODEL)).toBe(CODEX_DEFAULT_MODEL);
+    expect(row(ClaudeAgentStateKey.EFFORT)).toBe(MEDIUM);
+    expect(row(CodexStateKey.REASONING_EFFORT)).toBe(MEDIUM);
+    expect(row(ClaudeAgentStateKey.MODEL)).toBe(CLAUDE_AGENT_DEFAULT_MODEL);
+    expect(row(CodexStateKey.MODEL)).toBe(CODEX_DEFAULT_MODEL);
   });
 
   it('offers every current Anthropic model, and only those, to Claude Code', () => {
@@ -80,10 +89,7 @@ describe('readClaudeCodeRun', () => {
     const fake = makeFakeSettingsStores();
     return Effect.gen(function* () {
       if (userEffort) {
-        yield* fake.repoState.update(
-          WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
-          userEffort,
-        );
+        yield* fake.repoState.update(ClaudeAgentStateKey.EFFORT, userEffort);
       }
       return yield* readClaudeCodeRun(fake.stores, { model, effort });
     });
@@ -187,10 +193,7 @@ describe('codexRun', () => {
     const spawner = scriptedSpawnerLayer(answer);
     return Effect.gen(function* () {
       if (effort) {
-        yield* fake.repoState.update(
-          WorkspaceStateKey.CODEX_REASONING_EFFORT,
-          effort,
-        );
+        yield* fake.repoState.update(CodexStateKey.REASONING_EFFORT, effort);
       }
       const run = yield* codexRun(fake.stores, binaryPath);
       return { run, calls: spawner.calls };

@@ -3,9 +3,8 @@ import { z } from 'zod';
 /**
  * A plan is a plain objective document: what to achieve, the intended
  * approach, and a verifiable stopping condition. It deliberately has no
- * structured steps — step tracking belongs to the todo tool — so the
- * document stays a clear objective statement that can seed an autonomous
- * goal verbatim.
+ * structured steps, so the document stays a clear objective statement
+ * that can seed an autonomous goal verbatim.
  *
  * Pre-June-2026 plans were structured ({summary, steps[]}); those simply
  * fail to parse and read back as "no plan", which is fine — a plan only

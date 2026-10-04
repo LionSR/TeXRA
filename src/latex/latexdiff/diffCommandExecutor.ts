@@ -6,7 +6,7 @@ import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
 import type { ExecResult } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import { executeCommand } from '@utils/system/execUtils';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
@@ -174,7 +174,7 @@ export class DiffCommandExecutor {
       // scope (before any host is composed); a value captured at construction
       // would permanently freeze at whatever the default was at activation-zero.
       const timeoutMs = yield* this.setting<number>(
-        WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
+        TexraStateKey.LATEXDIFF_TIMEOUT_MS,
       );
       const execOptions: CommandExecOptions = {
         channel: this.channel,
@@ -276,14 +276,14 @@ export class DiffCommandExecutor {
   private getLatexdiffConfig(options: DiffExecutionOptions) {
     return Effect.gen({ self: this }, function* () {
       const changesOnly = yield* this.setting<boolean>(
-        WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
+        TexraStateKey.LATEXDIFF_CHANGES_ONLY,
       );
 
       return {
         mathMarkup:
           options.mathMarkup ??
           (yield* this.setting<LatexdiffMathMarkupValue>(
-            WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+            TexraStateKey.LATEXDIFF_MATH_MARKUP,
           )),
         subtype:
           options.subtype ??

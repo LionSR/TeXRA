@@ -36,12 +36,8 @@ import { describe, expect } from 'vitest';
 
 // Local imports - the package under test
 import { assistantMessageFromResult, completedTurn } from '../src/turn.js';
-import type {
-  Continuation,
-  Model,
-  TurnRequest,
-  TurnResult,
-} from '../src/turn.js';
+import type { Continuation } from '../src/message.js';
+import type { Model, TurnRequest, TurnResult } from '../src/turn.js';
 
 const TOOL_NAME = 'lookup_capital';
 

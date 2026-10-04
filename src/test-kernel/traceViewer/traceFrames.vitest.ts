@@ -105,7 +105,7 @@ describe('traceFrame replays the document through the one fold', () => {
       missingOutputs: {},
       compileFailures: {},
     });
-    expect(replayed).not.toHaveProperty('todos');
+    expect(replayed).not.toHaveProperty('plan');
     expect(replayed?.transcript.rows).toContainEqual(
       expect.objectContaining({
         kind: 'log',
@@ -117,23 +117,13 @@ describe('traceFrame replays the document through the one fold', () => {
   it('replays tool-use content without workflow output state', () => {
     const trace = traceDocument(runStart(AgentCategory.ToolUse), {
       type: 'run.fact',
-      fact: {
-        key: 'todos',
-        todos: [
-          {
-            content: 'Replay the plan',
-            status: 'pending',
-            activeForm: 'Replaying the plan',
-          },
-        ],
-      },
+      fact: { key: 'plan', plan: { objective: 'Replay the plan' } },
     });
 
     const replayed = foldTrace(trace);
     expect(replayed).toMatchObject({
       category: AgentCategory.ToolUse,
-      todos: [{ content: 'Replay the plan' }],
-      plan: null,
+      plan: { objective: 'Replay the plan' },
     });
     expect(replayed).not.toHaveProperty('files');
   });

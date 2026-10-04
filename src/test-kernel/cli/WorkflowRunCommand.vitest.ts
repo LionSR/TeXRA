@@ -338,7 +338,7 @@ function workflowSnapshot(
     family: 'toolUse',
     runtime: {
       modelId: 'deepseek/deepseek-v4-flash',
-      modelCompatibilityKey: null,
+      backend: 'deepseek',
       lastError: null,
       declinedRoutes: [],
       ...runtime,
@@ -765,7 +765,7 @@ describe('CLI run command, workflow agents', () => {
   );
 
   // Issue #12162: a remote agent's catalog listing carries no
-  // `defaultOutputFiles`, so only the definition the launch loads declares
+  // `task.outputs`, so only the definition the launch loads declares
   // them — and the launch hands them to output finalization, as the stub
   // here does: the declared name still decides.
   it.effect('expects the output files the launched definition declares', () =>

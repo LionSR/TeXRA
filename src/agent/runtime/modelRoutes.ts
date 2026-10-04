@@ -9,10 +9,8 @@ import {
 } from '@texra-ai/llm/node';
 import {
   type ApiKeyProviderId,
-  codexBackendModelId,
   decideModelRoute,
   exposeApiKey,
-  findModelProviderPlugin,
   getApiKey,
   type ModelRoute,
   resolveRouteEndpoint,
@@ -33,10 +31,11 @@ import { readRouteFacts } from '@model/modelRoute';
 import type { StateStore } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
-import type {
-  DeclinableUsageRoute,
-  ModelCompatibilityKey,
-  UsageRoute,
+import {
+  ModelBackendSchema,
+  type DeclinableUsageRoute,
+  type ModelBackend,
+  type UsageRoute,
 } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -76,8 +75,6 @@ type SubscriptionSession =
       /** The ChatGPT plan the session's token names, when it names one. It
        *  is display-only: the backend decides what the plan may call. */
       readonly plan: string | undefined;
-      /** The Codex backend's bare model id, which differs from the API's. */
-      readonly requestedModel: string;
       readonly endpoint: string;
       readonly usageRoute: 'chatgpt-subscription';
     }
@@ -140,7 +137,6 @@ interface SubscriptionRouteRow {
    */
   readonly readSession: (
     secrets: PlatformSecrets,
-    config: ModelConfig,
   ) => Effect.Effect<SubscriptionSession, Error, HttpClient.HttpClient>;
   /** Refresh the session after the provider rejected its access token. */
   readonly refreshRejected: (
@@ -163,7 +159,7 @@ const SUBSCRIPTION_ROUTES: {
 } = {
   'chatgpt-subscription': {
     provider: 'openai',
-    readSession: (secrets, config) =>
+    readSession: (secrets) =>
       Effect.gen(function* () {
         const coordinator = codexCoordinator(secrets);
         const accessToken = yield* coordinator.getFreshAccessToken();
@@ -174,7 +170,6 @@ const SUBSCRIPTION_ROUTES: {
           accessToken,
           accountId,
           plan,
-          requestedModel: codexBackendModelId(config),
           endpoint: CODEX_BACKEND_BASE_URL,
           usageRoute: 'chatgpt-subscription',
         } as const;
@@ -211,13 +206,12 @@ const SUBSCRIPTION_ROUTES: {
 export const resolveSubscriptionCredential = Effect.fn(
   'resolveSubscriptionCredential',
 )(function* (
-  config: ModelConfig,
   route: Extract<ModelRoute, { kind: SubscriptionSession['route'] }>,
   secrets: PlatformSecrets,
 ): Effect.fn.Return<SubscriptionRouteCredential, Error, HttpClient.HttpClient> {
   const row = SUBSCRIPTION_ROUTES[route.kind];
   const session = yield* row
-    .readSession(secrets, config)
+    .readSession(secrets)
     .pipe(Effect.mapError(row.authFailure));
   return { ...session, provider: row.provider };
 });
@@ -307,9 +301,9 @@ export type BindableRoute =
  * The route `config` binds under, decided once over this workspace's facts,
  * and those facts (the binding reads the route's config and endpoint off
  * them).
- * A resumed conversation's persisted format constrains the facts it answers
- * for: its OpenRouter, Copilot and validation choice are the format's, and a
- * subscription serves it only on the protocol the format names, so turning a
+ * A resumed conversation's backend constrains the facts it answers for: its
+ * OpenRouter, Copilot and validation choice are the backend's, and a
+ * subscription serves it only from its own provider, so turning a
  * preference on since cannot silently move the conversation's billing. An
  * own-key quota fallback declines the Copilot preference. When the decision
  * can land on Copilot, the editor's routes are discovered here, once, and the
@@ -325,7 +319,7 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
   },
   config: ModelConfig,
   options: {
-    readonly compatibilityKey?: ModelCompatibilityKey | null;
+    readonly backend?: ModelBackend;
     readonly ownApiKeyFallback?: boolean;
     readonly declinedRoutes?: readonly DeclinableUsageRoute[];
     /** The provider reasoning mode the request asks for (OpenAI `pro`). */
@@ -337,12 +331,12 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
   LanguageModel
 > {
   const host = yield* readRouteFacts(stores, options.declinedRoutes);
-  const key = options.compatibilityKey;
+  const backend = options.backend;
   const prefersCopilot =
-    key == null
+    backend === undefined
       ? !options.ownApiKeyFallback &&
         (yield* prefersCopilotRoute(config.ref, stores.globalState))
-      : key === 'VscodeLm';
+      : backend === 'copilot';
   // A provider mode never takes the Copilot preference (`decideModelRoute`),
   // so the editor is not asked for a route it would not use.
   const copilotRoute =
@@ -352,7 +346,7 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
       : undefined;
   const route = decideModelRoute(
     config,
-    key == null
+    backend === undefined
       ? {
           ...host,
           validation: yield* shouldUseInternalValidationModel(),
@@ -362,13 +356,12 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
         }
       : {
           ...host,
-          validation: key === 'Validation',
+          validation: backend === 'validation',
           prefersCopilot,
           copilotRoute,
-          useOpenRouter: key === 'OpenRouterNative',
-          chatgptSubscription:
-            host.chatgptSubscription && key === 'OpenAIResponse',
-          xaiSubscription: host.xaiSubscription && key === 'XAI',
+          useOpenRouter: backend === 'openRouter',
+          chatgptSubscription: host.chatgptSubscription && backend === 'openai',
+          xaiSubscription: host.xaiSubscription && backend === 'xai',
           mode: options.mode,
         },
   );
@@ -381,9 +374,9 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
   }
   if (route.kind !== 'copilot') return { route, facts: host };
   // A fresh run needs the editor to allow the route; a resumed conversation
-  // keeps its format and binds whatever route the editor offers.
+  // keeps its backend and binds whatever route the editor offers.
   const unavailableReason =
-    key == null
+    backend === undefined
       ? copilotRouteUnavailableReason(config.ref, route.route)
       : undefined;
   if (unavailableReason) {
@@ -429,41 +422,29 @@ export const withShortModelName = Effect.fn('withShortModelName')(function* (
 });
 
 /**
- * The conversation-history format a route binds under. Talking to OpenAI
- * directly always means Responses (the OpenAI-direct Chat Completions route
- * is gone); OpenRouter proxies on its own chat format.
+ * The backend `route` serves `config` from: the model's own provider on a
+ * direct route (any credential, subscription included), else the proxy that
+ * serves it.
  */
-export function routeCompatibilityKey(
+export function routeBackend(
   config: ModelConfig,
   route: BindableRoute,
-): Effect.Effect<ModelCompatibilityKey | undefined> {
+): Effect.Effect<ModelBackend | undefined> {
   switch (route.kind) {
     case 'validation':
-      return Effect.succeed('Validation');
+      return Effect.succeed('validation');
     case 'copilot':
-      return Effect.succeed('VscodeLm');
+      return Effect.succeed('copilot');
     case 'openrouter':
-      return Effect.succeed('OpenRouterNative');
-    default:
-      return config.provider === ModelProvider.OPENAI && !config.openRouterOnly
-        ? Effect.succeed('OpenAIResponse')
-        : providerCompatibilityKey(config.provider);
+      return Effect.succeed('openRouter');
+    default: {
+      // A provider string from outside the backends: a stale registry entry
+      // or persisted config. The caller names the failure.
+      const backend = ModelBackendSchema.safeParse(config.provider);
+      if (backend.success) return Effect.succeed(backend.data);
+      return Effect.logWarning(
+        `No model backend is registered for provider ${config.provider}`,
+      ).pipe(withLogChannel(CHANNEL), Effect.as(undefined));
+    }
   }
-}
-
-/**
- * Guarded plugin read. The provider plugin manifest gives every
- * `ModelProvider` a compatibility key (checked at compile time), so a miss
- * means a provider string from outside the enum (stale registry entry or
- * persisted config). Report it here instead of crashing on the property
- * access; the caller turns the missing route into a named failure.
- */
-function providerCompatibilityKey(
-  provider: ModelProvider,
-): Effect.Effect<ModelCompatibilityKey | undefined> {
-  const key = findModelProviderPlugin(provider)?.compatibilityKey;
-  if (key) return Effect.succeed(key);
-  return Effect.logWarning(
-    `No model route is registered for provider ${provider}`,
-  ).pipe(withLogChannel(CHANNEL), Effect.as(undefined));
 }

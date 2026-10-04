@@ -30,9 +30,9 @@ import {
 } from '@shared/schemas';
 import {
   settingSchemaWithoutPrefault,
-  settingsViewSnapshotEntries,
   type SettingsViewSnapshot,
 } from '@shared/state/stateSettings';
+import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
 import {
   SUBSCRIPTION_AUTH_PROVIDERS,
   SubscriptionAuthStatusSchema,
@@ -183,7 +183,7 @@ function snapshotMessage<S extends DerivedSettingsSnapshot>(snapshot: S) {
     snapshot: z.literal(snapshot),
     values: z.strictObject(
       Object.fromEntries(
-        settingsViewSnapshotEntries(snapshot).map((entry) => [
+        TEXRA_SETTINGS.snapshotEntries(snapshot).map((entry) => [
           entry.key,
           settingSchemaWithoutPrefault(entry),
         ]),

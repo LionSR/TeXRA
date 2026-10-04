@@ -13,10 +13,7 @@ import { Effect, FileSystem, Result } from 'effect';
 import { z } from 'zod';
 
 // Local imports - common
-import {
-  AgentPromptSchema,
-  AgentSettingSchema,
-} from '@agent/core/definition/AgentDataclass';
+import { PersonaSchema } from '@agent/core/definition/AgentDataclass';
 import {
   readInstalledPluginLoad,
   type InstalledPluginLoad,
@@ -50,7 +47,6 @@ const CLAUDE_CODE_TOOLS: Readonly<Record<string, string>> = {
   Grep: 'grep',
   WebFetch: 'web_fetch',
   WebSearch: 'web_search',
-  TodoWrite: 'todo_write',
 };
 
 /** What a top-level run of a plugin agent that names no tools inherits,
@@ -171,16 +167,13 @@ function pluginAgentEntry(agent: PluginAgent, file: string): AgentEntry {
     category: AgentCategory.ToolUse,
     description: agent.description,
     tools: agent.tools === undefined ? undefined : [...agent.tools],
-    setting: AgentSettingSchema.parse({
-      agentCategory: AgentCategory.ToolUse,
-      // None named: `AgentRun` gives it what it inherits.
+    // None named: `AgentRun` gives it what it inherits. The task arrives as
+    // the user message, as a Claude Code subagent's does.
+    persona: PersonaSchema.parse({
+      prompt: agent.systemPrompt,
       tools: agent.tools ?? [],
     }),
-    // The task arrives as the instruction, as a Claude Code subagent's does.
-    prompt: AgentPromptSchema.parse({
-      systemPrompt: agent.systemPrompt,
-      userRequest: '{{ INSTRUCTION }}',
-    }),
+    task: null,
   };
 }
 

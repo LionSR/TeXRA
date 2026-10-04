@@ -6,6 +6,10 @@
  * natural `@shared/state/stateKeys` import path, without any risk of pulling in
  * the VS Code module.
  *
+ * These are the harness's keys. An app's keys live beside its rows
+ * (`@shared/settingsView/texraSettings`), and a plugin's beside the rows its
+ * `Plugin` value declares.
+ *
  * The stores these keys address are the session's `roots.workspaceState`,
  * taken as data from the session, tool call or host command that holds it,
  * and the process's `AppState` service (`@platform/interfaces`). Each host
@@ -24,17 +28,6 @@ export enum WorkspaceStateKey {
   DISABLED_SKILLS = 'texra.skills.disabled',
   DISABLED_SKILL_SOURCES = 'texra.skills.disabledSources',
 
-  // Codex settings
-  CODEX_MODEL = 'texra.codexModel',
-  CODEX_SANDBOX_MODE = 'texra.codexSandboxMode',
-  CODEX_REASONING_EFFORT = 'texra.codexReasoningEffort',
-  CODEX_APPROVAL_POLICY = 'texra.codexApprovalPolicy',
-
-  // Claude Code CLI settings
-  CLAUDE_AGENT_MODEL = 'texra.claudeAgentModel',
-  CLAUDE_AGENT_PERMISSION_MODE = 'texra.claudeAgentPermissionMode',
-  CLAUDE_AGENT_EFFORT = 'texra.claudeAgentEffort',
-
   // Git commit author settings
   GIT_MARK_COMMITS = 'texra.git.markCommits',
   GIT_AUTHOR_NAME = 'texra.git.authorName',
@@ -45,17 +38,6 @@ export enum WorkspaceStateKey {
 
   // Tool path safety
   TOOL_PATH_PROTECTION_ENABLED = 'texra.tools.restrictPathsToWorkingDirectory',
-
-  // LaTeX/compile/diff settings (migrated from VS Code config)
-  WORKFLOW_AUTO_COMPILE = 'texra.workflow.autoCompileAfterOutput',
-  WORKFLOW_AUTO_COMPILE_TIMEOUT_MS = 'texra.workflow.autoCompileTimeoutMs',
-  WORKFLOW_AUTO_OPEN_PDF = 'texra.workflow.autoOpenPdf',
-  WORKFLOW_REJECT_ON_COMPILE_FAILURE = 'texra.workflow.rejectOnCompileFailure',
-  LATEXDIFF_BETWEEN_ROUNDS = 'texra.latexdiff.generateBetweenRoundDiffs',
-  LATEXDIFF_TIMEOUT_MS = 'texra.latexdiff.timeoutMs',
-  LATEXDIFF_MATH_MARKUP = 'texra.latexdiff.mathMarkup',
-  LATEXDIFF_CHANGES_ONLY = 'texra.latexdiff.changesOnly',
-  LATEX_FORMATTER = 'texra.latex.formatter',
 }
 
 export enum GlobalStateKey {
@@ -114,14 +96,6 @@ export enum GlobalStateKey {
 
   // Installed Claude Code and Codex plugins, and the trust given to each
   INSTALLED_PLUGINS = 'texra.plugins.installed',
-
-  // Experimental
-  INLINE_CRITICISM_ENABLED = 'texra.inlineCriticism.enabled',
-
-  /** Random anonymous telemetry install ID (UUIDv4); deleting the key resets it. */
-  TELEMETRY_INSTALL_ID = 'texra.telemetry.installId',
-  /** Set once the first-run telemetry notice has been shown on this host. */
-  TELEMETRY_NOTICE_SHOWN = 'texra.telemetry.noticeShown',
 
   // Onboarding funnel (user-scoped; see @shared/state/onboardingState)
   /** Canonical shared key; the CLI-originated spelling is intentionally stable. */

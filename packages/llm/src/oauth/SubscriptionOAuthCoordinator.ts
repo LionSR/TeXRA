@@ -438,15 +438,15 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     generation: number,
   ) {
     const tokens = yield* this.client.refreshTokens(previous.refreshToken).pipe(
-      // A fatal rejection means the stored session is dead: clear it, unless
-      // a concurrent login or sign-out already replaced it.
+      // Fatal: clear the session unless a login or a refresh replaced it.
       Effect.tapError((error) =>
         error instanceof SubscriptionOAuthError && error.kind === 'fatal'
           ? this.sessionMutations.run(
-              Effect.suspend(() =>
-                generation === this.sessionGeneration
-                  ? this.storage.delete()
-                  : Effect.void,
+              Effect.flatMap(this.loadSession(), (stored) =>
+                stored?.refreshToken !== previous.refreshToken ||
+                generation !== this.sessionGeneration
+                  ? Effect.void
+                  : this.storage.delete(),
               ),
             )
           : Effect.void,

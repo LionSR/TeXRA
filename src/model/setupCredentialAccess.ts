@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 
 import { hasUsableApiKey } from '@texra-ai/llm';
 import {
+  type ModelOptionStores,
   modelOptionsFrom,
   readModelAvailabilityInputs,
   usageRouteFrom,
@@ -80,3 +81,7 @@ export function hasUsableSetupCredential(
     ),
   );
 }
+
+/** The picker's model options as the follow-up controls list them, read live. */
+export const loadModelOptions = (stores: ModelOptionStores) =>
+  readModelAvailabilityInputs(stores).pipe(Effect.map(modelOptionsFrom));

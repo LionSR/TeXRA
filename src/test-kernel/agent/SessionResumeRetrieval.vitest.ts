@@ -21,7 +21,7 @@ import {
   emptyRunEndOutput,
   storedRunOutput,
   type RunSnapshotPayload,
-  type ModelCompatibilityKey,
+  type ModelBackend,
   type RunId,
 } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
@@ -42,25 +42,25 @@ const WORKFLOW_CONFIG: AgentConfig = {
   ...CONFIG,
   agentCategory: AgentCategory.Workflow,
 };
-const COMPATIBILITY_KEY: ModelCompatibilityKey = 'OpenAIResponse';
+const BACKEND: ModelBackend = 'openai';
 
 const runtimeOf = (
   modelId: string,
-  compatibilityKey: ModelCompatibilityKey | null,
+  backend: ModelBackend,
 ): RunSnapshotPayload['runtime'] => ({
   modelId,
-  modelCompatibilityKey: compatibilityKey,
+  backend,
   lastError: null,
   declinedRoutes: [],
 });
 
 function toolUseSnapshot(
   modelId: string,
-  compatibilityKey: ModelCompatibilityKey | null = COMPATIBILITY_KEY,
+  backend: ModelBackend = BACKEND,
 ): RunSnapshotPayload {
   return {
     family: 'toolUse',
-    runtime: runtimeOf(modelId, compatibilityKey),
+    runtime: runtimeOf(modelId, backend),
     state: { stateSlices: null },
   };
 }

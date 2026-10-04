@@ -5,7 +5,8 @@ import { describe, expect } from 'vitest';
 
 // Local imports
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { TexraStateKey } from '@shared/settingsView/texraSettings';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { applyStateSettingUpdate } from '@shared/settingsView/handlers/stateSettingWrite';
 import {
   isStored,
@@ -60,36 +61,36 @@ describe('applyStateSettingUpdate', () => {
       const ports = { stores: fake.stores, host: 'vscode' as const };
 
       yield* applyStateSettingUpdate(
-        WorkspaceStateKey.LATEX_FORMATTER,
+        TexraStateKey.LATEX_FORMATTER,
         'latexindent',
         ports,
       );
       expect(
-        yield* isStored(fake.workspaceState, WorkspaceStateKey.LATEX_FORMATTER),
+        yield* isStored(fake.workspaceState, TexraStateKey.LATEX_FORMATTER),
       ).toBe(true);
 
       expect(
         yield* applyStateSettingUpdate(
-          WorkspaceStateKey.LATEX_FORMATTER,
+          TexraStateKey.LATEX_FORMATTER,
           null,
           ports,
         ),
       ).toMatchObject({
         kind: 'applied',
         entry: {
-          key: WorkspaceStateKey.LATEX_FORMATTER,
+          key: TexraStateKey.LATEX_FORMATTER,
           surfaces: { settingsView: 'latex' },
         },
       });
       expect(
-        yield* isStored(fake.workspaceState, WorkspaceStateKey.LATEX_FORMATTER),
+        yield* isStored(fake.workspaceState, TexraStateKey.LATEX_FORMATTER),
       ).toBe(false);
 
       // A value-less message is a no-op: the catalog schemas `.prefault()`, so
       // parsing `undefined` would silently write a default.
       expect(
         yield* applyStateSettingUpdate(
-          WorkspaceStateKey.LATEX_FORMATTER,
+          TexraStateKey.LATEX_FORMATTER,
           undefined,
           ports,
         ),
@@ -102,7 +103,7 @@ describe('applyStateSettingUpdate', () => {
     () =>
       Effect.gen(function* () {
         const fake = makeFakeSettingsStores();
-        const key = WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS;
+        const key = TexraStateKey.LATEXDIFF_TIMEOUT_MS;
 
         expect(
           yield* applyStateSettingUpdate(key, 20000, {
@@ -144,14 +145,14 @@ describe('applyStateSettingUpdate', () => {
 
         expect(
           yield* applyStateSettingUpdate(
-            WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+            TexraStateKey.LATEXDIFF_MATH_MARKUP,
             'bogus',
             ports,
           ),
         ).toMatchObject({
           kind: 'rejected',
           entry: {
-            key: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+            key: TexraStateKey.LATEXDIFF_MATH_MARKUP,
             surfaces: { settingsView: 'latex' },
           },
           error: expect.any(Error),

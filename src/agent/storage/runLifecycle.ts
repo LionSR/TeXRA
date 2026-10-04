@@ -14,6 +14,7 @@ import {
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { haltedPositionRow } from '@agent/runtime/loop/rows';
 
 import {
   AgentCategory,
@@ -31,7 +32,6 @@ import {
   type RunIdentity,
   type RunOutcome,
   type RunProvenance,
-  type SessionEvent,
   type UserFollowUpSupport,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
@@ -392,26 +392,26 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
     session.updateRecordFacts(runId, (rows) =>
       Effect.gen(function* () {
         const target = aggregateId('run', runId);
-        const start = rows.find(
-          (row): row is Extract<SessionEvent, { type: 'run.start' }> =>
-            row.type === 'run.start' && row.aggregateId === target,
-        );
-        if (!start) {
+        const start = rows.find((row) => row.type === 'run.start');
+        if (start?.type !== 'run.start')
           return yield* Effect.fail(
             new Error(`Run start not found for ${runId}`),
           );
-        }
-        // "Already ended" is a fact about the run's current lifecycle, not about
-        // the aggregate (`runEndFromEvents` states the rule, and every reader
-        // shares it): a resumed run has to end again even when it ends the same
-        // way, or the fold, history and every `durableOutcome` reader keep it
-        // RUNNING for want of a terminal row.
+        // "Already ended" is about the run's current lifecycle (the rule of
+        // `runEndFromEvents`): a resumed run ends again, even the same way, or
+        // every `durableOutcome` reader keeps it RUNNING for want of the row.
         const ended = runEndFromEvents(rows, runId)?.outcome;
         const persisted =
           keepExistingOutcome === true && ended !== undefined ? ended : outcome;
         if (ended === persisted) return { events: [], value: persisted };
         return {
           events: [
+            // The loop's halt, never apart from its end.
+            ...rows.flatMap((row) =>
+              row.type === 'run.position'
+                ? [haltedPositionRow(row, persisted)]
+                : [],
+            ),
             ...session.streamClosureFacts(runId),
             {
               type: 'run.end' as const,

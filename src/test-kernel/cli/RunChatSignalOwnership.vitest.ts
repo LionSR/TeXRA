@@ -95,6 +95,12 @@ vi.mock('@cli/runtime/cliProcessRuntime', () => ({
   disposeCliProcessRuntime: Effect.void,
 }));
 
+// No background service in a unit run: the chat runs here, as it does
+// wherever the service cannot start.
+vi.mock('@cli/runtime/cliService', () => ({
+  reachCliService: () => Effect.fail(new Error('no TeXRA service in tests')),
+}));
+
 vi.mock('@model/setupCredentialAccess', () => ({
   hasUsableSetupCredential: mocks.hasUsableSetupCredential,
 }));

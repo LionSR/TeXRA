@@ -49,14 +49,14 @@ The whole loop is a round trip: pull your project down from Overleaf, edit it lo
 
 1.  In VS Code, open the Command Palette (<kbd>Ctrl/Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>) and run **TeXRA: Clone Overleaf/ShareLaTeX Project**.
 2.  Paste the Overleaf project URL or 24-character project ID when prompted.
-3.  Enter your Overleaf Git token (it begins with `olp_`). TeXRA saves it to VS Code's secret storage so future clones can reuse it.
+3.  Enter your Overleaf Git token (it begins with `olp_`). TeXRA saves it to `~/.texra/secrets/` so future clones can reuse it.
 4.  The command runs `git clone` directly into your workspace root, so the cloned project becomes the repository you're working in. Make sure that folder is empty before starting.
 
 <OverleafCloneFlow />
 
-<p class="hero-caption">Three quick-input prompts: pick the command, paste the project URL or 24-character ID, then enter your <code>olp_</code> token, which is cached to VS Code secret storage for next time.</p>
+<p class="hero-caption">Three quick-input prompts: pick the command, paste the project URL or 24-character ID, then enter your <code>olp_</code> token, which is saved in <code>~/.texra/secrets/</code> for next time.</p>
 
-> **Token storage:** Reset the cached token at any time with the VS Code command **Developer: Clear Secret Storage**. The token is never written into the clone's remote URL: after cloning, TeXRA offers it to your Git credential helper (the macOS keychain or Git Credential Manager, for example) so later pulls and pushes sign in. Without a helper, Git asks for it; enter the token as the password.
+> **Token storage:** Reset the saved token at any time by removing its entry from `~/.texra/secrets/`. The token is never written into the clone's remote URL: after cloning, TeXRA offers it to your Git credential helper (the macOS keychain or Git Credential Manager, for example) so later pulls and pushes sign in. Without a helper, Git asks for it; enter the token as the password.
 
 #### Option B: use the TeXRA CLI
 

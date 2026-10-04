@@ -34,7 +34,7 @@ If you used TeXRA in your own work, read [Acknowledging TeXRA](#acknowledging-te
 
 TeXRA's design draws on several concepts from AI and software development:
 
-- **Agentic Workflows & Tool Use [1]:** AI agents execute tasks with the help of specialized tools (for example, `texcount`). This lets LLMs use external capabilities for tasks that need precision or knowledge beyond their training data.
+- **Agentic Workflows & Tool Use [1]:** AI agents execute tasks with the help of specialized tools (for example, `arxiv_search`). This lets LLMs use external capabilities for tasks that need precision or knowledge beyond their training data.
 - **Chain-of-Thought (CoT) Reasoning [2]:** For complex agents, TeXRA uses techniques inspired by Chain-of-Thought prompting, encouraging models to think step by step (often visible in the `<scratchpad>` sections of logs) before producing a final output.
 - **Reflection & Action [3, 4]:** The automatic reflection passes, combined with the agent's ability to act (edit text, use tools), draw on frameworks like ReAct and Reflexion, allowing iterative refinement based on self-critique or environmental feedback.
 - **Structured Prompting (YAML + Jinja):** YAML for structure and Jinja for templating within prompts allow complex logic, dynamic content injection, and easier maintenance, following approaches seen in libraries like [Prompt Poet](https://github.com/character-ai/prompt-poet). Inheritance and modularity make prompt designs more flexible and reusable.

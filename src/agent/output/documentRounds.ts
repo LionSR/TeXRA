@@ -1,7 +1,7 @@
 /**
  * The documents plugin: what a workflow agent does around each model turn.
  * Before a round it builds the round's user content (TeXCount, the
- * `userRequest` template, input media on round 0 and the previous round's
+ * request template, input media on round 0 and the previous round's
  * figures after it, the compile-failure context of a rejected round); after a
  * round it runs the output pipeline over the turn's text (XML extraction,
  * lineage, latexdiff, the compile check, the round summary), commits
@@ -15,9 +15,8 @@ import { dirname } from 'node:path';
 import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
+import type { DocumentTask } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
 import type { TemplateVars } from '@agent/prompt/templateInputs';
 import { compileFailuresOf, runCompileCheck } from '@agent/output/compileCheck';
 import {
@@ -42,7 +41,6 @@ import { checkExpectedOutputs } from '@agent/output/outputValidation';
 import { summarizeRound, type RoundSummary } from '@agent/output/roundSummary';
 import type { RoundFileMapping } from '@agent/output/types';
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
-import { PromptBuilder } from '@agent/prompt/PromptBuilder';
 import { AgentRun } from '@agent/runtime/run/AgentRun';
 import { mediaInputParts, type InputPart } from '@agent/runtime/run/mediaInput';
 import { rowAggregate } from '@agent/runtime/loop/rows';
@@ -65,10 +63,11 @@ import {
   type RunStorageFileLocation,
 } from '@shared/schemas';
 import type { RunState } from '@shared/session/runStateFold';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
+import { renderPrompt } from '@utils/prompt';
 
 /** Why a turn ended; the editor arm, which reports none, reads as `stop`. */
 export type TurnFinish = Extract<
@@ -88,12 +87,12 @@ interface OutputExecResult {
  * then `nextRound` / `afterTurn` per round.
  */
 export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
-  setting: AgentWorkflowSetting,
+  task: DocumentTask,
   /** The launch's template inputs, which every round's prompts render from. */
   inputs: TemplateVars,
 ) {
   const run = yield* AgentRun;
-  const { runId, session, logger, config, prompt, fileService } = run;
+  const { runId, session, logger, config, fileService } = run;
   // The run's session roots, as data: the pipeline's workspace, storage and
   // setting reads take them from here, so the answer cannot depend on which
   // fiber turn the caller resumes in.
@@ -101,7 +100,7 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
   const getRejectOnCompileFailure = () =>
     readSettingFrom<boolean>(
       roots,
-      WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+      TexraStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
     );
   const baseFiles: FileLocation[] = (
     config.outputFiles.length > 0 ? config.outputFiles : config.inputFiles
@@ -115,19 +114,15 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
     roots.config,
   );
   const diffManager = new LatexDiffManager(
-    setting.isRewrite,
+    task.rewrite,
     () => getOutputFilesByRound(outputState),
     logger,
     runId,
     fileService,
     roots,
   );
-  const prompts = new PromptBuilder(prompt, inputs, roots.workspace, logger);
   const latexMediaManager = new LatexMediaManager(logger, roots, fileService);
-  const totalRounds = Math.max(
-    setting.rounds ?? 2,
-    userRequestTemplateCount(prompt.userRequest),
-  );
+  const totalRounds = task.requests.length;
   const deps: OutputDependencies = {
     config,
     baseFiles,
@@ -208,14 +203,13 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
       }
     }
 
+    const request = yield* renderPrompt(task.requests[round] ?? '', inputs);
     let requestText: string;
     if (round === 0) {
-      const initialPrompts = yield* prompts.buildInitialPrompts();
-      const prefix = initialPrompts.userPrefix.trim();
+      const prefix = (yield* renderPrompt(task.prefix, inputs)).trim();
       if (prefix) content.push({ kind: 'text', text: prefix });
-      requestText = initialPrompts.userRequest.trim();
+      requestText = request.trim();
     } else {
-      const request = yield* prompts.buildUserRequest(round);
       requestText = appendCompileFailureRoundContext(
         request,
         compile.compileFailureContext,
@@ -340,7 +334,7 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
       deps,
       outputLocation,
       round,
-      { mapping, isRewrite: setting.isRewrite, baseFiles: diffBaseFiles },
+      { mapping, isRewrite: task.rewrite, baseFiles: diffBaseFiles },
     );
     return { summary, compileResult: compileRoundResult, compiledArtifacts };
   });
@@ -358,7 +352,7 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
       deps,
       outputLocation,
       round,
-      { isRewrite: setting.isRewrite },
+      { isRewrite: task.rewrite },
     ).pipe(
       Effect.catch((summaryError) =>
         Effect.sync((): RoundSummary => {
@@ -395,7 +389,7 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
       endTurn &&
       (yield* readSettingFrom<boolean>(
         roots,
-        WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
+        TexraStateKey.WORKFLOW_AUTO_OPEN_PDF,
       ))
     ) {
       // A failed compile opens its log; a clean round opens what it produced.

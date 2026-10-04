@@ -10,7 +10,6 @@ import { SubscriptionRef } from 'effect';
 import { bindSessionView, sessionView } from '@cli/chat/tui/state/sessionView';
 import {
   AgentCategory,
-  isPlainAgentIdentity,
   requestParksItsCaller,
   RUN_PHASE,
   USER_FOLLOW_UP_SUPPORT,
@@ -94,9 +93,6 @@ function runViewFields(over: RunViewOverrides): RunView {
     conversationProgress: { toolCallCount: 0 },
     position: null,
     followUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-    resumeEligible:
-      (over.category ?? AgentCategory.ToolUse) === AgentCategory.ToolUse &&
-      isPlainAgentIdentity(over.identity ?? { kind: 'agent', agent: 'agent' }),
     context: null,
     parentId: null,
     ancestors: [],
@@ -133,7 +129,6 @@ function runViewFields(over: RunViewOverrides): RunView {
   return {
     ...common,
     category: AgentCategory.ToolUse,
-    todos: [],
     plan: null,
     facts: {},
     outputs: {},

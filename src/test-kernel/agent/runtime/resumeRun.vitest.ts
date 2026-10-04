@@ -8,7 +8,11 @@ import { resumeRun } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
 import { AgentCategory, aggregateId, RUN_OUTCOME } from '@shared/schemas';
-import { DatabaseReadFailed } from '@shared/session/database';
+import {
+  DatabaseClaimRefused,
+  DatabaseReadFailed,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
 import { RunHistoryRefused } from '@shared/session/runHistory';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
 import { closeSessionOf } from '@test/support/sessionEnd';
@@ -79,15 +83,12 @@ const seedRecoverable = Effect.fn('test.seedRecoverable')(function* (
   session: SessionHandle,
   ...texts: string[]
 ) {
-  const flow = session.followUps.claimLive(RUN, 'loop')!;
   for (const text of texts) {
-    yield* session.followUps.submit(
-      RUN,
-      { from: { kind: 'user' as const }, text },
-      'live_owner',
-    );
+    yield* session.followUps.send(RUN, {
+      from: { kind: 'user' as const },
+      text,
+    });
   }
-  session.followUps.release(flow, 'recoverable');
 });
 
 /** The text of each follow-up the run's rows still queue. */
@@ -100,12 +101,12 @@ const queuedTexts = (session: SessionHandle) =>
 const taken: string[] = [];
 
 /**
- * The resumed flow's side of the queue: attach to the recovery owner's
- * input and take what the rows still queue.
+ * The resumed flow's side of the queue: open its own reader and take what
+ * the rows still queue.
  */
 const resumedFlowTakes = (session: SessionHandle) =>
   Effect.gen(function* () {
-    const input = session.followUps.attachInput(RUN)!;
+    const input = yield* session.followUps.open(RUN);
     const batch = input.hasQueued() ? yield* input.take : null;
     if (batch?.kind === 'followUps') {
       taken.push(...batch.followUps.map((followUp) => followUp.content.text));
@@ -118,7 +119,7 @@ const resumedFlowTakes = (session: SessionHandle) =>
         })),
       );
     }
-  });
+  }).pipe(Effect.scoped);
 
 const sessions: SessionHandle[] = [];
 
@@ -183,38 +184,36 @@ describe('resumeRun tool-use queue ownership', () => {
       }),
   );
 
-  it.effect(
-    'claims run recovery before reading the committed run records',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* createSession();
-        const config =
-          yield* Deferred.make<ReturnType<typeof snapshot>['agentConfig']>();
-        const configRead = yield* Deferred.make<void>();
-        readConfigMock.mockImplementationOnce(() =>
-          Deferred.succeed(configRead, undefined).pipe(
-            Effect.andThen(Deferred.await(config)),
-          ),
-        );
+  it.effect('hands input sent during its record reads to the resumed run', () =>
+    Effect.gen(function* () {
+      const session = yield* createSession();
+      const config =
+        yield* Deferred.make<ReturnType<typeof snapshot>['agentConfig']>();
+      const configRead = yield* Deferred.make<void>();
+      readConfigMock.mockImplementationOnce(() =>
+        Deferred.succeed(configRead, undefined).pipe(
+          Effect.andThen(Deferred.await(config)),
+        ),
+      );
 
-        const resumed = yield* Effect.forkChild(resumeOne(RUN, { session }));
-        yield* Deferred.await(configRead);
-        expect(
-          yield* session.followUps.submit(
-            RUN,
-            { from: { kind: 'user' as const }, text: 'raced' },
-            'recoverable',
-          ),
-        ).toEqual({ kind: 'queued' });
+      const resumed = yield* Effect.forkChild(resumeOne(RUN, { session }));
+      yield* Deferred.await(configRead);
+      expect(
+        yield* session.followUps.send(
+          RUN,
+          { from: { kind: 'user' as const }, text: 'raced' },
+          { wake: true },
+        ),
+      ).toEqual({ kind: 'queued', read: false, wake: false });
 
-        yield* Deferred.succeed(config, snapshot().agentConfig);
-        expect(yield* Fiber.join(resumed)).toMatchObject({
-          started: true,
-          delivered: true,
-          outcome: RUN_OUTCOME.COMPLETED,
-        });
-        expect(taken).toEqual(['raced']);
-      }),
+      yield* Deferred.succeed(config, snapshot().agentConfig);
+      expect(yield* Fiber.join(resumed)).toMatchObject({
+        started: true,
+        delivered: true,
+        outcome: RUN_OUTCOME.COMPLETED,
+      });
+      expect(taken).toEqual(['raced']);
+    }),
   );
 
   it.effect('preserves raced input when the run has no persisted record', () =>
@@ -231,51 +230,50 @@ describe('resumeRun tool-use queue ownership', () => {
       const resumed = yield* Effect.forkChild(resumeOne(RUN, { session }));
       yield* Deferred.await(existsRead);
       expect(
-        yield* session.followUps.submit(
+        yield* session.followUps.send(
           RUN,
           { from: { kind: 'user' as const }, text: 'raced' },
-          'recoverable',
+          { wake: true },
         ),
-      ).toEqual({ kind: 'queued' });
+      ).toEqual({ kind: 'queued', read: false, wake: false });
 
       yield* Deferred.succeed(exists, false);
+      yield* session.settlePublications();
       expect(yield* Fiber.join(resumed)).toEqual({ failed: 'not_resumable' });
       expect(yield* queuedTexts(session)).toEqual(['raced']);
     }),
   );
 
-  it.effect(
-    'claims recovery before draining and preserves ordered raced input',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* createSession();
-        yield* seedRecoverable(session, 'first');
+  it.effect('preserves ordered input sent while it resumes', () =>
+    Effect.gen(function* () {
+      const session = yield* createSession();
+      yield* seedRecoverable(session, 'first');
 
-        expect(
-          yield* resumeOne(RUN, {
-            session,
-            onResumeResolved: () =>
-              Effect.gen(function* () {
-                expect(
-                  yield* session.followUps.submit(
-                    RUN,
-                    { from: { kind: 'user' as const }, text: 'second' },
-                    'recoverable',
-                  ),
-                ).toEqual({ kind: 'queued' });
-              }),
-          }),
-        ).toMatchObject({
-          started: true,
-          delivered: true,
-          outcome: RUN_OUTCOME.COMPLETED,
-        });
+      expect(
+        yield* resumeOne(RUN, {
+          session,
+          onResumeResolved: () =>
+            Effect.gen(function* () {
+              expect(
+                yield* session.followUps.send(
+                  RUN,
+                  { from: { kind: 'user' as const }, text: 'second' },
+                  { wake: true },
+                ),
+              ).toEqual({ kind: 'queued', read: false, wake: false });
+            }),
+        }),
+      ).toMatchObject({
+        started: true,
+        delivered: true,
+        outcome: RUN_OUTCOME.COMPLETED,
+      });
 
-        expect(taken).toEqual(['first', 'second']);
-      }),
+      expect(taken).toEqual(['first', 'second']);
+    }),
   );
 
-  it.effect('rejects a competing recovery consumer deterministically', () =>
+  it.effect('joins a competing resume to the one in flight', () =>
     Effect.gen(function* () {
       const session = yield* createSession();
       yield* seedRecoverable(session, 'once');
@@ -291,25 +289,29 @@ describe('resumeRun tool-use queue ownership', () => {
       const first = yield* Effect.forkChild(resumeOne(RUN, { session }));
       yield* Deferred.await(entered);
       expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
-      expect(yield* resumeOne(RUN, { session })).toEqual({
-        failed: 'not_resumable',
-      });
+      // The second resume signals as it reaches the resume in flight.
+      const joining = yield* Deferred.make<void>();
+      const resumeOnce = session.followUps.resumeOnce.bind(session.followUps);
+      vi.spyOn(session.followUps, 'resumeOnce').mockImplementationOnce(
+        (runId, resume) =>
+          Deferred.succeed(joining, undefined).pipe(
+            Effect.andThen(resumeOnce(runId, resume)),
+          ),
+      );
+      const second = yield* Effect.forkChild(resumeOne(RUN, { session }));
+      yield* Deferred.await(joining);
+      // Its join is already queued behind the signal: one turn of the event
+      // loop lets it run before the first resume is released.
+      yield* Effect.promise(() => new Promise((done) => setImmediate(done)));
       yield* Deferred.succeed(barrier, undefined);
-      yield* Fiber.join(first);
+      expect(yield* Fiber.join(second)).toEqual(yield* Fiber.join(first));
       expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
     }),
   );
 
-  it.effect('refuses a recovery invalidated during storage reads', () =>
+  it.effect('refuses a run whose input closed during storage reads', () =>
     Effect.gen(function* () {
       const session = yield* createSession();
-      expect(
-        yield* session.followUps.submit(
-          RUN,
-          { from: { kind: 'user' as const }, text: 'stale' },
-          'recoverable',
-        ),
-      ).toEqual({ kind: 'queued', wake: true });
       const config =
         yield* Deferred.make<ReturnType<typeof snapshot>['agentConfig']>();
       const configRead = yield* Deferred.make<void>();
@@ -321,7 +323,8 @@ describe('resumeRun tool-use queue ownership', () => {
 
       const resumed = yield* Effect.forkChild(resumeOne(RUN, { session }));
       yield* Deferred.await(configRead);
-      session.followUps.terminalize(RUN);
+      session.followUps.closeInput(RUN);
+      yield* session.settlePublications();
       yield* Deferred.succeed(config, snapshot().agentConfig);
 
       expect(yield* Fiber.join(resumed)).toEqual({ failed: 'not_resumable' });
@@ -341,8 +344,8 @@ describe('resumeRun tool-use queue ownership', () => {
         (yield* Effect.flip(resumeOne(RUN, { session }))).message,
       ).toContain('failed');
       expect(yield* queuedTexts(session)).toEqual(['keep me']);
-      // The resume that claimed the recovery gave it back: the next claims it.
-      expect(session.followUps.claimRecovery(RUN)).toBeDefined();
+      // Nothing here holds the run: the next resume may take it.
+      expect(session.runs.isLive(RUN)).toBe(false);
     }),
   );
 
@@ -365,15 +368,15 @@ describe('resumeRun tool-use queue ownership', () => {
         expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
 
         expect(
-          yield* session.followUps.submit(
+          yield* session.followUps.send(
             RUN,
             {
               text: 'completed child',
               from: { kind: 'run' as const, runId: 'c41dc41dc41d' as RunId },
             },
-            'recoverable',
+            { wake: true },
           ),
-        ).toEqual({ kind: 'queued' });
+        ).toEqual({ kind: 'queued', read: false, wake: false });
         yield* Deferred.fail(failing, new Error('resume failed'));
 
         expect((yield* Effect.flip(Fiber.join(resuming))).message).toContain(
@@ -386,16 +389,16 @@ describe('resumeRun tool-use queue ownership', () => {
       }),
   );
 
-  it.effect('claims the recovery a submission reserved', () =>
+  it.effect('resumes the run a send owed a wake', () =>
     Effect.gen(function* () {
       const session = yield* createSession();
       expect(
-        yield* session.followUps.submit(
+        yield* session.followUps.send(
           RUN,
           { from: { kind: 'user' as const }, text: 'claimed' },
-          'recoverable',
+          { wake: true },
         ),
-      ).toEqual({ kind: 'queued', wake: true });
+      ).toEqual({ kind: 'queued', read: false, wake: true });
 
       const result = yield* resumeOne(RUN, { session });
       expect(result).toMatchObject({
@@ -410,31 +413,29 @@ describe('resumeRun tool-use queue ownership', () => {
     }),
   );
 
-  it.effect(
-    'keeps a reserved wake input on the rows for workflow records',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* createSession();
-        expect(
-          yield* session.followUps.submit(
-            RUN,
-            { from: { kind: 'user' as const }, text: 'workflow input' },
-            'recoverable',
-          ),
-        ).toEqual({ kind: 'queued', wake: true });
-        readConfigMock.mockReturnValueOnce(
-          Effect.succeed({
-            ...snapshot().agentConfig,
-            agentCategory: AgentCategory.Workflow,
-          }),
-        );
-        retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
+  it.effect('keeps a woken input on the rows for workflow records', () =>
+    Effect.gen(function* () {
+      const session = yield* createSession();
+      expect(
+        yield* session.followUps.send(
+          RUN,
+          { from: { kind: 'user' as const }, text: 'workflow input' },
+          { wake: true },
+        ),
+      ).toEqual({ kind: 'queued', read: false, wake: true });
+      readConfigMock.mockReturnValueOnce(
+        Effect.succeed({
+          ...snapshot().agentConfig,
+          agentCategory: AgentCategory.Workflow,
+        }),
+      );
+      retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
 
-        expect(yield* resumeOne(RUN, { session })).toEqual({
-          failed: 'finished',
-        });
-        expect(yield* queuedTexts(session)).toEqual(['workflow input']);
-      }),
+      expect(yield* resumeOne(RUN, { session })).toEqual({
+        failed: 'finished',
+      });
+      expect(yield* queuedTexts(session)).toEqual(['workflow input']);
+    }),
   );
 
   it.effect('refuses with `finished` when no checkpoint remains', () =>
@@ -531,8 +532,14 @@ describe('resumeRun tool-use queue ownership', () => {
         const session = yield* createSession();
         const markUnreadable = vi.spyOn(session, 'markUnreadable');
         const ownerId = JSON.stringify(['other-host', 4321, 'start-1']);
-        vi.spyOn(session, 'claimOwner').mockReturnValue(
-          Effect.succeed({ ownerId, liveness: 'alive' }),
+        // The claim the host's resume takes is refused by its live owner.
+        vi.spyOn(session, 'borrowRunClaim').mockReturnValue(
+          Effect.fail(
+            new DatabaseWriteFailed({
+              path: ':memory:',
+              cause: new DatabaseClaimRefused({ ownerId, verdict: 'alive' }),
+            }),
+          ),
         );
         const onResumeResolved = vi.fn(() => Effect.void);
 

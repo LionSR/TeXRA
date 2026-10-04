@@ -6,13 +6,10 @@ import { ApprovalModal } from '@cli/chat/tui/modals/ApprovalModal';
 import { RetryRequest } from '@cli/chat/tui/modals/RetryRequest';
 import type {
   ApprovalPayload,
-  PendingApproval,
   RetryApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
 import type { RunId } from '@shared/schemas';
 import type { SurfaceDecision } from '@shared/session/approvalDecision';
-import { testRuntime } from '@test/support/testProcessRuntime';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import {
   loadInk,
@@ -22,14 +19,17 @@ import {
 
 /** A foreground modal entry whose decision the test awaits. */
 function pendingFor(payload: ApprovalPayload): {
-  readonly pending: PendingApproval;
+  readonly props: {
+    readonly payload: ApprovalPayload;
+    readonly onDecide: (decision: SurfaceDecision) => void;
+  };
   readonly decision: Promise<SurfaceDecision>;
 } {
-  let decide!: PendingApproval['decide'];
+  let onDecide!: (decision: SurfaceDecision) => void;
   const decision = new Promise<SurfaceDecision>((resolve) => {
-    decide = (_session, _runtime, next) => resolve(next);
+    onDecide = resolve;
   });
-  return { pending: { payload, decide }, decision };
+  return { props: { payload, onDecide }, decision };
 }
 
 describe('CLI retry request', () => {
@@ -58,7 +58,7 @@ describe('CLI retry request', () => {
 
   it('dismisses immediately instead of asking for rejection feedback', async () => {
     const { ink, React } = await loadInk();
-    const { pending, decision } = pendingFor({
+    const { props, decision } = pendingFor({
       kind: 'retry',
       data: {
         requestId: 'retry-request',
@@ -69,11 +69,7 @@ describe('CLI retry request', () => {
     });
     const { instance, stdin } = renderInteractive(
       ink,
-      React.createElement(ApprovalModal, {
-        pending,
-        runtime: testRuntime(),
-        session: testDefaultSession(),
-      }),
+      React.createElement(ApprovalModal, props),
       { columns: 100 },
     );
 
@@ -118,14 +114,10 @@ describe('CLI retry request', () => {
 
   it('settles the approval queue from a real terminal k input', async () => {
     const { ink, React } = await loadInk();
-    const { pending, decision } = pendingFor(subscriptionLimitPayload());
+    const { props, decision } = pendingFor(subscriptionLimitPayload());
     const { instance, stdin } = renderInteractive(
       ink,
-      React.createElement(ApprovalModal, {
-        pending,
-        runtime: testRuntime(),
-        session: testDefaultSession(),
-      }),
+      React.createElement(ApprovalModal, props),
       { columns: 100 },
     );
 

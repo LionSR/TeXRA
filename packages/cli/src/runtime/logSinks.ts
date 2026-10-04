@@ -123,6 +123,11 @@ export function getStderrColumns(): number | undefined {
   return process.stderr.columns;
 }
 
+/** Return the current stdout width without exposing the process stream. */
+export function getStdoutColumns(): number | undefined {
+  return process.stdout.columns;
+}
+
 export function writeTextStderr(text: string): void {
   writeRaw('stderr', `${text}\n`);
 }

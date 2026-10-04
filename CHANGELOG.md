@@ -6,6 +6,42 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **One credential store for every TeXRA app; enter your keys once more.**
+  The VS Code extension and the desktop app no longer keep API keys and
+  sign-ins in VS Code's secret storage or the system keychain. Every host,
+  the terminal and the background service included, reads and writes one
+  folder, `~/.texra/secrets/` (one file per key), readable by your user
+  alone (0600 files in a 0700 folder) but not keychain-encrypted. The
+  terminal's former `~/.texra/secrets.json` is no longer read. A key saved in any TeXRA app now works in all of
+  them, and in tasks the background service runs. Keys saved before this
+  release are not carried over: add them again from Settings › Models,
+  `TeXRA: Set API Key` or `texra auth`.
+- **Agent files are flat.** An agent YAML is now `name`, `description`,
+  `tools`, `temperature` and `prompt` at the top level, plus an optional
+  `task` block for an agent that revises documents: `task.prefix` lays out
+  the documents, `task.requests` holds one request per revision (their
+  number is the revision count, so `rounds` is gone), and `task.rewrite`,
+  `task.outputs` and `task.files` replace `isRewrite`, `defaultOutputFiles`
+  and `requiredFilesInternal`. A chat agent has no request template: your
+  message is its task, so the `{{ INSTRUCTION }}` boilerplate is gone. The
+  `settings:`/`prompts:` nesting and `agentCategory` are no longer read; a
+  custom agent in the old format is reported as unloadable, naming the
+  unrecognized keys. Every bundled and Lean agent and both creation
+  templates use the new format.
+- **Outdated tools are removed: the todo list, Crossref search, DOI lookup,
+  `texcount`, `arxiv_metadata` and `wolfram`.** Agents no longer keep a
+  todo list: the `todo_write` tool is gone, and with it the Todos panel in
+  the progress view, the CLI's todo rows under the conversation (the plan
+  summary stays, and `/plan` shows the objective), the todo summary in
+  `/executions`, and the `todos` view of its history query. A Codex child's
+  own task list is no longer shown either. `crossref_search` and Copilot
+  Chat's `#texra_crossref_search` are gone, and `zotero_add` takes a URL or
+  manual metadata but no longer a DOI. `arxiv_metadata` is gone:
+  `arxiv_search` hits carry each paper's abstract, authors and dates. The
+  `texcount` and `wolfram` tools are gone; agents run `texcount -inc <file>`
+  and `wolframscript -code '…'` through the shell, and the Wolfram card in
+  Settings › Plugins stays with its install guide. Custom agents that list
+  any of these tools should drop them.
 - **"Task" and "agent" are the only nouns, and `/ps` and `/send` are gone.**
   What you start is a task and what it starts is an agent, in all three
   hosts: the CLI's Tab list is the agent list (**Tab agents**), the exit line
@@ -302,6 +338,36 @@ All notable changes to this project will be documented in this file.
   snapshot.
 
 ### Features
+
+- **Every chat is a task of the background service (CLI).** `texra chat`
+  and a bare `texra` run their conversation's runs in the TeXRA service, so
+  another terminal's `/tasks` lists the conversation and attaches to it
+  live, while the chat answers its approvals and edit diffs as before.
+  When the service cannot start (on Windows, for now) the chat runs in its
+  own process and says so once. `texra run`, `-p` and
+  `--output-format ndjson` stay in their own process. The service now takes
+  its `PATH` and keys from your login shell rather than from whichever
+  window started it, so a service started by an app opened from the Dock
+  still finds `latexmk`.
+
+- **`/tasks` in the chat attaches to a background task (CLI).** The chat
+  lists every project's tasks in the TeXRA service; choosing one shows its
+  transcript live, sends it follow-ups, and answers its approvals (commands,
+  edits with their diff, questions) in place. Esc detaches and the task
+  keeps running. A service task that asks for approval now waits for that
+  answer instead of having the tool withheld.
+
+- **One background TeXRA service runs tasks for every terminal (CLI).**
+  `texra tasks start <agent> --instruction "…"` starts a tool-use task in a
+  per-user service, which starts on its own the first time it is needed and
+  keeps the task running after the terminal closes. `texra tasks list` shows
+  the tasks of every project, `texra tasks attach <id>` follows one live from
+  any number of terminals at once (each prints the same transcript; Ctrl-C
+  only detaches), and `texra tasks send` and `texra tasks stop` steer it.
+  `texra service status|stop|restart` manage the service and `texra serve`
+  runs it in the foreground. Clients reach it through a local socket only
+  your user can open, in `~/.texra/run/`, and it exits after ten idle
+  minutes.
 
 - **Interrupted tasks when TeXRA opens.** When the terminal chat, the
   desktop app or the extension opens and finds tasks a closed or crashed
@@ -648,6 +714,30 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Gemini calls work again.** After a change on Google's side, every
+  Gemini request failed with a validation error before any output arrived.
+- **A crash no longer undoes a Stop, a finished agent or a bypass turned
+  off.** A task you stopped mid-turn, killed before it finished stopping,
+  came back as interrupted, and with "Always resume" it carried on the turn
+  and paid for more model calls; a stop is now recorded whole or not at
+  all. An agent that had finished its answer when its task was killed no
+  longer asks whether to run it again: the resumed task reads the answer it
+  left. Turning an approval bypass off is confirmed only once it is saved,
+  for a task held by no window too, so a crash right after cannot bring
+  the bypass back on when the task resumes.
+- **Every surface agrees on which tasks can resume, workflows included.** In
+  `texra chat`, an interrupted workflow task now offers Resume (Enter on its
+  agent row, or `/resume <id>`) and continues beside the chat instead of
+  pointing you to `texra resume`; the exit line lists workflow agents too.
+  `texra history` marks a task resumable exactly when `texra resume` would
+  continue it: a task that was killed before its first step is now listed
+  as resumable, and a failed workflow is no longer hidden from `/resume`.
+- **A message to a task that is waking up is no longer refused.** A message
+  sent while a task is being resumed, or a second Resume, joins the resume
+  already under way instead of reporting "This run cannot accept messages
+  right now". A GitHub event or an agent's progress note for a task that is
+  not running in this window is kept for its next turn instead of dropped.
+  A message to an agent that is waiting for input now reports "Sent".
 - **Interrupted tasks now resume reliably after a crash at any point.** A
   task, an agent it started or a background script that was killed just
   after it started now resumes from the beginning instead of showing as

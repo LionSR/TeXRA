@@ -1,11 +1,18 @@
 /**
- * What turning a bypass on settles beside the flag itself: the run's requests
- * already waiting under it, on every host.
+ * A bypass change and what it settles beside the flag itself: its durable
+ * row, and when it turns a bypass on, the run's requests already waiting
+ * under it, on every host.
  */
+import { isDeepStrictEqual } from 'node:util';
+
 import { Effect, SubscriptionRef } from 'effect';
 
+import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
+import {
+  APPROVAL_BYPASS_KINDS,
+  type ApprovalBypassKind,
+} from '@shared/approvalBypassKind';
 import type { PermissionPayload } from '@shared/schemas';
 import { DatabaseNotOwner } from '@shared/session/database';
 import {
@@ -13,7 +20,7 @@ import {
   Unavailable,
   type RequestError,
 } from '@shared/session/requestErrors';
-import type { RuntimeRequest } from '@shared/session/runtimeRequest';
+import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 
 type BypassChange = Extract<RuntimeRequest, { kind: 'policy.set' }>['change'];
 
@@ -40,7 +47,7 @@ const COVERED_KINDS: Record<
  * offers no bypass. A request whose opening is still committing is not
  * listed yet and stays pending for the user.
  */
-export function approvePendingUnderBypass(
+function approvePendingUnderBypass(
   session: SessionHandle,
   { runId, bypass, exceptRequestId }: BypassChange,
 ): Effect.Effect<void, RequestError> {
@@ -78,4 +85,63 @@ export function approvePendingUnderBypass(
           }),
     ),
   );
+}
+
+/**
+ * Apply a bypass change, acknowledged once its `approval.policy` row is
+ * durable: a resume restores the bypass from that row, so an "off" lost to
+ * a crash would come back on. The caller holds the run's claim; the row is
+ * read back, since a claim lost meanwhile writes nothing. A change whose row
+ * did not land is undone here too, so no bypass the person was told failed
+ * stays live.
+ */
+export function setPolicy(
+  session: SessionHandle,
+  approvals: SessionApprovals,
+  change: BypassChange,
+  heldHere: boolean,
+): Effect.Effect<Outcome, RequestError> {
+  const { runId } = change;
+  const bypassOf = (kind: ApprovalBypassKind) =>
+    kind === 'superYolo' ? approvals.proposal : approvals[kind].bypass;
+  return Effect.gen(function* () {
+    const before = approvals.grantsFor(runId);
+    if (change.bypass === 'superYolo')
+      approvals.setDelegatedWorkBypasses(runId, change.enabled);
+    else bypassOf(change.bypass).setBypass(runId, change.enabled);
+    // The change queued its row; the settle commits it, the read proves it.
+    const saved = yield* session
+      .settlePublications(runId, { consume: false })
+      .pipe(
+        Effect.andThen(session.readRunRecords(runId)),
+        Effect.map((rows) => {
+          const row = rows.findLast((r) => r.type === 'approval.policy');
+          return (
+            row?.type === 'approval.policy' &&
+            isDeepStrictEqual(row.snapshot.own, approvals.grantsFor(runId).own)
+          );
+        }),
+        Effect.catch((error) =>
+          Effect.logWarning('An approval change was not saved').pipe(
+            Effect.annotateLogs({ data: error }),
+            Effect.as(false),
+          ),
+        ),
+      );
+    if (!saved) {
+      for (const kind of APPROVAL_BYPASS_KINDS) {
+        const own = before.own[kind];
+        bypassOf(kind).setBypass(runId, own === undefined ? own : own === 'on');
+      }
+      approvals.setGoalGrant(runId, before.goal);
+      return yield* new Unavailable({
+        runId,
+        reason: 'The approval change could not be saved.',
+      });
+    }
+    // A run held elsewhere has no fiber here to act on a decision.
+    if (change.enabled && heldHere)
+      yield* approvePendingUnderBypass(session, change);
+    return { kind: 'done' };
+  });
 }

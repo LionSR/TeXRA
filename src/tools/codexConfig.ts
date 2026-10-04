@@ -12,7 +12,7 @@ import {
   type AgentCliEffort,
   type ToolError,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { CodexStateKey } from '@shared/settingsView/integrationSettings';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { executeCommand } from '@utils/system/execUtils';
@@ -83,11 +83,11 @@ export const codexRun = Effect.fn('codexConfig.codexRun')(function* (
 > {
   const modelString = yield* readSettingFrom<string>(
     stores,
-    WorkspaceStateKey.CODEX_MODEL,
+    CodexStateKey.MODEL,
   );
   const userEffort = yield* readSettingFrom<AgentCliEffort>(
     stores,
-    WorkspaceStateKey.CODEX_REASONING_EFFORT,
+    CodexStateKey.REASONING_EFFORT,
   );
   const selection = yield* resolveAgentCliModel(() =>
     selectAgentCliModel(modelString, CODEX_MODEL_RULE),

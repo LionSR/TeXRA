@@ -42,8 +42,8 @@ describe('emitToolUseCard', () => {
     {
       status: 'completed',
       card: {
-        toolName: 'todo_write',
-        input: { items: [] },
+        toolName: 'read_file',
+        input: { path: 'notes.tex' },
         output: 'ok',
         status: 'completed',
       },

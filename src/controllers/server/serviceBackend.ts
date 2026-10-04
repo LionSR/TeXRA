@@ -1,0 +1,245 @@
+/**
+ * A window's session held by the background service: the `SessionBackend`
+ * a window drives when its runs run in `texra serve`. Launches, resumes and
+ * requests are procedures of the service, so this window writes nothing to
+ * the run history; the frames its ports render are the service's, with this
+ * window's own host snapshot merged in; and the view it reads run state from
+ * is the service's listing, folded here.
+ */
+import {
+  Effect,
+  FiberHandle,
+  Layer,
+  Semaphore,
+  Ref,
+  type Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
+
+import { WebviewSessions } from '@controllers/session/webviewSessionLayer';
+import type { SessionBackend } from '@controllers/session/sessionBackend';
+import {
+  Cancelled,
+  Internal,
+  NotOwner,
+  Rejected,
+  Unavailable,
+  type RequestError,
+} from '@shared/session/requestErrors';
+import type { TranscriptSubscription } from '@shared/schemas';
+import { isLiveRun } from '@shared/session/sessionView';
+import type {
+  EventsFrame,
+  RequestErrorWire,
+} from '@shared/session/sessionFrames';
+import { generateRunId } from '@utils/core';
+
+import type { ServiceClient } from './client';
+
+/** The transcript port of the window's own view. */
+const WINDOW_PORT = 'window';
+
+/** A refused request as the runtime spells it; a transport failure is a
+ *  refusal worded for the user. */
+function requestError(
+  error:
+    | RequestErrorWire
+    | { readonly _tag: 'RpcClientError'; readonly message: string },
+): RequestError {
+  switch (error._tag) {
+    case 'NotOwner':
+      return new NotOwner({ runId: error.runId });
+    case 'Unavailable':
+      return new Unavailable({ runId: error.runId, reason: error.reason });
+    case 'Cancelled':
+      return new Cancelled();
+    case 'Rejected':
+      return new Rejected({
+        reason: error.reason,
+        ...(error.docsCommand && { docsCommand: error.docsCommand }),
+      });
+    case 'Invalid':
+      return new Rejected({ reason: error.reason });
+    case 'Internal':
+      return new Internal({ ref: error.ref });
+    case 'RpcClientError':
+      return new Rejected({
+        reason: `The TeXRA service did not answer: ${error.message}`,
+      });
+  }
+}
+
+/**
+ * The backend of `workspace`'s session in the service, keyed by `key` (the
+ * session's storage root, as this window spells it). The view it folds
+ * lives for the caller's scope.
+ */
+export const serviceSessionBackend = Effect.fn('serviceSessionBackend')(
+  function* (
+    client: ServiceClient,
+    workspace: string,
+    key: string,
+  ): Effect.fn.Return<SessionBackend, never, Scope.Scope> {
+    const sessions = yield* Layer.build(WebviewSessions.layerNoDeps);
+    const graph = yield* WebviewSessions.open(key).pipe(
+      Effect.provideContext(sessions),
+    );
+    // The window's own view: the listing, plus the transcripts its ports
+    // name. A change of that set is a new generation of one watch, from the
+    // cursor and history the view already holds, as a webview resubscribes.
+    const ports = new Map<string, readonly TranscriptSubscription[]>();
+    const watch = yield* FiberHandle.make<void, never>();
+    const lane = Semaphore.makeUnsafe(1);
+    let generation = 0;
+    const resubscribe = lane.withPermits(1)(
+      Effect.gen(function* () {
+        generation += 1;
+        const view = yield* SubscriptionRef.get(graph.view.ref);
+        const named = new Set(
+          [...ports.values()].flatMap((set) => set.map((entry) => entry.id)),
+        );
+        const aggregates = [...named].map((id) => ({
+          id,
+          fromSeq: view.folded.get(id) ?? 0,
+        }));
+        yield* graph.frames.begin(generation);
+        yield* graph.subscriptions.set(WINDOW_PORT, aggregates);
+        yield* FiberHandle.run(
+          watch,
+          client['task.watch']({
+            workspace,
+            subscribe: {
+              kind: 'subscribe',
+              session: key,
+              generation,
+              debug: view.debug,
+              cursor: view.cursor,
+              aggregates,
+            },
+          }).pipe(
+            Stream.runForEach(graph.frames.feed),
+            Effect.catch((error) =>
+              Effect.logWarning(
+                `The TeXRA service stopped sending ${workspace}; this window's run state no longer updates`,
+              ).pipe(Effect.annotateLogs({ data: error })),
+            ),
+          ),
+        );
+      }),
+    );
+    yield* resubscribe;
+    return {
+      key,
+      view: graph.view.ref,
+      frames: (port, host, subscribe) =>
+        Stream.unwrap(
+          Effect.gen(function* () {
+            // Host-only frames carry the cursor the service last framed, so
+            // the window's fold never sees its tail move backwards.
+            const cursor = yield* Ref.make(subscribe.cursor);
+            const served = client['task.watch']({
+              workspace,
+              subscribe: { ...subscribe, session: key },
+            }).pipe(
+              Stream.tap((frame) => Ref.set(cursor, frame.cursor)),
+              // This window's key; its host snapshot rides the frames below.
+              Stream.map((frame): EventsFrame => ({ ...frame, session: key })),
+              Stream.catch((error) =>
+                Stream.fromEffect(
+                  Effect.logWarning(
+                    `The TeXRA service stopped sending port ${port}; its transcript no longer updates`,
+                  ).pipe(Effect.annotateLogs({ data: error })),
+                ).pipe(Stream.drain),
+              ),
+            );
+            const hosts = SubscriptionRef.changes(host).pipe(
+              Stream.filter((snapshot) => snapshot !== null),
+              Stream.mapEffect((snapshot) =>
+                Effect.map(Ref.get(cursor), (at): EventsFrame => ({
+                  kind: 'events',
+                  session: key,
+                  generation: subscribe.generation,
+                  cursor: at,
+                  events: [],
+                  chunks: [],
+                  local: null,
+                  host: snapshot,
+                  debug: null,
+                  replayComplete: false,
+                  existence: null,
+                  blocked: [],
+                })),
+              ),
+            );
+            return Stream.merge(served, hosts, { haltStrategy: 'left' });
+          }),
+        ),
+      transcripts: (port, set) =>
+        Effect.suspend(() => {
+          if (set.length === 0) ports.delete(port);
+          else ports.set(port, set);
+          return resubscribe;
+        }),
+      request: (request) =>
+        client['task.request']({ workspace, request }).pipe(
+          Effect.mapError(requestError),
+        ),
+      launch: (request, options) =>
+        client['task.start']({
+          workspace,
+          runId: request.runId ?? generateRunId(),
+          config: request.config,
+          continues: options.continues ?? null,
+          preferHelperModel: options.preferHelperModel ?? false,
+          ownApiKeyFallback: options.ownApiKeyFallback ?? false,
+          approveDelegatedWork: options.approveDelegatedWork ?? false,
+        }).pipe(
+          Effect.mapError(
+            (error) =>
+              new Error(
+                `The TeXRA service could not start the task: ${error.message}`,
+              ),
+          ),
+          Effect.tap((runId) => options.onRun?.(runId) ?? Effect.void),
+          Effect.tap((runId) =>
+            Effect.sync(() => options.onRunResolved?.(runId)),
+          ),
+          Effect.as(null),
+        ),
+      resume: (runId) =>
+        client['task.resume']({ workspace, runId }).pipe(
+          Effect.mapError(
+            (error) => new Unavailable({ runId, reason: error.message }),
+          ),
+          Effect.map((resumed) =>
+            resumed === null ? null : { runId: resumed, result: null },
+          ),
+        ),
+      controls: (runId) => {
+        const run = SubscriptionRef.getUnsafe(graph.view.ref).runs.get(runId);
+        if (run === undefined || !isLiveRun(run)) return undefined;
+        return {
+          // The service checks the switch against the run when it is asked.
+          modelSwitchDisabledReason: () => Effect.succeed(undefined),
+          switchModel: (model) =>
+            client['task.model']({ workspace, runId, model }).pipe(
+              Effect.mapError((error) => new Error(error.message)),
+            ),
+        };
+      },
+      preview: (requestId) =>
+        client['request.preview']({ workspace, requestId }).pipe(
+          Effect.mapError((error) => new Error(error.message)),
+        ),
+      setApprovalPolicy: (policy) =>
+        client['project.policy']({ workspace, policy }).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning(
+              `The TeXRA service did not take ${workspace}'s approval policy; its tasks keep the previous one`,
+            ).pipe(Effect.annotateLogs({ data: error })),
+          ),
+        ),
+    };
+  },
+);

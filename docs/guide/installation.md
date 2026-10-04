@@ -297,7 +297,7 @@ TeXRA talks to model providers directly with an API key you supply. You need a k
 
 ### In the VS Code extension
 
-The shortest path: open the TeXRA Settings, go to the **Models** page, and select the provider you want. Paste the key and it is saved in VS Code's secret storage. You can also run **TeXRA: Set API Key** from the Command Palette, or put the keys in a `.env` file in your project; the extension reads it on startup.
+The shortest path: open the TeXRA Settings, go to the **Models** page, and select the provider you want. Paste the key and it is saved in `~/.texra/secrets/`, a folder only your user can read, shared by every TeXRA app. You can also run **TeXRA: Set API Key** from the Command Palette, or put the keys in a `.env` file in your project; the extension reads it on startup.
 
 <ApiKeysHero />
 

@@ -8,12 +8,10 @@
 import {
   CODEX_FILE_CHANGE_TOOL,
   CODEX_THREAD_TOOL,
-  CODEX_TODO_TOOL,
   CODEX_TURN_TOOL,
   CodexFileChangeToolInputSchema,
   CodexMcpToolOutputSchema,
   CodexThreadToolInputSchema,
-  CodexTodoToolInputSchema,
   CodexTurnToolInputSchema,
   getProposalFileGroups,
   type ProposalFileGroup,
@@ -64,6 +62,9 @@ function toStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
   return value.filter((item): item is string => typeof item === 'string');
 }
+
+/** The label of the section that carries an `agent` call's delivered answer. */
+const AGENT_ANSWER_LABEL = 'Result:';
 
 function textSection(label: string, body: string): ToolTextSection {
   return { kind: 'text', label, text: transcriptText(body) };
@@ -376,7 +377,7 @@ function buildDelegationSections(ctx: SectionContext): ToolSection[] {
   // The answer without its delivery envelope: the card never prints the
   // `<subagent-result>` XML the parent's model reads.
   const answer = deliveredResponse(ctx.outputText);
-  if (answer) sections.push(textSection('Result:', answer));
+  if (answer) sections.push(textSection(AGENT_ANSWER_LABEL, answer));
   return sections;
 }
 
@@ -480,8 +481,8 @@ function buildMcpSections(ctx: SectionContext): ToolSection[] {
 }
 
 /**
- * The five native Codex cards (`codex`, `codex_patch`, `codex_thread`,
- * `codex_todo`, `codex_turn`). They used to be a webview-only Lit override;
+ * The four native Codex cards (`codex`, `codex_patch`, `codex_thread`,
+ * `codex_turn`). They used to be a webview-only Lit override;
  * expressed as sections they reach the terminal too, and the check marks,
  * change kinds and badges are one derivation instead of two.
  */
@@ -527,28 +528,6 @@ function buildCodexThreadSections(ctx: SectionContext): ToolSection[] {
   return [
     { kind: 'identifier', label: 'Thread ID:', value: parsed.data.threadId },
   ];
-}
-
-function buildCodexTodoSections(ctx: SectionContext): ToolSection[] {
-  const parsed = CodexTodoToolInputSchema.safeParse(ctx.input);
-  if (!parsed.success) return [];
-  const { items, completedCount, totalCount } = parsed.data;
-  const sections: ToolSection[] = [];
-  if (totalCount > 0) {
-    sections.push({
-      kind: 'badges',
-      label: 'Progress:',
-      badges: [`${completedCount}/${totalCount} completed`],
-    });
-  }
-  if (items.length > 0) {
-    sections.push({
-      kind: 'checklist',
-      label: 'Checklist:',
-      items: items.map((item) => ({ text: item.text, done: item.completed })),
-    });
-  }
-  return sections;
 }
 
 function buildCodexTurnSections(ctx: SectionContext): ToolSection[] {
@@ -651,10 +630,6 @@ const SECTION_BUILDERS: readonly {
     build: buildCodexThreadSections,
   },
   {
-    match: (ctx) => ctx.toolName === CODEX_TODO_TOOL,
-    build: buildCodexTodoSections,
-  },
-  {
     match: (ctx) => ctx.toolName === CODEX_TURN_TOOL,
     build: buildCodexTurnSections,
   },
@@ -682,7 +657,10 @@ export function dispatchSections(ctx: SectionContext): {
       carriesOutput:
         isMcpToolName(ctx.toolName) ||
         (ctx.toolName === AGENT_TOOL_NAME &&
-          deliveredResponse(ctx.outputText) !== undefined) ||
+          sections.some(
+            (section) =>
+              section.kind === 'text' && section.label === AGENT_ANSWER_LABEL,
+          )) ||
         (!ctx.failed && sections.some((section) => section.kind === 'diff')),
       ...(fileLinkKind ? { fileLinkKind } : {}),
     };

@@ -9,6 +9,7 @@ import path from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, SubscriptionRef } from 'effect';
 import { presentRunFailure, type SessionHandle } from '@agent/runtime';
+import { localSessionBackend } from '@controllers/session/sessionBackend';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { exportRunTranscript } from '@controllers/progressView/exportTranscript';
 import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
@@ -41,10 +42,7 @@ import {
 } from '@housekeeping/runDirOps';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  modelOptionsFrom,
-  readModelAvailabilityInputs,
-} from '@model/computeModelOptions';
+import { loadModelOptions } from '@model/setupCredentialAccess';
 import type { AgentDirectoriesFailed } from '@platform/interfaces';
 import {
   withProcessServices,
@@ -156,13 +154,11 @@ export function createDesktopHostRequests(
     createHostRunActions({
       ...run, // this window's launcher and output opener
       session,
+      backend: localSessionBackend(session),
       loadModelOptions: () =>
         withProcessServices(
           runtime,
-          readModelAvailabilityInputs({
-            ...session.roots,
-            secrets: options.secrets,
-          }).pipe(Effect.map(modelOptionsFrom)),
+          loadModelOptions({ ...session.roots, secrets: options.secrets }),
         ),
       // Only the "ask the user for a key" step is host-specific: on the
       // desktop that means opening the Models tab rather than a modal prompt.

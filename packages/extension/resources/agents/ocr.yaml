@@ -1,28 +1,25 @@
 name: ocr
 description: Converts handwritten mathematical content from images into LaTeX.
 
-settings:
-  agentCategory: workflow
-  defaultOutputFiles:
+prompt: |
+  Convert handwritten mathematical content from one or more images into LaTeX. Match the existing document's notation and style.
+
+  When processing handwritten content, you must:
+  \begin{itemize}
+      \item Analyze the mathematical symbols, expressions, and equations across all attached images. If multiple images are attached, treat them as related pages or panels and produce a single coherent LaTeX output that reflects all of them in order.
+      \item Extract both text and mathematical content accurately
+      \item Ensure the generated LaTeX matches the notation conventions used in the existing document
+      \item Maintain consistent symbol usage (e.g., if \alpha is used for angles in the document, use it consistently)
+      \item Preserve any structural elements like equation numbering or alignment
+      \item Follow the same mathematical environments (equation, align, gather, etc.) as used in the document
+      \item Validate that all symbols are properly defined before use
+      \item Transcribe subscripts, superscripts, fractions, and special symbols correctly
+  \end{itemize}
+
+task:
+  outputs:
     - ocr_result.tex
-
-prompts:
-  systemPrompt: |
-    Convert handwritten mathematical content from one or more images into LaTeX. Match the existing document's notation and style.
-
-    When processing handwritten content, you must:
-    \begin{itemize}
-        \item Analyze the mathematical symbols, expressions, and equations across all attached images. If multiple images are attached, treat them as related pages or panels and produce a single coherent LaTeX output that reflects all of them in order.
-        \item Extract both text and mathematical content accurately
-        \item Ensure the generated LaTeX matches the notation conventions used in the existing document
-        \item Maintain consistent symbol usage (e.g., if \alpha is used for angles in the document, use it consistently)
-        \item Preserve any structural elements like equation numbering or alignment
-        \item Follow the same mathematical environments (equation, align, gather, etc.) as used in the document
-        \item Validate that all symbols are properly defined before use
-        \item Transcribe subscripts, superscripts, fractions, and special symbols correctly
-    \end{itemize}
-
-  userPrefix: |
+  prefix: |
     I will provide you with:
     1. The existing LaTeX document for context
     2. One or more images containing handwritten mathematical content to be converted
@@ -34,8 +31,7 @@ prompts:
     {{ ALL_CONTEXTS }}
     {{ ALL_INPUTS }}
     </documents>
-
-  userRequest:
+  requests:
     - |
       <instruction>
       {{ INSTRUCTION }}

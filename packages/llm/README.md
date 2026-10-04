@@ -65,7 +65,9 @@ covers, which the operation handle deliberately does not copy.
 | `errors.ts`                       | `ModelError` and the failure classification along it, `RemoteOperation` included                                                                             |
 | `api/transport.ts`                | stream pull, tool-argument parsing, the abort-safe request helper                                                                                            |
 | `api/openaiResponses.ts`          | `openaiResponsesModel`                                                                                                                                       |
-| `api/openaiResponsesCodec.ts`     | the response-side schemas and normalization, content lowering, event decoding                                                                                |
+| `api/parts.ts`                    | the part events every codec reports a response in, and the canonical-part algebra (identity, restatement, growth)                                            |
+| `api/assembleTurn.ts`             | the one turn fold over part events: identity, positions, deltas, call arguments, finish agreement, terminal validation                                       |
+| `api/openaiResponsesCodec.ts`     | the response-side schemas, content lowering, and the one Responses event decoder (stream, WebSocket, observation)                                            |
 | `api/openaiResponsesUsage.ts`     | the usage receipt schema and its normalization, xAI's settled cost included                                                                                  |
 | `api/openaiResponsesLower.ts`     | input lowering and the continuation anchor                                                                                                                   |
 | `api/openaiResponsesRequest.ts`   | preparing a turn, its parameters, the abort classification                                                                                                   |
@@ -73,7 +75,6 @@ covers, which the operation handle deliberately does not copy.
 | `api/anthropicMessages.ts`        | `anthropicMessagesModel`                                                                                                                                     |
 | `api/googleInteractions.ts`       | `googleInteractionsModel`                                                                                                                                    |
 | `api/openrouterChat.ts`           | `openrouterChatModel`                                                                                                                                        |
-| `api/chatStream.ts`               | the Chat delta accumulator and usage counts `openrouterChat.ts` builds a turn from                                                                           |
 | `api/uploadCache.ts`              | the digest-keyed, model-scoped upload cache behind `uploadFile`                                                                                              |
 | `api/prefixFingerprint.ts`        | the admitted-history fingerprint a background completion anchors on                                                                                          |
 | `api/openaiError.ts`              | SDK error classification into `ModelError`                                                                                                                   |

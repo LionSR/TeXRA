@@ -192,10 +192,10 @@ export class FakeConfigProvider implements ConfigProvider {
     });
   }
 
-  inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
+  inspect<T = unknown>(key: string): ConfigInspection<T> {
     const resolvedKey = this.resolveExistingKey(key);
     if (resolvedKey === undefined) {
-      return undefined;
+      return { globalValue: undefined, workspaceValue: undefined };
     }
     const value = this.values.get(resolvedKey) as T;
     const target = this.targets.get(resolvedKey) ?? 'workspace';
@@ -278,7 +278,7 @@ export class FakeScopedConfigProvider implements ConfigProvider {
     return this.lastTargets.get(key);
   }
 
-  inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
+  inspect<T = unknown>(key: string): ConfigInspection<T> {
     return {
       globalValue: this.globalValues.has(key)
         ? (this.globalValues.get(key) as T)

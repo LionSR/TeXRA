@@ -4,10 +4,10 @@ import { ModelProvider } from 'llm-zoo';
 import {
   decideModelRoute,
   isKimiSubscriptionEligible,
-  KIMI_CODE_BASE_URL,
   OWN_KEY_ROUTE_FACTS,
   routeConfig,
 } from '@texra-ai/llm';
+import { KIMI_CODE_BASE_URL } from '../../../packages/llm/src/providers/providers.js';
 import type { ModelConfig } from 'llm-zoo';
 
 const dual = {

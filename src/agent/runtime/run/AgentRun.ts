@@ -12,8 +12,8 @@ import { Context, Effect, Exit, Layer, Scope, SynchronizedRef } from 'effect';
 import { selectModel } from '@texra-ai/llm';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type {
-  AgentPrompt,
-  AgentSetting,
+  DocumentTask,
+  Persona,
 } from '@agent/core/definition/AgentDataclass';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { PLUGIN_AGENT_DEFAULT_TOOLS } from '@agent/index/pluginAgents';
@@ -66,7 +66,7 @@ export interface ToolPolicy {
 }
 
 interface RunCallbacks {
-  /** Fires on meaningful progress: todo changes, tool call milestones. */
+  /** Fires on meaningful progress: plan changes, tool call milestones. */
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
   /** An idle turn boundary, after child delivery. */
   readonly onIdle?: () => void;
@@ -76,9 +76,10 @@ export interface AgentRunShape {
   readonly runId: RunId;
   readonly session: SessionHandle;
   readonly config: AgentConfig;
-  /** The setting, with the tools the agent declares. */
-  readonly setting: AgentSetting;
-  readonly prompt: AgentPrompt;
+  /** The persona the run is, with the tools it declares. */
+  readonly persona: Persona;
+  /** The document task it runs, or null for a conversation. */
+  readonly task: DocumentTask | null;
   readonly logger: AgentTrace;
   readonly parentStage: StageHandle;
   readonly toolPolicy: ToolPolicy;
@@ -180,7 +181,7 @@ export const agentRunLayer = (
       // each release runs concurrently under its own deadline.
       const scope = yield* Scope.fork(layerScope, 'parallel');
 
-      const { setting } = ctx;
+      const { persona, task } = ctx;
 
       // Unforced structured-output floor: when the config declares an output
       // schema, a synthetic `submit_output` terminal tool joins the run's own
@@ -203,15 +204,15 @@ export const agentRunLayer = (
       // The loaded plugins (MCP servers) the declared tools name, held for
       // the run's life; the read's problems reach its transcript. A
       // workflow run's rounds offer no tools, so it holds none.
-      const workflow = setting.agentCategory === AgentCategory.Workflow;
+      const workflow = task !== null;
       // A plugin agent that names no tools inherits them, as a Claude Code
       // subagent does: a child every tool its parent's step offered (the
       // narrow-only rule then keeps exactly those), a top-level run the
       // standard file, shell and web tools and the installed plugins' tools.
       const inherits =
         config.agentSource === AGENT_SOURCE.PLUGIN &&
-        setting.agentCategory === AgentCategory.ToolUse &&
-        setting.tools.length === 0;
+        !workflow &&
+        persona.tools.length === 0;
       const parentOffered = ctx.toolPolicy.parentOffered;
       const tools = inherits
         ? (
@@ -219,7 +220,7 @@ export const agentRunLayer = (
               ?.filter(({ plugin }) => plugin !== 'run')
               .map(({ name }) => name) ?? PLUGIN_AGENT_DEFAULT_TOOLS
           ).map((name) => ({ name }))
-        : setting.tools;
+        : persona.tools;
       const declared = declaredToolNames(tools);
       const held = yield* (yield* LiveTools)
         .hold(workflow ? [] : declared)
@@ -235,14 +236,13 @@ export const agentRunLayer = (
         // infrastructure.
         // A plugin agent that names its tools gets only those.
         injectTools:
-          setting.agentCategory === AgentCategory.ToolUse &&
-          (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
+          !workflow && (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
         // The installed plugins' tools reach a top-level run of any agent but
         // a plugin agent that names its tools; a child gets what it declares,
         // narrowed to its parent's. A background script's run is its
         // parent's agent with its parent's tools, installed ones included.
         injectInstalled:
-          setting.agentCategory === AgentCategory.ToolUse &&
+          !workflow &&
           (parentOffered === undefined ||
             (config.agentCategory === AgentCategory.ToolUse &&
               config.backgroundScript != null)) &&
@@ -253,19 +253,11 @@ export const agentRunLayer = (
         held,
       };
       const snapshot = yield* runHistory.latestSnapshot(runId);
-      // A workflow agent's rounds offer no tools: a fresh run says so rather
-      // than narrowing its YAML's declared `tools:` silently.
-      if (workflow && snapshot === null && declared.length > 0) {
-        logger.warn(
-          `The workflow family advertises no tools under this release, so the tools this agent declares are not offered to the model: ${declared.join(', ')}. Run the agent in the tool-use family if it needs them.`,
-        );
-      }
-
       // The model and route of a resumed run are the ones its latest snapshot
       // names; a fresh run binds the launch model under today's default route.
       const persisted = snapshot === null ? null : snapshot.payload.runtime;
       const modelId = persisted?.modelId ?? config.model;
-      const compatibilityKey = persisted?.modelCompatibilityKey ?? null;
+      const backend = persisted?.backend;
       const selected = selectModel(modelId);
       const modelConfig =
         modelId === config.model ? ctx.modelConfig : selected?.config;
@@ -290,11 +282,11 @@ export const agentRunLayer = (
         modelId,
         config: modelConfig,
         stores: ctx.stores,
-        compatibilityKey,
+        backend,
         ownApiKeyFallback: ctx.ownApiKeyFallback,
         declinedRoutes,
         agentCategory: config.agentCategory,
-        temperature: setting.temperature,
+        temperature: persona.temperature,
       }).pipe(Scope.provide(bindingScope));
       const model = yield* SynchronizedRef.make(bound);
       const swapModel: AgentRunShape['swapModel'] = (next) =>
@@ -322,8 +314,8 @@ export const agentRunLayer = (
         runId,
         session,
         config,
-        setting,
-        prompt: ctx.prompt,
+        persona,
+        task,
         logger,
         parentStage: ctx.parentStage,
         toolPolicy: ctx.toolPolicy,

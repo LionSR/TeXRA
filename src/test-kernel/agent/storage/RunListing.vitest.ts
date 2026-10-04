@@ -135,34 +135,32 @@ describe('run listing normalization', () => {
   );
 
   // A row is dropped only when the facts it is built from are unreadable. The
-  // checkpoint probe is not one of them: it decides an advertisement, so an
+  // resumability read is not one of them: it decides an advertisement, so an
   // unreadable snapshot costs the row its Resume affordance, never its place
   // in history.
-  it.effect(
-    'keeps a row whose checkpoint probe fails, without a checkpoint',
-    () =>
-      Effect.gen(function* () {
-        const id = 'eee556' as RunId;
-        yield* Effect.promise(() =>
-          writeRun(id, '2026-07-15T11:00:00.000Z', config('assistant')),
-        );
-        vi.spyOn(session.runHistory, 'latestSnapshot').mockReturnValue(
-          Effect.fail(
-            new DatabaseReadFailed({
-              path: 'session.db',
-              cause: new Error('snapshot read failed'),
-            }),
-          ),
-        );
-
-        expect(yield* listRuns(session)).toEqual([
-          expect.objectContaining({
-            id,
-            kind: 'run',
-            checkpointPresent: false,
+  it.effect('keeps a row whose snapshot read fails, not resumable', () =>
+    Effect.gen(function* () {
+      const id = 'eee556' as RunId;
+      yield* Effect.promise(() =>
+        writeRun(id, '2026-07-15T11:00:00.000Z', config('assistant')),
+      );
+      vi.spyOn(session.runHistory, 'latestSnapshot').mockReturnValue(
+        Effect.fail(
+          new DatabaseReadFailed({
+            path: 'session.db',
+            cause: new Error('snapshot read failed'),
           }),
-        ]);
-      }),
+        ),
+      );
+
+      expect(yield* listRuns(session)).toEqual([
+        expect.objectContaining({
+          id,
+          kind: 'run',
+          resumable: false,
+        }),
+      ]);
+    }),
   );
 
   it.effect(
@@ -219,7 +217,8 @@ describe('run listing normalization', () => {
             // The model the run is on is the view's (its snapshots', else its
             // launch model), not a second copy of the record's.
             model: agentConfig.model,
-            checkpointPresent: false,
+            // Registered and never opened: it reopens from its config.
+            resumable: true,
           },
         ]);
         expect(entries.filter(isUserVisibleRun)).toHaveLength(1);

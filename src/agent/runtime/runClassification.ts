@@ -10,11 +10,9 @@
  *   or cannot be proven dead (another TeXRA process). Shown read-only.
  * - `owned_here`: the claim is held by this very process, yet no loop runs
  *   for it here: a registry/claim disagreement. Shown read-only.
- * - `resumable`: a `run.snapshot` exists on the run aggregate, or a run
- *   TeXRA drives was registered and never opened, and nobody alive holds
- *   the claim. Continued only through the explicit Resume
- *   affordance.
- * - `finished`: no checkpoint, and not a run left unopened.
+ * - `resumable`: nobody alive holds the claim and `deriveResumability`
+ *   finds a point to continue from.
+ * - `finished`: nobody holds it and there is nothing to continue from.
  * - `unclassified`: the claim or metadata could not be read or is malformed.
  *   Nothing is known, so nothing is mutated.
  *
@@ -58,13 +56,9 @@ export const classifyRun = Effect.fn('classifyRun')(function* (
   if (standing.kind === 'self') return { kind: 'owned_here' };
   if (standing.kind === 'held')
     return { kind: 'held_elsewhere', owner: standing.owner };
-  // Ownership settled: the durable resumability facts alone decide the rest.
   const facts = yield* deriveResumability(runId, session);
   if (facts.kind === 'checkpoint' || facts.kind === 'unopened')
     return { kind: 'resumable' };
   if (facts.kind === 'none') return { kind: 'finished' };
-  yield* Effect.logWarning(`Cannot classify ${runId}: ${facts.cause}`).pipe(
-    withLogChannel(CHANNEL),
-  );
   return { kind: 'unclassified', cause: facts.cause };
 });

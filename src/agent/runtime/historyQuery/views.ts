@@ -133,21 +133,6 @@ SELECT position, run_id, at,
 FROM events WHERE type = 'usage';
 `;
 
-const TODOS = `
-CREATE VIEW todos AS
-WITH latest AS (
-  SELECT run_id, data,
-    ROW_NUMBER() OVER (PARTITION BY run_id ORDER BY position DESC) AS latest
-  FROM events
-  WHERE type = 'run.fact' AND json_extract(data, '$.fact.key') = 'todos'
-)
-SELECT latest.run_id, CAST(item.key AS INTEGER) + 1 AS item,
-  json_extract(item.value, '$.content') AS content,
-  json_extract(item.value, '$.status') AS status
-FROM latest, json_each(latest.data, '$.fact.todos') AS item
-WHERE latest.latest = 1;
-`;
-
 /** Everything the store runs once, before the first row arrives. */
 export const HISTORY_SCHEMA_SQL = [
   TABLES,
@@ -156,7 +141,6 @@ export const HISTORY_SCHEMA_SQL = [
   MESSAGES,
   TOOL_CALLS,
   USAGE,
-  TODOS,
 ].join('\n');
 
 /** The longest text value the store holds whole: a longer one, a large
@@ -177,6 +161,5 @@ export const HISTORY_VIEW_SUMMARY = `- runs(id, parent_id, kind, name, category,
 - messages(position, run_id, at, role, text) - user turns and assistant replies, role 'user' or 'assistant'.
 - tool_calls(position, run_id, call_id, tool, input, status, result, started_at, ended_at) - input and result are JSON text; status/result are NULL while the call is open.
 - usage(position, run_id, at, input_tokens, output_tokens, cache_read_input_tokens, reasoning_tokens, cost) - one row per priced model call (turns and compaction summaries).
-- todos(run_id, item, content, status) - each run's current task list.
 - events(position, run_id, type, at, data) - every row above is derived from this: the session's display rows, data as JSON text.
 Times are ISO-8601 UTC text. Order by position for load order. A text value longer than ${HISTORY_TEXT_LIMIT} characters (a large tool input or result, most often) is stored cut to its first ${HISTORY_TEXT_LIMIT}, followed by '… [cut: N characters in all]'; a row whose data is still longer than ${HISTORY_ROW_LIMIT} characters is stored as {"cut": N}.`;

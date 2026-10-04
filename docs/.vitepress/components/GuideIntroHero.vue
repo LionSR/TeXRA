@@ -3,7 +3,7 @@
 // delegated one task to a team of specialists. Clicking a delegation row in
 // the Progress sidebar switches the editor to that specialist's artifact —
 // grounded literature search, a Wolfram cross-check, a Lean 4 proof.
-// Mirrors StreamHeader.ts, TodoList.ts, BackgroundTasksPanel.ts, and the
+// Mirrors StreamHeader.ts, BackgroundTasksPanel.ts, and the
 // agent tool-use card from toolFormatters.ts.
 import { ref } from 'vue';
 import MockupFrame from './MockupFrame.vue';
@@ -43,27 +43,6 @@ const view = ref('search');
       </div>
 
       <div class="board-scroll">
-        <div class="panel">
-          <div class="panel-sum">
-            <wa-icon class="chev" library="texra" name="chevron-down"></wa-icon>
-            Todos (2/3)
-          </div>
-          <div class="panel-body todos">
-            <div class="todo done">
-              <wa-icon class="td-ic" library="texra" name="check"></wa-icon
-              ><span class="td-tx">Ground the literature</span>
-            </div>
-            <div class="todo done">
-              <wa-icon class="td-ic" library="texra" name="check"></wa-icon
-              ><span class="td-tx">Derive the concurrence</span>
-            </div>
-            <div class="todo prog">
-              <span class="td-sp"></span
-              ><span class="td-tx">Formalize subadditivity in Lean</span>
-            </div>
-          </div>
-        </div>
-
         <div class="log">
           <div class="umsg-wrap">
             <div class="umsg">
@@ -98,8 +77,7 @@ const view = ref('search');
             ></wa-icon>
             <wa-icon class="tc-ic" library="texra" name="circle-user"></wa-icon>
             <span class="tc-label"
-              ><span class="tc-tool">agent</span> — search · arXiv +
-              Crossref</span
+              ><span class="tc-tool">agent</span> — search · arXiv</span
             >
             <span class="tc-time">0:31</span>
           </button>
@@ -203,7 +181,7 @@ const view = ref('search');
 
       <!-- search: grounded BibTeX -->
       <div v-show="view === 'search'" class="term">
-        <div class="cmt">% 3 references found · DOIs verified via Crossref</div>
+        <div class="cmt">% 3 references found · grounded in arXiv</div>
         <div class="bib">
           <div class="bl">
             <span class="bk">@article</span>{<span class="bid"
@@ -222,7 +200,7 @@ const view = ref('search');
           <div class="bl">}</div>
         </div>
         <div class="term-note">
-          Every entry resolves to a real DOI — no fabricated citations.
+          Every entry comes from a real lookup — no fabricated citations.
           <span class="term-ok">✓ 3/3 verified</span>
         </div>
       </div>
@@ -295,13 +273,11 @@ const view = ref('search');
 .board-tabs,
 .tcard,
 .tcard-sum,
-.tc-row,
-.todo {
+.tc-row {
   min-width: 0;
 }
 .bt,
-.tc-v,
-.td-tx {
+.tc-v {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

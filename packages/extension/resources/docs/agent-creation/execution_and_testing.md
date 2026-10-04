@@ -12,11 +12,11 @@ Every agent run flows through one entry point: `texra.execute` command →
 / memory / working-directory fields), resolves the YAML, and dispatches one of
 two flow shapes:
 
-- **Workflow flow** for `agentCategory: workflow`. Fixed rounds, each round
-  consumes `userRequest[i]`. Operates on `inputFiles` (or the active editor
-  selection). Emits LaTeX output files from the unified `<documents>`
-  container / `defaultOutputFiles`.
-- **Tool-use flow** for `agentCategory: toolUse`. Multi-step loop invoking
+- **Workflow flow** for a file with a `task` block. One revision per
+  `task.requests` entry, in order. Operates on `inputFiles` (or the active
+  editor selection). Emits LaTeX output files from the unified `<documents>`
+  container / `task.outputs`.
+- **Tool-use flow** for a file without `task`. Multi-step loop invoking
   declared tools. May WAIT for interim follow-ups, spawn subagents via
   the `agent` tool (directly or from a `script`), and resume.
 

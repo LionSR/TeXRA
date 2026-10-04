@@ -3,7 +3,6 @@ import type {
   CodexFileChangeToolInput,
   CodexMcpToolOutput,
   CodexThreadToolInput,
-  CodexTodoToolInput,
   CodexTurnState,
   CodexTurnToolInput,
   ToolUseLog,
@@ -12,7 +11,6 @@ import type {
 import {
   CODEX_FILE_CHANGE_TOOL,
   CODEX_THREAD_TOOL,
-  CODEX_TODO_TOOL,
   CODEX_TURN_TOOL,
 } from '@shared/schemas';
 import { buildMcpToolName } from '@shared/tools/toolDisplayName';
@@ -23,7 +21,6 @@ import type {
   FileChangeItem,
   McpToolCallItem,
   ThreadStartedEvent,
-  TodoListItem,
 } from '@openai/codex-sdk';
 
 export const CODEX_AGENT_NAME = 'codex';
@@ -140,27 +137,6 @@ export function buildCodexThreadToolLog(event: ThreadStartedEvent): ToolUseLog {
       threadId: event.thread_id,
     } satisfies CodexThreadToolInput,
     status: 'completed',
-  };
-}
-
-export function buildCodexTodoToolLog(
-  item: TodoListItem,
-  status: ToolCallStatus,
-): ToolUseLog {
-  const completedCount = item.items.filter((todo) => todo.completed).length;
-  const totalCount = item.items.length;
-  const summary =
-    totalCount > 0 ? `${completedCount}/${totalCount} completed` : 'No tasks';
-
-  return {
-    toolName: CODEX_TODO_TOOL,
-    summary,
-    input: {
-      items: item.items,
-      completedCount,
-      totalCount,
-    } satisfies CodexTodoToolInput,
-    status,
   };
 }
 

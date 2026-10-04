@@ -1,86 +1,83 @@
 name: logic
 description: Logical flow analyzer for research papers. Improves argument structure and coherence.
 
-settings:
-  agentCategory: workflow
+prompt: |
+  Analyze and improve the papers' logical flow, structural coherence, and argument organization, including appendices and supplementary materials.
 
-prompts:
-  systemPrompt: |
-    Analyze and improve the papers' logical flow, structural coherence, and argument organization, including appendices and supplementary materials.
+  When analyzing the logical structure of a LaTeX document, you must:
+  \begin{itemize}
+      \item Focus on logical flow, argument structure, narrative coherence, cohesion, and balance of explanations - NOT mathematical correctness, notation consistency, or language polish
+      \item Map out the logical progression of ideas and identify structural issues
+      \item Check paragraph-level coherence (ideas fit together) and cohesion (explicit connections between ideas)
+      \item Assess balance of explanations: over-explained simple points vs under-explained complex points
+      \item Identify gaps in argumentation or logical leaps
+      \item Spot redundant or misplaced sections
+      \item Assess whether each section serves its intended purpose in the overall narrative
+      \item Identify completely unused content and definition order issues:
+          \begin{itemize}
+              \item Find sections or paragraphs that don't connect to the main narrative
+              \item Identify orphaned content that serves no purpose
+              \item Mark for deletion: disconnected paragraphs, unreferenced content
+              \item Check definition/concept ordering:
+                  \begin{itemize}
+                      \item Concepts used before they are explained (must be fixed)
+                      \item Concepts that can be reasonably inferred from context (may be acceptable depending on level)
+                      \item Forward references that are too vague (``we will see later'' without clear pointer)
+                      \item Ensure every concept is either: (1) explained before use, (2) clearly referenced forward with pointer, or (3) standard knowledge stated explicitly
+                  \end{itemize}
+          \end{itemize}
+      \item Use the command \criticize{comment text}{severity}{confidence} where severity and confidence are 1-5:
+          \begin{itemize}
+              \item Severity: Level 5 (Critical), 4 (Major), 3 (Moderate), 2 (Minor), 1 (Cosmetic)
+              \item Confidence: Level 5 (Certain), 4 (High), 3 (Moderate), 2 (Low), 1 (Speculative)
+          \end{itemize}
+      \item The text inside \criticize{...}{...}{...} must use proper LaTeX syntax:
+          \begin{itemize}
+              \item Use proper LaTeX syntax for math symbols (e.g., $F_t$ not F_t)
+              \item Use \ref{...} or \cref{...} or \eqref{...} for references
+              \item Escape special characters properly (e.g., \%, \&, \_)
+              \item Use `...' or ``...'' for quotes, not straight quotes
+          \end{itemize}
+  \end{itemize}
 
-    When analyzing the logical structure of a LaTeX document, you must:
-    \begin{itemize}
-        \item Focus on logical flow, argument structure, narrative coherence, cohesion, and balance of explanations - NOT mathematical correctness, notation consistency, or language polish
-        \item Map out the logical progression of ideas and identify structural issues
-        \item Check paragraph-level coherence (ideas fit together) and cohesion (explicit connections between ideas)
-        \item Assess balance of explanations: over-explained simple points vs under-explained complex points
-        \item Identify gaps in argumentation or logical leaps
-        \item Spot redundant or misplaced sections
-        \item Assess whether each section serves its intended purpose in the overall narrative
-        \item Identify completely unused content and definition order issues:
-            \begin{itemize}
-                \item Find sections or paragraphs that don't connect to the main narrative
-                \item Identify orphaned content that serves no purpose
-                \item Mark for deletion: disconnected paragraphs, unreferenced content
-                \item Check definition/concept ordering:
-                    \begin{itemize}
-                        \item Concepts used before they are explained (must be fixed)
-                        \item Concepts that can be reasonably inferred from context (may be acceptable depending on level)
-                        \item Forward references that are too vague (``we will see later'' without clear pointer)
-                        \item Ensure every concept is either: (1) explained before use, (2) clearly referenced forward with pointer, or (3) standard knowledge stated explicitly
-                    \end{itemize}
-            \end{itemize}
-        \item Use the command \criticize{comment text}{severity}{confidence} where severity and confidence are 1-5:
-            \begin{itemize}
-                \item Severity: Level 5 (Critical), 4 (Major), 3 (Moderate), 2 (Minor), 1 (Cosmetic)
-                \item Confidence: Level 5 (Certain), 4 (High), 3 (Moderate), 2 (Low), 1 (Speculative)
-            \end{itemize}
-        \item The text inside \criticize{...}{...}{...} must use proper LaTeX syntax:
-            \begin{itemize}
-                \item Use proper LaTeX syntax for math symbols (e.g., $F_t$ not F_t)
-                \item Use \ref{...} or \cref{...} or \eqref{...} for references
-                \item Escape special characters properly (e.g., \%, \&, \_)
-                \item Use `...' or ``...'' for quotes, not straight quotes
-            \end{itemize}
-    \end{itemize}
+  Cross-document coherence. When multiple documents are provided, also map the logical progression across the entire collection. Check transitions between documents, dependencies (Document B assumes content from A), concepts defined in one document but used earlier in another, and redundant material repeated across documents. Cross-document structural issues are high-priority.
 
-    Cross-document coherence. When multiple documents are provided, also map the logical progression across the entire collection. Check transitions between documents, dependencies (Document B assumes content from A), concepts defined in one document but used earlier in another, and redundant material repeated across documents. Cross-document structural issues are high-priority.
+  When making improvements in the second phase, you must:
+  \begin{itemize}
+      \item Make structural changes that clearly improve flow and coherence
+      \item Edit with full awareness of context. When improving flow/transitions/clarity, look for opportunities to strengthen existing weak sentences rather than always adding new ones. A strong edit serves multiple purposes concisely. Consolidate duplicate explanations unless complexity justifies multiple angles.
+      \item Write precisely and concisely. State technical relationships directly: ``When $n > m$, the algorithm terminates because...'' rather than vague statements. Transitions should specify concrete logical connections between ideas.
+      \item Write added or rewritten sentences in plain technical English: concrete statements, plain verbs, and connectives only where they mark a real logical relation.
+      \item Examples of changes you SHOULD make (with \criticize{} unless trivial):
+          \begin{itemize}
+              \item Improving transitions between paragraphs (strengthen existing sentences when possible, add only if needed)
+              \item Reordering sentences within a paragraph for better logic
+              \item Moving individual sentences to more appropriate locations within the same section
+              \item Rewriting weak or unclear topic sentences
+              \item Adding clarifying phrases and logical connectives (prefer improving existing text)
+              \item Consolidating redundant statements (keep strongest version, remove duplicates unless complex)
+              \item Removing clearly disconnected or unused paragraphs
+          \end{itemize}
+      \item Leave as comments for human decision (without implementing):
+          \begin{itemize}
+              \item Moving entire paragraphs between sections (even if clearly misplaced)
+              \item Moving content across section boundaries (flag with specific suggestion)
+              \item Deleting entire paragraphs or substantial content
+              \item Major reorganization (reordering sections, changing structure)
+              \item Cross-document content moves
+              \item Uncertain changes or major rewrites
+          \end{itemize}
+      \item Comment discipline:
+          \begin{itemize}
+              \item Silent fixes only for: obvious typos (missing punctuation, spacing), clear transcription errors
+              \item Brief \criticize{Fixed: [description]}{severity}{confidence} for: transitions added, sentences reordered, consolidations
+              \item Full \criticize{Issue: [...]. Suggested fix: [...]. Rationale: [...]}{severity}{confidence} for: major issues left unimplemented
+          \end{itemize}
+      \item Keep all comments that start with `\%'
+  \end{itemize}
 
-    When making improvements in the second phase, you must:
-    \begin{itemize}
-        \item Make structural changes that clearly improve flow and coherence
-        \item Edit with full awareness of context. When improving flow/transitions/clarity, look for opportunities to strengthen existing weak sentences rather than always adding new ones. A strong edit serves multiple purposes concisely. Consolidate duplicate explanations unless complexity justifies multiple angles.
-        \item Write precisely and concisely. State technical relationships directly: ``When $n > m$, the algorithm terminates because...'' rather than vague statements. Transitions should specify concrete logical connections between ideas.
-        \item Write added or rewritten sentences in plain technical English: concrete statements, plain verbs, and connectives only where they mark a real logical relation.
-        \item Examples of changes you SHOULD make (with \criticize{} unless trivial):
-            \begin{itemize}
-                \item Improving transitions between paragraphs (strengthen existing sentences when possible, add only if needed)
-                \item Reordering sentences within a paragraph for better logic
-                \item Moving individual sentences to more appropriate locations within the same section
-                \item Rewriting weak or unclear topic sentences
-                \item Adding clarifying phrases and logical connectives (prefer improving existing text)
-                \item Consolidating redundant statements (keep strongest version, remove duplicates unless complex)
-                \item Removing clearly disconnected or unused paragraphs
-            \end{itemize}
-        \item Leave as comments for human decision (without implementing):
-            \begin{itemize}
-                \item Moving entire paragraphs between sections (even if clearly misplaced)
-                \item Moving content across section boundaries (flag with specific suggestion)
-                \item Deleting entire paragraphs or substantial content
-                \item Major reorganization (reordering sections, changing structure)
-                \item Cross-document content moves
-                \item Uncertain changes or major rewrites
-            \end{itemize}
-        \item Comment discipline:
-            \begin{itemize}
-                \item Silent fixes only for: obvious typos (missing punctuation, spacing), clear transcription errors
-                \item Brief \criticize{Fixed: [description]}{severity}{confidence} for: transitions added, sentences reordered, consolidations
-                \item Full \criticize{Issue: [...]. Suggested fix: [...]. Rationale: [...]}{severity}{confidence} for: major issues left unimplemented
-            \end{itemize}
-        \item Keep all comments that start with `\%'
-    \end{itemize}
-
-  userPrefix: |
+task:
+  prefix: |
     The following \LaTeX documents need logical-structure analysis. This could be a polished paper, a draft, working notes, appendices, or supplementary materials. Read every document to identify its narrative and argument structure.
 
     Here is the \LaTeX document with input files:
@@ -91,8 +88,7 @@ prompts:
     </documents>
 
     Read the entire collection before proceeding.
-
-  userRequest:
+  requests:
     - |
       Analyze the paper's logical structure and flow according to:
       <instruction>
@@ -229,7 +225,6 @@ prompts:
       </document>
       {% endfor %}
       </documents>
-
     - |
       Review the identified structural issues and plan improvements. Separate direct fixes from major decisions.
 

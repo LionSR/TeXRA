@@ -4,10 +4,7 @@ import { describe, expect } from 'vitest';
 import { MODEL_CONFIGS, type ModelRef } from 'llm-zoo';
 
 import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@texra-ai/llm';
-import {
-  routeCompatibilityKey,
-  type BindableRoute,
-} from '@agent/runtime/modelRoutes';
+import { routeBackend, type BindableRoute } from '@agent/runtime/modelRoutes';
 
 const KIMI_CODING = 'moonshot/kimi-for-coding';
 const KIMI3 = 'moonshot/kimi-k3';
@@ -32,23 +29,17 @@ describe('Kimi Code routing', () => {
     () =>
       Effect.gen(function* () {
         expect(
-          yield* routeCompatibilityKey(
+          yield* routeBackend(
             MODEL_CONFIGS[KIMI_CODING],
             route(KIMI_CODING, false),
           ),
-        ).toBe('Kimi');
+        ).toBe('moonshot');
         expect(
-          yield* routeCompatibilityKey(
-            MODEL_CONFIGS[KIMI3],
-            route(KIMI3, false),
-          ),
-        ).toBe('Kimi');
+          yield* routeBackend(MODEL_CONFIGS[KIMI3], route(KIMI3, false)),
+        ).toBe('moonshot');
         expect(
-          yield* routeCompatibilityKey(
-            MODEL_CONFIGS[KIMI3],
-            route(KIMI3, true),
-          ),
-        ).toBe('OpenRouterNative');
+          yield* routeBackend(MODEL_CONFIGS[KIMI3], route(KIMI3, true)),
+        ).toBe('openRouter');
       }),
   );
 

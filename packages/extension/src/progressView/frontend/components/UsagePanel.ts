@@ -275,10 +275,7 @@ export class UsagePanel extends LitElement {
         own.outputTokens === total.outputTokens)
     )
       return undefined;
-    const ownCost =
-      usageCostLabel(own.cost, own.usageRoute, own.usagePlan) ??
-      formatCostUsd(own.cost);
-    return `Own model calls: ${formatCompactTokenCount(own.inputTokens)} input, ${formatCompactTokenCount(own.outputTokens)} output tokens, ${ownCost}. The total includes its agents.`;
+    return `Own model calls: ${formatCompactTokenCount(own.inputTokens)} input, ${formatCompactTokenCount(own.outputTokens)} output tokens, ${usageCostLabel(own)}. The total includes its agents.`;
   }
 
   /**
@@ -348,12 +345,8 @@ export class UsagePanel extends LitElement {
 
   private buildUsageLabel(): string {
     if (!this.usage) return '';
-    const { inputTokens, outputTokens, cost } = this.usage;
-    // The shared rule omits a zero-cost unknown route; the aria summary
-    // still states it as "$0.000".
-    const costLabel =
-      usageCostLabel(cost, this.usage.usageRoute, this.usage.usagePlan) ??
-      formatCostUsd(cost);
+    const { inputTokens, outputTokens } = this.usage;
+    const costLabel = usageCostLabel(this.usage);
     const parts = [`${formatCompactTokenCount(inputTokens)} input tokens`];
     const optionalParts: ReadonlyArray<readonly [number, string]> = [
       [this.usage.cacheReadInputTokens ?? 0, 'cache read tokens'],

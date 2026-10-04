@@ -1,6 +1,3 @@
-// Node imports
-import path from 'node:path';
-
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 import {
@@ -17,24 +14,14 @@ import {
   type ConfigStore,
 } from '@platform/defaults/jsonConfigProvider';
 import { nodeFileServices, type JsonStore } from '@platform/defaults/jsonStore';
-import {
-  TEXRA_CONFIG_FILE_NAME,
-  workspaceTexraConfigPath,
-} from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
-import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
 import type { ConfigProvider } from '@platform/interfaces';
 
 // Local imports - shared
 import { canonicalConfigKey } from '@shared/config/configKeys';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import {
-  CLI_CONFIG_SLOT_KEYS,
-  settingByKey,
-} from '@shared/state/stateSettings';
+import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
+import { installSettingsCatalog } from '@shared/state/stateSettings';
 
 // Local imports - tools
 import { mcpConfigWarnings, USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
@@ -184,7 +171,7 @@ export function cliCommandDefaults(
       ? {}
       : {
           modelScope:
-            stores.config.inspect(modelKey)?.workspaceValue === undefined
+            stores.config.inspect(modelKey).workspaceValue === undefined
               ? ('user-config' as const)
               : ('workspace-config' as const),
         }),
@@ -212,7 +199,7 @@ export const setWorkspaceCliChatAgent = Effect.fn(
   // copy a user-level `texra.chat.model` into the project file and pin it
   // above every later user-level edit.
   const existing =
-    stores.config.inspect<CliCommandDefaults>(sectionKey)?.workspaceValue ?? {};
+    stores.config.inspect<CliCommandDefaults>(sectionKey).workspaceValue ?? {};
   const next: { agent?: string; model?: string } = { ...existing };
   if (trimmed) next.agent = trimmed;
   else delete next.agent;
@@ -224,7 +211,9 @@ export const setWorkspaceCliChatAgent = Effect.fn(
 });
 
 /** Canonical `texra.*` keys the CLI recognizes in `.texra/config.json`. */
-const KNOWN_CONFIG_KEYS: ReadonlySet<string> = new Set(CLI_CONFIG_SLOT_KEYS);
+const KNOWN_CONFIG_KEYS: ReadonlySet<string> = new Set(
+  TEXRA_SETTINGS.configSlotKeys,
+);
 
 /** The two members of a `texra.chat` / `texra.run` section. */
 const COMMAND_SECTION_KEYS: ReadonlySet<string> = new Set(['agent', 'model']);
@@ -245,12 +234,12 @@ const COMMAND_SECTION_CONFIG_KEYS: ReadonlySet<string> = new Set(
 function configFileWarnings(
   files: readonly {
     readonly store: JsonStore;
-    readonly filePath: string;
     readonly isProjectFile: boolean;
   }[],
 ): readonly string[] {
   const warnings: string[] = [];
-  for (const { store, filePath, isProjectFile } of files) {
+  for (const { store, isProjectFile } of files) {
+    const { filePath } = store;
     for (const key of store.keys()) {
       if (!KNOWN_CONFIG_KEYS.has(key)) {
         if (isProjectFile) {
@@ -259,7 +248,7 @@ function configFileWarnings(
         continue;
       }
       const value = store.get<unknown>(key);
-      const entry = settingByKey(key);
+      const entry = TEXRA_SETTINGS.byKey(key);
       if (entry && !entry.schema.safeParse(value).success) {
         warnings.push(
           `Ignoring invalid ${filePath} value ${JSON.stringify(value)} for "${key}".`,
@@ -289,6 +278,11 @@ export function loadCliStartupConfig(
 ): Effect.Effect<CliStartupConfig, Error> {
   return Effect.provide(
     Effect.gen(function* () {
+      // The pre-runtime phase reads and scans TeXRA's rows (the startup
+      // rows, telemetry's project rule) before `installCliProcessRuntime`
+      // installs the process's catalog, so it installs TeXRA's static one,
+      // which holds the same rows.
+      installSettingsCatalog(TEXRA_SETTINGS);
       const degradations: string[] = [];
       const stores = yield* openTexraConfigStores(storageRoot, cwd, (message) =>
         degradations.push(message),
@@ -306,7 +300,7 @@ export function loadCliStartupConfig(
       const withoutInvalid = (store: JsonStore): ConfigStore => ({
         get: <T>(key: string): T | undefined => {
           const value = store.get<T>(key);
-          const entry = settingByKey(key);
+          const entry = TEXRA_SETTINGS.byKey(key);
           return value !== undefined &&
             entry &&
             !entry.schema.safeParse(value).success
@@ -323,27 +317,9 @@ export function loadCliStartupConfig(
         }),
         warnings: [
           ...configFileWarnings([
-            {
-              store: stores.workspace,
-              filePath: workspaceTexraConfigPath(cwd),
-              isProjectFile: true,
-            },
-            {
-              store: stores.global,
-              filePath: path.join(
-                resolveGlobalStoragePath(storageRoot),
-                TEXRA_CONFIG_FILE_NAME,
-              ),
-              isProjectFile: false,
-            },
-            {
-              store: stores.local,
-              filePath: path.join(
-                resolveWorkspaceStoragePath(storageRoot, cwd),
-                TEXRA_CONFIG_FILE_NAME,
-              ),
-              isProjectFile: false,
-            },
+            { store: stores.workspace, isProjectFile: true },
+            { store: stores.global, isProjectFile: false },
+            { store: stores.local, isProjectFile: false },
           ]),
           ...mcpWarnings,
         ],

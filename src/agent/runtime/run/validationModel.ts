@@ -415,7 +415,7 @@ export const shouldUseInternalValidationModel = Effect.fn(
 
 const VALIDATION_ENDPOINT = 'https://validation.invalid/v1';
 
-/** The canned llm `Model` behind the validation compatibility key. */
+/** The canned llm `Model` behind the validation backend. */
 export function validationModel(config: ModelConfig): {
   readonly model: Model;
   readonly origin: ModelOrigin;

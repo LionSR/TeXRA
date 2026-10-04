@@ -5,10 +5,10 @@
  *
  * Each (runId, key) pair holds one disposable from the polling source.
  * Event callbacks submit a `live_notification` follow-up so events land in
- * the same follow-up queue user-typed messages use; the agent consumes them
- * via the normal `waitForFollowUp` mechanism. When a run's queue is released
- * (orchestrator disposed, user deleted the run) subscriptions owned by
- * that queue's session are auto-disposed.
+ * the same inbox user-typed messages use; the agent reads them at its next
+ * park. When a run takes no more input (it ended for good, its input closed,
+ * the user deleted it) or its session's inbox closes, the subscriptions that
+ * session owns for it are auto-disposed.
  */
 
 import { Effect } from 'effect';
@@ -247,12 +247,17 @@ export class RunSubscriptionRegistry<K extends string, Input> {
 
   private ensureReleaseHook(session: SessionHandle): void {
     if (this.releaseHooks.has(session)) return;
-    const detach = session.followUps.onRelease((runId) => {
-      const bound = this.perRun.get(runId);
-      if (!bound) return;
-      const removed = [...bound]
-        .filter(([, binding]) => binding.owner === session)
-        .flatMap(([key]) => this.deleteBoundKey(runId, bound, key) ?? []);
+    const detach = session.followUps.onClosed((closed) => {
+      const runIds =
+        closed.kind === 'run' ? [closed.runId] : [...this.perRun.keys()];
+      const removed = runIds.flatMap((runId) => {
+        const bound = this.perRun.get(runId);
+        return bound === undefined
+          ? []
+          : [...bound]
+              .filter(([, binding]) => binding.owner === session)
+              .flatMap(([key]) => this.deleteBoundKey(runId, bound, key) ?? []);
+      });
       if (removed.length === 0) return;
       this.detachReleaseHookIfUnused(session);
       for (const binding of removed) binding.disposable.dispose();

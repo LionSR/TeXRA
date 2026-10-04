@@ -38,7 +38,7 @@ import type { StorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import {
   SettingsViewInboundMessageSchema,
   type SettingsViewOutboundMessage,
@@ -182,7 +182,7 @@ export class SettingsViewMessageHandler {
         // The status-bar tooltip paints the approval policy outside this
         // view's round-trip, so it follows the policy on its own signal.
         stateSettingApplied: (key) => {
-          if (key === GlobalStateKey.INLINE_CRITICISM_ENABLED) {
+          if (key === TexraStateKey.INLINE_CRITICISM_ENABLED) {
             return syncInlineCriticism();
           }
           if (key !== TEXRA_APPROVAL_POLICY_CONFIG_KEY) return Effect.void;

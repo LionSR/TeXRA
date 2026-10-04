@@ -22,7 +22,6 @@ const TOOL_LABEL = new Map<string, string>([
   ['agent', 'Subagent'],
   ['codex_patch', 'Codex Files'],
   ['codex_thread', 'Codex Thread'],
-  ['codex_todo', 'Codex Plan'],
   ['codex_turn', 'Codex Turn'],
 ]);
 

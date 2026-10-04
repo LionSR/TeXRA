@@ -40,7 +40,6 @@ import {
   RunSubstateSchema,
   RunIdSchema,
   TaskGroupSchema,
-  TodoItemSchema,
   TokenUsageStatsSchema,
   UserFollowUpSupportSchema,
   WorktreeInfoSchema,
@@ -179,10 +178,6 @@ const RunViewCommonSchema = z.object({
    *  which carries a phase and no position. */
   position: LoopCoordinateSchema.nullable(),
   followUpSupport: UserFollowUpSupportSchema,
-  /** A native tool-use resume can target this run: a plain agent identity,
-   *  or a background script, in the tool-use category. The rule lives here
-   *  so no host restates it. */
-  resumeEligible: z.boolean(),
   /** Latest `context.state`. */
   context: ContextStateDataSchema.nullable(),
   parentId: RunIdSchema.nullable(),
@@ -250,7 +245,6 @@ const RunViewCommonSchema = z.object({
 
 const ToolUseRunViewSchema = RunViewCommonSchema.extend({
   category: z.literal(AgentCategory.ToolUse),
-  todos: z.array(TodoItemSchema),
   plan: PlanSchema.nullable(),
   outputs: RoundKeyedOutputSidecarValueSchemas.outputFiles,
 });

@@ -1,7 +1,7 @@
 // The built-in slash command contributions, built from the surface's runtime
 // options and installed once at startup.
 
-import { Effect, Result } from 'effect';
+import { Effect, Result, type Scope } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
@@ -15,6 +15,11 @@ import {
   installPlugins,
   parsePluginOrigin,
 } from '@common/plugins/installedPlugins';
+import type { ServiceConnection } from '@controllers/server/client';
+import {
+  localSessionBackend,
+  type SessionBackend,
+} from '@controllers/session/sessionBackend';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
@@ -34,6 +39,7 @@ import { EnabledModelsForm } from '../forms/EnabledModelsForm';
 import { ModelListForm } from '../forms/ModelListForm';
 import { PluginsListForm } from '../forms/PluginsListForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
+import { TasksForm } from '../forms/TasksForm';
 import { SkillsListForm, type SkillActivation } from '../forms/SkillsListForm';
 import {
   patchSessionMeta,
@@ -101,6 +107,9 @@ export function registerBuiltinSlashCommands(options: {
   /** The session `/resume` lists history from and `/plan` and `/compact` act
    *  on, threaded from the surface that registers the commands. */
   runtimeSession: SessionHandle;
+  /** Where the commands' run requests and resumes land: the chat's session
+   *  in the service; its own session when unset. */
+  backend?: SessionBackend;
   onAgentSelect?: SelectHandler<string>;
   /** `/agent` → a team preset, by id. */
   onTeamSelect?: SelectHandler<string>;
@@ -122,10 +131,14 @@ export function registerBuiltinSlashCommands(options: {
   onMemorySelect?: SelectHandler<string>;
   onResumeSelect?: SelectHandler<RunId>;
   onSkillSelect?: SelectHandler<SkillActivation>;
+  /** Reach the TeXRA service (`/tasks`), starting it when none runs. */
+  connectService?: () => Effect.Effect<ServiceConnection, Error, Scope.Scope>;
   configStores?: SettingsStores;
   onError?: ErrorHandler;
 }): void {
   const { secrets, stores, runtime } = options;
+  const backend =
+    options.backend ?? localSessionBackend(options.runtimeSession);
   const modelStores = { ...stores, secrets, runtime };
   const onAgentSelect: SelectHandler<string> =
     options.onAgentSelect ??
@@ -229,7 +242,7 @@ export function registerBuiltinSlashCommands(options: {
               case 'superYolo':
                 return runId === undefined
                   ? Effect.void
-                  : revokeCliRunGrant(options.runtimeSession, runId, value);
+                  : revokeCliRunGrant(backend, runId, value);
               case 'ask':
               case 'never':
               case 'yolo':
@@ -306,6 +319,17 @@ export function registerBuiltinSlashCommands(options: {
     ),
     (id: RunId) => options.onResumeSelect?.(id) ?? Effect.void,
   );
+  const connectService = options.connectService;
+  const TasksFormAdapter = connectService
+    ? (props: SlashFormProps): React.JSX.Element => (
+        <TasksForm
+          runtime={runtime}
+          connect={connectService}
+          availableRows={props.availableRows}
+          onClose={() => props.onDone(undefined)}
+        />
+      )
+    : undefined;
   const SkillsListFormAdapter = makeSelectFormAdapter(
     (formProps) => (
       <SkillsListForm
@@ -516,7 +540,7 @@ export function registerBuiltinSlashCommands(options: {
           handler: (remainder, context) =>
             Effect.gen(function* () {
               if (remainder.trim() === 'all')
-                return yield* resumeInterruptedTasks(context.runtimeSession);
+                return yield* resumeInterruptedTasks(context.backend);
               const id = parseCliHistoryId(remainder);
               if (!id)
                 return yield* Effect.fail(
@@ -526,6 +550,18 @@ export function registerBuiltinSlashCommands(options: {
             }),
           formComponent: ResumeListFormAdapter,
         },
+        ...(TasksFormAdapter
+          ? [
+              {
+                name: 'tasks',
+                description:
+                  "Every project's tasks in the TeXRA service; attach to one live",
+                category: 'session' as const,
+                echo: 'never' as const,
+                formComponent: TasksFormAdapter,
+              },
+            ]
+          : []),
       ],
     },
     {
@@ -567,6 +603,6 @@ export function registerBuiltinSlashCommands(options: {
     // Only offer /config when the host wired the stores it reads/writes — a
     // command that can't reach a store would render an inert panel.
     ...(options.configStores ? [configContribution(options.configStores)] : []),
-    ...sessionContributions(options.runtimeSession),
+    ...sessionContributions(backend),
   ]);
 }

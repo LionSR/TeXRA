@@ -1,11 +1,11 @@
 import { Effect } from 'effect';
 
-import { type SessionHandle } from '@agent/runtime';
 import {
   appendLocalNotice,
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
+import type { SessionRequests } from '@cli/chat/tui/state/approvalQueue';
 import {
   formatTexraApprovalPolicy,
   parseTexraApprovalPolicy,
@@ -45,11 +45,11 @@ export function applyCliApprovalPolicySelection(
  * status-bar badge) is the confirmation.
  */
 export function revokeCliRunGrant(
-  session: SessionHandle,
+  requests: SessionRequests,
   runId: RunId,
   bypass: ApprovalBypassKind,
 ): Effect.Effect<void> {
-  return session.requests
+  return requests
     .request({
       kind: 'policy.set',
       change: { field: 'bypass', runId, bypass, enabled: false },

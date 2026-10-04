@@ -33,8 +33,11 @@ import {
 import { withLogChannel } from '@logger/effectLog';
 import { withSessionFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { settingByKey, settingEnumChoices } from '@shared/state/stateSettings';
+import {
+  TEXRA_SETTINGS,
+  TexraStateKey,
+} from '@shared/settingsView/texraSettings';
+import { settingEnumChoices } from '@shared/state/stateSettings';
 import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -85,11 +88,11 @@ const promptForLatexdiffMathMarkup = Effect.fnUntraced(function* (
 ) {
   const configuredMode = yield* readSettingFrom<LatexdiffMathMarkupValue>(
     session.roots,
-    WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+    TexraStateKey.LATEXDIFF_MATH_MARKUP,
   );
   // The row is a catalog enum row: a missing one is a defect, not an option.
   const items: MarkupItem[] = settingEnumChoices<LatexdiffMathMarkupValue>(
-    settingByKey(WorkspaceStateKey.LATEXDIFF_MATH_MARKUP)!,
+    TEXRA_SETTINGS.byKey(TexraStateKey.LATEXDIFF_MATH_MARKUP)!,
   )!.map(({ value, label, description }) => ({
     label,
     description,

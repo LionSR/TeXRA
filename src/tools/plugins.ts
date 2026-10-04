@@ -31,7 +31,10 @@ import type { RuntimeTool, ToolServices } from '@agent/runtime/ToolServices';
 import { StateReadFailed, type StateStore } from '@platform/interfaces';
 import type { ToolCategory } from '@shared/tools/toolPlugin';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import type { SettingHost } from '@shared/state/stateSettings';
+import type {
+  PluginSettingRow,
+  SettingHost,
+} from '@shared/state/stateSettings';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
 import type {
   Continuation,
@@ -61,10 +64,9 @@ export interface Plugin {
   readonly hidden?: boolean;
   /** Product hosts whose Tools dashboard does not list the plugin. */
   readonly unavailableHosts?: readonly SettingHost[];
-  /** Settings rows the plugin's dashboard card renders inline, in order:
-   *  each a settings-view catalog key and the row's short label (the card
-   *  already names the plugin, so 'Model' rather than 'Claude Code model'). */
-  readonly settings?: readonly (readonly [key: string, label: string])[];
+  /** The plugin's own catalog rows, which its dashboard card renders inline,
+   *  in order; `installProcessRuntime` adds them to the settings catalog. */
+  readonly settings?: readonly PluginSettingRow[];
   /** Tools of this plugin offered to every tool-use agent, declared or not,
    *  while the plugin is on and a boolean catalog setting is on: tool name to
    *  setting key, or `true` for no setting but the plugin's own switch. An

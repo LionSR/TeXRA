@@ -14,11 +14,9 @@ import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 
 import type { SettingEnumChoice } from '@shared/state/stateSettings';
+import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
 import type { StateSettingValue } from '@shared/settingsView/settingsViewMessages';
-import {
-  settingEnumChoices,
-  settingsViewSettingByKey,
-} from '@shared/state/stateSettings';
+import { settingEnumChoices } from '@shared/state/stateSettings';
 import { readSelectValue } from '@ui/wa/selectTemplates';
 import { renderSettingsToggleRow } from '@ui/wa/settingsSection';
 
@@ -48,7 +46,7 @@ export function postStateSetting(key: string, value: StateSettingValue): void {
 export function catalogEnumChoices<T extends string>(
   key: string,
 ): readonly SettingEnumChoice<T>[] {
-  const entry = settingsViewSettingByKey(key);
+  const entry = TEXRA_SETTINGS.settingsViewByKey(key);
   if (!entry) {
     throw new Error(`No settings-view catalog row for setting "${key}"`);
   }
@@ -71,7 +69,7 @@ interface StateSettingToggleRowOptions {
 export function renderStateSettingToggleRow(
   options: StateSettingToggleRowOptions,
 ): TemplateResult {
-  const entry = settingsViewSettingByKey(options.key);
+  const entry = TEXRA_SETTINGS.settingsViewByKey(options.key);
   if (!entry) {
     throw new Error(
       `No settings-view catalog row for setting "${options.key}"`,
@@ -107,7 +105,7 @@ interface StateSettingSelectRowOptions {
 export function renderStateSettingSelectRow(
   options: StateSettingSelectRowOptions,
 ): TemplateResult {
-  const entry = settingsViewSettingByKey(options.key);
+  const entry = TEXRA_SETTINGS.settingsViewByKey(options.key);
   if (!entry?.title) {
     throw new Error(
       `Settings-view catalog row "${options.key}" is missing or has no title`,

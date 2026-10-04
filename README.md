@@ -115,8 +115,8 @@ or any OpenAI-compatible endpoint. Each agent in a team can run a
 different model — pair a flagship reasoner for orchestration with
 cheaper, faster models for routine sub-tasks.
 
-In the extension, run **`TeXRA: Set API Key`** (stored in VS Code's
-encrypted SecretStorage) or add a workspace `.env`:
+In the extension, run **`TeXRA: Set API Key`** (stored in the owner-only
+`~/.texra/secrets/` folder every TeXRA host shares) or add a workspace `.env`:
 
 ```env
 OPENAI_API_KEY=…

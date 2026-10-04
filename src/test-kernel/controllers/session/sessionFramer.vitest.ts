@@ -37,6 +37,7 @@ import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WebviewSessions } from '@controllers/session/webviewSessionLayer';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { SessionBridge } from '@controllers/session/SessionBridge';
+import { localSessionBackend } from '@controllers/session/sessionBackend';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
@@ -251,7 +252,7 @@ describe('session framer', () => {
       yield* Effect.addFinalizer(() => closeSessionOf(session));
       const setSubscriptions = vi.spyOn(session.subscriptions, 'set');
       const bridge = yield* SessionBridge.make({
-        session,
+        backend: localSessionBackend(session),
         onPortClosed: () => {},
         handleHostRequest: () =>
           Effect.die(new Error('No host request is expected.')),
@@ -281,7 +282,7 @@ describe('session framer', () => {
       const session = yield* createTestSession();
       yield* Effect.addFinalizer(() => closeSessionOf(session));
       const bridge = yield* SessionBridge.make({
-        session,
+        backend: localSessionBackend(session),
         onPortClosed: () => {},
         handleHostRequest: () =>
           Effect.die(new Error('No host request is expected.')),
@@ -323,7 +324,7 @@ describe('session framer', () => {
         Stream.die(new Error('replay read failed')),
       );
       const bridge = yield* SessionBridge.make({
-        session,
+        backend: localSessionBackend(session),
         onPortClosed: () => {},
         handleHostRequest: () =>
           Effect.die(new Error('No host request is expected.')),
@@ -346,7 +347,7 @@ describe('session framer', () => {
       const setSubscriptions = vi.spyOn(session.subscriptions, 'set');
       const onPortClosed = vi.fn();
       const bridge = yield* SessionBridge.make({
-        session,
+        backend: localSessionBackend(session),
         onPortClosed,
         handleHostRequest: () =>
           Effect.die(new Error('No host request is expected.')),

@@ -31,7 +31,7 @@ export interface BashApprovalRequest {
    * Which standing grant answers this call. `'shell'`: a `bash` command; the
    * run's command bypass answers it, and its prompt offers approve-for-session,
    * which turns that bypass on. `'call'`: another tool's call spelled as a
-   * command (an MCP tool, codex, claude_code, wolfram, send_to_terminal, a
+   * command (an MCP tool, codex, claude_code, send_to_terminal, a
    * setup change). The command bypass is the shell's, so it answers no such
    * call, and the prompt offers no session grant, because the one a bash
    * prompt can mint is that shell bypass. Only the run's delegated-work grant,

@@ -361,9 +361,6 @@ function createRun(
     conversationProgress: { toolCallCount: 0 },
     position: null,
     followUpSupport: event.userFollowUpSupport,
-    resumeEligible:
-      event.category === AgentCategory.ToolUse &&
-      (isPlainAgentIdentity(identity) || identity.kind === 'script'),
     context: null,
     parentId: event.parent === null ? null : event.parent.id,
     forkedFrom:
@@ -403,7 +400,6 @@ function createRun(
       return {
         ...common,
         category: AgentCategory.ToolUse,
-        todos: [],
         plan: null,
         outputs: NO_ROUNDS,
         missingOutputs: NO_ROUNDS,
@@ -924,9 +920,7 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
       const fact = event.fact;
       if (run.category !== AgentCategory.ToolUse)
         return wrongArm(run, `run.fact ${fact.key}`);
-      return fact.key === 'todos'
-        ? { ...run, todos: fact.todos }
-        : { ...run, plan: fact.plan };
+      return { ...run, plan: fact.plan };
     }
     case 'plugin.fact':
       return {

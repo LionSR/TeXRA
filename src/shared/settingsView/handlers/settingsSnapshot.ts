@@ -10,7 +10,7 @@ import { Effect } from 'effect';
  * nothing left of its own to say.
  */
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { settingsViewSnapshotEntries } from '@shared/state/stateSettings';
+import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
 import type { DerivedSettingsSnapshot } from '@shared/settingsView/settingsViewMessages';
 import {
   readSetting,
@@ -27,10 +27,12 @@ export function buildSettingsSnapshotMessage(
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
       snapshot,
       values: Object.fromEntries(
-        yield* Effect.forEach(settingsViewSnapshotEntries(snapshot), (entry) =>
-          readSetting(entry, stores).pipe(
-            Effect.map((value) => [entry.key, value] as const),
-          ),
+        yield* Effect.forEach(
+          TEXRA_SETTINGS.snapshotEntries(snapshot),
+          (entry) =>
+            readSetting(entry, stores).pipe(
+              Effect.map((value) => [entry.key, value] as const),
+            ),
         ),
       ),
     };
