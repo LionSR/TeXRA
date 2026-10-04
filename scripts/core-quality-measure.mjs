@@ -15,12 +15,14 @@ import { build } from 'esbuild';
 import { ESLint } from 'eslint';
 import ts from 'typescript';
 import tseslint from 'typescript-eslint';
+import { parse as parseYaml } from 'yaml';
 
 import {
   CORE_QUALITY_APP_PATHS,
   CORE_QUALITY_DIRS,
   EFFECT_RUN_ENTRIES,
 } from '../eslint.config.mjs';
+import { coreEntries } from './core-quality-api-report.mjs';
 import { walkFiles } from './walkFiles.mjs';
 
 /** Lines a core file may hold before it needs a budget row. */
@@ -28,8 +30,10 @@ const CORE_FILE_LINES = 400;
 
 /**
  * The ESLint-measured rules: baseline name, rule id and options. Thresholds
- * are the owner's bar of 2026-10-03; complexity 15 is ESLint's long-standing
- * recommendation for "needs a design look", not a split target.
+ * are the core-quality study's (texra-design-pages/core-quality-study.md
+ * §14, taken 2026-10-03): physical function length 150 with IIFEs counted,
+ * so a layer closure used as a module counts; modified cyclomatic
+ * complexity 15, so a `switch` over an owned union counts once.
  */
 const ESLINT_RULES = [
   ['no-explicit-any', '@typescript-eslint/no-explicit-any', []],
@@ -39,13 +43,17 @@ const ESLINT_RULES = [
     '@typescript-eslint/explicit-module-boundary-types',
     [],
   ],
-  ['complexity', 'complexity', [15]],
+  [
+    'consistent-type-assertions',
+    '@typescript-eslint/consistent-type-assertions',
+    [{ assertionStyle: 'as', objectLiteralTypeAssertions: 'never' }],
+  ],
+  ['complexity', 'complexity', [{ max: 15, variant: 'modified' }]],
   ['max-depth', 'max-depth', [4]],
-  ['max-params', 'max-params', [4]],
   [
     'max-lines-per-function',
     'max-lines-per-function',
-    [{ max: 60, skipBlankLines: true, skipComments: true }],
+    [{ max: 150, skipBlankLines: false, skipComments: false, IIFEs: true }],
   ],
 ];
 
@@ -55,7 +63,9 @@ export const RULES = {
   'no-non-null-assertion':
     '`!` asserts a fact the types do not hold; model it so the value cannot be absent.',
   'type-assertions':
-    '`as` (other than `as const`) overrides the checker; a schema decode or a narrower type removes it.',
+    '`as` (other than `as const`) without a `// cast:` reason on its line or the line before overrides the checker; a schema decode or a narrower type removes it.',
+  'consistent-type-assertions':
+    'An object literal asserted to a type, or a `<T>x` assertion: annotate the binding instead.',
   'explicit-module-boundary-types':
     'An exported function states its contract instead of leaking an inferred one.',
   'undocumented-exports':
@@ -64,13 +74,11 @@ export const RULES = {
     'Runtime import edges inside a cycle; a cycle means two modules share one owner.',
   'file-size': `A core file over ${CORE_FILE_LINES} lines holds more than one responsibility.`,
   complexity:
-    'Functions over cyclomatic complexity 15: special cases a better data shape would remove.',
+    'Functions over modified cyclomatic complexity 15: special cases a better data shape would remove.',
   'max-depth':
     'Blocks nested deeper than 4: control flow standing in for a data structure.',
-  'max-params':
-    'Functions with more than 4 parameters: take an options object or a service.',
   'max-lines-per-function':
-    'Functions over 60 code lines: more than one job in one body.',
+    'Functions over 150 lines (layer closures included): shared locals hiding the state each helper depends on; make that state an explicit value.',
   'new-promise':
     '`new Promise` in core: Effect owns async (Effect.async/callback at a foreign edge).',
   'promise-then': '`.then(` chains in core: compose with Effect instead.',
@@ -82,7 +90,29 @@ export const RULES = {
     'Empty `catch {}`, `.catch(() => value)`, `Effect.orElseSucceed`, and `Effect.ignore` without a log: a failure turned into a quiet default.',
   'missing-readme':
     'A core directory without a README holding a purpose line and a mermaid diagram.',
+  'entry-files':
+    'Repo files a core package entry evaluates on import (value imports only): a stray import drags the app in.',
+  'entry-externals':
+    'External packages a core package entry evaluates on import.',
+  'wide-records':
+    'Public members past 20 on an exported class or `Context.Service` shape: a wide record, not a deep module.',
+  'core-module-mocks':
+    '`vi.mock` of a core module in a test: path-keyed mocks break on every move; provide a layer instead.',
+  'non-erasable-syntax':
+    'Parameter properties, enums, runtime namespaces or `import =` in core: the packages ship `.ts` that type stripping must run.',
+  'ranged-dependencies':
+    'A core package dependency not pinned to an exact version: replay assumes the behaviour recorded at write time.',
+  'durable-invariants':
+    'The harness README must number its durable invariants (`**I1**`), and a conformance test must cite each (`invariant I1`).',
+  'decision-codes':
+    'Internal decision codes (`D6`, `F3`, `#1234`) in core comments: state the rule or link the doc by path. Measured only, pending an owner ruling.',
 };
+
+/**
+ * Rules the report counts but the gate does not hold: rule 10 of the study
+ * waits on the owner's ruling about which codes stay as links.
+ */
+export const MEASURED_ONLY = new Set(['decision-codes']);
 
 const SOURCE_FILE = /\.(?:ts|mts)$/;
 const NOT_SOURCE = /\.d\.ts$|\.(?:test|vitest|spec)\.ts$/;
@@ -302,6 +332,77 @@ function undocumentedExports(sourceFile) {
   );
 }
 
+/** The decision-code shapes of the study's rule 10: `D6`, `HQ4b`, `#1234`. */
+const DECISION_CODE = /\b[A-Z]{1,2}\d{1,2}[a-z]?\b|#\d{3,6}\b/g;
+
+/** Public members an exported record may carry (study rule 11). */
+const WIDE_RECORD_MEMBERS = 20;
+
+const PARAMETER_PROPERTY = new Set([
+  ts.SyntaxKind.PublicKeyword,
+  ts.SyntaxKind.PrivateKeyword,
+  ts.SyntaxKind.ProtectedKeyword,
+  ts.SyntaxKind.ReadonlyKeyword,
+  ts.SyntaxKind.OverrideKeyword,
+]);
+
+/** Whether a namespace holds a value, so it compiles to runtime code. */
+function isInstantiated(node) {
+  const body = node.body;
+  if (body == null) return false;
+  if (ts.isModuleDeclaration(body)) return isInstantiated(body);
+  return body.statements.some(
+    (statement) =>
+      !ts.isInterfaceDeclaration(statement) &&
+      !ts.isTypeAliasDeclaration(statement) &&
+      !(ts.isModuleDeclaration(statement) && !isInstantiated(statement)),
+  );
+}
+
+const isHidden = (member) =>
+  (member.name != null && ts.isPrivateIdentifier(member.name)) ||
+  ts.isConstructorDeclaration(member) ||
+  ts.isClassStaticBlockDeclaration(member) ||
+  (ts.getModifiers(member) ?? []).some(
+    (modifier) =>
+      modifier.kind === ts.SyntaxKind.PrivateKeyword ||
+      modifier.kind === ts.SyntaxKind.ProtectedKeyword,
+  );
+
+/**
+ * An exported class's public member count; for a `Context.Service<Self,
+ * Shape>()` class, the members of its shape literal as well.
+ */
+function wideRecord(statement) {
+  if (
+    !ts.isClassDeclaration(statement) ||
+    statement.name == null ||
+    !ts
+      .getModifiers(statement)
+      ?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
+  ) {
+    return null;
+  }
+  let members = statement.members.filter((member) => !isHidden(member)).length;
+  for (const clause of statement.heritageClauses ?? []) {
+    for (const type of clause.types) {
+      // `Context.Service<Self, Shape>()(key)`: the shape is the second
+      // type argument of the inner call.
+      for (
+        let call = type.expression;
+        ts.isCallExpression(call);
+        call = call.expression
+      ) {
+        const shape = call.typeArguments?.[1];
+        if (shape != null && ts.isTypeLiteralNode(shape)) {
+          members += shape.members.length;
+        }
+      }
+    }
+  }
+  return { name: statement.name.text, members };
+}
+
 function measureAst(rootDir, files, byRule) {
   for (const file of files) {
     const text = readFileSync(path.join(rootDir, file), 'utf8');
@@ -332,16 +433,76 @@ function measureAst(rootDir, files, byRule) {
       site('undocumented-exports', node, `export '${name}' has no TSDoc`);
     }
 
+    const textLines = text.split('\n');
+    const hasCastReason = (node) => {
+      const line = lineOf(node);
+      return /\/\/ cast:/.test(
+        `${textLines[line - 2] ?? ''}\n${textLines[line - 1]}`,
+      );
+    };
+    for (const comment of text.matchAll(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g)) {
+      const codes = comment[0].match(DECISION_CODE) ?? [];
+      if (codes.length === 0) continue;
+      const line = text.slice(0, comment.index).split('\n').length;
+      for (const code of codes) {
+        addSite(byRule, 'decision-codes', file, line, code);
+      }
+    }
+    for (const statement of sourceFile.statements) {
+      const record = wideRecord(statement);
+      if (record != null && record.members > WIDE_RECORD_MEMBERS) {
+        // The value is the excess, so a record that widens fails.
+        for (let extra = WIDE_RECORD_MEMBERS; extra < record.members; extra++) {
+          site(
+            'wide-records',
+            statement,
+            `${record.name}: ${record.members} public members`,
+          );
+        }
+      }
+    }
+
     const visit = (node) => {
+      if (
+        ts.isParameter(node) &&
+        ts
+          .getModifiers(node)
+          ?.some((modifier) => PARAMETER_PROPERTY.has(modifier.kind))
+      ) {
+        site('non-erasable-syntax', node, 'parameter property');
+      } else if (
+        ts.isEnumDeclaration(node) &&
+        !ts
+          .getModifiers(node)
+          ?.some((modifier) => modifier.kind === ts.SyntaxKind.DeclareKeyword)
+      ) {
+        site('non-erasable-syntax', node, `enum ${node.name.text}`);
+      } else if (
+        ts.isModuleDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        isInstantiated(node) &&
+        !ts
+          .getModifiers(node)
+          ?.some((modifier) => modifier.kind === ts.SyntaxKind.DeclareKeyword)
+      ) {
+        site('non-erasable-syntax', node, `namespace ${node.name.text}`);
+      } else if (
+        ts.isImportEqualsDeclaration(node) &&
+        !node.isTypeOnly &&
+        ts.isExternalModuleReference(node.moduleReference)
+      ) {
+        site('non-erasable-syntax', node, 'import = require');
+      }
       if (
         ts.isAsExpression(node) &&
         !(
           ts.isTypeReferenceNode(node.type) &&
           node.type.typeName.getText() === 'const'
-        )
+        ) &&
+        !hasCastReason(node)
       ) {
         site('type-assertions', node, `as ${node.type.getText()}`);
-      } else if (ts.isTypeAssertionExpression(node)) {
+      } else if (ts.isTypeAssertionExpression(node) && !hasCastReason(node)) {
         site('type-assertions', node, `<${node.type.getText()}>`);
       } else if (
         ts.isNewExpression(node) &&
@@ -493,9 +654,216 @@ function measureReadmes(rootDir, byRule) {
   }
 }
 
+/** The external package name an import specifier names. */
+const packageOf = (specifier) =>
+  specifier
+    .split('/')
+    .slice(0, specifier.startsWith('@') ? 2 : 1)
+    .join('/');
+
 /**
- * Every rule's findings: `Map<rule, Map<file, { value, sites }>>`. `value`
- * is the site count, except for file-size, where it is the line count.
+ * Study rule 8: the repo files and external packages each core entry
+ * evaluates on import, following value imports and re-exports only.
+ */
+function measureEntries(rootDir, byRule) {
+  const parsed = ts.getParsedCommandLineOfConfigFile(
+    path.join(rootDir, 'tsconfig.json'),
+    {},
+    { ...ts.sys, onUnRecoverableConfigFileDiagnostic: () => {} },
+  );
+  for (const { name, subpath, file: entryFile } of coreEntries(rootDir)) {
+    const entry = subpath === '.' ? name : `${name}/${subpath.slice(2)}`;
+    const seen = new Set();
+    const externals = new Set();
+    const stack = [entryFile];
+    while (stack.length > 0) {
+      const file = stack.pop();
+      if (seen.has(file)) continue;
+      seen.add(file);
+      const source = ts.createSourceFile(
+        file,
+        readFileSync(file, 'utf8'),
+        ts.ScriptTarget.Latest,
+        false,
+      );
+      for (const statement of source.statements) {
+        const specifier = valueImportOf(statement);
+        if (specifier == null) continue;
+        const resolved = ts.resolveModuleName(
+          specifier,
+          file,
+          parsed.options,
+          ts.sys,
+        ).resolvedModule;
+        const target = resolved?.resolvedFileName;
+        if (
+          target != null &&
+          !resolved.isExternalLibraryImport &&
+          !target.includes('node_modules') &&
+          /\.tsx?$/.test(target) &&
+          !target.endsWith('.d.ts')
+        ) {
+          stack.push(path.resolve(target));
+        } else {
+          externals.add(packageOf(specifier));
+        }
+      }
+    }
+    const files = byRule.get('entry-files');
+    files.set(entry, {
+      value: seen.size,
+      sites: [{ line: 1, detail: `${seen.size} repo files` }],
+    });
+    byRule.get('entry-externals').set(entry, {
+      value: externals.size,
+      sites: [{ line: 1, detail: [...externals].toSorted().join(' ') }],
+    });
+  }
+}
+
+/** The specifier a statement evaluates, or null for type-only imports. */
+function valueImportOf(statement) {
+  if (ts.isImportDeclaration(statement)) {
+    const clause = statement.importClause;
+    if (clause?.isTypeOnly) return null;
+    const bindings = clause?.namedBindings;
+    if (
+      clause != null &&
+      clause.name == null &&
+      bindings != null &&
+      ts.isNamedImports(bindings) &&
+      bindings.elements.length > 0 &&
+      bindings.elements.every((element) => element.isTypeOnly)
+    ) {
+      return null;
+    }
+    return statement.moduleSpecifier.text;
+  }
+  if (
+    ts.isExportDeclaration(statement) &&
+    statement.moduleSpecifier != null &&
+    !statement.isTypeOnly
+  ) {
+    return statement.moduleSpecifier.text;
+  }
+  return null;
+}
+
+/** A core module, by alias or by a relative path that lands in one. */
+const CORE_MODULE =
+  /^(?:@agent\/|@shared\/session\/|@texra-ai\/llm|@texra-ai\/agent)/;
+const CORE_MODULE_PATH =
+  /^(?:src\/agent|src\/shared\/session|packages\/llm\/src|packages\/agent\/src)\//;
+
+/** Study rule 12: `vi.mock` of a core module, per test file. */
+function measureMocks(rootDir, byRule) {
+  const tests = walkFiles(path.join(rootDir, 'src/test-kernel'), {
+    include: (file) => /\.(?:vitest|test)\.tsx?$/.test(file),
+  });
+  for (const { absolutePath } of tests) {
+    const file = path.relative(rootDir, absolutePath).replaceAll('\\', '/');
+    const text = readFileSync(absolutePath, 'utf8');
+    for (const match of text.matchAll(
+      /\bvi\.(?:mock|doMock)\(\s*['"`]([^'"`]+)/g,
+    )) {
+      const target = match[1];
+      const relative = target.startsWith('.')
+        ? path
+            .relative(rootDir, path.resolve(path.dirname(absolutePath), target))
+            .replaceAll('\\', '/')
+        : null;
+      if (
+        CORE_MODULE.test(target) ||
+        (relative != null && CORE_MODULE_PATH.test(relative))
+      ) {
+        const line = text.slice(0, match.index).split('\n').length;
+        addSite(byRule, 'core-module-mocks', file, line, target);
+      }
+    }
+  }
+}
+
+/**
+ * Study rule 14: core package dependencies that are not an exact version,
+ * with `catalog:` read through the workspace catalog.
+ */
+function measureDependencies(rootDir, byRule) {
+  const { catalog = {} } = parseYaml(
+    readFileSync(path.join(rootDir, 'pnpm-workspace.yaml'), 'utf8'),
+  );
+  for (const dir of ['packages/agent', 'packages/llm']) {
+    const manifest = JSON.parse(
+      readFileSync(path.join(rootDir, dir, 'package.json'), 'utf8'),
+    );
+    for (const [name, spelled] of Object.entries(manifest.dependencies ?? {})) {
+      if (spelled.startsWith('workspace:')) continue;
+      const range = spelled === 'catalog:' ? catalog[name] : spelled;
+      if (/^\d+\.\d+\.\d+(?:-[\w.]+)?$/.test(range ?? '')) continue;
+      addSite(
+        byRule,
+        'ranged-dependencies',
+        `${dir}/package.json`,
+        1,
+        `${name}@${range}`,
+      );
+    }
+  }
+}
+
+/**
+ * Study rule 16: the harness README numbers its durable invariants
+ * (`**I1**`), and a conformance test cites each one (`invariant I1`).
+ */
+function measureInvariants(rootDir, byRule) {
+  const readme = 'packages/agent/README.md';
+  const text = readFileSync(path.join(rootDir, readme), 'utf8');
+  const listed = [...text.matchAll(/\*\*(I\d+)\*\*/g)].map((match) => match[1]);
+  if (listed.length === 0) {
+    addSite(byRule, 'durable-invariants', readme, 1, 'no numbered invariants');
+    return;
+  }
+  const cited = new Set();
+  for (const { absolutePath } of walkFiles(
+    path.join(rootDir, 'src/test-kernel'),
+    {
+      include: (file) => file.endsWith('.vitest.ts'),
+    },
+  )) {
+    for (const match of readFileSync(absolutePath, 'utf8').matchAll(
+      /\binvariant (I\d+)\b/g,
+    )) {
+      cited.add(match[1]);
+    }
+  }
+  for (const invariant of new Set(listed)) {
+    if (!cited.has(invariant)) {
+      addSite(
+        byRule,
+        'durable-invariants',
+        readme,
+        1,
+        `${invariant} has no test`,
+      );
+    }
+  }
+  for (const invariant of cited) {
+    if (!listed.includes(invariant)) {
+      addSite(
+        byRule,
+        'durable-invariants',
+        readme,
+        1,
+        `a test cites unlisted ${invariant}`,
+      );
+    }
+  }
+}
+
+/**
+ * Every rule's findings: `Map<rule, Map<key, { value, sites }>>`. The key is
+ * a repo file, or a package entry for the entry rules. `value` is the site
+ * count, except for file-size (line count) and the entry rules (files or
+ * packages reached).
  */
 export async function measure(rootDir) {
   const files = coreFiles(rootDir);
@@ -504,5 +872,9 @@ export async function measure(rootDir) {
   measureAst(rootDir, files, byRule);
   await measureCycles(rootDir, files, byRule);
   measureReadmes(rootDir, byRule);
+  measureEntries(rootDir, byRule);
+  measureMocks(rootDir, byRule);
+  measureDependencies(rootDir, byRule);
+  measureInvariants(rootDir, byRule);
   return { files, byRule };
 }

@@ -39,7 +39,7 @@ import { parseArgs } from 'node:util';
 
 import { CORE_QUALITY_DIRS } from '../eslint.config.mjs';
 import { apiReports } from './core-quality-api-report.mjs';
-import { RULES, measure } from './core-quality-measure.mjs';
+import { MEASURED_ONLY, RULES, measure } from './core-quality-measure.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -174,28 +174,57 @@ function printReport(files, byRule) {
     const lines = own.reduce((sum, file) => sum + lineCount(file), 0);
     console.log([dir, own.length, lines, ...counts].join('\t'));
   }
+  const HOTSPOT_RULES = [
+    'file-size',
+    'complexity',
+    'max-depth',
+    'max-lines-per-function',
+    'type-assertions',
+    'no-non-null-assertion',
+    'wide-records',
+  ];
   const score = new Map();
-  for (const [rule, entries] of byRule) {
-    if (rule === 'missing-readme' || rule === 'undocumented-exports') continue;
-    for (const [file, entry] of entries) {
+  for (const rule of HOTSPOT_RULES) {
+    for (const [file, entry] of byRule.get(rule)) {
       const weight =
         rule === 'file-size' ? Math.floor(entry.value / 100) : entry.value;
       score.set(file, (score.get(file) ?? 0) + weight);
     }
   }
   console.log(
-    '\nhotspots (file-size in hundreds of lines + complexity/depth/params/long-function/cast/! sites):',
+    `\nhotspots (file-size in hundreds of lines + sites of ${HOTSPOT_RULES.slice(1).join(', ')}):`,
   );
   for (const [file, value] of [...score]
     .toSorted((left, right) => right[1] - left[1])
     .slice(0, 25)) {
-    const parts = [...byRule]
-      .filter(
-        ([rule, entries]) =>
-          rule !== 'undocumented-exports' && entries.has(file),
-      )
-      .map(([rule, entries]) => `${rule}=${entries.get(file).value}`);
+    const parts = HOTSPOT_RULES.filter((rule) =>
+      byRule.get(rule).has(file),
+    ).map((rule) => `${rule}=${byRule.get(rule).get(file).value}`);
     console.log(`${value}\t${file}\t${parts.join(' ')}`);
+  }
+  console.log('\nper key (rules not keyed by a core source file):');
+  for (const rule of [
+    'entry-files',
+    'entry-externals',
+    'wide-records',
+    'core-module-mocks',
+    'non-erasable-syntax',
+    'ranged-dependencies',
+    'durable-invariants',
+    'decision-codes',
+  ]) {
+    const entries = [...byRule.get(rule)];
+    const total = entries.reduce((sum, [, entry]) => sum + entry.value, 0);
+    console.log(`${rule}: total ${total} over ${entries.length} keys`);
+    if (
+      rule.startsWith('entry-') ||
+      rule === 'ranged-dependencies' ||
+      rule === 'wide-records'
+    ) {
+      for (const [key, entry] of entries) {
+        console.log(`  ${key}\t${entry.value}\t${entry.sites.at(-1).detail}`);
+      }
+    }
   }
 }
 
@@ -219,6 +248,7 @@ const main = async () => {
   const problems = [];
   mkdirSync(baselineDir, { recursive: true });
   for (const [rule, actual] of byRule) {
+    if (MEASURED_ONLY.has(rule)) continue;
     const baseline = readBaseline(rule, moves);
     if (values.update) {
       // A rule without a baseline file is new: its first baseline is today's count.

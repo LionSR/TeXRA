@@ -10,8 +10,11 @@ import ts from 'typescript';
 
 const PACKAGES = ['packages/agent', 'packages/llm'];
 
-/** `{ name, subpath, file }` for every entry the core packages export. */
-function entries(rootDir) {
+/**
+ * `{ name, subpath, file, report }` for every entry the core packages export;
+ * the entry-reach budgets read the same list.
+ */
+export function coreEntries(rootDir) {
   return PACKAGES.flatMap((dir) => {
     const manifest = JSON.parse(
       readFileSync(path.join(rootDir, dir, 'package.json'), 'utf8'),
@@ -77,7 +80,7 @@ function describe(checker, symbol) {
 
 /** Report file name → report text, one per core package entry. */
 export function apiReports(rootDir) {
-  const list = entries(rootDir);
+  const list = coreEntries(rootDir);
   const configPath = path.join(rootDir, 'tsconfig.build.json');
   const { config } = ts.readConfigFile(configPath, ts.sys.readFile);
   const { options } = ts.parseJsonConfigFileContent(config, ts.sys, rootDir);
