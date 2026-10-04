@@ -16,6 +16,10 @@ import {
   parsePluginOrigin,
 } from '@common/plugins/installedPlugins';
 import type { ServiceConnection } from '@controllers/server/client';
+import {
+  localSessionBackend,
+  type SessionBackend,
+} from '@controllers/session/sessionBackend';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
@@ -103,6 +107,9 @@ export function registerBuiltinSlashCommands(options: {
   /** The session `/resume` lists history from and `/plan` and `/compact` act
    *  on, threaded from the surface that registers the commands. */
   runtimeSession: SessionHandle;
+  /** Where the commands' run requests and resumes land: the chat's session
+   *  in the service; its own session when unset. */
+  backend?: SessionBackend;
   onAgentSelect?: SelectHandler<string>;
   /** `/agent` → a team preset, by id. */
   onTeamSelect?: SelectHandler<string>;
@@ -130,6 +137,8 @@ export function registerBuiltinSlashCommands(options: {
   onError?: ErrorHandler;
 }): void {
   const { secrets, stores, runtime } = options;
+  const backend =
+    options.backend ?? localSessionBackend(options.runtimeSession);
   const modelStores = { ...stores, secrets, runtime };
   const onAgentSelect: SelectHandler<string> =
     options.onAgentSelect ??
@@ -233,7 +242,7 @@ export function registerBuiltinSlashCommands(options: {
               case 'superYolo':
                 return runId === undefined
                   ? Effect.void
-                  : revokeCliRunGrant(options.runtimeSession, runId, value);
+                  : revokeCliRunGrant(backend, runId, value);
               case 'ask':
               case 'never':
               case 'yolo':
@@ -531,7 +540,7 @@ export function registerBuiltinSlashCommands(options: {
           handler: (remainder, context) =>
             Effect.gen(function* () {
               if (remainder.trim() === 'all')
-                return yield* resumeInterruptedTasks(context.runtimeSession);
+                return yield* resumeInterruptedTasks(context.backend);
               const id = parseCliHistoryId(remainder);
               if (!id)
                 return yield* Effect.fail(
@@ -594,6 +603,6 @@ export function registerBuiltinSlashCommands(options: {
     // Only offer /config when the host wired the stores it reads/writes — a
     // command that can't reach a store would render an inert panel.
     ...(options.configStores ? [configContribution(options.configStores)] : []),
-    ...sessionContributions(options.runtimeSession),
+    ...sessionContributions(backend),
   ]);
 }

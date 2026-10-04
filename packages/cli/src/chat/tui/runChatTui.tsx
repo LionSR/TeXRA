@@ -5,13 +5,22 @@
 // Run start/resume/stop orchestration lives in ../chatSessionController;
 // this module keeps only composition, rendering glue, and the Ink lifecycle.
 
-import { Cause, Effect, Exit, Fiber } from 'effect';
+import {
+  Cause,
+  Effect,
+  Exit,
+  Fiber,
+  Result,
+  Scope,
+  SubscriptionRef,
+} from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
 import { getVisibleAgents } from '@agent/index';
 import type { AgentConfig } from '@agent/runtime';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { reachCliService } from '@cli/runtime/cliService';
+
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import { installCliProcessRuntime } from '@cli/runtime/cliProcessRuntime';
@@ -30,8 +39,11 @@ import {
   clearTerminalScrollback,
 } from '@cli/tui/terminalCleanup';
 import { cliSecrets } from '@cli/runtime/cliSecrets';
+import { localSessionBackend } from '@controllers/session/sessionBackend';
+import { serviceSessionBackend } from '@controllers/server/serviceBackend';
 import { DisposableStore } from '@platform/disposable';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
+import { aggregateId } from '@shared/schemas';
 import {
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
@@ -45,6 +57,7 @@ import {
   isTranscriptSettlementPhase,
 } from '@shared/runs/runStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { serviceAgentRuns } from '../serviceAgentRuns';
 
 import {
   createChatSessionController,
@@ -149,19 +162,46 @@ export async function runChat(
     minimumLogLevel: context.minimumLogLevel,
   });
   const initialResume = init.initialResume;
+  // The chat's hold on the background service, for its whole life.
+  const chatScope = Scope.makeUnsafe();
   // One startup program; an early exit is its `exitCode` arm.
   const startup = await runtime.runPromise(
     Effect.gen(function* () {
+      // Every chat is a client of the one service, so other terminals and
+      // windows see its task; one that cannot reach it runs here, and says
+      // so once.
+      const service = yield* reachCliService(
+        context.storageRoot,
+        context.version,
+      ).pipe(Scope.provide(chatScope), Effect.result);
       const services = yield* initCliPlatform({
         ...context,
         presentsStoreMovedAside: true,
-        // `texra resume <id>` resumes the task it names; a second resume of
-        // the interrupted ones beside it would race that one, so it only
-        // retries a blocked resume.
-        interruptedTasks: initialResume === undefined ? 'offer' : 'retry',
+        // The service follows interrupted tasks for a chat that is its
+        // client. In this process, `texra resume <id>` resumes the task it
+        // names; a second resume of the interrupted ones beside it would
+        // race that one, so it only retries a blocked resume.
+        ...(Result.isFailure(service) && {
+          interruptedTasks: initialResume === undefined ? 'offer' : 'retry',
+        }),
       });
       const runtimeSession = yield* services.session;
       runtimeSession.setApprovalPolicy(context.approvalPolicy);
+      const backend = Result.isSuccess(service)
+        ? yield* serviceSessionBackend(
+            service.success.client,
+            context.cwd,
+            runtimeSession.roots.storage,
+          ).pipe(Scope.provide(chatScope))
+        : localSessionBackend(runtimeSession);
+      // Said once the view is bound, which the transcript rows need.
+      const startupNotices: string[] = [];
+      if (Result.isSuccess(service))
+        yield* backend.setApprovalPolicy(context.approvalPolicy);
+      else
+        startupNotices.push(
+          `This chat runs here only, so other terminals and windows will not see it: ${service.failure.message}`,
+        );
       // Without a usable credential the chat still opens: the "Connect a
       // model" panel takes the first foreground slot, and model resolution
       // waits for the connection instead of ending the process.
@@ -237,19 +277,18 @@ export async function runChat(
           initialResume?.config.delegationAgentScope ?? undefined,
         version: context.version,
       });
-      if (modelSelection.notice) {
-        appendLocalNotice(modelSelection.notice);
-      }
+      if (modelSelection.notice) startupNotices.push(modelSelection.notice);
       // First-run handoff explanation: when the setup agent owns this session
       // (decided here for both the bare-`texra` and `texra chat` entries), say
       // so - display-only, so the agent waits for the user's first message.
       const startupNotice = init.startupNotice;
-      if (startupNotice) {
-        appendLocalNotice(startupNotice);
-      }
+      if (startupNotice) startupNotices.push(startupNotice);
       return {
+        startupNotices,
         services,
         runtimeSession,
+        backend,
+        runsElsewhere: Result.isSuccess(service),
         defaults,
         firstRunSetupAgent,
         model: modelSelection.model,
@@ -261,8 +300,9 @@ export async function runChat(
     }),
   );
   if (startup.exitCode !== undefined) return { exitCode: startup.exitCode };
-  const { services, runtimeSession, defaults, model } = startup;
-  const { inputHistory, followUpQueue } = startup;
+  const { services, runtimeSession, backend, runsElsewhere } = startup;
+  const { defaults, model } = startup;
+  const { inputHistory, followUpQueue, startupNotices } = startup;
   const { agent } = defaults;
 
   const getApprovalPolicy = (): TexraApprovalPolicy =>
@@ -273,6 +313,7 @@ export async function runChat(
   });
   const setApprovalPolicy = (policy: TexraApprovalPolicy): void => {
     runtimeSession.setApprovalPolicy(policy);
+    if (runsElsewhere) runtime.runFork(backend.setApprovalPolicy(policy));
     patchSessionMeta({ approvalPolicy: policy });
   };
   // The slash-command context is identical at every call site; build it once
@@ -282,6 +323,7 @@ export async function runChat(
     cliContext: context,
     session,
     runtimeSession,
+    backend,
     secrets: services.secrets,
     stores: services,
     runtime: services.runtime,
@@ -312,12 +354,16 @@ export async function runChat(
   // title below derives its attention state from it on install.
   const session = new TuiSession(
     (runId) => runtimeSession.runs.getHandle(runId)?.controls,
+    runsElsewhere,
   );
+  disposables.add(() => runtime.runFork(Scope.close(chatScope, Exit.void)));
   // A dead fold (`viewChanges` failing) is the end of this session: the
   // composer closes on the reason, Ctrl-C still exits, and the exit is a
   // failure on every exit path, since they all read `session.runExitCode`.
-  const unbindSessionView = bindSessionView(runtime, runtimeSession.view, {
-    changes: runtimeSession.viewChanges,
+  const unbindSessionView = bindSessionView(runtime, backend.view, {
+    changes: runsElsewhere
+      ? SubscriptionRef.changes(backend.view)
+      : runtimeSession.viewChanges,
     onFailure: (error) => {
       sessionViewFailureSignal.set(
         `The session view stopped updating: ${toErrorMessage(error)} Press Ctrl-C to exit and restart texra. If it repeats, run the same texra version that last opened this project; an older build cannot read a newer session store.`,
@@ -325,6 +371,7 @@ export async function runChat(
       session.runExitCode = CliExitCode.AgentError;
     },
   });
+  for (const notice of startupNotices) appendLocalNotice(notice);
   // Cosmetic, but "texra-local" or a bare shell prompt in every tab makes a
   // multi-session workflow hard to navigate: show project and attention state.
   // The terminal outlives session subscriptions: only the exit controller
@@ -349,9 +396,9 @@ export async function runChat(
     if (key === subscribedRuns) return;
     subscribedRuns = key;
     runtime.runFork(
-      runtimeSession.setTranscriptSubscriptions(
+      backend.transcripts(
         'tui',
-        ids.map((id) => ({ id, fromSeq: 0 })),
+        ids.map((id) => ({ id: aggregateId('run', id), fromSeq: 0 })),
       ),
     );
   };
@@ -389,6 +436,10 @@ export async function runChat(
     secrets: services.secrets,
     stores: services,
     runtime,
+    ...(runsElsewhere && {
+      backend,
+      agentRuns: serviceAgentRuns(backend),
+    }),
   });
 
   const resetSessionForClear = (): boolean => {
@@ -425,6 +476,7 @@ export async function runChat(
 
   // Pre-register the slash commands the input palette uses.
   registerBuiltinSlashCommands({
+    backend,
     connectService: () => reachCliService(context.storageRoot, context.version),
     onAccountChanged: () =>
       connectChatModel(
@@ -488,6 +540,7 @@ export async function runChat(
       stores={services}
       runtime={runtime}
       session={runtimeSession}
+      requests={backend}
       onSubmit={(line, mediaFiles, images) => {
         if (holdUntilConnected({ line, mediaFiles, images })) return;
         runtime.runFork(chatController.submit(line, mediaFiles, images));

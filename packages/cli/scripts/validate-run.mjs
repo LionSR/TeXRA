@@ -1377,6 +1377,105 @@ async function validateInterruptedTasks() {
 }
 
 /**
+ * Every chat is a client of the background service (D1–D4): a second
+ * `texra chat` lists the first one's conversation with `/tasks` and attaches
+ * to it live. The second chat's attached view is the artifact.
+ */
+async function validateServiceChatsSeeEachOther() {
+  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-service-chats-'));
+  const project = echoProject(cwd);
+  const env = { ...project.ptyEnv, TEXRA_NO_TELEMETRY: '1' };
+  const chatArgs = [
+    'chat',
+    '--agent',
+    'echo_validation',
+    '--model',
+    'openai/gpt-5.6-sol',
+  ];
+  let first;
+  let replied = false;
+  try {
+    const firstChat = runTexraPty(chatArgs, {
+      label: 'texra chat (first)',
+      cwd: project.work,
+      cols: 160,
+      rows: 40,
+      timeoutMs: 240_000,
+      env,
+      onData: (_data, pty) => {
+        first = pty;
+        const plain = stripVTControlCharacters(pty.output);
+        if (
+          !replied &&
+          plain.includes('/ commands') &&
+          !plain.includes('Hello there')
+        ) {
+          if (!first.typed) {
+            first.typed = true;
+            pty.setTimer(() => pty.write('Hello there'), 600);
+            pty.setTimer(() => pty.write('\r'), 1_000);
+          }
+        }
+        if (plain.includes('Model saw: Hello there')) replied = true;
+      },
+    });
+    const deadline = Date.now() + 180_000;
+    while (!replied) {
+      assert(
+        Date.now() < deadline,
+        `the first chat never answered\noutput:\n${stripVTControlCharacters(first?.output ?? '').slice(-3000)}`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    let phase = 'opening';
+    let from = 0;
+    const second = await runTexraPty(['chat'], {
+      label: 'texra chat (second), /tasks',
+      cwd: project.work,
+      cols: 160,
+      rows: 40,
+      timeoutMs: 120_000,
+      env,
+      onData: (_data, pty) => {
+        const plain = stripVTControlCharacters(pty.output).slice(from);
+        const steps = [
+          ['opening', 'list', '/ commands', ['/tasks', '\r']],
+          ['list', 'attach', 'echo_validation', ['\r']],
+          ['attach', 'done', 'Model saw: Hello there', ['\u001b', ETX, ETX]],
+        ];
+        const step = steps.find(([at]) => at === phase);
+        if (step === undefined) return;
+        const [, next, needle, keys] = step;
+        if (!plain.includes(needle)) return;
+        phase = next;
+        from += plain.indexOf(needle) + needle.length;
+        keys.forEach((key, index) =>
+          pty.setTimer(() => pty.write(key), 600 + index * 400),
+        );
+      },
+    });
+    first?.write(ETX);
+    first?.setTimer(() => first.write(ETX), 400);
+    await firstChat;
+    const artifactPath = writeArtifact('service-chats.json', {
+      phase,
+      tail: stripVTControlCharacters(second.output).split('\n').slice(-30),
+    });
+    assert(
+      phase === 'done',
+      `a second chat's /tasks should attach to the first chat's live conversation (artifact: ${artifactPath})\noutput:\n${stripVTControlCharacters(second.output).slice(-3000)}`,
+    );
+  } finally {
+    first?.kill();
+    run(process.execPath, [binaryPath, 'service', 'stop'], {
+      cwd: project.work,
+      env,
+    });
+    rmSync(cwd, { recursive: true, force: true });
+  }
+}
+
+/**
  * `/tasks` in the chat (D1–D4): a task started in the service under the
  * `ask` policy opens a command approval; `texra chat` lists it with
  * `/tasks`, attaches, approves the command in place and sends a follow-up,
@@ -1541,11 +1640,11 @@ async function validateServiceSharedTask() {
   const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-service-'));
   const project = echoProject(cwd);
   const env = { ...project.ptyEnv, TEXRA_NO_TELEMETRY: '1' };
-  const texra = (args, label) => {
+  const texra = (args, label, extraEnv = {}) => {
     const result = run(
       process.execPath,
       [binaryPath, ...args, '--cwd', project.work],
-      { cwd: project.work, env },
+      { cwd: project.work, env: { ...env, ...extraEnv } },
     );
     assertSuccess(result, label);
     return result.stdout.trim();
@@ -1586,6 +1685,10 @@ async function validateServiceSharedTask() {
         'First message',
       ],
       'texra tasks start',
+      // The service this starts reads the user's login shell for its
+      // environment, not the PATH of whoever started it: a window opened
+      // from the Dock passes one as bare as this.
+      { PATH: '/usr/bin:/bin' },
     );
     assert(/^[0-9a-f]{12}$/.test(runId), `tasks start printed ${runId}`);
     a = attach(runId);
@@ -1593,6 +1696,25 @@ async function validateServiceSharedTask() {
     await waitFor('both attaches to print the first reply', () =>
       [a, b].every((t) => t.stdout.includes('User instruction:')),
     );
+    const serveLog = readFileSync(
+      path.join(cwd, 'home', '.texra', 'run', 'serve.log'),
+      'utf8',
+    );
+    const loginPath =
+      /Using the login shell's environment \(PATH=([^)]*)\)/.exec(
+        serveLog,
+      )?.[1];
+    assert(
+      loginPath !== undefined,
+      `the service should say which login-shell PATH it runs with\n${serveLog}`,
+    );
+    // Where MacTeX is installed, the login shell puts it on the PATH even
+    // though the starter's PATH did not have it.
+    if (existsSync('/Library/TeX/texbin/latexmk'))
+      assert(
+        loginPath.split(':').includes('/Library/TeX/texbin'),
+        `a service started with PATH=/usr/bin:/bin should still find latexmk (login PATH: ${loginPath})`,
+      );
     const listed = parseJson(
       texra(['tasks', 'list', '--output-format', 'json'], 'texra tasks list'),
       'tasks list',
@@ -1992,6 +2114,7 @@ async function validateCliRunArtifacts(options = {}) {
   await validateOpenTimePrompt();
   await validateServiceSharedTask();
   await validateServiceTasksInTui();
+  await validateServiceChatsSeeEachOther();
   validateScriptFanoutRunCommand();
   validateTeamRunCommand();
   console.log('CLI run validation passed');

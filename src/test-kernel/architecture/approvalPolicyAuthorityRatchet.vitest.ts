@@ -49,6 +49,9 @@ const SEED_CALL_ALLOWLIST = new Set([
   // and `project.policy` is a window's settings change reaching it.
   'packages/cli/src/runtime/cliService.ts',
   'src/controllers/server/handlers.ts',
+  // A window's settings change reaches its session through its backend:
+  // the window's own session, or `project.policy` to the service.
+  'src/controllers/session/sessionBackend.ts',
 ]);
 
 /**

@@ -19,6 +19,7 @@ import {
   type SessionHandle,
   type ValidatedRunRequest,
 } from '@agent/runtime';
+import { launchOnRun } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { attachSessionHost } from '@controllers/session/attachSessionHost';
 import {
@@ -72,7 +73,7 @@ export interface DesktopAgentRun {
    *  bare `Error`; a caller that needs a named channel names it. */
   runValidated(
     request: ValidatedRunRequest,
-    options?: DesktopRunOptions,
+    options?: DesktopRunOptions & { readonly approveDelegatedWork?: boolean },
   ): Effect.Effect<void, Error>;
   /** Open a resumed workflow's final output, as a launch opens a fresh one's
    *  (`HostRunActionPorts.openWorkflowOutput`). */
@@ -177,14 +178,18 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
      */
     function runValidated(
       request: ValidatedRunRequest,
-      runOptions: DesktopRunOptions = {},
+      runOptions: DesktopRunOptions & {
+        readonly approveDelegatedWork?: boolean;
+      } = {},
     ): Effect.Effect<void, Error> {
+      const { approveDelegatedWork, ...launchOptions } = runOptions;
       return launchDesktopAgent(
         request,
         { session, runtime },
         {
           onRunResolved: options.onLaunched,
-          ...runOptions,
+          ...launchOptions,
+          onRun: launchOnRun(session.approvals, runOptions),
         },
       ).pipe(Effect.ensuring(options.onRunCompleted ?? Effect.void));
     }

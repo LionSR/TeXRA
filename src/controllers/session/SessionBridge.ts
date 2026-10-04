@@ -19,7 +19,7 @@
  * the bridge drains the requests in flight rather than cutting them; an
  * answer whose port is gone is dropped.
  *
- * A `runtime.request` runs `session.requests.request` and posts one
+ * A `runtime.request` runs the backend's `request` and posts one
  * `Response` under the request's id; a `host.request` runs the host's
  * handler the same way. A message the bridge cannot parse is answered
  * `Invalid` when it names a request id, and reported otherwise: a silent
@@ -39,11 +39,7 @@ import {
 } from 'effect';
 import { z } from 'zod';
 
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  frameSubscription,
-  type FramerSource,
-} from '@controllers/session/SessionFramer';
+import type { SessionBackend } from '@controllers/session/sessionBackend';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { HostRequest } from '@shared/session/hostRequest';
@@ -75,7 +71,8 @@ const RequestEnvelopeSchema = z.object({
 });
 
 interface SessionBridgeOptions {
-  readonly session: SessionHandle;
+  /** The session this bridge frames and requests through. */
+  readonly backend: SessionBackend;
   readonly onPortClosed: (port: string) => void;
   /** The host's capabilities (8.3), performed on the surface's behalf, as
    *  one program per request that takes the process services from the fiber
@@ -184,7 +181,6 @@ export class SessionBridge {
 
   /** The session key on every message: the session's storage root. */
   readonly key: string;
-  private readonly source: FramerSource;
   private readonly ports = new Map<string, PortEntry>();
 
   private constructor(
@@ -192,14 +188,7 @@ export class SessionBridge {
     private readonly host: SubscriptionRef.SubscriptionRef<HostSnapshot | null>,
     private readonly scope: Scope.Scope,
   ) {
-    const { session } = options;
-    this.key = session.roots.storage;
-    this.source = {
-      key: this.key,
-      view: session.view,
-      inputs: session.inputs,
-      setTranscriptSubscriptions: session.subscriptions.set,
-    };
+    this.key = options.backend.key;
   }
 
   /** The host's producers write the snapshot every port frames (8.1). */
@@ -256,14 +245,14 @@ export class SessionBridge {
         fiber: null,
         held: [],
       };
-      const { session, onPortClosed } = this.options;
+      const { backend, onPortClosed } = this.options;
       yield* Scope.addFinalizer(
         scope,
         Effect.suspend(() => {
           if (this.ports.get(port.id) !== entry) return Effect.void;
           this.ports.delete(port.id);
-          return session.subscriptions
-            .set(port.id, [])
+          return backend
+            .transcripts(port.id, [])
             .pipe(Effect.andThen(Effect.sync(() => onPortClosed(port.id))));
         }),
       );
@@ -293,7 +282,7 @@ export class SessionBridge {
       // Nothing joins this fiber: a failed replay or tail read would stop the
       // port's transcript with no trace, so its death is logged here.
       const frames = Stream.runForEach(
-        frameSubscription(this.source, entry.port.id, this.host, subscribe),
+        this.options.backend.frames(entry.port.id, this.host, subscribe),
         (frame) => Effect.sync(() => entry.port.send(frame)),
       ).pipe(
         Effect.tapCause((cause) =>
@@ -363,7 +352,7 @@ export class SessionBridge {
           return this.answer(
             entry,
             up.requestId,
-            this.options.session.requests.request(up.request).pipe(
+            this.options.backend.request(up.request).pipe(
               Effect.match({
                 onFailure: (error): Response['result'] => ({
                   ok: false,

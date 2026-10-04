@@ -42,6 +42,7 @@ import {
   type TurnOutcome,
 } from '@cli/runtime/terminalStatus';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
+import type { SessionBackend } from '@controllers/session/sessionBackend';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import type { DisposableStore } from '@platform/disposable';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
@@ -99,6 +100,8 @@ import {
   reportRequestDefect,
 } from './tui/state/transcript';
 import type { FollowUpDeliveryQueue } from './followUpDeliveryQueue';
+import type { ChatAgentRuns } from './serviceAgentRuns';
+import type { SessionRequests } from './tui/state/approvalQueue';
 import type { SkillActivation } from './tui/forms/SkillsListForm';
 import type { PastedImageEntry } from './tui/input/draftAttachments';
 
@@ -245,11 +248,12 @@ export interface ChatSessionControllerInit {
   /** The agent run boundary the controller drives. Composition leaves it
    *  unset and gets the agent runtime's own; a test harness injects its
    *  stand-ins here rather than mocking agent modules. */
-  readonly agentRuns?: {
-    readonly launch: typeof runAgent;
-    readonly resume: typeof resumeRun;
-    readonly records: typeof getRunRecords;
+  readonly agentRuns?: Partial<ChatAgentRuns> & {
+    readonly records?: typeof getRunRecords;
   };
+  /** Where run requests land and edit previews come from, when the chat is
+   *  a client of the background service; its own session otherwise. */
+  readonly backend?: Pick<SessionBackend, 'request' | 'preview'>;
 }
 
 interface PreparedChatInstruction {
@@ -317,9 +321,12 @@ export function createChatSessionController(
   const agentRuns = {
     launch: runAgent,
     resume: resumeRun,
+    resumeBeside: (id: RunId) =>
+      Effect.asVoid(resumeOnSession(id, runtimeSession)),
     records: getRunRecords,
     ...init.agentRuns,
   };
+  const requests: SessionRequests = init.backend ?? runtimeSession.requests;
   // Said in the transcript the controller writes to, not on stderr before
   // Ink mounts, where it would be left above the header.
   if (runtimeSession.storeMovedAside) {
@@ -346,7 +353,7 @@ export function createChatSessionController(
   /** Issue one request to the session's runtime and read its Effect result
    *  as the response (PRD 7.6): the refusal text, or undefined on success. */
   const request = (req: RuntimeRequest): Effect.Effect<string | undefined> =>
-    runtimeSession.requests.request(req).pipe(
+    requests.request(req).pipe(
       Effect.match({
         onFailure: describeRequestError,
         onSuccess: () => undefined,
@@ -443,6 +450,8 @@ export function createChatSessionController(
       runtimeSession.interactions.use(
         createTuiHostInteractions(presentationHost, sessionContext, {
           session: runtimeSession,
+          requests,
+          preview: init.backend?.preview,
           secrets,
           settings: stores,
           runtime,
@@ -476,26 +485,22 @@ export function createChatSessionController(
             try: () => AgentConfigSchema.parse(config),
             catch: ensureError,
           });
+          // Each chat round mints a fresh root run id, so bash/tool-edit/
+          // super-YOLO bypass, which is keyed per stream, would otherwise
+          // reset every round even though the user is continuing the same
+          // conversation. The new round continues the previous one, so bypass
+          // resolution falls through to whatever the prior round had, unless
+          // this round sets its own explicit value.
+          const previousRootRunId = rootRunId.get();
           const result = yield* agentRuns.launch(
             { config: registeredConfig, runId },
             {
               session: runtimeSession,
               enforceCategory: true,
+              ...(previousRootRunId !== undefined && {
+                continues: previousRootRunId,
+              }),
               onRunResolved: (resolvedRunId) => {
-                // Each chat round mints a fresh root run id, so
-                // bash/tool-edit/super-YOLO bypass, which is
-                // keyed per stream, would otherwise reset every round even
-                // though the user is continuing the same conversation. Link the
-                // new round's stream to the previous one so bypass resolution
-                // (see `registerRunParent`) falls through to whatever the
-                // prior round had, unless this round sets its own explicit value.
-                const previousRootRunId = rootRunId.get();
-                if (previousRootRunId && previousRootRunId !== resolvedRunId) {
-                  runtimeSession.approvals.registerRunParent(
-                    resolvedRunId,
-                    previousRootRunId,
-                  );
-                }
                 rootRunId.set(resolvedRunId);
                 moveLocalTranscriptToRun(resolvedRunId);
                 focusRun(resolvedRunId);
@@ -574,7 +579,7 @@ export function createChatSessionController(
           endResumeUnstarted(() =>
             appendLocalNotice(`Resuming workflow ${id}. Tab lists it.`),
           );
-          yield* Effect.forkDetach(resumeOnSession(id, runtimeSession));
+          yield* Effect.forkDetach(agentRuns.resumeBeside(id));
           return;
         }
 
@@ -786,6 +791,9 @@ export function createChatSessionController(
   // -----------------------------------------------------------------------
 
   const stop = (reason: RunStopReason): void => {
+    // A chat of the background service leaves its task running when the
+    // terminal goes: only the user's own stop reaches it.
+    if (reason === 'shutdown' && init.backend !== undefined) return;
     requestStop(reason);
     interruptActiveRun();
   };
@@ -979,7 +987,7 @@ export function createChatSessionController(
       }
       yield* Effect.uninterruptible(
         Effect.gen(function* () {
-          const outcome = yield* runtimeSession.requests
+          const outcome = yield* requests
             .request({
               kind: 'followUp.send',
               runId: followUpTarget,

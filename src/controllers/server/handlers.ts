@@ -22,6 +22,7 @@ import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { runAgent } from '@agent/runtime/runAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { launchOnRun } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { frameSubscription } from '@controllers/session/SessionFramer';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
@@ -288,7 +289,15 @@ export const serviceHandlers = TexraRpcs.toLayer(
             internal(Cause.die(defect)).pipe(Effect.flatMap(Effect.fail)),
           ),
         ),
-      'task.start': ({ workspace, runId, config, continues }) =>
+      'task.start': ({
+        workspace,
+        runId,
+        config,
+        continues,
+        preferHelperModel,
+        ownApiKeyFallback,
+        approveDelegatedWork,
+      }) =>
         Effect.gen(function* () {
           yield* refuseWhileDraining;
           const session = yield* open(workspace);
@@ -298,11 +307,14 @@ export const serviceHandlers = TexraRpcs.toLayer(
               {
                 session,
                 enforceCategory: true,
-                onRunResolved: (resolved) => {
-                  if (continues !== null && continues !== resolved)
-                    session.approvals.registerRunParent(resolved, continues);
-                  Deferred.doneUnsafe(admitted, Effect.succeed(resolved));
-                },
+                preferHelperModel,
+                ownApiKeyFallback,
+                onRun: launchOnRun(session.approvals, {
+                  approveDelegatedWork,
+                }),
+                ...(continues !== null && { continues }),
+                onRunResolved: (resolved) =>
+                  Deferred.doneUnsafe(admitted, Effect.succeed(resolved)),
               },
             ),
           );

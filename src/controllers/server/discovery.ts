@@ -8,7 +8,6 @@
  * there would take the default ACL, which is not the user's alone.
  */
 import { createHash } from 'node:crypto';
-import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
 import { Effect, FileSystem, Option, type PlatformError } from 'effect';
@@ -35,6 +34,8 @@ export interface ServicePaths {
   readonly runDirectory: string;
   /** `serve.json`, the running service's {@link ServiceRecord}. */
   readonly record: string;
+  /** `serve.log`: what a detached service writes. */
+  readonly log: string;
   /** The socket path clients connect to. */
   readonly socket: string;
   /** The private directory the socket lives in: `runDirectory`, or a
@@ -46,6 +47,7 @@ export interface ServicePaths {
 export function servicePaths(storageRoot: string): ServicePaths {
   const runDirectory = path.join(storageRoot, 'run');
   const record = path.join(runDirectory, 'serve.json');
+  const log = path.join(runDirectory, 'serve.log');
   const tag = createHash('sha256')
     .update(path.resolve(storageRoot))
     .digest('hex')
@@ -55,21 +57,18 @@ export function servicePaths(storageRoot: string): ServicePaths {
     return {
       runDirectory,
       record,
+      log,
       socket: local,
       socketDirectory: runDirectory,
     };
   }
-  // The system temp folder, unless it is itself too deep: `/tmp` always fits.
-  const fits = (base: string): boolean =>
-    Buffer.byteLength(path.join(base, `texra-${tag}`, 'serve.sock')) <=
-    MAX_UNIX_SOCKET_PATH;
-  const socketDirectory = path.join(
-    fits(tmpdir()) ? tmpdir() : '/tmp',
-    `texra-${tag}`,
-  );
+  // `/tmp`, not the per-user temp folder: a client and the service it
+  // started must agree on the path whatever environment each runs with.
+  const socketDirectory = path.join('/tmp', `texra-${tag}`);
   return {
     runDirectory,
     record,
+    log,
     socket: path.join(socketDirectory, 'serve.sock'),
     socketDirectory,
   };

@@ -16,8 +16,7 @@ import {
   lookupApiKey,
   type SecretsFailed,
 } from '@texra-ai/llm';
-import { presentFollowUpResult, submitFollowUp } from '@agent/followUp';
-import { resumeOnSession } from '@agent/followUp/ToolUseFollowUp';
+import { FOLLOW_UP_WAKE_FAILED_MESSAGE } from '@agent/followUp/ToolUseFollowUp';
 import { getRunRecords } from '@agent/storage';
 import {
   validateRunRequest,
@@ -62,6 +61,7 @@ import {
   type ProgressFollowUpState,
 } from '../progressView/ProgressFollowUpController';
 import { runActionGuard } from './runActionGuard';
+import type { SessionBackend } from './sessionBackend';
 
 const CHANNEL = 'HostRunActions';
 
@@ -102,6 +102,9 @@ class RunConfigUnreadable extends Data.TaggedError('RunConfigUnreadable')<{
 
 export interface HostRunActionPorts {
   readonly session: SessionHandle;
+  /** Where this window's run actions land: its own session, or the
+   *  background service's. Run state is read from its view. */
+  readonly backend: SessionBackend;
   /**
    * Launch a validated fresh run; the host's own launcher reaches
    * `runAgent`. The Effect settles with the launched run itself — a caller
@@ -116,6 +119,9 @@ export interface HostRunActionPorts {
       /** This launch replaces a quota-exhausted retry the user answered
        *  with their own API key. */
       ownApiKeyFallback?: boolean;
+      /** An Auto-approve launch: the run starts with delegated work
+       *  approved. */
+      approveDelegatedWork?: boolean;
       onRun?: (runId: RunId) => Effect.Effect<void>;
     },
   ): Effect.Effect<void, Error>;
@@ -220,9 +226,10 @@ export const createHostRunActions = (
     // read through this filesystem rather than taking one from whatever
     // context each of its callers happens to run on.
     const fs = yield* FileSystem.FileSystem;
-    const { session } = ports;
-    const view = () => SubscriptionRef.getUnsafe(session.view);
-    const guard = runActionGuard(session);
+    const { session, backend } = ports;
+    const view = () => SubscriptionRef.getUnsafe(backend.view);
+    const runView = (runId: RunId) => view().runs.get(runId);
+    const guard = runActionGuard({ runView, runs: session.runs });
 
     /** Validate a request an action built, then launch it: one that does
      *  not validate is refused before anything starts, a refusal the
@@ -253,14 +260,14 @@ export const createHostRunActions = (
     };
 
     const getOutputFiles = (runId: RunId) => {
-      const run = session.runView(runId);
+      const run = runView(runId);
       if (run === undefined) return {};
       return run.category === AgentCategory.Workflow ? run.files : run.outputs;
     };
     const runOutputs = {
       getOutputFiles,
       getCompileFailures: (runId: RunId) =>
-        session.runView(runId)?.compileFailures ?? {},
+        runView(runId)?.compileFailures ?? {},
     };
 
     const readConfig = Effect.fn('HostRunActions.readConfig')(function* (
@@ -345,7 +352,7 @@ export const createHostRunActions = (
       // defect — is logged and reports false, as the Promise edge's rejection
       // handler did. Interruption is not caught: it belongs to the caller's
       // fiber.
-      session.requests
+      backend
         .request({
           kind: 'request.decide',
           runId,
@@ -526,37 +533,28 @@ export const createHostRunActions = (
       runOutputs,
       sendFollowUp(runId, text) {
         const present = (message: string) => ports.showWarning(message);
-        const deliver = Effect.gen(function* () {
-          const result = yield* submitFollowUp(
-            runId,
-            { text, from: { kind: 'user' } },
-            { session },
-          ).pipe(
-            Effect.catch((error) =>
-              Effect.gen(function* () {
-                const message = toErrorMessage(error);
-                yield* Effect.logWarning(
-                  `Failed to submit follow-up for stream ${runId}: ${message}`,
-                ).pipe(
-                  Effect.annotateLogs({ data: { runId, error: message } }),
-                  withLogChannel(CHANNEL),
-                );
-                yield* present(`Could not send the follow-up: ${message}`);
-                return undefined;
-              }),
+        const deliver = backend
+          .request({ kind: 'followUp.send', runId, text })
+          .pipe(
+            Effect.flatMap((outcome) =>
+              outcome.kind === 'followUp' && outcome.wake === 'failed'
+                ? present(FOLLOW_UP_WAKE_FAILED_MESSAGE)
+                : Effect.void,
             ),
+            Effect.catchCause((cause) => {
+              const message = toErrorMessage(Cause.squash(cause));
+              return Effect.logWarning(
+                `Failed to submit follow-up for stream ${runId}: ${message}`,
+              ).pipe(
+                Effect.annotateLogs({ data: { runId, error: message } }),
+                withLogChannel(CHANNEL),
+                Effect.andThen(
+                  present(`Could not send the follow-up: ${message}`),
+                ),
+                Effect.ignore({ log: 'Warn' }),
+              );
+            }),
           );
-          if (!result) return;
-          const presentation = presentFollowUpResult(result);
-          if (presentation.severity !== 'none')
-            yield* present(presentation.message);
-        }).pipe(
-          Effect.catchCause((cause) =>
-            Effect.logWarning(
-              `Follow-up presentation failed for stream ${runId}: ${String(cause)}`,
-            ).pipe(withLogChannel(CHANNEL)),
-          ),
-        );
         // Detached: a recovery resume can run a whole model turn, so no host
         // request waits on the outcome.
         return Effect.forkDetach(deliver).pipe(Effect.asVoid);
@@ -569,20 +567,10 @@ export const createHostRunActions = (
        */
       resume: Effect.fn('HostRunActions.resume')(function* (runId) {
         yield* nativeAgentRun(runId, 'resume');
-        const resumed = yield* resumeOnSession(runId, session);
-        // A blocked resume is asked for, not refused: the task's own line
-        // says what it waits for, and it continues once that is back.
-        if ('failed' in resumed && resumed.failed === 'blocked') return;
-        if (!('started' in resumed) || !resumed.delivered)
-          return yield* Effect.fail(
-            new Unavailable({
-              runId,
-              reason: 'This run could not be resumed.',
-            }),
-          );
-        if (resumed.result)
+        const result = (yield* backend.resume(runId))?.result;
+        if (result)
           yield* ports
-            .openWorkflowOutput(resumed.result)
+            .openWorkflowOutput(result)
             .pipe(Effect.ignore({ log: 'Warn' }), withLogChannel(CHANNEL));
       }, guard.resuming),
       runNew: Effect.fn('HostRunActions.runNew')(function* (runId) {
@@ -644,7 +632,7 @@ export const createHostRunActions = (
         });
       },
       fork: Effect.fn('HostRunActions.fork')(function* (runId, at) {
-        const outcome = yield* session.requests
+        const outcome = yield* backend
           .request({ kind: 'run.fork', runId, at })
           .pipe(
             Effect.mapError((error): RequestRefusal =>
@@ -663,7 +651,9 @@ export const createHostRunActions = (
         // The fork waits for its host: continuing it parks it on the
         // user's next message. A refusal is told by the resume itself, and
         // the fork keeps its Resume.
-        yield* resumeOnSession(outcome.runId, session);
+        yield* backend
+          .resume(outcome.runId)
+          .pipe(Effect.ignore({ log: 'Warn' }));
         return outcome.runId;
       }),
     };

@@ -91,6 +91,7 @@ const CLI_PROCESS_OUTPUT_RESTRICTIONS = [
 const CLI_PROCESS_INPUT_BOUNDARY = ['packages/cli/src/runtime/cliContext.ts'];
 const CLI_PROCESS_OUTPUT_BOUNDARY = [
   'packages/cli/src/bin/texra.ts',
+  'packages/cli/src/bin/texraServe.ts',
   'packages/cli/src/runtime/logSinks.ts',
   // Ink mounts onto the real process streams in these launchers; the rest of
   // the TUI goes through logSinks.

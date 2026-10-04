@@ -43,7 +43,7 @@ import {
 
 /** Bumped whenever a procedure or a payload changes shape. A client newer
  *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /**
  * A Zod schema as an Effect Schema at the RPC edge: decoding runs the Zod
@@ -150,6 +150,13 @@ export const TexraRpcs = RpcGroup.make(
       config: zodWire(AgentConfigSchema),
       /** The chat's previous root: its bypass settings carry over. */
       continues: zodWire(RunIdSchema.nullable()),
+      /** Run on the configured helper model (the "fix LaTeX" actions). */
+      preferHelperModel: Schema.Boolean,
+      /** Replaces a quota-exhausted retry with the user's own API key. */
+      ownApiKeyFallback: Schema.Boolean,
+      /** An Auto-approve launch: the run starts with delegated work
+       *  approved, as the run header's switch would set it. */
+      approveDelegatedWork: Schema.Boolean,
     },
     /** The run that started: the asked id, or the one the launch resolved. */
     success: zodWire(RunIdSchema),

@@ -46,7 +46,11 @@ import { ScriptStagePopup } from './panes/ScriptStagePopup';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
 import { StatusBar } from './panes/StatusBar';
-import { currentApproval, promoteApprovalsForRun } from './state/approvalQueue';
+import {
+  currentApproval,
+  promoteApprovalsForRun,
+  type SessionRequests,
+} from './state/approvalQueue';
 import {
   ActiveDraftScope,
   createActiveDraftRegistry,
@@ -123,6 +127,9 @@ export interface AppProps {
    *  the work-plan reader renders from it, threaded from the chat surface that
    *  opened it. */
   readonly session: SessionHandle;
+  /** Where run requests and approval decisions land: the chat's session in
+   *  the service; `session`'s own when unset. */
+  readonly requests?: SessionRequests;
   readonly onSubmit: (
     line: string,
     mediaFiles?: readonly string[],
@@ -140,6 +147,7 @@ export interface AppProps {
 }
 
 export function App(props: AppProps): React.JSX.Element {
+  const requests = props.requests ?? props.session.requests;
   const view = useSignal(sessionView());
   const pending = useSignal(currentApproval);
   // The selection and the reader arrive already resolved against the view
@@ -288,7 +296,7 @@ export function App(props: AppProps): React.JSX.Element {
   // Kill, skip and retry; a refusal (a settled call) reads into the transcript.
   const request = (req: RuntimeRequest): void => {
     props.runtime.runFork(
-      Effect.catch(props.session.requests.request(req), (error) =>
+      Effect.catch(requests.request(req), (error) =>
         Effect.sync(() => appendLocalRequestRefusal(error)),
       ),
     );
@@ -401,7 +409,7 @@ export function App(props: AppProps): React.JSX.Element {
             availableRows={availableRows}
             payload={pending.payload}
             onDecide={(decision) =>
-              pending.decide(props.session, props.runtime, decision)
+              pending.decide(requests, props.runtime, decision)
             }
           />
         ) : null,

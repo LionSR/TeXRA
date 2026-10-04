@@ -4,8 +4,6 @@
  * as the desktop opens its folders), the detached start a client asks for
  * when no service answers, and the connection the chat TUI holds.
  */
-import { spawn } from 'node:child_process';
-import { closeSync, openSync } from 'node:fs';
 import * as path from 'node:path';
 
 import {
@@ -25,18 +23,16 @@ import {
 import {
   ensureService,
   probeService,
+  spawnService,
   type ServiceConnection,
   type ServiceUnavailable,
 } from '@controllers/server/client';
-import {
-  prepareServiceDirectories,
-  servicePaths,
-} from '@controllers/server/discovery';
+import { servicePaths } from '@controllers/server/discovery';
 import type { ServiceProjects } from '@controllers/server/handlers';
 import type { ServiceInfo } from '@controllers/server/protocol';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { setLogSink, silentLogSink, writeLogLine } from '@logger/logSink';
-import { JsonStore, nodeFileServices } from '@platform/defaults/jsonStore';
+import { JsonStore } from '@platform/defaults/jsonStore';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@platform/defaults/nodeStores';
@@ -61,11 +57,6 @@ import { ensureError } from '@utils/errors/errorMessage';
 import { readCliEntrypointPath } from './cliContext';
 import type { CliContext } from './cliContext';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-
-/** The log a detached service writes, beside its socket. */
-export function serviceLogPath(storageRoot: string): string {
-  return path.join(servicePaths(storageRoot).runDirectory, 'serve.log');
-}
 
 /**
  * The service's projects over the CLI's node roots, opened in `scope` and
@@ -169,40 +160,6 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
   } satisfies Context.Service.Shape<typeof ServiceProjects>;
 });
 
-/**
- * Start `texra serve` detached, with its output appended to the service
- * log, and return at once: the caller waits for its hello. It runs the
- * same entry and Node as this process.
- */
-function startCliService(storageRoot: string): Effect.Effect<void, Error> {
-  return Effect.gen(function* () {
-    const paths = servicePaths(storageRoot);
-    yield* prepareServiceDirectories(paths);
-    const log = yield* Effect.try({
-      try: () => openSync(serviceLogPath(storageRoot), 'a', 0o600),
-      catch: ensureError,
-    });
-    // Settle on the child's own report: an `error` event (no such binary,
-    // EACCES, no processes left) fails the start with its cause.
-    yield* Effect.callback<void, Error>((resume) => {
-      const child = spawn(
-        process.execPath,
-        [...process.execArgv, readCliEntrypointPath(), 'serve'],
-        {
-          cwd: paths.runDirectory,
-          detached: true,
-          stdio: ['ignore', log, log],
-        },
-      );
-      child.once('error', (error) => resume(Effect.fail(error)));
-      child.once('spawn', () => {
-        child.unref();
-        resume(Effect.void);
-      });
-    }).pipe(Effect.ensuring(Effect.sync(() => closeSync(log))));
-  }).pipe(Effect.mapError(ensureError), Effect.provide(nodeFileServices));
-}
-
 /** A client prints its own result; its process's log lines go nowhere, as
  *  a platform command's do (`initCliPlatform`). The service keeps its own
  *  log. */
@@ -226,7 +183,16 @@ export function reachCliService(
   storageRoot: string,
   version: string,
 ): Effect.Effect<ServiceConnection, Error, Scope.Scope> {
-  return ensureService(storageRoot, version, startCliService(storageRoot));
+  return ensureService(
+    storageRoot,
+    version,
+    // The same Node and entry as this process.
+    spawnService(storageRoot, process.execPath, [
+      ...process.execArgv,
+      readCliEntrypointPath(),
+      'serve',
+    ]),
+  );
 }
 
 /** {@link reachCliService} for a client command, whose process prints only
