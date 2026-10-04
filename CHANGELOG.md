@@ -693,6 +693,8 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Gemini calls work again.** After a change on Google's side, every
+  Gemini request failed with a validation error before any output arrived.
 - **A crash no longer undoes a Stop, a finished agent or a bypass turned
   off.** A task you stopped mid-turn, killed before it finished stopping,
   came back as interrupted, and with "Always resume" it carried on the turn

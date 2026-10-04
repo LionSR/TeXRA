@@ -95,7 +95,7 @@ const IN_FLIGHT_STATUSES: readonly string[] = ['queued', 'in_progress'];
 const WireEventSchema = z.discriminatedUnion('event_type', [
   z.object({
     event_type: z.literal('interaction.created'),
-    interaction: WireInteractionSchema,
+    interaction: WireInteractionSchema.omit({ status: true }),
   }),
   z.object({
     event_type: z.literal('interaction.completed'),
