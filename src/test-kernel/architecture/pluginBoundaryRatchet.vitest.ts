@@ -187,6 +187,7 @@ describe('plugin rosters', () => {
           'document_extract',
           'document_compile',
           'document_diff',
+          'document_review',
           'document_propose',
         ],
       ],

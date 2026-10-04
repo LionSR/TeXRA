@@ -291,6 +291,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     const flags: string[] = [];
     if (data.toolConfig.autoExtractFigure) flags.push('Extract figures');
     if (data.toolConfig.autoExtractTikzFigure) flags.push('Extract TikZ');
+    if (data.toolConfig.reflect) flags.push('Critic review');
     if (flags.length === 0) return nothing;
     return html`<div class="workflow-proposal__extract-flags">
       ${repeat(

@@ -49,8 +49,8 @@ const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
 ].join(' ');
 
 /** Resolve `name` from the agents `run` may launch, listing them on
- *  failure. A recipe's call names the agents its launch chose (its persona
- *  by key), so it resolves past any scope or shadowing. */
+ *  failure. A recipe's calls name the agents TeXRA chose (its persona by
+ *  key, the bundled `critic`), so they resolve past any scope or shadowing. */
 export const requireAgent = Effect.fn('requireAgent')(function* (
   stores: WorkspaceAgentsStores,
   name: string,

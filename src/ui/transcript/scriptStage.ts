@@ -12,6 +12,7 @@
  * cost are its child's rows.
  */
 import {
+  agentName,
   TOOL_CALL_STATUS,
   type PermissionPayload,
   type RunId,
@@ -39,6 +40,13 @@ import type { ToolRow, TranscriptRow } from './transcriptRow';
 /** What a card the run's end failed while it was open says: the call never
  *  settled, so nothing records how it ended. */
 export const TOOL_CUT_BY_RUN_END = 'The task ended before this tool completed.';
+
+/** An `agent` call's agent as the card shows it: a recipe names its
+ *  agents by `source:name` key, and the card shows the name. */
+const nameOf = (value: unknown): string | undefined => {
+  const key = stringOf(value);
+  return key === undefined ? undefined : agentName(key);
+};
 
 const AGENT_TOOL = 'agent';
 
@@ -220,7 +228,7 @@ function callView(
       ? child
       : undefined;
   const facts = [
-    agent ? stringOf(input.agentName) : undefined,
+    agent ? nameOf(input.agentName) : undefined,
     agent ? (child?.modelLabel ?? stringOf(input.model)) : undefined,
     row.attempt !== undefined && row.attempt > 1 ? 'retried' : undefined,
     agent
@@ -238,7 +246,7 @@ function callView(
       : undefined,
   ].filter((part): part is string => part !== undefined);
   const label = agent
-    ? (stringOf(input.label) ?? stringOf(input.agentName) ?? AGENT_TOOL)
+    ? (stringOf(input.label) ?? nameOf(input.agentName) ?? AGENT_TOOL)
     : [row.model.headerLabel, row.model.headerPreview]
         .filter((part) => part.length > 0)
         .join(' ');

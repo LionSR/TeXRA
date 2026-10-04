@@ -2,9 +2,10 @@
  * The document tools a document task's recipe (`./documentRecipe`) calls,
  * one step each over one revision of its run's documents (`./documents`):
  * the revision's prompt, the files its reply holds, their compile check,
- * their latexdiff, and the proposal the task ends with. Each reads the run's
- * documents from its rows and commits them again; none holds state between
- * calls, so a resumed recipe replays against the rows.
+ * their latexdiff, and the proposal the task ends with (a critic's review
+ * of a revision is `./DocumentReviewTool`). Each reads the run's documents
+ * from its rows and commits them again; none holds state between calls, so
+ * a resumed recipe replays against the rows.
  */
 import { Cause, Effect } from 'effect';
 import { z } from 'zod';
@@ -43,16 +44,19 @@ import { executed } from '@tools/core/result';
 import { requireToolRun } from '@tools/core/toolRun';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
-const RevisionSchema = z
+/** A revision of a document task, by its zero-based index. */
+export const RevisionSchema = z
   .int()
   .nonnegative()
   .describe('The revision, from 0, in the order the task runs them.');
 
-/** The documents of the run the calling tool serves. */
-const documentsOfCall = (tool: string) =>
-  Effect.flatMap(ToolCall, (call) =>
-    Effect.flatMap(requireToolRun(tool, call), ({ run }) => openDocuments(run)),
-  );
+/** The documents of the run the calling tool `tool` serves. */
+export const documentsOfCall = Effect.fn('documents.ofCall')(function* (
+  tool: string,
+) {
+  const { run } = yield* requireToolRun(tool, yield* ToolCall);
+  return yield* openDocuments(run);
+});
 
 /** A step whose failure costs that step, not the revision: reported at
  *  `warn` on the transcript, then the recipe carries on. */
@@ -86,12 +90,18 @@ const autoOpensPdf = (docs: Documents) =>
 export const DocumentContextTool = defineTool({
   name: 'document_context',
   description:
-    "A document task's revision prompt: the task's documents, every earlier request with the reply it got, and this revision's request with the compile failures that rejected the last one. Resolves to `{ prompt, mediaFiles, memories, revisions }`: `memories` are the launch's, for the revision's agent.",
+    "A document task's revision prompt: the task's documents, every earlier request with the reply it got, and this revision's request with the compile failures that rejected the last one and the `critique` of it, if any. Resolves to `{ prompt, mediaFiles, memories, revisions, reflect }`: `memories` are the launch's, for the revision's agent; `reflect` says the task reviews each revision but the last (`document_review`).",
   scriptReturns:
-    '{ prompt: string; mediaFiles: string[]; memories: string[]; revisions: number }',
+    '{ prompt: string; mediaFiles: string[]; memories: string[]; revisions: number; reflect: boolean }',
   replay: 'safe',
-  schema: z.strictObject({ revision: RevisionSchema }),
-  execute: Effect.fn('document_context')(function* ({ revision }) {
+  schema: z.strictObject({
+    revision: RevisionSchema,
+    critique: z
+      .string()
+      .nullish()
+      .describe("The critic's review of the last revision."),
+  }),
+  execute: Effect.fn('document_context')(function* ({ revision, critique }) {
     const docs = yield* documentsOfCall('document_context');
     const revisions = docs.task.requests.length;
     if (revision >= revisions)
@@ -100,14 +110,19 @@ export const DocumentContextTool = defineTool({
           `The task has ${revisions} revisions; revision ${revision} is not one of them.`,
         ),
       );
-    const { prompt, media } = yield* revisionPrompt(docs, revision);
+    const revised = yield* revisionPrompt(docs, revision);
+    // The critic's review of the last revision, after this one's request.
+    const prompt = critique?.trim()
+      ? `${revised.prompt}\n\nA reviewer read your last revision. Apply the corrections that hold, and the suggested improvement where it serves this request:\n<critique revision="${revision}">\n${critique.trim()}\n</critique>`
+      : revised.prompt;
     return {
       ...executed(prompt, `Revision ${revision + 1} of ${revisions}`),
       value: {
         prompt,
-        mediaFiles: media,
+        mediaFiles: revised.media,
         memories: docs.run.config.memories,
         revisions,
+        reflect: docs.run.config.toolConfig.reflect,
       },
     };
   }),

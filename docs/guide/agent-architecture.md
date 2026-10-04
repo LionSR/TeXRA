@@ -110,6 +110,8 @@ The number of revisions is the number of `task.requests` entries. An agent with 
 
 Control how many revisions run by editing the agent YAML: add or remove entries in `task.requests`. A run ends earlier only on failure or cancellation.
 
+**Critic review (opt-in):** Launched with reflection on (`texra run <agent> --reflect` on the CLI, or `reflect: true` on a lead's `document_task` call), a document task has the bundled `critic` agent review every revision but the last. After the revision is compiled and diffed, the critic reads the requests so far, the diff of each output against the document the task started from, and the compile result, and answers with grounded corrections, each tied to a location, plus the single most valuable optional improvement. The next revision's prompt carries that critique in a `<critique>` block. The revision count stays the number of `task.requests` entries; reflection adds one critic call between revisions.
+
 This flow, with optional reflection revisions, lets TeXRA agents perform targeted tasks based on their definitions and your instructions. For examples of built-in agents, read the [Built-in agent reference](./built-in-agents.md).
 
 ::: warning Potential XML Issues
