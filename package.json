@@ -149,6 +149,7 @@
     "openai": "catalog:",
     "pathe": "catalog:",
     "postal-mime": "catalog:",
+    "pretty-bytes": "^7.2.0",
     "pretty-ms": "catalog:",
     "quickjs-emscripten-core": "catalog:",
     "safe-stable-stringify": "catalog:",
