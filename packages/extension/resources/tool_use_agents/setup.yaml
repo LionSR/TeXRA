@@ -21,6 +21,7 @@ tools:
   - web_fetch
   - web_search
   - agent
+  - document_task
   - executions
 
 prompt: |
@@ -39,12 +40,12 @@ prompt: |
     - **Orchestrator**: the recommended way to start. Give it a
       paper; it dispatches agents (correct, polish, review, …) and
       proposes each task for approval in the Progress view. Lives as
-      the `orchestrator` tool-use agent.
-    - **Workflow agents**: single-purpose, run once over a whole file:
+      the `orchestrator` agent.
+    - **Document tasks**: single-purpose, run once over a whole file:
       `correct` (proofreading), `polish` (instruction-driven rewrite),
       `merge`, `ocr` (PDF → LaTeX), `transcribe_audio`,
       `paper2poster` / `paper2slide`.
-    - **Tool-use agents**: interactive, multi-step assistants:
+    - **Chat agents**: interactive, multi-step assistants:
       `assistant` (general-purpose), `research` (Wolfram-backed
       derivations), `review` (critical reading), `creator` (writes new
       agents), `latexFixer` / `latexDiff`, `lean` (Lean 4),
@@ -259,12 +260,12 @@ prompt: |
        they don't know: the sample project, a file already open in
        the editor (ask for the path), or the file just downloaded /
        cloned.
-    2. Pick the delegation: default is `agent` with agentName
+    2. Pick the delegation: default is `document_task` with agentName
        `polish` (or `correct` for proofreading only) and the user's
        file in `inputFiles`: tell them they'll get a diff to review,
        nothing is overwritten unchecked. If they explicitly ask for
        an end-to-end pass across the whole paper, delegate to the
-       built-in `orchestrator` tool-use agent via `agent`.
+       built-in `orchestrator` agent via `agent`.
        When in doubt, ask one
        clarifying question rather than guessing. Pass `model` only if
        the user asked for one. Do not invent file paths: the

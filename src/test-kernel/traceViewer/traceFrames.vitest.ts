@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   aggregateId as qualifyAggregateId,
-  AgentCategory,
   DisplaySessionEventSchema,
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -67,14 +66,12 @@ function traceDocument(
 }
 
 function runStart(
-  category: AgentCategory,
   identity: RunIdentity = { kind: 'agent', agent: 'assistant' },
 ): Record<string, unknown> {
   return {
     type: 'run.start',
     identity,
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-    category,
     worktree: null,
     parent: null,
     provenance: null,
@@ -85,13 +82,13 @@ function runEnd(outcome: RunOutcome): Record<string, unknown> {
   return {
     type: 'run.end',
     outcome,
-    output: { category: 'workflow' },
+    output: { response: '', files: [] },
   };
 }
 
 describe('traceFrame replays the document through the one fold', () => {
-  it('replays workflow content without tool-use state', () => {
-    const trace = traceDocument(runStart(AgentCategory.Workflow), {
+  it('replays logged content into the transcript', () => {
+    const trace = traceDocument(runStart(), {
       type: 'log',
       level: LOG_LEVELS.INFO,
       messageType: MESSAGE_TYPES.DEFAULT,
@@ -99,13 +96,6 @@ describe('traceFrame replays the document through the one fold', () => {
     });
 
     const replayed = foldTrace(trace);
-    expect(replayed).toMatchObject({
-      category: AgentCategory.Workflow,
-      files: {},
-      missingOutputs: {},
-      compileFailures: {},
-    });
-    expect(replayed).not.toHaveProperty('plan');
     expect(replayed?.transcript.rows).toContainEqual(
       expect.objectContaining({
         kind: 'log',
@@ -114,18 +104,16 @@ describe('traceFrame replays the document through the one fold', () => {
     );
   });
 
-  it('replays tool-use content without workflow output state', () => {
-    const trace = traceDocument(runStart(AgentCategory.ToolUse), {
+  it('replays the run plan', () => {
+    const trace = traceDocument(runStart(), {
       type: 'run.fact',
       fact: { key: 'plan', plan: { objective: 'Replay the plan' } },
     });
 
     const replayed = foldTrace(trace);
     expect(replayed).toMatchObject({
-      category: AgentCategory.ToolUse,
       plan: { objective: 'Replay the plan' },
     });
-    expect(replayed).not.toHaveProperty('files');
   });
 
   it.each([
@@ -134,9 +122,7 @@ describe('traceFrame replays the document through the one fold', () => {
   ] as const)(
     'folds the exported run.end "$outcome" to the terminal status "$expected"',
     ({ outcome, expected }) => {
-      const replayed = foldTrace(
-        traceDocument(runStart(AgentCategory.Workflow), runEnd(outcome)),
-      );
+      const replayed = foldTrace(traceDocument(runStart(), runEnd(outcome)));
       expect(replayed?.status).toBe(expected);
       expect(replayed?.durableOutcome).toBe(expected);
     },
@@ -145,24 +131,17 @@ describe('traceFrame replays the document through the one fold', () => {
   it('reports no durable outcome when the document carries no run.end', () => {
     // No terminal fact: an exported trace with no producer folds as an
     // interrupted run, never as a finished one.
-    expect(
-      foldTrace(traceDocument(runStart(AgentCategory.Workflow)))
-        ?.durableOutcome,
-    ).toBeNull();
+    expect(foldTrace(traceDocument(runStart()))?.durableOutcome).toBeNull();
   });
 
   it("folds a process run's exported config into the command", () => {
-    const trace = traceDocument(
-      runStart(AgentCategory.ToolUse, { kind: 'process', tool: 'bash' }),
-      {
-        type: 'run.config',
-        config: {
-          agentCategory: AgentCategory.ToolUse,
-          agent: 'bash',
-          instruction: 'ls -la',
-        },
+    const trace = traceDocument(runStart({ kind: 'process', tool: 'bash' }), {
+      type: 'run.config',
+      config: {
+        agent: 'bash',
+        instruction: 'ls -la',
       },
-    );
+    });
 
     expect(foldTrace(trace)?.command).toBe('ls -la');
   });

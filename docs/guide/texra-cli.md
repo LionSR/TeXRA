@@ -62,7 +62,7 @@ texra clone <project> --cwd ./project
 
 ## Running agents
 
-Run a workflow agent from a project directory:
+Run an agent's document task from a project directory:
 
 ```bash
 texra run polish --input paper.tex --output paper.polished.tex --print
@@ -71,15 +71,15 @@ texra run polish --input paper.tex --output paper.polished.tex --print
 <CliRunHero
   command="texra run polish --input paper.tex --output paper.polished.tex --print"
   :rounds="[
-    { label: 'r0: draft revision', state: 'done' },
-    { label: 'r1: critique and revise', state: 'done' },
+    { label: 'Revision 1: draft', state: 'done' },
+    { label: 'Revision 2: critique and revise', state: 'done' },
   ]"
   :outputs="['paper.polished.tex']"
 />
 
-<p class="hero-caption">Command in, rounds stream as progress, and the printed path is the success signal: the copied <code>--output</code> destination, or the generated file in run storage when no copy was requested.</p>
+<p class="hero-caption">Command in, revisions stream as progress, and the printed path is the success signal: the copied <code>--output</code> destination, or the generated file in run storage when no copy was requested.</p>
 
-Workflow agents that take an instruction, such as `polish`, accept it with
+Document tasks that take an instruction, such as `polish`, accept it with
 `--instruction <text>` or `--instruction-file <file>`. When both are set, the
 file contents are passed first:
 
@@ -106,7 +106,7 @@ texra run polish --input Draft0.tex --input appendices.tex --output-dir polished
 texra run correct --input 'sections/**/*.tex' --output-dir corrected
 ```
 
-Workflow agents always write generated files into the run's run-storage
+Document tasks always write generated files into the run's run-storage
 directory first. In text mode, TeXRA prints a filesystem path: the copied path
 when `--output` or `--output-dir` is used, otherwise the final generated file in
 run storage.
@@ -207,7 +207,7 @@ models the CLI can reach with the current credentials.
 
 ## Interactive chat
 
-`texra chat` opens an interactive tool-use session in the terminal. It streams
+`texra chat` opens an interactive chat in the terminal. It streams
 reasoning, tool calls, and diffs, and writes to the same run history as the VS
 Code extension. Running bare `texra` in a terminal opens this same session.
 
@@ -217,9 +217,9 @@ Code extension. Running bare `texra` in a terminal opens this same session.
 
 ```bash
 texra chat                                      # default chat agent and model
-texra chat --agent research                     # pick a tool-use agent for the session
+texra chat --agent research                     # pick the agent for the session
 texra chat --model deepseek/deepseek-flash@high # override the session model and effort
-# headless tool-use run for scripts and CI
+# headless chat run for scripts and CI
 texra run review --input main.tex --instruction "Check the proof." --print
 ```
 
@@ -232,13 +232,15 @@ immediately and persists on resume), `/skills` lists available skills and
 applies one to your next request, and `/resume` restores a stored execution.
 Chat requires an interactive terminal. For scripted, non-TTY runs use
 `texra run <agent>` with `--print` or `--output-format json|ndjson`. One
-command serves both agent categories: with a tool-use agent it accepts
+command serves every agent: an agent without a document task accepts
 workspace `--input` and `--context` files plus a required instruction
-(`--instruction`, `--instruction-file`, or both); with a workflow agent it takes
-input files and `--output`/`--output-dir`
-and produces document-oriented outputs. If one name exists in both categories,
-`texra run` refuses it and names both candidates — pass the source-qualified
-form it prints (for example `texra run custom:assistant`) to pick one.
+(`--instruction`, `--instruction-file`, or both); an agent with a document
+task runs that task over the `--input` files, takes `--output`/`--output-dir`,
+and produces document-oriented outputs. List the agents that have a document
+task with `texra agents list --tasks`. A bare name picks the
+highest-priority agent of that name (custom, then built-in, then plugin);
+pass a source-qualified key such as `texra run builtIn:assistant` to pick
+another.
 
 `/tasks` lists the tasks the background service runs, across every project
 (see [Background service](#background-service)). Choosing one attaches to it
@@ -325,13 +327,13 @@ environment values. If any of those change, the plugin loads nothing until you
 enable it again and trust it anew. A program or file outside the plugin that a
 server runs, such as `node`, is listed as external and trusted by its path,
 size and date, not by its content. A plugin cannot be named `custom`,
-`remote`, `plugin`, `builtInWorkflow` or `builtInToolUse`.
+`builtIn` or `plugin`.
 A plugin with hooks or LSP servers runs code of its own and cannot be enabled
 yet; output styles and apps are not loaded.
 
 An enabled, trusted plugin loads under its own name: its skills and commands
-are skills named `<plugin>:<name>`, its agents are tool-use agents named
-`<plugin>:<name>`, and every top-level tool-use run is offered its MCP servers'
+are skills named `<plugin>:<name>`, its agents are agents named
+`<plugin>:<name>`, and every top-level chat run is offered its MCP servers'
 tools, named `mcp__plugin_<plugin>_<server>__<tool>`. A plugin agent that lists
 `tools` gets only those; one that lists none inherits them: a subagent gets
 every tool its parent was offered, and a top-level run the file, shell and web
@@ -418,9 +420,9 @@ texra resume <id>
 texra --resume <id>
 ```
 
-A tool-use session reopens in the interactive chat and waits for your next
+A chat reopens in the interactive chat and waits for your next
 message, so without a terminal it exits with a usage error that points
-scripting at `texra run`. A workflow run resumes headless under its original
+scripting at `texra run`. A document task run resumes headless under its original
 execution id and honors the headless globals (`--print`, `--output-format`,
 `--no-input`). The interactive chat also accepts `/resume`: with no id it
 lists recent tasks by title, with an id it continues that task, and
@@ -484,7 +486,7 @@ process.
 
 ```bash
 texra tasks list                                   # every project's tasks, newest first
-texra tasks start <agent> --instruction "<text>"   # start a tool-use agent in the service; prints its id
+texra tasks start <agent> --instruction "<text>"   # start an agent in the service; prints its id
 texra tasks attach <id>                            # follow it live until it ends
 texra tasks send <id> "<text>"                     # send it a follow-up
 texra tasks stop <id>                              # stop it; it can be resumed later
@@ -593,8 +595,8 @@ texra config agents --all                   # make every agent visible in this f
 texra config agents --team lean-project     # use a named team
 texra config agents --inherit               # follow the user default
 texra config agents --default-team physicist
-texra config agents --workflow correct,polish --tool-use assistant,review
-texra config agents --default-agent builtInToolUse:assistant
+texra config agents --agents correct,polish,assistant,review
+texra config agents --default-agent builtIn:assistant
 ```
 
 `texra agents list` and `texra team list|show|run` keep narrower

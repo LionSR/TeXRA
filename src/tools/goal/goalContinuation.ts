@@ -11,11 +11,7 @@ import { Clock, Effect, SubscriptionRef } from 'effect';
 import { GOAL_CONTINUATION_TEMPLATE } from '@agent/runtime/bundledPrompts';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { goalElapsedMs } from '@shared/plugins/goal';
-import {
-  AgentCategory,
-  GOAL_MAX_COST_SETTING,
-  type RunId,
-} from '@shared/schemas';
+import { GOAL_MAX_COST_SETTING, type RunId } from '@shared/schemas';
 import type { Continuation } from '@tools/toolTable';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { renderPrompt } from '@utils/prompt';
@@ -37,7 +33,6 @@ const pauseActive = Effect.fn('goal.pause')(function* ({
 });
 
 export const goalContinuation: Continuation = {
-  category: AgentCategory.ToolUse,
   atIdle: Effect.fn('goal.atIdle')(function* ({
     session,
     runId,

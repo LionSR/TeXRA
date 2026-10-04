@@ -1,10 +1,16 @@
-# Workflow Agent Schema & Reference
+# Document Task Schema & Reference
 
-Workflow agents are document tasks: an agent file with a `task` block. They
-process LaTeX documents in a fixed sequence of revisions, one per entry in
-`task.requests` (usually 1 or 2), producing output wrapped in XML tags. Each
-revision uses a chain-of-thought with `<scratchpad>` planning before the
-final output.
+An agent file with a `task` block is also a document task. Its persona
+(`prompt`, `temperature`) is an ordinary agent; the `task` block says how a
+document task runs it over files. The task makes a fixed sequence of
+revisions, one per entry in `task.requests` (usually 1 or 2). Each revision
+calls the persona once, extracts the documents from its reply, compiles and
+diffs them; the last revision's documents are proposed for the user to
+accept. Each revision uses a chain-of-thought with `<scratchpad>` planning
+before the final output.
+
+The persona reads the documents only through the revision prompt: `prefix`,
+then each earlier request with its reply, then this revision's request.
 
 ## YAML structure
 
@@ -40,7 +46,7 @@ there is no reader for the old nested `settings:` / `prompts:` format.
 ## Critical rules
 
 - `task.requests` needs at least one entry. The number of entries is the
-  number of revisions; there is no separate round count.
+  number of revisions; there is no separate revision count.
 - A `task` file cannot declare `tools`: a document task works text-only.
 - Always include `{{ INSTRUCTION }}` somewhere in `prefix` or `requests` so
   user instructions pass through.
@@ -51,7 +57,9 @@ there is no reader for the old nested `settings:` / `prompts:` format.
 
 ## Template variables (Nunjucks)
 
-Workflow agent prompts receive:
+`task.prefix` and each `task.requests` entry receive the variables below.
+The persona `prompt` does not: it is the system prompt of every revision's
+call, rendered without the task's files.
 
 - `{{ INPUT_FILE }}` — path of the main input file
 - `{{ INPUT_CONTENT }}` — full text of the main input file
@@ -70,7 +78,7 @@ Workflow agent prompts receive:
   `X: some_file.tex`, the path and text of that file, which lives beside the
   agent YAML.
 
-The `prompt` of either kind of agent supports `{% if IS_ANTHROPIC_MODEL %}...{% endif %}` blocks
+The `prompt` of any agent supports `{% if IS_ANTHROPIC_MODEL %}...{% endif %}` blocks
 for model-specific instructions. It is the only model gate: there is no
 variable for any other provider, and an invented one renders as false.
 
@@ -86,7 +94,7 @@ variable for any other provider, and an invented one renders as false.
 
 ## Multiple-output agents
 
-All workflow agents use the same unified output protocol regardless of whether
+All document tasks use the same unified output protocol regardless of whether
 they produce one file or many. No separate `_multiple` variant is needed.
 
 - The `<documents><document name="...">` container is fixed protocol, not a

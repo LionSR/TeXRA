@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-import { AgentCategory } from './agent';
 import { RetryErrorInfoSchema } from './errors';
 import { RunSelectionSchema, RunIdSchema } from './identifiers';
 import {
@@ -12,7 +11,7 @@ import { LineCountSchema } from './lineChanges';
 import { PlanSchema } from './plan';
 import {
   BaseProposalFieldsSchema,
-  WorkflowSpecificFieldsSchema,
+  TaskProposalFieldsSchema,
 } from './proposalFields';
 import { DeclinableUsageRouteSchema } from './usage';
 
@@ -117,39 +116,24 @@ export const ToolOutcomePermissionSchema = z.strictObject({
 });
 export type ToolOutcomePermission = z.infer<typeof ToolOutcomePermissionSchema>;
 
-/** Workflow agent proposal - includes file fields for document processing */
-export const WorkflowAgentProposalSchema = BaseProposalFieldsSchema.extend(
-  WorkflowSpecificFieldsSchema.shape,
+/**
+ * A delegation awaiting approval: the agent and its prompt, and, for a
+ * document task (`task`), the files it revises and the tool configuration
+ * its file options give it. A chat delegation has no files.
+ */
+export const AgentProposalSchema = BaseProposalFieldsSchema.extend(
+  TaskProposalFieldsSchema.shape,
 ).extend({
-  agentCategory: z.literal(AgentCategory.Workflow),
-});
-export type WorkflowAgentProposal = z.infer<typeof WorkflowAgentProposalSchema>;
-
-/** Tool-use agent proposal - agents access files through their own tools */
-export const ToolUseAgentProposalSchema = BaseProposalFieldsSchema.extend({
-  agentCategory: z.literal(AgentCategory.ToolUse),
+  /** Runs the agent's document task over the files, not a conversation. */
+  task: z.boolean(),
   rootUserInstruction: z.string().nullish(),
 });
-export type ToolUseAgentProposal = z.infer<typeof ToolUseAgentProposalSchema>;
+export type AgentProposal = z.infer<typeof AgentProposalSchema>;
 
-const ProposalPermissionBaseSchema = z.object({
+export const AgentProposalPermissionSchema = AgentProposalSchema.extend({
   requestId: z.string(),
   runId: RunIdSchema,
 });
-
-const WorkflowAgentProposalPermissionSchema =
-  ProposalPermissionBaseSchema.extend(WorkflowAgentProposalSchema.shape);
-export type WorkflowAgentProposalPermission = z.infer<
-  typeof WorkflowAgentProposalPermissionSchema
->;
-
-const ToolUseAgentProposalPermissionSchema =
-  ProposalPermissionBaseSchema.extend(ToolUseAgentProposalSchema.shape);
-
-export const AgentProposalPermissionSchema = z.discriminatedUnion(
-  'agentCategory',
-  [WorkflowAgentProposalPermissionSchema, ToolUseAgentProposalPermissionSchema],
-);
 export type AgentProposalPermission = z.infer<
   typeof AgentProposalPermissionSchema
 >;

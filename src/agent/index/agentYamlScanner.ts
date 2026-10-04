@@ -17,7 +17,6 @@ import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
 import type { AgentSource } from '@shared/schemas';
 import type { AgentScanIssue } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
@@ -297,8 +296,6 @@ function scanYaml(
         name: entry.name,
         source,
         path: entry.path,
-        category:
-          task === null ? AgentCategory.ToolUse : AgentCategory.Workflow,
         description: entry.definition.description,
         tools: tools.length ? tools : undefined,
         rounds: task?.requests.length,

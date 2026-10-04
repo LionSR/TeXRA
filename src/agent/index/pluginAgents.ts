@@ -1,7 +1,7 @@
 /**
  * The agents installed plugins contribute: Claude Code subagent files
  * (`agents/<name>.md`, YAML frontmatter with `name`, `description` and
- * `tools`, the body its system prompt), read as tool-use agents of source
+ * `tools`, the body its system prompt), read as agents of source
  * `plugin` named `<plugin>:<name>`. TeXRA defines no agent format for them;
  * each file is read here, at the boundary, and nowhere else.
  */
@@ -22,7 +22,7 @@ import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
-import { AgentCategory, AgentNameSchema } from '@shared/schemas';
+import { AgentNameSchema } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 
@@ -164,7 +164,6 @@ function pluginAgentEntry(agent: PluginAgent, file: string): AgentEntry {
     name: agent.name,
     source: 'plugin',
     path: file,
-    category: AgentCategory.ToolUse,
     description: agent.description,
     tools: agent.tools === undefined ? undefined : [...agent.tools],
     // None named: `AgentRun` gives it what it inherits. The task arrives as

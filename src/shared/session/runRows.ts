@@ -21,7 +21,6 @@ import {
   type PositionAt,
   type PermissionPayload,
   type RequestDecision,
-  type RoundOutput,
   RUN_PHASE,
   type RunFamily,
   type RunOutcome,
@@ -37,7 +36,6 @@ const SHARED_RUN_ROW_TYPES = {
   'request.decided': true,
   'followup.queued': true,
   'followup.consumed': true,
-  'output.produced': true,
 } as const satisfies Partial<Record<SessionEvent['type'], true>>;
 
 export type SharedRunRow = Extract<
@@ -79,8 +77,6 @@ export type RunPosition = {
   readonly turn: number;
   /** By request id, in the order the rows opened them. */
   readonly requests: Readonly<Record<string, RequestState>>;
-  /** Complete output collection from the newest `output.produced` row. */
-  readonly roundOutputs: RoundOutput[];
 };
 
 /**
@@ -188,7 +184,6 @@ export const freshRunPosition = (): RunPosition => ({
   outcome: null,
   turn: 0,
   requests: byId([]),
-  roundOutputs: [],
 });
 
 /** The slice before any of these rows folded. */
@@ -373,10 +368,6 @@ export function applyRunRow(
       followUpIds.add(row.followUpId);
       return applied({ ...(removed ? { followUps } : {}), followUpIds });
     }
-    case 'output.produced':
-      // Each row carries the run's whole collection: the newest replaces it.
-      if (current === null) return { kind: 'unchanged' };
-      return applied({ roundOutputs: row.rounds });
   }
 }
 

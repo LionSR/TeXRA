@@ -38,11 +38,10 @@ composes the process and provides the session owner for one `Scope`, and the
 embedder runs the program at its own entry point. `plugins` is the list of
 what the runs can use: the harness's built-ins (`harnessBuiltins.all`, or
 `harnessBuiltins.minimal` for files and the shell alone), and any plugin of
-the embedder's own beside them. The built-ins run tool-use agents. A workflow agent
-(rounds that rewrite documents) needs a plugin that contributes the
-workflow category's round mode, which the package does not ship: TeXRA's
-`documents` plugin is the app's, and a run of a workflow agent with no such
-plugin fails, naming the category.
+the embedder's own beside them. `session.start` runs an agent as a
+conversation. A document task (an agent's `task:` block, run as revisions
+that rewrite documents) is a recipe script over the tools of TeXRA's
+`documents` plugin, which is the app's and which the package does not ship.
 
 ```ts
 import { Effect, Stream } from 'effect';
@@ -165,13 +164,16 @@ runtime completes disposal through its own scope.
 
 There is exactly one result shape: `RunEndResult`, the run's `run.end`
 payload plus the `runId` it belongs to. It carries an `outcome`, an optional
-`usage`, an `output`, and, on a failed run, a structured `error`. The output is
-a union discriminated on `output.category` (`'workflow'` | `'toolUse'`): a
-`workflow` output carries `outputs` and `compileFailures`, a `toolUse` output
-carries `response` and `files`, and either carries the `structured` value of a
-`submit_output` tool. Switch on `output.category` before reading either half.
+`usage`, an `output`, and, on a failed run, a structured `error`. Every run's
+output is one shape, `{ response, files, structured?, documents? }`: the reply
+text, the workspace-relative files its tool calls edited, and the `structured`
+value of a `submit_output` tool when the run used one. `documents` is present
+only on a document task's run: `{ outputs, compileFailures, diffs,
+diffsUnavailable? }`, the output files of its newest revision and the
+compilation failures. There is no category to switch on; test for
+`output.documents`.
 
-`run.result` is terminal-only. Internally a tool-use flow also has a
+`run.result` is terminal-only. Internally a run also has a
 non-terminal `WAITING` state — the run is parked mid-session waiting on the
 user rather than finished — and the runtime carries a separate waiting shape
 for it. That shape is deliberately not exported and never completes
@@ -181,8 +183,8 @@ Watch the trace stream if you need to observe a run reaching that state.
 
 Accounting is `usage`, present once a round recorded any: one totals record
 covering the run and its subagents, whose `usage.totalCost` is the run's cost
-and the only cost this surface states. The per-file `diffs` on a `workflow`
-output are written by the delivery that computes them after the run ended, so
+and the only cost this surface states. The per-file `documents.diffs` are
+written by the delivery that computes them after the run ended, so
 the embedding contract leaves diffing to the embedder, which already owns the
 files.
 
@@ -284,9 +286,9 @@ const EchoTool = defineTool({
 const tools = [EchoTool];
 ```
 
-Pass `tools` to `session.start`. Custom tools are accepted for **tool-use**
-agents only; passing them to a workflow agent fails the launch with
-`ToolsRefused`. A directly implemented `ITool` also returns an Effect from
+Pass `tools` to `session.start`. A custom tool that requires
+approval fails the launch with `ToolsRefused`: the package has no approval
+channel. A directly implemented `ITool` also returns an Effect from
 `call`; asynchronous operations compose inside that program. Execute programs
 only at the embedding application's host boundary.
 

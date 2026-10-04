@@ -1,6 +1,5 @@
 import type { z } from 'zod';
 
-import type { AgentCategory } from './agent';
 import type { RunId } from './identifiers';
 import type { FileLocation } from './output';
 import type { RoundKeyedOutputSidecarValueSchemas } from './runState';
@@ -49,12 +48,10 @@ export interface RequestShowInstructionPayload {
   showSuppress?: boolean;
 }
 
-/** Request the frontend to show the agent-config banner in the main webview.
- *  The category is the one the missing agent was launched as: the banner's
- *  action edits that catalog, not whatever surface happens to be open. */
+/** Request the frontend to show the agent-config banner in the main webview,
+ *  for the agent that could not launch. */
 export interface ShowAgentConfigBannerPayload {
   agentName: string;
-  category: AgentCategory;
 }
 
 /** Request the frontend to show an error message via a host notification. */

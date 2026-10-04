@@ -25,7 +25,6 @@ import { withProcessServices } from '@platform/processRuntime';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
-  AgentCategory,
   aggregateId,
   RunSnapshotPayloadSchema,
 } from '@shared/schemas';
@@ -57,7 +56,6 @@ function runConfig(
   return AgentConfigSchema.parse({
     agent,
     model,
-    agentCategory: AgentCategory.ToolUse,
   });
 }
 
@@ -330,7 +328,6 @@ describe('completedRunArchive facade', () => {
         launchMocks.resolveAgent.mockReturnValue(
           Effect.succeed({
             path: '/agents/orchestrator.yaml',
-            category: AgentCategory.ToolUse,
             persona: { prompt: '', tools: [], temperature: 1 },
             task: null,
           }),

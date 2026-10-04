@@ -10,8 +10,6 @@ import {
   DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
   renderAgentTemplateString,
 } from '@agent/templates/agentTemplateRenderer';
-// Local imports - shared
-import type { AgentCategory } from '@shared/schemas';
 // Local imports - utilities
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { entryExists } from '@utils/files/fsEntryExists';
@@ -25,16 +23,10 @@ import { entryExists } from '@utils/files/fsEntryExists';
  * sequence; this module owns it, and each host keeps only its dialog.
  */
 
-/** The user-facing name of an agent category, as both pickers spell it. */
-function templateAgentCategoryLabel(category: AgentCategory): string {
-  return category === 'toolUse' ? 'Tool Use' : 'Workflow';
-}
-
-/** Prompt for the name field of the create-from-template dialog. */
-export function templateAgentNamePrompt(category: AgentCategory): string {
-  return `Enter a name for the new ${templateAgentCategoryLabel(
-    category,
-  )} agent (without .yaml extension)`;
+/** Prompt for the name field of the create-from-template dialog: `task`
+ *  for the document-task template, else the chat one. */
+export function templateAgentNamePrompt(task: boolean): string {
+  return `Enter a name for the new ${task ? 'document task' : 'chat'} agent (without .yaml extension)`;
 }
 
 /** Rejection reason for a proposed custom-agent file name, or null. */
@@ -59,7 +51,7 @@ export function validateTemplateAgentName(value: string): string | null {
 export const writeTemplateAgentFile = Effect.fn(
   'settings.writeTemplateAgentFile',
 )(function* (
-  input: { category: AgentCategory; name: string; customDir: string },
+  input: { task: boolean; name: string; customDir: string },
   resourcesRoot: string,
 ) {
   const fileName = input.name.endsWith('.yaml')
@@ -67,10 +59,9 @@ export const writeTemplateAgentFile = Effect.fn(
     : `${input.name}.yaml`;
   const filePath = path.join(input.customDir, fileName);
   const baseName = input.name.replace(/\.yaml$/, '');
-  const isToolUse = input.category === 'toolUse';
-  const description = isToolUse
-    ? `${baseName} — interactive tool-use agent`
-    : `${baseName} — workflow agent`;
+  const description = input.task
+    ? `${baseName} — document task`
+    : `${baseName} — chat agent`;
   const fs = yield* FileSystem.FileSystem;
   if (yield* entryExists(fs, filePath)) {
     return {
@@ -83,7 +74,7 @@ export const writeTemplateAgentFile = Effect.fn(
     path.join(
       resourcesRoot,
       'templates',
-      AGENT_TEMPLATE_FILES[isToolUse ? 'toolUse' : 'workflowSingle'],
+      AGENT_TEMPLATE_FILES[input.task ? 'workflowSingle' : 'toolUse'],
     ),
   );
   yield* fs.writeFileString(

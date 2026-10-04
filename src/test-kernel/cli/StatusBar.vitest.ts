@@ -39,7 +39,7 @@ type StatusBarCase = Omit<StatusBarChrome, 'turn'> & {
   readonly queuedFollowUpMessages: readonly string[];
   readonly usage: TokenUsageStats | undefined;
   readonly contextState: ContextStateData | undefined;
-  readonly position: RunView['position'] | undefined;
+  readonly runTurn: RunView['turn'] | undefined;
   readonly subagents: number;
   readonly turn?: StatusBarChrome['turn'] & {
     readonly thinkingActive?: boolean;
@@ -56,7 +56,7 @@ function renderBar(input: StatusBarCase): StatusBarDisplay {
     queuedFollowUpMessages,
     usage,
     contextState,
-    position,
+    runTurn,
     subagents,
     turn,
     ...chrome
@@ -69,7 +69,7 @@ function renderBar(input: StatusBarCase): StatusBarDisplay {
     parentId: isChildRun ? ('root' as RunId) : null,
     usage: usage ?? { inputTokens: 0, outputTokens: 0, cost: 0 },
     context: contextState ?? null,
-    position: position ?? null,
+    turn: runTurn ?? null,
     rollup: { total: subagents, running: 0, finished: 0 },
     thinkingActive: thinkingActive ?? false,
     compactingActive: compactingActive ?? false,
@@ -110,7 +110,7 @@ function statusInput(overrides: StatusInputOverrides = {}): StatusBarCase {
     queuedFollowUpMessages: [],
     usage: undefined,
     contextState: undefined,
-    position: undefined,
+    runTurn: undefined,
     subagents: 0,
     runningSessions: 0,
     approvalDepth: 0,

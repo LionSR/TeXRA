@@ -9,7 +9,6 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
-  AgentCategory,
   emptyRunEndOutput,
   type BashPermission,
   type DisplaySessionEvent,
@@ -231,7 +230,6 @@ export async function seedActiveRun(
       {
         type: 'run.activate',
         aggregateId: qualifyAggregateId('run', runId),
-        category: AgentCategory.ToolUse,
       },
     ]);
     await Effect.runPromise(session.settlePublications());
@@ -251,7 +249,7 @@ export async function seedTerminalRun(
       type: 'run.end',
       aggregateId: qualifyAggregateId('run', runId),
       outcome,
-      output: emptyRunEndOutput(AgentCategory.ToolUse),
+      output: emptyRunEndOutput(),
     },
   ]);
   await Effect.runPromise(session.settlePublications());

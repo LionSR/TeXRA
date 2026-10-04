@@ -49,11 +49,7 @@ import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import {
-  AgentCategory,
-  aggregateId as qualifyAggregateId,
-  type RunId,
-} from '@shared/schemas';
+import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import { descendantRuns } from '@shared/session/sessionView';
 import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -123,12 +119,6 @@ function admitInput(
         message: `Agent "${input.agent}" was not found in the configured agent directory.`,
       });
     }
-    if (tools.length > 0 && resolved.category !== AgentCategory.ToolUse) {
-      return yield* new ToolsRefused({
-        tools: tools.map((tool) => tool.definition.name),
-        message: `Custom tools are supported only for tool-use agents; "${input.agent}" is a workflow agent.`,
-      });
-    }
     // The schema is the launch's last refusal, and it is a refusal rather
     // than a defect: an instruction this surface will not accept reaches an
     // embedder's `catchTag` in the vocabulary the surface names, as the
@@ -137,7 +127,6 @@ function admitInput(
       try: () =>
         AgentConfigSchema.parse({
           agent: resolved.name,
-          agentCategory: resolved.category,
           agentSource: resolved.source,
           instruction: input.instruction,
           ...(input.model ? { model: input.model } : {}),

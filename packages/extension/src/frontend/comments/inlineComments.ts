@@ -1,7 +1,7 @@
 /**
  * Inline comment threads backed by VS Code's native Comments UI
  * (`vscode.comments.createCommentController`). The `inline_comment` tool routes
- * through the provider exposed here so tool-use agents can open resolvable,
+ * through the provider exposed here so agents can open resolvable,
  * conversational comment threads anchored to a file range — gutter bubbles plus
  * entries in the Comments panel — that the user can reply to and resolve.
  *

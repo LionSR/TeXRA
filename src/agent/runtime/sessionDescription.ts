@@ -135,7 +135,6 @@ export const generateSessionDescription = Effect.fn(
       },
       {
         agentName: config.agent,
-        agentCategory: config.agentCategory,
         runId,
       },
       // No automatic retry and a short deadline: the run's end joins this

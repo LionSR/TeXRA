@@ -180,12 +180,12 @@ export const agentCatalogFollower = Layer.effectDiscard(
           registerRoot(directories.builtIn(), {
             kind: 'builtInWorkflow',
             writable: false,
-            label: 'Built-in workflow agents',
+            label: 'Built-in agents with a document task',
           }),
           registerRoot(directories.builtInToolUse(), {
             kind: 'builtInToolUse',
             writable: false,
-            label: 'Built-in tool-use agents',
+            label: 'Built-in agents',
           }),
           registerRoot(
             Effect.succeed(path.join(resourcesRoot, 'docs', 'agent-creation')),

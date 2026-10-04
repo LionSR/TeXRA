@@ -33,12 +33,13 @@ literals.
 ## Script basics
 
 `code` is the body of an async function. `await agent(prompt, opts)` runs
-one agent and resolves to `{ category, response | outputs, structured?,
-outcome, cost }`. A workflow agent takes `inputFiles` and resolves with
-`outputs` (each with an `absolutePath` you can pass to the next call); a
-tool-use agent resolves with `response`, or with `structured` when you pass
-`schema`. `Promise.all` runs calls together, `try`/`catch` recovers,
-`phase(title)` labels the calls that follow, and `console.log` lines come
+one agent and resolves to `{ response, files, structured?, runId, outcome,
+cost }`: `response` is its reply, or `structured` holds a value when you pass
+`schema`. `await document_task(prompt, opts)` runs an agent's document task
+over `inputFiles` and resolves to `{ documents: { outputs }, runId, outcome,
+cost }` (each output has an `absolutePath` you can pass to the next call).
+`Promise.all` runs calls together, `try`/`catch` recovers, `phase(title)`
+labels the calls that follow, and `console.log` lines come
 back with the result (the last 80). There are no timers, no `Date.now()`,
 no `Math.random()`, and no imports: the script replays exactly after an
 interruption, and calls that finished are not run again.
@@ -107,7 +108,7 @@ other. Flatten, map, and filter do not need a barrier.
 - `phase(title)` labels the calls issued after it. Branches interleave their
   steps, so a branched stretch of work is one phase; tell its steps apart
   with `label` (for example `Find: intro.tex`, `Verify: intro.tex #2`).
-- `schema` needs a tool-use agent and takes no file options. Put file paths
+- `schema` is an `agent` option and takes no file options. Put file paths
   in the prompt; the agent reads them with its own tools.
 - A script launches at most 1000 agents. The session's child-run budget sets
   how many run at once; to hold fewer in flight, run the items in batches.
@@ -278,7 +279,7 @@ The return value comes back to you as JSON with the script's result, next to
 the last lines it logged. Return compact, structured results you can act on:
 the suspect claims with their reasons, counts of what passed, and anything
 that was not covered. Do not return prose for its own sake, and do not return
-whole documents; workflow-agent calls already report their output files,
+whole documents; `document_task` calls already report their output files,
 which you review and accept with `accept_run_files`.
 
 ## Scale and honesty

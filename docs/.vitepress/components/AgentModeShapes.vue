@@ -1,9 +1,9 @@
 <script setup>
 // Frameless figure for the Quick Reference "Type" column: the two execution
-// SHAPES behind every built-in agent. Tool-use = a loop (instruction → read ·
-// edit · run tool → repeat → done); Workflow = a linear pipeline (input file →
-// edit → versioned diff). The agent-picker dropdown above already shows the
-// LIST; this shows WHY the categories behave differently — why `chat`/
+// SHAPES a built-in agent runs in. A chat = a loop (instruction → read ·
+// edit · run tool → repeat → done); a document task = a linear pipeline (input
+// file → edit → versioned diff). The agent-picker dropdown above already shows the
+// LIST; this shows WHY the two behave differently — why `chat`/
 // `research` feel conversational while `polish`/`correct` hand back a diff.
 //
 // Frameless and .mockup-scoped, so it inherits --mk-* and flips with the docs
@@ -16,7 +16,7 @@ const loopSteps = ['read', 'edit', 'run tool'];
 
 <template>
   <div class="mockup ams" role="group" aria-label="Agent execution shapes">
-    <!-- Tool-use: a loop -->
+    <!-- Chat: a loop -->
     <section class="ams-col">
       <header class="ams-head">
         <wa-icon
@@ -24,7 +24,7 @@ const loopSteps = ['read', 'edit', 'run tool'];
           library="texra"
           name="screwdriver-wrench"
         ></wa-icon>
-        <span class="ams-title">Tool-use</span>
+        <span class="ams-title">Chat</span>
         <StatusPill variant="info" shape="chip">loop</StatusPill>
       </header>
 
@@ -55,7 +55,7 @@ const loopSteps = ['read', 'edit', 'run tool'];
       </p>
     </section>
 
-    <!-- Workflow: a linear pipeline -->
+    <!-- Document task: a linear pipeline -->
     <section class="ams-col">
       <header class="ams-head">
         <wa-icon
@@ -63,7 +63,7 @@ const loopSteps = ['read', 'edit', 'run tool'];
           library="texra"
           name="diagram-project"
         ></wa-icon>
-        <span class="ams-title">Workflow</span>
+        <span class="ams-title">Document task</span>
         <StatusPill variant="accent" shape="chip">pipeline</StatusPill>
       </header>
 
@@ -87,7 +87,7 @@ const loopSteps = ['read', 'edit', 'run tool'];
       </div>
 
       <p class="ams-sub">
-        Run a fixed input → edit → diff pipeline; hand back a versioned diff.
+        Revise the input files in fixed revisions; hand back a versioned diff.
       </p>
     </section>
   </div>

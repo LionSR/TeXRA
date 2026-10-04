@@ -37,7 +37,6 @@ import {
 import { withLogChannel } from '@logger/effectLog';
 import {
   RUN_OUTCOME,
-  AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
   type OfferedTool,
   type RunEnd,
@@ -218,8 +217,7 @@ const executeInBand = Effect.fn('executeInBand')(
             runId,
             startedAt,
             workingDirectory,
-            runMode: 'single-cycle',
-            resultOnly: true,
+            inBand: true,
           }),
         }),
     });
@@ -460,19 +458,18 @@ const launchSubagentInBand = Effect.fn('executeSubagentInBand')(function* (
   const definition = yield* prepareAgentDefinition({
     config: AgentConfigSchema.parse(options.configPayload),
     session: options.session,
-    enforceCategory: true,
     suppressErrorNotification: true,
   });
   // Validate the current definition, not metadata left by an earlier
   // catalog load.
   if (
-    definition.config.agentCategory === AgentCategory.Workflow &&
-    definition.config.inputFiles.length === 0 &&
-    (definition.task?.outputs.length ?? 0) === 0
+    definition.config.script != null &&
+    definition.task !== null &&
+    definition.config.inputFiles.length === 0
   ) {
     return yield* Effect.fail(
       new Error(
-        `Workflow agent '${definition.config.agent}' edits files: pass options.inputFiles ` +
+        `The document task of '${definition.config.agent}' revises files: pass inputFiles ` +
           `with files that still exist (its result carries output files and ` +
           `diffs, not response text).`,
       ),

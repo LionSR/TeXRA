@@ -40,7 +40,6 @@ import { SessionBridge } from '@controllers/session/SessionBridge';
 import { localSessionBackend } from '@controllers/session/sessionBackend';
 import {
   aggregateId as qualifyAggregateId,
-  AgentCategory,
   DEBUG_MODE_KEY,
   FoldEventSchema,
   MESSAGE_TYPES,
@@ -94,7 +93,6 @@ const runStart: SessionEventDraft = {
   aggregateId: qualifyAggregateId('run', RUN),
   identity: { kind: 'agent', agent: 'chat' },
   userFollowUpSupport: 'unsupported',
-  category: AgentCategory.ToolUse,
   parent: null,
   provenance: null,
 };

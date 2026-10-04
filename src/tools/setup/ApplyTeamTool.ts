@@ -71,8 +71,7 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   // The setup agent runs this mid-conversation, so an open settings view is
   // showing an agent list this call just replaced.
   emitAppSignal('workspaceAgentsChanged', undefined);
-  const { workflow: activeWorkflow, toolUse: activeToolUse } =
-    result.resolution.agentKeys;
+  const active = result.resolution.agentKeys;
   // `agentKeys` holds only the agent keys that resolved in the registry. Names
   // that didn't resolve are not dropped: the agent list stores the team
   // reference and re-resolves `preset.agents` on every read, so a member
@@ -82,11 +81,8 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
 
   const lines = [
     `Applied the ${preset.name} team to this workspace.`,
-    `Workflow agents (${activeWorkflow.length}): ${
-      activeWorkflow.map((key) => agentName(key)).join(', ') || '(none)'
-    }`,
-    `Assistants (${activeToolUse.length}): ${
-      activeToolUse.map((key) => agentName(key)).join(', ') || '(none)'
+    `Agents (${active.length}): ${
+      active.map((key) => agentName(key)).join(', ') || '(none)'
     }`,
     `Saved "${preset.id}" as the default team: fresh workspaces start with this team.`,
   ];
@@ -98,7 +94,7 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
 
   return executed(
     lines.join('\n'),
-    `Applied the ${preset.name} team: ${activeWorkflow.length} workflows, ${activeToolUse.length} assistants.`,
+    `Applied the ${preset.name} team: ${active.length} agents.`,
   );
 });
 
@@ -106,7 +102,7 @@ export const ApplyTeamTool = defineTool({
   name: 'apply_team',
   description: `Apply an agent team (one per discipline) to this workspace and record it as the user's default team.
 
-Sets which workflow agents and assistants appear in this workspace's pickers, and saves the choice user-wide so future projects start with the same team. Use \`starter\` when the user skips the discipline question. The choice is reversible: Settings → Agents shows every agent and lets the user re-check anything.
+Sets which agents appear in this workspace's pickers, and saves the choice user-wide so future projects start with the same team. Use \`starter\` when the user skips the discipline question. The choice is reversible: Settings → Agents shows every agent and lets the user re-check anything.
 
 Teams:
 ${describeTeams()}`,

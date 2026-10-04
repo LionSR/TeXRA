@@ -59,28 +59,28 @@ describe('shared text-diff caller fixtures', () => {
         runId,
         'workflow-subagent',
         {
-          category: 'workflow',
-          outputs: [
-            {
-              round: 0,
-              relativePath: 'section/paper.tex',
-              absolutePath,
-              location: 'workspace',
-              originalPath,
-              added: 2,
-              removed: 1,
-            },
-          ],
-          compileFailures: [],
-          diffs: [],
+          response: '',
+          files: [],
+          documents: {
+            outputs: [
+              {
+                round: 0,
+                relativePath: 'section/paper.tex',
+                absolutePath,
+                location: 'workspace',
+                originalPath,
+                added: 2,
+                removed: 1,
+              },
+            ],
+            compileFailures: [],
+            diffs: [],
+          },
         },
         { startedAt: Date.now(), storageRoot },
       );
 
-      if (meta.output.category !== 'workflow') {
-        throw new Error('Expected a workflow subagent result.');
-      }
-      expect(meta.output.diffs).toEqual([
+      expect(meta.output.documents?.diffs).toEqual([
         {
           path: absolutePath,
           diffRelPath: 'diffs/section_paper.tex.diff',

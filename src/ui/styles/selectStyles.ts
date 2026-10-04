@@ -103,10 +103,6 @@ export const selectStyles: CSSResult = css`
     font-style: italic;
   }
 
-  wa-option[data-tool-use='true'] {
-    font-style: italic;
-  }
-
   .clickable {
     cursor: pointer;
     transition: color var(--transition-fast);

@@ -8,13 +8,7 @@ import path from 'node:path';
 
 import { Effect, type Scope, Stream, SubscriptionRef } from 'effect';
 
-import { getCategoryAgent } from '@agent/index';
-import {
-  AgentCategory,
-  RUN_PHASE,
-  type RunId,
-  type RunPhase,
-} from '@shared/schemas';
+import { RUN_PHASE, type RunId, type RunPhase } from '@shared/schemas';
 import {
   isLiveRun,
   type SessionView,
@@ -57,13 +51,6 @@ export interface RunProgressRendererInit {
   readonly getColumns?: () => number | undefined;
   readonly setInterval?: typeof setInterval;
   readonly clearInterval?: typeof clearInterval;
-  /**
-   * The agent catalog's round count for a workflow agent. Named here rather
-   * than read from `@agent/index` inside the renderer so a caller — the test
-   * harness included — states the catalog it renders against instead of
-   * reaching for the process-wide one.
-   */
-  readonly plannedRoundsFor?: (agentName: string) => number | undefined;
 }
 
 export function shouldRenderRunProgress(
@@ -100,7 +87,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private readonly clearInterval: typeof clearInterval;
   private readonly ansi: boolean;
   private readonly getColumns: () => number | undefined;
-  private readonly plannedRoundsFor: (agentName: string) => number | undefined;
   private lastRenderAt = 0;
   private lastLine = '';
   private liveLine = false;
@@ -125,7 +111,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     this.clearInterval = init.clearInterval ?? clearInterval;
     this.ansi = init.colorEnabled;
     this.getColumns = init.getColumns;
-    this.plannedRoundsFor = init.plannedRoundsFor ?? workflowRoundsFromCatalog;
     this.attachedAt = this.nowMs();
   }
 
@@ -251,33 +236,18 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   } {
     const root = this.root();
     if (!root) return { line: '', state: '' };
-    // The fold's coordinate, in the one its category counts; a run whose
-    // loop has not moved yet carries none.
-    const { position } = root;
+    // The fold's turn; a run whose loop has not moved yet carries none.
     const agentName =
       root.identity?.kind === 'agent' ? root.identity.agent : undefined;
-    const plannedRounds =
-      root.category === AgentCategory.Workflow && agentName !== undefined
-        ? this.plannedRoundsFor(agentName)
-        : undefined;
     const parts: string[] = [];
-    if (position !== null) {
-      parts.push(
-        `[${formatLoopPositionLabel(
-          position,
-          isMultiRound(plannedRounds) ? plannedRounds : undefined,
-        )}]`,
-      );
-    }
+    const turnLabel = formatLoopPositionLabel(root.turn);
+    if (turnLabel !== undefined) parts.push(`[${turnLabel}]`);
     const subject = [agentName, formatInputLabel(root.inputFiles)]
       .filter(Boolean)
       .join(' ');
     const phase = livePhaseText(root);
     parts.push(subject || phase || 'Running');
     if (subject && phase && phase !== 'Running') parts.push(phase);
-    if (position === null && isMultiRound(plannedRounds)) {
-      parts.push(`${plannedRounds} rounds`);
-    }
     const runStartedAt = root.runStartedAt ?? this.attachedAt;
     const elapsed = formatCompactDuration(now - runStartedAt);
     const children = this.liveChildren();
@@ -369,14 +339,4 @@ function normalizeTerminalColumns(
 ): number | undefined {
   if (columns == null || !Number.isFinite(columns)) return undefined;
   return Math.max(0, Math.floor(columns));
-}
-
-function isMultiRound(rounds: number | undefined): rounds is number {
-  return rounds != null && rounds > 1;
-}
-
-/** The process catalog's answer, which every production renderer renders
- *  against. */
-function workflowRoundsFromCatalog(agentName: string): number | undefined {
-  return getCategoryAgent(AgentCategory.Workflow, agentName)?.rounds;
 }

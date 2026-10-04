@@ -3,8 +3,8 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
+import { documentTaskConfig } from '@agent/output/documentRecipe';
 import type { OutputFileInfo, RunId } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
 
 function createAgentConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return AgentConfigSchema.parse({
@@ -12,18 +12,15 @@ function createAgentConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     model: 'google/gemini-3.1-pro-preview',
     inputFiles: ['input.tex'],
     outputFiles: ['declared.tex'],
-    agentCategory: AgentCategory.Workflow,
     ...overrides,
   });
 }
 
+/** A document task's config: the persona's config opened on the recipe. */
 export function createWorkflowConfig(
-  overrides: Omit<Partial<AgentConfig>, 'agentCategory'> = {},
+  overrides: Partial<AgentConfig> = {},
 ): AgentConfig {
-  return createAgentConfig({
-    ...overrides,
-    agentCategory: AgentCategory.Workflow,
-  });
+  return documentTaskConfig(createAgentConfig(overrides));
 }
 
 type WorkspaceLocationOverrides = {

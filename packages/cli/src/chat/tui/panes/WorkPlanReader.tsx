@@ -6,7 +6,7 @@ import { type SessionHandle } from '@agent/runtime';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { ReaderPanel, readerLayout } from '@cli/tui/ui/BorderedPanel';
 import { CLOSE_HINTS, READER_SCROLL_HINTS } from '@cli/tui/ui/KeyHints';
-import { AgentCategory, type RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 import { ScrollableModalText } from '../modals/ScrollableModalText';
 
@@ -26,14 +26,13 @@ export function WorkPlanReader({
 }): React.JSX.Element {
   const { columns } = useWindowSize();
   const run = session.runView(runId);
-  const plan = run?.category === AgentCategory.ToolUse ? run.plan : null;
   const layout = readerLayout({
     availableRows,
     frameWidth: Math.max(1, columns),
     hints: READER_SCROLL_HINTS,
     title,
   });
-  const text = `Objective\n${plan?.objective ?? '(no objective)'}`;
+  const text = `Objective\n${run?.plan?.objective ?? '(no objective)'}`;
 
   useInput((input, key) => {
     if (isEscapeInput(input, key)) onClose();

@@ -61,7 +61,6 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
 import {
-  AgentCategory,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   RUN_PHASE,
   type RunId,
@@ -256,6 +255,7 @@ function boundModel(
     backgroundCapable: false,
     persistentConnection: false,
     automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
+    textOnly: false,
     ...overrides,
   };
 }
@@ -278,7 +278,6 @@ function retryRunId(): RunId {
 const CONFIG = AgentConfigSchema.parse({
   agent: 'assistant',
   model: GPT54,
-  agentCategory: AgentCategory.ToolUse,
 });
 
 /** The run service the invoker reads: identity, session, trace, binding. */

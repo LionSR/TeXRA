@@ -10,6 +10,7 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared webview
+import { DocumentsStateKey } from '@shared/settingsView/documentsSettings';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { TexraStateKey } from '@shared/settingsView/texraSettings';
@@ -497,29 +498,29 @@ export class LaTeXTab extends LitElement {
           icon: 'bolt',
         })}
         ${renderStateSettingToggleRow({
-          key: TexraStateKey.WORKFLOW_AUTO_COMPILE,
+          key: DocumentsStateKey.WORKFLOW_AUTO_COMPILE,
           checked: this.autoCompile,
         })}
         ${renderStateSettingToggleRow({
-          key: TexraStateKey.WORKFLOW_AUTO_OPEN_PDF,
+          key: DocumentsStateKey.WORKFLOW_AUTO_OPEN_PDF,
           checked: this.autoOpenPdf,
           disabled: !this.autoCompile,
         })}
         ${renderStateSettingToggleRow({
-          key: TexraStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+          key: DocumentsStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
           checked: this.rejectOnCompileFailure,
           disabled: !this.autoCompile,
         })}
         ${renderStateSettingToggleRow({
-          key: TexraStateKey.LATEXDIFF_CHANGES_ONLY,
+          key: DocumentsStateKey.LATEXDIFF_CHANGES_ONLY,
           checked: this.diffChangesOnly,
         })}
         ${renderStateSettingSelectRow({
-          key: TexraStateKey.LATEXDIFF_MATH_MARKUP,
+          key: DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
           value: this.diffMathMarkup,
         })}
         ${renderStateSettingToggleRow({
-          key: TexraStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+          key: DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS,
           checked: this.diffBetweenRounds,
         })}
       </div>

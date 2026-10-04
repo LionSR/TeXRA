@@ -9,15 +9,11 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   aggregateId,
-  AgentCategory,
   emptyRunEndOutput,
   storedRunOutput,
   type RunSnapshotPayload,
@@ -35,13 +31,8 @@ const CONFIG = AgentConfigSchema.parse({
   agent: 'chat',
   model: 'openai/gpt-5.4-2026-03-05',
   instruction: 'Continue.',
-  agentCategory: AgentCategory.ToolUse,
   workingDirectory: '/workspace',
 });
-const WORKFLOW_CONFIG: AgentConfig = {
-  ...CONFIG,
-  agentCategory: AgentCategory.Workflow,
-};
 const BACKEND: ModelBackend = 'openai';
 
 const runtimeOf = (
@@ -116,24 +107,13 @@ describe('retrieveSessionResumeData', () => {
           type: 'run.end',
           aggregateId: aggregateId('run', runId),
           outcome: 'failed',
-          output: storedRunOutput(emptyRunEndOutput(AgentCategory.ToolUse)),
+          output: storedRunOutput(emptyRunEndOutput()),
         },
       ]);
 
       expect(
         yield* retrieveSessionResumeData(runId, CONFIG, session),
       ).toBeNull();
-    }),
-  );
-
-  it.effect('retrieves a workflow run on the same resume identity', () =>
-    Effect.gen(function* () {
-      const runId = 'ab0003' as RunId;
-      yield* openRun(runId, toolUseSnapshot('openai/gpt-5.4-2026-03-05'));
-
-      expect(
-        yield* retrieveSessionResumeData(runId, WORKFLOW_CONFIG, session),
-      ).toMatchObject({ runId, agentConfig: { agentCategory: 'workflow' } });
     }),
   );
 
@@ -155,7 +135,7 @@ describe('retrieveSessionResumeData', () => {
         retrieveSessionResumeData(runId, CONFIG, session),
       );
       expect(error.message).toContain(
-        `Failed to retrieve toolUse resume data for run: ${runId}`,
+        `Failed to retrieve resume data for run: ${runId}`,
       );
     }),
   );

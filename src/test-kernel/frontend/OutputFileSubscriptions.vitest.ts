@@ -6,7 +6,8 @@ import { Effect, Exit, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
+import { documentsOutputRow } from '@shared/plugins/documents';
 import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { waitForCondition } from '@test/support/asyncTestUtils';
@@ -126,31 +127,27 @@ async function emitOutputFiles(
   absolutePath: string,
 ): Promise<void> {
   session.publish([
-    {
-      type: 'output.produced',
-      aggregateId: qualifyAggregateId('run', runId),
-      rounds: [
-        {
-          round: 1,
-          rawOutput: null,
-          compileFailures: [],
-          missingOutputs: [],
-          outputs: [
-            {
-              source: absolutePath,
-              location: {
-                kind: 'workspace',
-                absolutePath,
-                relativePath: absolutePath.split('/').at(-1) ?? absolutePath,
-              },
-              lineage: null,
-              diff: null,
-              round: 1,
+    documentsOutputRow(runId, [
+      {
+        round: 1,
+        rawOutput: null,
+        compileFailures: [],
+        missingOutputs: [],
+        outputs: [
+          {
+            source: absolutePath,
+            location: {
+              kind: 'workspace',
+              absolutePath,
+              relativePath: absolutePath.split('/').at(-1) ?? absolutePath,
             },
-          ],
-        },
-      ],
-    },
+            lineage: null,
+            diff: null,
+            round: 1,
+          },
+        ],
+      },
+    ]),
   ]);
   await Effect.runPromise(session.settlePublications());
 }

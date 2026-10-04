@@ -10,7 +10,6 @@ import { runWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  AgentCategory,
   RUN_OUTCOME,
   aggregateId,
   emptyRunEndOutput,
@@ -201,7 +200,6 @@ describe('session isolation', () => {
               aggregateId: aggregateId('run', 'c0c002' as RunId),
               identity: { kind: 'agent', agent: 'chat' },
               userFollowUpSupport: 'unsupported',
-              category: 'toolUse',
               parent: null,
               provenance: null,
             },
@@ -266,7 +264,7 @@ describe('session isolation', () => {
               return {
                 outcome: RUN_OUTCOME.COMPLETED,
                 runId,
-                output: emptyRunEndOutput(AgentCategory.ToolUse),
+                output: emptyRunEndOutput(),
               };
             }),
           ).pipe(Effect.provideService(Runs, sessionB.runs)),

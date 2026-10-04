@@ -6,7 +6,6 @@
  */
 import { z } from 'zod';
 
-import { AgentCategorySchema } from './agent';
 import { JsonValueSchema } from './jsonValue';
 
 /* ---------------------------------------------------------- tools.offered */
@@ -60,23 +59,18 @@ export const ToolsOfferedPayloadSchema = z.strictObject({
 });
 
 /**
- * What the run's delegation tools can launch: per agent category, the
- * offered delegation tools that launch it and its visible agents; the models
- * available for delegation (null when they could not be read); and, when a
- * tool-use agent can be launched, whether worktrees are on.
+ * What the run's delegation tools can launch: the visible agents, each
+ * marked when it is also a document task; the models available for
+ * delegation (null when they could not be read); and whether worktrees are
+ * on (null when no agent can be launched).
  */
 const DelegationTargetsSchema = z.strictObject({
   agents: z.array(
     z.strictObject({
-      category: AgentCategorySchema,
-      tools: z.array(z.string().min(1)).min(1),
-      agents: z.array(
-        z.strictObject({
-          name: z.string().min(1),
-          description: z.string(),
-          tools: z.array(z.string()),
-        }),
-      ),
+      name: z.string().min(1),
+      description: z.string(),
+      tools: z.array(z.string()),
+      task: z.boolean(),
     }),
   ),
   models: z.array(z.string()).nullable(),

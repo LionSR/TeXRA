@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 // Local imports
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import type { AgentCatalogServices } from '@platform/processRuntime';
-import { AgentCategory } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { LaunchSurfaceSchema } from '@shared/session/surface';
 import {
@@ -88,7 +87,6 @@ describe('main-view run launch controller', () => {
 
       expect(config).toMatchObject({
         agent: 'orchestrator',
-        agentCategory: AgentCategory.ToolUse,
         instruction: 'Improve the draft.',
         outputFiles: [],
       });
@@ -117,12 +115,12 @@ describe('main-view run launch controller', () => {
       }),
   );
 
-  it.effect('requires an input file for workflow runs', () =>
+  it.effect('requires an input file for document task runs', () =>
     Effect.gen(function* () {
       const error = yield* Effect.flip(
         onGlobalStorage(
           prepareSurfaceLaunch(
-            launchRequest({ sessionType: 'workflow', agent: 'correct' }),
+            launchRequest({ sessionType: 'task', agent: 'correct' }),
             workspaceState,
             STORAGE_ROOT,
           ),
@@ -142,11 +140,8 @@ describe('main-view run launch controller', () => {
       mocks.resolveTeamLaunch.mockReturnValue({
         status: 'ready',
         fields: {
-          agent: 'builtInToolUse:lead',
-          delegationAgentScope: {
-            workflow: ['builtInWorkflow:writer'],
-            toolUse: ['builtInToolUse:lead'],
-          },
+          agent: 'builtIn:lead',
+          delegationAgentScope: ['builtIn:writer', 'builtIn:lead'],
           cli: { teamId: 'custom-team' },
         },
         missingNames: ['writer'],
@@ -166,12 +161,8 @@ describe('main-view run launch controller', () => {
       );
 
       expect(config).toMatchObject({
-        agent: 'builtInToolUse:lead',
-        agentCategory: AgentCategory.ToolUse,
-        delegationAgentScope: {
-          workflow: ['builtInWorkflow:writer'],
-          toolUse: ['builtInToolUse:lead'],
-        },
+        agent: 'builtIn:lead',
+        delegationAgentScope: ['builtIn:writer', 'builtIn:lead'],
         cli: { teamId: 'custom-team' },
       });
     }),

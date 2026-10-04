@@ -82,7 +82,7 @@ export function parseCallArguments(
  */
 export function dispatchFactsFor(
   turn: TurnResult,
-  /** The request's step's tools; none in round mode. */
+  /** The request's step's tools; undefined while no step is open. */
   registry: IToolRegistry | undefined,
   logger: AgentTrace,
   mintLogId: () => string,

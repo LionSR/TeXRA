@@ -46,7 +46,6 @@ import './tabs/ShortcutsTab';
 import { settingsViewHandlers } from './messageDispatcher';
 import {
   activePresetId,
-  agentSubTab,
   agentSkillsEnabled,
   allowOrchestratorKill,
   approvalPolicy,
@@ -331,7 +330,6 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             .customAgentDir=${customAgentDir.get()}
             .customAgentDirIsDefault=${customAgentDirIsDefault.get()}
             .customAgentScanIssues=${customAgentScanIssues.get()}
-            .initialSubTab=${agentSubTab.get()}
             .compactionThresholdPercent=${compactionThresholdPercent.get()}
             .modelRetryMaxAttempts=${modelRetryMaxAttempts.get()}
             .allowOrchestratorKill=${allowOrchestratorKill.get()}

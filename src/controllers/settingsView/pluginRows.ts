@@ -8,11 +8,10 @@
  */
 import { Effect, FileSystem } from 'effect';
 
-import { getAgentsByCategory } from '@agent/index';
+import { getCatalogAgents } from '@agent/index';
 import type { PluginEnv } from '@common/plugins/installRecord';
 import { listPlugins } from '@common/plugins/pluginTrust';
 import { buildToolDashboardItems } from '@controllers/settingsView/ToolDashboardData';
-import { AGENT_CATEGORIES } from '@shared/schemas';
 import type { PluginRow } from '@shared/settingsView/settingsViewMessages';
 import { readMcpConfig, USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
@@ -29,7 +28,7 @@ export const buildPluginRows = Effect.fn('buildPluginRows')(function* (
   inputs: ToolProbeInputs & PluginEnv,
   cachedResults?: readonly ExternalToolCheckResult[],
 ) {
-  const agents = AGENT_CATEGORIES.flatMap(getAgentsByCategory).map((agent) => ({
+  const agents = getCatalogAgents().map((agent) => ({
     name: agent.name,
     tools: agent.tools ?? [],
   }));

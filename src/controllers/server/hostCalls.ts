@@ -12,7 +12,6 @@ import { z } from 'zod';
 import type { ManualCriticismEntry } from '@agent/runtime/HostInteractions';
 import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import {
-  AgentCategory,
   FileLocationSchema,
   INSTRUCTION_ACTION,
   RunIdSchema,
@@ -92,7 +91,6 @@ const NoticeSchema = z.discriminatedUnion('event', [
     event: z.literal('showAgentConfigBanner'),
     payload: z.object({
       agentName: z.string(),
-      category: z.enum(AgentCategory),
     }) satisfies z.ZodType<ShowAgentConfigBannerPayload>,
   }),
   z.object({

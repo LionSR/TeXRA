@@ -16,7 +16,7 @@ TeXRA ships with built-in agents tailored for rigorous research workflows and sc
   columns="2"
   :groups="[
     {
-      label: 'Tool-use',
+      label: 'Chat',
       items: [
         { name: 'assistant', icon: 'comment' },
         { name: 'prover', icon: 'lightbulb' },
@@ -32,7 +32,7 @@ TeXRA ships with built-in agents tailored for rigorous research workflows and sc
       ],
     },
     {
-      label: 'Workflow',
+      label: 'Document task',
       items: [
         { name: 'correct', icon: 'check' },
         { name: 'polish', icon: 'sparkle', active: true },
@@ -46,18 +46,19 @@ TeXRA ships with built-in agents tailored for rigorous research workflows and sc
   ]"
 />
 
-<p class="hero-caption">The agent picker, split by the two agent classes, <code>tool-use</code> (left) and <code>workflow</code> (right), with the selected agent (<code>polish</code>) highlighted.</p>
+<p class="hero-caption">The agent picker, with a <strong>Chat</strong> section (every agent can chat; a few shown on the left) and a <strong>Document task</strong> section (the agents that also run a document task, right), with the selected agent (<code>polish</code>) highlighted.</p>
 
 The same catalog is available from any terminal:
 
 <CliAgentsListHero />
 
-<p class="hero-caption">One <code>category &nbsp;name&nbsp; description</code> row per agent, tab-separated and stable for scripts; <code>--category workflow</code> filters, <code>--all</code> includes hidden agents.</p>
+<p class="hero-caption">One <code>kind &nbsp;name&nbsp; description</code> row per agent, tab-separated and stable for scripts, the kind <code>task</code> for an agent with a document task and <code>chat</code> otherwise; <code>--tasks</code> lists only the agents with a document task, <code>--all</code> includes hidden agents.</p>
 
 ## Quick reference
 
-Every built-in agent is one of two execution shapes, a tool-use loop or a
-workflow pipeline:
+Every agent chats: it converses and calls its tools in a loop. An agent
+whose file has a `task` block can also run a document task, a fixed
+pipeline over the files you select:
 
 <AgentCatalog />
 
@@ -65,7 +66,7 @@ The two shapes behave differently once they run:
 
 <AgentModeShapes />
 
-<p class="hero-caption">Tool-use agents loop: they converse and call tools until done. Workflow agents run a fixed input → edit → diff pipeline and hand back a versioned diff.</p>
+<p class="hero-caption">A chat loops: the agent converses and calls tools until done. A document task revises the input files in fixed revisions and hands back a versioned diff.</p>
 
 ::: warning Prompts may change
 The prompts and specific behaviors of these built-in agents may change slightly between TeXRA versions. If you need precise, unchanging behavior or want to customize the process in depth, create a [custom agent](./custom-agents.md) based on these examples.
@@ -188,7 +189,7 @@ diagrams for the architecture.
 
 ## Research writing agents
 
-These workflow agents drive the Physicist, Mathematician, and Computer
+These document tasks drive the Physicist, Mathematician, and Computer
 Scientist teams. Three of them review a paper and leave inline comments; the
 others rewrite it, and `apply` works through the comments the reviewers left.
 
@@ -319,7 +320,7 @@ Highlight key figures and tables. Make it visually appealing with appropriate co
 ```
 
 ::: tip Creating figures
-To generate or improve TikZ figures, use a tool-use agent (`research` or `presenter`) and describe the figure. The agent writes compilable TikZ, compiles it, and visually verifies the result. Read [Working with figures](./working-with-figures.md) and [TikZ figures](./tikz-figures.md).
+To generate or improve TikZ figures, chat with `research` or `presenter` and describe the figure. The agent writes compilable TikZ, compiles it, and visually verifies the result. Read [Working with figures](./working-with-figures.md) and [TikZ figures](./tikz-figures.md).
 :::
 
 ## LaTeX & build agents
@@ -537,7 +538,7 @@ Teams are predefined collections of agents for a discipline. Pick one from the
 
 Every team except Software Engineer bundles the `progressCheck` audit helper
 and `latexFixer`. Every member ships with TeXRA, including the `generic`,
-`devise`, `apply`, and `criticize` workflow agents the Physicist,
+`devise`, `apply`, and `criticize` document tasks the Physicist,
 Mathematician, and Computer Scientist teams list, so no team needs a sign-in.
 Every lead can also run its specialists in parallel as a
 [multi-agent workflow](./multi-agent-workflows.md).

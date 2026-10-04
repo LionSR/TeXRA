@@ -1,15 +1,16 @@
 /**
  * TeXRA's own setting rows and keys, and the static catalog its settings
  * surfaces read: the harness's rows (`@shared/state/stateSettings`), these,
- * and the rows its plugins declare (`./integrationSettings`). The hosts pass
+ * and the rows its plugins declare (`./documentsSettings`,
+ * `./integrationSettings`). The hosts pass
  * {@link TEXRA_SETTING_ROWS} to `installProcessRuntime`, which adds the rows
  * on their plugin values; the webview and the CLI, which render the catalog
  * before or without a runtime, read {@link TEXRA_SETTINGS}.
  *
  * Owner by key: the CLI's startup rows (`agent`, `model`, `chat`, `run`,
  * `outputFormat`), `agentOutputs.autoOpenFinal`, the bibliography
- * (`bib.*`), LaTeX (`latex.*`, `latexdiff.*`, the formatter), the documents
- * plugin's compile rows (`workflow.*`), inline criticism and telemetry.
+ * (`bib.*`), LaTeX (`latex.*`, `latexdiff.tempFileLocation`, the
+ * formatter), inline criticism and telemetry.
  */
 
 // Third-party imports
@@ -18,9 +19,7 @@ import { z } from 'zod';
 // Local imports
 import {
   LATEX_CONFIG_DEFAULTS,
-  LATEX_CONFIG_RANGES,
   LATEX_FORMATTER_VALUES,
-  LATEXDIFF_MATH_MARKUP_VALUES,
 } from '@shared/constants/latexConfig';
 import {
   DEFAULT_ENABLED_REGEX_REPLACEMENTS,
@@ -33,6 +32,7 @@ import {
   LATEXDIFF_TEMP_FILE_LOCATIONS,
   TELEMETRY_ENABLED_DEFAULT,
 } from '@shared/schemas';
+import { DOCUMENTS_SETTINGS } from '@shared/settingsView/documentsSettings';
 import {
   CLAUDE_AGENT_SETTINGS,
   CODEX_SETTINGS,
@@ -45,17 +45,8 @@ import {
   type StateSettingEntry,
 } from '@shared/state/stateSettings';
 
-/** TeXRA's state keys: the documents plugin's and LaTeX's, inline criticism and telemetry. */
+/** TeXRA's state keys: LaTeX's, inline criticism and telemetry. */
 export enum TexraStateKey {
-  // Workspace-scoped: compile and diff after a document round
-  WORKFLOW_AUTO_COMPILE = 'texra.workflow.autoCompileAfterOutput',
-  WORKFLOW_AUTO_COMPILE_TIMEOUT_MS = 'texra.workflow.autoCompileTimeoutMs',
-  WORKFLOW_AUTO_OPEN_PDF = 'texra.workflow.autoOpenPdf',
-  WORKFLOW_REJECT_ON_COMPILE_FAILURE = 'texra.workflow.rejectOnCompileFailure',
-  LATEXDIFF_BETWEEN_ROUNDS = 'texra.latexdiff.generateBetweenRoundDiffs',
-  LATEXDIFF_TIMEOUT_MS = 'texra.latexdiff.timeoutMs',
-  LATEXDIFF_MATH_MARKUP = 'texra.latexdiff.mathMarkup',
-  LATEXDIFF_CHANGES_ONLY = 'texra.latexdiff.changesOnly',
   LATEX_FORMATTER = 'texra.latex.formatter',
 
   // Global
@@ -227,111 +218,6 @@ const TEXRA_CONFIG_ROWS: Record<
 /** TeXRA's own rows (its plugins' are on their `Plugin` values), in catalog order. */
 export const TEXRA_SETTING_ROWS: readonly StateSettingEntry[] = [
   ...configTreeRows(TEXRA_CONFIG_ROWS),
-  // --- Workflow auto-compile -------------------------------------------------
-  surfacedSetting({
-    key: TexraStateKey.WORKFLOW_AUTO_COMPILE,
-    schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.workflowAutoCompile),
-    title: 'Auto-compile outputs',
-    description:
-      'Compile the LaTeX project automatically after an agent writes its output.',
-    category: 'workflow',
-    slot: 'workspaceState',
-    surfaces: { settingsView: 'latex', cliConfig: true },
-  }),
-  surfacedSetting({
-    key: TexraStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-    schema: z
-      .int()
-      .min(LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min)
-      .prefault(LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs),
-    title: 'Auto-compile timeout',
-    description:
-      'Maximum time (in milliseconds) to wait for an automatic post-output compile before giving up.',
-    category: 'workflow',
-    slot: 'workspaceState',
-    surfaces: { cliConfig: true },
-  }),
-  surfacedSetting({
-    key: TexraStateKey.WORKFLOW_AUTO_OPEN_PDF,
-    schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.workflowAutoOpenPdf),
-    title: 'Open the compiled PDF',
-    description:
-      'After auto-compile, open the PDF when it succeeds or the LaTeX log when it fails.',
-    category: 'workflow',
-    slot: 'workspaceState',
-    // Read by the documents plugin, but the emitted `requestOpenFile` has no
-    // CLI handler (headless), so the CLI ignores it.
-    surfaces: { settingsView: 'latex' },
-  }),
-  surfacedSetting({
-    key: TexraStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-    schema: z
-      .boolean()
-      .prefault(LATEX_CONFIG_DEFAULTS.workflowRejectOnCompileFailure),
-    title: 'Repair failed compiles',
-    description:
-      'When the automatic compile fails, spend the next planned round repairing the output from the compile log.',
-    category: 'workflow',
-    slot: 'workspaceState',
-    surfaces: { settingsView: 'latex', cliConfig: true },
-  }),
-
-  // --- LaTeXdiff -------------------------------------------------------------
-  // Run by the documents plugin, so every host honors them. The timeout is
-  // kept out of the settings view (an insider knob) and edited from CLI
-  // `/config`; the rest are deferred from `/config` by product decision.
-  surfacedSetting({
-    key: TexraStateKey.LATEXDIFF_BETWEEN_ROUNDS,
-    schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds),
-    title: 'Diff consecutive rounds',
-    description:
-      'Also diff each agent round against the previous one, not only against your original input.',
-    category: 'latexdiff',
-    slot: 'workspaceState',
-    surfaces: { settingsView: 'latex' },
-  }),
-  surfacedSetting({
-    key: TexraStateKey.LATEXDIFF_TIMEOUT_MS,
-    schema: z
-      .int()
-      .min(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min)
-      .max(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max)
-      .prefault(LATEX_CONFIG_DEFAULTS.latexdiffTimeoutMs),
-    title: 'latexdiff timeout',
-    description:
-      'Maximum time (in milliseconds) to allow a single latexdiff invocation to run.',
-    category: 'latexdiff',
-    slot: 'workspaceState',
-    surfaces: { cliConfig: true },
-  }),
-  surfacedSetting({
-    key: TexraStateKey.LATEXDIFF_MATH_MARKUP,
-    schema: z
-      .enum(LATEXDIFF_MATH_MARKUP_VALUES)
-      .prefault(LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup),
-    title: 'Math markup in diffs',
-    description: 'How latexdiff marks up changes inside math environments.',
-    category: 'latexdiff',
-    slot: 'workspaceState',
-    enumDescriptions: [
-      'suppress markup',
-      'equation-level',
-      'within equations',
-      'small changes inside equations',
-    ],
-    surfaces: { settingsView: 'latex' },
-  }),
-  surfacedSetting({
-    key: TexraStateKey.LATEXDIFF_CHANGES_ONLY,
-    schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly),
-    title: 'Only changed pages in diff PDFs',
-    description:
-      'Compile diff PDFs with only the pages that contain edits, instead of the full document.',
-    category: 'latexdiff',
-    slot: 'workspaceState',
-    surfaces: { settingsView: 'latex' },
-  }),
-
   // --- LaTeX formatter -------------------------------------------------------
   surfacedSetting({
     key: TexraStateKey.LATEX_FORMATTER,
@@ -370,5 +256,9 @@ export const TEXRA_SETTING_ROWS: readonly StateSettingEntry[] = [
 /** The whole catalog TeXRA's settings surfaces render: the harness's rows, TeXRA's and its plugins'. */
 export const TEXRA_SETTINGS: SettingsCatalog = settingsCatalog(
   TEXRA_SETTING_ROWS,
-  [{ settings: CODEX_SETTINGS }, { settings: CLAUDE_AGENT_SETTINGS }],
+  [
+    { settings: DOCUMENTS_SETTINGS },
+    { settings: CODEX_SETTINGS },
+    { settings: CLAUDE_AGENT_SETTINGS },
+  ],
 );

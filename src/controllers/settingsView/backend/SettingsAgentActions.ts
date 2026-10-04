@@ -49,9 +49,10 @@ interface SettingsAgentActionsOptions {
     name: string,
   ) => { path?: string; digest?: string } | undefined;
   readonly getCustomAgentDirectory: () => SettingsActionEffect<string>;
-  readonly getSourceDirectory: (
+  /** The directories a source's agents live under (`agentSourceRoots`). */
+  readonly getSourceRoots: (
     source: AgentSource,
-  ) => SettingsActionEffect<string | undefined>;
+  ) => SettingsActionEffect<readonly string[]>;
   readonly openDocument: (filePath: string) => SettingsActionEffect<void>;
   /**
    * Show a file the user must not edit in place. Hosts present it however
@@ -151,17 +152,16 @@ export function createSettingsAgentActions(
 
         // Both directory reads start together, as the `Promise.all` they
         // replace did.
-        const [customDir, sourceDir] = yield* Effect.all(
+        const [customDir, sourceRoots] = yield* Effect.all(
           [
             options.getCustomAgentDirectory(),
-            options.getSourceDirectory(message.agentSource),
+            options.getSourceRoots(message.agentSource),
           ],
           { concurrency: 'unbounded' },
         );
         const targetPath = customCopyPath({
           entryPath: entry.path,
-          source: message.agentSource,
-          sourceDir,
+          sourceRoots,
           customDir,
         });
         if (!targetPath) {

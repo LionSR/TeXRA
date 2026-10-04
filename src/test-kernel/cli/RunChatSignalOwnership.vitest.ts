@@ -297,7 +297,7 @@ describe('runChat signal ownership wiring', () => {
       modelSource: 'default',
     });
     mocks.resolveChatToolUseAgent.mockReturnValue(
-      Effect.succeed({ source: 'builtInToolUse' }),
+      Effect.succeed({ source: 'builtIn' }),
     );
     mocks.selectCliRunnableModel.mockReturnValue(
       Effect.succeed({ model: 'gpt-test' }),

@@ -17,10 +17,7 @@ describe('parseAgentModePresets', () => {
       name: 'My Team',
       description: 'Hand-saved agent list',
       icon,
-      agents: {
-        workflow: ['polish'],
-        toolUse: ['assistant'],
-      },
+      agents: ['polish', 'assistant'],
     };
   }
 

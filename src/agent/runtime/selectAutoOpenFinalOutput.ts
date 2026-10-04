@@ -29,10 +29,8 @@ export function selectAutoOpenFinalOutput(
   result: RunEndResult,
 ) {
   return Effect.gen(function* () {
-    if (
-      result.output.category !== 'workflow' ||
-      result.outcome !== RUN_OUTCOME.COMPLETED
-    ) {
+    const { documents } = result.output;
+    if (documents === undefined || result.outcome !== RUN_OUTCOME.COMPLETED) {
       return undefined;
     }
     if (
@@ -44,6 +42,6 @@ export function selectAutoOpenFinalOutput(
       return undefined;
     }
 
-    return finalWorkflowOutput(result.output.outputs);
+    return finalWorkflowOutput(documents.outputs);
   });
 }

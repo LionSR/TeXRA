@@ -8,23 +8,21 @@
  * durable row or re-derives liveness from a missing in-process handle.
  */
 
-import {
-  type AgentCategory,
-  type RunId,
-  type RunIdentity,
-} from '@shared/schemas';
+import { type RunId, type RunIdentity } from '@shared/schemas';
 import type { RunView, SessionView } from '@shared/session/sessionView';
 import { formatTimestamp } from '@utils/text/stringUtils';
 
 /**
- * The display category of a run: an agent run shows its run mode
- * (`workflow` / `toolUse`), every other run shows what it IS
- * (`process` / `script`).
+ * The display category of a run: an agent run is a conversation (`agent`)
+ * or a document task (`task`); every other run
+ * shows what it IS (`process` / `script`).
  */
-type RunDisplayCategory = AgentCategory | Exclude<RunIdentity['kind'], 'agent'>;
+type RunDisplayCategory = 'task' | RunIdentity['kind'];
 
 export function runDisplayCategory(run: RunView): RunDisplayCategory {
-  return run.identity.kind === 'agent' ? run.category : run.identity.kind;
+  return run.identity.kind === 'agent' && run.documentTask
+    ? 'task'
+    : run.identity.kind;
 }
 
 /**
@@ -51,10 +49,10 @@ function getAvailablePaths(
     ...(hasChildren ? ['children'] : []),
   ];
   switch (category) {
-    case 'toolUse':
+    case 'agent':
       return [...common, 'conversation', 'workspace-files'];
-    case 'workflow':
-      return [...common, 'files'];
+    case 'task':
+      return [...common, 'files', 'conversation'];
     case 'process':
       return [...common, 'output'];
     case 'script':

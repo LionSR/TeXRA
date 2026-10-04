@@ -9,15 +9,11 @@
 import { Cause, Effect, Exit } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 
-import {
-  isAgentRunRecord,
-  type RunRecord,
-} from '@agent/core/definition/RunRecord';
+import type { RunRecord } from '@agent/core/definition/RunRecord';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { haltedPositionRow } from '@agent/runtime/loop/rows';
 
 import {
-  AgentCategory,
   RUN_OUTCOME,
   RunRecordFieldsSchema,
   aggregateId,
@@ -115,16 +111,12 @@ const reactivatedApprovalPolicy = (
  * A resume's activation: its `run.activate` with the approval snapshot
  * enforcement holds, as one batch (no `run.start` re-stamps the snapshot).
  */
-export const commitResumedActivation = (
-  session: SessionHandle,
-  runId: RunId,
-  category: AgentCategory,
-) =>
+export const commitResumedActivation = (session: SessionHandle, runId: RunId) =>
   reactivatedApprovalPolicy(session, runId).pipe(
     Effect.flatMap((snapshot) => {
       const target = aggregateId('run', runId);
       return session.commit([
-        { type: 'run.activate', aggregateId: target, category },
+        { type: 'run.activate', aggregateId: target },
         { type: 'approval.policy', aggregateId: target, snapshot },
       ]);
     }),
@@ -137,7 +129,6 @@ interface RegisterRunOptions {
   readonly parentCard?: string;
   /** That call's id: the call that owns this run until it detaches. */
   readonly parentCallId?: string;
-  readonly category?: AgentCategory;
   /** The run's identity, declared by the launch site — the durable authority. */
   readonly identity: RunIdentity;
   /** Runtime behavior declared by the launch source, not UI visibility. */
@@ -218,9 +209,6 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
       aggregateId: target,
       config: RunRecordFieldsSchema.parse(pinned),
     } satisfies SessionEventDraft;
-    const category = isAgentRunRecord(pinned)
-      ? pinned.agentCategory
-      : (options.category ?? AgentCategory.ToolUse);
     const events: SessionEventDraft[] = [];
     if (!prior) {
       // The worktree the fold spells is the run's working directory as a
@@ -233,7 +221,6 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
         identity: options.identity,
         userFollowUpSupport:
           options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-        category,
         worktree: worktreeCwd ? { workingDirectory: worktreeCwd } : undefined,
         parent:
           options.parentRunId === undefined
@@ -250,7 +237,7 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
       });
     }
     events.push(config);
-    events.push({ type: 'run.activate', aggregateId: target, category });
+    events.push({ type: 'run.activate', aggregateId: target });
     // Enforcement is the session's in-memory policy; the row is its
     // projection. A re-registration writes no `run.start`, so the
     // activation re-stamps the snapshot enforcement now holds, rebuilt from
@@ -289,7 +276,7 @@ export interface FinalizeRunInput {
   /**
    * What the run produced. Absent for a backstop that ends a run whose flow
    * produced nothing (host exit, a stop of a parked run, a failed launch):
-   * the row then carries the empty output of the run's category. Also
+   * the row then carries an empty output. Also
    * absent, by rule rather than omission, on the child-run path
    * (`finalizeChildRun` in `src/tools/delegation/childRun.ts`): a child's
    * product is its per-turn delivery to its parent, not a flow output.
@@ -418,9 +405,7 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
               aggregateId: target,
               outcome: persisted,
               ...(input.error !== undefined ? { error: input.error } : {}),
-              output: storedRunOutput(
-                input.output ?? emptyRunEndOutput(start.category),
-              ),
+              output: storedRunOutput(input.output ?? emptyRunEndOutput()),
             },
           ],
           value: persisted,

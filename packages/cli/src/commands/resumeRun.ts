@@ -9,9 +9,9 @@ import {
 } from '@agent/runtime';
 import { getRunRecords } from '@agent/storage';
 import {
-  AgentCategory,
   agentKey,
   agentName,
+  isDocumentTaskConfig,
   type RunId,
 } from '@shared/schemas';
 import { runHeldByProcessMessage } from '@shared/runs/runStatusDisplay';
@@ -25,7 +25,7 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { cliErrorMessage, writeTextStderr } from '../runtime/logSinks';
 import { buildHeadlessRunContext } from '../runtime/runModel';
-import { resolveCliResumeAgent } from '../runtime/agents';
+import { resolveCliRunAgent } from '../runtime/agents';
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
@@ -113,12 +113,10 @@ export function runResumeCommand(
       writeTextStderr(`Run not found: ${id}`);
       return CliExitCode.Usage;
     }
-    if (
-      action !== undefined &&
-      config.agentCategory !== AgentCategory.ToolUse
-    ) {
+    const documentTask = isDocumentTaskConfig(config);
+    if (action !== undefined && documentTask) {
       writeTextStderr(
-        `Task ${id} is a workflow: only a conversation can be forked, reset or handed off.`,
+        `Task ${id} is a document task: only a conversation can be forked, reset or handed off.`,
       );
       return CliExitCode.Usage;
     }
@@ -187,10 +185,10 @@ export function runResumeCommand(
         break;
     }
 
-    // Tool-use resume reopens the interactive TUI, so headless callers are
-    // rejected before resume-state loading. Workflow resume runs headless and
-    // skips this gate entirely.
-    if (config.agentCategory === AgentCategory.ToolUse) {
+    // A chat resume reopens the interactive TUI, so headless callers are
+    // rejected before resume-state loading. A document task resumes headless
+    // and skips this gate entirely.
+    if (!documentTask) {
       const terminalFailure = interactiveTerminalFailure(context);
       if (terminalFailure) {
         const commandName = context.commandName;
@@ -227,7 +225,7 @@ export function runResumeCommand(
     // The launch pinned the resolved source on the record, so resume checks
     // that exact entry rather than re-resolving the bare name.
     const agent = yield* Effect.result(
-      resolveCliResumeAgent(
+      resolveCliRunAgent(
         stores,
         config.agentSource
           ? agentKey(config.agentSource, agentName(config.agent))
@@ -290,7 +288,7 @@ export function runResumeCommand(
                       );
                     if (resumed.result) return Effect.succeed(resumed.result);
                     return Effect.fail(
-                      new Error(`Run ${id} did not resume as a workflow.`),
+                      new Error(`Run ${id} did not resume as a document task.`),
                     );
                   }),
                 ),

@@ -55,16 +55,16 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { ONBOARDING_SETUP_HANDOFF } from '@ui/copy/onboarding';
 import { getBasename } from '@utils/core';
 
-/** A workflow task's planned pass count: its agent's catalog entry, by the
+/** A document task's planned pass count: its agent's catalog entry, by the
  *  key the launch recorded or, for a plain name only, the agent name. A
  *  source-qualified key names one agent exactly, so a same-named agent from
  *  another source never lends it its count. */
 function plannedPassesOf(run: RunView, host: HostSnapshot): number | undefined {
-  if (run.category !== 'workflow' || run.identity.kind !== 'agent') {
+  if (!run.documentTask || run.identity.kind !== 'agent') {
     return undefined;
   }
   const id = run.identity.agent;
-  return host.agentOptions.workflow?.find(
+  return host.agentOptions.find(
     (option) =>
       option.value === id || (agentName(id) === id && option.label === id),
   )?.rounds;
@@ -441,9 +441,9 @@ export class ProgressApp extends LitElement {
       `;
     }
     const { launch } = surface;
-    // Only a document pass reads Input and Context, so only it gets the file
-    // section; an interactive task attaches through the composer alone.
-    const documentPass = launch.sessionType === 'workflow';
+    // Only a document task reads Input and Context, so only it gets the file
+    // section; a chat attaches through the composer alone.
+    const documentPass = launch.sessionType === 'task';
     const selectedFiles = FILE_SELECT_CONFIGS.flatMap(
       (config) => launch[LAUNCH_FILE_LISTS[config.type]],
     );
@@ -502,10 +502,7 @@ export class ProgressApp extends LitElement {
             .view=${view}
             .surface=${surface}
           ></interrupted-tasks-notice>
-          <session-banners
-            .banners=${host.banners}
-            .sessionType=${launch.sessionType}
-          ></session-banners>
+          <session-banners .banners=${host.banners}></session-banners>
         </div>
         <launch-attachments .files=${documentPass ? [] : launch.mediaFiles}
           ><session-composer

@@ -18,6 +18,7 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
 import { testCallPluginServices } from '@test/support/testPluginServices';
 import { generateShortId } from '@utils/core';
+import { RunFileService } from '@utils/files/runStorage';
 
 type CallRun = NonNullable<ToolCallShape['run']>;
 
@@ -85,6 +86,9 @@ export function nativeToolTestLayer(
               logger: noopTrace,
               steps: noStep(),
               scope: Scope.makeUnsafe(),
+              task: null,
+              opening: null,
+              fileService: new RunFileService(run.runId, roots),
               ...run,
             },
             // A run's requests open unbound on its session: a test call

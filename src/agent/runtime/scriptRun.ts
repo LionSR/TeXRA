@@ -1,6 +1,6 @@
 /**
  * A background script's run: the `script` call a parent sent to the
- * background, made by a child run of its own (`AgentConfig.backgroundScript`). The run
+ * background, made by a child run of its own (`AgentConfig.script`). The run
  * is the native tool-use program whose one response is that call, so it
  * replays from its rows as a foreground script does. This is what it tells
  * its parent: the strategy that delivers its result once, and the fold of
@@ -112,15 +112,12 @@ export const scriptRunCalls = Effect.fn('scriptRun.calls')(function* (
   return { script, calls };
 });
 
-/** The files a call's agent child wrote, when its value is a run's
- *  envelope: a workflow agent's outputs, a tool-use agent's edits. */
-const EnvelopeFilesSchema = z.discriminatedUnion('category', [
-  z.object({
-    category: z.literal('workflow'),
-    outputs: z.array(OutputFileSummarySchema),
-  }),
-  z.object({ category: z.literal('toolUse'), files: z.array(z.string()) }),
-]);
+/** The files a call's child wrote, when its value is a run's envelope: a
+ *  document task's outputs, or an agent's edits. */
+const EnvelopeFilesSchema = z.object({
+  files: z.array(z.string()),
+  documents: z.object({ outputs: z.array(OutputFileSummarySchema) }).optional(),
+});
 
 /**
  * A delivered file as the workspace file it replaces, not the run-storage
@@ -185,8 +182,9 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
     }
     const envelope = EnvelopeFilesSchema.safeParse(call.value);
     if (!envelope.success) continue;
-    if (envelope.data.category === 'workflow')
-      for (const output of envelope.data.outputs) {
+    const { documents } = envelope.data;
+    if (documents !== undefined)
+      for (const output of documents.outputs) {
         const path = deliveredFilePath(session.roots, output);
         files.set(path, { path, added: output.added, removed: output.removed });
       }

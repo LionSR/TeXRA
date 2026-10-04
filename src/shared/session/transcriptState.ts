@@ -7,7 +7,6 @@
  * written slot into the row every host renders.
  */
 import {
-  AgentCategory,
   TOOL_CALL_STATUS,
   isPlainAgentIdentity,
   EMPTY_TURN_TOTALS,
@@ -64,13 +63,8 @@ export interface TranscriptContext {
  * external-CLI session, whose verbatim log is the point of opening it. Phase
  * headers are unaffected: they stay rows everywhere.
  */
-export function lifecycleToTaskGroups(
-  run: Pick<RunView, 'category' | 'identity'>,
-): boolean {
-  return (
-    run.category === AgentCategory.Workflow ||
-    isPlainAgentIdentity(run.identity)
-  );
+export function lifecycleToTaskGroups(run: Pick<RunView, 'identity'>): boolean {
+  return isPlainAgentIdentity(run.identity);
 }
 
 // ---------------------------------------------------------------------------

@@ -112,8 +112,7 @@ describe('CLI config command', () => {
     mocks.readCliWorkspaceAgents.mockResolvedValue({
       selection: { kind: 'all' },
       effectiveSelection: { kind: 'all' },
-      workflowAgentKeys: [],
-      toolUseAgentKeys: [],
+      agentKeys: 'all',
       unresolvedNames: [],
     });
     stdoutSpy = spyOnStreamWrite(process.stdout);
@@ -127,32 +126,21 @@ describe('CLI config command', () => {
     stderrSpy.mockRestore();
   });
 
-  it.each([
-    ['workflow', '--workflow', ['builtInWorkflow:write', 'custom:review']],
-    ['toolUse', '--tool-use', ['builtInToolUse:assistant', 'custom:review']],
-  ] as const)(
-    'changes only the %s category when the other list is omitted',
-    async (category, flag, keys) => {
-      const result = await runCli([
-        'config',
-        'agents',
-        flag,
-        keys.join(','),
-        '--output-format',
-        'json',
-        '--no-input',
-      ]);
+  it('stores a custom --agents list as the workspace selection', async () => {
+    const keys = ['builtIn:write', 'custom:review'];
+    const result = await runCli([
+      'config',
+      'agents',
+      '--agents',
+      keys.join(','),
+      '--output-format',
+      'json',
+      '--no-input',
+    ]);
 
-      expect(result.exitCode).toBe(0);
-      expect(await readSelection()).toEqual({
-        kind: 'custom',
-        agentKeys: {
-          workflow: category === 'workflow' ? keys : 'all',
-          toolUse: category === 'toolUse' ? keys : 'all',
-        },
-      });
-    },
-  );
+    expect(result.exitCode).toBe(0);
+    expect(await readSelection()).toEqual({ kind: 'custom', agentKeys: keys });
+  });
 
   it.each([
     {
@@ -204,7 +192,7 @@ describe('CLI config command', () => {
     // the canonicalized agent key.
     expect(mocks.setWorkspaceCliChatAgent).toHaveBeenCalledWith(
       expect.anything(),
-      'builtInToolUse:assistant',
+      'builtIn:assistant',
     );
   });
 

@@ -6,11 +6,11 @@ import TikzTroubleshootCards from '../.vitepress/components/TikzTroubleshootCard
 
 [TikZ](https://github.com/pgf-tikz/pgf) is a LaTeX package for creating vector graphics programmatically. It is widely used in academia for diagrams, plots, and technical illustrations because of its output quality and its integration with LaTeX. Learning TikZ can feel like learning a new language. TeXRA helps with that, so the figures that illustrate a derivation or a result take less of your time than the theory itself.
 
-TeXRA offers features built for TikZ, centered on its tool-use agents, which write TikZ, compile it, and visually verify the result, together with dedicated extraction and compilation tools. This guide covers the TikZ-specific workflows.
+TeXRA offers features built for TikZ, centered on agents with tools, which write TikZ, compile it, and visually verify the result, together with dedicated extraction and compilation tools. This guide covers the TikZ-specific workflows.
 
 ::: info No dedicated `draw` agent
 Earlier versions of TeXRA shipped a standalone `draw` agent. Figure generation
-is now handled by the general tool-use agents (`research` or `presenter`), which
+is now handled by the general agents `research` and `presenter`, which
 can write TikZ, compile it, inspect the rendered output, and iterate until it
 looks right.
 :::
@@ -38,14 +38,14 @@ This code draws a blue circle with text inside. TeXRA's tools help you manage an
 
 ## <wa-icon library="texra" name="sparkle"></wa-icon> Generating TikZ with agents
 
-A tool-use agent (`research` or `presenter`) acts as your graphics assistant for TikZ. It can:
+An agent with tools (`research` or `presenter`) acts as your graphics assistant for TikZ. It can:
 
 1. <wa-icon library="texra" name="add"></wa-icon> **Create new TikZ figures** from a textual description.
 2. <wa-icon library="texra" name="edit"></wa-icon> **Enhance existing figures** with improvements or additions.
 3. <wa-icon library="texra" name="wrench"></wa-icon> **Fix errors** in TikZ code.
 4. <wa-icon library="texra" name="comment"></wa-icon> **Add annotations** or labels to diagrams.
 
-Because these are tool-use agents, they can compile the figure and inspect the rendered PDF, then refine the code until it compiles cleanly and looks correct.
+Because these agents have tools, they can compile the figure and inspect the rendered PDF, then refine the code until it compiles cleanly and looks correct.
 
 <ToolCallPanel
   title="research"
@@ -65,14 +65,14 @@ Because these are tool-use agents, they can compile the figure and inspect the r
 
 ### Creating new figures
 
-1. Select a tool-use agent, `research` or `presenter` (<wa-icon library="texra" name="sparkle"></wa-icon>).
+1. Select an agent, `research` or `presenter` (<wa-icon library="texra" name="sparkle"></wa-icon>).
 2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>). `anthropic/claude-sonnet-5-5`, `anthropic/claude-opus-5-5`, `openai/gpt-6.1-sol`, and `google/gemini-3.1-pro-preview` are good choices for complex drawings.
 3. Describe the figure you want in detail.
 4. Select **Run agent** (<wa-icon library="texra" name="arrow-up"></wa-icon>).
 
 From the CLI, the same draw, compile, and inspect loop shown below runs
-headlessly (`texra run` takes workflow and tool-use agents alike, so a tool-use
-agent like `research` runs through it too):
+headlessly (`texra run` takes any agent: one without a document task, like
+`research`, runs with your `--instruction`):
 
 ```bash
 texra run research --input figures.tex \
@@ -90,10 +90,9 @@ Connect the steps with arrows and add appropriate labels.
 
 ### Enhancing existing figures
 
-1. Select the input file (<wa-icon library="texra" name="file-code"></wa-icon>) containing the TikZ code.
-2. Select a tool-use agent (`research` or `presenter`).
-3. Describe the improvements you want.
-4. Select **Run agent** (<wa-icon library="texra" name="arrow-up"></wa-icon>).
+1. Select an agent (`research` or `presenter`).
+2. Describe the improvements you want, and name the file that holds the TikZ code; the agent reads it with its own tools.
+3. Select **Run agent** (<wa-icon library="texra" name="arrow-up"></wa-icon>).
 
 **Example instruction:**
 
@@ -147,7 +146,7 @@ This creates standalone files for each TikZ figure in your document.
 
 ### Agent tool calls
 
-Tool-use agents can invoke `extract_tikz_figures` to perform the same discovery and optional compilation steps programmatically:
+Agents with the extraction tools can invoke `extract_tikz_figures` to perform the same discovery and optional compilation steps programmatically:
 
 ```json
 {
@@ -224,7 +223,7 @@ This helps LaTeX locate packages and styles stored elsewhere in the project.
 
 ## <wa-icon library="texra" name="library"></wa-icon> Figure libraries
 
-Tool-use agents can reuse existing figures as references when creating new ones.
+Agents with tools can reuse existing figures as references when creating new ones.
 
 ### Using reference figures
 

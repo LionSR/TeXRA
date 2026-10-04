@@ -9,7 +9,6 @@ import '@test/support/sessionGraphTestSetup';
 import { SubscriptionRef } from 'effect';
 import { bindSessionView, sessionView } from '@cli/chat/tui/state/sessionView';
 import {
-  AgentCategory,
   requestParksItsCaller,
   RUN_PHASE,
   USER_FOLLOW_UP_SUPPORT,
@@ -45,10 +44,7 @@ export function seedView(view: SessionView): void {
   sessionView().set(view);
 }
 
-type RunViewOverrides = Partial<Omit<RunView, 'category'>> & {
-  readonly id: string;
-  readonly category?: RunView['category'];
-};
+type RunViewOverrides = Partial<RunView> & { readonly id: string };
 
 /** One stream as the fold would state it; every field explicit. The label,
  *  tone, and group follow the status the way the fold derives them, and the
@@ -91,7 +87,7 @@ function runViewFields(over: RunViewOverrides): RunView {
     runStartedAt: null,
     lastTimestamp: null,
     conversationProgress: { toolCallCount: 0 },
-    position: null,
+    turn: null,
     followUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     context: null,
     parentId: null,
@@ -114,27 +110,12 @@ function runViewFields(over: RunViewOverrides): RunView {
       settledRows: 0,
     },
   };
-  const { category, ...rest } = over;
-  if (category === AgentCategory.Workflow) {
-    return {
-      ...common,
-      category: AgentCategory.Workflow,
-      files: {},
-      missingOutputs: {},
-      compileFailures: {},
-      ...rest,
-      id,
-    } as RunView;
-  }
   return {
     ...common,
-    category: AgentCategory.ToolUse,
+    documentTask: false,
     plan: null,
     facts: {},
-    outputs: {},
-    missingOutputs: {},
-    compileFailures: {},
-    ...rest,
+    ...over,
     id,
   } as RunView;
 }

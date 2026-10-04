@@ -8,14 +8,6 @@ const fileListFields = {
   outputFiles: z.array(z.string()).prefault([]),
 };
 
-/** The same four `*Files` list fields, required (no default). */
-export const requiredFileListFields = {
-  inputFiles: z.array(z.string()),
-  contextFiles: z.array(z.string()),
-  mediaFiles: z.array(z.string()),
-  outputFiles: z.array(z.string()),
-};
-
 /** Used by AgentConfig where `editedFile` may be null. */
 export const NullableFileFieldsSchema = z.object({
   ...fileListFields,

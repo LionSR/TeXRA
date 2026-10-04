@@ -8,7 +8,7 @@ import {
   type SessionHandle,
   type ValidatedRunRequest,
 } from '@agent/runtime';
-import { runOutputReader } from '@agent/storage';
+import { documentTaskConfig } from '@agent/runtime';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import type { NotificationFailed, PromptFailed } from '@hosts/uiHosts';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
@@ -29,7 +29,8 @@ import {
 import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
 import type { RunId } from '@shared/schemas';
 import type { Rejected } from '@shared/session/requestErrors';
-import { TexraStateKey } from '@shared/settingsView/texraSettings';
+import { DocumentsStateKey } from '@shared/settingsView/documentsSettings';
+import { runOutputReader } from '@tools/documents/runOutputs';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -118,12 +119,12 @@ export class DesktopProgressFileActions {
   ): Effect.Effect<void, Rejected | StateReadFailed> {
     return Effect.gen({ self: this }, function* () {
       const validation = validateRunRequest({
-        config: {
+        config: documentTaskConfig({
           agent: 'merge',
           model: yield* getHelperModelName(this.host.session.roots),
           inputFiles: [baseFile],
           editedFile,
-        },
+        }),
       });
       if (!validation.valid) {
         yield* this.ui.showErrorMessage(`Merge: ${validation.message}`);
@@ -188,7 +189,7 @@ export class DesktopProgressFileActions {
         latexdiffAllFailedMessage(
           yield* readSettingFrom<LatexdiffMathMarkupValue>(
             this.host.session.roots,
-            TexraStateKey.LATEXDIFF_MATH_MARKUP,
+            DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
           ),
         ),
       );

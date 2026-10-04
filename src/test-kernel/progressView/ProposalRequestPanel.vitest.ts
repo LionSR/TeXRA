@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { ProposalRequestPanel } from '@progressView/frontend/components/ProposalRequestPanel';
-import { AgentCategory, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
+import { DEFAULT_TOOL_CONFIG } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { recordPermissionActions } from '@test/support/permissionPanelEvents';
 
@@ -20,7 +20,7 @@ function createPermission(): ProposalRequestPanel['permission'] {
     data: {
       requestId: 'proposal-1',
       runId: 'run-a' as RunId,
-      agentCategory: AgentCategory.Workflow,
+      task: true,
       agent: 'writer',
       agentSource: null,
       model: 'sonnet',

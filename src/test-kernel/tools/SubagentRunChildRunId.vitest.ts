@@ -60,18 +60,17 @@ vi.mock('@tools/approval', () => ({
 }));
 
 import { launchDetachedSubagent } from '@tools/delegation/subagentRun';
+import { RunFileService } from '@utils/files/runStorage';
 
 describe('launchDetachedSubagent child run launch', () => {
-  const orchestratorRunId = 'orchestrator-stream' as RunId;
-
   const defaultPayload = {
     agent: 'proof-checker',
     model: 'openai/gpt-5-2025-08-07',
-    agentCategory: 'toolUse',
   } as never;
 
+  const roots = createFakeWorkspaceRoots();
   const parent: RunToolCall = {
-    roots: createFakeWorkspaceRoots(),
+    roots,
     tracker: new FileInteractionState(),
     requests: {
       nextId: (prefix: string) => prefix,
@@ -80,6 +79,9 @@ describe('launchDetachedSubagent child run launch', () => {
     run: {
       runId: 'parent-exec' as RunId,
       session: { tag: 'parent-session' } as never,
+      task: null,
+      opening: null,
+      fileService: new RunFileService('parent-exec' as RunId, roots),
       steps: noStep(),
       scope: Scope.makeUnsafe(),
       config: AgentConfigSchema.parse({
@@ -97,7 +99,6 @@ describe('launchDetachedSubagent child run launch', () => {
   function runDefaultSubagent() {
     return Effect.provide(
       launchDetachedSubagent(parent, defaultPayload, {
-        parentRunId: orchestratorRunId,
         runId: 'child-run' as RunId,
         parentOffered: [],
         inheritChildRunApprovals: () => undefined,

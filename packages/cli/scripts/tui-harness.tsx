@@ -36,7 +36,7 @@ import {
 } from '@shared/approvalPolicy';
 import {
   aggregateId as qualifyAggregateId,
-  AgentCategory,
+  AgentProposalPermissionSchema,
   AgentConfigFieldsSchema,
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -49,6 +49,7 @@ import {
   type JsonValue,
   type LogLevel,
   type MessageType,
+  type AgentProposalPermission,
   type NormalizedToolUse,
   type PermissionPayload,
   type PlanApprovalPermission,
@@ -299,12 +300,7 @@ function parseList(value: string | undefined): string[] {
     .filter((item) => item.length > 0);
 }
 
-const HARNESS_VISIBLE_TOOL_USE_AGENTS = parseList(
-  process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS,
-);
-const HARNESS_VISIBLE_WORKFLOW_AGENTS = parseList(
-  process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS,
-);
+const HARNESS_VISIBLE_AGENTS = parseList(process.env.HARNESS_VISIBLE_AGENTS);
 const HARNESS_VISIBLE_MODELS = parseList(process.env.HARNESS_VISIBLE_MODELS);
 const HARNESS_MEMORY_FILES = parseList(process.env.HARNESS_MEMORY_FILES);
 
@@ -375,23 +371,11 @@ const harnessRuntimeSession = await harnessRuntime.runPromise(
   HARNESS_PLATFORM_SERVICES.session,
 );
 harnessRuntimeSession.setApprovalPolicy(TEXRA_APPROVAL_POLICY_DEFAULT);
-if (
-  process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined ||
-  process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
-) {
+if (process.env.HARNESS_VISIBLE_AGENTS !== undefined) {
   await harnessRuntime.runPromise(
     harnessRoots.repoState.update(WorkspaceStateKey.WORKSPACE_AGENTS, {
       kind: 'custom',
-      agentKeys: {
-        workflow:
-          process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
-            ? HARNESS_VISIBLE_WORKFLOW_AGENTS
-            : 'all',
-        toolUse:
-          process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined
-            ? HARNESS_VISIBLE_TOOL_USE_AGENTS
-            : 'all',
-      },
+      agentKeys: HARNESS_VISIBLE_AGENTS,
     }),
   );
 }
@@ -467,12 +451,11 @@ HARNESS_DISPOSERS.push(
 HARNESS_DISPOSERS.push(announceForegroundApprovals());
 
 /**
- * The runs this harness has minted, and the category each was minted with.
- * `publish` enqueues a job on the session's one publisher, so the fold — and
+ * The runs this harness has minted. `publish` enqueues a job on the session's one publisher, so the fold — and
  * the view every render reads — lands after the seeding that queued it. A
  * seeder therefore reads what it published from here, never from the view.
  */
-const harnessRuns = new Map<RunId, AgentCategory>();
+const harnessRuns = new Set<RunId>();
 
 /** Mint a run: its `run.start` existence fact (PRD 6, item 2), then the
  *  `run.config` launch fact a real run publishes next, which names the model
@@ -480,7 +463,6 @@ const harnessRuns = new Map<RunId, AgentCategory>();
 function seedRun(
   runId: RunId,
   options: {
-    readonly category?: AgentCategory;
     readonly identity?: NonNullable<
       Extract<SessionEventDraft, { type: 'run.start' }>['identity']
     >;
@@ -494,7 +476,7 @@ function seedRun(
   } = {},
 ): void {
   if (harnessRuns.has(runId)) return;
-  harnessRuns.set(runId, options.category ?? AgentCategory.ToolUse);
+  harnessRuns.add(runId);
   const identity = options.identity ?? {
     kind: 'agent' as const,
     agent: options.agent ?? 'harness-agent',
@@ -503,7 +485,6 @@ function seedRun(
     type: 'run.start',
     aggregateId: qualifyAggregateId('run', runId),
     identity,
-    category: options.category ?? AgentCategory.ToolUse,
     userFollowUpSupport:
       options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     parent:
@@ -518,7 +499,6 @@ function seedRun(
       aggregateId: qualifyAggregateId('run', runId),
       config: AgentConfigFieldsSchema.parse({
         agent: identity.agent,
-        agentCategory: options.category ?? AgentCategory.ToolUse,
         model: HARNESS_MODEL,
       }),
     });
@@ -541,12 +521,10 @@ function seedPhase(runId: RunId, phase: RunPhase): void {
     return;
   }
   const run = runViewOf(currentView(), runId);
-  const category = run?.category ?? AgentCategory.ToolUse;
   if (run?.status !== RUN_PHASE.RUNNING) {
     publish({
       type: 'run.activate',
       aggregateId: qualifyAggregateId('run', runId),
-      category,
     });
   }
   if (phase === RUN_PHASE.WAITING) {
@@ -555,7 +533,7 @@ function seedPhase(runId: RunId, phase: RunPhase): void {
       aggregateId: qualifyAggregateId('run', runId),
       payload: { family: 'toolUse', at: 'waiting' },
     });
-  } else if (category === AgentCategory.ToolUse) {
+  } else {
     publish({
       type: 'run.position',
       aggregateId: qualifyAggregateId('run', runId),
@@ -565,23 +543,19 @@ function seedPhase(runId: RunId, phase: RunPhase): void {
 }
 
 /** End a run the way a real session does: the terminal `run.end` fact the
- *  fold turns into the terminal phase and the durable outcome. The run's
- *  category comes from the mint record, not the view: a fixture that seeds a
+ *  fold turns into the terminal phase and the durable outcome. The run is
+ *  looked up in the mint record, not the view: a fixture that seeds a
  *  terminal phase during boot does it before the publisher has folded the
  *  `run.start` it just queued. */
 function seedRunEnd(runId: RunId, outcome: RunOutcome): void {
-  const category = harnessRuns.get(runId);
-  if (category === undefined) {
+  if (!harnessRuns.has(runId)) {
     throw new Error(`tui-harness: cannot end unknown run ${runId}`);
   }
   publish({
     type: 'run.end',
     aggregateId: qualifyAggregateId('run', runId),
     outcome,
-    output:
-      category === AgentCategory.Workflow
-        ? { category: 'workflow' }
-        : { category: 'toolUse', response: '', files: [] },
+    output: { response: '', files: [] },
   });
 }
 
@@ -813,7 +787,7 @@ function seedSubagentFollowupTranscript(): void {
   const followups = [
     '<subagent-progress id="child-a" agent="strategy" type="overview" tool-calls="3" files-changed="none" />',
     [
-      '<subagent-result id="child-b" agent="leanSolver" category="toolUse" status="completed">',
+      '<subagent-result id="child-b" agent="leanSolver" status="completed">',
       '<wall-time>2min, 3sec</wall-time>',
       '<response>Proved &lt;/response> is escaped &amp; visible.</response>',
       '</subagent-result>',
@@ -956,11 +930,13 @@ function makePlanApprovalPayload(): PlanApprovalPermission {
   };
 }
 
-function makeAgentProposalPayload() {
-  return {
+function makeAgentProposalPayload(): AgentProposalPermission {
+  // A chat delegation: the schema fills the empty file fields a document
+  // task would carry.
+  return AgentProposalPermissionSchema.parse({
     requestId: 'harness-agent-proposal',
     runId: HARNESS_RUN_ID,
-    agentCategory: AgentCategory.ToolUse,
+    task: false,
     agent: 'review',
     model: 'deepseek/deepseek-flash',
     instruction: AGENT_PROPOSAL_INSTRUCTION,
@@ -982,7 +958,7 @@ function makeAgentProposalPayload() {
           },
         }
       : {}),
-  };
+  });
 }
 
 /** A finished `agent` call: its card's output is the delivery envelope the
@@ -1771,10 +1747,7 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
   const waiting = RunIdSchema.parse('eeeeeeeeeeee');
   const interrupted = RunIdSchema.parse('ffffffffffff');
   const nested = RunIdSchema.parse('111111111111');
-  log.emit(PROCESS, 10_000_000, {
-    type: 'run.activate',
-    category: AgentCategory.ToolUse,
-  });
+  log.emit(PROCESS, 10_000_000, { type: 'run.activate' });
   for (const [id, agent, owner, parentId] of [
     [waiting, 'waiting', OWNER, null],
     [interrupted, 'interrupted', OTHER_OWNER, null],
@@ -1786,7 +1759,6 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
       {
         type: 'run.start',
         identity: { kind: 'agent', agent },
-        category: AgentCategory.ToolUse,
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
         // The creation commit the database stamps, not a guess: `Log.parent`
         // refuses a parent that never started.
@@ -1795,15 +1767,7 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
       },
       owner,
     );
-    log.emit(
-      id,
-      10_000_000,
-      {
-        type: 'run.activate',
-        category: AgentCategory.ToolUse,
-      },
-      owner,
-    );
+    log.emit(id, 10_000_000, { type: 'run.activate' }, owner);
   }
   log.emit(waiting, 10_000_000, {
     type: 'request.opened',

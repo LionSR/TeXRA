@@ -16,7 +16,6 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 import {
-  AgentCategorySchema,
   AgentMetadataBaseSchema,
   AgentModePresetSchema,
   AgentScanIssueSchema,
@@ -135,7 +134,6 @@ export const SettingsTargetSchema = z.enum(
 const SetTabMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.SET_TAB),
   tab: SettingsTargetSchema,
-  agentSubTab: AgentCategorySchema.optional(),
 });
 
 // ============================================================
@@ -205,7 +203,7 @@ const UpdateSettingsSnapshotMessageSchema = z.discriminatedUnion('snapshot', [
 
 /**
  * Agent selection data for the settings view.
- * Extends AgentMetadataBaseSchema (name, category, description) with
+ * Extends AgentMetadataBaseSchema (name, hasTask, description) with
  * settings-specific fields for UI state.
  */
 const AgentSelectionItemSchema = AgentMetadataBaseSchema.extend({
@@ -225,7 +223,7 @@ export type AgentSelectionItem = z.infer<typeof AgentSelectionItemSchema>;
 /** Outbound: backend → frontend agent selection data */
 const UpdateAgentSelectionMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION),
-  agents: z.record(AgentCategorySchema, z.array(AgentSelectionItemSchema)),
+  agents: z.array(AgentSelectionItemSchema),
   customAgentIssues: z.array(AgentScanIssueSchema).prefault([]),
 });
 
@@ -588,11 +586,10 @@ const OpenAgentYamlMessageSchema = agentCommand(
 );
 const SetAgentEnabledMessageSchema = agentCommand(
   SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
-).extend({ category: AgentCategorySchema, enabled: z.boolean() });
+).extend({ enabled: z.boolean() });
 
 const SetAllAgentsEnabledMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED),
-  category: AgentCategorySchema,
   source: AgentSourceSchema,
   enabled: z.boolean(),
 });
@@ -602,7 +599,8 @@ const OpenAgentFolderMessageSchema = z.object({
 });
 const CreateAgentMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.CREATE_AGENT),
-  category: AgentCategorySchema,
+  /** From the document-task template rather than the chat one. */
+  task: z.boolean(),
 });
 const CustomizeAgentMessageSchema = agentCommand(
   SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT,

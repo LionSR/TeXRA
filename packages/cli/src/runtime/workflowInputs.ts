@@ -28,7 +28,7 @@ export const STDIN_WORKFLOW_INPUT_BASENAME = 'stdin.tex';
  * destination into existence.
  */
 export const WORKFLOW_INPUT_REQUIRED_MESSAGE =
-  'At least one workflow input file is required.';
+  'At least one input file is required for a document task.';
 
 function resolveAgainstCwd(candidate: string, cwd: string): string {
   return path.resolve(cwd, candidate);

@@ -96,7 +96,6 @@ const PARENT_RUN_ID = 'a9e70a9e7002' as RunId;
 const persistedRuns = new Map<RunId, { readonly parentId: RunId }>();
 const CONFIG = AgentConfigSchema.parse({
   agent: 'assistant',
-  agentCategory: 'toolUse',
   model: 'test-model',
 });
 const settlePublications = vi.fn(
@@ -153,7 +152,6 @@ const SESSION = {
 } as never;
 
 const EXECUTE_RESULT = {
-  category: 'toolUse',
   runId: RUN_ID,
   outcome: 'COMPLETED',
 };
@@ -314,10 +312,10 @@ describe('runAgent run ownership', () => {
   );
 
   it.effect(
-    'registers the resolved category and passes the same definition to run',
+    'registers the resolved config and passes the same definition to run',
     () =>
       Effect.gen(function* () {
-        const definition = { config: { ...CONFIG, agentCategory: 'workflow' } };
+        const definition = { config: { ...CONFIG, agent: 'resolved' } };
         mocks.prepareAgentDefinition.mockReturnValueOnce(definition);
 
         yield* launchRun(
@@ -329,7 +327,9 @@ describe('runAgent run ownership', () => {
           SESSION,
           RUN_ID,
           definition.config,
-          expect.objectContaining({ userFollowUpSupport: 'unsupported' }),
+          expect.objectContaining({
+            identity: { kind: 'agent', agent: 'resolved' },
+          }),
         );
         expect(mocks.executeAgent).toHaveBeenCalledWith(
           definition,

@@ -9,7 +9,7 @@
  * change reaches the model as lines of the context update
  * (`delegationUpdate`). The tool descriptions never change with them, so
  * neither does the cached prefix. A launch is checked against the live lists
- * when it is called (`requireWorkflowOrToolUseAgent`,
+ * when it is called (`requireAgent`,
  * `selectAvailableDelegationModel`), and a refusal names the current ones.
  */
 
@@ -29,14 +29,16 @@ import { decideRunModel } from '@model/runModelDecision';
 import { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type {
-  AgentCategory,
   AgentDelegationScope,
   DelegationTargets,
   ModelOptionData,
   ToolDefinition,
 } from '@shared/schemas';
 import { isModelOptionAvailable } from '@shared/schemas';
-import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
+import {
+  AGENT_TOOL_NAME,
+  DOCUMENT_TASK_TOOL_NAME,
+} from '@shared/constants/delegationTools';
 import { unique } from '@utils/core';
 import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -50,9 +52,9 @@ const availableModelNames = (models: readonly ModelOptionData[]): string[] =>
 
 /**
  * The targets the offered `definitions` can launch, or `undefined` when they
- * hold no delegation tool. A delegation tool declares the agent category it
- * launches (`availabilityCategory`); the agents are the run's pinned
- * delegation scope's, or the workspace's visible ones.
+ * hold no delegation tool: the run's pinned delegation scope's agents, or
+ * the workspace's visible ones, each marked when it is a document task;
+ * only those when `document_task` is offered without `agent`.
  */
 export const readDelegationTargets = Effect.fn('readDelegationTargets')(
   function* (
@@ -60,34 +62,28 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
     stores: ModelOptionStores,
     scope: AgentDelegationScope | undefined,
   ) {
-    const launchers = new Map<AgentCategory, string[]>();
-    for (const { name, availabilityCategory } of definitions)
-      if (name === AGENT_TOOL_NAME && availabilityCategory !== undefined)
-        for (const category of [availabilityCategory].flat())
-          launchers.set(category, [...(launchers.get(category) ?? []), name]);
-    if (launchers.size === 0) return undefined;
-    const agents: DelegationTargets['agents'] = [];
-    for (const [category, tools] of launchers) {
-      const entries = yield* resolveDelegationScopeAgents(
-        stores,
-        scope,
-        category,
-      );
-      agents.push({
-        category,
-        tools,
-        agents: entries.map(({ name, description, tools: agentTools }) => ({
-          name,
-          // One line per agent: a blank line in a (user-defined) description
-          // would otherwise read as the end of the list.
-          description: (description || 'No description').replaceAll(
-            /\s*\n\s*/g,
-            ' ',
-          ),
-          tools: agentTools ?? [],
-        })),
-      });
-    }
+    const names = new Set(definitions.map(({ name }) => name));
+    const chats = names.has(AGENT_TOOL_NAME);
+    if (!chats && !names.has(DOCUMENT_TASK_TOOL_NAME)) return undefined;
+    const entries = yield* resolveDelegationScopeAgents(stores, scope);
+    const agents = entries.flatMap(
+      ({ name, description, tools: agentTools, task }) =>
+        chats || task !== null
+          ? [
+              {
+                name,
+                // One line per agent: a blank line in a (user-defined)
+                // description would otherwise read as the end of the list.
+                description: (description || 'No description').replaceAll(
+                  /\s*\n\s*/g,
+                  ' ',
+                ),
+                tools: agentTools ?? [],
+                task: task !== null,
+              },
+            ]
+          : [],
+    );
     const models = yield* readModelAvailabilityInputs(stores).pipe(
       Effect.map((inputs) => availableModelNames(modelOptionsFrom(inputs))),
       // A failed read (an unreadable store, a host call that rejected) tells
@@ -103,9 +99,7 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
     return {
       agents,
       models,
-      worktree: launchers.has('toolUse')
-        ? yield* isWorktreeSupportEnabled(stores)
-        : null,
+      worktree: chats ? yield* isWorktreeSupportEnabled(stores) : null,
     } satisfies DelegationTargets;
   },
 );
@@ -121,20 +115,20 @@ const worktreeLine = (enabled: boolean): string =>
 
 /** The system text's delegation section, rendered once, at the freeze. */
 export function delegationSection(targets: DelegationTargets): string {
-  const lines = targets.agents.flatMap(({ tools, agents }) => {
-    const head = `Available agents for ${tools.join(', ')}:`;
-    if (agents.length === 0)
-      return [
-        `${head} none are currently enabled in this workspace. Ask the user to enable delegation targets in Settings → Agents before delegating.`,
-      ];
-    return [
-      head,
-      ...agents.map(
-        ({ name, description, tools: agentTools }) =>
-          `- ${name}: ${description}${agentTools.length > 0 ? `\n  Tools: ${agentTools.join(', ')}` : ''}`,
-      ),
-    ];
-  });
+  const head =
+    'Available agents (a document task also runs over files with `document_task`):';
+  const lines =
+    targets.agents.length === 0
+      ? [
+          `${head} none are currently enabled in this workspace. Ask the user to enable delegation targets in Settings → Agents before delegating.`,
+        ]
+      : [
+          head,
+          ...targets.agents.map(
+            ({ name, description, tools: agentTools, task }) =>
+              `- ${name}${task ? ' (document task)' : ''}: ${description}${agentTools.length > 0 ? `\n  Tools: ${agentTools.join(', ')}` : ''}`,
+          ),
+        ];
   if (targets.models === null)
     lines.push(
       'Available models: unavailable to load; omit model unless the user explicitly requested one.',
@@ -174,14 +168,12 @@ export function delegationUpdate(
   told: DelegationTargets | undefined,
   now: DelegationTargets,
 ): string[] {
-  const lines = now.agents.flatMap(({ category, tools, agents }) => {
-    const before = told?.agents.find((group) => group.category === category);
-    const change = namesChange(
-      before?.agents.map(({ name }) => name) ?? [],
-      agents.map(({ name }) => name),
-    );
-    return change === null ? [] : [`Agents for ${tools.join(', ')} ${change}.`];
-  });
+  const lines: string[] = [];
+  const change = namesChange(
+    told?.agents.map(({ name }) => name) ?? [],
+    now.agents.map(({ name }) => name),
+  );
+  if (change !== null) lines.push(`Agents ${change}.`);
   if (now.models === null) {
     if (told?.models !== null)
       lines.push(

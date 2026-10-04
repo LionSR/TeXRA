@@ -46,7 +46,6 @@ export type RunStorageFileLocation = z.infer<
 >;
 export type ExternalFileLocation = z.infer<typeof ExternalFileLocationSchema>;
 export type FileLocation = z.infer<typeof FileLocationSchema>;
-export type AgentFileLocation = z.infer<typeof AgentFileLocationSchema>;
 
 // ============================================================================
 // How a file location reads to a human
