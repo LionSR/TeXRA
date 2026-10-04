@@ -11,6 +11,7 @@ import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
   ToolError,
+  type ToolDefinition,
   type ToolResult,
 } from '@shared/schemas';
 import { findStorageRefusal } from '@shared/session/runHistory';
