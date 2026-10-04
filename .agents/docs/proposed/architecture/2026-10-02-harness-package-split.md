@@ -251,15 +251,15 @@ class Sessions extends Context.Service<
     list: Effect<readonly Session[]>;
   }
 >() {
-  static layer(input: {
+  static layer<Host = never>(input: {
     platform: AgentPlatform;
-    plugins: readonly Plugin[];
+    plugins: readonly Plugin<any, any, Host>[]; // each H must be in Host
     execution?: (
       roots: WorkspaceRoots,
     ) => Layer<WorkspaceFs | ChildProcessSpawner>; // new (H4, in M2)
     usageLog?: Layer<UsageLog, never, HarnessServices>; // new (M2): provided inside the layer; the SDK defaults to disabled
-    host?: Layer<HostServices>; // new (M2): what a host serves its plugins
-  }): Layer<Sessions | Plugins, PlatformConflict | PluginConflict>; // plugins, host: new (M2)
+    host?: Layer<Host>; // new (M2): what a host serves its plugins
+  }): Layer<Sessions | Plugins<Host>, PlatformConflict | PluginConflict>; // plugins, host: new (M2)
 }
 interface Session {
   roots: WorkspaceRoots;
@@ -269,7 +269,10 @@ interface Session {
   view: { changes: Stream<SessionView> };
   subscribe(i: readonly TranscriptSubscription[]): Effect<void, never, Scope>;
 }
-// Run { runId, result, view, events, interrupt }: unchanged
+// Run<Result = RunEndResult> { runId, result, view, events, interrupt }:
+// `result` is the harness's generic end result; a plugin-keyed extension
+// (`result.plugins[id]`) carries each plugin's typed part, and an app wrapper
+// (the documents plugin's `workflowResult(run)`) narrows it
 class Plugins<Host = never> extends Context.Service<
   Plugins<Host>,
   {
@@ -339,7 +342,7 @@ interface Plugin<POut = never, SOut = never, H = never, ROut = POut | SOut> {
   readonly rounds?: RoundPolicy<ROut>; // per agent category (M1)
   readonly arms?: readonly PluginArm[]; // plugin.fact kinds, versioned
   readonly settings?: readonly SettingRow[]; // §4
-  readonly availability?: Availability; // probes → blocked reasons
+  readonly availability?: Availability<H>; // probes → blocked reasons; may require H
   readonly meta?: PluginMeta; // below
   readonly requests?: readonly PluginRequest[]; // durable request kinds, §4
   readonly project?: PluginProjection<ROut>; // read side of its arms, §4
@@ -397,7 +400,11 @@ declare const definePlugin: <POut, SOut, H>(
   `settings`, `agents` and `skills` follow the same registry generations as
   tools: the settings catalog, the agent catalog follower and the skill
   roots rebuild when a generation changes, and withdrawing a plugin removes
-  its rows, agents and skills.
+  its rows, agents and skills. Setting keys must be unique across the harness
+  and every enabled plugin; a duplicate `texra.*` key is a `PluginConflict`
+  (reason `settingKey`) and the generation is not published. Availability
+  probes run with the pinned host layer provided and are typed by `H`, so a
+  probe cannot read a host service the host does not supply.
 - **Dependencies.** An agent's dependencies are derived from its tool list and from the
   plugin that supplies the round policy of its category, so a workflow agent
   with no tools still depends on `documents`; an agent may also name an
@@ -570,7 +577,10 @@ result stays generic, `WorkflowRunEndResult` and the helpers of
 diff paths and the `diffsUnavailable` reason, which `withWorkflowDiffs` and
 `storedResultMeta` write after delivery, become a second documents fact,
 `documents/diffs` v1, appended once the diffs are computed, so a reopened
-run rebuilds them. `selectAutoOpenFinalOutput.ts` (it reads
+run rebuilds them. Delivery is part of the result-finalization path: the
+documents plugin's finalizer computes the diffs and appends the fact before
+`Run.result` resolves, so a live awaiter, the CLI and a subagent see the
+enriched result, not the pre-delivery one. `selectAutoOpenFinalOutput.ts` (it reads
 `texra.agentOutputs.autoOpenFinal`) and `subagentResults.ts` (it interprets
 outputs, compile failures and diffs) move to the app in M3 and read the
 slot. A stored run folds to the same slot, so reopening a session loses
@@ -692,6 +702,13 @@ read. M5 on its own lands early, so M6 to M8 are written in the new
 vocabulary. M8's one documentation edit is the live guides: `CLAUDE.md` and
 `AGENTS.md` (paths, the SDK boundary, the ratchet names) change in the same
 PR, while historical proposals keep their baseline paths.
+
+**Build configuration.** M8 also retargets every live reference to the old
+name: `tsconfig.build.json` (its `packages/agent/src/**/*.ts` include and the
+`packages/agent/dist/types` output), the root `typecheck:agent` filter, the
+lint paths, the workspace and release configuration and the package
+validation scripts. A grep for `packages/agent` and `@texra-ai/agent` must
+come back empty outside historical docs before the PR merges.
 
 **Path aliases.** The alias names stay. `tsconfig.json` maps the harness's
 aliases (`@agent/*`, `@shared/*`, `@tools/*`, `@controllers/*`, `@common/*`,
