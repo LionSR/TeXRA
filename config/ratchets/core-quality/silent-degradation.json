@@ -1,0 +1,9 @@
+{
+  "packages/llm/src/oauth/xai/xaiOAuthClient.ts": 1,
+  "src/agent/runtime/runLaunchGuard.ts": 1,
+  "src/agent/runtime/SessionHandle.ts": 1,
+  "src/controllers/session/storeAside.ts": 2,
+  "src/controllers/session/storeSchema.ts": 3,
+  "src/tools/mcp/mcpServer.ts": 2,
+  "src/tools/web/WebFetchTool.ts": 1
+}
