@@ -70,10 +70,7 @@ import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { ExternalOpenFailed } from '@hosts/uiHosts';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  modelOptionsFrom,
-  readModelAvailabilityInputs,
-} from '@model/computeModelOptions';
+import {} from '@model/computeModelOptions';
 import {
   AgentDirectories,
   type StateStore,
@@ -252,14 +249,6 @@ export function createExtensionHostRequests(
         withProcessServices(
           runtime,
           openFinalOutputIfAvailable(session.roots)(result),
-        ),
-      loadModelOptions: () =>
-        withProcessServices(
-          runtime,
-          readModelAvailabilityInputs({
-            ...session.roots,
-            secrets,
-          }).pipe(Effect.map(modelOptionsFrom)),
         ),
       // The set-key quick pick is a VS Code command: it either runs or
       // faults, so its rejection is the one failure, as `ApiKeyPromptFailed`.

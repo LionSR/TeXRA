@@ -30,7 +30,11 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import type { MessageHost, NotificationFailed } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
-import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
+import {
+  type ModelHostFactUnreadable,
+  modelOptionsFrom,
+  readModelAvailabilityInputs,
+} from '@model/computeModelOptions';
 import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
 import type { AppState, StateReadFailed } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
@@ -58,7 +62,6 @@ import {
 import {
   ProgressFollowUpController,
   type CompileFixerPlanFailed,
-  type ProgressFollowUpModelOption,
   type ProgressFollowUpState,
 } from '../progressView/ProgressFollowUpController';
 import { runActionGuard } from './runActionGuard';
@@ -121,10 +124,6 @@ export interface HostRunActionPorts {
   ): Effect.Effect<void, Error>;
   /** Open a resumed workflow's final output, as the launcher does a fresh one's. */
   openWorkflowOutput(result: RunEndResult): Effect.Effect<void, Error>;
-  loadModelOptions(): Effect.Effect<
-    readonly ProgressFollowUpModelOption[],
-    ModelHostFactUnreadable | StateReadFailed
-  >;
   /**
    * Ask the user for a provider key; the controller re-reads the store. A
    * host that could not ask fails with `ApiKeyPromptFailed`; a user who
@@ -211,11 +210,23 @@ export interface HostRunActions {
   sendFollowUp(runId: RunId, text: string): Effect.Effect<void>;
 }
 
+/** What the model-availability read runs over, supplied by the host runtime. */
+type ModelAvailabilityServices = Effect.Services<
+  ReturnType<typeof readModelAvailabilityInputs>
+>;
+
 export const createHostRunActions = (
   ports: HostRunActionPorts,
-): Effect.Effect<HostRunActions, never, FileSystem.FileSystem | Secrets> =>
+): Effect.Effect<
+  HostRunActions,
+  never,
+  FileSystem.FileSystem | Secrets | ModelAvailabilityServices
+> =>
   Effect.gen(function* () {
     const secrets = yield* Secrets;
+    // The model-availability read runs later, outside this program's scope,
+    // so it carries the services this one was built with.
+    const services = yield* Effect.context<ModelAvailabilityServices>();
     // Resolved once here and carried: the planner's workspace probes below
     // read through this filesystem rather than taking one from whatever
     // context each of its callers happens to run on.
@@ -372,7 +383,11 @@ export const createHostRunActions = (
     });
 
     const followUp = new ProgressFollowUpController({
-      loadModelOptions: () => ports.loadModelOptions(),
+      loadModelOptions: () =>
+        readModelAvailabilityInputs({ ...session.roots, secrets }).pipe(
+          Effect.map(modelOptionsFrom),
+          Effect.provide(services),
+        ),
       state: runOutputs,
       // The session's own folder, carried as data: the planner resolves and
       // probes its candidates there rather than through the calling

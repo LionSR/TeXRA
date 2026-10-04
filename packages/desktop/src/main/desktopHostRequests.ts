@@ -41,13 +41,9 @@ import {
 } from '@housekeeping/runDirOps';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  modelOptionsFrom,
-  readModelAvailabilityInputs,
-} from '@model/computeModelOptions';
+import {} from '@model/computeModelOptions';
 import type { AgentDirectoriesFailed } from '@platform/interfaces';
 import {
-  withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
 } from '@platform/processRuntime';
@@ -156,14 +152,6 @@ export function createDesktopHostRequests(
     createHostRunActions({
       ...run, // this window's launcher and output opener
       session,
-      loadModelOptions: () =>
-        withProcessServices(
-          runtime,
-          readModelAvailabilityInputs({
-            ...session.roots,
-            secrets: options.secrets,
-          }).pipe(Effect.map(modelOptionsFrom)),
-        ),
       // Only the "ask the user for a key" step is host-specific: on the
       // desktop that means opening the Models tab rather than a modal prompt.
       // The controller re-reads the secret store after this returns.
