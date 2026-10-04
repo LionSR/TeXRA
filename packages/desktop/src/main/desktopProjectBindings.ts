@@ -7,6 +7,7 @@
 
 import { Effect, Exit, Scope } from 'effect';
 
+import { localSessionBackend } from '@controllers/session/sessionBackend';
 import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import {
   createHostSnapshotSource,
@@ -195,7 +196,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       // Install the recipient before host requests publish the recorder's
       // state.
       const bridge = yield* SessionBridge.make({
-        session: project.session,
+        backend: localSessionBackend(project.session),
         handleHostRequest: (request, portId) =>
           hostRequests.handleHostRequest(request, portId),
         onPortClosed: (portId) => hostRequests.closePort(portId),

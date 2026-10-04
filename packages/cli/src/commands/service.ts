@@ -8,13 +8,13 @@ import { ServiceProjects } from '@controllers/server/handlers';
 import { serve } from '@controllers/server/serve';
 import type { ServiceInfo } from '@controllers/server/protocol';
 import { entryChannel, entryMessage, setLogSink } from '@logger/logSink';
+import { adoptLoginShellEnvironment } from '@platform/defaults/loginShellEnv';
 
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 import {
   cliServiceProjects,
   connectCliService,
   probeCliService,
-  serviceLogPath,
 } from '../runtime/cliService';
 import { CliExitCode } from '../runtime/exitCodes';
 import { writeTextStderr } from '../runtime/logSinks';
@@ -71,6 +71,15 @@ function installServiceLogSink(): void {
 function runServe(context: CliContext, idleSeconds: number) {
   return Effect.gen(function* () {
     installServiceLogSink();
+    // Whoever started it, the service runs with the user's login-shell
+    // environment, so every window finds the same tools.
+    yield* adoptLoginShellEnvironment().pipe(
+      Effect.catch((error) =>
+        Effect.logWarning(
+          `${error.message}; tasks run with only HOME and the TEXRA_* settings the service was started with, so tools such as latexmk and git may not be found`,
+        ),
+      ),
+    );
     const shutdown = yield* Deferred.make<void>();
     const onSignal = () => Deferred.doneUnsafe(shutdown, Exit.void);
     process.on('SIGINT', onSignal);
@@ -140,7 +149,7 @@ function statusText(info: ServiceInfo | null, context: CliContext): string {
     `  started:  ${new Date(info.startedAt).toISOString()}`,
     `  clients:  ${info.clients}`,
     `  running:  ${info.running} task${info.running === 1 ? '' : 's'}${info.draining ? ' (draining)' : ''}`,
-    `  log:      ${serviceLogPath(context.storageRoot)}`,
+    `  log:      ${servicePaths(context.storageRoot).log}`,
   ].join('\n');
 }
 

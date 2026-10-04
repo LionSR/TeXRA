@@ -339,6 +339,17 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Every chat is a task of the background service (CLI).** `texra chat`
+  and a bare `texra` run their conversation's runs in the TeXRA service, so
+  another terminal's `/tasks` lists the conversation and attaches to it
+  live, while the chat answers its approvals and edit diffs as before.
+  When the service cannot start (on Windows, for now) the chat runs in its
+  own process and says so once. `texra run`, `-p` and
+  `--output-format ndjson` stay in their own process. The service now takes
+  its `PATH` and keys from your login shell rather than from whichever
+  window started it, so a service started by an app opened from the Dock
+  still finds `latexmk`.
+
 - **`/tasks` in the chat attaches to a background task (CLI).** The chat
   lists every project's tasks in the TeXRA service; choosing one shows its
   transcript live, sends it follow-ups, and answers its approvals (commands,

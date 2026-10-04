@@ -35,6 +35,8 @@ import {
   handleRunLatexdiff,
 } from '@commands/latex/latexdiffCommands';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
+import { launchOnRun } from '@controllers/mainView/backend/MainViewRunLaunchController';
+import { localSessionBackend } from '@controllers/session/sessionBackend';
 import type { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { normalizeMainViewFileExtension } from '@controllers/mainView/MainViewDroppedFilesController';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
@@ -235,7 +237,7 @@ export function createExtensionHostRequests(
       session,
       preferHelperModel: runOptions.preferHelperModel ?? false,
       ownApiKeyFallback: runOptions.ownApiKeyFallback,
-      onRun: runOptions.onRun,
+      onRun: launchOnRun(session.approvals, runOptions),
       onRunResolved: options.presentLaunchedRun,
     }).pipe(Effect.flatMap(openFinalOutputIfAvailable(session.roots)));
     return withProcessServices(runtime, launch);
@@ -244,6 +246,7 @@ export function createExtensionHostRequests(
   const runActions = runtime.runSync(
     createHostRunActions({
       session,
+      backend: localSessionBackend(session),
       runValidated,
       openWorkflowOutput: (result) =>
         withProcessServices(

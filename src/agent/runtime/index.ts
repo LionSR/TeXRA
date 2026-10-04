@@ -64,7 +64,7 @@ export {
 
 // resumeRun
 export { resumeRun } from './resumeRun';
-export type { ResumeRunOptions } from './resumeRun';
+export type { ResumeRunOptions, ResumeRunResult } from './resumeRun';
 // The refusal wording a host applies to a `ResumeRunResult` failure.
 export { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 

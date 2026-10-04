@@ -6,12 +6,18 @@
  * it drains its running tasks while a new one starts. One speaking a newer
  * protocol is left running and refused, and the caller stays in process.
  */
+import { spawn } from 'node:child_process';
+import { closeSync, openSync } from 'node:fs';
+
 import * as NodeSocket from '@effect/platform-node/NodeSocket';
 import { Data, Effect, Layer, Schedule, type Scope } from 'effect';
 import { lt as semverLt, valid as semverValid } from 'semver';
 import { RpcClient, RpcSerialization, type RpcClientError } from 'effect/rpc';
 
-import { servicePaths } from './discovery';
+import { nodeFileServices } from '@platform/defaults/jsonStore';
+import { ensureError } from '@utils/errors/errorMessage';
+import { prepareServiceDirectories, servicePaths } from './discovery';
+
 import { PROTOCOL_VERSION, TexraRpcs, type ServiceInfo } from './protocol';
 import type { SocketError } from 'effect/socket/Socket';
 
@@ -107,6 +113,54 @@ export function probeService(
           ),
     ),
   );
+}
+
+/**
+ * Start the service detached, with its output appended to its log, and
+ * return at once: the caller waits for its hello. It is detached in its own
+ * process group, so it outlives the window that started it. `command` and `args` are
+ * the host's: its own Node and entry (the CLI), or its runtime as Node and
+ * the shipped headless bundle (`env` `ELECTRON_RUN_AS_NODE=1`).
+ */
+export function spawnService(
+  storageRoot: string,
+  command: string,
+  args: readonly string[],
+  env: Readonly<Record<string, string>> = {},
+): Effect.Effect<void, Error> {
+  return Effect.gen(function* () {
+    const paths = servicePaths(storageRoot);
+    yield* prepareServiceDirectories(paths);
+    const log = yield* Effect.try({
+      try: () => openSync(paths.log, 'a', 0o600),
+      catch: ensureError,
+    });
+    // Settle on the child's own report: an `error` event (no such binary,
+    // EACCES, no processes left) fails the start with its cause.
+    yield* Effect.callback<void, Error>((resume) => {
+      const child = spawn(command, [...args], {
+        cwd: paths.runDirectory,
+        detached: true,
+        stdio: ['ignore', log, log],
+        // Only the home directory and TeXRA's own settings: the service
+        // reads the rest from the user's login shell, so it never depends
+        // on the window that happened to start it.
+        env: {
+          ...Object.fromEntries(
+            Object.entries(process.env).filter(
+              ([name]) => name === 'HOME' || name.startsWith('TEXRA_'),
+            ),
+          ),
+          ...env,
+        },
+      });
+      child.once('error', (error) => resume(Effect.fail(error)));
+      child.once('spawn', () => {
+        child.unref();
+        resume(Effect.void);
+      });
+    }).pipe(Effect.ensuring(Effect.sync(() => closeSync(log))));
+  }).pipe(Effect.mapError(ensureError), Effect.provide(nodeFileServices));
 }
 
 /**

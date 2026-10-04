@@ -31,6 +31,7 @@
     "packages/cli": {
       "entry": [
         "src/bin/texra.ts!",
+        "src/bin/texraServe.ts!",
         "scripts/{build-bundle,copy-docs,copy-resources}.mjs!",
         "scripts/**/*.{ts,tsx,mjs}"
       ],

@@ -231,6 +231,9 @@ const startCommand = defineCliCommand({
             runId: generateRunId(),
             config,
             continues: null,
+            preferHelperModel: false,
+            ownApiKeyFallback: false,
+            approveDelegatedWork: false,
           });
         }),
       ).pipe(

@@ -14,11 +14,19 @@ const reactDevtoolsStub = fileURLToPath(
 // through this same build graph, so validate-tui exercises the configuration
 // that ships. It stays unminified for readable failure traces.
 const harness = process.argv.includes('--harness');
+// `--serve` bundles the headless background service (`texra serve` with no
+// chat TUI), the file the VS Code extension and the desktop app ship.
+const serve = process.argv.includes('--serve');
 const configuredOutfile = process.env.TEXRA_CLI_BUNDLE_OUTFILE?.trim();
-const entryPoint = harness ? 'scripts/tui-harness.tsx' : 'src/bin/texra.ts';
+const entryPoint = harness
+  ? 'scripts/tui-harness.tsx'
+  : serve
+    ? 'src/bin/texraServe.ts'
+    : 'src/bin/texra.ts';
 const outfile = harness
   ? 'dist/bin/tui-harness.js'
-  : configuredOutfile || 'dist/bin/texra.js';
+  : configuredOutfile ||
+    (serve ? 'dist/bin/texra-serve.js' : 'dist/bin/texra.js');
 const includeInternalValidationModel =
   process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL === '1';
 

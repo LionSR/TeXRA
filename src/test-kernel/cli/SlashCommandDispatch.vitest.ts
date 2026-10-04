@@ -51,6 +51,7 @@ import type { CliLogoutTarget } from '@cli/runtime/loginOptions';
 import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
 import * as cliProviderKeys from '@cli/chat/tui/hosts/cliProviderKeys';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
+import { localSessionBackend } from '@controllers/session/sessionBackend';
 import * as subscriptionAccess from '@model/subscriptionAccess';
 import { withProcessServices } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
@@ -208,6 +209,7 @@ function createContext(
     cliContext: createCliContext(),
     session,
     runtimeSession: services.runtimeSession,
+    backend: localSessionBackend(services.runtimeSession),
     secrets: services.secrets,
     stores: services.stores,
     runtime: testRuntime(),

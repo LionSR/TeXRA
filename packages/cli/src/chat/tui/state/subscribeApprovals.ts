@@ -25,6 +25,7 @@ import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
 import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
+import type { ToolEditPreview } from '@controllers/server/protocol';
 import {
   ApiKeyPromptFailed,
   ProgressApiKeyRetryController,
@@ -48,6 +49,7 @@ import {
   pruneToLive,
   reopenRequest,
   stagePresentation,
+  type SessionRequests,
   useHostCapability,
 } from './approvalQueue';
 import { appendLocalNotice } from './transcript';
@@ -64,6 +66,14 @@ interface TuiApprovalStores {
    *  denial notice names the live policy read from it rather than the
    *  launch-time CliContext value. */
   readonly session: SessionHandle;
+  /** Where its decisions land: the chat's session in the service;
+   *  `session`'s own when unset. */
+  readonly requests?: SessionRequests;
+  /** A tool edit's preview, when another process (the background service)
+   *  runs the tool and so stages it there; absent when this one does. */
+  readonly preview?: (
+    requestId: string,
+  ) => Effect.Effect<ToolEditPreview | null, Error>;
   readonly secrets: PlatformSecrets;
   /** The settings slots a key prompt reads a provider's display name and key
    *  URL from, so a retry that has to ask for a credential words the ask the
@@ -137,7 +147,7 @@ export function createTuiHostInteractions(
         // This capability already selected the credential route; decomposing
         // the decision again would call the capability recursively.
         landRequestDecision(
-          stores.session,
+          stores.requests ?? stores.session.requests,
           stores.runtime,
           runId,
           requestId,
@@ -239,9 +249,31 @@ export function createTuiHostInteractions(
     pruneToLive(live, acted, switched);
     for (const request of pending) {
       if (acted.has(request.requestId)) continue;
-      if (request.payload.kind !== 'retry') continue;
-      acted.add(request.requestId);
-      stagePresentation({ kind: 'retry', data: request.payload.data });
+      const { payload } = request;
+      if (payload.kind === 'retry') {
+        acted.add(request.requestId);
+        stagePresentation({ kind: 'retry', data: payload.data });
+      } else if (payload.kind === 'toolEdit' && stores.preview) {
+        // The service ran the tool: its preview is fetched, once. One the
+        // service no longer holds shows as an empty diff.
+        acted.add(request.requestId);
+        stores.runtime.runFork(
+          stores.preview(request.requestId).pipe(
+            Effect.catch((error) =>
+              Effect.logWarning(
+                `The preview of edit ${request.requestId} was not fetched`,
+              ).pipe(Effect.annotateLogs({ data: error }), Effect.as(null)),
+            ),
+            Effect.map((preview) =>
+              stagePresentation({
+                kind: 'toolEdit',
+                data: payload.data,
+                tui: preview ?? { originalContent: '', proposedContent: '' },
+              }),
+            ),
+          ),
+        );
+      }
     }
   };
 

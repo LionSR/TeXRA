@@ -463,10 +463,18 @@ are sure it is gone, delete the run from history and start a new one.
 
 ## Background service
 
-One TeXRA service per user and machine can run tasks for every terminal.
-It starts on its own the first time a `texra tasks` command needs it, keeps
-running the tasks it started when the terminal that started them closes,
-and exits after ten minutes with no client connected and no task running.
+One TeXRA service per user and machine runs tasks for every terminal.
+It starts on its own the first time a chat or a `texra tasks` command needs
+it, keeps running the tasks it started when the terminal that started them
+closes, and exits after ten minutes with no client connected and no task
+running.
+
+`texra chat` (and a bare `texra`) is a client of the service: the
+conversation's runs run there, so `/tasks` in another terminal lists it and
+can attach to it while it works. When the service cannot start, the chat
+runs in its own process and says so once; other terminals then do not see
+it. `texra run`, `-p` and `--output-format ndjson` always run in their own
+process.
 
 ```bash
 texra tasks list                                   # every project's tasks, newest first
@@ -499,10 +507,14 @@ texra serve             # run it in the foreground, logging to stderr
 The service listens on a socket in `~/.texra/run/` that only your user can
 open, and writes its log to `~/.texra/run/serve.log`. A newer TeXRA that
 finds an older service asks it to finish its running tasks and exit, and
-starts its own beside it. The service reads provider keys from its
-environment, and your settings, when it starts: after you export or remove
-a key, or edit `config.json`, run `texra service restart`. The service does
-not run on Windows yet.
+starts its own beside it. The service takes its environment (`PATH`,
+provider keys) from your login shell, not from the terminal or window that
+happened to start it, so `latexmk` and `git` are found the same way from
+every window; it logs the `PATH` it uses. It reads that environment and
+your settings when it starts: after you export or remove a key in your
+shell profile, or edit `config.json`, run `texra service restart`. The
+service does not run on Windows yet; there, chats run in their own
+process.
 
 ## Tools and integrations
 

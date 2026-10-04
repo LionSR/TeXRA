@@ -306,10 +306,7 @@ export function handleSharedHostRequest(
         ).pipe(
           Effect.flatMap((prepared) =>
             ports.runActions
-              .runValidated(
-                prepared,
-                launchApprovalOptions(request, ports.session.approvals),
-              )
+              .runValidated(prepared, launchApprovalOptions(request))
               .pipe(
                 Effect.mapError((cause) => hostFailure('runValidated', cause)),
               ),

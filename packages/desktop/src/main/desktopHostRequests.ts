@@ -9,6 +9,7 @@ import path from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, SubscriptionRef } from 'effect';
 import { presentRunFailure, type SessionHandle } from '@agent/runtime';
+import { localSessionBackend } from '@controllers/session/sessionBackend';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { exportRunTranscript } from '@controllers/progressView/exportTranscript';
 import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
@@ -153,6 +154,7 @@ export function createDesktopHostRequests(
     createHostRunActions({
       ...run, // this window's launcher and output opener
       session,
+      backend: localSessionBackend(session),
       loadModelOptions: () =>
         withProcessServices(
           runtime,

@@ -249,7 +249,7 @@ function chatGptSubscriptionRetry(label: string): RetryPermission {
 function decideCurrent(decision: SurfaceDecision): void {
   const pending = currentApproval.get();
   expect(pending).toBeDefined();
-  pending?.decide(testDefaultSession(), testRuntime(), decision);
+  pending?.decide(testDefaultSession().requests, testRuntime(), decision);
 }
 
 function decideRetry(decision: SurfaceDecision): void {
