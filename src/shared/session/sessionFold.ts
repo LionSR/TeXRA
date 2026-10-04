@@ -81,11 +81,8 @@ import {
   runResumeBlockedMessage,
   runStatusCopy,
 } from '@shared/runs/runStatusDisplay';
-import {
-  isSettledRow,
-  rowHeadline,
-  type TranscriptRow,
-} from '@shared/transcript';
+import { isSettledRow, rowHeadline } from '@shared/transcript';
+import type { TranscriptRow } from '@shared/transcript';
 import {
   applyRunRow,
   freshRunRows,
@@ -107,7 +104,6 @@ import {
   replaceTranscript,
   resetTranscriptOwnership,
 } from './transcriptState';
-
 import { runActions } from './runActions';
 import { emptySessionView, loopCoordinate, rollupOf } from './sessionView';
 import type { SessionView, RunView } from './sessionView';

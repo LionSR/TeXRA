@@ -252,8 +252,7 @@ function describedAtFreeze<
  * `recordedHooks` a resumed dispatch to the hooks its calls were offered
  * under; `holding` says the hold outlives this step (a park's). The rows
  * are what the loop appends before a request: the new offered set, when it
- * differs from `state`'s.
- */
+ * differs from `state`'s. */
 const openStep = Effect.fn('Step.open')(function* (
   run: AgentRunShape,
   state: RunState,
