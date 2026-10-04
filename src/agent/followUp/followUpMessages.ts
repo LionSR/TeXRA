@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import {
   deliveryTagOf,
   SUMMARIZED_TAGS,
@@ -5,7 +7,14 @@ import {
   parseScriptDeliverySummary,
   summarizeSubagentFollowup,
 } from '@shared/subagentFollowup';
-import type { FollowUpContent, ScriptDeliverySummary } from '@shared/schemas';
+import type {
+  FollowUpContent,
+  RunId,
+  RunRelation,
+  ScriptDeliverySummary,
+} from '@shared/schemas';
+import type { QueuedFollowUp } from '@shared/session/runRows';
+import type { InboxItem } from './Inbox';
 
 interface FollowUpDisplay {
   readonly text: string;
@@ -58,4 +67,27 @@ export function userFollowUpInstruction(
     .join('\n\n')
     .trim();
   return instruction || undefined;
+}
+
+/** The `followup.queued` row one send writes: its id is the delivery id
+ *  when the producer gave one, and a run sender gets its relation to the
+ *  recipient. */
+export function queuedRow(
+  item: InboxItem,
+  hold: QueuedFollowUp['holdUntil'],
+  relationOf: (sender: RunId) => RunRelation,
+): QueuedFollowUp {
+  const { from, deliveryId, mediaFiles, ...content } = item;
+  return {
+    followUpId: deliveryId ?? randomUUID(),
+    ...(hold ? { holdUntil: hold } : {}),
+    content: {
+      ...content,
+      mediaFiles: mediaFiles?.slice(),
+      from:
+        from.kind === 'run'
+          ? { kind: 'run', runId: from.runId, relation: relationOf(from.runId) }
+          : from,
+    },
+  };
 }

@@ -2,7 +2,7 @@
  * Who a producer says a follow-up is from. Runs talk as a graph: any run may
  * message any run in the project, whatever their places in the supervision
  * tree. A run names only itself; the recipient's admission
- * (`ToolUseFollowUpQueue`) stamps how it relates to the recipient.
+ * (`Inbox.send`) stamps how it relates to the recipient.
  */
 import type { FollowUpSender, RunId } from '@shared/schemas';
 

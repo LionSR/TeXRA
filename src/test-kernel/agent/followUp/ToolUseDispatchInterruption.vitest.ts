@@ -350,11 +350,10 @@ describe('tool dispatch interrupted mid-turn', () => {
       yield* Fiber.await(fiber);
       yield* finalizeRun(session, { runId, outcome: RUN_OUTCOME.CANCELLED });
       yield* session.settlePublications();
-      yield* session.followUps.submit(
-        runId,
-        { text: 'What is 2+2?', from: { kind: 'user' } },
-        'recoverable',
-      );
+      yield* session.followUps.send(runId, {
+        text: 'What is 2+2?',
+        from: { kind: 'user' },
+      });
 
       // One model turn: a second request would run out of scripted turns.
       const resumed = yield* runToolUse({ resume: true }).pipe(

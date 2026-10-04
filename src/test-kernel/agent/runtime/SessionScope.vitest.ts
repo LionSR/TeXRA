@@ -89,21 +89,24 @@ describe('session-owned transcripts and follow-up queues', () => {
         closeSessionOf(a).pipe(Effect.andThen(closeSessionOf(b))),
       );
       const runId = generateRunId();
+      for (const session of [a, b]) {
+        publishTestRunStart(session, runId);
+        yield* session.settlePublications();
+      }
 
-      expect(a.followUps.claimLive(runId, 'loop')).toBeDefined();
-      expect(b.followUps.claimLive(runId, 'loop')).toBeDefined();
+      yield* a.followUps.open(runId);
+      yield* b.followUps.open(runId);
 
-      a.followUps.terminalize(runId);
+      a.followUps.closeInput(runId);
+      yield* a.settlePublications();
 
-      expect(a.followUps.hasLiveOwner(runId)).toBe(false);
-      expect(
-        yield* a.followUps.submit(
-          runId,
-          { from: { kind: 'user' as const }, text: 'late' },
-          'live_owner',
-        ),
-      ).toEqual({ kind: 'refused' });
-      expect(b.followUps.hasLiveOwner(runId)).toBe(true);
+      const late = { from: { kind: 'user' as const }, text: 'late' };
+      expect(yield* a.followUps.send(runId, late)).toEqual({ kind: 'refused' });
+      expect(yield* b.followUps.send(runId, late)).toEqual({
+        kind: 'queued',
+        read: true,
+        wake: false,
+      });
     }),
   );
 });
@@ -118,7 +121,7 @@ describe('sendFollowUp host-path session routing', () => {
         yield* processSession.settlePublications();
         yield* Effect.addFinalizer(() =>
           Effect.sync(() =>
-            processSession.followUps.terminalize(parentRun),
+            processSession.followUps.closeInput(parentRun),
           ).pipe(Effect.andThen(closeSessionOf(processSession))),
         );
 

@@ -594,8 +594,8 @@ describe('headless delegation', () => {
         session.runs.stop(runId, { reason: 'user' }).settlement,
       );
     }
-    session.followUps.terminalize(PARENT_RUN_ID);
-    session.followUps.terminalize(CHILD_RUN_ID);
+    session.followUps.closeInput(PARENT_RUN_ID);
+    session.followUps.closeInput(CHILD_RUN_ID);
     await Effect.runPromise(session.runs.awaitDrained());
     await Effect.runPromise(closeSessionOf(inBandSession));
   });

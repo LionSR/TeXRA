@@ -209,7 +209,7 @@ const pauseChildRun = (
     // The pause is durable by now: a failed admission loses only the
     // notice, which the report keeps, so it is warned about, never raised.
     const submitted = yield* session.followUps
-      .submit(parentRunId, { text, from }, 'recoverable', { liveOffer: 'none' })
+      .send(parentRunId, { text, from }, { hold: 'instruction' })
       .pipe(
         Effect.catch((error) =>
           Effect.sync(() => {

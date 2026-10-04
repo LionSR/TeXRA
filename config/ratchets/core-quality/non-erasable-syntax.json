@@ -1,7 +1,5 @@
 {
   "src/agent/core/state/AgentWorkspaceState.ts": 3,
-  "src/agent/followUp/RunInput.ts": 1,
-  "src/agent/followUp/ToolUseFollowUpQueueManager.ts": 1,
   "src/agent/index/AgentDirectoryService.ts": 1,
   "src/agent/runtime/childRunLoop.ts": 3,
   "src/agent/runtime/historyQuery/HistoryQuery.ts": 3,
