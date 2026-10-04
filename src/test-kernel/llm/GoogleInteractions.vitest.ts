@@ -125,9 +125,10 @@ function signedEvents(
   return [
     {
       event_type: 'interaction.created',
+      // The live opening event carries no status (gemini-3.8-flash, 2026-10).
       interaction: {
         id: 'int_1',
-        status: 'in_progress',
+        object: 'interaction',
         model: 'gemini-returned',
       },
     },

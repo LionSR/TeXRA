@@ -693,6 +693,11 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Gemini calls work again.** Every Gemini request failed with a
+  validation error on `interaction.status`: Google's streaming API stopped
+  sending a status on the event that opens an interaction, and TeXRA
+  required one there. The opening event now carries only the interaction's
+  identity; the outcome is still read from its completion.
 - **A crash no longer undoes a Stop, a finished agent or a bypass turned
   off.** A task you stopped mid-turn, killed before it finished stopping,
   came back as interrupted, and with "Always resume" it carried on the turn
