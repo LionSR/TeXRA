@@ -246,7 +246,10 @@ class Sessions extends Context.Service<
   static layer(input: {
     platform: AgentPlatform;
     plugins: readonly Plugin[];
-    execution?: Layer<WorkspaceFs | ChildProcessSpawner>; // new (H4, in M2)
+    execution?: (
+      roots: WorkspaceRoots,
+    ) => Layer<WorkspaceFs | ChildProcessSpawner>; // new (H4, in M2)
+    usageLog?: Layer<UsageLog>; // new (M2): the SDK defaults to disabled
     host?: Layer<HostServices>; // new (M2): what a host serves its plugins
   }): Layer<Sessions | Plugins, PlatformConflict | PluginConflict>; // plugins, host: new (M2)
 }
@@ -272,21 +275,26 @@ environment and the host's layers are `Sessions.layer` inputs, because they
 are replaced per embedder and have no default in the platform. Each is served
 as an Effect service:
 
-| Port          | Platform field                   | Service                                                                                                                           |
-| ------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Storage       | `roots` (storage paths)          | `GlobalDatabase`, `ProjectDatabases`; `RunHistory` internal                                                                       |
-| Models        | `languageModel`, `secrets`       | `LanguageModel`, `Secrets`; reads settings into `RouteFacts`, serves `llm` its `CredentialStore` and `HttpClient`, gets a `Model` |
-| Settings      | `roots.config`, the state stores | `AppState`, `ConfigProvider`                                                                                                      |
-| Execution env | (none: `execution` input)        | `WorkspaceFs` + `ChildProcessSpawner`, replaced together, per run after H4; the Node pair from `./node` is the default            |
-| Sandbox       | (none)                           | `CodeSandbox`, the `codemode` plugin's session layer                                                                              |
-| Agents        | `agentDirectories`               | `AgentDirectories`                                                                                                                |
-| Usage         | (none: composition-root option)  | `UsageLog`, disabled in the SDK; the app's `src/telemetry` implements it through `installProcessRuntime`'s `usageLog` option      |
+| Port          | Platform field                                          | Service                                                                                                                               |
+| ------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Storage       | `roots` (storage paths)                                 | `GlobalDatabase`, `ProjectDatabases`; `RunHistory` internal                                                                           |
+| Models        | `languageModel`, `secrets`                              | `LanguageModel`, `Secrets`; reads settings into `RouteFacts`, serves `llm` its `CredentialStore` and `HttpClient`, gets a `Model`     |
+| Settings      | `roots.config`, the state stores                        | `AppState`, `ConfigProvider`                                                                                                          |
+| Execution env | (none: `execution` input, keyed by the session's roots) | `WorkspaceFs` + `ChildProcessSpawner`, replaced together, per run after H4; the Node pair from `./node` is the default                |
+| Sandbox       | (none)                                                  | `CodeSandbox`, the `codemode` plugin's session layer                                                                                  |
+| Agents        | `agentDirectories`                                      | `AgentDirectories`                                                                                                                    |
+| Usage         | (none: `usageLog` input)                                | `UsageLog`, disabled in the SDK; the three hosts pass the app's `src/telemetry` layer, so usage reporting and its shutdown drain stay |
 
 `mcpConfigPath` stays a platform field. The installed-plugin reader and the
 MCP loader are harness machinery, not a plugin value. `host` carries what a
 host supplies to its plugins and the app cannot import: the extension's Lean,
 inline-comment and Copilot providers. A plugin requires them as ordinary
 services, and `definePlugin` types them in `HostServices`.
+
+**Per-root execution.** `execution` is a function of the session's roots,
+called at `Session.open(roots)`, so a sandboxed filesystem and spawner are
+built per workspace; `WorkspaceFs` is constructed from them for each
+session's roots.
 
 **Roster identity.** `acquireProcess` joins an installed process only when
 both the platform and the initial plugin list are the same. A second
@@ -488,6 +496,16 @@ the harness's `SessionEvent` union and in its folds:
 - `inquiryThreadUpdated` (`:352`), with its own aggregate kind, `inquiry`
   (`:111`), and a special parent edge in `referencedAggregates` (`:497`).
 
+Arms and projections follow the registry generation like the catalogs: a
+generation that adds an arm re-decodes the session's `plugin.fact` rows that
+were left out while it was absent and refolds open sessions, and one that
+withdraws it drops the projection's slot. Contribution is therefore safe for
+stateful plugins. A plugin's arm may also declare a `transition(prev, next,
+parent)` check, which the store runs inside the append transaction beside the
+schema, so state machines (the inquiry's monotonic turns, one open turn, a
+terminal drop, a valid reopen and reparenting) stay atomic and `PluginState`
+carries no read-then-write race; it replaces `validateInquiryTransition`.
+
 Both are the plugin's arms with their read side. `Plugin.requests` lets a
 plugin contribute a durable `request.opened` kind and its decision: the
 inquiry's `externalInquiry` permission payload and `answer` decision leave
@@ -590,7 +608,7 @@ in the same PR.
 | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | ---------------------- | ------ |
 | M1   | Round mode becomes the documents plugin's `rounds` contribution, keyed by category and read once at run open (`toolUse.ts:143-144` loses the category branch; `rounds.ts:127-142` loses `makeDocumentRounds`). This is H3's remaining violation, 4                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | M, ~15 files                      | none                   | no     |
 | M2   | `Plugin`, `definePlugin`, `Sessions.layer({ platform, plugins })`, `Plugins.contribute`, `Session.resume`, and the spawner moved onto the run layer (H4, absorbed). The manifest and its five tables become plugin values. The composition root loses its app options and record layers, and `ProcessServices`/`PluginServices` lose their app tags. The SDK stops binding TeXRA's table. `harnessBuiltins.minimal` and `.all`, and the roster case (§4)                                                                                                                                                                                                                                                                                                                                                                                                                                           | L, ~60 files, net deletion        | M1                     | no     |
-| M3   | The remaining harness→app imports. Misplaced types and constants move to their owners: `ToolCategory` and the other types out of `settingsViewMessages` (6 importers), `workflowOutput`, icon names, account copy, `teams`, `latexToolchain`. `fileOps({ writeFilter })`; `accept_run_files` moves to `documents`; `SessionRequests` stops importing `inquiryActions`. `pluginAvailability.ts` dissolves into per-plugin `availability` values, and `toolProbes.ts` stops importing the app's LaTeX dependency checks. The Codex and `latexdiff` row builders split from the row model. The host-side session modules are marked for the app                                                                                                                                                                                                                                                       | M, ~40 files                      | M2                     | no     |
+| M3   | The remaining harness→app imports. Misplaced types and constants move to their owners: `ToolCategory` and the other types out of `settingsViewMessages` (6 importers), `workflowOutput`, icon names, account copy, `teams`, `latexToolchain`. `fileOps({ writeFilter })`; `accept_run_files` moves to `documents`; `SessionRequests` stops importing `inquiryActions`. `pluginAvailability.ts` dissolves into per-plugin `availability` values, and `toolProbes.ts` stops importing the app's LaTeX dependency checks. The Codex and `latexdiff` row builders split from the row model, and `LATEXDIFF` and `parseDiffResultEntries` leave `schemas/log.ts` and `logPayload.ts` for the app, which contributes a log-payload decoder beside its row presentation (the harness decodes an unknown log kind as opaque, loudly). The host-side session modules are marked for the app                 | M, ~40 files                      | M2                     | no     |
 | M4   | Model access into `@texra-ai/llm` (ruling 2): `git mv` of `src/auth` (29), 8 `src/model` files and the 5 provider-catalog files into `packages/llm/src/{models,providers,api,oauth}`; `CredentialStore` defined in `llm` and served from `Secrets`; `RouteFacts` gains `endpoints` and `chatgptContextWindow`; the entries of §1: the 34 `./turn` importers rewritten to `.`, the protocol choice moved from `modelBinding.ts` into `bindModel` in `./node` with the protocols, the fingerprint and the upload cache under `src/api/` and unexported, today's six subpaths deleted, and the four suites in `src/test-kernel/llm/` reaching `packages/llm/src/api/` by relative path, as `test-live/` does; the moved files' importers rewritten to `.` or `./node` and the `@auth/*` alias deleted; `llm` gains `llm-zoo`; the llm-imports-nothing zone and the browser-safe `.` rule, no baseline | M, ~45 files moved, ~70 importers | none                   | no     |
 | M5   | "Ledger" becomes "history" (ruling 1): the four files of §6 and every occurrence, about 1,100 in about 170 files, CLAUDE.md, AGENTS.md and `.agents/docs` included; a codemod over a fixed word list that skips the rulings ledger and Lean's `tactic-ledger`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | S in review, M in files           | H1, H2 merged          | no     |
 | M6   | Rows: the `documents/output` and `external-inquiry/thread` arms replace `output.produced` and `inquiryThreadUpdated`; the `plugin` aggregate kind and `plugin.fact.parent`; the plugin id changes; `Plugin.requests` and `Plugin.project` replace the inquiry request payload and `SessionView.inquiries`, and the documents result slot replaces `roundOutputs`. The golden store is regenerated once, with H1's if they land together                                                                                                                                                                                                                                                                                                                                                                                                                                                            | M, ~30 files                      | H2 (#13638) merged; M2 | before |
@@ -640,7 +658,9 @@ that TeXRA is one plugin list among others.
 - _VS Code contributions._ `scripts/sync-package-contributes.mjs` scans the
   harness resource root as well as the extension's, so the moved
   `workflow-script` skill stays in `contributes.chatSkills`, and emits the
-  staged VSIX path. M8 updates it, and `check:package-contributes` covers it.
+  staged VSIX path. `verify-vsix-contents.mjs` maps and hashes the harness
+  resource root as well as the extension's, so the staged skill is not an
+  unexpected resource. M8 updates it, and `check:package-contributes` covers it.
 - _Published harness._ `packages/harness/package.json` `files` includes
   `resources/`, and `nodePlatform` resolves the installed package's
   resource directory, so a packed harness advertises `workflow-script` with
