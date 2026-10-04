@@ -337,8 +337,9 @@ All notable changes to this project will be documented in this file.
   any number of terminals at once (each prints the same transcript; Ctrl-C
   only detaches), and `texra tasks send` and `texra tasks stop` steer it.
   `texra service status|stop|restart` manage the service and `texra serve`
-  runs it in the foreground. The service speaks Effect RPC over a socket only
-  your user can open, in `~/.texra/run/`, and exits after ten idle minutes.
+  runs it in the foreground. Clients reach it through a local socket only
+  your user can open, in `~/.texra/run/`, and it exits after ten idle
+  minutes.
 
 - **Interrupted tasks when TeXRA opens.** When the terminal chat, the
   desktop app or the extension opens and finds tasks a closed or crashed

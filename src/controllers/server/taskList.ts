@@ -166,17 +166,24 @@ export const listTasks = Effect.fn('taskList.listTasks')(function* (
       );
       continue;
     }
-    if (!(yield* fs.exists(path.join(storage, 'texra.db')))) continue;
-    const view = yield* Effect.scoped(
-      RcMap.get(databases, storage).pipe(
-        Effect.flatMap((database) => coldView(database, storage)),
+    // One project's read, isolated whole: a store that cannot be opened or
+    // replayed (a defect included) is reported and left out.
+    const view = yield* fs.exists(path.join(storage, 'texra.db')).pipe(
+      Effect.flatMap((exists) =>
+        exists
+          ? Effect.scoped(
+              RcMap.get(databases, storage).pipe(
+                Effect.flatMap((database) => coldView(database, storage)),
+              ),
+            )
+          : Effect.succeed(null),
       ),
-    ).pipe(
       Effect.map((value): SessionView | null => value),
-      Effect.catch((error) =>
+      Effect.catchCause((cause) =>
         Effect.logWarning(
           `Leaving ${workspace} out of the task list: its store could not be read`,
-        ).pipe(Effect.annotateLogs({ data: error }), Effect.as(null)),
+          cause,
+        ).pipe(Effect.as(null)),
       ),
     );
     if (view !== null) tasks.push(...summaries(view, workspace));

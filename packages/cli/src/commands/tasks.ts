@@ -28,11 +28,7 @@ import { attachTask } from '../runtime/taskAttach';
 import { runOutcomeExitCode } from '../runtime/terminalStatus';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import {
-  AGENT_RUN_GLOBAL_ARGS,
-  GLOBAL_ARGS,
-  optString,
-} from './_helpers/globalArgs';
+import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
 
@@ -140,8 +136,13 @@ const attachCommand = defineCliCommand({
   },
   args: { ...GLOBAL_ARGS, id: TASK_ID_ARG },
   catchExitCode: CliExitCode.AgentError,
-  run: (context, ctx) =>
-    Effect.gen(function* () {
+  run: (context, ctx) => {
+    // A live transcript has no single JSON document to print.
+    if (context.outputFormat === 'json')
+      throw new CliUsageError(
+        '`texra tasks attach` prints text or NDJSON (`--output-format ndjson`), not JSON.',
+      );
+    return Effect.gen(function* () {
       const { client } = yield* connectCliService(context.storageRoot);
       const task = yield* findTask(client, ctx.args.id);
       const outcome = yield* attachTask(client, task, {
@@ -154,7 +155,8 @@ const attachCommand = defineCliCommand({
       return outcome === null
         ? CliExitCode.Success
         : runOutcomeExitCode(outcome);
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.scoped);
+  },
 });
 
 const startCommand = defineCliCommand({
@@ -164,7 +166,7 @@ const startCommand = defineCliCommand({
       'Start a tool-use agent as a task in the TeXRA service and print its id',
   },
   args: {
-    ...AGENT_RUN_GLOBAL_ARGS,
+    ...GLOBAL_ARGS,
     agent: {
       type: 'positional',
       required: true,
@@ -221,6 +223,13 @@ const startCommand = defineCliCommand({
       const runId = yield* Effect.scoped(
         Effect.gen(function* () {
           const { client } = yield* connectCliService(context.storageRoot);
+          // This command's approval policy (its flag, `--no-input`, or the
+          // config) becomes the project's in the service before the task
+          // starts, so the task runs under what this command was asked.
+          yield* client['project.policy']({
+            workspace: context.cwd,
+            policy: context.approvalPolicy,
+          });
           return yield* client['task.start']({
             workspace: context.cwd,
             runId: generateRunId(),

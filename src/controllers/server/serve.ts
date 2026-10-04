@@ -65,7 +65,7 @@ export class ServiceListenFailed extends Data.TaggedError(
 }
 
 /** How a service run ended. */
-export type ServeExit = 'stopped' | 'drained' | 'idle' | 'replaced';
+type ServeExit = 'stopped' | 'drained' | 'idle' | 'replaced';
 
 interface ServeOptions {
   /** The build that serves, reported by `service.hello`. */
@@ -102,9 +102,6 @@ export const serve = Effect.fn('server.serve')(function* (
   const existing = yield* probeService(paths.socket);
   if (existing !== null)
     return yield* Effect.fail(new ServiceAlreadyRunning({ info: existing }));
-  // Nothing answers: a socket file left here is a dead service's.
-  if (process.platform !== 'win32')
-    yield* fs.remove(paths.socket, { force: true }).pipe(Effect.ignore);
 
   const startedAt = yield* Clock.currentTimeMillis;
   const ended = yield* Deferred.make<ServeExit>();
@@ -127,7 +124,13 @@ export const serve = Effect.fn('server.serve')(function* (
         : Deferred.succeed(ended, 'stopped').pipe(Effect.asVoid),
   };
 
-  const protocol = yield* Layer.build(
+  // The socket file's identity: a service that took the path over made a
+  // new one.
+  const socketIno = fs.stat(paths.socket).pipe(
+    Effect.map((info) => Option.getOrUndefined(info.ino)),
+    Effect.orElseSucceed(() => undefined),
+  );
+  const listen = Layer.build(
     RpcServer.layerProtocolSocketServer.pipe(
       Layer.provide(RpcSerialization.layerNdjson),
       Layer.provide(NodeSocketServer.layer({ path: paths.socket })),
@@ -136,6 +139,28 @@ export const serve = Effect.fn('server.serve')(function* (
     Effect.map((context) => Context.get(context, RpcServer.Protocol)),
     Effect.mapError(
       (cause) => new ServiceListenFailed({ socket: paths.socket, cause }),
+    ),
+  );
+  // Bind without unlinking first: a live service's socket makes the bind
+  // fail. Only a socket that refuses connections, and is still the same
+  // file after that probe, is a dead service's and is removed; a service
+  // that took the path meanwhile keeps it, and this one stops.
+  const protocol = yield* listen.pipe(
+    Effect.catch((failed) =>
+      Effect.gen(function* () {
+        if (process.platform === 'win32') return yield* Effect.fail(failed);
+        const stale = yield* socketIno;
+        const answer = yield* probeService(paths.socket);
+        if (answer !== null)
+          return yield* Effect.fail(
+            new ServiceAlreadyRunning({ info: answer }),
+          );
+        if (stale === undefined || (yield* socketIno) !== stale)
+          return yield* Effect.fail(failed);
+        // A removal that fails leaves the file, and the bind below reports it.
+        yield* fs.remove(paths.socket).pipe(Effect.ignore);
+        return yield* listen;
+      }),
     ),
   );
   clients = protocol.clientIds.pipe(Effect.map((ids) => ids.size));
@@ -156,12 +181,6 @@ export const serve = Effect.fn('server.serve')(function* (
       ),
       Effect.provideService(RpcServer.Protocol, protocol),
     ),
-  );
-  // The socket file's identity: a service that took the path over made a
-  // new one.
-  const socketIno = fs.stat(paths.socket).pipe(
-    Effect.map((info) => Option.getOrUndefined(info.ino)),
-    Effect.orElseSucceed(() => undefined),
   );
   const listening = yield* socketIno;
   yield* writeServiceRecord(paths, {

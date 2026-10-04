@@ -473,7 +473,11 @@ texra tasks stop <id>                              # stop it; it can be resumed 
 `list` marks the tasks the service is running now with `*`. Any number of
 terminals can attach to the same task at once and all of them print the
 same transcript; Ctrl-C detaches one terminal and leaves the task running.
-An id may be shortened to any prefix only one task has. With
+An id may be shortened to any prefix only one task has. `tasks start` applies its
+approval policy (`--approval-policy`, `--no-input`, or your config) to that
+project in the service before the task starts. No terminal answers an
+approval prompt yet, so a tool that would ask is withheld from service
+tasks unless the policy approves it. With
 `--output-format ndjson`, `attach` writes the task's rows as `progress`
 records, the same projection `texra run` writes.
 

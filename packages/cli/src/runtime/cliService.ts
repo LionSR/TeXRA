@@ -147,8 +147,11 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
         ),
       );
       // Notices a run raises while no window is attached are the service
-      // log's: every client reads the task's state from its rows.
+      // log's: every client reads the task's state from its rows. No
+      // client answers an approval prompt yet, so a tool that needs one is
+      // withheld rather than left waiting.
       yield* session.interactions.use({
+        approvalPromptsUnavailable: true,
         emit: (event, payload) =>
           Effect.logWarning(`Service notice ${event}`).pipe(
             Effect.annotateLogs({ data: payload }),
@@ -186,25 +189,28 @@ function startCliService(storageRoot: string): Effect.Effect<void, Error> {
   return Effect.gen(function* () {
     const paths = servicePaths(storageRoot);
     yield* prepareServiceDirectories(paths);
-    yield* Effect.try({
-      try: () => {
-        const log = openSync(serviceLogPath(storageRoot), 'a', 0o600);
-        try {
-          spawn(
-            process.execPath,
-            [...process.execArgv, readCliEntrypointPath(), 'serve'],
-            {
-              cwd: paths.runDirectory,
-              detached: true,
-              stdio: ['ignore', log, log],
-            },
-          ).unref();
-        } finally {
-          closeSync(log);
-        }
-      },
+    const log = yield* Effect.try({
+      try: () => openSync(serviceLogPath(storageRoot), 'a', 0o600),
       catch: ensureError,
     });
+    // Settle on the child's own report: an `error` event (no such binary,
+    // EACCES, no processes left) fails the start with its cause.
+    yield* Effect.callback<void, Error>((resume) => {
+      const child = spawn(
+        process.execPath,
+        [...process.execArgv, readCliEntrypointPath(), 'serve'],
+        {
+          cwd: paths.runDirectory,
+          detached: true,
+          stdio: ['ignore', log, log],
+        },
+      );
+      child.once('error', (error) => resume(Effect.fail(error)));
+      child.once('spawn', () => {
+        child.unref();
+        resume(Effect.void);
+      });
+    }).pipe(Effect.ensuring(Effect.sync(() => closeSync(log))));
   }).pipe(Effect.mapError(ensureError), Effect.provide(nodeFileServices));
 }
 
