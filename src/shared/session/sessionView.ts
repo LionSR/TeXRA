@@ -22,11 +22,11 @@ import {
   CommitOrdinalSchema,
   ContextStateDataSchema,
   ConversationProgressSchema,
-  InquiryThreadSummarySchema,
   JsonValueSchema,
   OwnerIdSchema,
   PermissionPayloadSchema,
   PlanSchema,
+  PluginFactDraftSchema,
   requestParksItsCaller,
   RunActionSchema,
   RunIdentitySchema,
@@ -345,7 +345,7 @@ const SessionViewSchema = z.object({
   requests: z.array(PendingRequestSchema),
   /** Latest snapshot per run. */
   policy: z.map(RunIdSchema, ApprovalPolicySnapshotSchema),
-  inquiries: z.array(InquiryThreadSummarySchema),
+  pluginFacts: z.array(PluginFactDraftSchema),
   queuedFollowUps: z.map(RunIdSchema, z.array(QueuedFollowUpViewSchema)),
 });
 export type SessionView = z.infer<typeof SessionViewSchema>;
@@ -431,7 +431,7 @@ export function emptySessionView(
     rollup: { running: 0, waiting: 0, interrupted: 0 },
     requests: [],
     policy: new Map(),
-    inquiries: [],
+    pluginFacts: [],
     queuedFollowUps: new Map(),
   };
 }

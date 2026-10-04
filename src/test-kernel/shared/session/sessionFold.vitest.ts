@@ -831,6 +831,7 @@ describe('sessionFold', () => {
       kind: DOCUMENTS_OUTPUT_ARM.kind,
       version: DOCUMENTS_OUTPUT_ARM.version,
       value: { rounds },
+      parent: null,
     });
     const firstRound = [log.emit(CHILD, 3010, documentsRow([roundOutput(0)]))];
     const secondRound = [

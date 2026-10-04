@@ -610,6 +610,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       plugin: DOCUMENTS_OUTPUT_ARM.plugin,
       kind: DOCUMENTS_OUTPUT_ARM.kind,
       version: DOCUMENTS_OUTPUT_ARM.version,
+      parent: null,
       value: {
         rounds: [0, 1].map((round) => ({
           round,

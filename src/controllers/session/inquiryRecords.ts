@@ -11,7 +11,7 @@ import {
   type AnsweredInquiryTurn,
 } from '@shared/schemas';
 import { GlobalDatabase } from '@shared/session/database';
-import { InquiryRecords } from '@shared/session/inquiryRecords';
+import { InquiryRecords } from '@shared/plugins/externalInquiry';
 import { toNewestFirstByTimestamp, unique, hexId12 } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 

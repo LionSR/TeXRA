@@ -248,7 +248,6 @@ const IGNORED_ROW_TYPES: Readonly<
   'run.fact': true,
   'child.park': true,
   'plugin.fact': true,
-  inquiryThreadUpdated: true,
   'approval.policy': true,
   log: true,
   'stage.start': true,

@@ -220,13 +220,16 @@ const framerSource = Effect.gen(function* () {
 });
 
 describe('session framer', () => {
-  it('rejects a run event carried by an inquiry aggregate at the wire boundary', () => {
+  it('rejects a run event carried by a plugin aggregate at the wire boundary', () => {
     const input = {
       _tag: 'event',
       read: 'listing',
       event: {
         ...runStart,
-        aggregateId: qualifyAggregateId('inquiry', 'ei_012345abcdef'),
+        aggregateId: qualifyAggregateId(
+          'plugin',
+          'external-inquiry:ei_012345abcdef',
+        ),
         seq: 1,
         commit: 1,
         origin: SELF,

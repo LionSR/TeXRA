@@ -34,7 +34,6 @@ import {
 } from './runRecords';
 import { RunIdSchema, type RunId } from './identifiers';
 import { FollowUpContentSchema } from './followUp';
-import { InquiryThreadSummarySchema } from './inquiry';
 import { PermissionPayloadSchema } from './progressView/data';
 import { RunFactSchema } from './rowValues';
 import { RequestDecisionSchema } from './request';
@@ -105,8 +104,8 @@ export function ownerPid(ownerId: OwnerId): number {
 export type OwnerLiveness = 'alive' | 'dead' | 'unprovable';
 
 /** C2 separates independent lifecycles even when their logical ids coincide:
- *  `run` is keyed by the run id, every other kind by its own logical id. */
-const AggregateKindSchema = z.enum(['run', 'inquiry']);
+ *  `run` is keyed by the run id, `plugin` (one a plugin owns) `<plugin>:<key>`. */
+const AggregateKindSchema = z.enum(['run', 'plugin']);
 type AggregateKind = z.infer<typeof AggregateKindSchema>;
 const AggregateKeySchema = z
   .tuple([AggregateKindSchema, z.string().min(1)])
@@ -194,7 +193,7 @@ export type ApprovalPolicySnapshot = z.infer<
 
 /**
  * The envelope every durable arm rides (contract C1). A run-scoped fact's
- * aggregate is its run; an inquiry thread's aggregate is the thread id
+ * aggregate is its run; a plugin's own aggregate is the plugin's key
  * (PRD 5.1: no sentinel run id exists). `at` is the publish clock,
  * informational only; ordering is `seq` within an aggregate and `commit`
  * across them.
@@ -302,6 +301,20 @@ const RunRemovedDraftSchema = RunRemovedEventSchema.omit({
   runIds: true,
 });
 
+/** A row of a plugin's own kind (`@tools/pluginArms`): core folds `value`
+ *  latest per (plugin, kind) and never reads it; the plugin decodes it. A
+ *  run's is `RunView.facts`; a plugin aggregate's is `SessionView.pluginFacts`,
+ *  under its `parent` run (whose deletion collects it) or none. */
+export const PluginFactDraftSchema = durable('plugin.fact', {
+  plugin: z.string().min(1),
+  kind: z.string().min(1),
+  /** The arm's version `value` was written at: a plugin evolves its
+   *  kinds without a core row version. */
+  version: z.int().positive(),
+  value: JsonValueSchema,
+  parent: RunIdSchema.nullable(),
+}).extend({ aggregateId: AggregateIdSchema });
+
 /**
  * The durable arms every renderer folds. This is the one declaration of the
  * run vocabulary: the trace's `AgentEvent` (`src/agent/trace/events.ts`) is
@@ -357,18 +370,7 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
     description: z.string(),
     by: z.enum(['model', 'user']),
   }),
-  /** A row of a plugin's own kind (`@tools/pluginArms`): core folds `value`
-   *  latest per (plugin, kind) and never reads it; the plugin decodes it. */
-  durable('plugin.fact', {
-    plugin: z.string().min(1),
-    kind: z.string().min(1),
-    /** The arm's version `value` was written at: a plugin evolves its
-     *  kinds without a core row version. */
-    version: z.int().positive(),
-    value: JsonValueSchema,
-  }),
-  /** Aggregate is the thread id; `parentRunId` is the payload's edge. */
-  durable('inquiryThreadUpdated', InquiryThreadSummarySchema.shape, 'inquiry'),
+  PluginFactDraftSchema,
   /**
    * Input a run has not taken yet (one run model, section 3.7): the whole
    * follow-up, so a resume seeds the run's queue from its rows and a crash
@@ -514,20 +516,18 @@ export function referencedAggregates(event: SessionEvent): AggregateId[] {
   const ids = [event.aggregateId];
   if (event.type === 'run.start' && event.parent !== null)
     ids.push(aggregateId('run', event.parent.id));
-  if (event.type === 'inquiryThreadUpdated' && event.parentRunId !== null) {
-    ids.push(aggregateId('run', event.parentRunId));
-  }
+  if (event.type === 'plugin.fact' && event.parent !== null)
+    ids.push(aggregateId('run', event.parent));
   return ids;
 }
 
 /**
  * The aggregate-graph edges one draft declares, applied by the store in the
  * transaction that appends it: the parent a `run.start` stamps, the
- * aggregate a row hangs its target under (an inquiry thread under its
- * asking run, or none),
- * the claim an inquiry update borrows for that transaction alone, and the
- * closure a tombstone makes. {@link referencedAggregates} reads the same
- * edges off committed rows.
+ * aggregate a row hangs its target under (a plugin's aggregate under its
+ * `parent` run, or none), the claim a plugin's aggregate borrows for that
+ * transaction alone, and the closure a tombstone makes.
+ * {@link referencedAggregates} reads the same edges off committed rows.
  */
 export interface AggregateEdges {
   readonly parent: AggregateId | null;
@@ -546,16 +546,16 @@ export function edgesOf(draft: SessionEventDraft): AggregateEdges {
         borrowsClaim: false,
         closes: false,
       };
-    case 'inquiryThreadUpdated':
-      return {
-        parent: null,
-        reparent:
-          draft.parentRunId === null
-            ? null
-            : aggregateId('run', draft.parentRunId),
-        borrowsClaim: true,
-        closes: false,
-      };
+    case 'plugin.fact':
+      return aggregateTarget(draft.aggregateId).kind === 'run'
+        ? { parent: null, borrowsClaim: false, closes: false }
+        : {
+            parent: null,
+            reparent:
+              draft.parent === null ? null : aggregateId('run', draft.parent),
+            borrowsClaim: true,
+            closes: false,
+          };
     case 'run.removed':
       return { parent: null, borrowsClaim: false, closes: true };
     default:

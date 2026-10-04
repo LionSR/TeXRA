@@ -40,7 +40,6 @@ import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
   edgesOf,
   isDisplaySessionEvent,
-  validateInquiryTransition,
   RunIdSchema,
   OwnerIdSchema,
   ownerIdentity,
@@ -66,6 +65,7 @@ import {
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from '@shared/session/database';
+import { PLUGIN_ARMS } from '@tools/pluginArms';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { currentValues } from './currentValues';
 import { localDatabasePath } from './localDatabasePath';
@@ -411,10 +411,6 @@ export const databaseLayer = (
           AND closed_by IS NULL RETURNING id`;
       const release = `UPDATE event_sequence SET owner_id = NULL
         WHERE id IN (${AGGREGATE_LIST}) AND owner_id = ?`;
-      const latestInquiry = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
-        WHERE s.kind = ? AND s.logical_id = ?
-          AND e.type = 'inquiryThreadUpdated'
-        ORDER BY e.seq DESC LIMIT 1`;
       const reparent = `UPDATE event_sequence SET parent_id = ${AGGREGATE}
         WHERE id = ? AND owner_id = ? AND closed_by IS NULL`;
       const cleanupLanes = new Map<AggregateId, PerKeyLane>();
@@ -723,19 +719,14 @@ export const databaseLayer = (
           const target = aggregateTarget(draft.aggregateId);
           const columns = aggregateColumns(draft.aggregateId);
           if (edges.borrowsClaim) {
-            // Inquiry writes borrow their claim for this transaction only.
+            // A plugin's own aggregate borrows its claim for this
+            // transaction only.
             yield* exec(claim, [identity.ownerId, ...columns, null]);
           }
-          if (draft.type === 'inquiryThreadUpdated') {
-            const previousRow = yield* execOne(latestInquiry, columns);
-            const previous =
-              previousRow === undefined ? undefined : decodeRow(previousRow);
-            if (previous !== undefined && previous._tag !== 'event')
-              return yield* invariant(
-                `Unreadable inquiry history: ${draft.aggregateId}`,
-              );
-            const opens = validateInquiryTransition(previous?.event, draft);
-            if (opens && edges.reparent != null) {
+          if (edges.reparent != null) {
+            // A new parent run must be open and held by this writer.
+            const current = (yield* readState([draft.aggregateId]))[0];
+            if (current?.parentId !== edges.reparent) {
               const parent = (yield* readState([edges.reparent]))[0];
               if (
                 !parent ||
@@ -743,7 +734,7 @@ export const databaseLayer = (
                 parent.ownerId !== identity.ownerId
               ) {
                 return yield* invariant(
-                  `Inquiry opening requires an owned open parent: ${draft.parentRunId}`,
+                  `A plugin aggregate's new parent must be open and owned here: ${edges.reparent}`,
                 );
               }
             }
@@ -761,15 +752,25 @@ export const databaseLayer = (
               'Sequence refused for an absent aggregate',
             );
           }
-          // A plugin never writes its kind over a value a later build wrote.
-          const newer =
-            draft.type === 'plugin.fact'
-              ? yield* verdicts.newerPlugin(
-                  aggregate,
-                  `${draft.plugin}/${draft.kind}`,
-                )
-              : undefined;
-          if (newer) return yield* new DatabaseAggregateBlocked(newer);
+          if (draft.type === 'plugin.fact') {
+            const name = `${draft.plugin}/${draft.kind}`;
+            const held = yield* verdicts.pluginRows(aggregate, name);
+            // Never over a later build's value of the kind, or a corrupt one.
+            const stop = held.find((v) => v._tag !== 'event');
+            const refusal = stop?._tag === 'leftOut' ? stop.newer : stop;
+            if (refusal) return yield* new DatabaseAggregateBlocked(refusal);
+            const last = held.at(-1);
+            const refused =
+              target.kind === 'run' && draft.parent !== null
+                ? `A run's own plugin fact names no parent: ${name}`
+                : PLUGIN_ARMS.get(name)?.admits?.(
+                    last?._tag === 'event' && last.event.type === 'plugin.fact'
+                      ? last.event
+                      : undefined,
+                    draft,
+                  );
+            if (refused) return yield* invariant(refused);
+          }
           // The seq-1 rule (decision 9): a run aggregate begins with exactly
           // one `run.start`, and nothing else ever lands at seq 1.
           if (
@@ -850,9 +851,8 @@ export const databaseLayer = (
             );
           }
           if (edges.reparent !== undefined) {
-            // A workflow checkpoint hangs under the run that invoked it, so
-            // that run's deletion collects the journal; an inquiry thread
-            // under its asking run, or under none.
+            // A plugin's aggregate hangs under its `parent` run, so that
+            // run's deletion collects it, or under none.
             const parentColumns =
               edges.reparent === null
                 ? [null, null]

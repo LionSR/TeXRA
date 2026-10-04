@@ -203,6 +203,7 @@ describe('plugin rosters', () => {
     ).toEqual([
       ['goal/state', true],
       ['documents/output', true],
+      ['external-inquiry/thread', true],
     ]);
   });
 
