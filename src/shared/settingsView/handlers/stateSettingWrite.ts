@@ -18,13 +18,12 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
-  cliConfigSettingByKey,
-  settingsViewSettingByKey,
   type SettingHost,
   type SettingsViewSnapshot,
   type SettingsViewStateSettingEntry,
   type SurfacedSettingEntry,
 } from '@shared/state/stateSettings';
+import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
 import {
   readSetting,
   resetSetting,
@@ -97,8 +96,8 @@ export function applyStateSettingUpdate<H extends SettingHost>(
   // Sound: the lookup matches the host, which is what `WritableEntry` keys on.
   const entry = (
     ports.host === 'cli'
-      ? cliConfigSettingByKey(key)
-      : settingsViewSettingByKey(key)
+      ? TEXRA_SETTINGS.cliByKey(key)
+      : TEXRA_SETTINGS.settingsViewByKey(key)
   ) as WritableEntry<H> | undefined;
   if (!entry) return Effect.succeed({ kind: 'ignored' });
   const parsed = value === null ? null : entry.schema.safeParse(value);

@@ -56,6 +56,6 @@ export function setPreferSubscription(
   // row's schema still validates the value.
   const inspection = stores.config.inspect<boolean>(configKey);
   const target: ConfigTarget =
-    inspection?.workspaceValue !== undefined ? 'workspace' : 'global';
+    inspection.workspaceValue !== undefined ? 'workspace' : 'global';
   return writeSettingTo(stores, configKey, enabled, target);
 }

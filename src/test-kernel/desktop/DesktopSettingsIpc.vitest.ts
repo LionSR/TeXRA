@@ -29,6 +29,8 @@ import {
   SettingsViewInboundMessageSchema,
   type DerivedSettingsSnapshot,
 } from '@shared/settingsView/settingsViewMessages';
+import { CodexStateKey } from '@shared/settingsView/integrationSettings';
+import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -451,7 +453,7 @@ describe('desktop settings IPC', () => {
         expect(
           settings.handleMessage({
             command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-            key: WorkspaceStateKey.LATEX_FORMATTER,
+            key: TexraStateKey.LATEX_FORMATTER,
             value: 'none',
           }),
         ).toBe(true);
@@ -460,7 +462,7 @@ describe('desktop settings IPC', () => {
         expect(
           yield* withProcessServices(
             testRuntime(),
-            workspaceState.get(WorkspaceStateKey.LATEX_FORMATTER),
+            workspaceState.get(TexraStateKey.LATEX_FORMATTER),
           ),
         ).toBe('none');
         expect(latexSnapshotCount(posted)).toBe(1);
@@ -468,7 +470,7 @@ describe('desktop settings IPC', () => {
         expect(
           settings.handleMessage({
             command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-            key: WorkspaceStateKey.LATEX_FORMATTER,
+            key: TexraStateKey.LATEX_FORMATTER,
             value: null,
           }),
         ).toBe(true);
@@ -476,7 +478,7 @@ describe('desktop settings IPC', () => {
         expect(
           yield* withProcessServices(
             testRuntime(),
-            workspaceState.get(WorkspaceStateKey.LATEX_FORMATTER),
+            workspaceState.get(TexraStateKey.LATEX_FORMATTER),
           ),
         ).toBeUndefined();
         expect(latexSnapshotCount(posted)).toBe(2);
@@ -562,7 +564,7 @@ describe('desktop settings IPC', () => {
 
   it('posts the Tools and LaTeX pages and approval settings on readiness', async () => {
     const repoState = new FakeStateStore({
-      [WorkspaceStateKey.CODEX_SANDBOX_MODE]: 'danger-full-access',
+      [CodexStateKey.SANDBOX_MODE]: 'danger-full-access',
     });
     const config = new FakeScopedConfigProvider();
     config.seedWorkspace('texra.toolUse.requireBashApproval', false);
@@ -598,7 +600,7 @@ describe('desktop settings IPC', () => {
       snapshot: 'approval',
       values: {
         [BASH_APPROVAL_CONFIG_KEY]: false,
-        [WorkspaceStateKey.CODEX_SANDBOX_MODE]: 'danger-full-access',
+        [CodexStateKey.SANDBOX_MODE]: 'danger-full-access',
       },
     });
     // Without these the Git tab renders a permanently "Not set" token status
@@ -652,7 +654,7 @@ describe('desktop settings IPC', () => {
     // The store's own tagged refusal, which is what the IPC reports: the
     // write is an Effect the IPC composes, so the double fails with one.
     const failure = new StateWriteFailed({
-      key: WorkspaceStateKey.LATEX_FORMATTER,
+      key: TexraStateKey.LATEX_FORMATTER,
       message: 'workspace write failed',
       cause: new Error('workspace write failed'),
     });
@@ -665,7 +667,7 @@ describe('desktop settings IPC', () => {
     expect(
       settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-        key: WorkspaceStateKey.LATEX_FORMATTER,
+        key: TexraStateKey.LATEX_FORMATTER,
         value: 'none',
       }),
     ).toBe(true);
@@ -686,7 +688,7 @@ describe('desktop settings IPC', () => {
     expect(
       settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-        key: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+        key: TexraStateKey.LATEXDIFF_MATH_MARKUP,
         value: 'bogus',
       }),
     ).toBe(true);

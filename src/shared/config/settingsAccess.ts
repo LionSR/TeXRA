@@ -161,7 +161,7 @@ function rawConfigValue(
   config: ConfigProvider,
 ): unknown {
   return entry.configTarget === 'global'
-    ? config.inspect<unknown>(entry.key)?.globalValue
+    ? config.inspect<unknown>(entry.key).globalValue
     : config.get<unknown>(entry.key);
 }
 

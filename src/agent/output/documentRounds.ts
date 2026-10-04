@@ -65,7 +65,7 @@ import {
   type RunStorageFileLocation,
 } from '@shared/schemas';
 import type { RunState } from '@shared/session/runStateFold';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
@@ -101,7 +101,7 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
   const getRejectOnCompileFailure = () =>
     readSettingFrom<boolean>(
       roots,
-      WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+      TexraStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
     );
   const baseFiles: FileLocation[] = (
     config.outputFiles.length > 0 ? config.outputFiles : config.inputFiles
@@ -395,7 +395,7 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
       endTurn &&
       (yield* readSettingFrom<boolean>(
         roots,
-        WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
+        TexraStateKey.WORKFLOW_AUTO_OPEN_PDF,
       ))
     ) {
       // A failed compile opens its log; a clean round opens what it produced.

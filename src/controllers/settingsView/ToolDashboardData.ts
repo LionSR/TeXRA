@@ -72,7 +72,7 @@ export function planToolTerminalAction(
 /** The plugin's inline settings rows, as the dashboard item carries them. */
 function settingRows(plugin: Plugin): Pick<ToolDashboardItem, 'settings'> {
   return plugin.settings
-    ? { settings: plugin.settings.map(([key, label]) => [key, label]) }
+    ? { settings: plugin.settings.map(({ row, label }) => [row.key, label]) }
     : {};
 }
 

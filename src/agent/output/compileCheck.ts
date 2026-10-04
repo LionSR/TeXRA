@@ -17,7 +17,7 @@ import {
   type OutputFileInfo,
   type RunStorageFileLocation,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import { LATEX_CONFIG_RANGES } from '@shared/constants/latexConfig';
 import { stripWorkflowRoundDir } from '@shared/constants/workflowOutput';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
@@ -71,7 +71,7 @@ export const getWorkflowAutoCompileTimeoutMs = Effect.fn(
     MIN_TIMEOUT_MS,
     yield* readSettingFrom<number>(
       roots,
-      WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
+      TexraStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
     ),
   );
 });
@@ -129,7 +129,7 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
     if (
       !(yield* readSettingFrom<boolean>(
         ctx.roots,
-        WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
+        TexraStateKey.WORKFLOW_AUTO_COMPILE,
       ))
     ) {
       return empty;

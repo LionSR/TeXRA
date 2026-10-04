@@ -9,7 +9,10 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import {
+  CLAUDE_AGENT_SETTINGS,
+  CODEX_SETTINGS,
+} from '@shared/settingsView/integrationSettings';
 import {
   ClaudeAgentSessions,
   claudeAgentSessionsLayer,
@@ -202,12 +205,7 @@ export const codex = definePlugin<CodexThreads>({
   tools: { codex: CodexTool },
   name: 'OpenAI Codex CLI',
   category: 'ai-agents',
-  settings: [
-    [WorkspaceStateKey.CODEX_MODEL, 'Model'],
-    [WorkspaceStateKey.CODEX_SANDBOX_MODE, 'Sandbox mode'],
-    [WorkspaceStateKey.CODEX_REASONING_EFFORT, 'Reasoning effort'],
-    [WorkspaceStateKey.CODEX_APPROVAL_POLICY, 'Approval policy'],
-  ],
+  settings: CODEX_SETTINGS,
   description:
     'OpenAI Codex agent runtime. Required by the Codex SDK for local code generation and analysis.',
   setup: Object.freeze({
@@ -248,11 +246,7 @@ export const claudeAgent = definePlugin<ClaudeAgentSessions>({
   tools: { [CLAUDE_AGENT_NAME]: ClaudeAgentTool },
   name: 'Claude Code CLI',
   category: 'ai-agents',
-  settings: [
-    [WorkspaceStateKey.CLAUDE_AGENT_MODEL, 'Model'],
-    [WorkspaceStateKey.CLAUDE_AGENT_EFFORT, 'Reasoning effort'],
-    [WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE, 'Permission mode'],
-  ],
+  settings: CLAUDE_AGENT_SETTINGS,
   description:
     'Spin off a Claude Code CLI agent that works in your workspace. It can read files, run commands, edit code, and search the web on your behalf. Use it to delegate focused exploration or implementation while another agent stays in charge.',
   setup: Object.freeze({

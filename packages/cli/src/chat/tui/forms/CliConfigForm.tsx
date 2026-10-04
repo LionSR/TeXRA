@@ -6,10 +6,8 @@ import { storeCredential } from '@common/secrets/storeCredential';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import {
-  CLI_STATE_SETTINGS,
-  type SurfacedSettingEntry,
-} from '@shared/state/stateSettings';
+import { type SurfacedSettingEntry } from '@shared/state/stateSettings';
+import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
 import {
   readSetting,
   type SettingsStores,
@@ -94,7 +92,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   const settings = useAsyncListForm<Record<string, unknown>>({
     load: () =>
       Effect.map(
-        Effect.forEach(CLI_STATE_SETTINGS, (entry) =>
+        Effect.forEach(TEXRA_SETTINGS.cliRows, (entry) =>
           Effect.map(
             readSetting(entry, stores),
             (value) => [entry.key, value] as const,
@@ -166,7 +164,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   return (
     <ConfigForm
       availableRows={props.availableRows}
-      entries={CLI_STATE_SETTINGS}
+      entries={TEXRA_SETTINGS.cliRows}
       readValue={(entry) => settings.data?.[entry.key]}
       writeValue={(entry, value) => applyUpdate(entry, value)}
       resetValue={(entry) => applyUpdate(entry, null)}
