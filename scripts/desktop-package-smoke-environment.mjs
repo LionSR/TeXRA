@@ -67,7 +67,6 @@ export function buildDesktopSmokeEnvironment(sourceEnvironment, paths) {
     LOCALAPPDATA: join(paths.profile, 'AppData', 'Local'),
     NODE_ENV: 'production',
     TEXRA_DESKTOP_E2E_USER_DATA_PATH: paths.userData,
-    TEXRA_DISABLE_KEYCHAIN: '1',
     TEXRA_NO_UPDATE_CHECK: '1',
     USERPROFILE: paths.profile,
     XDG_CACHE_HOME: join(paths.profile, '.cache'),

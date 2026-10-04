@@ -69,10 +69,6 @@ export async function findWorkspaceStoragePath(input: {
  * @texra/desktop build` or the individual `build:main`/`build:preload`/
  * `build:renderer` scripts). The harness intentionally does NOT rebuild on
  * every test — that would blow the per-suite budget.
- *
- * Set `TEXRA_DISABLE_KEYCHAIN=1` (handled by the app platform layer) so the
- * harness never blocks on a macOS keychain prompt while reading or writing
- * saved secrets.
  */
 export async function launchTexraApp(
   options: LaunchOptions = {},
@@ -97,8 +93,6 @@ export async function launchTexraApp(
     cwd: PACKAGE_ROOT,
     env: {
       ...process.env,
-      // Hint to platform/secrets layer to avoid the macOS keychain prompt.
-      TEXRA_DISABLE_KEYCHAIN: '1',
       // Test runs never report usage (and never raise the first-run notice).
       TEXRA_NO_TELEMETRY: '1',
       TEXRA_DESKTOP_E2E_USER_DATA_PATH: userDataPath,

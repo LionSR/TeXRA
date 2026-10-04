@@ -20,7 +20,7 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 // Local imports - runtime
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
-import { CliSecrets, cliSecretsPath } from '../runtime/cliSecrets';
+import { cliSecrets } from '../runtime/cliSecrets';
 import { CliExitCode } from '../runtime/exitCodes';
 import { askCliQuestion, writeTextStderr } from '../runtime/logSinks';
 
@@ -38,7 +38,7 @@ function buildOverleafClonePorts(
   workspacePath: string,
 ): OverleafCloneWorkflowPorts {
   // Clone installs no platform, so it opens the store over its root itself.
-  const secrets = new CliSecrets(cliSecretsPath(context.storageRoot));
+  const secrets = cliSecrets(context.storageRoot);
   let canonicalWorkspacePath = workspacePath;
   return {
     // A credential store this host cannot reach fails the clone with its
@@ -170,7 +170,7 @@ export const cloneCommand = withUsageSections(
         description: 'Directory to create or clone into (defaults to --cwd)',
       },
     },
-    // `clone` runs without a platform, but its token ports are `CliSecrets`,
+    // `clone` runs without a platform, but its token ports are `FileSecrets`,
     // whose reads and writes are Effect programs. The process runtime its
     // entry installs for them serves a state store and a global-root handle
     // that refuse: clone serves no application state and reads no record, and

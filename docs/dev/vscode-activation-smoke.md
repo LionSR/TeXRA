@@ -28,8 +28,7 @@ This launches the built extension in a real VS Code and asserts, from inside the
 extension host, that it activates, that every manifest command is registered, and
 that `showProgressView`, `showAgents` and `openProgressViewInTab` run and open a
 TeXRA webview tab. It runs in CI on push, nightly and dispatch, not on pull
-requests. It makes no model call: the extension keeps API keys only in VS Code
-SecretStorage, which a test cannot seed.
+requests. It makes no model call: it seeds no API key.
 
 ## Development Host
 

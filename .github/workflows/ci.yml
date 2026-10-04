@@ -394,7 +394,6 @@ jobs:
 
       - name: Run desktop e2e suite
         env:
-          TEXRA_DISABLE_KEYCHAIN: '1'
           TEXRA_NO_UPDATE_CHECK: '1'
         run: pnpm --filter @texra/desktop test:e2e
 

@@ -134,24 +134,6 @@
       "name": "isAllowedExternalUrl"
     },
     {
-      "file": "packages/desktop/src/main/platform/electronSecrets.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE"
-    },
-    {
-      "file": "packages/desktop/src/main/platform/electronSecrets.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "__resetKeychainStateForTests"
-    },
-    {
-      "file": "packages/desktop/src/main/platform/electronSecrets.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "getSecretStorageMode"
-    },
-    {
       "file": "packages/llm/src/oauth/deviceAuthorization.ts",
       "category": "unused",
       "kind": "exports",

@@ -1,8 +1,8 @@
 /**
  * Platform-agnostic secrets provider.
  *
- * Abstracts API key storage/retrieval. VS Code uses context.secrets, the
- * CLI a config file, Electron `safeStorage`. The store answers only what it
+ * Abstracts API key storage/retrieval. Every host serves it from one
+ * owner-only file (`FileSecrets`). The store answers only what it
  * holds; a credential that may also come from the environment is read through
  * {@link resolveCredential}, the one secret-then-env ladder.
  */
@@ -20,10 +20,8 @@ import type { CredentialStore, SecretsFailed } from '@texra-ai/llm';
  * commit survives cancellation. The uninterruptible region is the commit
  * itself and nothing before it — for the file-backed stores it begins once
  * the write lane has been entered, inside `JsonStore.set`, so a write still
- * queued behind another one can be cancelled; for the VS Code store it is the
- * single `SecretStorage` call, which is the whole commit. Everything that
- * prepares a write — the lane wait, opening the store, the desktop store's
- * encrypt step — stays interruptible, because interruption there means
+ * queued behind another one can be cancelled. Everything that
+ * prepares a write — the lane wait, opening the store — stays interruptible, because interruption there means
  * nothing was written. A post-commit step cannot run as a step after the
  * write: a commit the store landed still exits as interrupted when its caller
  * was cancelled during it, so the step would be skipped over a credential

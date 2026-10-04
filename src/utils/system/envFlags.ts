@@ -17,9 +17,8 @@
  *   a loud defect rather than a widened error channel.
  *
  * Every host had grown its own spelling of the flag check, so
- * `TEXRA_NO_UPDATE_CHECK=0` disabled update checks in one host and
- * `TEXRA_DISABLE_KEYCHAIN=yes` did nothing in another. A user who writes `=0`
- * means off in both.
+ * `TEXRA_NO_UPDATE_CHECK=0` disabled update checks in one host and not in
+ * another. A user who writes `=0` means off in all of them.
  */
 import { Config, ConfigProvider, Effect, Layer, Option } from 'effect';
 

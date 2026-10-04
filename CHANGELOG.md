@@ -6,6 +6,16 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **One credential store for every TeXRA app; enter your keys once more.**
+  The VS Code extension and the desktop app no longer keep API keys and
+  sign-ins in VS Code's secret storage or the system keychain. Every host,
+  the terminal and the background service included, reads and writes one
+  folder, `~/.texra/secrets/` (one file per key), readable by your user
+  alone (0600 files in a 0700 folder) but not keychain-encrypted. The
+  terminal's former `~/.texra/secrets.json` is no longer read. A key saved in any TeXRA app now works in all of
+  them, and in tasks the background service runs. Keys saved before this
+  release are not carried over: add them again from Settings › Models,
+  `TeXRA: Set API Key` or `texra auth`.
 - **Agent files are flat.** An agent YAML is now `name`, `description`,
   `tools`, `temperature` and `prompt` at the top level, plus an optional
   `task` block for an agent that revises documents: `task.prefix` lays out

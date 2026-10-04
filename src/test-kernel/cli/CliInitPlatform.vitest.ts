@@ -108,11 +108,10 @@ vi.mock('@controllers/session/appStateStore', () => ({
 }));
 
 vi.mock('@cli/runtime/cliSecrets', () => ({
-  CliSecrets: class {
-    readonly kind = 'cli-secrets';
-    listStoredKeys = () => Effect.succeed([]);
-  },
-  cliSecretsPath: (storageRoot: string) => storageRoot,
+  cliSecrets: () => ({
+    kind: 'cli-secrets',
+    listStoredKeys: () => Effect.succeed([]),
+  }),
 }));
 
 function cliContext(

@@ -5,7 +5,7 @@
  * which opens the workspace state and config stores as Effect programs before
  * it wires the platform; `notifyCliUpdate`, which runs before any platform
  * exists; `clone`, which never builds a platform at all yet reads and writes
- * its remote's token through `CliSecrets`; and the headless run commands,
+ * its remote's token through `FileSecrets`; and the headless run commands,
  * whose native validation runs before platform initialization. Whichever
  * arrives first builds the runtime and the rest run on it, so a normal run
  * still ends with exactly the runtime the platform's shutdown disposes.
@@ -64,7 +64,7 @@ import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { texraPlugins } from '@tools/registry';
 
 import { readCliVersion } from './cliContext';
-import { CliSecrets, cliSecretsPath } from './cliSecrets';
+import { cliSecrets } from './cliSecrets';
 import { setCliLogRuntime } from './logSinks';
 
 const NO_PLATFORM_APP_STATE =
@@ -202,7 +202,7 @@ export function installCliProcessRuntime(
   // and which runs no records operation — must not create it at all.
   const globalStoragePath = resolveGlobalStoragePath(storageRoot);
   const version = readCliVersion();
-  const secrets = new CliSecrets(cliSecretsPath(storageRoot));
+  const secrets = cliSecrets(storageRoot);
   // The agent directories are a process service the runtime serves, so
   // they are built here, before the install, rather than in the platform
   // init that may join an already-installed runtime. The built-in agent
