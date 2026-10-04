@@ -10,8 +10,8 @@ import { Effect, Layer, type Scope, SynchronizedRef } from 'effect';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
-  AgentPromptSchema,
-  AgentSettingSchema,
+  DocumentTaskSchema,
+  PersonaSchema,
 } from '@agent/core/definition/AgentDataclass';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
@@ -69,7 +69,7 @@ function testBoundModel(overrides: Partial<BoundModel> = {}): BoundModel {
     modelId: 'test-model',
     config: buildTestModelConfig({ capabilities: { supportsVision } }),
     reasoning: { thinking: false, effort: null, mode: null },
-    compatibilityKey: 'DeepSeek',
+    backend: 'deepseek',
     model: unusedModel,
     origin: TEST_ORIGIN,
     route: { kind: 'api-key', provider: 'deepseek', usageRoute: 'api-key' },
@@ -267,9 +267,10 @@ export function testAgentRun(
       agent: 'chat',
       model: 'test-model',
       agentCategory: AgentCategory.ToolUse,
+      instruction: 'Do the thing.',
     }),
-    setting: AgentSettingSchema.parse({ agentCategory: AgentCategory.ToolUse }),
-    prompt: AgentPromptSchema.parse({ userRequest: 'Do the thing.' }),
+    persona: PersonaSchema.parse({}),
+    task: null,
     parentStage: logger.openStage('Run: chat'),
     stores: hostStores(),
     toolPolicy: {},
@@ -339,12 +340,12 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
                 model: 'test-model',
                 agentCategory: AgentCategory.Workflow,
               }),
-              setting: AgentSettingSchema.parse({
-                agentCategory: AgentCategory.Workflow,
-                rounds: init.rounds,
-              }),
-              prompt: AgentPromptSchema.parse({
-                userRequest: 'Write the document.',
+              persona: PersonaSchema.parse({}),
+              task: DocumentTaskSchema.parse({
+                requests: Array.from(
+                  { length: init.rounds },
+                  () => 'Write the document.',
+                ),
               }),
               parentStage: logger.openStage('Run: correct'),
               initialUserMessageForTranscript: 'Write the document.',
@@ -356,10 +357,10 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
             agent: 'chat',
             model: 'test-model',
             agentCategory: AgentCategory.ToolUse,
+            instruction: 'Do the thing.',
             ...(init.mediaFiles ? { mediaFiles: init.mediaFiles } : {}),
           }),
-          setting: AgentSettingSchema.parse({
-            agentCategory: AgentCategory.ToolUse,
+          persona: PersonaSchema.parse({
             tools: Object.keys(tools).map((name) => ({ name })),
           }),
           toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },

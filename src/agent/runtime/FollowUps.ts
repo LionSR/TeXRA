@@ -14,14 +14,10 @@
  * message is that merge, done once, where the row is written. The
  * provider-visible difference is the message count of a multi-item batch.
  *
- * A native child's delivery driver owns continuation while this service
- * reads its input in the same live run, without a second queue consumer.
- *
- * The run's conversation claims it for itself (`claimFollowUps`, from its
+ * The run's conversation opens its own reader (`claimFollowUps`, from its
  * own `AgentRun`); it is never a context service. A child launched from a
  * parent's tool call runs in that call's fiber, so a context service would
- * hand the child its parent's input: a round-mode child that settled it
- * ended the parent's lease, and the parked parent halted cancelled.
+ * hand the child its parent's input.
  */
 import { randomUUID } from 'node:crypto';
 
@@ -40,11 +36,7 @@ import {
   isInstruction,
   userFollowUpInstruction,
 } from '@agent/followUp/followUpMessages';
-import {
-  FollowUpContinuationOwned,
-  type FollowUpBatch,
-  type ViewEdit,
-} from '@agent/followUp/RunInput';
+import type { FollowUpBatch, ViewEdit } from '@agent/followUp/RunInput';
 import { logUserMessage } from '@agent/trace';
 import { mediaNeedsVisionWarning } from '@agent/runtime/mediaVisionWarning';
 import {
@@ -121,7 +113,7 @@ export interface FollowUps {
     Error,
     FileSystem.FileSystem | ChildProcessSpawner
   >;
-  /** Release the lease: keep the run recoverable, or end it. */
+  /** End the reader: the run stays recoverable, or takes no more input. */
   readonly release: (next: 'recoverable' | 'terminal') => void;
   /**
    * Commit a batch: its `followup.consumed` rows, its user message, and
@@ -143,37 +135,15 @@ export interface FollowUps {
   >;
 }
 
-/** Claim `run`'s own follow-up input for the enclosing scope. */
+/** Open `run`'s own reader for the enclosing scope. */
 export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   run: AgentRunShape,
   runHistory: RunHistory['Service'],
-): Effect.fn.Return<FollowUps, Error, Scope.Scope> {
+): Effect.fn.Return<FollowUps, never, Scope.Scope> {
   const { runId, session, logger } = run;
-  const manager = session.followUps;
-  // The lease is claimed here and the caller's scope releases it.
-  // The run's settleRun arm decides recoverable-vs-terminal on every exit
-  // after the run opened; this finalizer backstops the exits that never
-  // reach it, because a failed acquire or a thrown attach releases nothing
-  // under acquireUseRelease semantics, and the lease must not outlive the
-  // scope that claimed it (the run-loop design,
-  // .agents/docs/implemented/architecture/2026-09-21-effect-design-run-loop-programs.md).
-  let released = false;
-  const lease = yield* Effect.acquireRelease(
-    Effect.sync(() => manager.claimLive(runId, 'loop')),
-    (held) =>
-      Effect.sync(() => {
-        if (!released && held) {
-          released = true;
-          manager.release(held, 'recoverable');
-        }
-      }),
-  );
-  const input = manager.attachInput(runId, lease);
-  if (!input) {
-    return yield* new FollowUpContinuationOwned({
-      message: `Follow-up continuation already has an owner for run ${runId}.`,
-    });
-  }
+  // Ended with the scope; the run's settleRun arm ends it first, saying
+  // whether the run takes more input.
+  const input = yield* session.followUps.open(runId);
   let syntheticPending = false;
 
   const taken = (batch: FollowUpBatch | null) => {
@@ -483,11 +453,14 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
               : batchRows(state, batch);
           })
         : Effect.succeed(null),
-    release: (next) => {
-      if (released || !lease) return;
-      released = true;
-      manager.release(lease, next);
-    },
+    // A child takes no more input once its loop ends: its parent resumes it.
+    release: (next) =>
+      session.followUps.release(
+        runId,
+        input,
+        next === 'terminal' ||
+          (session.runs.getHandle(runId)?.parent ?? null) !== null,
+      ),
     consume,
   };
 });

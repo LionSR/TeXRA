@@ -1126,7 +1126,7 @@ Appendix.
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  // Agents like ocr/paper2slide declare one defaultOutputFiles entry while
+  // Agents like ocr/paper2slide declare one `task.outputs` entry while
   // accepting several attached input files. documentRounds.ts then builds
   // baseFiles from outputFiles, not inputFiles, so baseFiles[i] no longer
   // corresponds to inputFiles[i].

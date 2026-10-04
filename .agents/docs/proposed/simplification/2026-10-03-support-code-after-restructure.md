@@ -111,22 +111,19 @@ its doc says "only absence is recovered". Proposal: have `entryTypeIn`
 recover through `absentReason`. Not done because it changes a failure into
 a value for its callers.
 
-## 6. Config file paths derived twice
+## 6. Config file paths derived twice (done with M7)
 
-`src/platform/defaults/nodeStores.ts` derives the local and global
-`config.json` paths inline. `packages/cli/src/runtime/cliConfig.ts`
-recomputes the same two paths for its warnings. Only the project path has
-a shared helper (`workspaceTexraConfigPath` in `nodeStorage.ts`). Proposal:
-add the two siblings and use them at both sites. Hold this until M7 (the
-settings split by owner), which reshapes these readers anyway.
+`packages/cli/src/runtime/cliConfig.ts` recomputed the global and local
+`config.json` paths that `src/platform/defaults/nodeStores.ts` had already
+opened. The M7 settings split made `JsonStore.filePath` readable, and the
+CLI's warnings now name `store.filePath`, so the second derivation is gone
+with no new helper.
 
-## 7. `ConfigProvider.inspect` is typed `| undefined`, and no implementation returns it
+## 7. `ConfigProvider.inspect` is typed `| undefined` (done with M7)
 
-`JsonConfigProvider.inspect` always returns an object. Only the test fake
-`FakePlatform` returns `undefined`. Proposal: drop `| undefined` and the
-four callers' `?.` (`settingsAccess.ts`, `subscriptionAccess.ts`, two in
-`cliConfig.ts`). This is a type tightening with cross-lane callers, so it
-waits for M7.
+No production implementation returned `undefined`. The port now returns
+`ConfigInspection<T>`, the test fake returns an empty inspection for an
+unknown key, and the four production callers lost their `?.`.
 
 ## 8. `@common/errors` is a barrel with mixed import paths
 

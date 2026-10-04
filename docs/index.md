@@ -46,7 +46,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
       </div>
       <div class="phase-name">Explore</div>
       <div class="phase-agents">search</div>
-      <div class="phase-desc">arXiv, Crossref</div>
+      <div class="phase-desc">arXiv, Zotero</div>
     </div>
     <div class="lifecycle-arrow">
       <svg width="28" height="16" viewBox="0 0 28 16"><path d="M0 8h24M18 2l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
@@ -146,7 +146,6 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 
   <!-- Tools bar -->
   <div class="tools-bar">
-    <span class="tool-tag">wolfram</span>
     <span class="tool-tag">lean</span>
     <span class="tool-tag">arxiv</span>
     <span class="tool-tag">bash</span>

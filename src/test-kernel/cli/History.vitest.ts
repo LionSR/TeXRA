@@ -255,14 +255,12 @@ function runListEntry(
     timestamp: '2026-05-18T08:00:00.000Z',
     record: config,
     status: 'completed',
+    resumable: false,
     ...overrides,
   };
 }
 
-// The durable fact that makes a listing row resumable: a checkpoint on disk.
-const RESUMABLE_ROW_FACTS = {
-  checkpointPresent: true,
-};
+const RESUMABLE_ROW_FACTS = { resumable: true };
 
 describe('CLI history runtime', () => {
   setupPlatform(async () => {
@@ -902,7 +900,7 @@ describe('CLI history runtime', () => {
         config,
         meta: null,
         entries: [],
-        snapshot: { todos: [], plan: null, usage: null },
+        snapshot: { plan: null, usage: null },
         terminalStatus: null,
       } as unknown as TraceDocument;
 

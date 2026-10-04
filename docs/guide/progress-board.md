@@ -1,7 +1,6 @@
 <script setup>
 import StreamHeaderActions from '../.vitepress/components/StreamHeaderActions.vue';
 import StatusDotLegend from '../.vitepress/components/StatusDotLegend.vue';
-import TodoLifecycle from '../.vitepress/components/TodoLifecycle.vue';
 import ProgressLogHero from '../.vitepress/components/ProgressLogHero.vue';
 import CliHistoryHero from '../.vitepress/components/CliHistoryHero.vue';
 </script>
@@ -126,14 +125,6 @@ AUTO-BASH and AUTO-TASK badges.
 ### Context utilization
 
 A small percentage next to the token count shows how full the model's context window is. When it climbs toward 100%, the conversation may get compacted automatically, or you may want to start a fresh session.
-
-### Todo list
-
-When a tool-use agent works on a multi-step task, it shows a **live checklist** in the ProgressBoard. Each item moves from Pending to In Progress to Completed, so you can see what the agent is working on and how far along it is.
-
-<TodoLifecycle />
-
-<p class="hero-caption">A live checklist: completed items are checked and struck through, the active item spins, pending items wait.</p>
 
 ### After a workflow run
 

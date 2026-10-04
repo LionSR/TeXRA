@@ -38,7 +38,7 @@ import { Effect, SubscriptionRef } from 'effect';
 
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
-import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
+import type { Persona } from '@agent/core/definition/AgentDataclass';
 import { isInstalledPluginId } from '@common/plugins/pluginTrust';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { SettingHost } from '@shared/state/stateSettings';
@@ -60,7 +60,7 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 /** What a step resolves its tools from: fixed at the run's open, but the
  *  approval flag the step reads live. */
 export interface StepToolInputs {
-  readonly tools: AgentToolUseSetting['tools'];
+  readonly tools: Persona['tools'];
   /** When true, approval-gated tools are withheld: read live each step. */
   readonly approvalPromptsUnavailable: boolean;
   /** The product host the run's roots name; tools excluded from it are dropped. */
@@ -84,9 +84,7 @@ export interface StepToolInputs {
 }
 
 /** A declaration's tool names, in order. */
-export const declaredToolNames = (
-  tools: AgentToolUseSetting['tools'],
-): readonly string[] =>
+export const declaredToolNames = (tools: Persona['tools']): readonly string[] =>
   (Array.isArray(tools) ? tools : []).map((toolConfig) =>
     typeof toolConfig === 'string' ? toolConfig : toolConfig.name,
   );
@@ -101,7 +99,7 @@ export const declaredToolNames = (
  */
 export function childToolRefusal(
   parentOffered: readonly OfferedTool[],
-  tools: AgentToolUseSetting['tools'],
+  tools: Persona['tools'],
   agentName?: string,
 ): string | undefined {
   const servers = new Set(

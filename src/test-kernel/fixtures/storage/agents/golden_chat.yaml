@@ -1,9 +1,7 @@
 name: golden_chat
 description: The golden store's interactive chat, run as a goal and switched mid-run.
-settings:
-  agentCategory: toolUse
-  tools:
-    - plan
-prompts:
-  systemPrompt: 'GOLDEN-CHAT: plan, run the plan as a goal, complete it.'
-  userRequest: '{{ INSTRUCTION }}'
+tools:
+  - plan
+
+prompt: |-
+  GOLDEN-CHAT: plan, run the plan as a goal, complete it.

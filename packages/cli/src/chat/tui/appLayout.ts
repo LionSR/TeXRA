@@ -1,6 +1,6 @@
 /** Pure row allocation and visibility policy for the root CLI TUI layout. */
 
-import { TODO_STATUS, type RunId, type TodoItem } from '@shared/schemas';
+import { type RunId } from '@shared/schemas';
 import { clamp } from '@utils/core';
 import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
 import { REVERSE_SEARCH_ROWS } from './input/ReverseSearch';
@@ -81,19 +81,19 @@ export function allocateConversationPanelRows({
   maxRows,
   sessionCount,
   childListFocused,
-  todosPlanContentRows,
+  planContentRows,
   transcriptRows,
 }: {
   readonly maxRows: number;
   readonly sessionCount: number;
   readonly childListFocused: boolean;
-  readonly todosPlanContentRows: number;
+  readonly planContentRows: number;
   readonly transcriptRows: number;
 }): {
   readonly bottomPanelRows: number;
   readonly conversationRows: number;
   readonly sessionPanelRows: number;
-  readonly todosPlanRows: number;
+  readonly planRows: number;
 } {
   const availableTranscriptRows = Math.max(0, transcriptRows);
   // A bottom panel may never consume the last transcript row.
@@ -102,14 +102,13 @@ export function allocateConversationPanelRows({
     bottomPanelRows: 0,
     conversationRows: availableTranscriptRows,
     sessionPanelRows: 0,
-    todosPlanRows: 0,
+    planRows: 0,
   };
   // Exactly one bottom panel exists at a time. Child sessions already have a
   // compact count and navigation affordance in the status bar, so their list
   // stays collapsed until the user focuses it — a large workflow must not take
   // transcript space merely because it is running in the background — and the
-  // todos/plan panel hides while the list has focus
-  // (`shouldShowTodosPlanPanel`).
+  // plan panel hides while the list has focus.
   if (childListFocused) {
     if (sessionCount === 0) return none;
     const rows = Math.min(maxRows, sessionCount + 1, panelBudget);
@@ -118,13 +117,13 @@ export function allocateConversationPanelRows({
       bottomPanelRows: rows,
       conversationRows: availableTranscriptRows - rows,
       sessionPanelRows: rows,
-      todosPlanRows: 0,
+      planRows: 0,
     };
   }
-  if (todosPlanContentRows === 0) return none;
+  if (planContentRows === 0) return none;
   const rows = Math.min(
     maxRows,
-    todosPlanContentRows + 1,
+    planContentRows + 1,
     Math.floor(panelBudget / 2),
   );
   if (rows < BOTTOM_PANEL_MIN_ROWS) return none;
@@ -132,7 +131,7 @@ export function allocateConversationPanelRows({
     bottomPanelRows: rows,
     conversationRows: availableTranscriptRows - rows,
     sessionPanelRows: 0,
-    todosPlanRows: rows,
+    planRows: rows,
   };
 }
 
@@ -186,21 +185,4 @@ export function staticScrollbackTarget({
     ownerKey: 'root',
     runId: rootRunId ?? activeRunId,
   };
-}
-
-export function shouldShowTodosPlanPanel({
-  childListFocused,
-  foregroundOpen,
-  hasPlan,
-  todos,
-}: {
-  /** The focused child list is the only bottom panel; todos yield to it. */
-  readonly childListFocused: boolean;
-  readonly foregroundOpen: boolean;
-  readonly hasPlan: boolean;
-  readonly todos: readonly TodoItem[];
-}): boolean {
-  if (foregroundOpen || childListFocused) return false;
-  if (hasPlan) return true;
-  return todos.some((todo) => todo.status !== TODO_STATUS.COMPLETED);
 }

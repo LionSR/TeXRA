@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 
 // Local imports - formatter implementations
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
 // Local file imports
@@ -63,7 +63,7 @@ export function resolveLatexFormatter(stores: SettingsStores) {
   return Effect.gen(function* () {
     const formatter = yield* readSettingFrom<string>(
       stores,
-      WorkspaceStateKey.LATEX_FORMATTER,
+      TexraStateKey.LATEX_FORMATTER,
     );
     if (formatter === 'none') {
       return null;

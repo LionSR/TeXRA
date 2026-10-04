@@ -45,7 +45,7 @@ import {
 } from 'effect';
 
 import type { AgentEvent } from '@agent/trace';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import { Inbox } from '@agent/followUp/Inbox';
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -286,8 +286,8 @@ export class SessionHandle {
    * own folder.
    */
   readonly roots: WorkspaceRoots;
-  /** Session-owned follow-up queue owner. */
-  readonly followUps: ToolUseFollowUpQueue;
+  /** The session's follow-up inbox: every run's input, one reader each. */
+  readonly followUps: Inbox;
   private readonly graph: SessionGraph;
   private disposed = false;
   private readonly publications = new Set<TrackedPublication>();
@@ -326,8 +326,7 @@ export class SessionHandle {
     // Forced dependency order, every cross-reference explicit — never let a
     // member fall back to a neighboring module singleton (silent-state-split).
     this.roots = init.roots;
-    // Built before the graph: the session's approvals are built over it, and
-    // announce every effective bypass change through it.
+    // Built before the graph, whose approvals announce bypasses through it.
     this.interactions = new SessionHostInteractions();
     const graph = init.graph(this);
     this.graph = graph;
@@ -345,7 +344,7 @@ export class SessionHandle {
     const run = (runId: RunId) => qualifyAggregateId('run', runId);
     const viewOf = (runId: RunId) =>
       SubscriptionRef.getUnsafe(graph.view).runs.get(runId);
-    this.followUps = new ToolUseFollowUpQueue({
+    this.followUps = new Inbox({
       exclusive: (job) => graph.exclusive(job),
       detach: (job) => graph.detach(job),
       pending: (runId) => graph.events.pendingFollowUps(run(runId)),
@@ -357,6 +356,7 @@ export class SessionHandle {
       named: (runId, followUpId) =>
         graph.events.followUpNamed(run(runId), followUpId),
       acquireClaim: (runId) => this.acquireClaims(run(runId)),
+      live: (runId) => graph.runs.isLive(runId),
     });
     this.modelRetries = init.modelRetries;
     this.history = init.history;
@@ -1124,7 +1124,7 @@ export class SessionHandle {
       // The sweep and host notifications belong to the authoring process.
       const target = aggregateTarget(event.aggregateId);
       this.graph.events.foldLifecycle(event);
-      if (endsRun(event)) this.followUps.wakeTakes();
+      if (endsRun(event)) this.followUps.wakeReaders();
       const { self } = yield* SubscriptionRef.get(this.graph.local);
       if (event.origin == null || !self.includes(event.origin)) return;
       if (target.kind !== 'run' || event.type !== 'run.end') return;

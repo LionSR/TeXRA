@@ -10,11 +10,7 @@ import { afterAll, assert, beforeAll, describe, expect, vi } from 'vitest';
 
 import { apiKeyEnvName, apiKeySecretName } from '@texra-ai/llm';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import {
-  AgentPromptSchema,
-  AgentSettingSchema,
-  AgentToolUseSettingSchema,
-} from '@agent/core/definition/AgentDataclass';
+import { PersonaSchema } from '@agent/core/definition/AgentDataclass';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
@@ -71,8 +67,7 @@ function validationLaunch(
 ): AgentLaunchContext {
   return {
     ...createTestLaunchContext(init),
-    config,
-    prompt: AgentPromptSchema.parse({ userRequest: 'Do the thing.' }),
+    config: { ...config, instruction: 'Do the thing.' },
     // Headless: the turn ends the run instead of parking for input.
     toolPolicy: { stopAfterCycle: true },
     modelConfig: buildTestModelConfig(),
@@ -291,10 +286,7 @@ describe('run-scoped tool resolution', () => {
         const launch = validationLaunch({ runId, session }, config);
         const ctx: AgentLaunchContext = {
           ...launch,
-          setting: AgentSettingSchema.parse({
-            agentCategory: AgentCategory.ToolUse,
-            tools: [{ name: 'agent' }],
-          }),
+          persona: PersonaSchema.parse({ tools: [{ name: 'agent' }] }),
         };
         yield* runToolUse({ resume: false }).pipe(
           Effect.provide(runLayer(ctx, [])),
@@ -355,8 +347,7 @@ describe('run-scoped tool resolution', () => {
         });
         const ctx: AgentLaunchContext = {
           ...validationLaunch({ runId, session }, config),
-          setting: AgentSettingSchema.parse({
-            agentCategory: AgentCategory.ToolUse,
+          persona: PersonaSchema.parse({
             tools: [
               { name: 'script' },
               { name: 'read_file' },
@@ -416,7 +407,7 @@ describe('run-scoped tool resolution', () => {
       // The run's tool policy carries both gates; `AgentRun` hands them to the
       // resolver when it builds the model-facing list.
       const resolved = yield* resolveTestStep({
-        tools: AgentToolUseSettingSchema.parse({
+        tools: PersonaSchema.parse({
           tools: [
             { name: 'bash' },
             { name: 'grep' },

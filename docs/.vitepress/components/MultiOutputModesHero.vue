@@ -3,12 +3,12 @@
 // The page contrasts two ways output filenames are determined, spread over
 // three paragraphs + a YAML snippet:
 //   • Editing agents reuse the selected INPUT_FILES as the output names.
-//   • Generator agents declare settings.defaultOutputFiles, exposed as
-//     OUTPUT_FILES, when the outputs are not the inputs.
+//   • Generator agents declare task.outputs, exposed as OUTPUT_FILES, when
+//     the outputs are not the inputs.
 //
 // This shows both modes side by side: each card maps input file rows → output
 // file rows, driven by the variable chip in its header (INPUT_FILES vs
-// defaultOutputFiles → OUTPUT_FILES). Reuses the .fitem/.fi-name file-row
+// task.outputs → OUTPUT_FILES). Reuses the .fitem/.fi-name file-row
 // vocabulary and the .mk-card shell from the shared `.mockup` globals.
 
 const editing = {
@@ -19,7 +19,7 @@ const editing = {
 };
 
 const generator = {
-  driver: 'defaultOutputFiles → OUTPUT_FILES',
+  driver: 'task.outputs → OUTPUT_FILES',
   inputs: ['notes.md'],
   // Generator agents declare fixed new filenames.
   outputs: ['paper_section.tex', 'appendix.tex'],

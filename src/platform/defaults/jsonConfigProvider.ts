@@ -113,7 +113,7 @@ export class JsonConfigProvider implements ConfigProvider {
     );
   }
 
-  inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
+  inspect<T = unknown>(key: string): ConfigInspection<T> {
     const storedKey = canonicalConfigKey(key);
     return {
       globalValue: this.globalStore.get<T>(storedKey),

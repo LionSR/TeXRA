@@ -42,7 +42,6 @@ import {
   MESSAGE_TYPES,
   RUN_OUTCOME,
   RUN_PHASE,
-  TODO_STATUS,
   TOOL_CALL_STATUS,
   USER_FOLLOW_UP_SUPPORT,
   RunIdSchema,
@@ -230,9 +229,8 @@ const DISABLED_MODEL_SWITCH_REASON =
   'different conversation format; start new chat';
 const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
 const SHOW_NESTED_CHILDREN = process.env.HARNESS_NESTED_CHILDREN === '1';
-const SHOW_TODOS = process.env.HARNESS_TODOS === '1';
-const SHOW_IDLE_TODOS = process.env.HARNESS_TODOS_IDLE === '1';
-const SHOW_COMPLETED_TODOS_ONLY = process.env.HARNESS_TODOS_COMPLETED === '1';
+const SHOW_PLAN = process.env.HARNESS_PLAN === '1';
+const SHOW_IDLE_PLAN = process.env.HARNESS_PLAN_IDLE === '1';
 const FAILED_CHILD_AGENT = process.env.HARNESS_FAILED_CHILD?.trim();
 const TEAM_NAME = process.env.HARNESS_TEAM_NAME?.trim() || undefined;
 let canInterrupt = process.env.HARNESS_CAN_INTERRUPT === '1';
@@ -1144,14 +1142,14 @@ async function appendHarnessPlanDecision(
   );
 }
 
-// Queued follow-ups or active (non-idle) todos simulate an in-flight run;
-// idle todos instead park the run in a waiting state.
+// Queued follow-ups or an active (non-idle) plan simulate an in-flight run;
+// an idle plan instead parks the run in a waiting state.
 const HARNESS_RUN_ACTIVE =
-  QUEUED_FOLLOW_UPS.length > 0 || (SHOW_TODOS && !SHOW_IDLE_TODOS);
+  QUEUED_FOLLOW_UPS.length > 0 || (SHOW_PLAN && !SHOW_IDLE_PLAN);
 // A root that has finished a turn and waits, as a real chat after its first
 // message: the state an approval grant applies to.
 const HARNESS_RUN_IDLE =
-  (SHOW_TODOS && SHOW_IDLE_TODOS) || process.env.HARNESS_ROOT_WAITING === '1';
+  (SHOW_PLAN && SHOW_IDLE_PLAN) || process.env.HARNESS_ROOT_WAITING === '1';
 
 function harnessInitialRunStatus(): RunPhase | undefined {
   if (HARNESS_RUN_ACTIVE) return RUN_PHASE.RUNNING;
@@ -1308,49 +1306,21 @@ if (SHOW_CHILDREN) {
   }
 }
 
-if (SHOW_TODOS) {
-  const workPlan = {
-    todos: [
-      {
-        content: 'Split theorem into algebraic and analytic checks',
-        activeForm: 'Splitting theorem into checks',
-        status: TODO_STATUS.COMPLETED,
+if (SHOW_PLAN) {
+  publish({
+    type: 'run.fact',
+    aggregateId: qualifyAggregateId('run', HARNESS_RUN_ID),
+    fact: {
+      key: 'plan',
+      plan: {
+        objective: [
+          'Coordinate a small math proof through nested CLI work.',
+          'Route proof obligations to the right specialist.',
+          'Have a subagent inspect the Lean-style finite case.',
+        ].join('\n'),
       },
-      {
-        content: 'Ask leanSolver to verify the finite case',
-        activeForm: 'Waiting for leanSolver',
-        status: SHOW_COMPLETED_TODOS_ONLY
-          ? TODO_STATUS.COMPLETED
-          : TODO_STATUS.IN_PROGRESS,
-      },
-      {
-        content: 'Merge subagent conclusions into final answer',
-        activeForm: 'Merging subagent conclusions',
-        status: SHOW_COMPLETED_TODOS_ONLY
-          ? TODO_STATUS.COMPLETED
-          : TODO_STATUS.PENDING,
-      },
-    ],
-    plan: {
-      objective: [
-        'Coordinate a small math proof through nested CLI work.',
-        'Route proof obligations to the right specialist.',
-        'Have a subagent inspect the Lean-style finite case.',
-      ].join('\n'),
     },
-  };
-  publish(
-    {
-      type: 'run.fact',
-      aggregateId: qualifyAggregateId('run', HARNESS_RUN_ID),
-      fact: { key: 'todos', todos: [...workPlan.todos] },
-    },
-    {
-      type: 'run.fact',
-      aggregateId: qualifyAggregateId('run', HARNESS_RUN_ID),
-      fact: { key: 'plan', plan: workPlan.plan },
-    },
-  );
+  });
 }
 
 if (SHOW_EDIT_APPROVAL) {

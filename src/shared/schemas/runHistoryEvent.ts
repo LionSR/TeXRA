@@ -21,7 +21,7 @@ import { JsonValueSchema } from './jsonValue';
 import { Sha256Schema } from './offeredTools';
 import { RunOutcomeSchema } from './run';
 import {
-  ModelCompatibilityKeySchema,
+  ModelBackendSchema,
   NormalizedUsageSchema,
   ToolUseSnapshotStateSchema,
 } from './runSnapshotState';
@@ -470,7 +470,6 @@ const PendingRetrySchema = z.strictObject({
   requestId: z.string().min(1),
   invocation: InvocationRefSchema,
   failedModelId: z.string().min(1),
-  failedCompatibilityKey: ModelCompatibilityKeySchema.nullable(),
   /** Route requirements without secrets: a scope, never a credential. */
   credentialScope: z.string().min(1),
   /** No default and no `.catch`. A spent permit that reads as an unused one
@@ -497,7 +496,7 @@ export const ModelRetryPayloadSchema = z.strictObject({
  */
 const SnapshotRuntimeSchema = z.strictObject({
   modelId: z.string().min(1),
-  modelCompatibilityKey: ModelCompatibilityKeySchema.nullable(),
+  backend: ModelBackendSchema,
   /**
    * Runtime-owned failure vocabulary, already persisted today and already
    * carrying the exhaustion classification that drives retry and route-switch

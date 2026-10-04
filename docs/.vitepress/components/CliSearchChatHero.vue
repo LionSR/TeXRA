@@ -5,7 +5,7 @@
 // model: …`, a `› ` reverse-video user band, `● tool (preview)` rows (dot dim
 // while running, green when done) and a dim `⎿ ` result line. Tool names are
 // the real grounded-search tools (src/tools/arxiv/ArxivSearchTool.ts
-// `arxiv_search`, src/tools/citation/CrossrefSearchTool.ts `crossref_search`).
+// `arxiv_search`, src/tools/web/WebSearchTool.ts `web_search`).
 //
 // Built on <TermWindow>; .mockup-scoped and token-only. Static strings; the
 // quoted paper is a real arXiv preprint, not fabricated.
@@ -55,8 +55,8 @@
       <li class="csr-call">
         <div class="csr-row">
           <span class="csr-dot csr-dot--running">●</span>
-          <span class="csr-tname">crossref_search</span>
-          <span class="csr-preview">(efficient attention published)</span>
+          <span class="csr-tname">web_search</span>
+          <span class="csr-preview">(efficient attention long context)</span>
         </div>
       </li>
     </ul>
@@ -65,9 +65,7 @@
       <span class="csr-diamond">◆</span>
       <span class="csr-seg">running</span>
       <span class="csr-seg">API keys</span>
-      <span class="csr-seg-dim"
-        >every row a real lookup — arXiv + Crossref</span
-      >
+      <span class="csr-seg-dim">every row a real lookup — arXiv + web</span>
     </template>
   </TermWindow>
 </template>

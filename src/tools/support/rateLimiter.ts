@@ -1,5 +1,5 @@
 /**
- * Per-API request rate limiting for the metadata lookups (arXiv, Crossref).
+ * Per-API request rate limiting for the arXiv metadata lookups.
  *
  * The limiters are keyed by API name in one module-level map: a limit is a
  * property of the remote API, shared by every tool call in the process, so
@@ -53,7 +53,7 @@ const acquireRateLimitSlot = Effect.fn('rateLimiter.acquireRateLimitSlot')(
 
 /**
  * A rate-limited request against an external metadata API with uniform
- * error wrapping — the exact pattern every arXiv/Crossref lookup repeats.
+ * error wrapping — the exact pattern every arXiv lookup repeats.
  *
  * Waits for the API's next slot ({@link acquireRateLimitSlot}), runs the
  * request under a `timeoutMs` deadline, and fails with a `ToolError`

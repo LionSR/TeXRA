@@ -78,10 +78,10 @@ function rejectionOf(
 const documentRoundPolicy = Effect.fn('rounds.policy')(function* (
   run: AgentRunShape,
 ) {
-  const { runId, setting, logger, session, prompt } = run;
+  const { runId, task, logger, session, persona } = run;
   const invoker = yield* ModelInvoker;
-  if (setting.agentCategory !== AgentCategory.Workflow) {
-    return yield* Effect.die(new Error('Round mode requires a workflow run.'));
+  if (task === null) {
+    return yield* Effect.die(new Error('Round mode requires a document task.'));
   }
   // Every round renders its prompts from the launch's template inputs.
   if (run.opening === null) {
@@ -90,7 +90,7 @@ const documentRoundPolicy = Effect.fn('rounds.policy')(function* (
     );
   }
   const { inputs } = run.opening;
-  const docs = yield* makeDocumentRounds(setting, inputs);
+  const docs = yield* makeDocumentRounds(task, inputs);
   const { totalRounds } = docs;
 
   /** A context-window overflow is recovered once per round: force the
@@ -154,7 +154,7 @@ const documentRoundPolicy = Effect.fn('rounds.policy')(function* (
     request: (index) =>
       Effect.map(
         getSystemPromptWithRules(
-          prompt.systemPrompt,
+          persona.prompt,
           inputs,
           session.roots.workspace,
         ),

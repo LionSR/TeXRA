@@ -14,7 +14,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { stripVTControlCharacters } from 'node:util';
 import { parseArgs as parseCittyArgs } from 'citty';
@@ -877,16 +877,10 @@ function validateHistoryQueryRunCommand() {
       `name: history_query_validation
 description: Ask the run history one SQL question from the headless CLI.
 
-settings:
-  agentCategory: toolUse
-  tools:
-    - executions
-
-prompts:
-  systemPrompt: |
-    Query the run history once, then report what it returned.
-  userRequest: |
-    {{ INSTRUCTION }}
+tools:
+  - executions
+prompt: |
+  Query the run history once, then report what it returned.
 `,
     );
     writeFileSync(validationFlagPath, validationFlagContent);
@@ -963,15 +957,8 @@ function echoProject(cwd, config = null) {
     `name: echo_validation
 description: Say what the model was shown.
 
-settings:
-  agentCategory: toolUse
-  tools: []
-
-prompts:
-  systemPrompt: |
-    Say what you were shown.
-  userRequest: |
-    {{ INSTRUCTION }}
+prompt: |
+  Say what you were shown.
 `,
   );
   writeFileSync(validationFlagPath, validationFlagContent);
@@ -1390,6 +1377,261 @@ async function validateInterruptedTasks() {
 }
 
 /**
+ * `/tasks` in the chat (D1–D4): a task started in the service under the
+ * `ask` policy opens a command approval; `texra chat` lists it with
+ * `/tasks`, attaches, approves the command in place and sends a follow-up,
+ * and the service runs both. The task's request and tool rows, the file
+ * the command wrote and the attached view's last lines are the artifact.
+ */
+async function validateServiceTasksInTui() {
+  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-service-tui-'));
+  const project = echoProject(cwd);
+  writeFileSync(
+    path.join(
+      cwd,
+      'home',
+      '.texra',
+      'v1',
+      'global-storage',
+      'custom_agents',
+      'approval-validation.yaml',
+    ),
+    `name: approval_validation
+description: Run one command once it is approved.
+tools: [bash]
+
+prompt: |
+  GOLDEN-APPROVAL
+`,
+  );
+  const env = {
+    ...project.ptyEnv,
+    TEXRA_NO_TELEMETRY: '1',
+    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+  };
+  const texra = (args, label) => {
+    const result = run(
+      process.execPath,
+      [binaryPath, ...args, '--cwd', project.work],
+      { cwd: project.work, env },
+    );
+    assertSuccess(result, label);
+    return result.stdout.trim();
+  };
+  // The task's rows, from the project's own store (the chat also opens
+  // the no-workspace one), each with whether it carries the follow-up.
+  const taskRows = (runId) => {
+    const storage = path.join(cwd, 'home', '.texra', 'v1', 'workspace-storage');
+    const project = readdirSync(storage).find((name) =>
+      name.startsWith('work-'),
+    );
+    if (project === undefined) return [];
+    const db = new DatabaseSync(path.join(storage, project, 'texra.db'), {
+      readOnly: true,
+    });
+    try {
+      return db
+        .prepare(
+          `SELECT e.type, e.data LIKE '%Ping%' AS ping FROM event e
+           JOIN event_sequence s ON s.id = e.aggregate
+           WHERE s.logical_id = ? ORDER BY e."commit"`,
+        )
+        .all(runId);
+    } finally {
+      db.close();
+    }
+  };
+  try {
+    const runId = texra(
+      [
+        'tasks',
+        'start',
+        'approval_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--approval-policy',
+        'ask',
+        '--instruction',
+        'Run the command',
+      ],
+      'texra tasks start approval_validation',
+    );
+    let phase = 'opening';
+    let from = 0;
+    const chat = await runTexraPty(['chat'], {
+      label: 'texra chat, /tasks',
+      cwd: project.work,
+      cols: 160,
+      rows: 40,
+      timeoutMs: 180_000,
+      env,
+      onData: (_data, pty) => {
+        const plain = stripVTControlCharacters(pty.output).slice(from);
+        // One step per chunk: each waits for output after the last one's.
+        const steps = [
+          ['opening', 'list', '/ commands', ['/tasks', '\r']],
+          ['list', 'attach', 'approval_validation', ['\r']],
+          ['attach', 'approved', 'Run command?', ['y']],
+          ['approved', 'sent', 'The approved command ran.', ['Ping', '\r']],
+        ];
+        const step = steps.find(([at]) => at === phase);
+        if (step === undefined) return;
+        const [, next, needle, keys] = step;
+        if (!plain.includes(needle)) return;
+        phase = next;
+        from += plain.indexOf(needle) + needle.length;
+        keys.forEach((key, index) =>
+          pty.setTimer(() => pty.write(key), 600 + index * 400),
+        );
+        if (phase !== 'sent') return;
+        // The follow-up's answer is a second finalized response in the
+        // task's own rows; the screen repaints old replies, so it is read
+        // from the store.
+        const poll = () => {
+          const answered = taskRows(runId).filter(
+            (row) => row.type === 'response.finalized',
+          ).length;
+          if (answered < 2) return pty.setTimer(poll, 500);
+          phase = 'done';
+          ['\u001b', ETX, ETX].forEach((key, index) =>
+            pty.setTimer(() => pty.write(key), 1_500 + index * 600),
+          );
+        };
+        pty.setTimer(poll, 1_000);
+      },
+    });
+    const rows = taskRows(runId);
+    const approved = path.join(project.work, 'approved.txt');
+    const artifactPath = writeArtifact('service-tasks-tui.json', {
+      runId,
+      phase,
+      rows: rows.map((row) => row.type),
+      followUpRows: rows.filter((row) => row.ping).map((row) => row.type),
+      approvedFile: existsSync(approved)
+        ? readFileSync(approved, 'utf8')
+        : null,
+      tail: stripVTControlCharacters(chat.output).split('\n').slice(-40),
+    });
+    assert(
+      phase === 'done' &&
+        existsSync(approved) &&
+        rows.some((row) => row.type === 'request.decided') &&
+        rows.some((row) => row.ping) &&
+        rows.filter((row) => row.type === 'response.finalized').length >= 2 &&
+        stripVTControlCharacters(chat.output).includes('› Ping'),
+      `/tasks should attach to the service task, approve its command and send a follow-up (artifact: ${artifactPath})\noutput:\n${stripVTControlCharacters(chat.output).slice(-3000)}`,
+    );
+  } finally {
+    run(process.execPath, [binaryPath, 'service', 'stop'], {
+      cwd: project.work,
+      env,
+    });
+    rmSync(cwd, { recursive: true, force: true });
+  }
+}
+
+/**
+ * The background service (`texra serve`) end to end: `texra tasks start`
+ * starts the service on demand and a task in it; two terminals attach to
+ * that task at once, a third sends it a follow-up and then stops it. Both
+ * attached terminals must print the same transcript, holding both turns;
+ * those two transcripts are the artifact.
+ */
+async function validateServiceSharedTask() {
+  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-service-'));
+  const project = echoProject(cwd);
+  const env = { ...project.ptyEnv, TEXRA_NO_TELEMETRY: '1' };
+  const texra = (args, label) => {
+    const result = run(
+      process.execPath,
+      [binaryPath, ...args, '--cwd', project.work],
+      { cwd: project.work, env },
+    );
+    assertSuccess(result, label);
+    return result.stdout.trim();
+  };
+  const attach = (runId) => {
+    const child = spawn(
+      process.execPath,
+      [binaryPath, 'tasks', 'attach', runId, '--cwd', project.work],
+      { cwd: project.work, env: { ...process.env, CI: '1', ...env } },
+    );
+    const state = { stdout: '', stderr: '', exit: null };
+    child.stdout.on('data', (chunk) => (state.stdout += chunk));
+    child.stderr.on('data', (chunk) => (state.stderr += chunk));
+    state.exited = new Promise((resolve) =>
+      child.on('close', (code) => resolve((state.exit = code))),
+    );
+    return state;
+  };
+  const waitFor = async (label, check, timeoutMs = 120_000) => {
+    const deadline = Date.now() + timeoutMs;
+    while (!check()) {
+      assert(Date.now() < deadline, `timed out waiting for ${label}`);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  };
+  const count = (text, needle) => text.split(needle).length - 1;
+  let a;
+  let b;
+  try {
+    const runId = texra(
+      [
+        'tasks',
+        'start',
+        'echo_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        'First message',
+      ],
+      'texra tasks start',
+    );
+    assert(/^[0-9a-f]{12}$/.test(runId), `tasks start printed ${runId}`);
+    a = attach(runId);
+    b = attach(runId);
+    await waitFor('both attaches to print the first reply', () =>
+      [a, b].every((t) => t.stdout.includes('User instruction:')),
+    );
+    const listed = parseJson(
+      texra(['tasks', 'list', '--output-format', 'json'], 'texra tasks list'),
+      'tasks list',
+    );
+    assert(
+      listed.some((task) => task.runId === runId && task.live),
+      `tasks list should show ${runId} running in the service`,
+    );
+    texra(['tasks', 'send', runId, 'Second message'], 'texra tasks send');
+    await waitFor('both attaches to print the second reply', () =>
+      [a, b].every(
+        (t) => count(t.stdout, 'First message | Second message') >= 1,
+      ),
+    );
+    texra(['tasks', 'stop', runId], 'texra tasks stop');
+    await Promise.all([a.exited, b.exited]);
+    const artifactDir = path.join(validationRoot, 'artifacts');
+    mkdirSync(artifactDir, { recursive: true });
+    const artifactA = path.join(artifactDir, 'service-attach-a.txt');
+    writeFileSync(artifactA, a.stdout);
+    writeFileSync(path.join(artifactDir, 'service-attach-b.txt'), b.stdout);
+    assert(
+      a.exit === 130 && b.exit === 130,
+      `a stopped task should end both attaches as interrupted (exits ${a.exit}, ${b.exit})\n${a.stderr}\n${b.stderr}`,
+    );
+    assert(
+      a.stdout === b.stdout && count(a.stdout, 'Second message') >= 2,
+      `both attached terminals should print the same two-turn transcript (artifact: ${artifactA})\nA:\n${a.stdout}\nB:\n${b.stdout}`,
+    );
+  } finally {
+    run(process.execPath, [binaryPath, 'service', 'stop'], {
+      cwd: project.work,
+      env,
+    });
+    rmSync(cwd, { recursive: true, force: true });
+  }
+}
+
+/**
  * The open-time prompt and rename (GUI lane G4): a chat killed while it
  * waits leaves its task interrupted; under the default
  * `texra.resumeOnOpen: ask`, the next `texra chat` lists it above the input
@@ -1529,17 +1771,11 @@ function validateScriptFanoutRunCommand() {
       `name: script_fanout_validation
 description: Exercise a script's agent fan-out from the headless CLI.
 
-settings:
-  agentCategory: toolUse
-  tools:
-    - script
-    - agent
-
-prompts:
-  systemPrompt: |
-    Run the requested script exactly once, then finish.
-  userRequest: |
-    {{ INSTRUCTION }}
+tools:
+  - script
+  - agent
+prompt: |
+  Run the requested script exactly once, then finish.
 `,
     );
     writeFileSync(validationFlagPath, validationFlagContent);
@@ -1754,6 +1990,8 @@ async function validateCliRunArtifacts(options = {}) {
   await validateBackgroundCompaction();
   await validateInterruptedTasks();
   await validateOpenTimePrompt();
+  await validateServiceSharedTask();
+  await validateServiceTasksInTui();
   validateScriptFanoutRunCommand();
   validateTeamRunCommand();
   console.log('CLI run validation passed');

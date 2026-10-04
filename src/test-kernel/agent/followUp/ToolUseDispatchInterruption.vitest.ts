@@ -9,7 +9,9 @@ import { describe, expect, vi } from 'vitest';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { finalizeRun } from '@agent/storage/runLifecycle';
 import {
+  RUN_OUTCOME,
   type RequestDecision,
   type ToolOutcomePermission,
 } from '@shared/schemas';
@@ -343,14 +345,15 @@ describe('tool dispatch interrupted mid-turn', () => {
       );
       yield* toolB.started;
       yield* Fiber.interrupt(fiber);
-      // The halt row the resume's join reads is the stopped fiber's exit.
+      // The halt row the resume's join reads commits with the stopped run's
+      // end, as its lifecycle writes it.
       yield* Fiber.await(fiber);
+      yield* finalizeRun(session, { runId, outcome: RUN_OUTCOME.CANCELLED });
       yield* session.settlePublications();
-      yield* session.followUps.submit(
-        runId,
-        { text: 'What is 2+2?', from: { kind: 'user' } },
-        'recoverable',
-      );
+      yield* session.followUps.send(runId, {
+        text: 'What is 2+2?',
+        from: { kind: 'user' },
+      });
 
       // One model turn: a second request would run out of scripted turns.
       const resumed = yield* runToolUse({ resume: true }).pipe(

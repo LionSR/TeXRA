@@ -3,6 +3,7 @@ import { quote } from 'shell-quote';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   isEmptyUsage,
+  isLoopDriven,
   type CliOutputFormat,
   type RunId,
   type TokenUsageStats,
@@ -84,11 +85,11 @@ function formatResumeUsage(
   lines.push(`output=${usage.outputTokens.toLocaleString('en-US')}`);
   if (reasoning > 0)
     lines.push(`(reasoning ${reasoning.toLocaleString('en-US')})`);
-  const costLine = usageCostLabel(
-    usage.cost,
-    usage.usageRoute,
-    usage.usagePlan,
-  );
+  // A task that never reached a model has no cost to state.
+  const costLine =
+    usage.cost > 0 || usage.usageRoute !== undefined
+      ? usageCostLabel(usage)
+      : undefined;
   return costLine
     ? `Token usage: ${lines.join(' ')}\nTask cost: ${costLine}`
     : `Token usage: ${lines.join(' ')}`;
@@ -106,7 +107,7 @@ export function collectResumeTargets({
     includeRoot: false,
   })) {
     const run = runViewOf(view, runId);
-    if (!run?.resumeEligible) continue;
+    if (run === undefined || !isLoopDriven(run.identity)) continue;
     targets.push({ runId: run.id, label: run.label });
   }
   return targets;

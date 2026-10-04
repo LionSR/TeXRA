@@ -92,20 +92,12 @@ describe('summarizeSubagentFollowup', () => {
     ).toBe('⟳ research · 1 tool call · $0.0007');
   });
 
-  it('summarizes todo progress attributes', () => {
-    expect(
-      summarizeSubagentFollowup(
-        '<subagent-progress id="abc" agent="review" type="todos" completed="1" active="1" pending="1" />',
-      ),
-    ).toBe('⟳ review · todos · 1 done, 1 active, 1 pending');
-  });
-
   it.each([
     '<subagent-progress agent="a" />',
     '<subagent-progress agent="a" type="bogus" />',
     '<subagent-progress agent="a" type="overview" />',
     '<subagent-progress agent="a" type="plan" status="updated" />',
-    '<subagent-progress agent="a" type="todos" completed="1" active="0" />',
+    '<subagent-progress agent="a" type="todos" completed="1" active="0" pending="0" />',
     '<subagent-progress agent="a" tool-type="started" />',
   ])('preserves a non-canonical progress block: %s', (xml) => {
     expect(summarizeSubagentFollowup(xml)).toBe(xml);
@@ -128,16 +120,13 @@ describe('summarizeSubagentFollowup', () => {
     const text = [
       'before',
       '<subagent-progress id="abc" agent="review" type="started" />',
-      '<subagent-progress id="abc" agent="review" type="todos" completed="2" active="1" pending="0" />',
+      '<subagent-progress id="abc" agent="review" type="plan" status="cleared" />',
       'after',
     ].join('\n');
     expect(summarizeEmbeddedSubagentFollowups(text)).toBe(
-      [
-        'before',
-        '⟳ review · started',
-        '⟳ review · todos · 2 done, 1 active, 0 pending',
-        'after',
-      ].join('\n'),
+      ['before', '⟳ review · started', '⟳ review · plan cleared', 'after'].join(
+        '\n',
+      ),
     );
   });
 

@@ -18,7 +18,6 @@ import {
   allocateConversationPanelRows,
   allocateMiddleRows,
   PINNED_CHROME_ROWS,
-  shouldShowTodosPlanPanel,
   staticScrollbackTarget,
   staticTranscriptRowBudget,
 } from '../appLayout';
@@ -34,7 +33,7 @@ import {
 } from './QueuedFollowUpsPanel';
 import { StaticConversationTranscript } from './StaticConversationTranscript';
 import { SubagentList } from './SubagentList';
-import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
+import { PlanPanel } from './PlanPanel';
 import {
   inputBarContentRows,
   interruptedNoticeHidden as interruptedNoticeHiddenSignal,
@@ -49,7 +48,7 @@ import { staticTranscriptRepaintEpoch } from '../state/staticTranscriptRepaint';
 import { useSignal } from '../state/useSignal';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
 
-// Cap the bottom subagent/todos panels so they never crowd out the
+// Cap the bottom subagent/plan panels so they never crowd out the
 // conversation, even though they now render below the input bar.
 const BOTTOM_PANEL_MAX_ROWS = 10;
 /** The App-owned facts: its layout decisions and the child list's reducer
@@ -108,8 +107,6 @@ export function ConversationRegion({
   const staticTranscriptRepaint = useSignal(staticTranscriptRepaintEpoch);
   const staticTranscriptKey = `${scrollbackTarget.ownerKey}:${staticTranscriptRepaint}`;
 
-  const activeTodos =
-    activeRun?.category === AgentCategory.ToolUse ? activeRun.todos : [];
   const activePlan =
     activeRun?.category === AgentCategory.ToolUse ? activeRun.plan : null;
   const queuedFollowUpMessages = (
@@ -152,12 +149,6 @@ export function ConversationRegion({
         queuedFollowUpPanelRows: aboveFooterRows,
         rows,
       });
-  const hasTodosPlanPanel = shouldShowTodosPlanPanel({
-    childListFocused: snapshot.childListFocused,
-    foregroundOpen,
-    hasPlan: activePlan != null,
-    todos: activeTodos,
-  });
   const transcriptWidth = clampModalWidth(columns);
   const { foregroundRows, transcriptRows } = allocateMiddleRows({
     footerRows,
@@ -170,22 +161,21 @@ export function ConversationRegion({
     staticTranscriptRows: staticTranscriptRows ?? 0,
   });
   // One bottom panel at a time in the same vertical column: the child list
-  // while it has focus, otherwise the todos/plan panel. Reserve only as many
-  // rows as that panel actually needs.
-  const todosPlanContentRows =
-    hasTodosPlanPanel && activeRun
-      ? todosPlanPanelRowCount(activeTodos, activePlan)
+  // while it has focus, otherwise the plan panel's one summary row.
+  const planContentRows =
+    activePlan !== null && !foregroundOpen && !snapshot.childListFocused
+      ? 1
       : 0;
   const {
     bottomPanelRows: bottomPanelBudget,
     conversationRows,
     sessionPanelRows: subagentRows,
-    todosPlanRows,
+    planRows,
   } = allocateConversationPanelRows({
     maxRows: BOTTOM_PANEL_MAX_ROWS,
     sessionCount: foregroundOpen ? 0 : sessionRows.length,
     childListFocused: snapshot.childListFocused,
-    todosPlanContentRows,
+    planContentRows,
     transcriptRows,
   });
   const childListVisible = subagentRows > 0;
@@ -262,11 +252,7 @@ export function ConversationRegion({
               rows={sessionRows}
               activeRunId={activeRunId}
             />
-            <TodosPlanPanel
-              maxRows={todosPlanRows}
-              plan={activePlan}
-              todos={activeTodos}
-            />
+            <PlanPanel maxRows={planRows} plan={activePlan} />
           </Box>
         ) : null}
       </Box>

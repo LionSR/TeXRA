@@ -1,10 +1,10 @@
 /**
  * The model provider plugin manifest — the one list every model provider
- * belongs to. Each entry is a stable id plus everything known about the
- * provider that is not a wire protocol: its display name, the API-key page
+ * belongs to. Each entry is a stable id plus plain data about the
+ * provider, never its wire code: its display name, the API-key page
  * and environment variable, the default HTTP endpoint and its regional pair,
- * the conversation format its models bind under, and the setup assistant's
- * probe model.
+ * and the setup assistant's probe model. Beside it, `BACKEND_PROTOCOLS`
+ * names the protocol each provider a run can be bound to speaks.
  *
  * Derived from this list: the provider display names, key URLs, model-source
  * and API-key provider orders (`./providers.ts`), API-key env names
@@ -14,14 +14,17 @@
  * `RouteFacts.endpoints`.
  *
  * Rules: an id is persisted (the `apiKey.<id>` secret, model configs,
- * settings), so it never changes and is never reused. Every llm-zoo
- * `ModelProvider` has an entry with a `compatibilityKey` (checked below). No
+ * settings, a run's backend), so it never changes and is never reused.
+ * Every llm-zoo `ModelProvider` has an entry (checked below). No
  * hooks, event channels or runtime registration: a plugin is data, read by
  * code at every startup. Plain data only — the settings webview imports the
  * derived lists, so nothing here may pull in a Node or Effect module.
  */
 
 import type { ModelProvider } from 'llm-zoo';
+import type { z } from 'zod';
+
+import type { TurnProtocolSchema } from '../protocol.js';
 
 /**
  * OpenAI's own endpoint. Named because a route that lands on it is the one
@@ -40,24 +43,6 @@ interface ProviderRegion {
   readonly keyUrlWhenSet?: string;
   readonly keyUrlWhenUnset?: string;
 }
-
-/**
- * The conversation formats a direct provider route binds under. The host's
- * `ModelCompatibilityKey` is a superset (it adds its own routes).
- */
-type ProviderCompatibilityKey =
-  | 'OpenAI'
-  | 'Anthropic'
-  | 'GoogleInteractions'
-  | 'XAI'
-  | 'DeepSeek'
-  | 'Kimi'
-  | 'DashScope'
-  | 'MiniMax'
-  | 'GLM'
-  | 'Meta'
-  | 'VscodeLm'
-  | 'OpenRouterNative';
 
 /** A default endpoint that depends on the provider's region toggle. */
 interface RegionalBaseUrl {
@@ -85,8 +70,6 @@ interface ModelProviderPlugin {
    * a plugin outside llm-zoo's `ModelProvider` (`openRouter`, `kimiCode`).
    */
   readonly baseUrl?: string | RegionalBaseUrl | null;
-  /** Conversation format a direct route to this provider binds under. */
-  readonly compatibilityKey?: ProviderCompatibilityKey;
   /** Model the setup assistant probes when this is the only credential. */
   readonly setupModel?: string;
   /** Listed as a model source in selection lists. */
@@ -106,7 +89,6 @@ const MANIFEST = [
     keyUrl: 'https://platform.openai.com/api-keys',
     apiKey: true,
     baseUrl: OPENAI_DEFAULT_ENDPOINT,
-    compatibilityKey: 'OpenAI',
     setupModel: 'openai/gpt-6.1-sol',
     modelSource: true,
   },
@@ -116,7 +98,6 @@ const MANIFEST = [
     keyUrl: 'https://console.anthropic.com/',
     apiKey: true,
     baseUrl: 'https://api.anthropic.com',
-    compatibilityKey: 'Anthropic',
     setupModel: 'anthropic/claude-opus-5-5',
     modelSource: true,
   },
@@ -126,7 +107,6 @@ const MANIFEST = [
     keyUrl: 'https://aistudio.google.com/app/apikey',
     apiKey: true,
     baseUrl: 'https://generativelanguage.googleapis.com',
-    compatibilityKey: 'GoogleInteractions',
     setupModel: 'google/gemini-3.1-pro-preview',
     modelSource: true,
   },
@@ -136,7 +116,6 @@ const MANIFEST = [
     keyUrl: 'https://console.x.ai/',
     apiKey: true,
     baseUrl: 'https://api.x.ai/v1',
-    compatibilityKey: 'XAI',
     setupModel: 'xai/grok-4.7',
     modelSource: true,
   },
@@ -146,7 +125,6 @@ const MANIFEST = [
     keyUrl: 'https://platform.deepseek.com/api_keys',
     apiKey: true,
     baseUrl: 'https://api.deepseek.com',
-    compatibilityKey: 'DeepSeek',
     setupModel: 'deepseek/deepseek-v4-pro',
     modelSource: true,
   },
@@ -167,7 +145,6 @@ const MANIFEST = [
       china: 'https://api.moonshot.cn/v1',
       international: 'https://api.moonshot.ai/v1',
     },
-    compatibilityKey: 'Kimi',
     setupModel: 'moonshot/kimi-k3',
     modelSource: true,
   },
@@ -184,7 +161,6 @@ const MANIFEST = [
       china: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
       international: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
     },
-    compatibilityKey: 'DashScope',
     setupModel: 'dashscope/qwen-plus',
     modelSource: true,
   },
@@ -200,7 +176,6 @@ const MANIFEST = [
       china: 'https://api.minimax.cn/v1',
       international: 'https://api.minimax.io/v1',
     },
-    compatibilityKey: 'MiniMax',
     setupModel: 'minimax/MiniMax-M3',
     modelSource: true,
   },
@@ -220,7 +195,6 @@ const MANIFEST = [
       china: 'https://open.bigmodel.cn/api/v1',
       international: 'https://api.z.ai/api/v1',
     },
-    compatibilityKey: 'GLM',
     setupModel: 'glm/glm-5.3',
     modelSource: true,
   },
@@ -230,7 +204,6 @@ const MANIFEST = [
     keyUrl: 'https://dev.meta.ai/',
     apiKey: true,
     baseUrl: 'https://api.meta.ai/v1',
-    compatibilityKey: 'Meta',
     setupModel: 'meta/muse-spark-1.3',
     modelSource: true,
   },
@@ -254,14 +227,12 @@ const MANIFEST = [
     id: 'copilot',
     displayName: 'Copilot',
     baseUrl: null,
-    compatibilityKey: 'VscodeLm',
     modelSource: true,
   },
   {
     id: 'others',
     displayName: 'Others',
     baseUrl: null,
-    compatibilityKey: 'OpenRouterNative',
   },
 ] as const satisfies readonly ModelProviderPlugin[];
 
@@ -288,6 +259,30 @@ export type RegionalProviderId = Extract<
   { readonly baseUrl: RegionalBaseUrl }
 >['id'];
 
+/**
+ * The protocol each provider a run's conversation can be bound to (its
+ * backend) serves that conversation on, keyed by plugin id.
+ */
+export const BACKEND_PROTOCOLS = Object.freeze({
+  openai: 'openai-responses',
+  anthropic: 'anthropic-messages',
+  google: 'google-interactions',
+  xai: 'openai-responses',
+  deepseek: 'openai-responses',
+  moonshot: 'openai-responses',
+  dashscope: 'openai-responses',
+  minimax: 'openai-responses',
+  glm: 'openai-responses',
+  meta: 'openai-responses',
+  openRouter: 'openrouter-chat',
+  copilot: 'vscode-lm',
+} satisfies Partial<
+  Record<ModelProviderPluginEntry['id'], z.infer<typeof TurnProtocolSchema>>
+>);
+
+/** A provider a run's conversation can be bound to: its backend. */
+export type BackendProviderId = keyof typeof BACKEND_PROTOCOLS;
+
 /** Look up a provider plugin by id. */
 export function findModelProviderPlugin(
   id: string,
@@ -298,16 +293,14 @@ export function findModelProviderPlugin(
 type AssertNever<T extends never> = T;
 
 /**
- * Every llm-zoo provider is a plugin with a conversation format; the error
+ * Every llm-zoo provider with an HTTP endpoint names its protocol; the error
  * names the provider ids a new llm-zoo release added without one.
  */
-type _EveryModelProviderHasACompatibilityKey = AssertNever<
+type _EveryEndpointProviderNamesAProtocol = AssertNever<
   Exclude<
     `${ModelProvider}`,
-    Extract<
-      ModelProviderPluginEntry,
-      { readonly compatibilityKey: string }
-    >['id']
+    | BackendProviderId
+    | Extract<ModelProviderPluginEntry, { readonly baseUrl: null }>['id']
   >
 >;
 

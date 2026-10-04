@@ -21,7 +21,7 @@ import {
   type HookOutcomes,
   type InvocationRef,
   type JsonValue,
-  type ModelCompatibilityKey,
+  type ModelBackend,
   type OfferedTool,
   type PendingRetry,
   type RunSnapshotPayload,
@@ -164,7 +164,7 @@ export type RunState = RunPosition & {
    *  {@link phaseAfter}): no row that presupposes an opened run precedes it. */
   readonly phase: RunLoopPhase | null;
   readonly modelId: string | null;
-  readonly modelCompatibilityKey: ModelCompatibilityKey | null;
+  readonly backend: ModelBackend | null;
   readonly lastError: RetryErrorInfo | null;
   /** The human retry permit, as the last `model.retry` row left it. */
   readonly pendingRetry: PendingRetry | null;
@@ -276,7 +276,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   runHistoryRows: 0,
   phase: null,
   modelId: null,
-  modelCompatibilityKey: null,
+  backend: null,
   lastError: null,
   pendingRetry: null,
   declinedRoutes: [],

@@ -1,11 +1,13 @@
 /**
- * One run's follow-up input for one owner generation: a wake signal over the
- * follow-ups the run's rows still queue. The rows are the authority; this
- * holds no copy of them.
+ * One run's reader for one generation: a wake signal over the follow-ups
+ * the run's rows still queue. The rows are the authority; this holds no
+ * copy of them.
  */
-import { Data, Deferred, Effect, Latch } from 'effect';
+import { Deferred, Effect, Latch } from 'effect';
 
+import type { RunId } from '@shared/schemas';
 import type { QueuedFollowUp } from '@shared/session/runRows';
+import { isInstruction } from './followUpMessages';
 
 /**
  * A host's edit of a parked run's view (durable harness, gap 3): a reset
@@ -32,23 +34,16 @@ export type FollowUpBatch =
   | { readonly kind: 'synthetic'; readonly text: string }
   | { readonly kind: 'edit'; readonly edit: ViewEdit };
 
-/** A live consumer claim refused: another consumer already holds the run's input. */
-export class FollowUpContinuationOwned extends Data.TaggedError(
-  'FollowUpContinuationOwned',
-)<{ readonly message: string }> {}
-
 /**
- * One owner generation's input. A take reads what is pending from `pending`
- * (the session publisher's pending follow-ups, less the ids the admission
- * boundary holds back for a finalizing child), so a row an earlier process
- * left queued and one admitted while this generation runs arrive the same
- * way, in commit order. The admission boundary signals the generation when
- * a row lands for it.
+ * One generation's reader. A take reads the run's readable rows (`pending`),
+ * so a row an earlier process left
+ * queued and one sent while this generation runs arrive the same way, in
+ * commit order. The inbox signals the reader when a row lands for it.
  *
- * One consumer per generation. A taken batch stays pending until its
- * `followup.consumed` commit (the tool-use `consume`, the agent-CLI child's
- * turn settle), and a consumer takes again only after that commit, so a
- * batch in flight is never read twice.
+ * A taken batch stays pending until its `followup.consumed` commit (the
+ * tool-use `consume`, the agent-CLI child's turn settle), and the reader
+ * takes again only after that commit, so a batch in flight is never read
+ * twice.
  */
 export class RunInput {
   private readonly signal = Latch.makeUnsafe(false);
@@ -58,7 +53,32 @@ export class RunInput {
   private beforeEdit: ReadonlySet<string> = new Set();
   private ended = false;
 
-  constructor(private readonly pending: () => readonly QueuedFollowUp[]) {}
+  private readonly queued: () => readonly QueuedFollowUp[];
+  /** Whether a sender's latest lifecycle has a committed terminal row. */
+  private readonly senderEnded: (sender: RunId) => boolean;
+
+  constructor(
+    queued: () => readonly QueuedFollowUp[],
+    senderEnded: (sender: RunId) => boolean,
+  ) {
+    this.queued = queued;
+    this.senderEnded = senderEnded;
+  }
+
+  /** What a take may read, folded from the rows' holds: no row whose sender
+   *  has not ended, and an `instruction`-held row only beside an instruction. */
+  private pending(): readonly QueuedFollowUp[] {
+    const rows = this.queued().filter(
+      ({ holdUntil, content: { from } }) =>
+        holdUntil !== 'senderEnd' ||
+        from.kind !== 'run' ||
+        this.senderEnded(from.runId),
+    );
+    const asked = rows.some(
+      (f) => f.holdUntil !== 'instruction' && isInstruction(f.content),
+    );
+    return asked ? rows : rows.filter((f) => f.holdUntil !== 'instruction');
+  }
 
   /** Wake the consumer: a follow-up row landed for it. */
   notify(): void {

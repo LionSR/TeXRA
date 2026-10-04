@@ -20,7 +20,6 @@ import { createNativeSubagentStrategy } from '@agent/runtime/nativeSubagentStrat
 import { withLogChannel } from '@logger/effectLog';
 import {
   AgentCategory,
-  TODO_STATUS,
   USER_FOLLOW_UP_SUPPORT,
   type OfferedTool,
   type RunId,
@@ -45,12 +44,6 @@ export function describeSubagentProgress(
   switch (update.kind) {
     case 'started':
       return `Subagent '${agentName}' started`;
-    case 'todos': {
-      const done = update.todos.filter(
-        (todo) => todo.status === TODO_STATUS.COMPLETED,
-      ).length;
-      return `Subagent '${agentName}' todos: ${done}/${update.todos.length} complete`;
-    }
     case 'plan':
       return update.plan
         ? `Subagent '${agentName}' plan: ${update.plan.objective}`
@@ -108,7 +101,7 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
     // that asked for it, before any row records it.
     const refusal = childToolRefusal(
       parentOffered,
-      definition.setting.tools,
+      definition.persona.tools,
       agentName,
     );
     if (refusal !== undefined) {

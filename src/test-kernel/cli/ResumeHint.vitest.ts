@@ -51,7 +51,7 @@ describe('collectResumeTargets', () => {
     ).toEqual([{ runId: 'root', label: 'task' }]);
   });
 
-  it('lists running and finished plain tool-use subagents', () => {
+  it('lists subagents TeXRA drives, of either category', () => {
     const view = viewWith([
       root(),
       child({ id: 'rev' as RunId, label: 'reviewer' }),
@@ -66,7 +66,11 @@ describe('collectResumeTargets', () => {
         view,
         rootRunId: ROOT,
       }),
-    ).toEqual(TWO_RESUME_TARGETS);
+    ).toEqual([
+      { runId: 'root', label: 'task' },
+      { runId: 'flow', label: 'builder' },
+      { runId: 'rev', label: 'reviewer' },
+    ]);
   });
 
   it('skips children that are not plain agent runs', () => {

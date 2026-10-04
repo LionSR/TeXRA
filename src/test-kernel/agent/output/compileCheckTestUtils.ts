@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import type { runCompileCheck } from '@agent/output/compileCheck';
 import type { OutputState } from '@agent/output/outputState';
 import type { RunId, FileLocation, OutputFileInfo } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
@@ -77,8 +77,8 @@ export function initLatexPlatform(
     storagePath,
     workspacePath,
     workspaceState: {
-      [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE]: true,
-      [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: 30_000,
+      [TexraStateKey.WORKFLOW_AUTO_COMPILE]: true,
+      [TexraStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: 30_000,
     },
   });
 }

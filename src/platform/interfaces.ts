@@ -100,7 +100,7 @@ export interface ConfigProvider {
     value: T,
     target?: ConfigTarget,
   ): Effect.Effect<void, ConfigWriteFailed>;
-  inspect<T = unknown>(key: string): ConfigInspection<T> | undefined;
+  inspect<T = unknown>(key: string): ConfigInspection<T>;
 }
 
 // ---------------------------------------------------------------------------

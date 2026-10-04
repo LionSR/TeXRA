@@ -126,27 +126,25 @@ describe('PlanTool — update (plan approval)', () => {
     for (const release of cleanups.splice(0)) release();
   });
 
-  it.live(
-    'keeps an approved plan in displayed work-plan state and defers steps to the todo tool',
-    () =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          yield* Effect.tryPromise(() => installFakePlatform());
-          const { result, workPlanState, permission, decide } =
-            yield* startPlanUpdate(generateRunId(), plan.objective);
+  it.live('keeps an approved plan in displayed work-plan state', () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* Effect.tryPromise(() => installFakePlatform());
+        const { result, workPlanState, permission, decide } =
+          yield* startPlanUpdate(generateRunId(), plan.objective);
 
-          expect(permission.plan).toEqual(plan);
-          decide({ action: 'approve' });
+        expect(permission.plan).toEqual(plan);
+        decide({ action: 'approve' });
 
-          const outcome = yield* result;
-          expect(outcome.status).toBe('executed');
-          expect(outcome.output).toContain('todo tool');
-          expect(workPlanState.plan).toEqual(plan);
-          expect(workPlanState.toSnapshot().planSummary).toBe(
-            planSummaryLine(plan.objective),
-          );
-        }),
-      ),
+        const outcome = yield* result;
+        expect(outcome.status).toBe('executed');
+        expect(outcome.output).toContain('Plan approved');
+        expect(workPlanState.plan).toEqual(plan);
+        expect(workPlanState.toSnapshot().planSummary).toBe(
+          planSummaryLine(plan.objective),
+        );
+      }),
+    ),
   );
 
   it.live(

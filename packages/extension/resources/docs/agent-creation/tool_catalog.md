@@ -32,10 +32,8 @@ recommended groups at the bottom are a good starting point.
 
 - `arxiv_search` — search arXiv. Supports `field="author"` for author
   searches.
-- `arxiv_metadata` — fetch bibliographic metadata for an arXiv paper by ID.
 - `download_arxiv_source` — download an arXiv paper's source archive into
   the workspace.
-- `crossref_search` — search Crossref works or look up detailed DOI metadata.
 
 ## LaTeX processing
 
@@ -44,17 +42,11 @@ recommended groups at the bottom are a good starting point.
 - `extract_bib_entries` — collect BibTeX records for citations.
 - `extract_tikz_figures` — discover TikZ figures and optionally compile them
   to PDF.
-- `texcount` — count words in LaTeX files.
 
 ## Citation management
 
 - `zotero_search`, `zotero_add`, `zotero_export`, `zotero_collections` —
   manage references with Zotero (requires Better BibTeX).
-
-## Computation
-
-- `wolfram` — execute Wolfram Language code. Sessions do NOT persist
-  between calls.
 
 ## Agent delegation
 
@@ -127,7 +119,6 @@ true` runs it as its own background run that delivers one result and a
 ## Utility
 
 - `memory` — manage persistent memory files for cross-session knowledge.
-- `todo_write` — track progress on complex tasks with structured checklists.
 - `plan` — record structured plans.
 - `diagnostics` — retrieve linter diagnostics for source files.
 - `ask_user_question` — ask the user one to three short clarification
@@ -143,27 +134,27 @@ Most agents should include the file-operations set as a baseline.
 
 **Research agent:**
 `bash, read_file, write_file, glob, grep, web_search, web_fetch,
-arxiv_search, arxiv_metadata, download_arxiv_source, crossref_search`
+arxiv_search, download_arxiv_source`
 
 **Code/editing agent:**
 `bash, read_file, write_file, edit_file, glob, grep, diagnostics`
 
 **LaTeX analysis agent:**
 `bash, read_file, write_file, glob, grep, extract_figures,
-extract_bib_entries, extract_tikz_figures, texcount`
+extract_bib_entries, extract_tikz_figures`
 
 **Literature review agent:**
-`bash, read_file, write_file, glob, grep, arxiv_search, arxiv_metadata,
-crossref_search, web_search, zotero_search, zotero_add,
-zotero_export`
+`bash, read_file, write_file, glob, grep, arxiv_search, web_search,
+zotero_search, zotero_add, zotero_export`
 
 **Orchestrator agent:**
 `bash, read_file, write_file, glob, grep, agent, script, executions,
-accept_run_files, todo_write`. `agent` needs the "Multi-Agent Workflow"
+accept_run_files`. `agent` needs the "Multi-Agent Workflow"
 switch on (see above).
 
 **Computation agent:**
-`bash, read_file, write_file, glob, grep, wolfram`
+`bash, read_file, write_file, glob, grep` (Wolfram Language runs through
+`wolframscript` in bash)
 
 **Lean 4 agent:**
 `bash, read_file, write_file, edit_file, glob, grep, lean_diagnostics,
@@ -177,10 +168,7 @@ lean_file, lean_project, lean_inspect, lean_loogle`
 - Start with a clear role: "You are a [role]. Your task is to [objective]."
 - Give tool usage guidance tailored to the agent's purpose.
 - Structure complex workflows as numbered steps.
-- Mention tool limitations (e.g. wolfram sessions don't persist; bash cwd is
-  the workspace).
+- Mention tool limitations (e.g. bash cwd is the workspace).
 - For agents with many tools, organise guidance by phase (discovery →
   analysis → output).
 - Keep prompts focused — describe only what this specific agent needs.
-- Use `todo_write` for agents with multi-step verification or audit
-  workflows.

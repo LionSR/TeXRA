@@ -149,7 +149,7 @@ Press **Execute** (<wa-icon library="texra" name="play"></wa-icon>). The Progres
 
 <GuideIntroHero />
 
-<p class="hero-caption">The ProgressBoard streams the run live (todos, delegated subagents, and the tool-use log) with the output files alongside.</p>
+<p class="hero-caption">The ProgressBoard streams the run live (delegated subagents and the tool-use log) with the output files alongside.</p>
 
 ### Review results
 

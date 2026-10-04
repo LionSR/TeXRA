@@ -4,6 +4,7 @@
  */
 import {
   AgentCategory,
+  isLoopDriven,
   isPlainAgentIdentity,
   RUN_PHASE,
   RUN_SUBSTATE,
@@ -27,10 +28,12 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * history is offered while it is live. Any run this process can act on can
  * be renamed, and a tool-use conversation whose first turn has ended
  * forked (at its latest settled point, before any turn it is in now). After, a
- * run can be deleted; a plain agent's can be resumed (an interrupted one,
- * or a workflow from its saved outputs) or run again; a background
- * script's can be resumed unless it completed; a workflow agent's outputs
- * can be diffed, archived, or removed.
+ * run can be deleted; a plain agent's run again; a workflow agent's outputs
+ * diffed, archived, or removed. Resume is offered where it is the way to
+ * continue: on any loop-driven run that was interrupted, and on a settled one
+ * that takes no message (a workflow, from its saved outputs; a background
+ * script that did not complete). A settled conversation continues through its
+ * composer. Whether a resume can proceed is `deriveResumability`'s.
  */
 export function runActions(
   run: Pick<
@@ -65,16 +68,17 @@ export function runActions(
     ];
   }
   const actions: RunAction[] = ['delete', 'rename'];
+  if (
+    isLoopDriven(run.identity) &&
+    (run.group === 'interrupted' ||
+      run.category === AgentCategory.Workflow ||
+      (run.identity.kind === 'script' && run.status !== RUN_PHASE.COMPLETED))
+  )
+    actions.push('resume');
   if (isPlainAgentIdentity(run.identity)) {
-    if (run.group === 'interrupted' || run.category === AgentCategory.Workflow)
-      actions.push('resume');
     actions.push('runNew');
     if (forkable(run)) actions.push('fork');
   }
-  // A background script takes no message: a resume is how it continues
-  // after a crash or a stop, its finished calls handed back from its rows.
-  if (run.identity.kind === 'script' && run.status !== RUN_PHASE.COMPLETED)
-    actions.push('resume');
   if (run.identity.kind === 'agent' && run.category === AgentCategory.Workflow)
     actions.push('diff', 'pack', 'clean');
   return [...actions, ...inspectActions()];

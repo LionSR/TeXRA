@@ -4,7 +4,8 @@ import { it } from '@effect/vitest';
 
 import { afterEach, describe, expect, vi } from 'vitest';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { TexraStateKey } from '@shared/settingsView/texraSettings';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { getProviderEndpoint } from '@utils/config/providerConfig';
@@ -26,14 +27,14 @@ describe('readSettingFrom', () => {
         yield* Effect.promise(() =>
           installPlatform({
             workspaceState: {
-              [WorkspaceStateKey.LATEX_FORMATTER]: 'not-a-formatter',
+              [TexraStateKey.LATEX_FORMATTER]: 'not-a-formatter',
             },
           }),
         );
         expect(
           yield* readSettingFrom(
             testWorkspaceRoots(),
-            WorkspaceStateKey.LATEX_FORMATTER,
+            TexraStateKey.LATEX_FORMATTER,
           ),
         ).toBe(LATEX_CONFIG_DEFAULTS.latexFormatter);
       }),

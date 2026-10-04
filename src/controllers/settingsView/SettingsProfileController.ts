@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { API_KEY_PROVIDER_IDS, PROVIDER_DISPLAY_NAMES } from '@texra-ai/llm';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { modelsTabSettings } from '@shared/state/stateSettings';
+import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
 import {
   type ProviderKeyStatus,
   type UpdateProfileMessage,
@@ -83,13 +83,15 @@ export class SettingsProfileController {
   }
 
   private getProviderSettings(provider: string) {
-    return Effect.forEach(modelsTabSettings(provider), ({ entry, surface }) =>
-      readSetting(entry, this.deps.stores).pipe(
-        Effect.map((value) => {
-          const { provider: _provider, ...display } = surface;
-          return { ...display, key: entry.key, value: value === true };
-        }),
-      ),
+    return Effect.forEach(
+      TEXRA_SETTINGS.modelsTab(provider),
+      ({ entry, surface }) =>
+        readSetting(entry, this.deps.stores).pipe(
+          Effect.map((value) => {
+            const { provider: _provider, ...display } = surface;
+            return { ...display, key: entry.key, value: value === true };
+          }),
+        ),
     );
   }
 }

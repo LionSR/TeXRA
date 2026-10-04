@@ -1,4 +1,4 @@
-// Scrollable, read-only view of one stream's canonical plan and todos.
+// Scrollable, read-only view of one stream's canonical plan.
 
 import { useInput, useWindowSize } from 'ink';
 
@@ -6,36 +6,9 @@ import { type SessionHandle } from '@agent/runtime';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { ReaderPanel, readerLayout } from '@cli/tui/ui/BorderedPanel';
 import { CLOSE_HINTS, READER_SCROLL_HINTS } from '@cli/tui/ui/KeyHints';
-import {
-  AgentCategory,
-  STATUS_DISPLAY,
-  type Plan,
-  type RunId,
-  type TodoItem,
-} from '@shared/schemas';
+import { AgentCategory, type RunId } from '@shared/schemas';
 
 import { ScrollableModalText } from '../modals/ScrollableModalText';
-
-/** Render the complete work plan loaded from committed events. */
-function formatWorkPlanReaderText(
-  plan: Plan | null,
-  todos: readonly TodoItem[],
-): string {
-  const todoLines =
-    todos.length === 0
-      ? ['(no todos)']
-      : todos.map(
-          (todo, index) =>
-            `${index + 1}. [${STATUS_DISPLAY[todo.status].label}] ${todo.content}`,
-        );
-  return [
-    'Objective',
-    plan?.objective ?? '(no objective)',
-    '',
-    'Todos',
-    ...todoLines,
-  ].join('\n');
-}
 
 export function WorkPlanReader({
   availableRows,
@@ -53,20 +26,14 @@ export function WorkPlanReader({
 }): React.JSX.Element {
   const { columns } = useWindowSize();
   const run = session.runView(runId);
-  const workPlan =
-    run?.category === AgentCategory.ToolUse
-      ? { plan: run.plan, todos: run.todos }
-      : undefined;
+  const plan = run?.category === AgentCategory.ToolUse ? run.plan : null;
   const layout = readerLayout({
     availableRows,
     frameWidth: Math.max(1, columns),
     hints: READER_SCROLL_HINTS,
     title,
   });
-  const text = formatWorkPlanReaderText(
-    workPlan?.plan ?? null,
-    workPlan?.todos ?? [],
-  );
+  const text = `Objective\n${plan?.objective ?? '(no objective)'}`;
 
   useInput((input, key) => {
     if (isEscapeInput(input, key)) onClose();

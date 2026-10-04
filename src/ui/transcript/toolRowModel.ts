@@ -116,19 +116,6 @@ interface ToolStatusSection extends ToolSectionBase {
   readonly status: string;
 }
 
-/** One line of a {@link ToolChecklistSection}. */
-interface ToolChecklistItem {
-  readonly text: string;
-  readonly done: boolean;
-}
-
-/** A tool's own task list — Codex's `codex_todo` card today. Carried as data
- *  so each host draws its own check mark instead of shipping glyphs. */
-export interface ToolChecklistSection extends ToolSectionBase {
-  readonly kind: 'checklist';
-  readonly items: readonly ToolChecklistItem[];
-}
-
 export type ToolSection =
   | ToolTextSection
   | ToolCodeSection
@@ -138,8 +125,7 @@ export type ToolSection =
   | ToolFileListSection
   | ToolDiffSection
   | ToolBadgesSection
-  | ToolStatusSection
-  | ToolChecklistSection;
+  | ToolStatusSection;
 
 // ---------------------------------------------------------------------------
 // Model

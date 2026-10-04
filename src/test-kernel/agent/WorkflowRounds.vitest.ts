@@ -13,7 +13,15 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Layer, SynchronizedRef } from 'effect';
+import {
+  Cause,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  SynchronizedRef,
+} from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -23,6 +31,7 @@ import {
   positionRow,
 } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
+import { finalizeRun } from '@agent/storage/runLifecycle';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { AgentRun } from '@agent/runtime/run/AgentRun';
 import { turnText } from '@agent/runtime/run/turnText';
@@ -47,7 +56,7 @@ import {
 } from '@shared/constants/workflowOutput';
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runStateFold';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import {
   agentRunTestLayer,
   textTurn,
@@ -182,23 +191,13 @@ vi.mock('@agent/output/outputValidation', () => ({
 
 vi.mock('@agent/prompt/PromptBuilder', () => ({
   getSystemPromptWithRules: vi.fn(() => Effect.succeed('system')),
-  PromptBuilder: class {
-    buildInitialPrompts = () =>
-      Effect.succeed({
-        userPrefix: '',
-        userRequest: 'Write the document.',
-      });
-
-    buildUserRequest = (round: number) =>
-      Effect.succeed(`Revise for round ${round}.`);
-  },
 }));
 
 setupPlatform({
   storagePath: fakePath('storage'),
   workspacePath: fakePath('workspace'),
   workspaceState: {
-    [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: true,
+    [TexraStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: true,
   },
 });
 
@@ -331,8 +330,22 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
   );
 }
 
+/** The run program to its exit, ended as its lifecycle ends it: the halt
+ *  commits with the run's `run.end`. */
 function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
   return runToolUse({ resume: init.resume === true }).pipe(
+    Effect.onExit((exit) =>
+      finalizeRun(init.session, {
+        runId: init.runId,
+        outcome: Exit.match(exit, {
+          onSuccess: (result) => result.outcome,
+          onFailure: (cause) =>
+            Cause.hasInterrupts(cause)
+              ? RUN_OUTCOME.CANCELLED
+              : RUN_OUTCOME.FAILED,
+        }),
+      }),
+    ),
     Effect.provide(
       invokerLayer(init, requests).pipe(
         Layer.provideMerge(agentRunTestLayer(init)),
@@ -413,7 +426,7 @@ function startedRun(session: SessionHandle): RunId {
 const setRejectOnCompileFailure = (enabled: boolean) =>
   installedHost()
     .roots.workspaceState.update(
-      WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+      TexraStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
       enabled,
     )
     .pipe(Effect.orDie);
@@ -558,7 +571,7 @@ describe('the workflow round loop', () => {
           storagePath: fakePath('storage'),
           workspacePath: fakePath('workspace'),
           workspaceState: {
-            [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: false,
+            [TexraStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: false,
           },
         }),
       );
@@ -791,7 +804,7 @@ describe('the output facts a workflow round publishes', () => {
           {
             workspaceState: {
               get: (key: string) =>
-                key === WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF
+                key === TexraStateKey.WORKFLOW_AUTO_OPEN_PDF
                   ? Effect.fail(
                       new StateReadFailed({
                         key,

@@ -1,41 +1,8 @@
-import { it } from '@effect/vitest';
-import { Effect, type FileSystem } from 'effect';
-import { describe, expect } from 'vitest';
-
-import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
-import { PromptBuilder } from '@agent/prompt/PromptBuilder';
+import { describe, expect, it } from 'vitest';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
-import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-
-/** The system prompt reads `AGENTS.md` through `FileSystem`, so the
- *  standard library's own is what these renders run over. */
-const overNodePlatform = <A, E>(
-  program: Effect.Effect<A, E, FileSystem.FileSystem | ChildProcessSpawner>,
-): Effect.Effect<A, E> => Effect.provide(program, nodePlatformLayer);
 
 describe('PromptBuilder', () => {
-  it.effect('uses array-based userRequest entries for reflections', () =>
-    Effect.gen(function* () {
-      const prompt: AgentPrompt = {
-        systemPrompt: 'system',
-        userPrefix: 'prefix',
-        userRequest: ['initial {{ value }}', 'reflect {{ value }}'],
-      } as AgentPrompt;
-
-      const builder = new PromptBuilder(prompt, { value: 'test' }, undefined);
-      const initial = yield* overNodePlatform(builder.buildInitialPrompts());
-      expect(initial.userRequest).toBe('initial test');
-
-      const reflect = yield* builder.buildUserRequest(1);
-      expect(reflect).toBe('reflect test');
-
-      const fallback = yield* builder.buildUserRequest(3);
-      expect(fallback).toBe('reflect test');
-    }),
-  );
-
   it('keeps pinned-memory consultation unconditional even for self-contained requests', () => {
     // Regression test for #7957: relevance gating (added in #7855) must not
     // silently drop pinned memories, which are documented as loading every

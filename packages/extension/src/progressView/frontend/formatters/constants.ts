@@ -45,12 +45,9 @@ export const TOOL_OUTPUT_LANGUAGES = new Map<string, string>([
 /**
  * Tools whose input contains a code field that should be syntax highlighted.
  * Maps tool name to highlight.js language for the code field.
- * Supports 'code' field (wolfram) and 'command' field (bash).
+ * Supports the 'command' field (bash).
  */
-export const TOOL_CODE_LANGUAGES = new Map<string, string>([
-  ['bash', 'bash'],
-  ['wolfram', 'mathematica'],
-]);
+export const TOOL_CODE_LANGUAGES = new Map<string, string>([['bash', 'bash']]);
 
 /**
  * Map file extensions that don't match highlight.js language names.
@@ -126,27 +123,20 @@ export const TOOL_ICON_MAP: Record<string, TeXRAIconName> = {
 
   // Shell
   bash: 'terminal',
-  wolfram: 'cube',
 
   // Web/research
   web_fetch: 'globe',
   web_search: 'globe',
   arxiv_search: 'book',
-  arxiv_metadata: 'book',
   download_arxiv_source: 'cloud-arrow-down',
-  crossref_search: 'link',
 
   // LaTeX
-  texcount: 'hashtag',
   extract_figures: 'image',
   extract_tikz_figures: 'image',
   extract_bib_entries: 'book',
 
   // Diagnostics
   diagnostics: 'list-check',
-
-  // Task management
-  todo_write: 'list-check',
 
   // Memory
   memory: 'database',
@@ -175,6 +165,5 @@ export const TOOL_ICON_MAP: Record<string, TeXRAIconName> = {
   codex: 'robot',
   codex_patch: 'code-compare',
   codex_thread: 'comments',
-  codex_todo: 'list-check',
   codex_turn: 'check-double',
 };
