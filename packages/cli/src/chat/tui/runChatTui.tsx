@@ -29,7 +29,9 @@ import {
   acquireTuiTerminal,
   clearTerminalScrollback,
 } from '@cli/tui/terminalCleanup';
+import { cliSecrets } from '@cli/runtime/cliSecrets';
 import { DisposableStore } from '@platform/disposable';
+import { nodeFileServices } from '@platform/defaults/jsonStore';
 import {
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
@@ -66,8 +68,6 @@ import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
 import { announceForegroundApprovals } from './state/subscribeApprovals';
 import { subscribeCliCredentialChanges } from './hosts/cliProviderKeys';
-import { cliSecrets } from '@cli/runtime/cliSecrets';
-import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { createTuiViewportController } from './render/tuiViewportController';
 import {
   selectedRunId as selectedRunIdSignal,
