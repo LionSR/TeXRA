@@ -29,10 +29,10 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * ended forked (at its latest settled point, before any turn it is in now). After, a
  * run can be deleted; a plain agent's run again; a document task's outputs
  * diffed, archived, or removed. Resume is offered where it is the way to
- * continue: on any loop-driven run that was interrupted, and on a settled one
- * that takes no message (a document task, from its saved outputs; a background
- * script that did not complete). A settled conversation continues through its
- * composer. Whether a resume can proceed is `deriveResumability`'s.
+ * continue: on any loop-driven run that was interrupted, and on a background
+ * script that did not complete. A settled document task runs again; a
+ * settled conversation continues through its composer. Whether a resume can
+ * proceed is `deriveResumability`'s.
  */
 export function runActions(
   run: Pick<
@@ -68,7 +68,6 @@ export function runActions(
   if (
     isLoopDriven(run.identity) &&
     (run.group === 'interrupted' ||
-      run.documentTask ||
       (run.identity.kind === 'script' && run.status !== RUN_PHASE.COMPLETED))
   )
     actions.push('resume');

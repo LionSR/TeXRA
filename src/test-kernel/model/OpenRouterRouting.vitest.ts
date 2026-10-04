@@ -147,6 +147,14 @@ describe('bindModel', () => {
       expect(exit.value.origin.requestedModel).toBe(
         MODEL_CONFIGS[GPT4O].shortName,
       );
+      // A text-only persona's binding keeps the whole output budget.
+      const turn = yield* exit.value.model.prepareTurn({
+        messages: [{ role: 'user', content: [{ kind: 'text', text: 'hi' }] }],
+      });
+      assert(turn.protocol === 'openai-responses');
+      expect(turn.controls.maxOutputTokens).toBe(
+        MODEL_CONFIGS[GPT4O].maxOutputTokens,
+      );
     }),
   );
 

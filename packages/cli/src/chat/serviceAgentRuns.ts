@@ -65,7 +65,6 @@ export function serviceAgentRuns(backend: SessionBackend): ChatAgentRuns {
         return Effect.fail(new Error('A chat launch names the run it starts.'));
       return backend
         .launch(request, {
-          enforceCategory: options.enforceCategory,
           continues: options.continues,
           onRunResolved: options.onRunResolved,
         })

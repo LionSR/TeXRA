@@ -2,6 +2,8 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { documentTaskConfig } from '@agent/output/documentRecipe';
 import { deriveResumability, finalizeRun } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -85,6 +87,35 @@ describe('deriveResumability', () => {
       expect(yield* deriveResumability(runId, session)).toMatchObject({
         kind: 'checkpoint',
         snapshot: OPENING_SNAPSHOT,
+      });
+    }),
+  );
+
+  it.effect('does not resume a document task that ended: it runs again', () =>
+    Effect.gen(function* () {
+      const runId = 'ac0001' as RunId;
+      yield* Effect.promise(() => writeMeta(runId, {}));
+      yield* session.commit([
+        {
+          type: 'run.config',
+          aggregateId: aggregateId('run', runId),
+          config: AgentConfigSchema.parse(
+            documentTaskConfig({ agent: 'polish', model: 'test-model' }),
+          ),
+        },
+      ]);
+      yield* Effect.promise(() => writeSnapshot(runId));
+      yield* session.commit([
+        {
+          type: 'run.end',
+          aggregateId: aggregateId('run', runId),
+          outcome: RUN_OUTCOME.FAILED,
+          output: emptyRunEndOutput(),
+        },
+      ]);
+
+      expect(yield* deriveResumability(runId, session)).toEqual({
+        kind: 'none',
       });
     }),
   );
