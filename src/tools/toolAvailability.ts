@@ -427,9 +427,7 @@ function resolveOptionalStatus(
   if (!getStatus) return Effect.succeed(undefined);
   return getStatus(probeResult).pipe(
     Effect.catch((error) =>
-      Effect.logWarning(
-        `Failed to resolve ${field} for plugin ${pluginId}`,
-      ).pipe(
+      Effect.logWarning(`Failed to resolve ${field} for ${pluginId}`).pipe(
         Effect.annotateLogs({ data: error }),
         withLogChannel(CHANNEL),
         Effect.as(undefined),
