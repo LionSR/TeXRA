@@ -2,6 +2,7 @@ import { defineCommand } from 'citty';
 import { Deferred, Effect, Exit, Schedule, Scope } from 'effect';
 
 import { closeAllSessions } from '@agent/runtime';
+import { askServiceToStop } from '@controllers/server/client';
 import { servicePaths } from '@controllers/server/discovery';
 import { ServiceProjects } from '@controllers/server/handlers';
 import { serve } from '@controllers/server/serve';
@@ -157,15 +158,7 @@ function stopService(context: CliContext) {
   return Effect.gen(function* () {
     const info = yield* probeCliService(context.storageRoot);
     if (info === null) return null;
-    yield* Effect.scoped(
-      Effect.gen(function* () {
-        const { client } = yield* connectCliService(
-          context.storageRoot,
-          context.version,
-        );
-        yield* client['service.stop']({ drain: false });
-      }),
-    );
+    yield* askServiceToStop(info.socket, false);
     yield* probeCliService(context.storageRoot).pipe(
       Effect.flatMap((answer) =>
         answer === null ? Effect.void : Effect.fail('running' as const),

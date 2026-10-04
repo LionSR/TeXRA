@@ -26,6 +26,7 @@ import {
   approvalDecisionArms,
   type SurfaceDecision,
 } from '@shared/session/approvalDecision';
+import { acceptsFollowUp } from '@shared/session/sessionView';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { BaseTextInput } from '../input/BaseTextInput';
@@ -118,8 +119,7 @@ interface AttachedTaskProps {
 /** A pending request this view can present, with what it presents. */
 type Presentable =
   | { readonly kind: 'modal'; readonly payload: ApprovalPayload }
-  | { readonly kind: 'edit'; readonly data: ToolEditPermission }
-  | { readonly kind: 'elsewhere'; readonly label: string };
+  | { readonly kind: 'edit'; readonly data: ToolEditPermission };
 
 function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
   const { task, runtime } = props;
@@ -161,6 +161,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
   /** Run one action on the service, saying so when it fails. */
   const act = (
     program: (a: AttachedTaskActions) => Effect.Effect<void, Error>,
+    onFailed?: () => void,
   ) => {
     const ready = actions.current;
     if (!ready) {
@@ -170,15 +171,26 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     runtime.runFork(
       program(ready).pipe(
         Effect.catch((error) =>
-          Effect.sync(() => setNotice(toErrorMessage(error))),
+          Effect.sync(() => {
+            onFailed?.();
+            setNotice(toErrorMessage(error));
+          }),
         ),
       ),
     );
   };
 
+  // An external inquiry is answered from its thread and never parks its
+  // run, so it is named apart and never stands in front of a request
+  // this view can answer.
   const pending = level.requests.find(
-    (request) => !decided.has(request.requestId),
+    (request) =>
+      request.payload.kind !== 'externalInquiry' &&
+      !decided.has(request.requestId),
   );
+  const inquiries = level.requests.filter(
+    (request) => request.payload.kind === 'externalInquiry',
+  ).length;
   // An edit's preview is the service's to hand over: fetch it once.
   const asked = useRef(new Set<string>());
   useEffect(() => {
@@ -202,7 +214,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     const { payload } = pending;
     switch (payload.kind) {
       case 'externalInquiry':
-        return { kind: 'elsewhere', label: 'An external inquiry' };
+        return undefined;
       case 'toolEdit': {
         const preview = previews.get(pending.requestId);
         if (preview === undefined) return undefined;
@@ -224,22 +236,39 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
       );
       return;
     }
-    setDecided((held) => new Set(held).add(pending.requestId));
-    act((ready) =>
-      Effect.forEach(
-        arms,
-        (arm) => ('runtime' in arm ? ready.request(arm.runtime) : Effect.void),
-        { discard: true },
-      ),
+    const { requestId } = pending;
+    setDecided((held) => new Set(held).add(requestId));
+    act(
+      (ready) =>
+        Effect.forEach(
+          arms,
+          (arm) =>
+            'runtime' in arm ? ready.request(arm.runtime) : Effect.void,
+          { discard: true },
+        ),
+      // Refused: the request is still open, so it comes back.
+      () =>
+        setDecided((held) => {
+          const next = new Set(held);
+          next.delete(requestId);
+          return next;
+        }),
     );
   };
 
   const answering =
     presentable?.kind === 'modal' || presentable?.kind === 'edit';
-  // The composer takes Esc while it shows; once the watch has ended there
-  // is no composer, and Esc still detaches.
+  // The composer shows only for a run that takes a follow-up (the rule
+  // every host reads); a terminal-backed run takes none from here.
+  const composing =
+    !answering &&
+    !level.ended &&
+    level.run !== undefined &&
+    acceptsFollowUp(level.run, { terminalBacked: false });
+  // The composer takes Esc while it shows; without one, Esc still
+  // detaches.
   useInput((input, key) => {
-    if (level.ended && isEscapeInput(input, key)) props.onClose();
+    if (!composing && !answering && isEscapeInput(input, key)) props.onClose();
   });
 
   const width = Math.max(20, (columns ?? 80) - BORDERED_PANEL_CHROME_COLUMNS);
@@ -262,7 +291,9 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
         footer={
           <KeyHints
             hints={[
-              { key: 'Enter', action: 'send a follow-up' },
+              ...(composing
+                ? [{ key: 'Enter', action: 'send a follow-up' }]
+                : []),
               { key: 'Esc', action: 'detach (the task keeps running)' },
             ]}
             confirmCancel={false}
@@ -272,7 +303,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
         {lines.slice(-budget).map((line, index) => (
           <Text key={index}>{line}</Text>
         ))}
-        {!answering && !level.ended && (
+        {composing && (
           <Box marginTop={1}>
             <Text>{`${POINTER} `}</Text>
             <BaseTextInput
@@ -314,10 +345,10 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
           <Text>{`${presentable.data.relativePath} (+${presentable.data.addedLines} −${presentable.data.removedLines}); the service holds no preview.`}</Text>
         </ConfirmCard>
       )}
-      {presentable?.kind === 'elsewhere' && (
-        <Text
-          dimColor
-        >{`${presentable.label} waits; answer it from its thread.`}</Text>
+      {inquiries > 0 && (
+        <Text dimColor>
+          {`${inquiries === 1 ? 'An external inquiry waits' : `${inquiries} external inquiries wait`}; answer from its thread.`}
+        </Text>
       )}
     </Box>
   );
