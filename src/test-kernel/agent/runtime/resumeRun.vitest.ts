@@ -289,9 +289,20 @@ describe('resumeRun tool-use queue ownership', () => {
       const first = yield* Effect.forkChild(resumeOne(RUN, { session }));
       yield* Deferred.await(entered);
       expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
+      // The second resume signals as it reaches the resume in flight.
+      const joining = yield* Deferred.make<void>();
+      const resumeOnce = session.followUps.resumeOnce.bind(session.followUps);
+      vi.spyOn(session.followUps, 'resumeOnce').mockImplementationOnce(
+        (runId, resume) =>
+          Deferred.succeed(joining, undefined).pipe(
+            Effect.andThen(resumeOnce(runId, resume)),
+          ),
+      );
       const second = yield* Effect.forkChild(resumeOne(RUN, { session }));
-      // Let the second reach the resume in flight before the first ends.
-      yield* Effect.promise(() => new Promise((done) => setTimeout(done, 20)));
+      yield* Deferred.await(joining);
+      // Its join is already queued behind the signal: one turn of the event
+      // loop lets it run before the first resume is released.
+      yield* Effect.promise(() => new Promise((done) => setImmediate(done)));
       yield* Deferred.succeed(barrier, undefined);
       expect(yield* Fiber.join(second)).toEqual(yield* Fiber.join(first));
       expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();

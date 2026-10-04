@@ -163,12 +163,20 @@ export class Inbox {
   }
 
   /** End the run's reader `input`; `terminal`: the observers hear the run
-   *  takes no more input here. Idempotent. */
+   *  takes no more input here, on the publisher after the sends already
+   *  admitted, and only if none left a row queued. Idempotent. */
   release(runId: RunId, input: RunInput, terminal: boolean): void {
     if (this.readers.get(runId) !== input) return;
     this.readers.delete(runId);
     input.end();
-    if (terminal) this.notify({ kind: 'run', runId });
+    if (!terminal) return;
+    this.port.detach(() =>
+      Effect.sync(() => {
+        if (this.readers.has(runId) || this.port.pending(runId).length > 0)
+          return;
+        this.notify({ kind: 'run', runId });
+      }),
+    );
   }
 
   /**
