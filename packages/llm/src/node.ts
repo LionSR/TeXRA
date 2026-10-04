@@ -139,6 +139,8 @@ const construct = Effect.fn('llm.construct')(function* (
       );
     }
     case 'openai-responses': {
+      // Named fields only: `ResponseAuthenticationSchema` is a strictObject, so
+      // a field added to the credential must not reach its parse.
       const authentication =
         credential.kind === 'api-key'
           ? credential
