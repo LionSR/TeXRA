@@ -109,7 +109,15 @@ with 8 files of `src/model` (`apiProviders`, the pure half of `modelRoute`,
 5 of the provider catalog in `src/shared` (`constants/providers.ts`, the
 data of `modelProviderPlugins.ts`, `modelSelection.ts`,
 `kimiCodeRetryGate.ts`, `codingPlanSubscriptions.ts`), with the route and
-provider-error schemas they return. `llm` gains `llm-zoo`, and it still
+provider-error schemas they return. Two of those files carry TeXRA
+configuration today: `modelProviderPlugins.ts` imports `GlobalStateKey` and
+`ModelCompatibilityKey` and embeds the Models tab's setting keys and control
+copy, and `codingPlanSubscriptions.ts` imports `GlobalStateKey`, `UsageRoute`
+and `ExhaustionReason` and carries CLI and setup presentation. M4 splits
+each first: the pure provider and routing facts move to `llm`, and the
+setting descriptors, control copy and presentation stay in the harness (and
+the app, for the CLI and setup text), so `llm` imports no setting enum
+before M7 splits them. `llm` gains `llm-zoo`, and it still
 imports nothing in the repo; an ESLint zone with no baseline holds that
 from M4.
 
@@ -297,7 +305,9 @@ built per workspace; `WorkspaceFs` is constructed from them for each
 session's roots.
 
 **Roster identity.** `acquireProcess` joins an installed process only when
-both the platform and the initial plugin list are the same. A second
+every process input is the same: the platform, the initial plugin list, and
+the `host` and `usageLog` layers (by reference). `execution` is applied per
+session and is part of the identity too. A second
 `Sessions.layer` with the same platform and a different list fails with
 `PluginConflict`, reason `roster`, so the first acquisition never decides
 another consumer's plugins. Each `Plugins.contribute` withdraws only what it
@@ -345,7 +355,10 @@ declare const definePlugin: <ROut>(plugin: Plugin<ROut>) => Plugin.Any;
   admitted (the GitHub poller's) finishes writing to its session. A layer
   finalizer cannot express that order.
 - **State.** A plugin reads and appends its own arms through `PluginState`
-  (`read(arm)`, `commit(arm, value)`), exported from `.` and scoped to the
+  (`read(arm, key?)`, `commit(arm, value, { key?, parent? })`, where `key`
+  names the plugin aggregate, one per inquiry thread, and `parent` is the
+  run edge supplied when a thread opens or reopens; the `transition` check
+  below receives both), exported from `.` and scoped to the
   plugin's declared arms. It wraps `SessionHandle.runView` and `commit`,
   which stay internal, so `goal` and the app's plugins need no deep import.
 - **Typed requirements.** `definePlugin` checks at compile time that every
@@ -365,7 +378,10 @@ declare const definePlugin: <ROut>(plugin: Plugin<ROut>) => Plugin.Any;
   tools: the settings catalog, the agent catalog follower and the skill
   roots rebuild when a generation changes, and withdrawing a plugin removes
   its rows, agents and skills.
-- **Dependencies.** An agent's dependencies are derived from its tool list.
+- **Dependencies.** An agent's dependencies are derived from its tool list and from the
+  plugin that supplies the round policy of its category, so a workflow agent
+  with no tools still depends on `documents`; an agent may also name an
+  owning plugin.
   A hard `requires` is for first-party values only: resolved at
   `Step.open`, transitive, and a cycle is refused when the plugin set is
   built (`PluginConflict`, reason `cycle`). Nothing turns a required plugin
@@ -380,13 +396,13 @@ declare const definePlugin: <ROut>(plugin: Plugin<ROut>) => Plugin.Any;
 
 ### Subpath exports
 
-| Subpath        | Contents                                                                                                                                | Runs in      |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| `.`            | `Sessions`, `Session`, `Run`, `Plugins`, `PluginState`, `Plugin`, `definePlugin`, `defineTool`, the errors, the port types              | any          |
-| `./plugins`    | The built-in plugin values of §3, `fileOps(options)` and `agent(options)` included, and two lists: `harnessBuiltins.minimal` and `.all` | any          |
-| `./schemas`    | Agent config and run-end schemas (exists), `SessionEvent`, `PluginArm`, `SettingRow`                                                    | browser-safe |
-| `./transcript` | The row model and its projections, for renderers                                                                                        | browser-safe |
-| `./node`       | `nodePlatform`, the SQLite store, the Node spawner, the code-sandbox worker asset                                                       | Node         |
+| Subpath        | Contents                                                                                                                                                     | Runs in      |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
+| `.`            | `Sessions`, `Session`, `Run`, `Plugins`, `PluginState`, `Plugin`, `definePlugin`, `defineTool`, the errors, the port types                                   | any          |
+| `./plugins`    | The built-in plugin values of §3, `fileOps(options)` and `agent(options)` included, and two lists: `harnessBuiltins.minimal` and `.all`                      | any          |
+| `./schemas`    | Agent config and run-end schemas (exists; the four document flags of `ToolConfigSchema` are not in it, see below), `SessionEvent`, `PluginArm`, `SettingRow` | browser-safe |
+| `./transcript` | The row model and its projections, for renderers                                                                                                             | browser-safe |
+| `./node`       | `nodePlatform`, the SQLite store, the Node spawner, the code-sandbox worker asset                                                                            | Node         |
 
 `./schemas` and `./transcript` exist because the webview frontends cannot
 load `.`. A `./testing` subpath waits for a named external consumer. There
@@ -505,6 +521,12 @@ parent)` check, which the store runs inside the append transaction beside the
 schema, so state machines (the inquiry's monotonic turns, one open turn, a
 terminal drop, a valid reopen and reparenting) stay atomic and `PluginState`
 carries no read-then-write race; it replaces `validateInquiryTransition`.
+
+The same goes for run configuration: `ToolConfigSchema`'s four document
+flags (`autoExtractFigure`, `autoExtractTikzFigure`, `attachTeXCount`,
+`autoCompileInputPdf`) leave `AgentConfig` for a plugin-keyed config slot,
+`config.plugins[id]`, validated by the owning plugin and persisted on
+`run.config` as opaque to the harness. The documents plugin declares them.
 
 Both are the plugin's arms with their read side. `Plugin.requests` lets a
 plugin contribute a durable `request.opened` kind and its decision: the
