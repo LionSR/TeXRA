@@ -111,14 +111,14 @@ const internal = (cause: Cause.Cause<unknown>) =>
  * answer once it reports its run admitted; a program that ends first
  * answers with its failure.
  */
-function admit<A>(
+function admit<Admitted extends RunId | null>(
   runs: FiberSet.FiberSet,
   program: (
-    admitted: Deferred.Deferred<RunId, TaskFailed>,
-  ) => Effect.Effect<A, Error, ProcessServices>,
-): Effect.Effect<RunId, TaskFailed, ProcessServices> {
+    admitted: Deferred.Deferred<Admitted, TaskFailed>,
+  ) => Effect.Effect<unknown, Error, ProcessServices>,
+): Effect.Effect<Admitted, TaskFailed, ProcessServices> {
   return Effect.gen(function* () {
-    const admitted = yield* Deferred.make<RunId, TaskFailed>();
+    const admitted = yield* Deferred.make<Admitted, TaskFailed>();
     const ended = (message: string) =>
       Deferred.fail(admitted, failed(message)).pipe(Effect.asVoid);
     yield* FiberSet.run(
@@ -301,7 +301,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
         Effect.gen(function* () {
           yield* refuseWhileDraining;
           const session = yield* open(workspace);
-          return yield* admit(runs, (admitted) =>
+          return yield* admit<RunId>(runs, (admitted) =>
             runAgent(
               { config, runId },
               {
@@ -319,6 +319,17 @@ export const serviceHandlers = TexraRpcs.toLayer(
             ),
           );
         }),
+      'task.model': ({ workspace, runId, model }) =>
+        Effect.flatMap(open(workspace), (session) => {
+          const controls = session.runs.getHandle(runId)?.controls;
+          if (controls === undefined)
+            return Effect.fail(
+              failed('The task is not running; resume it to switch its model.'),
+            );
+          return controls
+            .switchModel(model)
+            .pipe(Effect.mapError((error) => failed(error.message)));
+        }),
       'project.policy': ({ workspace, policy }) =>
         open(workspace).pipe(
           Effect.map((session) => session.setApprovalPolicy(policy)),
@@ -327,13 +338,16 @@ export const serviceHandlers = TexraRpcs.toLayer(
         Effect.gen(function* () {
           yield* refuseWhileDraining;
           const session = yield* open(workspace);
-          return yield* admit(runs, (admitted) =>
+          return yield* admit<RunId | null>(runs, (admitted) =>
             Effect.gen(function* () {
               const result = yield* resumeRun(runId, {
                 session,
                 onResumeResolved: (resumed) =>
                   Deferred.succeed(admitted, resumed).pipe(Effect.asVoid),
               });
+              // Blocked, not failed: it stays interrupted until what it needs is back.
+              if ('failed' in result && result.failed === 'blocked')
+                return yield* Deferred.succeed(admitted, null);
               if ('failed' in result)
                 return yield* Effect.fail(
                   new Error(describeFollowUpFailure(result.failed)),

@@ -19,7 +19,8 @@ const TIMEOUT_MS = 10_000;
 
 /**
  * The variables the user's login shell exports, read by running it as a
- * login shell with nothing but the home directory and user name. Fails with
+ * login shell with nothing but the home directory, user name and system
+ * PATH. Fails with
  * the reason when the shell does not answer, so the caller can say why it
  * runs without them.
  */
@@ -33,7 +34,14 @@ function loginShellEnvironment(
         shell || '/bin/sh',
         ['-ilc', `printf '${MARKER}'; env -0`],
         {
-          env: { HOME: home, USER: username, LOGNAME: username },
+          // The system PATH, so a profile that runs a tool by name before
+          // it sets PATH still finds it.
+          env: {
+            HOME: home,
+            USER: username,
+            LOGNAME: username,
+            PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
+          },
           stdio: ['ignore', 'pipe', 'ignore'],
           timeout: TIMEOUT_MS,
           encoding: 'utf8',

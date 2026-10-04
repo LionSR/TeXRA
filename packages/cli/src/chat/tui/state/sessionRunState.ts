@@ -1,7 +1,7 @@
 import { computed, signal } from '@lit-labs/signals';
 
-import type { SessionHandle } from '@agent/runtime';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import type { SessionBackend } from '@controllers/session/sessionBackend';
 import { RUN_PHASE, type RunPhase, type RunId } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
 
@@ -9,9 +9,7 @@ import { registerCliStateResetHook } from './cliState';
 import { runPhaseOf, runViewOf, sessionView } from './sessionView';
 import type { Effect } from 'effect';
 
-type RunControlsOf = (
-  runId: RunId,
-) => NonNullable<ReturnType<SessionHandle['runs']['getHandle']>>['controls'];
+type RunControlsOf = SessionBackend['controls'];
 
 /**
  * The claimed root run's settlement, as the slot holds it: the program that

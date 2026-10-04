@@ -19,6 +19,7 @@
  *   for one `Subscribe`, the frames the webview bridge already carries.
  * - `task.request`: one `RuntimeRequest` (send, approve, stop, fork, …).
  * - `task.start` / `task.resume`: launch or continue a task in the service.
+ * - `task.model`: switch a running task's model.
  * - `project.policy`: the approval policy of a project's session.
  * - `request.preview`: a pending tool edit's original and proposed content,
  *   which the durable request does not carry.
@@ -43,7 +44,24 @@ import {
 
 /** Bumped whenever a procedure or a payload changes shape. A client newer
  *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
+
+/** `value` as JSON carries it: an absent field (`undefined`) is left out,
+ *  which the wire's JSON check otherwise refuses. */
+function jsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(jsonValue);
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    Object.getPrototypeOf(value) !== Object.prototype
+  )
+    return value;
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([key, field]) =>
+      field === undefined ? [] : [[key, jsonValue(field)]],
+    ),
+  );
+}
 
 /**
  * A Zod schema as an Effect Schema at the RPC edge: decoding runs the Zod
@@ -58,7 +76,7 @@ function zodWire<T extends z.ZodType>(
     () => (input, _ast, options) => {
       const parsed = schema.safeParse(input);
       return parsed.success
-        ? Effect.succeed(parsed.data)
+        ? Effect.succeed(jsonValue(parsed.data) as z.output<T>)
         : Effect.fail(
             new SchemaIssue.InvalidValue(
               { message: z.prettifyError(parsed.error) },
@@ -164,14 +182,22 @@ export const TexraRpcs = RpcGroup.make(
   }),
   Rpc.make('task.resume', {
     payload: { workspace, runId: zodWire(RunIdSchema) },
-    /** The run that resumed: the asked one, or the parent that owns it. */
-    success: zodWire(RunIdSchema),
+    /** The run that resumed: the asked one, or the parent that owns it;
+     *  null when something it needs (its agent, a plugin) is missing, so it
+     *  stays interrupted. */
+    success: zodWire(RunIdSchema.nullable()),
     error: zodWire(TaskFailedSchema),
   }),
   Rpc.make('request.preview', {
     payload: { workspace, requestId: Schema.String },
     /** Null once the request is settled, or when the service staged none. */
     success: zodWire(ToolEditPreviewSchema.nullable()),
+    error: zodWire(TaskFailedSchema),
+  }),
+  /** Switch a run the service is running to `model` from its next turn;
+   *  refused with the run's reason. */
+  Rpc.make('task.model', {
+    payload: { workspace, runId: zodWire(RunIdSchema), model: Schema.String },
     error: zodWire(TaskFailedSchema),
   }),
   Rpc.make('project.policy', {

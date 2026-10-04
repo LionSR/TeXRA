@@ -28,6 +28,7 @@ import {
   type RequestError,
 } from '@shared/session/requestErrors';
 import type { TranscriptSubscription } from '@shared/schemas';
+import { isLiveRun } from '@shared/session/sessionView';
 import type {
   EventsFrame,
   RequestErrorWire,
@@ -211,8 +212,22 @@ export const serviceSessionBackend = Effect.fn('serviceSessionBackend')(
           Effect.mapError(
             (error) => new Unavailable({ runId, reason: error.message }),
           ),
-          Effect.map((resumed) => ({ runId: resumed, result: null })),
+          Effect.map((resumed) =>
+            resumed === null ? null : { runId: resumed, result: null },
+          ),
         ),
+      controls: (runId) => {
+        const run = SubscriptionRef.getUnsafe(graph.view.ref).runs.get(runId);
+        if (run === undefined || !isLiveRun(run)) return undefined;
+        return {
+          // The service checks the switch against the run when it is asked.
+          modelSwitchDisabledReason: () => Effect.succeed(undefined),
+          switchModel: (model) =>
+            client['task.model']({ workspace, runId, model }).pipe(
+              Effect.mapError((error) => new Error(error.message)),
+            ),
+        };
+      },
       preview: (requestId) =>
         client['request.preview']({ workspace, requestId }).pipe(
           Effect.mapError((error) => new Error(error.message)),

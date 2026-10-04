@@ -76,7 +76,7 @@ function runServe(context: CliContext, idleSeconds: number) {
     yield* adoptLoginShellEnvironment().pipe(
       Effect.catch((error) =>
         Effect.logWarning(
-          `${error.message}; tasks run with the environment the service was started with`,
+          `${error.message}; tasks run with only HOME and the TEXRA_* settings the service was started with, so tools such as latexmk and git may not be found`,
         ),
       ),
     );

@@ -12,6 +12,7 @@ import {
   Option,
   Scope,
   Stream,
+  SubscriptionRef,
 } from 'effect';
 
 import { getRunRecords } from '@agent/storage';
@@ -251,9 +252,10 @@ export interface ChatSessionControllerInit {
   readonly agentRuns?: Partial<ChatAgentRuns> & {
     readonly records?: typeof getRunRecords;
   };
-  /** Where run requests land and edit previews come from, when the chat is
-   *  a client of the background service; its own session otherwise. */
-  readonly backend?: Pick<SessionBackend, 'request' | 'preview'>;
+  /** Where run requests land, edit previews come from and run state is
+   *  read, when the chat is a client of the background service; its own
+   *  session otherwise. */
+  readonly backend?: Pick<SessionBackend, 'request' | 'preview' | 'view'>;
 }
 
 interface PreparedChatInstruction {
@@ -327,6 +329,11 @@ export function createChatSessionController(
     ...init.agentRuns,
   };
   const requests: SessionRequests = init.backend ?? runtimeSession.requests;
+  // The fold the chat's runs appear in: the service's, or this session's.
+  const viewChanges =
+    init.backend === undefined
+      ? runtimeSession.viewChanges
+      : SubscriptionRef.changes(init.backend.view);
   // Said in the transcript the controller writes to, not on stderr before
   // Ink mounts, where it would be left above the header.
   if (runtimeSession.storeMovedAside) {
@@ -344,7 +351,7 @@ export function createChatSessionController(
   ): Effect.Effect<RunId | undefined> =>
     runId === undefined
       ? Effect.succeed(undefined)
-      : runtimeSession.viewChanges.pipe(
+      : viewChanges.pipe(
           Stream.filter((view) => view.runs.has(runId)),
           Stream.runHead,
           Effect.map((head) => (Option.isSome(head) ? runId : undefined)),
@@ -779,12 +786,16 @@ export function createChatSessionController(
         if (!previous.has(id) && run?.parentId === null) adoptResumedRoot(run);
       }
     });
-  const resumedRoots = runtime.runFork(
-    Stream.runForEach(runtimeSession.viewChanges, observeResumedRoots),
-  );
-  disposables.add(() => {
-    runtime.runFork(Fiber.interrupt(resumedRoots));
-  });
+  // A chat of the service adopts only the runs it launches or resumes: the
+  // service's view also holds other terminals' conversations.
+  if (init.backend === undefined) {
+    const resumedRoots = runtime.runFork(
+      Stream.runForEach(runtimeSession.viewChanges, observeResumedRoots),
+    );
+    disposables.add(() => {
+      runtime.runFork(Fiber.interrupt(resumedRoots));
+    });
+  }
 
   // -----------------------------------------------------------------------
   // stop

@@ -1416,7 +1416,13 @@ async function validateServiceChatsSeeEachOther() {
             pty.setTimer(() => pty.write('\r'), 1_000);
           }
         }
-        if (plain.includes('Model saw: Hello there')) replied = true;
+        // A second message goes to the live conversation in the service.
+        if (plain.includes('Model saw: Hello there') && !first.followed) {
+          first.followed = true;
+          pty.setTimer(() => pty.write('And again'), 600);
+          pty.setTimer(() => pty.write('\r'), 1_000);
+        }
+        if (plain.includes('Hello there | And again')) replied = true;
       },
     });
     const deadline = Date.now() + 180_000;
@@ -1441,7 +1447,7 @@ async function validateServiceChatsSeeEachOther() {
         const steps = [
           ['opening', 'list', '/ commands', ['/tasks', '\r']],
           ['list', 'attach', 'echo_validation', ['\r']],
-          ['attach', 'done', 'Model saw: Hello there', ['\u001b', ETX, ETX]],
+          ['attach', 'done', 'Hello there | And again', ['\u001b', ETX, ETX]],
         ];
         const step = steps.find(([at]) => at === phase);
         if (step === undefined) return;

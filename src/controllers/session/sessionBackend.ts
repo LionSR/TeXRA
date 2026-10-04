@@ -5,13 +5,15 @@
  * window writes the run history: the service is the one writer.
  *
  * The port is the window's half of the session API (launch, resume,
- * requests, frames, the view it reads run state from, the approval policy),
+ * requests, frames, the view it reads run state from, a live run's model
+ * switch, the approval policy),
  * not a mirror of `SessionHandle`.
  */
 import { Effect, type Stream, type SubscriptionRef } from 'effect';
 
 import { resumeOnSession } from '@agent/followUp/ToolUseFollowUp';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
+import type { RunControls } from '@agent/runtime/RunHandle';
 import { runAgent, type RunAgentRequest } from '@agent/runtime/runAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ToolEditPreview } from '@controllers/server/protocol';
@@ -30,6 +32,12 @@ import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 
 import { frameSubscription } from './SessionFramer';
+
+/** What a window asks of a live run's loop: its model switch. */
+type RunModelControls = Pick<
+  RunControls,
+  'modelSwitchDisabledReason' | 'switchModel'
+>;
 
 /** The session a window works on, wherever its runs run. */
 export interface SessionBackend {
@@ -77,6 +85,8 @@ export interface SessionBackend {
   readonly preview: (
     requestId: string,
   ) => Effect.Effect<ToolEditPreview | null, Error>;
+  /** A live run's model switch, while its loop runs; undefined otherwise. */
+  readonly controls: (runId: RunId) => RunModelControls | undefined;
   /** The session's approval policy, from this window's settings. */
   readonly setApprovalPolicy: (
     policy: TexraApprovalPolicy,
@@ -134,6 +144,7 @@ export function localSessionBackend(session: SessionHandle): SessionBackend {
         suppressErrorNotification: options.suppressErrorNotification,
       }),
     request: (request) => session.requests.request(request),
+    controls: (runId) => session.runs.getHandle(runId)?.controls,
     resume: (runId) =>
       Effect.flatMap(resumeOnSession(runId, session), (resumed) => {
         // A blocked resume is asked for, not refused: the task's own line

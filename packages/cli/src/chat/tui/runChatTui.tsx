@@ -297,7 +297,14 @@ export async function runChat(
         // waits on `idle` before that runtime is disposed.
         followUpQueue: yield* makeFollowUpDeliveryQueue(runtime.scope),
       };
-    }),
+    }).pipe(
+      // A chat that ends at startup lets go of the service there.
+      Effect.onExit((exit) =>
+        Exit.isSuccess(exit) && exit.value.exitCode === undefined
+          ? Effect.void
+          : Scope.close(chatScope, Exit.void),
+      ),
+    ),
   );
   if (startup.exitCode !== undefined) return { exitCode: startup.exitCode };
   const { services, runtimeSession, backend, runsElsewhere } = startup;
@@ -352,10 +359,7 @@ export async function runChat(
   // bridged into a signal, its transcript tier subscribed for the runs this
   // terminal paints. Bound before anything reads the view: the terminal
   // title below derives its attention state from it on install.
-  const session = new TuiSession(
-    (runId) => runtimeSession.runs.getHandle(runId)?.controls,
-    runsElsewhere,
-  );
+  const session = new TuiSession(backend.controls, runsElsewhere);
   disposables.add(() => runtime.runFork(Scope.close(chatScope, Exit.void)));
   // A dead fold (`viewChanges` failing) is the end of this session: the
   // composer closes on the reason, Ctrl-C still exits, and the exit is a

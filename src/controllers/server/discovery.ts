@@ -3,14 +3,15 @@
  * and `serve.json`, the running service's pid, protocol and build. The
  * directory is the user's alone (0700), which is what keeps the socket
  * private. A storage root whose socket path would pass the Unix limit
- * keeps its socket in a private directory under the system temp folder,
- * named by a hash of the root. Windows has no service yet: a named pipe
+ * keeps its socket in a private directory under `/tmp`, named by the user
+ * and a hash of the root. Windows has no service yet: a named pipe
  * there would take the default ACL, which is not the user's alone.
  */
 import { createHash } from 'node:crypto';
+import { lstatSync } from 'node:fs';
 import * as path from 'node:path';
 
-import { Effect, FileSystem, Option, type PlatformError } from 'effect';
+import { Effect, FileSystem, Option, PlatformError } from 'effect';
 import { z } from 'zod';
 
 import { absentReason } from '@utils/files/fsEntryExists';
@@ -64,7 +65,11 @@ export function servicePaths(storageRoot: string): ServicePaths {
   }
   // `/tmp`, not the per-user temp folder: a client and the service it
   // started must agree on the path whatever environment each runs with.
-  const socketDirectory = path.join('/tmp', `texra-${tag}`);
+  // Named by the user, and checked to be theirs before it is used.
+  const socketDirectory = path.join(
+    '/tmp',
+    `texra-${process.getuid?.() ?? 0}-${tag}`,
+  );
   return {
     runDirectory,
     record,
@@ -86,8 +91,33 @@ export function prepareServiceDirectories(
       paths.socketDirectory,
     ])) {
       yield* fs.makeDirectory(directory, { recursive: true, mode: 0o700 });
+      yield* ownDirectory(directory);
       yield* fs.chmod(directory, 0o700);
     }
+  });
+}
+
+/** Fails unless `directory` is a real directory (not a link) this user
+ *  owns: one someone else made in `/tmp` must not hold the socket. */
+function ownDirectory(
+  directory: string,
+): Effect.Effect<void, PlatformError.PlatformError> {
+  return Effect.try({
+    try: () => {
+      const stat = lstatSync(directory);
+      const uid = process.getuid?.();
+      if (!stat.isDirectory() || (uid !== undefined && stat.uid !== uid))
+        throw new Error(
+          `${directory} is not a directory this user owns; remove it and start the service again`,
+        );
+    },
+    catch: (cause) =>
+      PlatformError.badArgument({
+        module: 'TexraService',
+        method: 'prepareServiceDirectories',
+        description: cause instanceof Error ? cause.message : String(cause),
+        cause,
+      }),
   });
 }
 
