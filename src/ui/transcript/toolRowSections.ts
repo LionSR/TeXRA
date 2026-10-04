@@ -65,6 +65,9 @@ function toStringArray(value: unknown): string[] | undefined {
   return value.filter((item): item is string => typeof item === 'string');
 }
 
+/** The label of the section that carries an `agent` call's delivered answer. */
+const AGENT_ANSWER_LABEL = 'Result:';
+
 function textSection(label: string, body: string): ToolTextSection {
   return { kind: 'text', label, text: transcriptText(body) };
 }
@@ -376,7 +379,7 @@ function buildDelegationSections(ctx: SectionContext): ToolSection[] {
   // The answer without its delivery envelope: the card never prints the
   // `<subagent-result>` XML the parent's model reads.
   const answer = deliveredResponse(ctx.outputText);
-  if (answer) sections.push(textSection('Result:', answer));
+  if (answer) sections.push(textSection(AGENT_ANSWER_LABEL, answer));
   return sections;
 }
 
@@ -682,7 +685,10 @@ export function dispatchSections(ctx: SectionContext): {
       carriesOutput:
         isMcpToolName(ctx.toolName) ||
         (ctx.toolName === AGENT_TOOL_NAME &&
-          deliveredResponse(ctx.outputText) !== undefined) ||
+          sections.some(
+            (section) =>
+              section.kind === 'text' && section.label === AGENT_ANSWER_LABEL,
+          )) ||
         (!ctx.failed && sections.some((section) => section.kind === 'diff')),
       ...(fileLinkKind ? { fileLinkKind } : {}),
     };
