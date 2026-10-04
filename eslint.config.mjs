@@ -743,7 +743,7 @@ export default tseslint.config(
   // The core holds no `any` (count 0 at 2026-10-03), so it is a lint error
   // rather than a ratchet row.
   {
-    files: CORE_QUALITY_DIRS.map((dir) => `${dir}/**/*.{ts,mts}`),
+    files: CORE_QUALITY_DIRS.map((dir) => `${dir}/**/*.{ts,tsx,mts}`),
     ignores: [
       '**/*.vitest.ts',
       ...CORE_QUALITY_APP_PATHS.map((entry) =>

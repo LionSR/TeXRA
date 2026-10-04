@@ -114,8 +114,8 @@ export const RULES = {
  */
 export const MEASURED_ONLY = new Set(['decision-codes']);
 
-const SOURCE_FILE = /\.(?:ts|mts)$/;
-const NOT_SOURCE = /\.d\.ts$|\.(?:test|vitest|spec)\.ts$/;
+const SOURCE_FILE = /\.(?:ts|tsx|mts)$/;
+const NOT_SOURCE = /\.d\.ts$|\.(?:test|vitest|spec)\.tsx?$/;
 
 function appPathMatcher() {
   const patterns = CORE_QUALITY_APP_PATHS.map((entry) =>
@@ -153,7 +153,7 @@ async function measureEslint(rootDir, files, byRule) {
     overrideConfigFile: true,
     overrideConfig: [
       {
-        files: ['**/*.ts', '**/*.mts'],
+        files: ['**/*.ts', '**/*.tsx', '**/*.mts'],
         languageOptions: { parser: tseslint.parser },
         plugins: { '@typescript-eslint': tseslint.plugin },
         // A disable comment would hide debt from the count, so the ratchet
@@ -420,7 +420,7 @@ function measureAst(rootDir, files, byRule) {
       text,
       ts.ScriptTarget.Latest,
       true,
-      ts.ScriptKind.TS,
+      file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
     );
     const lineOf = (node) =>
       sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line +
@@ -495,12 +495,8 @@ function measureAst(rootDir, files, byRule) {
           ?.some((modifier) => modifier.kind === ts.SyntaxKind.DeclareKeyword)
       ) {
         site('non-erasable-syntax', node, `namespace ${node.name.text}`);
-      } else if (
-        ts.isImportEqualsDeclaration(node) &&
-        !node.isTypeOnly &&
-        ts.isExternalModuleReference(node.moduleReference)
-      ) {
-        site('non-erasable-syntax', node, 'import = require');
+      } else if (ts.isImportEqualsDeclaration(node) && !node.isTypeOnly) {
+        site('non-erasable-syntax', node, 'import =');
       }
       if (
         ts.isAsExpression(node) &&
@@ -840,10 +836,18 @@ function measureInvariants(rootDir, byRule) {
   const readme = 'packages/agent/README.md';
   const text = readFileSync(path.join(rootDir, readme), 'utf8');
   const listed = [...text.matchAll(/\*\*(I\d+)\*\*/g)].map((match) => match[1]);
+  // Two keys: an empty catalog must not hide the first untested invariant.
   if (listed.length === 0) {
-    addSite(byRule, 'durable-invariants', readme, 1, 'no numbered invariants');
+    addSite(
+      byRule,
+      'durable-invariants',
+      `${readme} (catalog)`,
+      1,
+      'no numbered invariants',
+    );
     return;
   }
+  const tests = `${readme} (tests)`;
   const cited = new Set();
   for (const { absolutePath } of walkFiles(
     path.join(rootDir, 'src/test-kernel'),
@@ -862,7 +866,7 @@ function measureInvariants(rootDir, byRule) {
       addSite(
         byRule,
         'durable-invariants',
-        readme,
+        tests,
         1,
         `${invariant} has no test`,
       );
@@ -873,7 +877,7 @@ function measureInvariants(rootDir, byRule) {
       addSite(
         byRule,
         'durable-invariants',
-        readme,
+        tests,
         1,
         `a test cites unlisted ${invariant}`,
       );

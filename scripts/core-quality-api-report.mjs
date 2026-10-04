@@ -82,15 +82,37 @@ function describe(checker, symbol) {
     const signatures = (type) =>
       checker
         .getPropertiesOfType(type)
-        .filter((member) => member.name !== 'prototype')
+        .filter(
+          (member) =>
+            member.name !== 'prototype' &&
+            !(member.declarations ?? []).some(
+              (memberDeclaration) =>
+                (ts.getCombinedModifierFlags(memberDeclaration) &
+                  (ts.ModifierFlags.Private | ts.ModifierFlags.Protected)) !==
+                  0 ||
+                (memberDeclaration.name != null &&
+                  ts.isPrivateIdentifier(memberDeclaration.name)),
+            ),
+        )
         .map(
           (member) =>
             `${member.name}: ${checker.typeToString(checker.getTypeOfSymbolAtLocation(member, declaration), undefined, FULL)}`,
         )
         .toSorted();
-    const statics = signatures(checker.getTypeOfSymbol(target));
+    const staticType = checker.getTypeOfSymbol(target);
+    const constructors = staticType
+      .getConstructSignatures()
+      .map((signature) =>
+        checker.signatureToString(
+          signature,
+          undefined,
+          FULL,
+          ts.SignatureKind.Construct,
+        ),
+      );
+    const statics = signatures(staticType);
     const instance = signatures(checker.getDeclaredTypeOfSymbol(target));
-    return `class ${symbol.name} { static: ${statics.join('; ')}; instance: ${instance.join('; ')} }`;
+    return `class ${symbol.name} { constructor: ${constructors.join(' | ')}; static: ${statics.join('; ')}; instance: ${instance.join('; ')} }`;
   }
   const type = checker.getTypeOfSymbolAtLocation(target, declaration);
   return `${kind} ${symbol.name}: ${checker.typeToString(type, undefined, FULL)}`;
