@@ -330,6 +330,9 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
       </BorderedPanel>
       {presentable?.kind === 'modal' && (
         <ApprovalModal
+          // A fresh modal per request: a question's answers or a card's
+          // feedback never carry into the next one.
+          key={pending?.requestId}
           payload={presentable.payload}
           availableRows={10}
           onDecide={decide}
@@ -337,6 +340,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
       )}
       {presentable?.kind === 'edit' && (
         <ConfirmCard
+          key={pending?.requestId}
           color={COLOR_WARNING}
           title="Apply edit?"
           rejectionMode="feedback"

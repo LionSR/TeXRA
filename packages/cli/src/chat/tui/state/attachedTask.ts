@@ -12,12 +12,16 @@ import type {
   ToolEditPreview,
 } from '@controllers/server/protocol';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
-import type { RunView, SessionView } from '@shared/session/sessionView';
+import {
+  attentionOf,
+  type RunView,
+  type SessionView,
+} from '@shared/session/sessionView';
 
 /** One level of the attached task, as the view paints it. */
 export interface AttachedTaskLevel {
   readonly run: RunView | undefined;
-  /** The task's pending requests, its agents' included, in commit order. */
+  /** The task's answerable requests, its agents' included, in commit order. */
   readonly requests: SessionView['requests'];
   /** Why the attachment ended, once it has. */
   readonly ended: string | null;
@@ -81,7 +85,12 @@ export function followAttachedTask(
         const tree = treeOf(view, task.runId);
         onLevel({
           run: view.runs.get(task.runId),
-          requests: view.requests.filter((request) => tree.has(request.runId)),
+          // Only what the service can take an answer for now (the rule
+          // every window reads): an interrupted run's request waits for a
+          // resume, and is not offered here.
+          requests: attentionOf(view).requests.filter((request) =>
+            tree.has(request.runId),
+          ),
           ended: null,
         });
       }),
