@@ -252,7 +252,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     if (missing !== undefined) {
       if (source === 'declared')
         warnings.push(
-          `Tool "${name}" is not offered: ${missing.name} is not available in this workspace${missing.statusDetail ? ` (${missing.statusDetail})` : ''}.`,
+          `Tool "${name}" is not offered: its plugin ${missing.id} is not available in this workspace${missing.statusDetail ? ` (${missing.statusDetail})` : ''}.`,
         );
       return;
     }

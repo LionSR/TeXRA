@@ -65,13 +65,14 @@ export const bootstrapHost = Effect.fn('bootstrapHost')(function* (
   // process, so it may set the global dispatcher an embedder's may not.
   installProcessHttpDispatcher();
   // Project skills follow each session's workspace; only the bundle is fixed
-  // here, so this is a registration rather than a scan. Tool plugins that ship
-  // skills contribute them to the bundled tier; the ids cross as strings so
-  // `@skills` and `@platform` take no value edge to `@tools`.
+  // here, so this is a registration rather than a scan. Each tool plugin's
+  // bundled directory contributes the skills it ships to the bundled tier;
+  // the ids cross as strings so `@skills` and `@platform` take no value edge
+  // to `@tools`.
   const plugins = [...(yield* ToolRegistry).entries.values()];
   initializeNodeRuntimeSkills(
     init.skills,
-    plugins.flatMap((plugin) => (plugin.skills === true ? [plugin.id] : [])),
+    plugins.map(({ id }) => id),
   );
   // Seed first-install defaults (e.g. disabled tools). No-ops once
   // DISABLED_TOOLS exists, so upgrading users keep the tools they enabled.

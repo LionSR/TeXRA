@@ -13,7 +13,6 @@ import { isTexFile } from '@common/files/fileTypeUtils';
 import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
-import { DOCUMENTS_SETTINGS } from '@shared/settingsView/documentsSettings';
 import {
   codemode,
   fileOps,
@@ -116,19 +115,11 @@ const latexExtract: Plugin = {
     extract_tikz_figures: ExtractTikzFiguresTool,
     extract_bib_entries: ExtractBibliographyTool,
   },
-  name: 'LaTeX Extraction',
-  category: 'latex',
-  description:
-    'Extract figures, TikZ diagrams, and bibliography entries from LaTeX documents.',
 };
 
 const latexDiagnostics: Plugin = {
   id: 'latex-diagnostics',
   tools: { diagnostics: DiagnosticsTool },
-  name: 'LaTeX Diagnostics',
-  category: 'latex',
-  description:
-    'Report LaTeX compilation errors and warnings from the VS Code Problems panel.',
 };
 
 const arxiv: Plugin = {
@@ -137,9 +128,6 @@ const arxiv: Plugin = {
     arxiv_search: ArxivSearchTool,
     download_arxiv_source: ArxivDownloadTool,
   },
-  name: 'ArXiv Search & Download',
-  category: 'academic',
-  description: 'Search arXiv papers and download LaTeX source packages.',
 };
 
 /**
@@ -152,17 +140,13 @@ const arxiv: Plugin = {
 const core = (provider?: InlineCommentProvider) =>
   definePlugin<InlineComments>({
     id: 'core',
-    name: 'Core Tools',
-    category: 'workflow',
-    description:
-      'Review annotations, PDF viewing, user questions, and Loogle search.',
+
     tools: {
       inline_comment: InlineCommentTool,
       open_pdf: OpenPdfTool,
       ask_user_question: AskUserQuestionTool,
       lean_loogle: LeanLoogleTool,
     },
-    hidden: true,
     prompt: ({ config }) => {
       const bibPath = config.get<string>('texra.bib.defaultPath');
       return bibPath
@@ -179,10 +163,6 @@ const core = (provider?: InlineCommentProvider) =>
 /** The onboarding agent's narrow set, one responsibility per tool. */
 const setup: Plugin = {
   id: 'setup',
-  name: 'Setup Assistant',
-  category: 'system',
-  description:
-    'Probe and verify the environment, manage API keys and settings, and apply a team.',
   tools: {
     probe_environment: ProbeEnvironmentTool,
     verify_setup: VerifySetupTool,
@@ -195,7 +175,6 @@ const setup: Plugin = {
     send_to_terminal: SendToTerminalTool,
     apply_team: ApplyTeamTool,
   },
-  hidden: true,
 };
 
 /** Document tasks: the tools their recipe calls, launching one as a child
@@ -203,10 +182,6 @@ const setup: Plugin = {
  *  workspace. */
 const documents: Plugin = {
   id: 'documents',
-  name: 'Documents',
-  category: 'workflow',
-  description:
-    'Run document tasks: revisions that rewrite documents, with diffs and compile checks, and accept their outputs into the workspace.',
   tools: {
     accept_run_files: AcceptRunFilesTool,
     document_task: DocumentTaskTool,
@@ -217,8 +192,6 @@ const documents: Plugin = {
     document_review: DocumentReviewTool,
     document_propose: DocumentProposeTool,
   },
-  settings: DOCUMENTS_SETTINGS,
-  hidden: true,
 };
 
 /**
@@ -259,17 +232,8 @@ export const texraPlugins = (
   setup,
   {
     id: 'copilot',
-    name: 'Copilot Chat Tools',
-    category: 'ai-agents',
-    description:
-      'Expose arXiv search and web fetch to GitHub Copilot Chat and agent mode as #texra_arxiv_search and #texra_web_fetch. Each is exposed while its own plugin is on.',
-    setup: Object.freeze({
-      configNotes:
-        'VS Code only. Turning this off removes every TeXRA tool from Copilot.',
-    }),
-    unavailableHosts: ['cli', 'desktop', 'sdk'],
-    toggleable: true,
-    onByDefault: true,
+
+    toggle: 'on',
     availability: ALWAYS_AVAILABLE,
     ...(host.copilot !== undefined && { processLayer: host.copilot }),
   },

@@ -1,10 +1,8 @@
 /**
  * The documents plugin's setting rows and keys: the compile check after a
  * revision (`workflow.*`) and the diffs between revisions (`latexdiff.*`),
- * which its `Plugin` value declares (`@tools/registry`), so an SDK embedder
- * that installs the plugin gets them with it. They live here, in a
- * browser-safe module, because the settings view's webview renders them and
- * cannot import a plugin value.
+ * which TeXRA's catalog lists (`./texraSettings`). They live here, in a
+ * browser-safe module, because the settings view's webview renders them.
  */
 
 // Third-party imports

@@ -89,7 +89,7 @@ export interface NodeRuntimeSkillOptions {
  *
  * All three hosts use the same precedence: explicit custom roots, project
  * skills, user skills, and bundled skills, where the bundled tier also holds
- * the skills each tool plugin in `skillPluginIds` ships. The CLI supplies
+ * the skills each tool plugin in `pluginIds` ships. The CLI supplies
  * custom and interop options from command-line flags; desktop and the
  * extension use the defaults so they always get project, user, and bundled
  * runtime skills. The plugin ids are required so a caller that forgets them
@@ -97,13 +97,13 @@ export interface NodeRuntimeSkillOptions {
  */
 export function initializeNodeRuntimeSkills(
   options: NodeRuntimeSkillOptions,
-  skillPluginIds: readonly string[],
+  pluginIds: readonly string[],
 ): void {
   // The workspace folder is not fixed here: project and interop sources are
   // resolved from the calling session's workspace at discovery time.
   installSkillContributions({
     resourcesPath: options.resourcesPath,
     options: options.skillSourceOptions ?? {},
-    contributions: hostSkillContributions(skillPluginIds),
+    contributions: hostSkillContributions(pluginIds),
   });
 }

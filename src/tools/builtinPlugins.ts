@@ -59,28 +59,16 @@ export const fileOps = (
   options: { readonly writeFilter?: WriteFilter } = {},
 ): Plugin => ({
   id: 'file-ops',
-  name: 'File & Shell Operations',
-  category: 'file',
-  description:
-    'Read, write, edit files and run shell commands. Includes glob/grep search.',
   tools: fileTools(options.writeFilter),
 });
 
 export const web: Plugin = {
   id: 'web',
-  name: 'Web Search & Fetch',
-  category: 'web',
-  description:
-    'Search the web with DuckDuckGo Instant Answers and fetch or extract content from URLs.',
   tools: { web_search: WebSearchTool, web_fetch: WebFetchTool },
 };
 
 export const memoryWorkflow: Plugin = {
   id: 'memory-workflow',
-  name: 'Memory & Executions',
-  category: 'workflow',
-  description:
-    'Persistent memory across sessions and the executions view of the runs an agent launched.',
   tools: {
     memory: MemoryTool,
     executions: ExecutionsTool,
@@ -98,18 +86,9 @@ export const memoryWorkflow: Plugin = {
  */
 export const goal: Plugin = {
   id: 'goal',
-  name: 'Goal Mode',
-  category: 'workflow',
-  description:
-    'Propose a plan for approval and, when you run it as a goal, let the agent keep working turn after turn until the objective is done or it needs you.',
   tools: { plan: PlanTool },
   injectedWhen: { plan: true },
-  setup: Object.freeze({
-    configNotes:
-      "No local install required. Turning this off removes the plan tool from every agent and stops goal turns, from each run's next step.",
-  }),
-  toggleable: true,
-  onByDefault: true,
+  toggle: 'on',
   availability: ALWAYS_AVAILABLE,
   continuation: goalContinuation,
 };
@@ -117,20 +96,10 @@ export const goal: Plugin = {
 /** Child agents: the `agent` tool. */
 export const multiAgent: Plugin = {
   id: 'multi-agent',
-  name: 'Multi-Agent Workflow',
-  category: 'workflow',
-  description:
-    'Run named agents as children of a run: one at a time, or fanned out and joined from a script, resuming safely after interruption. An agent only gets the agent tool if its own configuration names it: this switch is an additional kill switch on top of that per-agent opt-in.',
   tools: { [AGENT_TOOL_NAME]: agentTool() },
-  setup: Object.freeze({
-    configNotes:
-      'No local install required. Turning this off removes the agent tool from every agent tool list, even agents whose configuration names it explicitly, so no agent can delegate.',
-  }),
-  toggleable: true,
   // The one delegation tool: the built-in orchestrators need it.
-  onByDefault: true,
+  toggle: 'on',
   availability: ALWAYS_AVAILABLE,
-  skills: true,
 };
 
 /**
@@ -140,12 +109,7 @@ export const multiAgent: Plugin = {
  */
 export const codemode = definePlugin<CodeSandbox>({
   id: 'codemode',
-  name: 'Code Mode',
-  category: 'workflow',
-  description:
-    "Run a JavaScript program that calls the agent's other tools, resuming after an interruption without running finished calls again.",
   tools: SCRIPT_TOOLS,
-  hidden: true,
   sessionLayer: codeSandboxLayer,
 });
 

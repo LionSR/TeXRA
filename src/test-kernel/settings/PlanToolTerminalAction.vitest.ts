@@ -4,8 +4,6 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it, vi } from 'vitest';
 
 import { planToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
-import { texraPlugins } from '@tools/registry';
-import { toolTable } from '@tools/toolTable';
 
 const mocks = vi.hoisted(() => ({
   packageManager: null as 'brew' | 'apt' | 'scoop' | null,
@@ -31,8 +29,6 @@ vi.mock('@utils/system/platformPaths', async (importOriginal) => {
     },
   };
 });
-
-const PLUGINS = toolTable(texraPlugins()).entries;
 
 const CASES: Array<{
   name: string;
@@ -119,6 +115,6 @@ describe('planToolTerminalAction', () => {
     mocks.packageManager = packageManager ?? null;
     mocks.isWindows = isWindows ?? false;
 
-    expect(planToolTerminalAction(input, PLUGINS)).toEqual(expected);
+    expect(planToolTerminalAction(input)).toEqual(expected);
   });
 });

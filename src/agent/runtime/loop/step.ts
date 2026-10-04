@@ -276,12 +276,12 @@ const openStep = Effect.fn('Step.open')(function* (
       run.toolInputs.tools,
     );
     // The plugin on that continues a parked run, if any (the table rules
-    // out two), and those that add a section or skills to its text.
+    // out two), and those that add a section to its text.
     const continuing =
       pinned.plugins.find(({ continuation }) => continuation !== undefined) ??
       null;
     const contributing = pinned.plugins.filter(
-      ({ prompt, skills }) => prompt !== undefined || skills === true,
+      ({ prompt }) => prompt !== undefined,
     );
     // Only the plugins this step uses hold services: a parked run keeps up
     // nothing it does not offer.
@@ -300,15 +300,15 @@ const openStep = Effect.fn('Step.open')(function* (
         )
         .pipe(Scope.provide(scope)),
     );
-    // The skills: the built-in plugins that ship them and the installed
-    // ones the step accepted contribute, as it accepted them, so a plugin
-    // enabled or updated since reaches this step's text. A step held to the
-    // record lists what the record lists, whatever the toggle says now, as
-    // its tools are; otherwise the settings toggle turns the listing off. A
+    // The skills: the built-in plugins on and the installed ones the step
+    // accepted contribute, as it accepted them, so a plugin enabled or
+    // updated since reaches this step's text. A step held to the record
+    // lists what the record lists, whatever the toggle says now, as its
+    // tools are; otherwise the settings toggle turns the listing off. A
     // skill the user activated is resolved either way. The skills a step
     // lists or its user activated are the ones its calls may read.
     const contributors = new Set([
-      ...contributing.flatMap(({ id, skills }) => (skills ? [id] : [])),
+      ...pinned.plugins.map(({ id }) => id),
       ...pinned.installed.keys(),
     ]);
     const skills = {

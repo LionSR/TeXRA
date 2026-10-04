@@ -177,7 +177,7 @@ export type PromptSection = (ctx: {
 /** The process's plugins by plugin id: what each contributes (its tools,
  *  continuation, prompt section and layers) is read off its value. */
 export interface ToolTable {
-  /** Every plugin, in the order the app listed them (dashboard order). */
+  /** Every plugin, in the order the app listed them. */
   readonly entries: ReadonlyMap<string, Plugin>;
   /** The tool registered under `name` in any plugin. */
   readonly get: (name: string) => ITool | undefined;
@@ -186,8 +186,8 @@ export interface ToolTable {
 /**
  * The table over `plugins`, which the app lists in order. A list that
  * repeats a plugin id or a tool name, claims the parked runs'
- * continuation twice, or gives a toggle or setup copy to a plugin with no
- * availability probe is a defect of the list, refused when it is built.
+ * continuation twice, or gives a switch to a plugin with no availability
+ * probe is a defect of the list, refused when it is built.
  */
 export function toolTable(plugins: readonly Plugin[]): ToolTable {
   const entries = new Map<string, Plugin>();
@@ -211,13 +211,8 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
         );
       continued = plugin.id;
     }
-    if (
-      plugin.availability === undefined &&
-      (plugin.toggleable === true || plugin.setup !== undefined)
-    )
-      refuse(
-        `plugin ${plugin.id} has a toggle or setup copy but no availability probe.`,
-      );
+    if (plugin.availability === undefined && plugin.toggle !== undefined)
+      refuse(`plugin ${plugin.id} has a switch but no availability probe.`);
   }
   return { entries, get: (name) => byName.get(name) };
 }

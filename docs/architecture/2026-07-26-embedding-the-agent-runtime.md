@@ -512,16 +512,17 @@ when it opens.
 
 ## 4. What degrades gracefully (safe to skip)
 
-- **`initializeNodeRuntimeSkills({…}, skillPluginIds)`:** Runtime skills
+- **`initializeNodeRuntimeSkills({…}, pluginIds)`:** Runtime skills
   degrade to an empty catalog: with no installed skill contributions the
   fold yields no sources and discovery finds nothing
   (`installSkillContributions` in `src/skills/runtimeSkills.ts`; registration
   in `src/platform/defaults/nodeHost.ts`). An embedder that does call it must
-  pass the ids of the tool plugins that ship skills (`bootstrapHost` passes
-  every manifest entry with `skills: true`, today `lean4`); an empty list
-  drops those plugins' bundled skills.
+  pass the ids of the tool plugins (`bootstrapHost` passes every plugin's;
+  each ships the skills under `<resourcesPath>/plugins/<id>/skills`, today
+  `lean4` and `multi-agent`); an empty list drops those plugins' bundled
+  skills.
 - **`seedDisabledToolDefaults(key)`:** No first-install tool defaults are
-  written, so no toggleable external tools are default-disabled. More tools
+  written, so no plugin whose switch starts `off` is default-disabled. More tools
   are available, not fewer (`src/tools/toolAvailability.ts:77-95`).
 - **`lean: directLeanLanguageServices()`:** The raw loop still runs over any
   `LeanLanguageServices` layer; without the direct one, Lean tools reach
@@ -532,10 +533,10 @@ The installed `AgentDirectoriesPort` is the whole of the core agent bundle:
 `AgentDirectoryService` resolves `builtIn()` and `builtInToolUse()` inside the
 `resourcesPath` it was given and the files are read where they sit, so a port
 pointed at a tree that does not hold them leaves `loadAgents` with no packaged
-agents (§2). Tool plugins that ship agents (`agents: true`, today `lean4`)
-keep them at `<resourcesPath>/plugins/<id>/agents`, and the `builtInToolUse`
-scan adds those directories only once
-`installPluginAgentDirectories(resourcesPath, agentPluginIds)`
+agents (§2). Tool plugins that ship agents (today `lean4`) keep them at
+`<resourcesPath>/plugins/<id>/agents`, and the `builtInToolUse` scan adds
+those directories only once
+`installPluginAgentDirectories(resourcesPath, pluginIds)`
 (`src/agent/index/BundledAgentDirectories.ts`) has run, as `bootstrapHost`
 does. Skipping it drops the Lean agents and nothing else.
 
