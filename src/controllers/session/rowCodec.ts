@@ -7,10 +7,9 @@
  * `data` text, an integer aggregate id or the `blob` table, and nothing
  * below it reads a payload field.
  *
- * - **Versions.** A row is written at its kind's current version
- *   (`ROW_KINDS`). A lower stored version is upcast step by step and parsed
- *   with the current arm; a higher one, or a kind this build lacks, is
- *   `Blocked`; a known version that fails its schema is `Corrupt`. A
+ * - **Versions.** A row is written at its kind's version (`ROW_KINDS`); an
+ *   older one is upcast step by step, a newer or unknown one `Blocked`, one
+ *   failing its schema `Corrupt` (a plugin row's, named by its kind). A
  *   plugin value carries its arm's version and is upcast through the arm.
  * - **Blobs.** A payload string of 4096+ characters is stored once per store,
  *   zstd of its JSON encoding (lone surrogates survive) under that text's
@@ -301,7 +300,8 @@ export function decodeRow(
   let value = event.value;
   for (const step of arm.upcasters.slice(event.version - 1))
     value = step(value);
-  if (!arm.schema.safeParse(value).success) return blocked('corrupt');
+  if (!arm.schema.safeParse(value).success)
+    return { ...blocked('corrupt'), type: `plugin.fact/${name}` };
   return {
     _tag: 'event',
     event: { ...event, version: arm.version, value },
@@ -309,11 +309,10 @@ export function decodeRow(
 }
 
 /**
- * The read-time projection of a tool card's output (§10): on a run with a
- * run history a `tool.end` stores no `result`, and its output is the `tool.result`
- * committed in the same batch, the row just before it on its aggregate (bar
- * the card's own `tool.start`). The card keeps its `files`; the transcript
- * fold keeps the name and input its `tool.start` opened the card with.
+ * The read-time projection of a tool card's output (§10): a `tool.end` on a
+ * run history stores no `result`; its output is the `tool.result` committed
+ * just before it in the same batch (bar the card's `tool.start`). The card
+ * keeps its `files`; the fold keeps the name and input it opened with.
  */
 export function settleCards(
   events: readonly SessionEvent[],
@@ -370,11 +369,10 @@ export function unreadableKinds(
 }
 
 /**
- * One connection's record of what its reads could not decode: the
- * aggregates blocked by the first verdict found (warned once each), and the
- * plugin kinds left out (warned once per kind). `decodeAll` answers a
- * read's events and records the rest; `refresh` adds the aggregates
- * `stored_kind` names; `retain` drops the verdicts of collected ones.
+ * One connection's record of what its reads could not decode: the aggregates
+ * blocked (warned once each) and the plugin kinds left out (once per kind).
+ * `decodeAll` answers a read's events and records the rest; `refresh` adds
+ * what `stored_kind` names; `retain` drops the verdicts of collected ones.
  */
 export function verdictBook(
   path: string,
@@ -476,6 +474,15 @@ export function verdictBook(
       : Effect.fail(failed(new DatabaseAggregateBlocked(verdict)));
   };
   /** In the caller's transaction: plugin kind `name`'s rows, and any corrupt one. */
+  /** The rows bearing on writing kind `name`; a row too corrupt to name
+   *  its kind bears on every kind. */
+  const concerns = (v: RowVerdict, name: string): boolean => {
+    if (v._tag === 'leftOut') return v.kind === name;
+    if (v._tag === 'blocked')
+      return v.type === 'plugin.fact' || v.type === `plugin.fact/${name}`;
+    const e = v.event;
+    return e.type === 'plugin.fact' && `${e.plugin}/${e.kind}` === name;
+  };
   const pluginRows = (aggregate: number, name: string) =>
     exec(
       `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
@@ -483,15 +490,7 @@ export function verdictBook(
       [aggregate],
     ).pipe(
       Effect.map((rows) =>
-        rows
-          .map(decodeRow)
-          .filter((v) =>
-            v._tag === 'leftOut'
-              ? v.kind === name
-              : v._tag === 'blocked' ||
-                (v.event.type === 'plugin.fact' &&
-                  `${v.event.plugin}/${v.event.kind}` === name),
-          ),
+        rows.map(decodeRow).filter((v) => concerns(v, name)),
       ),
     );
   return { blocked, decodeAll, pluginRows, refresh, refuse, retain, scan };

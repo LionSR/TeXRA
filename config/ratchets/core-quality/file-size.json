@@ -37,7 +37,7 @@
   "src/agent/workspaceAgents/WorkspaceAgentsController.ts": 436,
   "src/controllers/session/Database.ts": 1312,
   "src/controllers/session/hostRunActions.ts": 658,
-  "src/controllers/session/rowCodec.ts": 498,
+  "src/controllers/session/rowCodec.ts": 497,
   "src/controllers/session/SessionBridge.ts": 426,
   "src/controllers/session/sessionLayer.ts": 1211,
   "src/controllers/session/SessionRequests.ts": 552,
