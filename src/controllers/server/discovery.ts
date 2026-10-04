@@ -1,0 +1,171 @@
+/**
+ * Where a client finds the service: `<storageRoot>/run/` holds the socket
+ * and `serve.json`, the running service's pid, protocol and build. The
+ * directory is the user's alone (0700), which is what keeps the socket
+ * private. A storage root whose socket path would pass the Unix limit
+ * keeps its socket in a private directory under the system temp folder,
+ * named by a hash of the root; on Windows the socket is a named pipe.
+ */
+import { createHash } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import * as path from 'node:path';
+
+import { Effect, FileSystem, type PlatformError } from 'effect';
+import { z } from 'zod';
+
+import { absentReason } from '@utils/files/fsEntryExists';
+
+/** The longest Unix socket path every platform accepts (macOS: 104 bytes). */
+const MAX_UNIX_SOCKET_PATH = 100;
+
+/** The running service's record, written once it listens. */
+const ServiceRecordSchema = z.object({
+  pid: z.int().positive(),
+  protocol: z.int().positive(),
+  version: z.string(),
+  socket: z.string().min(1),
+  startedAt: z.int().positive(),
+});
+export type ServiceRecord = z.infer<typeof ServiceRecordSchema>;
+
+/** The files of one storage root's service. */
+export interface ServicePaths {
+  /** The private directory beside the store: `<storageRoot>/run`. */
+  readonly runDirectory: string;
+  /** `serve.json`, the running service's {@link ServiceRecord}. */
+  readonly record: string;
+  /** The socket path or pipe name clients connect to. */
+  readonly socket: string;
+  /** The private directory the socket lives in, when it is not
+   *  `runDirectory` (a long root's temp fallback); null on Windows. */
+  readonly socketDirectory: string | null;
+}
+
+/** The service files of `storageRoot` (`~/.texra` in production). */
+export function servicePaths(storageRoot: string): ServicePaths {
+  const runDirectory = path.join(storageRoot, 'run');
+  const record = path.join(runDirectory, 'serve.json');
+  const tag = createHash('sha256')
+    .update(path.resolve(storageRoot))
+    .digest('hex')
+    .slice(0, 16);
+  if (process.platform === 'win32') {
+    return {
+      runDirectory,
+      record,
+      socket: `\\\\.\\pipe\\texra-${tag}`,
+      socketDirectory: null,
+    };
+  }
+  const local = path.join(runDirectory, 'serve.sock');
+  if (Buffer.byteLength(local) <= MAX_UNIX_SOCKET_PATH) {
+    return {
+      runDirectory,
+      record,
+      socket: local,
+      socketDirectory: runDirectory,
+    };
+  }
+  const socketDirectory = path.join(tmpdir(), `texra-${tag}`);
+  return {
+    runDirectory,
+    record,
+    socket: path.join(socketDirectory, 'serve.sock'),
+    socketDirectory,
+  };
+}
+
+/** Make the run directory and the socket's directory, each the user's
+ *  alone; an existing one is narrowed to 0700. */
+export function prepareServiceDirectories(
+  paths: ServicePaths,
+): Effect.Effect<void, PlatformError.PlatformError, FileSystem.FileSystem> {
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    for (const directory of new Set(
+      [paths.runDirectory, paths.socketDirectory].filter(
+        (entry): entry is string => entry !== null,
+      ),
+    )) {
+      yield* fs.makeDirectory(directory, { recursive: true, mode: 0o700 });
+      yield* fs.chmod(directory, 0o700);
+    }
+  });
+}
+
+/** The record a running service wrote, or null when there is none. A
+ *  record that does not parse is reported and read as none: the next
+ *  service to start writes a fresh one. */
+function readServiceRecord(
+  paths: ServicePaths,
+): Effect.Effect<ServiceRecord | null, never, FileSystem.FileSystem> {
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const text = yield* fs.readFileString(paths.record).pipe(
+      Effect.map((value): string | null => value),
+      Effect.catch((error: PlatformError.PlatformError) =>
+        absentReason(error)
+          ? Effect.succeed(null)
+          : Effect.logWarning(
+              `Cannot read the service record ${paths.record}`,
+            ).pipe(Effect.annotateLogs({ data: error }), Effect.as(null)),
+      ),
+    );
+    if (text === null) return null;
+    const parsed = ServiceRecordSchema.safeParse(safeJson(text));
+    if (parsed.success) return parsed.data;
+    yield* Effect.logWarning(
+      `Ignoring the malformed service record ${paths.record}: ${z.prettifyError(parsed.error)}`,
+    );
+    return null;
+  });
+}
+
+function safeJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    // The schema check that follows reports the record as malformed.
+    return undefined;
+  }
+}
+
+/** Write this service's record, readable by the user alone. */
+export function writeServiceRecord(
+  paths: ServicePaths,
+  record: ServiceRecord,
+): Effect.Effect<void, PlatformError.PlatformError, FileSystem.FileSystem> {
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const staged = `${paths.record}.${record.pid}.tmp`;
+    yield* fs.writeFileString(staged, `${JSON.stringify(record)}\n`, {
+      mode: 0o600,
+    });
+    yield* fs.rename(staged, paths.record);
+  });
+}
+
+/**
+ * Remove the record and socket a service left, when they are still that
+ * service's: a record naming another pid belongs to a successor, which
+ * also owns the socket path by then.
+ */
+export function removeServiceFiles(
+  paths: ServicePaths,
+  pid: number,
+): Effect.Effect<void, never, FileSystem.FileSystem> {
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const record = yield* readServiceRecord(paths);
+    if (record !== null && record.pid !== pid) return;
+    yield* fs.remove(paths.record, { force: true });
+    if (process.platform !== 'win32')
+      yield* fs.remove(paths.socket, { force: true });
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.logWarning('Could not remove the service files').pipe(
+        Effect.annotateLogs({ data: error }),
+      ),
+    ),
+  );
+}

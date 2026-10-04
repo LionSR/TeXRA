@@ -14,7 +14,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { stripVTControlCharacters } from 'node:util';
 import { parseArgs as parseCittyArgs } from 'citty';
@@ -1377,6 +1377,107 @@ async function validateInterruptedTasks() {
 }
 
 /**
+ * The background service (`texra serve`) end to end: `texra tasks start`
+ * starts the service on demand and a task in it; two terminals attach to
+ * that task at once, a third sends it a follow-up and then stops it. Both
+ * attached terminals must print the same transcript, holding both turns;
+ * those two transcripts are the artifact.
+ */
+async function validateServiceSharedTask() {
+  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-service-'));
+  const project = echoProject(cwd);
+  const env = { ...project.ptyEnv, TEXRA_NO_TELEMETRY: '1' };
+  const texra = (args, label) => {
+    const result = run(
+      process.execPath,
+      [binaryPath, ...args, '--cwd', project.work],
+      { cwd: project.work, env },
+    );
+    assertSuccess(result, label);
+    return result.stdout.trim();
+  };
+  const attach = (runId) => {
+    const child = spawn(
+      process.execPath,
+      [binaryPath, 'tasks', 'attach', runId, '--cwd', project.work],
+      { cwd: project.work, env: { ...process.env, CI: '1', ...env } },
+    );
+    const state = { stdout: '', stderr: '', exit: null };
+    child.stdout.on('data', (chunk) => (state.stdout += chunk));
+    child.stderr.on('data', (chunk) => (state.stderr += chunk));
+    state.exited = new Promise((resolve) =>
+      child.on('close', (code) => resolve((state.exit = code))),
+    );
+    return state;
+  };
+  const waitFor = async (label, check, timeoutMs = 120_000) => {
+    const deadline = Date.now() + timeoutMs;
+    while (!check()) {
+      assert(Date.now() < deadline, `timed out waiting for ${label}`);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  };
+  const count = (text, needle) => text.split(needle).length - 1;
+  let a;
+  let b;
+  try {
+    const runId = texra(
+      [
+        'tasks',
+        'start',
+        'echo_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        'First message',
+      ],
+      'texra tasks start',
+    );
+    assert(/^[0-9a-f]{12}$/.test(runId), `tasks start printed ${runId}`);
+    a = attach(runId);
+    b = attach(runId);
+    await waitFor('both attaches to print the first reply', () =>
+      [a, b].every((t) => t.stdout.includes('User instruction:')),
+    );
+    const listed = parseJson(
+      texra(['tasks', 'list', '--output-format', 'json'], 'texra tasks list'),
+      'tasks list',
+    );
+    assert(
+      listed.some((task) => task.runId === runId && task.live),
+      `tasks list should show ${runId} running in the service`,
+    );
+    texra(['tasks', 'send', runId, 'Second message'], 'texra tasks send');
+    await waitFor('both attaches to print the second reply', () =>
+      [a, b].every(
+        (t) => count(t.stdout, 'First message | Second message') >= 1,
+      ),
+    );
+    texra(['tasks', 'stop', runId], 'texra tasks stop');
+    await Promise.all([a.exited, b.exited]);
+    const artifactDir = path.join(validationRoot, 'artifacts');
+    mkdirSync(artifactDir, { recursive: true });
+    const artifactA = path.join(artifactDir, 'service-attach-a.txt');
+    writeFileSync(artifactA, a.stdout);
+    writeFileSync(path.join(artifactDir, 'service-attach-b.txt'), b.stdout);
+    assert(
+      a.exit === 130 && b.exit === 130,
+      `a stopped task should end both attaches as interrupted (exits ${a.exit}, ${b.exit})\n${a.stderr}\n${b.stderr}`,
+    );
+    assert(
+      a.stdout === b.stdout && count(a.stdout, 'Second message') >= 2,
+      `both attached terminals should print the same two-turn transcript (artifact: ${artifactA})\nA:\n${a.stdout}\nB:\n${b.stdout}`,
+    );
+  } finally {
+    run(process.execPath, [binaryPath, 'service', 'stop'], {
+      cwd: project.work,
+      env,
+    });
+    rmSync(cwd, { recursive: true, force: true });
+  }
+}
+
+/**
  * The open-time prompt and rename (GUI lane G4): a chat killed while it
  * waits leaves its task interrupted; under the default
  * `texra.resumeOnOpen: ask`, the next `texra chat` lists it above the input
@@ -1735,6 +1836,7 @@ async function validateCliRunArtifacts(options = {}) {
   await validateBackgroundCompaction();
   await validateInterruptedTasks();
   await validateOpenTimePrompt();
+  await validateServiceSharedTask();
   validateScriptFanoutRunCommand();
   validateTeamRunCommand();
   console.log('CLI run validation passed');
