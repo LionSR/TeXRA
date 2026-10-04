@@ -320,7 +320,7 @@ and the five `satisfies` tables (`registry.ts:156-283`) and the manifest
 flags that point into them (`plugins.ts:60-110`):
 
 ```ts
-interface Plugin<ROut = never> {
+interface Plugin<POut = never, SOut = never, ROut = POut | SOut> {
   readonly id: PluginId;
   readonly revision: string; // 'builtin' for first-party
   readonly requires?: readonly PluginId[]; // first-party only (below)
@@ -334,13 +334,16 @@ interface Plugin<ROut = never> {
   readonly meta?: PluginMeta; // below
   readonly requests?: readonly PluginRequest[]; // durable request kinds, §4
   readonly project?: PluginProjection<ROut>; // read side of its arms, §4
-  readonly drain?: Effect<void, never, HarnessServices | ROut>; // before sessions close
-  readonly processLayer?: Layer<ROut, never, HarnessServices>;
-  readonly sessionLayer?: Layer<ROut, never, HarnessServices | SessionServices>;
+  readonly runConfig?: PluginRunConfig; // versioned schema and upcasters, §4
+  readonly drain?: Effect<void, never, HarnessServices | POut>; // process output only
+  readonly processLayer?: Layer<POut, never, HarnessServices>;
+  readonly sessionLayer?: Layer<SOut, never, HarnessServices | SessionServices>;
   readonly agents?: string; // directories, as data
   readonly skills?: string;
 }
-declare const definePlugin: <ROut>(plugin: Plugin<ROut>) => Plugin.Any;
+declare const definePlugin: <POut, SOut>(
+  plugin: Plugin<POut, SOut>,
+) => Plugin.Any;
 ```
 
 - **Operational metadata stays.** `Plugin` replaces the manifest's tables
@@ -361,6 +364,10 @@ declare const definePlugin: <ROut>(plugin: Plugin<ROut>) => Plugin.Any;
   below receives both), exported from `.` and scoped to the
   plugin's declared arms. It wraps `SessionHandle.runView` and `commit`,
   which stay internal, so `goal` and the app's plugins need no deep import.
+- **Process and session outputs.** `drain` runs once against the process
+  layer's context, so it may require only the process output (`POut`); the
+  session output (`SOut`) is tracked separately, and a drain that asks for a
+  per-session service fails to compile.
 - **Typed requirements.** `definePlugin` checks at compile time that every
   tool, continuation and round policy needs only harness services and what
   the plugin's own layers add. The Registry stores the erased value, and the
@@ -531,7 +538,9 @@ flags (`autoExtractFigure`, `autoExtractTikzFigure`, `attachTeXCount`,
 `autoCompileInputPdf`) leave `AgentConfig` for a plugin-keyed config slot,
 `config.plugins[id]`, validated by the owning plugin and persisted on
 `run.config` as a versioned envelope `{ v, body }` that the harness stores
-opaquely and the plugin upcasts, as with `plugin.fact`. The documents
+opaquely. `Plugin.runConfig` declares the schema, its version and the
+upcasters, which the harness runs on validate and on resume, as `arms` does
+for `plugin.fact`. M6 lands it with the slot. The documents
 plugin declares them.
 
 Both are the plugin's arms with their read side. `Plugin.requests` lets a
