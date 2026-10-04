@@ -44,6 +44,7 @@ import {
 } from '@cli/runtime/terminalStatus';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import type { SessionBackend } from '@controllers/session/sessionBackend';
+import type { WindowHost } from '@controllers/server/windowHost';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import type { DisposableStore } from '@platform/disposable';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
@@ -256,6 +257,8 @@ export interface ChatSessionControllerInit {
    *  read, when the chat is a client of the background service; its own
    *  session otherwise. */
   readonly backend?: Pick<SessionBackend, 'request' | 'preview' | 'view'>;
+  /** Offer the service what this chat shows for its project's tasks. */
+  readonly attachWindow?: (host: WindowHost) => void;
 }
 
 interface PreparedChatInstruction {
@@ -452,20 +455,27 @@ export function createChatSessionController(
       Effect.suspend(() => presentationHost.close()),
     ),
   );
-  disposables.add(
-    runtime.runSync(
-      runtimeSession.interactions.use(
-        createTuiHostInteractions(presentationHost, sessionContext, {
-          session: runtimeSession,
-          requests,
-          preview: init.backend?.preview,
-          secrets,
-          settings: stores,
-          runtime,
-        }),
-      ),
-    ),
+  const interactions = createTuiHostInteractions(
+    presentationHost,
+    sessionContext,
+    {
+      session: runtimeSession,
+      requests,
+      preview: init.backend?.preview,
+      secrets,
+      settings: stores,
+      runtime,
+    },
   );
+  disposables.add(
+    runtime.runSync(runtimeSession.interactions.use(interactions)),
+  );
+  // A chat of the service is one of its project's windows: the notices
+  // its tasks raise are shown here.
+  init.attachWindow?.({
+    emit: interactions.emit,
+    approvalDenied: interactions.approvalDenied,
+  });
 
   // -----------------------------------------------------------------------
   // startRootRun

@@ -339,6 +339,17 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **A chat shows its project's background-task notices (CLI).** A task the
+  TeXRA service runs now tells a window of its own project what it would
+  show on screen (a refused resume, an error with its guide link), and a
+  terminal chat is such a window; before, those notices reached only the
+  service log. The same channel carries what only an editor window can do
+  (diagnostics, inline criticism, opening a PDF, an editable tool-edit
+  preview), which the extension and desktop windows offer as they become
+  service clients. A task never waits on a window that closed: the tool
+  says the window went or did not answer in time, and with no window of
+  the project open the task runs as a headless run does.
+
 - **Every chat is a task of the background service (CLI).** `texra chat`
   and a bare `texra` run their conversation's runs in the TeXRA service, so
   another terminal's `/tasks` lists the conversation and attaches to it

@@ -49,10 +49,10 @@ export interface ManualCriticismEntry {
   readonly confidence: number;
 }
 
-type AddCriticismSink = (input: ManualCriticismEntry) => {
-  readonly accepted: boolean;
-  readonly resolvedPath: string;
-};
+/** Whether the criticism was added: not where inline criticism is off. */
+type AddCriticismSink = (
+  input: ManualCriticismEntry,
+) => Effect.Effect<boolean, Error>;
 
 interface OpenPdfRequest {
   readonly location: FileLocation;

@@ -469,6 +469,12 @@ it, keeps running the tasks it started when the terminal that started them
 closes, and exits after ten minutes with no client connected and no task
 running.
 
+A task in the service asks a window of its own project for what only a
+window has, and the window focused last answers. A chat shows its
+project's task notices (a refused resume, an error). When the asked window
+closes or does not answer in time, the tool says so instead of waiting;
+with no window of the project open, the task runs as a headless run does.
+
 `texra chat` (and a bare `texra`) is a client of the service: the
 conversation's runs run there, so `/tasks` in another terminal lists it and
 can attach to it while it works. When the service cannot start, the chat

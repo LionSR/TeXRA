@@ -41,6 +41,7 @@ import {
 import { cliSecrets } from '@cli/runtime/cliSecrets';
 import { localSessionBackend } from '@controllers/session/sessionBackend';
 import { serviceSessionBackend } from '@controllers/server/serviceBackend';
+import { attachWindowHost } from '@controllers/server/windowHost';
 import { DisposableStore } from '@platform/disposable';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { aggregateId } from '@shared/schemas';
@@ -288,6 +289,7 @@ export async function runChat(
         services,
         runtimeSession,
         backend,
+        client: Result.isSuccess(service) ? service.success.client : undefined,
         runsElsewhere: Result.isSuccess(service),
         defaults,
         firstRunSetupAgent,
@@ -307,7 +309,7 @@ export async function runChat(
     ),
   );
   if (startup.exitCode !== undefined) return { exitCode: startup.exitCode };
-  const { services, runtimeSession, backend, runsElsewhere } = startup;
+  const { services, runtimeSession, backend, runsElsewhere, client } = startup;
   const { defaults, model } = startup;
   const { inputHistory, followUpQueue, startupNotices } = startup;
   const { agent } = defaults;
@@ -440,9 +442,16 @@ export async function runChat(
     secrets: services.secrets,
     stores: services,
     runtime,
-    ...(runsElsewhere && {
+    ...(client !== undefined && {
       backend,
       agentRuns: serviceAgentRuns(backend),
+      attachWindow: (host) => {
+        runtime.runFork(
+          attachWindowHost(client, context.cwd, host).pipe(
+            Scope.provide(chatScope),
+          ),
+        );
+      },
     }),
   });
 

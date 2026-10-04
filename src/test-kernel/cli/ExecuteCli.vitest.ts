@@ -7,7 +7,7 @@ import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { Deferred, Effect, Exit, Fiber, Scope } from 'effect';
 
-import { withholdsApprovalTools } from '@agent/runtime/requestPolicy';
+import { liveToolGates } from '@agent/runtime/requestPolicy';
 import type { RunAgentOptions } from '@agent/runtime/runAgent';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -437,7 +437,7 @@ describe('executeCliRequest', () => {
     let seen: boolean | undefined;
     mocks.runAgent.mockImplementationOnce(
       async (_request, options: { session: SessionHandle }) => {
-        seen = withholdsApprovalTools(options.session);
+        seen = liveToolGates(options.session).approvalPromptsUnavailable;
         return COMPLETED_RUN;
       },
     );
