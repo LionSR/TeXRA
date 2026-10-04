@@ -3042,7 +3042,7 @@ describe('RunHistory', () => {
       family: 'toolUse',
       runtime: {
         modelId: 'gpt-test',
-        modelCompatibilityKey: null,
+        backend: 'openai',
         lastError: null,
         declinedRoutes: [],
       },

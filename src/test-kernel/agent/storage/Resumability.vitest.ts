@@ -25,7 +25,7 @@ const OPENING_SNAPSHOT: RunSnapshotPayload = {
   family: 'toolUse',
   runtime: {
     modelId: 'test-model',
-    modelCompatibilityKey: null,
+    backend: 'validation',
     lastError: null,
     declinedRoutes: [],
   },

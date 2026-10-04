@@ -345,7 +345,7 @@ describe('completedRunArchive facade', () => {
               family: 'toolUse',
               runtime: {
                 modelId: config.model,
-                modelCompatibilityKey: 'OpenAIResponse',
+                backend: 'openai',
                 lastError: null,
                 declinedRoutes: [],
               },

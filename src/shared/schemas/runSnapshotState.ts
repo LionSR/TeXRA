@@ -1,6 +1,6 @@
 /**
  * The agent flow state a `run.snapshot` row restores: the run-state and
- * workspace snapshots, the model compatibility key, and the message-free
+ * workspace snapshots, the model backend, and the message-free
  * core of the tool-use flow. Host-neutral so the
  * run history (`runHistoryEvent.ts`) composes them without reaching the agent
  * layer; the agent modules import them back.
@@ -152,26 +152,31 @@ export interface SkillCatalogEntry {
   readonly directory: string | null;
 }
 
-// --------------------------------------------------- model compatibility
+// ---------------------------------------------------------- model backend
 
-const MODEL_COMPATIBILITY_KEYS = [
-  'Validation',
-  'OpenAIResponse',
-  'OpenRouterNative',
-  'VscodeLm',
-  'Anthropic',
-  'OpenAI',
-  'GoogleInteractions',
-  'DeepSeek',
-  'XAI',
-  'Kimi',
-  'DashScope',
-  'MiniMax',
-  'GLM',
-  'Meta',
-] as const;
-export type ModelCompatibilityKey = (typeof MODEL_COMPATIBILITY_KEYS)[number];
-export const ModelCompatibilityKeySchema = z.enum(MODEL_COMPATIBILITY_KEYS);
+/**
+ * Who serves a run's conversation: the provider plugin its route lands on
+ * (`openRouter`, `copilot`, or the model's own provider, whose plugin names
+ * the protocol), or the internal validation model. A run keeps its backend:
+ * a resume or a model switch rebinds it, whatever the OpenRouter and Copilot
+ * preferences say now.
+ */
+export const ModelBackendSchema = z.enum([
+  'validation',
+  'openRouter',
+  'copilot',
+  'openai',
+  'anthropic',
+  'google',
+  'xai',
+  'deepseek',
+  'moonshot',
+  'dashscope',
+  'minimax',
+  'glm',
+  'meta',
+]);
+export type ModelBackend = z.infer<typeof ModelBackendSchema>;
 
 // ------------------------------------------------------------ flow core
 

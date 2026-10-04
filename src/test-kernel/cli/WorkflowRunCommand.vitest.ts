@@ -338,7 +338,7 @@ function workflowSnapshot(
     family: 'toolUse',
     runtime: {
       modelId: 'deepseek/deepseek-v4-flash',
-      modelCompatibilityKey: null,
+      backend: 'deepseek',
       lastError: null,
       declinedRoutes: [],
       ...runtime,

@@ -1337,7 +1337,7 @@ const TURN_USAGE = {
 };
 const RUNTIME = {
   modelId: 'gpt-test',
-  modelCompatibilityKey: null,
+  backend: 'openai',
   lastError: null,
   declinedRoutes: [],
 };
