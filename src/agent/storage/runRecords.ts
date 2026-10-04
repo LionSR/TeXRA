@@ -132,14 +132,18 @@ export const persistedParentRunId = Effect.fn('persistedParentRunId')(
 
 /** The run's parent edge as its rows leave it: null for a root, and for a
  *  child a `run.detach` severed. */
+const edgeOf = (rows: readonly SessionEvent[]) => {
+  const edge = rows.findLast(
+    (row) => row.type === 'run.start' || row.type === 'run.detach',
+  );
+  return edge?.type === 'run.start' ? edge.parent : null;
+};
+
 const parentEdge = Effect.fn('parentEdge')(function* (
   session: SessionHandle,
   runId: RunId,
 ) {
-  const edge = (yield* session.readRunRecords(runId)).findLast(
-    (row) => row.type === 'run.start' || row.type === 'run.detach',
-  );
-  return edge?.type === 'run.start' ? edge.parent : null;
+  return edgeOf(yield* session.readRunRecords(runId));
 });
 
 /**
@@ -204,10 +208,13 @@ export const openOwnedChildren = Effect.fn('openOwnedChildren')(function* (
   const open: { readonly runId: RunId; readonly callId: string }[] = [];
   for (const [callId, intent] of Object.entries(intents))
     for (const child of callChildren(runId, callId, intent)) {
-      const records = getRunRecords(session, child);
-      if (!(yield* records.exists())) continue;
-      if ((yield* parentEdge(session, child))?.callId !== callId) continue;
-      if ((yield* records.readRunEnd()) === null)
+      // One read of the child's records: a child that never started has no
+      // edge, and its edge and its end come from the same rows.
+      const rows = yield* session.readRunRecords(child);
+      if (
+        edgeOf(rows)?.callId === callId &&
+        runEndFromEvents(rows, child) === null
+      )
         open.push({ runId: child, callId });
     }
   return open;

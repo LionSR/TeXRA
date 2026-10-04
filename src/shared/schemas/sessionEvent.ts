@@ -357,7 +357,6 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
     resumeId: z.string().optional(),
   }),
   RunRemovedDraftSchema,
-  /** The AI-generated summary of what the run set out to do. */
   /** A run's title, and who gave it: the model's summary, or the user's
    *  rename, which a later model title does not replace. */
   durable('run.description', {
@@ -444,8 +443,7 @@ const RunRecordEventDraftSchema = z.discriminatedUnion('type', [
   durable('followup.closed', {}),
 ]);
 /**
- * The run history's private rows (`2026-09-08-pr1-run-ledger-foundation.md`):
- * the byte-exact conversation and the loop's durable state (its hooks'
+ * The run history's private rows: the byte-exact conversation and the loop's durable state (its hooks'
  * outcomes included), read only by `foldRunState` through `RunHistory`. Never
  * redacted, on a renderer's transport or in the cold listing.
  */

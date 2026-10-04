@@ -34,9 +34,10 @@ export type ResumabilityDecision =
  *
  * A checkpoint means exactly one thing: the run aggregate carries a
  * `run.snapshot`, read through the indexed latest-snapshot read. The run's
- * records are read only to prove its metadata is readable at all, never its
- * whole aggregate, which the resume's claim reads once: the terminal outcome
- * never blocks, because rows live until explicit deletion
+ * records (never its whole aggregate, which the resume's claim reads once)
+ * prove its metadata readable and say whether a run without one is
+ * `unopened`. The terminal outcome of a checkpointed run never blocks,
+ * because rows live until explicit deletion
  * (C9), so a failed or cancelled run is offered as "continue from its last
  * snapshot". Ownership is not decided here; `classifyRun`
  * (`@agent/runtime/runClassification`) combines this decision with the run

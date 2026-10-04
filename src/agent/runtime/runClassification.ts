@@ -14,7 +14,7 @@
  *   TeXRA drives was registered and never opened, and nobody alive holds
  *   the claim. Continued only through the explicit Resume
  *   affordance.
- * - `finished`: no checkpoint.
+ * - `finished`: no checkpoint, and not a run left unopened.
  * - `unclassified`: the claim or metadata could not be read or is malformed.
  *   Nothing is known, so nothing is mutated.
  *
