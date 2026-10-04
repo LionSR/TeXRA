@@ -270,10 +270,14 @@ interface Session {
   subscribe(i: readonly TranscriptSubscription[]): Effect<void, never, Scope>;
 }
 // Run { runId, result, view, events, interrupt }: unchanged
-class Plugins extends Context.Service<
-  Plugins,
+class Plugins<Host = never> extends Context.Service<
+  Plugins<Host>,
   {
-    contribute(p: Plugin): Effect<void, PluginConflict, Scope>; // new (H4, in M2)
+    // H must be provided by the `host` layer; a plugin needing more is a type
+    // error, and is refused before its generation publishes (PluginConflict)
+    contribute<P, S, H extends Host>(
+      p: Plugin<P, S, H>,
+    ): Effect<void, PluginConflict, Scope>; // new (H4, in M2)
   }
 >() {}
 ```
@@ -576,8 +580,13 @@ An arm declares its scope, `session` (the project database) or `global`
 (the `GlobalDatabase`), and `PluginState` reads and appends it in that
 store. The inquiry thread arm is `global`, as `InquiryRecords` is today, so a
 follow-up from another project and an answer with the originating project
-closed still reach the thread; the project's `plugin.fact` rows stay display
-notifications for the session view.
+closed still reach the thread. A global arm has no parent edge, because the
+run aggregate lives in a project database and the two stores share no
+transaction (`SessionRequests.ts:238-246`). The owned-open-parent check stays
+in the project transaction: opening or reopening a thread first commits a
+project `plugin.fact` row that carries the validated edge, and only then
+appends the global thread state. The project rows stay display notifications
+for the session view.
 
 Both become `plugin.fact` arms. `output.produced` becomes `documents/output`
 v1: the listing already folds the latest value per (plugin, kind), and the
