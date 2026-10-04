@@ -75,7 +75,7 @@ not copied from a peer's. (3) The doc calls the owner "the owner" or
 
 The agent YAMLs, skills and plugin resources in
 `packages/extension/resources/` are app data and stay there. The desktop
-(`electron-builder.yml:41`) and the CLI (`scripts/copy-resources.mjs:8`)
+(`electron-builder.yml:41`) and the CLI (`packages/cli/scripts/copy-resources.mjs:8`)
 copy them from there, and `vsce` packs only the extension's own directory.
 The one harness resource, the `agent` plugin's skills in
 `resources/plugins/workflow-script/`, moves to `packages/harness/resources/`,
@@ -88,7 +88,13 @@ which the three hosts also copy.
 `sessionFold.ts:83`, `sessionView.ts:51`, `transcriptState.ts`,
 `transcriptReads.ts` and `transcriptFold.ts:30` import it, and the SDK's
 `TranscriptView` rows are `TranscriptRow`. Its import of
-`@ui/copy/workflowCall` (the tally text it prints) moves with it. The kit,
+`@ui/copy/workflowCall` (the tally text it prints) moves with it, so the
+split is 8 harness and 51 app. Only the generic row and fold contract goes:
+the app-specific presentation stays app code and is contributed through the
+row model's extension point. That is `toolRowSections.ts`'s five Codex card
+builders and the Codex schemas they import, and the `latexdiff` row in
+`projectTranscriptRow.ts` and `TranscriptRow`. M3 splits them out before the
+move, so the harness's row model imports no app schema. The kit,
 styles, markdown and KaTeX, and copy tables go to the app. Their only
 harness consumers are four misplaced imports (icon names in
 `agentPresets.ts` and `todoDisplay.ts`, account copy in
@@ -124,6 +130,11 @@ reads from settings today, and `openBrowser` is already an option
 | `routeEndpoint.ts:48`: the custom provider endpoint; the region toggles, which `modelProviderPlugins.ts:28` names as `GlobalStateKey`s                                               | `RouteFacts.endpoints` (provider to URL), resolved by the harness. The toggle's key and control copy stay a harness setting row                                                                            |
 | `apiProviders.ts:111-130`: key lookups over `PlatformSecrets` (`:8-14`); `sessionAccess.ts:11, :37-40`: `SecretsFailed` and the session store                                        | `CredentialStore`                                                                                                                                                                                          |
 | `SubscriptionOAuthCoordinator.ts:18-20`, `sessionAccess.ts:10`: `safeParseJson`, `withLogChannel`, `SharedAttempt`                                                                   | `Effect.try` over `JSON.parse`; `Effect.annotateLogs` with the same `channel` key; `SharedAttempt` (63 lines) moves into `llm`, and its other caller (`SubscriptionUsageService`) imports it from `./node` |
+
+`RouteFacts`, `ModelRoute` and `decideModelRoute` move to `llm` without
+`CopilotModelRoute`, which is built from the host `LanguageModel` types. The
+harness's `runModelDecision` widens the result to `ModelRoute |
+CopilotModelRoute` where it adapts the Context-provided capability.
 
 **What stays in the harness** is the binding of a run's model choice to
 the session's settings: `readRouteFacts`, `runModelDecision`, and the
@@ -165,7 +176,7 @@ facts about today's consumers decide the shape.
 | `@texra-ai/llm` entry | Contents                                                                                                                                                                                                                           | Runs in      |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
 | `.`                   | `Model`, the turn types and schemas (today's `./turn`), the model catalog over `llm-zoo` and the provider data, `RouteFacts`, `decideModelRoute`, `routeConfig`, the reasoning choice, the `CredentialStore` port type, the errors | browser-safe |
-| `./node`              | `bindModel(route, facts, credentials) → Model`, the ChatGPT and Grok sign-in flows, their coordinators and session schemas, `SharedAttempt`                                                                                        | Node         |
+| `./node`              | `bindModel(route, facts, { credentials, fetch }) → Model`, the ChatGPT and Grok sign-in flows, their coordinators and session schemas, `SharedAttempt`                                                                             | Node         |
 
 **The protocols become internal modules.** `packages/llm/src/api/` holds
 the four protocols, the fingerprint and the upload cache, and nothing
@@ -174,7 +185,9 @@ exports them. `bindModel` moves the protocol choice out of
 chosen module with a literal `import('./api/<protocol>.js')`, so a run
 loads only its provider's SDK. The harness's binding keeps what it owns
 today: the route's price, context window and retry-gate keys, the Copilot
-host route, and the long-running fetch it passes as the transport. Nothing
+host route, and the long-running fetch (proxy handling, the 30-minute stream
+and 10-minute header timeouts), which it passes to `bindModel` as `fetch` for
+the protocols to hand their SDKs. Nothing
 in `bindModel`'s signature names a protocol module's type
 (`modelBinding.ts:210`'s `typeof openaiResponsesWebSocketModel` moves
 inside `llm`), so the declaration graph of `./node` stays free of vendor
@@ -233,7 +246,9 @@ class Sessions extends Context.Service<
   static layer(input: {
     platform: AgentPlatform;
     plugins: readonly Plugin[];
-  }): Layer<Sessions, PlatformConflict | PluginConflict>; // plugins: new (M2)
+    execution?: Layer<WorkspaceFs | ChildProcessSpawner>; // new (H4, in M2)
+    host?: Layer<HostServices>; // new (M2): what a host serves its plugins
+  }): Layer<Sessions | Plugins, PlatformConflict | PluginConflict>; // plugins, host: new (M2)
 }
 interface Session {
   roots: WorkspaceRoots;
@@ -252,21 +267,33 @@ class Plugins extends Context.Service<
 >() {}
 ```
 
-The ports are fields of `AgentPlatform` (`runtime.ts:50`). Each is served as
-an Effect service:
+Most ports are fields of `AgentPlatform` (`runtime.ts:50`); the execution
+environment and the host's layers are `Sessions.layer` inputs, because they
+are replaced per embedder and have no default in the platform. Each is served
+as an Effect service:
 
 | Port          | Platform field                   | Service                                                                                                                           |
 | ------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | Storage       | `roots` (storage paths)          | `GlobalDatabase`, `ProjectDatabases`; `RunHistory` internal                                                                       |
 | Models        | `languageModel`, `secrets`       | `LanguageModel`, `Secrets`; reads settings into `RouteFacts`, serves `llm` its `CredentialStore` and `HttpClient`, gets a `Model` |
 | Settings      | `roots.config`, the state stores | `AppState`, `ConfigProvider`                                                                                                      |
-| Execution env | (none: Node defaults)            | `WorkspaceFs` + `ChildProcessSpawner`, per run after H4                                                                           |
+| Execution env | (none: `execution` input)        | `WorkspaceFs` + `ChildProcessSpawner`, replaced together, per run after H4; the Node pair from `./node` is the default            |
 | Sandbox       | (none)                           | `CodeSandbox`, the `codemode` plugin's session layer                                                                              |
 | Agents        | `agentDirectories`               | `AgentDirectories`                                                                                                                |
-| Usage         | `usageLog`                       | `UsageLog`; the app's `src/telemetry` implements it                                                                               |
+| Usage         | (none: composition-root option)  | `UsageLog`, disabled in the SDK; the app's `src/telemetry` implements it through `installProcessRuntime`'s `usageLog` option      |
 
 `mcpConfigPath` stays a platform field. The installed-plugin reader and the
-MCP loader are harness machinery, not a plugin value.
+MCP loader are harness machinery, not a plugin value. `host` carries what a
+host supplies to its plugins and the app cannot import: the extension's Lean,
+inline-comment and Copilot providers. A plugin requires them as ordinary
+services, and `definePlugin` types them in `HostServices`.
+
+**Roster identity.** `acquireProcess` joins an installed process only when
+both the platform and the initial plugin list are the same. A second
+`Sessions.layer` with the same platform and a different list fails with
+`PluginConflict`, reason `roster`, so the first acquisition never decides
+another consumer's plugins. Each `Plugins.contribute` withdraws only what it
+contributed, when its scope closes.
 
 ### The extend half: `Plugin`
 
@@ -286,6 +313,10 @@ interface Plugin<ROut = never> {
   readonly arms?: readonly PluginArm[]; // plugin.fact kinds, versioned
   readonly settings?: readonly SettingRow[]; // §4
   readonly availability?: Availability; // probes → blocked reasons
+  readonly meta?: PluginMeta; // below
+  readonly requests?: readonly PluginRequest[]; // durable request kinds, §4
+  readonly project?: PluginProjection<ROut>; // read side of its arms, §4
+  readonly drain?: Effect<void, never, HarnessServices | ROut>; // before sessions close
   readonly processLayer?: Layer<ROut, never, HarnessServices>;
   readonly sessionLayer?: Layer<ROut, never, HarnessServices | SessionServices>;
   readonly agents?: string; // directories, as data
@@ -294,6 +325,21 @@ interface Plugin<ROut = never> {
 declare const definePlugin: <ROut>(plugin: Plugin<ROut>) => Plugin.Any;
 ```
 
+- **Operational metadata stays.** `Plugin` replaces the manifest's tables
+  and pointers, not what the product does with them. `PluginMeta` keeps
+  `toggleable` and `onByDefault` (which seed `toolAvailability.ts`),
+  `injectedWhen` (automatic tools, `agentToolResolution.ts`), the display
+  and host-visibility fields (`ToolDashboardData`) and the setup and sign-in
+  steps the CLI install flow reads. M2 moves each field and deletes no
+  behavior.
+- **Drain.** `drain` replaces `ProcessPluginLayer.drain`. `drainPlugins`
+  runs every plugin's `drain` before sessions close, so a delivery already
+  admitted (the GitHub poller's) finishes writing to its session. A layer
+  finalizer cannot express that order.
+- **State.** A plugin reads and appends its own arms through `PluginState`
+  (`read(arm)`, `commit(arm, value)`), exported from `.` and scoped to the
+  plugin's declared arms. It wraps `SessionHandle.runView` and `commit`,
+  which stay internal, so `goal` and the app's plugins need no deep import.
 - **Typed requirements.** `definePlugin` checks at compile time that every
   tool, continuation and round policy needs only harness services and what
   the plugin's own layers add. The Registry stores the erased value, and the
@@ -307,6 +353,10 @@ declare const definePlugin: <ROut>(plugin: Plugin<ROut>) => Plugin.Any;
   replacement in `write_file` (`WriteTool.ts:48-55`).
 - **Contribute in a `Scope`.** `Plugins.contribute` is `Registry.contribute`
   for each of the plugin's maps under one scope, as the durable doc says.
+  `settings`, `agents` and `skills` follow the same registry generations as
+  tools: the settings catalog, the agent catalog follower and the skill
+  roots rebuild when a generation changes, and withdrawing a plugin removes
+  its rows, agents and skills.
 - **Dependencies.** An agent's dependencies are derived from its tool list.
   A hard `requires` is for first-party values only: resolved at
   `Step.open`, transitive, and a cycle is refused when the plugin set is
@@ -324,7 +374,7 @@ declare const definePlugin: <ROut>(plugin: Plugin<ROut>) => Plugin.Any;
 
 | Subpath        | Contents                                                                                                                                | Runs in      |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| `.`            | `Sessions`, `Session`, `Run`, `Plugins`, `Plugin`, `definePlugin`, `defineTool`, the errors, the port types                             | any          |
+| `.`            | `Sessions`, `Session`, `Run`, `Plugins`, `PluginState`, `Plugin`, `definePlugin`, `defineTool`, the errors, the port types              | any          |
 | `./plugins`    | The built-in plugin values of §3, `fileOps(options)` and `agent(options)` included, and two lists: `harnessBuiltins.minimal` and `.all` | any          |
 | `./schemas`    | Agent config and run-end schemas (exists), `SessionEvent`, `PluginArm`, `SettingRow`                                                    | browser-safe |
 | `./transcript` | The row model and its projections, for renderers                                                                                        | browser-safe |
@@ -420,7 +470,7 @@ still leaked peer dependencies on its sandbox, approval and PTC packages.
 declared by its owner: the harness's rows (model, approvals, retries,
 compaction, concurrency, skills, logging) in the harness, each plugin's on
 its `Plugin` value, as the manifest's `settings` field already lists them.
-The catalog is their concatenation, built once at `Sessions.layer`, and the
+The catalog is their concatenation, rebuilt per registry generation, and the
 settings view and `texra config` read it. `stateSettings.ts` loses its two
 app imports (`latexConfig`, `replacementCategories`), and the closed
 `GlobalStateKey` and `WorkspaceStateKey` enums split by owner. Key strings
@@ -437,6 +487,19 @@ the harness's `SessionEvent` union and in its folds:
   `runState.ts`, and the row model's `toolRowSections`.
 - `inquiryThreadUpdated` (`:352`), with its own aggregate kind, `inquiry`
   (`:111`), and a special parent edge in `referencedAggregates` (`:497`).
+
+Both are the plugin's arms with their read side. `Plugin.requests` lets a
+plugin contribute a durable `request.opened` kind and its decision: the
+inquiry's `externalInquiry` permission payload and `answer` decision leave
+`prompts.ts` and `RequestDecisionSchema` for a generic `plugin.request`
+payload `{ plugin, kind, v, body }`, validated by the owning plugin.
+`Plugin.project` folds a plugin's facts into `SessionView.plugins[id]`, which
+replaces `SessionView.inquiries` (the `BackgroundTasksPanel` reads the
+plugin's slot) and gives `Run.result` its documents: the harness's end
+result stays generic, `WorkflowRunEndResult` and the helpers of
+`schemas/output.ts` move to the app, and `executeAgent.ts` and
+`runRecords.ts` read the documents slot instead of `roundOutputs`. A stored
+run folds to the same slot, so reopening a session loses nothing.
 
 Both become `plugin.fact` arms. `output.produced` becomes `documents/output`
 v1: the listing already folds the latest value per (plugin, kind), and the
@@ -527,10 +590,10 @@ in the same PR.
 | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | ---------------------- | ------ |
 | M1   | Round mode becomes the documents plugin's `rounds` contribution, keyed by category and read once at run open (`toolUse.ts:143-144` loses the category branch; `rounds.ts:127-142` loses `makeDocumentRounds`). This is H3's remaining violation, 4                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | M, ~15 files                      | none                   | no     |
 | M2   | `Plugin`, `definePlugin`, `Sessions.layer({ platform, plugins })`, `Plugins.contribute`, `Session.resume`, and the spawner moved onto the run layer (H4, absorbed). The manifest and its five tables become plugin values. The composition root loses its app options and record layers, and `ProcessServices`/`PluginServices` lose their app tags. The SDK stops binding TeXRA's table. `harnessBuiltins.minimal` and `.all`, and the roster case (§4)                                                                                                                                                                                                                                                                                                                                                                                                                                           | L, ~60 files, net deletion        | M1                     | no     |
-| M3   | The remaining harness→app imports. Misplaced types and constants move to their owners: `ToolCategory` and the other types out of `settingsViewMessages` (6 importers), `workflowOutput`, icon names, account copy, `teams`, `latexToolchain`. `fileOps({ writeFilter })`; `accept_run_files` moves to `documents`; `SessionRequests` stops importing `inquiryActions`. The host-side session modules are marked for the app                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | M, ~40 files                      | M2                     | no     |
+| M3   | The remaining harness→app imports. Misplaced types and constants move to their owners: `ToolCategory` and the other types out of `settingsViewMessages` (6 importers), `workflowOutput`, icon names, account copy, `teams`, `latexToolchain`. `fileOps({ writeFilter })`; `accept_run_files` moves to `documents`; `SessionRequests` stops importing `inquiryActions`. `pluginAvailability.ts` dissolves into per-plugin `availability` values, and `toolProbes.ts` stops importing the app's LaTeX dependency checks. The Codex and `latexdiff` row builders split from the row model. The host-side session modules are marked for the app                                                                                                                                                                                                                                                       | M, ~40 files                      | M2                     | no     |
 | M4   | Model access into `@texra-ai/llm` (ruling 2): `git mv` of `src/auth` (29), 8 `src/model` files and the 5 provider-catalog files into `packages/llm/src/{models,providers,api,oauth}`; `CredentialStore` defined in `llm` and served from `Secrets`; `RouteFacts` gains `endpoints` and `chatgptContextWindow`; the entries of §1: the 34 `./turn` importers rewritten to `.`, the protocol choice moved from `modelBinding.ts` into `bindModel` in `./node` with the protocols, the fingerprint and the upload cache under `src/api/` and unexported, today's six subpaths deleted, and the four suites in `src/test-kernel/llm/` reaching `packages/llm/src/api/` by relative path, as `test-live/` does; the moved files' importers rewritten to `.` or `./node` and the `@auth/*` alias deleted; `llm` gains `llm-zoo`; the llm-imports-nothing zone and the browser-safe `.` rule, no baseline | M, ~45 files moved, ~70 importers | none                   | no     |
 | M5   | "Ledger" becomes "history" (ruling 1): the four files of §6 and every occurrence, about 1,100 in about 170 files, CLAUDE.md, AGENTS.md and `.agents/docs` included; a codemod over a fixed word list that skips the rulings ledger and Lean's `tactic-ledger`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | S in review, M in files           | H1, H2 merged          | no     |
-| M6   | Rows: the `documents/output` and `external-inquiry/thread` arms replace `output.produced` and `inquiryThreadUpdated`; the `plugin` aggregate kind and `plugin.fact.parent`; the plugin id changes. The golden store is regenerated once, with H1's if they land together                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | M, ~30 files                      | H2 (#13638) merged; M2 | before |
+| M6   | Rows: the `documents/output` and `external-inquiry/thread` arms replace `output.produced` and `inquiryThreadUpdated`; the `plugin` aggregate kind and `plugin.fact.parent`; the plugin id changes; `Plugin.requests` and `Plugin.project` replace the inquiry request payload and `SessionView.inquiries`, and the documents result slot replaces `roundOutputs`. The golden store is regenerated once, with H1's if they land together                                                                                                                                                                                                                                                                                                                                                                                                                                                            | M, ~30 files                      | H2 (#13638) merged; M2 | before |
 | M7   | The settings catalog by owner: harness rows, plugin rows on `Plugin`, the enums split                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | M, ~25 files                      | M2; after G6           | no     |
 | M8   | The move, rename only: `git mv` of about 520 files into `packages/harness/src` and about 300 into `packages/texra/src`; `packages/agent` becomes `packages/harness` (`@texra-ai/harness`); `tsconfig.json` paths retargeted; dependencies split; ESLint zones and ratchet paths re-keyed with identical entries; the harness-imports-no-app zone at zero; the widened deep-import ratchet                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | L in files, S in review           | M1–M7, H1; G2 merged   | see Q5 |
 | M9   | Shrink the deep-import baseline, one host per PR, through `Session.request` arms and public exports                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | M each                            | M8                     | no     |
@@ -574,6 +637,14 @@ that TeXRA is one plugin list among others.
 
 **Build and packaging.**
 
+- _VS Code contributions._ `scripts/sync-package-contributes.mjs` scans the
+  harness resource root as well as the extension's, so the moved
+  `workflow-script` skill stays in `contributes.chatSkills`, and emits the
+  staged VSIX path. M8 updates it, and `check:package-contributes` covers it.
+- _Published harness._ `packages/harness/package.json` `files` includes
+  `resources/`, and `nodePlatform` resolves the installed package's
+  resource directory, so a packed harness advertises `workflow-script` with
+  its skill.
 - _Extension, desktop, CLI._ The bundles follow the aliases from
   `tsconfig.json`. `verify-vsix-contents.mjs` keys on `extension/resources/`,
   which does not move. The harness resources join each host's copy step
