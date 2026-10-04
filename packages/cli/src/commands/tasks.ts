@@ -60,7 +60,7 @@ function describeRefusal(error: RequestErrorWire): string {
 
 /** The task `id` names: its full id, or a prefix only one task has. */
 function findTask(client: ServiceClient, id: string) {
-  return client['tasks.list']().pipe(
+  return client['tasks.list']({ all: true }).pipe(
     Effect.flatMap((tasks) => {
       const exact = tasks.find((task) => task.runId === id);
       const matches = exact
@@ -122,7 +122,7 @@ const listCommand = defineCliCommand({
         context.storageRoot,
         context.version,
       );
-      const tasks = yield* client['tasks.list']();
+      const tasks = yield* client['tasks.list']({ all: false });
       emitCliResult(context, {
         json: tasks,
         ndjson: tasks.map((task) => ({ kind: 'task' as const, task })),

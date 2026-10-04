@@ -172,9 +172,13 @@ export const serviceHandlers = TexraRpcs.toLayer(
           } satisfies ServiceInfo;
         }),
       'service.stop': ({ drain }) => control.stop(drain),
-      'tasks.list': () =>
+      'tasks.list': ({ all }) =>
         Effect.gen(function* () {
-          return yield* listTasks(projects.storageRoot, yield* projects.opened);
+          return yield* listTasks(
+            projects.storageRoot,
+            yield* projects.opened,
+            all,
+          );
         }).pipe(Effect.orDie),
       'task.watch': ({ workspace, subscribe }) =>
         Stream.unwrap(

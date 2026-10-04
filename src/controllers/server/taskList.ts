@@ -131,10 +131,12 @@ const coldView = Effect.fn('taskList.coldView')(function* (
  * Every project's top-level tasks, newest first. `open` holds the sessions
  * the service has open, by storage root; a project whose store cannot be
  * read is reported and left out, so one damaged store never hides the rest.
+ * `all` returns every task; otherwise the newest 200, live ones always kept.
  */
 export const listTasks = Effect.fn('taskList.listTasks')(function* (
   storageRoot: string,
   open: ReadonlyMap<string, SessionHandle>,
+  all: boolean,
 ): Effect.fn.Return<
   TaskSummary[],
   DatabaseReadFailed | PlatformError.PlatformError,
@@ -189,6 +191,7 @@ export const listTasks = Effect.fn('taskList.listTasks')(function* (
     if (view !== null) tasks.push(...summaries(view, workspace));
   }
   const newest = tasks.toSorted((a, b) => b.launchedAt - a.launchedAt);
+  if (all) return newest;
   const live = newest.filter((task) => task.live);
   // Every live task is kept past the limit; the list stays newest first.
   const kept = new Set([

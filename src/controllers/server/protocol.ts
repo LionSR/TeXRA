@@ -118,6 +118,8 @@ export const TexraRpcs = RpcGroup.make(
   }),
   Rpc.make('service.stop', { payload: { drain: Schema.Boolean } }),
   Rpc.make('tasks.list', {
+    /** `all`: every task, for resolving an id; otherwise the newest. */
+    payload: { all: Schema.Boolean },
     success: zodWire(z.array(TaskSummarySchema)),
   }),
   Rpc.make('task.watch', {
