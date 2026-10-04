@@ -137,11 +137,30 @@ export const resumeRun = Effect.fn('resumeRun')(function* (
   if (!joined) return result;
   // A caller that joined a resume already in flight still gets its own
   // cancellation and its own host step, once that resume has the run.
-  if (cancelled()) return REFUSED;
-  if ('started' in result && options.onResumeResolved)
-    yield* options.onResumeResolved(runId);
-  return result;
+  if (cancelled() || !('started' in result) || !options.onResumeResolved)
+    return result;
+  // The host step runs under the run's claim, as the resume's own does.
+  const hook = options.onResumeResolved;
+  return yield* Effect.scoped(
+    Effect.gen(function* () {
+      const heldBy = yield* holdClaim(session, runId);
+      if (heldBy !== null) return { failed: 'owned_elsewhere' } as const;
+      yield* hook(runId);
+      return result;
+    }),
+  );
 }, Effect.uninterruptible);
+
+/** Hold the run's claim for the enclosing scope: null, or the live process
+ *  that refused it. */
+const holdClaim = (session: SessionHandle, runId: RunId) =>
+  session.borrowRunClaim(runId).pipe(
+    Effect.as(null),
+    Effect.catch((error) => {
+      const holder = heldElsewhereBy(error);
+      return holder === null ? Effect.fail(error) : Effect.succeed(holder);
+    }),
+  );
 
 /** One resume of a run no generation here holds. */
 const resumeHere = Effect.fn('resumeHere')(function* (
@@ -173,19 +192,11 @@ const resumeHere = Effect.fn('resumeHere')(function* (
     };
   }
   const resume = retrieved;
-  // A host about to rearrange itself holds the run's claim first, until the
-  // launched run holds its own: a claim this process holds, or one whose
-  // owner is provably dead, is taken over; another live TeXRA process's run
-  // is refused before the host changes anything.
-  const heldBy = options.onResumeResolved
-    ? yield* session.borrowRunClaim(runId).pipe(
-        Effect.as(null),
-        Effect.catch((error) => {
-          const holder = heldElsewhereBy(error);
-          return holder === null ? Effect.fail(error) : Effect.succeed(holder);
-        }),
-      )
-    : null;
+  // Every resume holds the run's claim from here until the launched run
+  // holds its own, so two processes never both launch it and a host is
+  // refused before it rearranges itself: a claim this process holds, or
+  // one whose owner is provably dead, is taken over.
+  const heldBy = yield* holdClaim(session, runId);
   yield* session.clearUnreadable(runId);
   if (heldBy !== null) {
     yield* session.markUnreadable(runId, runHeldMessage(ownerPid(heldBy)));
