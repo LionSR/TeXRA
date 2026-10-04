@@ -19,7 +19,6 @@ import {
 import { createNativeSubagentStrategy } from '@agent/runtime/nativeSubagentStrategy';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
   type OfferedTool,
   type RunId,
@@ -75,7 +74,6 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
     parent: RunToolCall,
     childConfigPayload: AgentConfigPayload,
     launch: {
-      readonly parentRunId: RunId;
       readonly runId: RunId;
       /** The most the child may be offered: its parent step's tools. */
       readonly parentOffered: readonly OfferedTool[];
@@ -83,16 +81,14 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
       readonly approvalMeta?: ApprovalMeta;
     },
   ) {
-    const { parentRunId, runId, parentOffered, inheritChildRunApprovals } =
-      launch;
-    const parentSession = parent.run.session;
+    const { runId, parentOffered, inheritChildRunApprovals } = launch;
+    const { session: parentSession, runId: parentRunId } = parent.run;
     const workingDirectory = childConfigPayload.workingDirectory ?? undefined;
     const agentName = childConfigPayload.agent;
     const startedAt = Date.now();
     const definition = yield* prepareAgentDefinition({
       config: AgentConfigSchema.parse(childConfigPayload),
       session: parentSession,
-      enforceCategory: childConfigPayload.agentCategory !== undefined,
       suppressErrorNotification: true,
     });
     const { config } = definition;
@@ -109,10 +105,11 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
         summary: `Subagent '${agentName}' not launched`,
       });
     }
-    const isToolUse = config.agentCategory === AgentCategory.ToolUse;
-    // One decision for the child's follow-up capability: the child row it
-    // registers under and the run it launches must agree.
-    const userFollowUpSupport = isToolUse
+    // A conversation takes follow-ups; a run opened on a script (a document
+    // task) ends with its script. One decision: the child row it registers
+    // under and the run it launches must agree.
+    const conversation = config.script == null;
+    const userFollowUpSupport = conversation
       ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
       : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
     yield* Effect.uninterruptibleMask((restore) =>
@@ -182,7 +179,7 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
         `Run ID: ${runId}`,
         ...metaLines,
         `The result arrives automatically. Continue other work meanwhile. To check progress: executions tool with path=/executions/${runId}; use action=wait only when you cannot proceed without it.`,
-        ...(isToolUse
+        ...(conversation
           ? [
               `To send follow-up instructions: executions tool, action=send, path=/executions/${runId}.`,
             ]

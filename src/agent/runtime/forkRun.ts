@@ -17,7 +17,6 @@ import { Effect } from 'effect';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { registrationRows } from '@agent/storage/runLifecycle';
 import {
-  AgentCategory,
   aggregateId,
   USER_FOLLOW_UP_SUPPORT,
   type RunId,
@@ -59,11 +58,7 @@ export const forkRun = Effect.fn('forkRun')(function* (
 ): Effect.fn.Return<RunId, Rejected | Error> {
   const records = getRunRecords(session, from.id);
   const config = yield* records.readConfig();
-  if (
-    config === null ||
-    config.agentCategory !== AgentCategory.ToolUse ||
-    config.backgroundScript != null
-  ) {
+  if (config === null || config.script != null) {
     return yield* refused('Only a conversation can be forked.');
   }
   const aggregate = aggregateId('run', from.id);

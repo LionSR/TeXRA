@@ -1,15 +1,6 @@
 import { z } from 'zod';
 
-import { AgentCategorySchema } from './agent';
-
 const AgentKeyListSchema = z.array(z.string().trim().min(1));
-const WorkspaceAgentsCategorySelectionSchema = z.union([
-  z.literal('all'),
-  AgentKeyListSchema,
-]);
-export type WorkspaceAgentsCategorySelection = z.infer<
-  typeof WorkspaceAgentsCategorySelectionSchema
->;
 
 /**
  * One durable description of how a workspace obtains its visible agents.
@@ -25,10 +16,7 @@ export const WorkspaceAgentsSelectionSchema = z.discriminatedUnion('kind', [
   }),
   z.strictObject({
     kind: z.literal('custom'),
-    agentKeys: z.record(
-      AgentCategorySchema,
-      WorkspaceAgentsCategorySelectionSchema,
-    ),
+    agentKeys: AgentKeyListSchema,
   }),
 ]);
 
@@ -50,9 +38,6 @@ export const INHERITED_WORKSPACE_AGENTS: WorkspaceAgentsSelection =
   });
 
 /** Exact delegation catalog attached to a run, independent of durable UI state. */
-export const AgentDelegationScopeSchema = z.record(
-  AgentCategorySchema,
-  AgentKeyListSchema,
-);
+export const AgentDelegationScopeSchema = AgentKeyListSchema;
 
 export type AgentDelegationScope = z.infer<typeof AgentDelegationScopeSchema>;

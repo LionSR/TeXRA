@@ -5,10 +5,10 @@
  * Problems panel, like a linter.
  *
  * Two ingest paths:
- *   1. Session `output.produced` rows parse each output
- *      `.tex` file. Universal — any agent that writes the macro participates.
+ *   1. A document task's documents rows parse each output `.tex` file.
+ *      Universal — any agent that writes the macro participates.
  *   2. The `diagnostics` tool's `add` command routes through
- *      `pushManualCriticism` here for tool-use agents that want to flag issues
+ *      `pushManualCriticism` here for agents that want to flag issues
  *      without inserting the macro.
  *
  * Gated on the `texra.inlineCriticism.enabled` catalog row (global state,
@@ -196,7 +196,7 @@ const reconcile = Effect.fnUntraced(function* (current: CriticismRegistration) {
 });
 
 /**
- * Append a criticism entry from a tool-use agent. Returns false when the
+ * Append a criticism entry from an agent. Returns false when the
  * feature is disabled so the tool can report the no-op back to the agent.
  */
 export function pushManualCriticism(entry: ManualCriticismEntry): boolean {

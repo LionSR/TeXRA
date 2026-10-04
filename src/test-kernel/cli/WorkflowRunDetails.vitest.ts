@@ -9,12 +9,7 @@ import {
   rootRunId,
   focusRun,
 } from '@cli/chat/tui/state/cliState';
-import {
-  AgentCategory,
-  type CompileFailure,
-  RUN_PHASE,
-  type RunId,
-} from '@shared/schemas';
+import { type CompileFailure, RUN_PHASE, type RunId } from '@shared/schemas';
 import { loadInk } from '@test/support/inkTestHarness.ts';
 import { textRowFixture } from '@test/support/transcriptRowFixtures';
 import {
@@ -121,7 +116,7 @@ describe('selectWorkflowRunDetailLines', () => {
       viewWith([
         makeRunView({
           id: STREAM_ID,
-          category: AgentCategory.Workflow,
+          documentTask: true,
           status: RUN_PHASE.RUNNING,
           transcript: {
             rows: [textRowFixture('live', 'log', 'live workflow log')],

@@ -108,7 +108,6 @@ export function publishTestRunStart(
       aggregateId: aggregateId('run', runId),
       identity: { kind: 'agent', agent: 'chat' },
       userFollowUpSupport: 'unsupported',
-      category: 'toolUse',
       parent:
         options.parent == null ? null : { id: options.parent, callId: null },
       provenance: null,

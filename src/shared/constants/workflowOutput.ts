@@ -17,7 +17,7 @@ import { agentFileName } from '@shared/schemas';
 /** The fixed basename of every workflow output file (no extension). */
 export const WORKFLOW_OUTPUT_BASENAME = 'output';
 
-/** The fixed extension for raw workflow round output. */
+/** The fixed extension for a document task revision's raw output. */
 export const WORKFLOW_RAW_OUTPUT_EXT = 'xml';
 
 /**
@@ -34,7 +34,7 @@ export function stripWorkflowRoundDir(
     : relativePath;
 }
 
-/** The runDir-relative `r{round}` directory segment for a workflow round. */
+/** The runDir-relative `r{round}` directory segment for a document task revision. */
 export function workflowOutputRoundDir(round: number): string {
   return `r${round}`;
 }

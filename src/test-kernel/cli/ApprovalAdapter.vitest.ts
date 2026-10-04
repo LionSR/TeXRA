@@ -31,7 +31,6 @@ import {
   formatRetryRequestMessage,
 } from '@cli/runtime/approval/approvalSummaries';
 import {
-  AgentCategory,
   DEFAULT_TOOL_CONFIG,
   RUN_OUTCOME,
   type AgentProposalPermission,
@@ -157,23 +156,15 @@ function agentProposal(
     instruction: 'Please check this proof.',
     memories: [],
   };
-  const { agentCategory, ...rest } = overrides;
-  if (agentCategory === AgentCategory.Workflow) {
-    return {
-      ...base,
-      agentCategory,
-      inputFiles: [],
-      contextFiles: [],
-      mediaFiles: [],
-      outputFiles: [],
-      toolConfig: DEFAULT_TOOL_CONFIG,
-      ...rest,
-    };
-  }
   return {
     ...base,
-    agentCategory: AgentCategory.ToolUse,
-    ...rest,
+    inputFiles: [],
+    contextFiles: [],
+    mediaFiles: [],
+    outputFiles: [],
+    task: false,
+    toolConfig: DEFAULT_TOOL_CONFIG,
+    ...overrides,
   };
 }
 

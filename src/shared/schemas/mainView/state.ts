@@ -5,7 +5,7 @@
  */
 import { z } from 'zod';
 
-import { AgentCategorySchema, AgentSourceSchema } from '@shared/schemas/agent';
+import { AgentSourceSchema } from '@shared/schemas/agent';
 import { CHATGPT_AUTH, GROK_AUTH } from '@shared/model/accountAuth';
 import {
   TEXRA_ICON_CANONICAL_NAMES,
@@ -19,13 +19,10 @@ import { ToolConfigFieldsSchema } from '../toolConfig';
 // ============================================================
 
 /**
- * The main view's surface name for the {@link AgentCategory} a session runs
- * as. The value set is identical by construction (`'toolUse' | 'workflow'`),
- * so the schema is derived from the canonical one rather than redeclared —
- * the two vocabularies cannot drift. Persisted and wire values are
- * byte-identical to the historical standalone enum.
+ * What the main view launches: a document task over the selected files, or
+ * a chat with the selected agent.
  */
-export const SessionTypeSchema = AgentCategorySchema;
+export const SessionTypeSchema = z.enum(['task', 'chat']);
 export type SessionType = z.infer<typeof SessionTypeSchema>;
 
 /** Who runs a main-view request: a single agent or a team. */
@@ -183,11 +180,11 @@ export function isModelOptionAvailable(model: ModelOptionData): boolean {
 }
 
 export const AgentOptionDataSchema = PickerOptionBaseSchema.extend({
-  isToolUse: z.boolean().optional(),
   isOrchestrator: z.boolean().optional(),
   /** Provenance, in the canonical agent vocabulary rather than one-hot flags. */
   source: AgentSourceSchema.optional(),
-  /** A workflow agent's planned passes: the header's "Pass 2 of 3". */
+  /** A document task's revision count (the header's "Pass 2 of 3"):
+   *  present exactly when the agent is also a document task. */
   rounds: z.int().positive().optional(),
 });
 export type AgentOptionData = z.infer<typeof AgentOptionDataSchema>;
@@ -223,9 +220,6 @@ export type TeamOptionData = z.infer<typeof TeamOptionDataSchema>;
 
 export const AgentConfigBannerDataSchema = z.object({
   agentName: z.string().nullish(),
-  /** The category the named agent was launched as: what the banner's
-   *  actions edit, whichever surface renders the strip. */
-  sessionType: SessionTypeSchema.nullish(),
   customDirSet: z.boolean().nullish(),
 });
 

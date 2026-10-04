@@ -22,7 +22,6 @@ import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
-import { AgentCategory } from '@shared/schemas';
 
 export function handleFixCompilation(
   session: SessionHandle,
@@ -38,7 +37,7 @@ export function handleFixCompilation(
     ({ editor, relativePath }) =>
       Effect.gen(function* () {
         yield* Effect.logInfo(
-          `Launching tool-use agent to fix compilation for: ${relativePath}`,
+          `Launching agent to fix compilation for: ${relativePath}`,
         ).pipe(withLogChannel(CHANNEL));
 
         const instruction = yield* buildLatexdiffAwareFixInstruction(
@@ -53,10 +52,6 @@ export function handleFixCompilation(
             {
               config: {
                 agent: 'latexFixer',
-                // latexFixer is a tool-use agent; without this the config
-                // category prefaults to workflow and resolveAgentForLaunch
-                // can't find it.
-                agentCategory: AgentCategory.ToolUse,
                 instruction,
               },
               // This is a "run latexFixer" command, so prefer the helper model.

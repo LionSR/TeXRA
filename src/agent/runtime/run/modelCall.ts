@@ -18,11 +18,7 @@ import {
 
 import type { AgentTrace } from '@agent/trace';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import {
-  type AgentCategory,
-  type NormalizedUsage,
-  type RunId,
-} from '@shared/schemas';
+import { type NormalizedUsage, type RunId } from '@shared/schemas';
 import { UsageLog } from '@shared/usageLog';
 import { roundTo } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -74,7 +70,6 @@ export function routePolicies(
  */
 export interface UsageAttribution {
   readonly agentName: string;
-  readonly agentCategory: AgentCategory | null;
   readonly runId: RunId | null;
 }
 
@@ -100,9 +95,6 @@ export const reportUsage = (
             model: bound.config.id,
             provider: usage.provider,
             agentName: attribution.agentName,
-            ...(attribution.agentCategory === null
-              ? {}
-              : { agentCategory: attribution.agentCategory }),
             // Billing needs a real number, so a provider that reported no
             // cache-miss count is billed the derived estimate (input minus
             // cache-read). Display never guesses.

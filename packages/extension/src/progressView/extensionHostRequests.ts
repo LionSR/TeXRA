@@ -587,11 +587,7 @@ export function createExtensionHostRequests(
         ),
       ),
     ),
-    openAgentSettings: (sessionType) =>
-      commandVerb(
-        'texra.showAgents',
-        sessionType === 'toolUse' ? 'toolUse' : undefined,
-      ),
+    openAgentSettings: commandVerb('texra.showAgents'),
     openCustomAgentDirectory: Effect.gen(function* () {
       const dir = yield* (yield* AgentDirectories).custom();
       if (dir) {

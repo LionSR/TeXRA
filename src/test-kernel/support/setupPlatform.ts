@@ -33,7 +33,6 @@ import { globalStorageFsLayer } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
-import { AgentCategory } from '@shared/schemas';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import {
   GlobalDatabase,
@@ -332,11 +331,8 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
         ),
     }),
     // An empty tool table (the real one loads every tool), with goal mode's
-    // continuation (and its switch) and the documents plugin's round mode: a
-    // suite that resolves a run's tools runs on the session graph's runtime
-    // or provides `pluginCatalogLayer`. The round mode's module is read per
-    // run, as the wake's is above, so a suite's mock of the output pipeline
-    // (the LaTeX compile it reaches) is the one a round runs.
+    // continuation (and its switch): a suite that resolves a run's tools runs
+    // on the session graph's runtime or provides `pluginCatalogLayer`.
     toolTableLayer(
       toolTable([
         {
@@ -347,22 +343,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
           toggleable: true,
           availability: { check: () => Effect.succeed(true) },
           continuation: goalContinuation,
-        },
-        {
-          id: 'documents',
-          name: 'Documents',
-          category: 'workflow',
-          description: '',
-          rounds: {
-            category: AgentCategory.Workflow,
-            open: (run) =>
-              Effect.flatMap(
-                Effect.promise(
-                  () => import('@agent/output/documentRoundPolicy'),
-                ),
-                (plugin) => plugin.documentRoundMode.open(run),
-              ),
-          },
         },
       ]),
     ).pipe(

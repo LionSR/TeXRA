@@ -14,10 +14,58 @@ import {
 
 import { getRunRecords } from './runRecords';
 
+/** Fail unless `reference` names a declared output of a completed direct
+ *  child of `parentRunId`. */
+const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
+  function* (
+    session: SessionHandle,
+    parentRunId: RunId,
+    reference: { readonly runId: RunId; readonly relativePath: string },
+  ) {
+    const store = getRunRecords(session, reference.runId);
+    const [runEnd, resultMeta] = yield* Effect.all([
+      store.readRunEnd(),
+      store.readResultMeta(),
+    ]);
+    if (session.runView(reference.runId)?.parentId !== parentRunId) {
+      return yield* Effect.fail(
+        new Error(
+          `Run ${reference.runId} is not a direct child of ${parentRunId}.`,
+        ),
+      );
+    }
+    const documents = runEnd?.output.documents;
+    if (
+      resultMeta?.producer !== 'subagent' ||
+      documents === undefined ||
+      runEnd?.outcome !== RUN_OUTCOME.COMPLETED
+    ) {
+      return yield* Effect.fail(
+        new Error(
+          `Run ${reference.runId} has no completed document task output manifest.`,
+        ),
+      );
+    }
+    const declared = documents.outputs.some(
+      (output) =>
+        output.location === 'runStorage' &&
+        normalizeFilePath(output.relativePath) === reference.relativePath,
+    );
+    if (!declared) {
+      return yield* Effect.fail(
+        new Error(
+          `${reference.relativePath} is not a declared output of run ${reference.runId}.`,
+        ),
+      );
+    }
+  },
+);
+
 /**
- * Resolve a declared output of a completed direct child run. The absolute path
- * is only a lookup token; persisted lineage and result metadata are the source
- * of authority.
+ * Resolve a file of the calling run's own storage (a document task's
+ * figures), or a declared output of a completed direct child run. The
+ * absolute path is only a lookup token; persisted lineage and result
+ * metadata are the source of authority.
  */
 export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
   function* (
@@ -37,42 +85,9 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
       );
     }
 
-    const store = getRunRecords(session, reference.runId);
-    const [runEnd, resultMeta] = yield* Effect.all([
-      store.readRunEnd(),
-      store.readResultMeta(),
-    ]);
-    if (session.runView(reference.runId)?.parentId !== parentRunId) {
-      return yield* Effect.fail(
-        new Error(
-          `Run ${reference.runId} is not a direct child of ${parentRunId}.`,
-        ),
-      );
-    }
-    if (
-      resultMeta?.producer !== 'subagent' ||
-      runEnd?.output.category !== 'workflow' ||
-      runEnd.outcome !== RUN_OUTCOME.COMPLETED
-    ) {
-      return yield* Effect.fail(
-        new Error(
-          `Run ${reference.runId} has no completed workflow output manifest.`,
-        ),
-      );
-    }
-
-    const declared = runEnd.output.outputs.some(
-      (output) =>
-        output.location === 'runStorage' &&
-        normalizeFilePath(output.relativePath) === reference.relativePath,
-    );
-    if (!declared) {
-      return yield* Effect.fail(
-        new Error(
-          `${reference.relativePath} is not a declared output of run ${reference.runId}.`,
-        ),
-      );
-    }
+    // The calling run's own storage needs no manifest: it is its own.
+    if (reference.runId !== parentRunId)
+      yield* checkDeclaredChildOutput(session, parentRunId, reference);
 
     const entry = yield* inspectRunStorageEntryUnder(
       storageRoot,

@@ -18,12 +18,7 @@ import {
   withProcessServices,
   type ProcessRuntime,
 } from '@platform/processRuntime';
-import {
-  RUN_OUTCOME,
-  type RunEndOutput,
-  type RunId,
-  AgentCategory,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import {
   DatabaseNotOwner,
   type SessionOpenError,
@@ -80,9 +75,6 @@ interface CliExecuteOptions {
    *  shutdown-status step is a finalizer of a child scope of it, so it runs
    *  before the sessions close. */
   readonly shutdownScope: Scope.Scope;
-  /** Forwarded to `runAgent`. Derived by `executeCliConfig` from
-   *  `expectedCategory`, never set by a command handler. */
-  readonly enforceCategory?: boolean;
   /** Stop a tool-use run after one model/tool cycle. */
   readonly stopAfterCycle?: boolean;
   /** Workflow output handler extended with the CLI publication gate; attempt
@@ -103,19 +95,7 @@ interface CliExecuteOptions {
   }>;
 }
 
-type ExecuteAgentResultForCategory<C extends AgentCategory | undefined> =
-  C extends AgentCategory
-    ? CliRunResult & {
-        readonly output: Extract<RunEndOutput, { category: C }>;
-      }
-    : CliRunResult;
-
-export interface CliConfigExecuteOptions<
-  C extends AgentCategory | undefined = undefined,
-> extends Omit<CliExecuteOptions, 'enforceCategory'> {
-  /** Pins the category this command path must stay in: enforced before the
-   *  run by `runAgent`, and the narrowing key for the returned result. */
-  readonly expectedCategory?: C;
+export interface CliConfigExecuteOptions extends CliExecuteOptions {
   /**
    * The persisted run a resume continues, instead of minting a fresh id; its
    * `agentRuns.launch` is the resume path.
@@ -123,12 +103,12 @@ export interface CliConfigExecuteOptions<
   readonly runId?: RunId;
 }
 
-export type CliConfigExecuteResult<C extends AgentCategory | undefined> =
+export type CliConfigExecuteResult =
   | {
       readonly ok: true;
       readonly runId: string;
       readonly outcomePersisted: boolean;
-      readonly result: ExecuteAgentResultForCategory<C>;
+      readonly result: CliRunResult;
     }
   | {
       readonly ok: false;
@@ -138,22 +118,16 @@ export type CliConfigExecuteResult<C extends AgentCategory | undefined> =
 /**
  * Build and validate a headless CLI run request, then run it. Command
  * handlers own command-specific config construction; this module owns the
- * common request lifecycle so workflow, tool-use, and team runs cannot
- * drift on validation, run ids, or category-mismatch status writes.
+ * common request lifecycle so document task, chat and team runs cannot
+ * drift on validation or run ids.
  */
-export function executeCliConfig<
-  C extends AgentCategory | undefined = undefined,
->(
+export function executeCliConfig(
   config: AgentConfigPayload,
   runContext: CliContext,
-  options: CliConfigExecuteOptions<C>,
-): Effect.Effect<CliConfigExecuteResult<C>, Error, CliRunServices> {
+  options: CliConfigExecuteOptions,
+): Effect.Effect<CliConfigExecuteResult, Error, CliRunServices> {
   return Effect.gen(function* () {
-    const {
-      expectedCategory,
-      runId: resumedRunId,
-      ...executeOptions
-    } = options;
+    const { runId: resumedRunId, ...executeOptions } = options;
     const runId = resumedRunId ?? generateRunId();
     const validation = validateRunRequest({ config });
     if (!validation.valid) {
@@ -163,31 +137,15 @@ export function executeCliConfig<
 
     const plugins = yield* readCliPluginPins((yield* options.session).roots);
     const request = { ...validation.request, runId };
-    const run = yield* executeCliRequest(request, runContext, {
-      ...executeOptions,
-      enforceCategory: expectedCategory !== undefined,
-    });
+    const run = yield* executeCliRequest(request, runContext, executeOptions);
     if (!run.ok) {
       return run;
     }
-    const { result } = run;
-
-    if (
-      expectedCategory !== undefined &&
-      result.output.category !== expectedCategory
-    ) {
-      // Unreachable: `enforceCategory` above refuses the launch whenever the
-      // resolved agent setting disagrees, and the output's category is stamped
-      // from that same setting. Kept so the narrowing below stays honest.
-      const message = `Agent resolved to a non ${expectedCategory} run.`;
-      return yield* Effect.fail(new Error(message));
-    }
-
     return {
       ok: true as const,
       runId,
       outcomePersisted: run.outcomePersisted,
-      result: { ...(result as ExecuteAgentResultForCategory<C>), plugins },
+      result: { ...run.result, plugins },
     };
   }).pipe(
     Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
@@ -197,7 +155,7 @@ export function executeCliConfig<
 export function executeCliToolUseConfig(
   config: AgentConfigPayload,
   runContext: CliContext,
-  options: CliConfigExecuteOptions<typeof AgentCategory.ToolUse> & {
+  options: CliConfigExecuteOptions & {
     /** False when invocation-owned temporary inputs will not survive exit. */
     readonly recoveryInputIsDurable?: boolean;
   },
@@ -223,7 +181,6 @@ export function executeCliToolUseConfig(
                 true,
               )))
           : undefined,
-      expectedCategory: AgentCategory.ToolUse,
     });
     if (!run.ok) return run;
 
@@ -535,7 +492,6 @@ export function executeCliRequest(
     const invoke = (): ReturnType<typeof runAgent> =>
       agentRuns.launch(() => shutdownRequested)(request, {
         session,
-        enforceCategory: options.enforceCategory,
         publishWorkflowOutput:
           publishWorkflowOutput === undefined
             ? undefined

@@ -104,7 +104,7 @@ function SessionRow({
     nowMs,
   );
   const approval = pendingApprovalRowDisplay(pendingKinds);
-  const positionLabel = formatLoopPositionLabel(run.position);
+  const positionLabel = formatLoopPositionLabel(run.turn);
   const modelLabel = run.parentId === null ? undefined : run.modelLabel;
   const metadataText = metadataColumn
     ? childRowMetadataText({

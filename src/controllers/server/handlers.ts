@@ -250,7 +250,6 @@ export const serviceHandlers = TexraRpcs.toLayer(
               { config, runId },
               {
                 session,
-                enforceCategory: true,
                 preferHelperModel,
                 ownApiKeyFallback,
                 onRun: launchOnRun(session.approvals, {

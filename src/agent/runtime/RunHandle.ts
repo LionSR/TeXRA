@@ -9,20 +9,17 @@
  */
 
 import type { AgentTrace } from '@agent/trace';
-import type { AgentCategory, RunId, RunIdentity } from '@shared/schemas';
+import type { RunId, RunIdentity } from '@shared/schemas';
 import { runIdentityName } from '@shared/schemas';
 import type { Effect } from 'effect';
 
 /**
  * The run's immutable birth facts, the same values `run.start` publishes and
- * `registerRun` persists. `category` is the launch-time in-memory
- * config's run mode — never re-read from a persisted record or a
- * display projection.
+ * `registerRun` persists.
  */
 export interface RunFacts {
   readonly runId: RunId;
   readonly identity: RunIdentity;
-  readonly category: AgentCategory;
 }
 
 /** One live parent edge, retained by a native activation and its handles. */
@@ -103,10 +100,6 @@ export class RunHandle<
     return runIdentityName(this.run.identity);
   }
 
-  get category(): AgentCategory {
-    return this.run.category;
-  }
-
   /** The launching run this run's results route to, or null for a root and
    *  for a child the registry has detached. */
   get parent(): RunId | null {
@@ -124,9 +117,6 @@ export class RunHandle<
   }
 
   attachControls(controls: RunControls): void {
-    if (this.category !== 'toolUse') {
-      throw new Error('Only tool-use run handles can attach run controls.');
-    }
     this.liveControls = controls;
   }
 

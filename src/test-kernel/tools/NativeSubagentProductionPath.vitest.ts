@@ -17,6 +17,7 @@ import '@test/support/defaultSessionTestSetup';
 import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import {
+  apiKeySecretName,
   chooseReasoning,
   type Model,
   ModelError,
@@ -43,6 +44,7 @@ import { getRunRecords, registerRun } from '@agent/storage';
 import { readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { documentTaskConfig } from '@agent/output/documentRecipe';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { ToolCall } from '@agent/runtime/ToolCall';
@@ -70,7 +72,6 @@ import {
   RUN_PHASE,
   type RunId,
   type SessionEvent,
-  AgentCategory,
 } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { noopTrace } from '@test/support/noopTrace';
@@ -89,6 +90,7 @@ import {
 } from '@test/support/tempDirPlatform';
 import {
   fakeHostAgentDirectories,
+  fakeHostSecrets,
   setupPlatform,
   type FakeHost,
 } from '@test/support/setupPlatform';
@@ -104,6 +106,7 @@ import type { RunToolCall } from '@tools/core/toolRun';
 import { launchDetachedSubagent } from '@tools/delegation/subagentRun';
 import { readCompletedRunConversation } from '@transcript';
 import { generateRunId } from '@utils/core';
+import { RunFileService } from '@utils/files/runStorage';
 import { ResolvedTurnSchema } from '../../../packages/llm/src/turn.js';
 
 const PARENT_RUN_ID = 'a9531a9531a9' as RunId;
@@ -320,6 +323,7 @@ function scriptedBoundModel(
     backgroundCapable: false,
     persistentConnection: false,
     automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
+    textOnly: false,
   };
 }
 
@@ -455,7 +459,6 @@ const launchChild = (
 ) =>
   Effect.gen(function* () {
     return yield* launchDetachedSubagent(parent, payload, {
-      parentRunId: PARENT_RUN_ID,
       runId: generateRunId(),
       parentOffered: yield* offeredBy(parent.run),
       inheritChildRunApprovals: (childRunId) =>
@@ -545,7 +548,6 @@ async function launchWaitingChild(options: {
   const parentConfig = AgentConfigSchema.parse({
     agent: PARENT_AGENT,
     agentSource: 'custom',
-    agentCategory: AgentCategory.ToolUse,
     model: PARENT_MODEL,
     instruction: 'Coordinate the child proof review.',
     workingDirectory: process.cwd(),
@@ -589,6 +591,9 @@ async function launchWaitingChild(options: {
     run: {
       runId: PARENT_RUN_ID,
       session,
+      task: null,
+      opening: null,
+      fileService: new RunFileService(PARENT_RUN_ID, session.roots),
       scope: Scope.makeUnsafe(),
       config: AgentConfigSchema.parse({
         agent: 'chat',
@@ -606,7 +611,6 @@ async function launchWaitingChild(options: {
     launchChild(parentCall, {
       agent: CHILD_AGENT,
       agentSource: 'custom',
-      agentCategory: AgentCategory.ToolUse,
       model: CHILD_MODEL,
       instruction: 'Prove the first assertion.',
       memories: [],
@@ -659,6 +663,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       ),
     );
     parentFiber = undefined;
+    // A document task's revisions delegate on a model a key makes available.
+    await Effect.runPromise(
+      fakeHostSecrets.set(apiKeySecretName('openai'), 'test-fake-key'),
+    );
   });
 
   afterEach(async () => {
@@ -1284,15 +1292,17 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
                 'launch_workflow_child',
                 yield* ToolCall,
               );
-              const launched = yield* launchChild(parent, {
-                agent: WORKFLOW_CHILD_AGENT,
-                agentSource: 'custom',
-                agentCategory: AgentCategory.Workflow,
-                model: CHILD_MODEL,
-                instruction: 'Polish the notes.',
-                inputFiles: ['notes.md'],
-                memories: [],
-              });
+              const launched = yield* launchChild(
+                parent,
+                documentTaskConfig({
+                  agent: WORKFLOW_CHILD_AGENT,
+                  agentSource: 'custom',
+                  model: CHILD_MODEL,
+                  instruction: 'Polish the notes.',
+                  inputFiles: ['notes.md'],
+                  memories: [],
+                }),
+              );
               childId = childRunId(launched.output);
               return launched;
             }) as unknown as ReturnType<ITool['call']>,
@@ -1300,7 +1310,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         const parentConfig = AgentConfigSchema.parse({
           agent: PARENT_AGENT,
           agentSource: 'custom',
-          agentCategory: AgentCategory.ToolUse,
           model: PARENT_MODEL,
           instruction: 'Polish the notes through the workflow child.',
           workingDirectory: workspace,
@@ -1408,14 +1417,15 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           launchDesktopAgent(
             {
               runId,
-              config: AgentConfigSchema.parse({
-                agent: WORKFLOW_CHILD_AGENT,
-                agentSource: 'custom',
-                agentCategory: AgentCategory.Workflow,
-                model: CHILD_MODEL,
-                instruction: 'Polish the notes.',
-                inputFiles: ['notes.md'],
-              }),
+              config: AgentConfigSchema.parse(
+                documentTaskConfig({
+                  agent: WORKFLOW_CHILD_AGENT,
+                  agentSource: 'custom',
+                  model: CHILD_MODEL,
+                  instruction: 'Polish the notes.',
+                  inputFiles: ['notes.md'],
+                }),
+              ),
             },
             { session, runtime: testRuntime() },
           ),

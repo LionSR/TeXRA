@@ -9,39 +9,42 @@ Every agent run flows through one entry point: `texra.execute` command →
 `runAgent`, which assigns the run id and calls
 `executeAgent(definition, runId, options)`. The runtime takes a
 `PreparedAgentDefinition` (agent name, model, instruction, and optional input
-/ memory / working-directory fields), resolves the YAML, and dispatches one of
-two flow shapes:
+/ memory / working-directory fields), resolves the YAML, and runs it in one of
+two ways:
 
-- **Workflow flow** for a file with a `task` block. One revision per
-  `task.requests` entry, in order. Operates on `inputFiles` (or the active
-  editor selection). Emits LaTeX output files from the unified `<documents>`
-  container / `task.outputs`.
-- **Tool-use flow** for a file without `task`. Multi-step loop invoking
-  declared tools. May WAIT for interim follow-ups, spawn subagents via
-  the `agent` tool (directly or from a `script`), and resume.
+- **A chat** (or an `agent` call): any agent, given a prompt. Multi-step
+  loop invoking its declared tools. May WAIT for interim follow-ups, spawn
+  subagents via the `agent` tool (directly or from a `script`), and resume.
+- **A document task** (or a `document_task` call): only an agent with a
+  `task` block, over `inputFiles` (or the active editor selection). One
+  revision per `task.requests` entry, in order; each revision calls the
+  agent once and extracts LaTeX output files from the unified `<documents>`
+  container / `task.outputs`. The last revision's documents are proposed
+  for the user to accept.
 
 The creator agent does NOT need to call `executeAgent` directly. Instead it
-delegates through the `agent` tool, which handles everything (including approval and the
-follow-up queue) the way an ordinary user would.
+delegates through the `agent` and `document_task` tools, which handle
+everything (including approval and the follow-up queue) the way an ordinary
+user would.
 
 ## Testing a new agent
 
-Use the `agent` tool in the `tools:` list of `creator.yaml`. The named
-agent decides the category: pass `inputFiles` to a workflow agent and none
-to a tool-use agent.
+Use the `agent` and `document_task` tools in the `tools:` list of
+`creator.yaml`: `document_task` with `inputFiles` for an agent with a `task`
+block, `agent` with a prompt for one without.
 
-### Testing a workflow agent
+### Testing a document task
 
 1. Make a small test input in the workspace. Example:
    ```
    bash: mkdir -p test_inputs
    write_file test_inputs/sample.tex with a 5–10 line LaTeX snippet
    ```
-2. Call `agent`:
+2. Call `document_task`:
    ```
-   agent(
+   document_task(
      agentName: "my_new_polish",
-     model: "<a configured workflow model>",
+     model: "<a configured model>",
      prompt: "Tighten the abstract",
      inputFiles: ["./test_inputs/sample.tex"]
    )
@@ -52,13 +55,13 @@ to a tool-use agent.
      content.
    - Report pass/fail to the user.
 
-### Testing a tool-use agent
+### Testing an agent without a task
 
 1. Call `agent`:
    ```
    agent(
      agentName: "my_new_tool_agent",
-     model: "<a configured tool-use model>",
+     model: "<a configured model>",
      prompt: "Do X (small end-to-end smoke test)"
    )
    ```
@@ -78,5 +81,5 @@ plainly in the hand-off message that the agent has not been exercised.
 ## Iterating
 
 If a test fails — invalid YAML, missing tool, unclear prompt, wrong output
-structure — use `edit_file` on the custom YAML and re-run the `agent`
-call. It picks up the updated file on the next invocation.
+structure — use `edit_file` on the custom YAML and re-run the `agent` or
+`document_task` call. It picks up the updated file on the next invocation.

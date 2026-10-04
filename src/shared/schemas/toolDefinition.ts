@@ -1,7 +1,5 @@
 import { z, type ZodType } from 'zod';
 
-import { AgentCategorySchema } from './agent';
-
 /**
  * Zod schema for validating tool definition structure.
  * Single source of truth - type is derived via z.infer<>.
@@ -22,15 +20,6 @@ export const ToolDefinitionSchema = z.looseObject({
   parameters: z.record(z.string(), z.unknown()).optional(),
   /** Runtime-only: original Zod schema for SDK-native conversion */
   zodSchema: z.custom<ZodType>().optional(),
-  /**
-   * Agent category this delegation tool launches, or the categories when it
-   * launches either (`agent`), whose agents the run's delegation targets
-   * list. Declared by the tool itself — never a side table mapping tool
-   * names to categories.
-   */
-  availabilityCategory: z
-    .union([AgentCategorySchema, z.array(AgentCategorySchema).readonly()])
-    .optional(),
   /**
    * What a script's call of the tool resolves to, as a TypeScript type, when
    * it is not `ToolOutput` (`{ output, summary }`): a tool whose result

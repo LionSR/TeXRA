@@ -9,7 +9,7 @@ Figures carry a lot of the evidence in theoretical work: a plot that a derivatio
 
 ::: tip CLI
 This page covers the VS Code **Media** selector. From the [`texra` CLI](./texra-cli.md),
-work with a figure conversationally in `texra chat`, or let a tool-use agent
+work with a figure conversationally in `texra chat`, or let an agent
 pull figures out of your documents with the built-in extraction tools.
 (`--context` files are read as text, so they are for `.tex` and
 `.bib` sources, not images.)
@@ -115,7 +115,7 @@ Enable extraction from the **Auto Extract** dropdown (<wa-icon library="texra" n
 
 ## <wa-icon library="texra" name="tools"></wa-icon> Figure extraction tools
 
-Tool-use agents can extract figures programmatically. These tools are part of the **LaTeX Extraction** built-in tool group and are always available. In a run, an agent like `research` drives them one after another, attaching what it finds so a multimodal model can read it:
+Agents can extract figures programmatically. These tools are part of the **LaTeX Extraction** built-in tool group and are always available. In a run, an agent like `research` drives them one after another, attaching what it finds so a multimodal model can read it:
 
 <ToolCallPanel
   title="research"

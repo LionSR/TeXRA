@@ -10,7 +10,6 @@ import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
-import { AgentCategory } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
@@ -106,7 +105,7 @@ describe('bindModel', () => {
               modelId,
               config: selected.config,
               stores: hostStores(),
-              agentCategory: AgentCategory.Workflow,
+              textOnly: true,
               temperature: 0,
             }),
           ),
@@ -147,6 +146,14 @@ describe('bindModel', () => {
       expect(MODEL_CONFIGS[GPT4O].id).not.toBe(MODEL_CONFIGS[GPT4O].shortName);
       expect(exit.value.origin.requestedModel).toBe(
         MODEL_CONFIGS[GPT4O].shortName,
+      );
+      // A text-only persona's binding keeps the whole output budget.
+      const turn = yield* exit.value.model.prepareTurn({
+        messages: [{ role: 'user', content: [{ kind: 'text', text: 'hi' }] }],
+      });
+      assert(turn.protocol === 'openai-responses');
+      expect(turn.controls.maxOutputTokens).toBe(
+        MODEL_CONFIGS[GPT4O].maxOutputTokens,
       );
     }),
   );

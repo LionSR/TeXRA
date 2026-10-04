@@ -14,7 +14,7 @@ This guide walks you through creating your own agent definition files (`.yaml`) 
 ::: info Agent fundamentals
 Before creating a custom agent, it helps to understand the underlying concepts:
 
-- <wa-icon library="texra" name="symbol-structure"></wa-icon> **Agent architecture and execution flow**: the `.yaml` structure, settings, prompts, and how agents run. Read the [Workflow agents: how they work](./agent-architecture.md) guide.
+- <wa-icon library="texra" name="symbol-structure"></wa-icon> **Agent architecture and execution flow**: the `.yaml` structure, settings, prompts, and how agents run. Read the [Document tasks: how they work](./agent-architecture.md) guide.
 - <wa-icon library="texra" name="sparkle"></wa-icon> **Built-in agents**: the standard agents TeXRA provides, useful as examples and as inheritance parents. Read the [Built-in agent reference](./built-in-agents.md).
 - <wa-icon library="texra" name="dashboard"></wa-icon> **Agents tab**: browse and manage agent files from the **Agents** tab (<wa-icon library="texra" name="sparkle"></wa-icon>) in the TeXRA Settings.
   :::
@@ -36,11 +36,11 @@ Custom agents live in a dedicated directory that TeXRA prepares for you.
 
 ### <wa-icon library="texra" name="wand"></wa-icon> Automatic creation
 
-To have TeXRA draft an agent for you, run the built-in [`creator`](./built-in-agents.md#creator) tool-use agent and describe the behavior you want. It studies the existing agents, writes the YAML into your custom agents folder (you approve the write like any other edit), and can test the new agent before handing it over.
+To have TeXRA draft an agent for you, chat with the built-in [`creator`](./built-in-agents.md#creator) agent and describe the behavior you want. It studies the existing agents, writes the YAML into your custom agents folder (you approve the write like any other edit), and can test the new agent before handing it over.
 
 ### <wa-icon library="texra" name="file-add"></wa-icon> Step 2: create a new YAML file
 
-1. In the **Agents** tab, select **Create from template** (<wa-icon library="texra" name="file-circle-plus"></wa-icon>) to create a new agent YAML file in your custom agents directory.
+1. In the **Agents** tab, select **New chat agent** or **New document task** (<wa-icon library="texra" name="file-circle-plus"></wa-icon>) to create a new agent YAML file from a template in your custom agents directory.
 2. Alternatively, select the folder icon (<wa-icon library="texra" name="folder-open"></wa-icon>, **Open custom agents folder**) in the directory info bar to open the directory and create a `.yaml` file manually.
 3. Choose a descriptive name using underscores and ending with `.yaml` (for example `literature_review_generator.yaml`).
 
@@ -74,8 +74,8 @@ prompt: |
   [Define the AI's role and core instructions]
 
 # --- Document task ---
-# A `task` block makes this a workflow agent. Without it, the file is a
-# tool-use agent (see below). A file with `task` cannot also list `tools`.
+# A `task` block lets this agent also run as a document task. Without it,
+# the agent only chats (see below). A file with `task` cannot also list `tools`.
 task:
   rewrite: true # Edit the input documents (true, the default) or write new documents (false).
 
@@ -93,12 +93,12 @@ task:
 
   requests:
     - |
-      # The prompt for the AI's first round of work (Round 0).
+      # The prompt for the AI's first revision.
       # Often includes guidance for thinking (<scratchpad>) and the fixed <documents> output structure.
       [Define the initial task prompt, potentially including scratchpad guidance]
     - |
-      # Optional follow-up prompt for a reflection round (Round 1+).
-      # Each entry is one round: add or remove entries to control how many run.
+      # Optional follow-up prompt for a reflection revision.
+      # Each entry is one revision: add or remove entries to control how many run.
       [Define how the model should critique or iterate on its previous output]
 ```
 
@@ -108,7 +108,7 @@ field; you choose the model when you run the agent.
 
 > **Reflection tips:** TeXRA takes the first `requests` entry as the initial
 > request and each remaining entry as one reflection prompt, in order. The
-> number of entries is the number of rounds.
+> number of entries is the number of revisions.
 
 #### <wa-icon library="texra" name="symbol-variable"></wa-icon> Using variables in prompts (Nunjucks templating)
 
@@ -160,7 +160,7 @@ task:
 
 **Key considerations:**
 
-- <wa-icon library="texra" name="symbol-structure"></wa-icon> **Architecture overview:** For the execution flow and how prompts and settings interact, read the [Workflow agents: how they work](./agent-architecture.md) guide.
+- <wa-icon library="texra" name="symbol-structure"></wa-icon> **Architecture overview:** For the execution flow and how prompts and settings interact, read the [Document tasks: how they work](./agent-architecture.md) guide.
 - <wa-icon library="texra" name="type-hierarchy"></wa-icon> **Inheritance:** Inheriting from a related agent in the same directory (for example a customized copy of `correct` or `polish`) saves effort. Define only the fields you need to change.
 - <wa-icon library="texra" name="files"></wa-icon> **Multiple outputs:** If your agent needs to generate multiple distinct files, make sure your prompts generate the required XML structure. Read the [Handling multiple files](./multiple-output.md) guide.
 - <wa-icon library="texra" name="rocket"></wa-icon> **Start simple:** Begin with basic settings and prompts and add complexity incrementally.
@@ -168,23 +168,23 @@ task:
 
 ### <wa-icon library="texra" name="link"></wa-icon> Chaining agents together
 
-After a workflow agent finishes, TeXRA captures the output so follow-up steps can reuse it without another trip through the file picker. This is how multi-stage pipelines work: for example, an orchestrator agent can run a `polish` step, then hand the result to a `correct` step, all in one session.
+After a document task finishes, its result lists the output files, so follow-up steps can reuse them without another trip through the file picker. This is how multi-stage pipelines work: for example, an orchestrator agent can run `polish` with the `document_task` tool, then hand the result to a `correct` task, all in one session.
 
 You do not need to configure this yourself; it happens when an agent definition includes orchestration prompts. The reference agents contain working examples.
 
-### <wa-icon library="texra" name="tools"></wa-icon> Tool-use agents
+### <wa-icon library="texra" name="tools"></wa-icon> Agents with tools
 
-Tool-use agents are interactive: instead of producing a single polished file, they hold a conversation and take actions on your behalf, such as reading and editing files, searching the web, and looking up papers.
+An agent without a `task` block works in a chat: instead of producing a single polished file, they hold a conversation and take actions on your behalf, such as reading and editing files, searching the web, and looking up papers.
 
 **Typical user story:** You are writing up results for a conference submission and realize you need three new BibTeX entries, a TikZ architecture diagram, and a consistency pass across four `.tex` files. Rather than juggling browser tabs and terminal windows, you open a `research` agent (<wa-icon library="texra" name="sparkle"></wa-icon>) and describe what you need. The agent reads your project, searches arXiv for the missing references, drafts the TikZ code, and edits the files, all in one session.
 
-To create your own tool-use agent, leave out the `task` block and list the tools you want to grant. A tool-use agent has no request template: what you type is sent as the user message. TeXRA groups tools by the plugin that adds them (listed on **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>)). Each chip below is a token you can put straight into your `tools:` array:
+To create your own agent with tools, leave out the `task` block and list the tools you want to grant. Such an agent has no request template: what you type is sent as the user message. TeXRA groups tools by the plugin that adds them (listed on **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>)). Each chip below is a token you can put straight into your `tools:` array:
 
 <ToolCategoriesHero />
 
 <p class="hero-caption">The grantable tool categories; every chip is a name you can list verbatim in your agent's <code>tools:</code> array.</p>
 
-For the exact tool names to list in your YAML, browse any of the built-in tool-use agents (like `research`, `review`, `lean`, or `numerics`) in the **Agents** tab. Their `tools:` array shows which tools are wired up.
+For the exact tool names to list in your YAML, browse any of the built-in agents with tools (like `research`, `review`, `lean`, or `numerics`) in the **Agents** tab. Their `tools:` array shows which tools are wired up.
 
 Example skeleton:
 
@@ -209,7 +209,7 @@ The ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>) lo
 
 If your workflow requires several output files, your agent must structure its
 response using the appropriate filename list. Below is a simplified template
-for a workflow agent that writes two generated output files:
+for a document task that writes two generated output files:
 
 ```yaml
 name: intro_and_conclusion

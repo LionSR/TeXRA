@@ -11,8 +11,8 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 interface SettingsTeamCatalog {
-  getPresetToolUseRoot(
-    toolUseAgents: string[],
+  getPresetRoot(
+    members: string[],
     presetId?: string,
   ): Effect.Effect<string | undefined, StateReadFailed>;
 }
@@ -56,11 +56,10 @@ export function applySettingsTeam<R = never>(
         );
         return;
       case 'applied': {
-        const selectedToolUseAgent =
-          yield* options.catalog.getPresetToolUseRoot(
-            result.preset.agents.toolUse,
-            result.preset.id,
-          );
+        const selectedToolUseAgent = yield* options.catalog.getPresetRoot(
+          [...result.preset.agents],
+          result.preset.id,
+        );
         yield* options.refreshAfterApply(selectedToolUseAgent).pipe(
           Effect.mapError(
             (cause) =>

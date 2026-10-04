@@ -5,7 +5,7 @@ import { confirmCardContentWidth } from '@cli/tui/ui/theme';
 import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { formatAgentProposalFileGroup } from '@cli/runtime/approval/approvalSummaries';
 import {
-  agentProposalCategoryLabel,
+  agentProposalLabel,
   getProposalFileGroups,
   type AgentProposalPermission,
 } from '@shared/schemas';
@@ -41,7 +41,7 @@ interface MetadataSegment {
 /**
  * One line of the proposal card's metadata block. Segments (rather than a
  * single bold prefix) let a line carry more than one bold span — e.g. the
- * `Model: X · Category: Y` line's two mid-line labels. `tone` maps to the
+ * `Model: X · Kind: Y` line's two mid-line labels. `tone` maps to the
  * shared color/dim vocabulary; `marginTop` reproduces a blank spacer row
  * (not text) above the line, matching the plain-approval branch's file-group
  * Box marginTop.
@@ -139,8 +139,8 @@ function agentProposalMetadataLines({
         { text: 'Model: ', bold: true },
         { text: getModelLabel(payload.model) },
         { text: ' · ' },
-        { text: 'Category: ', bold: true },
-        { text: agentProposalCategoryLabel(payload.agentCategory) },
+        { text: 'Kind: ', bold: true },
+        { text: agentProposalLabel(payload) },
       ],
     },
   ];

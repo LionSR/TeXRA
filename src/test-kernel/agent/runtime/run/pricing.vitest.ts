@@ -71,6 +71,7 @@ const boundAnthropic: BoundModel = {
   backgroundCapable: false,
   persistentConnection: false,
   automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
+  textOnly: false,
 };
 
 function anthropicUsage(breakdown: {

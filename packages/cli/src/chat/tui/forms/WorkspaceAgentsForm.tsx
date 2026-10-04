@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 import {
   createWorkspaceAgentsController,
-  getAgentsByCategory,
+  getCatalogAgents,
   type AgentEntry,
 } from '@agent/index';
 import {
@@ -21,12 +21,8 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   AGENT_MODE_PRESETS,
   agentKeyOf,
-  byCategory,
   STARTER_AGENT_MODE_PRESET,
-  type AgentCategory,
   type AgentModePreset,
-  type WorkspaceAgentsCategorySelection,
-  type ByCategory,
 } from '@shared/schemas';
 
 import { renderAsyncListFormTransient } from './_shared/FormFrame';
@@ -34,17 +30,12 @@ import { ListForm } from './_shared/ListForm';
 import { runFormWrite, useAsyncListForm } from './_shared/useAsyncListForm';
 
 type WorkspaceAgentsFormMode =
-  | 'overview'
-  | 'workspace'
-  | 'default'
-  | 'chat-default'
-  | 'custom-category'
-  | AgentCategory;
+  'overview' | 'workspace' | 'default' | 'chat-default' | 'custom';
 
 interface WorkspaceAgentsData {
   readonly record: CliWorkspaceAgentsRecord;
   readonly presets: readonly AgentModePreset[];
-  readonly agents: ByCategory<readonly AgentEntry[]>;
+  readonly agents: readonly AgentEntry[];
 }
 
 interface WorkspaceAgentsFormProps {
@@ -89,17 +80,11 @@ function buildChatDefaultAgentItems(
 }
 
 function selectedAgentKeys(
-  selection: WorkspaceAgentsCategorySelection,
+  selection: CliWorkspaceAgentsRecord['agentKeys'],
   agents: readonly AgentEntry[],
 ): readonly string[] {
   if (selection === 'all') return agents.map(agentKeyOf);
   return selection;
-}
-
-function selectionSizeLabel(
-  selection: WorkspaceAgentsCategorySelection,
-): string {
-  return selection === 'all' ? 'all' : String(selection.length);
 }
 
 export function WorkspaceAgentsForm(
@@ -121,7 +106,7 @@ export function WorkspaceAgentsForm(
           ({ record, presets }): WorkspaceAgentsData => ({
             record,
             presets,
-            agents: byCategory((category) => getAgentsByCategory(category)),
+            agents: getCatalogAgents(),
           }),
         ),
       runtime: props.runtime,
@@ -198,9 +183,12 @@ export function WorkspaceAgentsForm(
           description: data.record.defaultChatAgent ?? '(automatic)',
         },
         {
-          value: 'custom-category',
+          value: 'custom',
           label: 'Custom selection',
-          description: `${selectionSizeLabel(data.record.agentKeys.workflow)} workflow, ${selectionSizeLabel(data.record.agentKeys.toolUse)} tool-use`,
+          description:
+            data.record.agentKeys === 'all'
+              ? 'all agents'
+              : `${data.record.agentKeys.length} agents`,
         },
       ],
       (value) => setMode(value as WorkspaceAgentsFormMode),
@@ -275,8 +263,8 @@ export function WorkspaceAgentsForm(
   if (mode === 'chat-default') {
     return frame(
       buildChatDefaultAgentItems(
-        data.agents.toolUse,
-        selectedAgentKeys(data.record.agentKeys.toolUse, data.agents.toolUse),
+        data.agents,
+        selectedAgentKeys(data.record.agentKeys, data.agents),
       ),
       (value) => {
         const cwd = props.workspaceRoot;
@@ -296,35 +284,14 @@ export function WorkspaceAgentsForm(
     );
   }
 
-  if (mode === 'custom-category') {
-    return frame(
-      [
-        {
-          value: 'workflow',
-          label: 'Workflow agents',
-          description: 'Choose document-processing agents',
-        },
-        {
-          value: 'toolUse',
-          label: 'Tool-use agents',
-          description: 'Choose chat and delegation agents',
-        },
-      ],
-      (value) => setMode(value as AgentCategory),
-      () => setMode('overview'),
-    );
-  }
-
-  const agents = data.agents[mode];
-  const selected = new Set(
-    selectedAgentKeys(data.record.agentKeys[mode], agents),
-  );
+  const agents = data.agents;
+  const selected = new Set(selectedAgentKeys(data.record.agentKeys, agents));
   return frame(
     agents.map((agent) => {
       const key = agentKeyOf(agent);
       return {
         value: key,
-        label: `${selected.has(key) ? `${TICK} ` : ''}${agent.name}`,
+        label: `${selected.has(key) ? `${TICK} ` : ''}${agent.name}${agent.task === null ? '' : ' · document task'}`,
         description: agent.description,
       };
     }),
@@ -333,13 +300,12 @@ export function WorkspaceAgentsForm(
       if (!agent) return;
       write(() =>
         createWorkspaceAgentsController(roots).setAgentEnabled({
-          category: mode,
           source: agent.source,
           name: agent.name,
           enabled: !selected.has(value),
         }),
       );
     },
-    () => setMode('custom-category'),
+    () => setMode('overview'),
   );
 }

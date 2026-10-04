@@ -5,7 +5,6 @@ import { TurnProtocolSchema } from '@texra-ai/llm';
 import type { ConfigProvider } from '@platform/interfaces';
 import {
   AGENT_SOURCE,
-  AgentCategory,
   UsageRouteSchema,
   type AgentSource,
 } from '@shared/schemas';
@@ -19,10 +18,7 @@ export function usageAgentName(
   name: string,
   source: AgentSource | null | undefined,
 ): string {
-  return source === AGENT_SOURCE.BUILT_IN_WORKFLOW ||
-    source === AGENT_SOURCE.BUILT_IN_TOOL_USE
-    ? name
-    : 'custom';
+  return source === AGENT_SOURCE.BUILT_IN ? name : 'custom';
 }
 
 const UsageLogMetadataSchema = z.object({
@@ -32,7 +28,6 @@ const UsageLogMetadataSchema = z.object({
    * protocol names under the same versioning rule as the rest of this wire. */
   provider: TurnProtocolSchema,
   agentName: z.string().optional(),
-  agentCategory: z.enum(AgentCategory).optional(),
   /** Canonical route used to account for API-key/subscription usage. */
   usageRoute: UsageRouteSchema.optional(),
   /** Wire key of the usage-log edge function (`supabase/functions/log-usage-v2`), which

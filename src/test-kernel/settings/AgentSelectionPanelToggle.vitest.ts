@@ -18,24 +18,22 @@ import {
 
 type AgentSelectionPanelElement = HTMLElement & {
   agents: AgentSelectionItem[];
-  category: 'workflow' | 'toolUse';
   updateComplete: Promise<boolean>;
 };
 
-const workflowAgent: AgentSelectionItem = {
+const taskAgent: AgentSelectionItem = {
   name: 'summarize',
-  category: 'workflow',
-  source: AGENT_SOURCE.BUILT_IN_WORKFLOW,
+  hasTask: true,
+  source: AGENT_SOURCE.BUILT_IN,
   hasPath: true,
   enabled: true,
 };
 
 function renderAgentSelectionPanel(
-  agents: AgentSelectionItem[] = [workflowAgent],
+  agents: AgentSelectionItem[] = [taskAgent],
 ): Promise<AgentSelectionPanelElement> {
   return mountComponent<AgentSelectionPanelElement>('agent-selection-panel', {
     agents,
-    category: 'workflow',
   });
 }
 
@@ -76,8 +74,7 @@ describe('AgentSelectionPanel', () => {
         SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
         {
           agentName: 'summarize',
-          agentSource: AGENT_SOURCE.BUILT_IN_WORKFLOW,
-          category: 'workflow',
+          agentSource: AGENT_SOURCE.BUILT_IN,
           enabled: false,
         },
       ],
@@ -90,9 +87,9 @@ describe('AgentSelectionPanel', () => {
   it('flags a custom copy whose built-in changed and offers its three resolutions', async () => {
     const panel = await renderAgentSelectionPanel([
       {
-        ...workflowAgent,
+        ...taskAgent,
         source: AGENT_SOURCE.CUSTOM,
-        newerBuiltIn: AGENT_SOURCE.BUILT_IN_WORKFLOW,
+        newerBuiltIn: AGENT_SOURCE.BUILT_IN,
       },
     ]);
     const root = panel.shadowRoot!;
@@ -111,7 +108,7 @@ describe('AgentSelectionPanel', () => {
     expect(mocks.postMessage.mock.calls).toEqual([
       [
         SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML,
-        { agentName: 'summarize', agentSource: AGENT_SOURCE.BUILT_IN_WORKFLOW },
+        { agentName: 'summarize', agentSource: AGENT_SOURCE.BUILT_IN },
       ],
       [SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT, { agentName: 'summarize' }],
       [SETTINGS_VIEW_COMMANDS.KEEP_CUSTOM_AGENT, { agentName: 'summarize' }],

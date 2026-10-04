@@ -5,7 +5,6 @@ import type { AgentTrace } from '@agent/trace';
 import { RunHandle, type RunFacts } from '@agent/runtime/RunHandle';
 import { RunRegistry, type RunRegistryInit } from '@agent/runtime/runRegistry';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
-import { AgentCategory } from '@shared/schemas';
 import type { RunId, RunIdentity } from '@shared/schemas';
 import { testPinPlugins } from './testPluginServices';
 import { testRuntime } from './testProcessRuntime';
@@ -26,7 +25,6 @@ export function testRunHandle(input: {
   /** The parent edge; omitted (or null) for a root. */
   parent?: RunId | null;
   agent: string;
-  category?: AgentCategory;
   /** Defaults to a native agent identity for `agent`. */
   identity?: RunIdentity;
   trace?: AgentTrace;
@@ -34,7 +32,6 @@ export function testRunHandle(input: {
   const run: RunFacts = {
     runId: input.runId,
     identity: input.identity ?? { kind: 'agent', agent: input.agent },
-    category: input.category ?? AgentCategory.ToolUse,
   };
   return new RunHandle(run, input.parent ?? null, input.trace);
 }

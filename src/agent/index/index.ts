@@ -11,7 +11,7 @@
 
 export {
   AgentDirectoryService,
-  agentSourceDirectory,
+  agentSourceRoots,
 } from './AgentDirectoryService';
 
 export {
@@ -29,9 +29,9 @@ export type { AgentEntry } from './agentEntry';
 export {
   changedBuiltInOf,
   getAgent,
-  getCategoryAgent,
+  getCatalogAgent,
   resolveAgentForLaunch,
-  getAgentsByCategory,
+  getCatalogAgents,
   getCatalogLoadFailure,
   getCustomAgentScanIssues,
   refresh,

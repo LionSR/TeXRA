@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect } from 'vitest';
 import { PersonaSchema } from '@agent/core/definition/AgentDataclass';
 import {
   findAgentByIdentifier,
-  getCategoryAgent,
+  getCatalogAgent,
   getVisibleAgents,
   refresh,
   resolveAgentForLaunch,
@@ -20,7 +20,6 @@ import {
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalStorageFs } from '@platform/rootedFs';
-import { AgentCategory } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
@@ -34,45 +33,43 @@ import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 /** The entry validation accepts: `identifier` within the visible agents. */
-function visibleAgent(category: AgentCategory, identifier: string) {
-  return getVisibleAgents(hostStores(), category).pipe(
+function visibleAgent(identifier: string) {
+  return getVisibleAgents(hostStores()).pipe(
     Effect.map((entries) => findAgentByIdentifier(entries, identifier)),
   );
 }
 
 /** Resolve exactly as launch does: through the single launch resolver, by the
  * source the delegation captured at validation time (see `getAgentPath`). */
-function launchAs(category: AgentCategory, entry: AgentEntry | undefined) {
+function launchAs(entry: AgentEntry | undefined) {
   return entry
-    ? resolveAgentForLaunch(hostStores(), category, entry.name, entry.source)
+    ? resolveAgentForLaunch(hostStores(), entry.name, entry.source)
     : Effect.succeed(undefined);
 }
 
 /**
- * A custom *workflow* agent named `assistant` collides with the bundled
- * *tool-use* `assistant`. Validation resolves through the category-aware
- * the visible agents; a category-blind resolver would answer the same name with
- * the custom workflow entry (source priority: custom > … > builtInToolUse) and
- * the run would fail with a category mismatch. Launch therefore carries the
- * validated entry's *source* and resolves the exact `(source, name)` key, so
- * it cannot diverge from what validation accepted.
+ * A custom agent named `assistant` shadows the bundled `assistant`. A bare
+ * name resolves to the higher-priority custom entry; a delegation that
+ * validated the built-in carries the entry's *source*, and launch resolves the
+ * exact `(source, name)` key, so it cannot diverge from what validation
+ * accepted.
  */
-describe('cross-category agent resolution', () => {
+describe('shadowed agent resolution', () => {
   const tempDirs: string[] = [];
 
   beforeAll(async () => {
     const customAgents: Record<string, string[]> = {
       'assistant.yaml': [
         'name: assistant',
-        'description: Custom workflow agent that shadows a built-in name.',
-        'prompt: Custom workflow assistant.',
+        'description: Custom document task that shadows a built-in name.',
+        'prompt: Custom assistant.',
         'task:',
         '  requests:',
         '    - Revise the documents.',
       ],
       'review.yaml': [
         'name: review',
-        'description: Custom tool-use agent that shadows a built-in name.',
+        'description: Custom agent that shadows a built-in name.',
         'prompt: Custom review agent.',
       ],
     };
@@ -127,24 +124,11 @@ describe('cross-category agent resolution', () => {
     'pins launch to the exact (source, name) entry validation captured',
     () =>
       Effect.gen(function* () {
-        // The tool-use delegation validates via the visible agents and carries the
-        // entry's source; launch resolves that exact key — the built-in tool-use
-        // entry, never the colliding custom workflow shadow.
-        const toolUse = yield* launchAs(
-          'toolUse',
-          yield* visibleAgent('toolUse', 'assistant'),
-        );
-        expect(toolUse?.category).toBe('toolUse');
-        expect(toolUse?.source).toBe('builtInToolUse');
+        const builtIn = yield* launchAs(getCatalogAgent('builtIn:assistant'));
+        expect(builtIn?.source).toBe('builtIn');
 
-        // The same mechanism reaches the custom workflow entry when that is what a
-        // workflow delegation validated.
-        const workflow = yield* launchAs(
-          'workflow',
-          yield* visibleAgent('workflow', 'assistant'),
-        );
-        expect(workflow?.category).toBe('workflow');
-        expect(workflow?.source).toBe('custom');
+        const custom = yield* launchAs(yield* visibleAgent('assistant'));
+        expect(custom?.source).toBe('custom');
       }),
   );
 
@@ -153,65 +137,44 @@ describe('cross-category agent resolution', () => {
     () =>
       Effect.gen(function* () {
         // A direct launch without a pinned source (e.g. the webview "Run") routes
-        // through the visible agents — the identical lookup validation makes — so it
-        // resolves to exactly the entry validation would, never a same-name shadow.
-        const toolUse = yield* resolveAgentForLaunch(
+        // through the visible agents — the identical lookup validation makes.
+        const unpinned = yield* resolveAgentForLaunch(
           hostStores(),
-          AgentCategory.ToolUse,
           'assistant',
         );
-        expect(toolUse).toBe(yield* visibleAgent('toolUse', 'assistant'));
-        expect(toolUse?.source).toBe('builtInToolUse');
-
-        const workflow = yield* resolveAgentForLaunch(
-          hostStores(),
-          AgentCategory.Workflow,
-          'assistant',
-        );
-        expect(workflow).toBe(yield* visibleAgent('workflow', 'assistant'));
+        expect(unpinned).toBe(yield* visibleAgent('assistant'));
+        expect(unpinned?.source).toBe('custom');
 
         // A stale/missing pinned source falls through to that same visible-set tier.
         const stale = yield* resolveAgentForLaunch(
           hostStores(),
-          AgentCategory.ToolUse,
           'assistant',
           'plugin',
         );
-        expect(stale?.source).toBe('builtInToolUse');
+        expect(stale?.source).toBe('custom');
 
-        // A `source:name` key of the other category is no match: only an
-        // explicit `source` pins category-blind.
-        const crossCategory = yield* resolveAgentForLaunch(
+        // A `source:name` key matches its exact entry, even a shadowed one.
+        const keyed = yield* resolveAgentForLaunch(
           hostStores(),
-          AgentCategory.ToolUse,
-          'custom:assistant',
+          'builtIn:assistant',
         );
-        expect(crossCategory).toBeUndefined();
+        expect(keyed?.source).toBe('builtIn');
       }),
   );
 
-  it('keeps a wrong-category name out of category-scoped resolution', () => {
-    // `correct` is a workflow agent and must not resolve as tool-use.
-    expect(getCategoryAgent('toolUse', 'correct')).toBeUndefined();
-  });
+  it.effect('resolves scoped keys and drops unknown ones', () =>
+    Effect.gen(function* () {
+      const scoped = yield* resolveDelegationScopeAgents(hostStores(), [
+        'assistant',
+        'builtIn:assistant',
+        'missing-agent',
+      ]);
 
-  it.effect(
-    'resolves scoped names within category and drops unknown ones',
-    () =>
-      Effect.gen(function* () {
-        const scoped = yield* resolveDelegationScopeAgents(
-          hostStores(),
-          {
-            workflow: [],
-            toolUse: ['assistant', 'builtInToolUse:assistant', 'missing-agent'],
-          },
-          AgentCategory.ToolUse,
-        );
-
-        expect(scoped.map((entry) => `${entry.source}:${entry.name}`)).toEqual([
-          'builtInToolUse:assistant',
-        ]);
-      }),
+      expect(scoped.map((entry) => `${entry.source}:${entry.name}`)).toEqual([
+        'custom:assistant',
+        'builtIn:assistant',
+      ]);
+    }),
   );
 
   it.effect(
@@ -221,17 +184,13 @@ describe('cross-category agent resolution', () => {
         // Both source-qualified identifiers must resolve to their own entry
         // (`custom:review` to the custom one, not the built-in it shadows), and
         // the deduplicated result must keep both, in scope order.
-        const scoped = yield* resolveDelegationScopeAgents(
-          hostStores(),
-          {
-            workflow: [],
-            toolUse: ['builtInToolUse:review', 'custom:review'],
-          },
-          AgentCategory.ToolUse,
-        );
+        const scoped = yield* resolveDelegationScopeAgents(hostStores(), [
+          'builtIn:review',
+          'custom:review',
+        ]);
 
         expect(scoped.map((entry) => `${entry.source}:${entry.name}`)).toEqual([
-          'builtInToolUse:review',
+          'builtIn:review',
           'custom:review',
         ]);
       }),
@@ -244,20 +203,14 @@ describe('findAgentByIdentifier (shared identity rule)', () => {
       name,
       source,
       path: '',
-      category: AgentCategory.ToolUse,
       persona: PersonaSchema.parse({}),
       task: null,
     };
   }
-  const entries = [
-    entry('review', 'builtInToolUse'),
-    entry('review', 'custom'),
-  ];
+  const entries = [entry('review', 'builtIn'), entry('review', 'custom')];
 
   it('matches a bare name by name (first candidate wins)', () => {
-    expect(findAgentByIdentifier(entries, 'review')?.source).toBe(
-      'builtInToolUse',
-    );
+    expect(findAgentByIdentifier(entries, 'review')?.source).toBe('builtIn');
   });
 
   it('matches a source-qualified key only by exact key', () => {

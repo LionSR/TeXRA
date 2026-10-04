@@ -1,6 +1,6 @@
 /**
  * `<run-conversation>`: the body of the selected run. A switch on the
- * run's `category` and `identity.kind` over plain properties; the three
+ * run's `documentTask` and `identity.kind` over plain properties; the three
  * bodies take the same four records and nothing is provided by context.
  */
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
@@ -64,22 +64,19 @@ export class RunConversation extends LitElement {
       ></process-run-content>`;
     }
 
-    switch (run.category) {
-      case 'toolUse':
-        return html`<tool-use-run-content
+    return run.documentTask
+      ? html`<workflow-run-content
+          .run=${run}
+          .view=${view}
+          .surface=${surface}
+          .host=${this.host}
+        ></workflow-run-content>`
+      : html`<tool-use-run-content
           .run=${run}
           .view=${view}
           .surface=${surface}
           .host=${this.host}
         ></tool-use-run-content>`;
-      case 'workflow':
-        return html`<workflow-run-content
-          .run=${run}
-          .view=${view}
-          .surface=${surface}
-          .host=${this.host}
-        ></workflow-run-content>`;
-    }
   }
 }
 

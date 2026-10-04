@@ -18,7 +18,6 @@ import {
   type RunId,
   type RunPhase,
   type RunSubstate,
-  AgentCategory,
   type SessionEventDraft,
 } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
@@ -67,7 +66,6 @@ setupPlatform({ workspacePath: '/workspace' });
 
 type HandleOverrides = {
   agentName?: string;
-  category?: AgentCategory;
   trace?: AgentTrace;
 };
 
@@ -81,7 +79,6 @@ function createHandle(
     runId,
     parent,
     agent: overrides.agentName ?? 'test-subagent',
-    category: overrides.category,
     trace: overrides.trace,
   });
   return handle;

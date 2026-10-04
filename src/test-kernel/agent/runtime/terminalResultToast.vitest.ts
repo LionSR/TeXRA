@@ -16,7 +16,7 @@ function result(over: Partial<ResultEvent>): ResultEvent {
     type: 'run.end',
     outcome: 'failed',
     runId: 'a00101' as RunId,
-    output: { category: 'toolUse', response: '', files: [] },
+    output: { response: '', files: [] },
     ...over,
   };
 }

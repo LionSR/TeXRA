@@ -9,11 +9,11 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import {
-  agentSourceDirectory,
+  agentSourceRoots,
   changedBuiltInOf,
   createWorkspaceAgentsController,
   getAgent,
-  getAgentsByCategory,
+  getCatalogAgents,
   getCustomAgentScanIssues,
   keepCustomAgent,
   refresh,
@@ -63,7 +63,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
   const catalog = new SettingsAgentCatalogController({
     repoState: ports.roots.repoState,
     workspaceAgents,
-    getAgents: getAgentsByCategory,
+    getAgents: getCatalogAgents,
     newerBuiltInOf: (entry) => changedBuiltInOf(entry)?.source,
   });
   const customDirectory = AgentDirectories.use((directories) =>
@@ -120,9 +120,9 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
   const actions = createSettingsAgentActions({
     findAgent: (source, name) => getAgent(agentKey(source, name)),
     getCustomAgentDirectory: () => customDirectory,
-    getSourceDirectory: (source) =>
+    getSourceRoots: (source) =>
       AgentDirectories.use((directories) =>
-        agentSourceDirectory(directories, source),
+        agentSourceRoots(directories, source),
       ),
     openDocument: bindings.openPath,
     openReadOnlyDocument: (filePath) =>
@@ -145,7 +145,6 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
         'Failed to update agent visibility',
         workspaceAgents
           .setAgentEnabled({
-            category: message.category,
             source: message.agentSource,
             name: message.agentName,
             enabled: message.enabled,
@@ -195,8 +194,8 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       present.reported(
         'Failed to open agent folder',
         Effect.gen(function* () {
-          const directory = yield* AgentDirectories.use((directories) =>
-            agentSourceDirectory(directories, message.folderType),
+          const [directory] = yield* AgentDirectories.use((directories) =>
+            agentSourceRoots(directories, message.folderType),
           );
           if (!directory) {
             return yield* present.alert(
@@ -211,7 +210,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
         'Failed to create agent',
         Effect.gen(function* () {
           const name = yield* bindings.prompt.input({
-            prompt: templateAgentNamePrompt(message.category),
+            prompt: templateAgentNamePrompt(message.task),
             placeHolder: 'my_agent',
           });
           if (!name) return;
@@ -224,7 +223,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
             fs.makeDirectory(customDir, { recursive: true }),
           );
           const written = yield* writeTemplateAgentFile(
-            { category: message.category, name, customDir },
+            { task: message.task, name, customDir },
             ports.resourcesPath,
           );
           if (!written.ok) return yield* present.alert(written.message);

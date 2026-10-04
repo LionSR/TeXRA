@@ -7,10 +7,14 @@
  * retry permit) is folded from that row and never restated here.
  */
 
+import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
+
+import { Effect, SynchronizedRef } from 'effect';
 
 import {
   aggregateId as qualifyAggregateId,
+  type JsonValue,
   type PositionAt,
   type RunSnapshotPayload,
   type PendingRetry,
@@ -21,9 +25,16 @@ import {
   type SnapshotRuntime,
   type ToolBindingPayload,
 } from '@shared/schemas';
+import type { DatabaseReadFailed } from '@shared/session/database';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
-import type { MessageSchema } from '@texra-ai/llm';
+import { sha256 } from '@tools/catalogEntries';
+import { generateShortId } from '@utils/core';
+import { dispatchFactsFor } from '../run/tools';
+import type { MessageSchema, TurnResult } from '@texra-ai/llm';
 import type { z } from 'zod';
+
+import type { AgentRunShape } from '../run/AgentRun';
+import type { SessionHandle } from '../SessionHandle';
 
 export type Message = z.infer<typeof MessageSchema>;
 
@@ -196,3 +207,115 @@ export function displayRow(
 ): RunHistoryDraft {
   return { ...draft, aggregateId: rowAggregate(runId) };
 }
+
+/** The tool a script's run calls: `script`, whatever launched the run. */
+const SCRIPT_TOOL_NAME = 'script';
+
+/**
+ * The rows of a script's run's one response: the call it was handed. Its
+ * origin is the run's binding and it carries no usage. Committed once, at
+ * its first turn.
+ */
+export const handedDown = Effect.fn('rows.handedDown')(function* (
+  run: Pick<AgentRunShape, 'model' | 'steps' | 'logger' | 'runId'>,
+  state: RunState,
+  call: NonNullable<AgentRunShape['config']['script']>,
+) {
+  const { runId } = run;
+  const { origin } = yield* SynchronizedRef.get(run.model);
+  // An editor binding's turns carry no calls: its launch refuses it.
+  if (origin.protocol === 'vscode-lm')
+    return yield* Effect.die(
+      new Error(`${runId}: a script cannot run on an editor model binding`),
+    );
+  const invocation = { invocationId: randomUUID(), attempt: 1 };
+  const argumentsText = JSON.stringify({
+    code: call.code,
+    title: call.title,
+    ...(call.timeoutMs != null && { timeoutMs: call.timeoutMs }),
+  });
+  const turn: TurnResult = {
+    kind: 'http',
+    providerResponseId: `script-${runId}`,
+    requestedOrigin: origin,
+    returnedModel: null,
+    modelFingerprint: null,
+    content: [
+      {
+        kind: 'local-call',
+        providerCallId: SCRIPT_CALL_ID,
+        name: SCRIPT_TOOL_NAME,
+        argumentsText,
+      },
+    ],
+    finishReason: 'tool-calls',
+    usage: null,
+  };
+  const aggregateId = rowAggregate(runId);
+  return [
+    {
+      type: 'model.message',
+      aggregateId,
+      payload: {
+        kind: 'attempt',
+        invocation,
+        request: sha256(argumentsText),
+        origin,
+        delivery: 'blocking',
+      },
+    },
+    {
+      type: 'model.message',
+      aggregateId,
+      payload: {
+        kind: 'response',
+        responseId: randomUUID(),
+        invocation,
+        turn,
+        calls: dispatchFactsFor(
+          turn,
+          (yield* SynchronizedRef.get(run.steps))?.tools.registry,
+          run.logger,
+          generateShortId,
+        ),
+        usage: null,
+      },
+    },
+    positionRow(runId, state, 'response.ready'),
+  ] satisfies readonly RunHistoryDraft[];
+});
+
+/** The call id of a script run's one call (`AgentConfig.script`): its
+ *  nested calls are `script/<seq>`. */
+const SCRIPT_CALL_ID = 'script';
+
+/** How a script's run's one call settled, as its journaled row says. */
+interface ScriptSettlement {
+  readonly failed: boolean;
+  /** A failed script's error, the run's reply. */
+  readonly reply: string;
+  /** What the script returned, the run's structured value (a document
+   *  task's documents). */
+  readonly value: JsonValue | undefined;
+}
+
+/** The settlement of `runId`'s script call; null before it settled. */
+export const scriptSettlement = Effect.fn('toolUse.scriptSettlement')(
+  function* (
+    session: Pick<SessionHandle, 'readAggregate'>,
+    runId: RunId,
+  ): Effect.fn.Return<ScriptSettlement | null, DatabaseReadFailed> {
+    const rows = yield* session.readAggregate(rowAggregate(runId), [
+      'tool.result',
+    ]);
+    const settled = rows.findLast(
+      (row) =>
+        row.type === 'tool.result' && row.payload.callId === SCRIPT_CALL_ID,
+    );
+    if (settled?.type !== 'tool.result') return null;
+    const { result } = settled.payload;
+    return result.status === 'error'
+      ? { failed: true, reply: result.error, value: undefined }
+      : { failed: false, reply: '', value: result.value };
+  },
+);

@@ -65,7 +65,6 @@ import type { PluginContext } from '@platform/processRuntime';
 import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
-  AgentCategory,
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
   type RunId,
@@ -191,6 +190,7 @@ function boundModel(): BoundModel {
     backgroundCapable: false,
     persistentConnection: false,
     automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
+    textOnly: false,
   };
 }
 
@@ -226,7 +226,6 @@ function agentRun(
       config: AgentConfigSchema.parse({
         agent: 'assistant',
         model: GPT54,
-        agentCategory: AgentCategory.ToolUse,
         ...(rootUserInstruction === undefined ? {} : { rootUserInstruction }),
       }),
       pendingModelSwitch: { value: pendingSwitch },

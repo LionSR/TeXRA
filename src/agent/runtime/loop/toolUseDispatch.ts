@@ -307,8 +307,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const pending = initial.pendingResponse;
   if (pending === null) return { state: initial, endTurn: false };
   const { responseId } = pending;
-  // Folded from stored rows, not received here: a call with no intent never ran.
-  const recovered = cell.opened.pendingResponse?.responseId === responseId;
+  // A stored call with no intent never ran; a script's (no model) starts.
+  const replan = cell.opened.pendingResponse?.responseId === responseId;
   const calls = localCallsOf(pending.turn);
   // The calls answer the instruction the committed state records.
   const at = initial.loop?.instruction;
@@ -1299,7 +1299,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       );
       return;
     }
-    if (recovered) {
+    if (replan && !run.config.script) {
       yield* settle(fact, 1, syntheticSettlement(SKIPPED_NOT_STARTED), []);
       return;
     }

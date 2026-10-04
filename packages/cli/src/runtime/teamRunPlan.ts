@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { getCategoryAgent } from '@agent/index';
+import { getCatalogAgent } from '@agent/index';
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset } from '@common/teams/TeamPresets';
 import type { StateStore } from '@platform/interfaces';
@@ -31,7 +31,7 @@ export function loadCliTeamRunPlan(
       );
     }
     return planTeamRun(team, {
-      resolveAgent: getCategoryAgent,
+      resolveAgent: getCatalogAgent,
       agentOverride: init.agent,
     });
   });

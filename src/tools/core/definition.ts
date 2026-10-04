@@ -11,7 +11,6 @@ import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
   ToolError,
-  type ToolDefinition,
   type ToolResult,
 } from '@shared/schemas';
 import { findStorageRefusal } from '@shared/session/runHistory';
@@ -43,7 +42,7 @@ export type DefinedTool<T, R = never> = Omit<ITool<Error, R>, 'call'> & {
 export type DefineToolOptions<T, R = never> = Required<
   Pick<ToolDefinition, 'name' | 'description'>
 > &
-  Pick<ToolDefinition, 'availabilityCategory' | 'scriptReturns'> &
+  Pick<ToolDefinition, 'scriptReturns'> &
   Pick<
     ITool,
     | 'unavailableHosts'
@@ -98,9 +97,6 @@ export function defineTool<T, R = never>(
       // The Zod schema is the tool's only parameter representation; the
       // provider converters derive JSON Schema from it per request.
       zodSchema: def.schema,
-      ...(def.availabilityCategory && {
-        availabilityCategory: def.availabilityCategory,
-      }),
       ...(def.scriptReturns !== undefined && {
         scriptReturns: def.scriptReturns,
       }),

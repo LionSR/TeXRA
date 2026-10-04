@@ -6,7 +6,6 @@ import { API_KEY_PROVIDER_IDS, type ApiKeyProviderId } from '@texra-ai/llm';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
-import { AgentCategorySchema, type AgentCategory } from '@shared/schemas';
 import {
   SettingsTargetSchema,
   type SettingsTarget,
@@ -70,10 +69,7 @@ type CommandProgram<A = void> = Effect.Effect<
  * over the same `CommandId` union with their host-specific actions.
  */
 export interface ExtensionCommandActions {
-  showSettings(
-    tab?: SettingsTarget,
-    agentSubTab?: AgentCategory,
-  ): CommandProgram;
+  showSettings(tab?: SettingsTarget): CommandProgram;
   newTask(): CommandProgram;
   cleanBuild(): CommandProgram;
   signInChatGpt(): CommandProgram;
@@ -98,8 +94,6 @@ export interface ExtensionCommandActions {
 /**
  * `texra.show*` rows derived from the catalog's `settingsTab` field so the
  * command → tab mapping lives in one place (`settingsTabByCommand`).
- * `texra.showAgents` is re-declared below: it additionally accepts an
- * agent-category sub-tab argument.
  */
 const SETTINGS_TAB_COMMAND_HANDLERS = Object.fromEntries(
   (
@@ -162,11 +156,6 @@ export const EXTENSION_COMMAND_HANDLERS = {
     z.tuple([z.unknown().optional()]),
     (actions: ExtensionCommandActions, input?: unknown) =>
       actions.execute(input),
-  ),
-  'texra.showAgents': definedHandler(
-    z.tuple([AgentCategorySchema.optional()]),
-    (actions: ExtensionCommandActions, subTab?: AgentCategory) =>
-      actions.showSettings(settingsTabByCommand['texra.showAgents'], subTab),
   ),
 } as const satisfies Record<
   ExtensionRegistryCommandId,

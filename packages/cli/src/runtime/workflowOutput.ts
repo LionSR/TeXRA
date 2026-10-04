@@ -5,16 +5,17 @@ import { Effect, FileSystem, Path, PlatformError } from 'effect';
 import {
   withWorkflowDiffs,
   type AgentConfigPayload,
-  type WorkflowRunEndResult,
+  type RunEndResult,
 } from '@agent/runtime';
 import { isNotADirectoryError } from '@common/errors';
 import type {
   OutputFileSummary,
-  WorkflowRunEndOutputSchema,
+  RunDocuments,
+  RunEndOutput,
 } from '@shared/schemas';
 import {
-  AgentCategory,
   finalWorkflowOutput,
+  isDocumentTaskConfig,
   RUN_OUTCOME,
 } from '@shared/schemas';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
@@ -35,7 +36,6 @@ import { CliUsageError, type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
 import { type CliRunResult } from './terminalStatus';
 import { STDIN_WORKFLOW_INPUT_BASENAME } from './workflowInputs';
-import type { z } from 'zod';
 
 /** Resolve a user-supplied path against `cwd` when it isn't already absolute. */
 function joinCwdRelative(target: string, cwd: string): string {
@@ -200,8 +200,9 @@ export function assertOutputFileAvailable(
   );
 }
 
+/** A document task's run result: its output always carries its documents. */
 export type CliWorkflowRunResult = CliRunResult & {
-  readonly output: z.infer<typeof WorkflowRunEndOutputSchema>;
+  readonly output: RunEndOutput & { readonly documents: RunDocuments };
 };
 
 interface WorkflowOutputResolutionOptions {
@@ -316,21 +317,30 @@ function copyOutputFile(
 export function resolveWorkflowOutput(
   outputFile: string | undefined,
   outputDir: string | undefined,
-  result: WorkflowRunEndResult,
+  result: RunEndResult,
   context: CliContext,
   options: WorkflowOutputResolutionOptions,
 ): Effect.Effect<CliWorkflowRunResult, Error, FileSystem.FileSystem> {
   return Effect.gen(function* () {
+    // The launch attaches a document task's documents before it publishes.
+    const { documents } = result.output;
+    if (documents === undefined) {
+      return yield* Effect.die(
+        new Error(`Document task ${result.runId} ended without its documents.`),
+      );
+    }
     const runDirectory = runDirUnder(options.storageRoot, result.runId);
+    // The flow reports no diffs: computing them is the delivery's, and
+    // this is the CLI's, so its result carries the diffs a subagent's
+    // record does.
+    const { documents: withDiffs = documents } = yield* withWorkflowDiffs(
+      options.storageRoot,
+      result.runId,
+      result.output,
+    );
     const baseResult = {
       ...result,
-      // The flow reports no diffs: computing them is the delivery's, and this
-      // is the CLI's, so its result carries the diffs a subagent's record does.
-      output: yield* withWorkflowDiffs(
-        options.storageRoot,
-        result.runId,
-        result.output,
-      ),
+      output: { ...result.output, documents: withDiffs },
       workingDirectory: context.cwd,
       runDirectory,
     };
@@ -338,7 +348,7 @@ export function resolveWorkflowOutput(
     // status line alone would end on a bare "Error": name the documents the
     // last round failed to compile and where their logs are.
     if (result.outcome === RUN_OUTCOME.FAILED && !result.error) {
-      const failures = result.output.compileFailures;
+      const failures = documents.compileFailures;
       // A failure with neither an error nor a compile failure has nothing
       // more to name than the status line already says.
       if (failures.length === 0) return baseResult;
@@ -346,7 +356,7 @@ export function resolveWorkflowOutput(
       for (const failure of failures) {
         if (failure.round !== lastRound) continue;
         writeTextStderr(
-          `LaTeX compile failed for ${failure.displayName} (round ${failure.round + 1}); log: ${failure.logAbsolutePath}`,
+          `LaTeX compile failed for ${failure.displayName} (revision ${failure.round + 1}); log: ${failure.logAbsolutePath}`,
         );
       }
     }
@@ -362,12 +372,12 @@ export function resolveWorkflowOutput(
       return baseResult;
     }
     const terminalStatus = runOutcomeToCliRunStatus(result.outcome);
-    if (result.output.outputs.length === 0 && (outputFile || outputDir)) {
+    if (documents.outputs.length === 0 && (outputFile || outputDir)) {
       return yield* Effect.fail(
         new Error(
           outputDir
-            ? `Workflow ${terminalStatus} without generated outputs; nothing was copied to ${outputDir}.`
-            : `Workflow ${terminalStatus} without a generated output; ${outputFile} was not written.`,
+            ? `Document task ${terminalStatus} without generated outputs; nothing was copied to ${outputDir}.`
+            : `Document task ${terminalStatus} without a generated output; ${outputFile} was not written.`,
         ),
       );
     }
@@ -378,7 +388,7 @@ export function resolveWorkflowOutput(
         (file) => getSafeDocumentRelativePath(file),
       );
       const outputsByRelativePath = new Map<string, OutputFileSummary>();
-      for (const output of result.output.outputs) {
+      for (const output of documents.outputs) {
         const relativePath = outputCopyRelativePathForExpectedOutput(
           output,
           expectedRelativePaths,
@@ -402,7 +412,7 @@ export function resolveWorkflowOutput(
       if (missing.length > 0) {
         return yield* Effect.fail(
           new Error(
-            `Workflow ${terminalStatus} without expected ${pluralize(missing.length, 'output')}: ${missing.join(', ')}; copied ${copiedOutputs.length} of ${formatResultCount(expectedRelativePaths.length, 'expected output')} to ${targetRoot}.`,
+            `Document task ${terminalStatus} without expected ${pluralize(missing.length, 'output')}: ${missing.join(', ')}; copied ${copiedOutputs.length} of ${formatResultCount(expectedRelativePaths.length, 'expected output')} to ${targetRoot}.`,
           ),
         );
       }
@@ -410,7 +420,7 @@ export function resolveWorkflowOutput(
       return { ...baseResult, copiedOutputs };
     }
 
-    const finalOutput = finalWorkflowOutput(result.output.outputs);
+    const finalOutput = finalWorkflowOutput(documents.outputs);
     if (!outputFile || !finalOutput) {
       return baseResult;
     }
@@ -428,7 +438,7 @@ export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
   if (result.outcome === RUN_OUTCOME.FAILED) {
     const diagnosticPath =
       result.runDirectory ??
-      finalWorkflowOutput(result.output.outputs)?.absolutePath;
+      finalWorkflowOutput(result.output.documents.outputs)?.absolutePath;
     return diagnosticPath
       ? `FAILED\nRun artifacts: ${diagnosticPath}`
       : 'FAILED';
@@ -448,7 +458,7 @@ export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
     return result.copiedOutput;
   }
 
-  const finalOutput = finalWorkflowOutput(result.output.outputs);
+  const finalOutput = finalWorkflowOutput(result.output.documents.outputs);
   return (
     finalOutput?.absolutePath ??
     result.runDirectory ??
@@ -459,13 +469,13 @@ export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
 export function resumeWorkflowOutputFile(
   config: AgentConfigPayload,
 ): string | undefined {
-  if (config.agentCategory !== AgentCategory.Workflow) return undefined;
+  if (!isDocumentTaskConfig(config)) return undefined;
 
   const cliOutputFile = config.cli?.outputFile;
   if (isNonEmptyString(cliOutputFile)) {
     if (!path.isAbsolute(cliOutputFile)) {
       throw new CliUsageError(
-        `Stored workflow output file is not absolute: ${cliOutputFile}`,
+        `Stored document task output file is not absolute: ${cliOutputFile}`,
       );
     }
     return cliOutputFile;
@@ -486,13 +496,13 @@ export function resumeWorkflowOutputFile(
 export function resumeWorkflowOutputDirectory(
   config: AgentConfigPayload,
 ): string | undefined {
-  if (config.agentCategory !== AgentCategory.Workflow) return undefined;
+  if (!isDocumentTaskConfig(config)) return undefined;
 
   const outputDirectory = config.cli?.outputDirectory;
   if (!isNonEmptyString(outputDirectory)) return undefined;
   if (!path.isAbsolute(outputDirectory)) {
     throw new CliUsageError(
-      `Stored workflow output directory is not absolute: ${outputDirectory}`,
+      `Stored document task output directory is not absolute: ${outputDirectory}`,
     );
   }
   return outputDirectory;

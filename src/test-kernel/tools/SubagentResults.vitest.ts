@@ -18,32 +18,22 @@ import {
   formatBashError,
 } from '@tools/delegation/bashDelivery';
 
-type ToolUseOutput = Extract<RunEndOutput, { category: 'toolUse' }>;
-type WorkflowOutput = Extract<RunEndOutput, { category: 'workflow' }>;
+type DocumentsOutput = NonNullable<RunEndOutput['documents']>;
 
 function toolUseResult(
   outcome: RunEnd['outcome'] = RUN_OUTCOME.COMPLETED,
-  output: Partial<Omit<ToolUseOutput, 'category'>> = {},
+  output: Partial<RunEndOutput> = {},
 ): RunEnd {
   return {
     outcome,
-    output: { category: 'toolUse', response: '', files: [], ...output },
+    output: { response: '', files: [], ...output },
   };
 }
 
-function workflowResult(
-  output: Partial<Omit<WorkflowOutput, 'category'>> = {},
-): RunEnd {
-  return {
-    outcome: RUN_OUTCOME.COMPLETED,
-    output: {
-      category: 'workflow',
-      outputs: [],
-      compileFailures: [],
-      diffs: [],
-      ...output,
-    },
-  };
+function documentTaskResult(documents: Partial<DocumentsOutput> = {}): RunEnd {
+  return toolUseResult(RUN_OUTCOME.COMPLETED, {
+    documents: { outputs: [], compileFailures: [], diffs: [], ...documents },
+  });
 }
 
 function seconds(milliseconds: number): string {
@@ -96,7 +86,7 @@ describe('formatSubagentDelivery', () => {
   });
 
   it('flags failed diff computation so orchestrators read outputs directly', () => {
-    const result = workflowResult({
+    const result = documentTaskResult({
       outputs: [
         {
           round: 0,

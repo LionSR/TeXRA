@@ -20,7 +20,6 @@ const baseConfig = AgentConfigSchema.parse({
   agent: 'chat',
   model: 'deepseek/deepseek-v4-flash',
   instruction: 'Check the proof.',
-  agentCategory: 'toolUse',
 });
 const runId = 'abc123' as RunId;
 const options = {

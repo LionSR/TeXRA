@@ -1,5 +1,5 @@
-// `/agent` form. It lists visible tool-use agents, the team presets, and
-// workflows. Before the first message, an agent or a team can be chosen to
+// `/agent` form. It lists the visible agents (document tasks marked) and the
+// team presets. Before the first message, an agent or a team can be chosen to
 // lead the chat.
 
 import { Box, Text } from 'ink';
@@ -7,21 +7,20 @@ import { Effect } from 'effect';
 
 import {
   computeAgentOptionsData,
-  getCategoryAgent,
+  getCatalogAgent,
   type WorkspaceAgentsStores,
 } from '@agent/index';
 import { Select } from '@cli/tui/ui/Select';
 import {
   computeSelectWindowSize,
   isCompactFormRows,
-  type SelectWindowSize,
 } from '@cli/tui/selectWindow';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { AgentOptionData, TeamOptionData } from '@shared/schemas';
-import { AgentCategory, agentName } from '@shared/schemas';
+import { agentName } from '@shared/schemas';
 
 import {
   CompactPickerKeyHints,
@@ -52,8 +51,7 @@ export type AgentPickerValue =
   | { readonly kind: 'team'; readonly teamId: string };
 
 interface AgentGroups {
-  readonly toolUse: readonly AgentOptionData[];
-  readonly workflow: readonly AgentOptionData[];
+  readonly agents: readonly AgentOptionData[];
   readonly teams: readonly TeamOptionData[];
 }
 
@@ -69,14 +67,14 @@ function agentPickerItems(
   groups: AgentGroups,
 ): ReadonlyArray<SelectItem<AgentPickerValue>> {
   return [
-    ...groups.toolUse.map((agent) => {
-      const description = getCategoryAgent(
-        AgentCategory.ToolUse,
-        agent.value,
-      )?.description;
+    ...groups.agents.map((agent) => {
+      const description = getCatalogAgent(agent.value)?.description;
       return {
         value: { kind: 'agent' as const, agent: agent.value },
-        label: agent.label,
+        label:
+          agent.rounds === undefined
+            ? agent.label
+            : `${agent.label} · document task`,
         ...(description ? { description } : {}),
       };
     }),
@@ -98,14 +96,10 @@ function agentPickerPrimarySectionTitle(
   const hasDelegatingAgents = agents.some(
     (agent) => agent.isOrchestrator === true,
   );
-  const hasToolUseSpecialists = agents.some(
-    (agent) => agent.isOrchestrator !== true,
-  );
-
-  if (hasDelegatingAgents && hasToolUseSpecialists) {
-    return 'Tool-use and delegating agents';
-  }
-  return hasDelegatingAgents ? 'Delegating agents' : 'Tool-use agents';
+  const hasSpecialists = agents.some((agent) => agent.isOrchestrator !== true);
+  return hasDelegatingAgents && !hasSpecialists
+    ? 'Delegating agents'
+    : 'Agents';
 }
 
 function currentVisibleAgent(
@@ -129,89 +123,20 @@ function hiddenCurrentAgentHint(
   return `Current: ${agentName(current)} (hidden from picker)`;
 }
 
-/** How the Workflows section renders: its full list, one summary row, not at
- *  all when there are no workflows, or in the compact frame when even one
- *  select row and the summary row do not fit the full frame. */
-type WorkflowLayout = 'list' | 'summary' | 'none' | 'compact';
-
-/**
- * Window the picker within its sections; never drop one. The selectable list
- * scrolls inside the rows left over once the Workflows section (heading, one
- * row per workflow, the `texra run <name>` hint) has its rows. When that full
- * section would squeeze the selectable list below three rows, it folds into
- * one summary row that still names the section and the run hint; below that,
- * the picker takes its compact frame.
- */
-function agentSelectWindow({
-  availableRows,
-  extraRows,
-  itemCount,
-  workflowCount,
-}: {
-  readonly availableRows: number | undefined;
-  readonly extraRows: number;
-  readonly itemCount: number;
-  readonly workflowCount: number;
-}): SelectWindowSize & { readonly workflowLayout: WorkflowLayout } {
-  // Border, title, description, section heading, and key hints are the fixed
-  // chrome for the primary selectable list.
-  const chromeRows = 8 + extraRows;
-  const window = (workflowRows: number): SelectWindowSize =>
-    computeSelectWindowSize({
-      availableRows,
-      itemCount,
-      chromeRows: chromeRows + workflowRows,
-    });
-  if (workflowCount === 0) return { ...window(0), workflowLayout: 'none' };
-  // Decide on the raw budget: `computeSelectWindowSize` floors its list at
-  // one row, so its result cannot say whether the reserved rows fit.
-  const listRows = workflowCount + 2;
-  const spareRows =
-    availableRows == null ? Infinity : availableRows - chromeRows;
-  if (spareRows - listRows >= Math.min(3, itemCount)) {
-    return { ...window(listRows), workflowLayout: 'list' };
-  }
-  return {
-    ...window(1),
-    workflowLayout: spareRows >= 2 ? 'summary' : 'compact',
-  };
-}
-
-// Border, title, section heading, one select row, the workflow summary row,
-// and the key hints: the compact frame's rows once workflows join it.
-const COMPACT_ROWS_WITH_WORKFLOWS = 7;
-
-const WORKFLOW_RUN_HINT = 'texra run <name> --input=<file>';
-
-/** The Workflows section folded to one row: heading, run hint, then names. */
-function WorkflowSummaryRow(props: {
-  readonly names: readonly string[];
-}): React.JSX.Element {
-  return (
-    <Text wrap="truncate-end">
-      <Text bold>Workflows</Text>
-      <Text dimColor>{` · ${WORKFLOW_RUN_HINT}: `}</Text>
-      {props.names.join(', ')}
-    </Text>
-  );
-}
-
 export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   const picker = useAsyncPickerForm<AgentGroups, AgentPickerValue>({
     title: '/agent',
     loadingLabel: 'Loading agents...',
     load: () =>
       Effect.gen(function* () {
-        const { toolUse, workflow } = yield* computeAgentOptionsData(
-          props.stores,
-        );
+        const agents = yield* computeAgentOptionsData(props.stores);
         const teams = loadTeamOptions(
           yield* createTeamCatalogPorts(props.stores.repoState),
         );
-        return { toolUse, workflow, teams };
+        return { agents, teams };
       }),
     runtime: props.runtime,
-    isEmpty: (groups) => groups.toolUse.length === 0,
+    isEmpty: (groups) => groups.agents.length === 0,
     closeEmptyOnEnter: true,
     items: agentPickerItems,
     selectable: props.selectable,
@@ -219,12 +144,8 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     onClose: props.onClose,
   });
 
-  const agents: AgentGroups = picker.data ?? {
-    toolUse: [],
-    workflow: [],
-    teams: [],
-  };
-  const primarySectionTitle = `${agentPickerPrimarySectionTitle(agents.toolUse)}${
+  const agents: AgentGroups = picker.data ?? { agents: [], teams: [] };
+  const primarySectionTitle = `${agentPickerPrimarySectionTitle(agents.agents)}${
     agents.teams.length > 0 ? ', then teams' : ''
   }`;
   const items = picker.items;
@@ -232,23 +153,22 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   // bare name; rows are keyed by canonical value, so match Select in that same
   // identity space when rendering the ✓ on the active row. A chosen team
   // outranks its lead, which also appears as an agent row.
-  const activeAgent = currentVisibleAgent(agents.toolUse, props.currentAgent);
+  const activeAgent = currentVisibleAgent(agents.agents, props.currentAgent);
   const activeValue = items.find(({ value }) =>
     props.currentTeamId !== undefined
       ? value.kind === 'team' && value.teamId === props.currentTeamId
       : value.kind === 'agent' && value.agent === activeAgent?.value,
   )?.value;
   const currentAgentHint = hiddenCurrentAgentHint(
-    agents.toolUse,
+    agents.agents,
     props.currentAgent,
   );
-  const workflowNames = agents.workflow.map((agent) => agent.label);
-  const extraRows = currentAgentHint ? 1 : 0;
-  const selectWindow = agentSelectWindow({
+  // Border, title, description, section heading, and key hints are the fixed
+  // chrome around the selectable list.
+  const selectWindow = computeSelectWindowSize({
     availableRows: props.availableRows,
-    extraRows,
     itemCount: items.length,
-    workflowCount: workflowNames.length,
+    chromeRows: 8 + (currentAgentHint ? 1 : 0),
   });
   if (picker.transient) return picker.transient;
 
@@ -258,11 +178,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     </Text>
   ) : null;
 
-  if (
-    (isCompactFormRows(props.availableRows) ||
-      selectWindow.workflowLayout === 'compact') &&
-    items.length > 0
-  ) {
+  if (isCompactFormRows(props.availableRows) && items.length > 0) {
     return (
       <FormFrame title="/agent" showCloseHint={false}>
         {currentAgentHintRow}
@@ -275,11 +191,6 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
           onSelect={picker.select}
           onCancel={props.onClose}
         />
-        {workflowNames.length > 0 &&
-        (props.availableRows ?? 0) >=
-          COMPACT_ROWS_WITH_WORKFLOWS + extraRows ? (
-          <WorkflowSummaryRow names={workflowNames} />
-        ) : null}
         <CompactPickerKeyHints selectable={props.selectable} />
       </FormFrame>
     );
@@ -304,23 +215,6 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
           onCancel={props.onClose}
         />
       </Box>
-      {selectWindow.workflowLayout === 'list' ? (
-        <Box flexDirection="column">
-          <Text bold>Workflows</Text>
-          {agents.workflow.map((workflow) => (
-            <Text key={workflow.value} wrap="truncate-end">
-              {'  '}
-              {workflow.label}
-            </Text>
-          ))}
-          <Text dimColor wrap="truncate-end">
-            {`Run a workflow with ${WORKFLOW_RUN_HINT}.`}
-          </Text>
-        </Box>
-      ) : null}
-      {selectWindow.workflowLayout === 'summary' ? (
-        <WorkflowSummaryRow names={workflowNames} />
-      ) : null}
       <Box marginTop={1}>
         <PickerKeyHints
           selectable={props.selectable}

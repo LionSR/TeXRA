@@ -2,7 +2,7 @@
  * A plugin: one value that is both its manifest row (a stable id plus
  * dashboard copy, the opt-in toggle, the availability probe and the
  * install/auth actions) and what it contributes (its tools, continuation,
- * prompt section, round mode and layers). The harness's built-ins are
+ * prompt section and layers). The harness's built-ins are
  * `@tools/builtinPlugins`; an app passes its list, built-ins included, to
  * `installProcessRuntime`, and the process's `ToolRegistry` holds it in
  * order (`@tools/toolTable`), which every reader takes it from: the Tools
@@ -25,7 +25,6 @@ import { Effect, type Layer, Result } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import type { RoundMode } from '@agent/runtime/loop/rounds';
 import type { Runs } from '@agent/runtime/runRegistry';
 import type { RuntimeTool, ToolServices } from '@agent/runtime/ToolServices';
 import { StateReadFailed, type StateStore } from '@platform/interfaces';
@@ -67,11 +66,11 @@ export interface Plugin {
   /** The plugin's own catalog rows, which its dashboard card renders inline,
    *  in order; `installProcessRuntime` adds them to the settings catalog. */
   readonly settings?: readonly PluginSettingRow[];
-  /** Tools of this plugin offered to every tool-use agent, declared or not,
+  /** Tools of this plugin offered to every agent with tools, declared or not,
    *  while the plugin is on and a boolean catalog setting is on: tool name to
    *  setting key, or `true` for no setting but the plugin's own switch. An
-   *  injected tool still passes the host and approval gates; workflow
-   *  runs get none. */
+   *  injected tool still passes the host and approval gates; a script's
+   *  run (a document task's) and a text-only persona get none. */
   readonly injectedWhen?: Readonly<Record<string, string | true>>;
   /** Opt-in: the dashboard shows an enable/disable toggle, a fresh install
    *  seeds the plugin disabled (unless `onByDefault`), and while disabled its
@@ -86,8 +85,6 @@ export interface Plugin {
   /** Its section of each request's system text; a run's step pins it while
    *  the plugin is switched on. */
   readonly prompt?: PromptSection;
-  /** Drives the runs of one agent category in rounds (`@agent/runtime/loop/rounds`). */
-  readonly rounds?: RoundMode;
   /** Process-lifetime services, up while the plugin is switched on or a step
    *  pins it (`@tools/liveTools`). A host-supplied one (Copilot's, in VS
    *  Code) is passed with the host's plugin value. */

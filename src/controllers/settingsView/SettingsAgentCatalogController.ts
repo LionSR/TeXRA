@@ -10,9 +10,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   agentKeyOf,
   agentMatchesIdentifier,
-  byCategory,
   parseAgentModePresets,
-  type AgentCategory,
   type AgentModePreset,
   type AgentSource,
 } from '@shared/schemas';
@@ -24,7 +22,8 @@ import { byName, isObject } from '@utils/core';
 interface SettingsAgentCatalogEntry {
   name: string;
   source: AgentSource;
-  category: AgentCategory;
+  /** Its file's `task` block, or null for a chat agent. */
+  task: object | null;
   description?: string;
   path?: string;
   tools?: string[];
@@ -34,7 +33,7 @@ interface SettingsAgentCatalogEntry {
 interface SettingsAgentCatalogControllerDeps {
   repoState: StateStore;
   workspaceAgents: WorkspaceAgentsController<SettingsAgentCatalogEntry>;
-  getAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
+  getAgents(): SettingsAgentCatalogEntry[];
   /** The source of the changed bundled agent a customized copy overrides. */
   newerBuiltInOf(entry: SettingsAgentCatalogEntry): AgentSource | undefined;
   now?: () => number;
@@ -45,9 +44,11 @@ export class SettingsAgentCatalogController {
 
   buildSelectionItems() {
     return Effect.gen({ self: this }, function* () {
-      return yield* Effect.all(
-        byCategory((category) => this.buildCategorySelectionItems(category)),
-      );
+      const enabledKeys = yield* this.enabledKeys();
+      return this.deps
+        .getAgents()
+        .map((entry) => this.toSelectionItem(entry, enabledKeys))
+        .sort(byName);
     });
   }
 
@@ -71,14 +72,14 @@ export class SettingsAgentCatalogController {
 
   getOrchestratorAgentNames(): string[] {
     const names = new Set<string>(BUILTIN_TEAM_ROOT_AGENT_NAMES);
-    for (const agent of this.deps.getAgents('toolUse')) {
+    for (const agent of this.deps.getAgents()) {
       if (hasDelegationTool(agent.tools)) names.add(agent.name);
     }
     return [...names].sort();
   }
 
   /**
-   * Preview the team root for a preset's tool-use member list. Mirrors launch
+   * Preview the team root for a preset's member list. Mirrors launch
    * semantics: the preview plans with the preset's own members only, so a
    * custom team with no delegating members previews no root — the same state
    * the launcher disables with "no runnable team root".
@@ -90,7 +91,7 @@ export class SettingsAgentCatalogController {
    * `planTeamRun` picks for that team at launch. Ad-hoc member lists without
    * a resolvable id keep custom-preset semantics.
    */
-  getPresetToolUseRoot(toolUseAgents: string[], presetId?: string) {
+  getPresetRoot(members: string[], presetId?: string) {
     return Effect.gen({ self: this }, function* () {
       const knownPreset = presetId
         ? findTeamPreset(
@@ -103,16 +104,12 @@ export class SettingsAgentCatalogController {
         name: 'Settings preview',
         description: '',
         icon: 'bookmark',
-        agents: { workflow: [], toolUse: toolUseAgents },
+        agents: members,
         source: 'custom',
       };
-      // Only the tool-use root matters here, so workflow members stay
-      // unresolved.
       return planTeamRun(preset, {
-        resolveAgent: (category, identifier) =>
-          category === 'toolUse'
-            ? this.deps.workspaceAgents.resolveAgent(category, identifier)
-            : undefined,
+        resolveAgent: (identifier) =>
+          this.deps.workspaceAgents.resolveAgent(identifier),
       }).rootAgent?.name;
     });
   }
@@ -120,18 +117,13 @@ export class SettingsAgentCatalogController {
   saveCurrentPreset(name: string) {
     return Effect.gen({ self: this }, function* () {
       const trimmedName = name.trim();
-      const visible = yield* Effect.all(
-        byCategory((category) =>
-          this.deps.workspaceAgents.getVisibleAgents(category),
-        ),
-      );
-      const agents = byCategory((category) =>
-        visible[category].map((entry) => entry.name),
+      const agents = (yield* this.deps.workspaceAgents.getVisibleAgents()).map(
+        (entry) => entry.name,
       );
       const preset: AgentModePreset = {
         id: `custom-${this.deps.now?.() ?? Date.now()}`,
         name: trimmedName,
-        description: `Custom team: ${[...agents.toolUse, ...agents.workflow].join(', ')}`,
+        description: `Custom team: ${agents.join(', ')}`,
         icon: 'bookmark',
         agents,
       };
@@ -166,26 +158,22 @@ export class SettingsAgentCatalogController {
   }
 
   /**
-   * Enable or disable every agent from one source within a category.
+   * Enable or disable every agent from one source.
    *
    * The identical-list short-circuit is load-bearing: without it every
    * "enable all" click writes the same agent list back and republishes the
    * catalog for no change.
    */
-  setAllAgentsEnabled(input: {
-    category: AgentCategory;
-    source: AgentSource;
-    enabled: boolean;
-  }) {
+  setAllAgentsEnabled(input: { source: AgentSource; enabled: boolean }) {
     return Effect.gen({ self: this }, function* () {
-      const allAgents = this.deps.getAgents(input.category);
+      const allAgents = this.deps.getAgents();
       const targetKeys = new Set(
         allAgents
           .filter((entry) => entry.source === input.source)
           .map((entry) => agentKeyOf(entry)),
       );
 
-      const current = yield* this.enabledKeys(input.category);
+      const current = yield* this.enabledKeys();
 
       const updated = input.enabled
         ? [...new Set([...current, ...targetKeys])]
@@ -197,32 +185,17 @@ export class SettingsAgentCatalogController {
       ) {
         return;
       }
-      return yield* this.deps.workspaceAgents.setEnabledAgentKeys(
-        input.category,
-        updated,
-      );
-    });
-  }
-
-  private buildCategorySelectionItems(category: AgentCategory) {
-    return Effect.gen({ self: this }, function* () {
-      const enabledKeys = yield* this.enabledKeys(category);
-      return this.deps
-        .getAgents(category)
-        .map((entry) => this.toSelectionItem(entry, enabledKeys))
-        .sort(byName);
+      return yield* this.deps.workspaceAgents.setEnabledAgentKeys(updated);
     });
   }
 
   /** The enabled keys; an `all` agent list enables every visible agent, never a
    *  custom agent the user hid. */
-  private enabledKeys(category: AgentCategory) {
+  private enabledKeys() {
     return Effect.gen({ self: this }, function* () {
       return (
-        (yield* this.deps.workspaceAgents.getEnabledAgentKeys(category)) ??
-        (yield* this.deps.workspaceAgents.getVisibleAgents(category)).map(
-          agentKeyOf,
-        )
+        (yield* this.deps.workspaceAgents.getEnabledAgentKeys()) ??
+        (yield* this.deps.workspaceAgents.getVisibleAgents()).map(agentKeyOf)
       );
     });
   }
@@ -234,7 +207,7 @@ export class SettingsAgentCatalogController {
     return {
       name: entry.name,
       source: entry.source,
-      category: entry.category,
+      hasTask: entry.task !== null,
       description: entry.description,
       hasPath: Boolean(entry.path),
       filePath: entry.path || undefined,

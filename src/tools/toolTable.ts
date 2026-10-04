@@ -1,8 +1,7 @@
 /**
  * The process's plugin table: the plugin list an entry passes to
  * `installProcessRuntime` (TeXRA's is `texraPlugins` in `@tools/registry`),
- * by plugin id, with the round mode of each agent category and each tool by
- * name. What a plugin contributes to the live catalog (`@tools/liveTools`)
+ * by plugin id, and each tool by name. What a plugin contributes to the live catalog (`@tools/liveTools`)
  * is read off its value. The `ToolRegistry` service holds it, beside
  * the catalog built over it. This module imports no tool or plugin layer, so
  * a reader of the tag loads none of them.
@@ -16,12 +15,11 @@ import {
   type Scope,
 } from 'effect';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
-import type { RoundMode } from '@agent/runtime/loop/rounds';
 import type { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import type { AppState, ConfigProvider } from '@platform/interfaces';
-import type { AgentCategory, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { RunState } from '@shared/session/runStateFold';
 import type { LiveTools } from '@tools/liveTools';
 import type { Plugin } from '@tools/plugins';
@@ -141,7 +139,7 @@ export type InstalledToolReader = Effect.Effect<{
 }>;
 
 /**
- * What decides that a parked run of one agent category continues, pinned by
+ * What decides that a parked run continues, pinned by
  * each step beside its tools (`@agent/runtime/loop/step`); with none, the run
  * parks. `atIdle` answers the synthetic turn's text or null; `canContinue`
  * is false when the run ends here or a follow-up is queued. `onResume` runs
@@ -149,7 +147,6 @@ export type InstalledToolReader = Effect.Effect<{
  * decides anything: continuation does not survive a resume on its own.
  */
 export interface Continuation<R = never> {
-  readonly category: AgentCategory;
   readonly atIdle: (park: {
     readonly session: SessionHandle;
     readonly runId: RunId;
@@ -182,24 +179,20 @@ export type PromptSection = (ctx: {
 export interface ToolTable {
   /** Every plugin, in the order the app listed them (dashboard order). */
   readonly entries: ReadonlyMap<string, Plugin>;
-  /** The round mode of each plugin that drives an agent category's runs in
-   *  rounds, by that category; the loop reads it once at a run's open. */
-  readonly rounds: ReadonlyMap<AgentCategory, RoundMode>;
   /** The tool registered under `name` in any plugin. */
   readonly get: (name: string) => ITool | undefined;
 }
 
 /**
  * The table over `plugins`, which the app lists in order. A list that
- * repeats a plugin id or a tool name, claims one agent category's rounds or
+ * repeats a plugin id or a tool name, claims the parked runs'
  * continuation twice, or gives a toggle or setup copy to a plugin with no
  * availability probe is a defect of the list, refused when it is built.
  */
 export function toolTable(plugins: readonly Plugin[]): ToolTable {
   const entries = new Map<string, Plugin>();
   const byName = new Map<string, ITool>();
-  const rounds = new Map<AgentCategory, RoundMode>();
-  const continued = new Set<AgentCategory>();
+  let continued: string | null = null;
   const refuse = (reason: string): never => {
     throw new Error(`The plugin list is not valid: ${reason}`);
   };
@@ -211,19 +204,12 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
         refuse(`tool ${name} of plugin ${plugin.id} is another plugin's.`);
       byName.set(name, tool);
     }
-    if (plugin.rounds !== undefined) {
-      if (rounds.has(plugin.rounds.category))
-        refuse(
-          `plugin ${plugin.id} drives ${plugin.rounds.category} agents' rounds, which another plugin already drives.`,
-        );
-      rounds.set(plugin.rounds.category, plugin.rounds);
-    }
     if (plugin.continuation !== undefined) {
-      if (continued.has(plugin.continuation.category))
+      if (continued !== null)
         refuse(
-          `plugin ${plugin.id} continues ${plugin.continuation.category} agents, which another plugin already continues.`,
+          `plugin ${plugin.id} continues parked runs, which plugin ${continued} already does.`,
         );
-      continued.add(plugin.continuation.category);
+      continued = plugin.id;
     }
     if (
       plugin.availability === undefined &&
@@ -233,7 +219,7 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
         `plugin ${plugin.id} has a toggle or setup copy but no availability probe.`,
       );
   }
-  return { entries, rounds, get: (name) => byName.get(name) };
+  return { entries, get: (name) => byName.get(name) };
 }
 
 /** The process's plugin table, which every run's offered tools come from. */

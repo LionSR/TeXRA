@@ -5,11 +5,7 @@ import { registerRun } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ProcessServices } from '@platform/processRuntime';
 import { Secrets } from '@platform/secrets';
-import {
-  AgentCategory,
-  type RunId,
-  USER_FOLLOW_UP_SUPPORT,
-} from '@shared/schemas';
+import { type RunId, USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
 import { generateRunId } from '@utils/core';
 import { prepareAgentDefinition } from './AgentLaunchContext';
 import { runWithLaunchGuard, type RunTerminalOwner } from './runLaunchGuard';
@@ -37,8 +33,6 @@ export interface RunAgentOptions
     >,
     RunTerminalOwner {
   readonly session: SessionHandle;
-  /** Reject an explicitly supplied category that differs from the resolved definition. */
-  readonly enforceCategory?: boolean;
   /**
    * The caller owns presentation for failures before registration; after
    * that the run's `result` event presents.
@@ -114,11 +108,10 @@ export const runAgent = Effect.fn('runAgent')(function* (
       const definition = yield* prepareAgentDefinition({
         config,
         session: runSession,
-        enforceCategory: options.enforceCategory,
         suppressErrorNotification,
       });
       const userFollowUpSupport =
-        definition.config.agentCategory === AgentCategory.ToolUse &&
+        definition.config.script == null &&
         executeAgentOptions.stopAfterCycle !== true
           ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
           : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;

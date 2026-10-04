@@ -89,7 +89,7 @@ export { getHelperModelName } from './helperModelName';
 // RunHandle
 
 // RunEndResult
-export type { RunEndResult, WorkflowRunEndResult } from './RunEndResult';
+export type { RunEndResult } from './RunEndResult';
 
 // core/definition config contract used by host launch/resume seams.
 export {
@@ -110,3 +110,7 @@ export { ToolCall } from './ToolCall';
 
 // A workflow run's delivered outputs with their diffs, for a host that prints them.
 export { withWorkflowDiffs } from './subagentResults';
+
+// The document task launch: a host lowers a launch of an agent's task to a
+// run of its persona opened on the documents recipe.
+export { documentTaskConfig } from '../output/documentRecipe';

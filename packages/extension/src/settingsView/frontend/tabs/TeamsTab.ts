@@ -200,11 +200,10 @@ export class TeamsTab extends LitElement {
     preset: AgentModePreset,
     deletable: boolean,
   ): TemplateResult {
-    const allAgents = [...preset.agents.toolUse, ...preset.agents.workflow];
-    const orchestratorAgents = allAgents.filter((name) =>
+    const orchestratorAgents = preset.agents.filter((name) =>
       this.isOrchestratorAgent(name),
     );
-    const teammateAgents = allAgents.filter(
+    const teammateAgents = preset.agents.filter(
       (name) => !this.isOrchestratorAgent(name),
     );
     const isActive = this.activePresetId === preset.id;

@@ -17,11 +17,8 @@ import type {
   StateWriteFailed,
 } from '@platform/interfaces';
 import {
-  AGENT_CATEGORIES,
   AGENT_SOURCE,
-  type AgentCategory,
   type AgentModePreset,
-  type WorkspaceAgentsCategorySelection,
   agentKeyOf,
   agentMatchesIdentifier,
   type WorkspaceAgentsSelection,
@@ -113,9 +110,8 @@ export function unlistedCustomAgents<Entry extends WorkspaceAgentEntry>(
 }
 
 /**
- * Record which custom agents the written lists turn on and off: in a
- * category `selections` names, one its list leaves out is hidden, one it
- * names is shown again, and `'all'` shows them all. Only the agents listed
+ * Record which custom agents a written list turns on and off: one the list
+ * leaves out is hidden, one it names is shown again. Only the agents listed
  * now change; every other stored choice stays, a key whose agent is absent
  * included, since absence (a first scan not yet published, a file that no
  * longer parses) is no removal. A deleted agent's key goes where it is
@@ -124,21 +120,16 @@ export function unlistedCustomAgents<Entry extends WorkspaceAgentEntry>(
  */
 export function recordCustomChoices(
   repoState: StateStore,
-  agentsOf: (category: AgentCategory) => readonly WorkspaceAgentEntry[],
-  selections: Partial<Record<AgentCategory, WorkspaceAgentsCategorySelection>>,
+  agents: readonly WorkspaceAgentEntry[],
+  selection: readonly string[],
 ): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
   return Effect.gen(function* () {
     const hidden = yield* readHidden(repoState);
-    for (const category of AGENT_CATEGORIES) {
-      const selection = selections[category];
-      if (selection === undefined) continue;
-      for (const entry of agentsOf(category)) {
-        if (entry.source !== AGENT_SOURCE.CUSTOM) continue;
-        const key = agentKeyOf(entry);
-        if (selection === 'all' || listNames(selection, entry))
-          hidden.delete(key);
-        else hidden.add(key);
-      }
+    for (const entry of agents) {
+      if (entry.source !== AGENT_SOURCE.CUSTOM) continue;
+      const key = agentKeyOf(entry);
+      if (listNames(selection, entry)) hidden.delete(key);
+      else hidden.add(key);
     }
     yield* repoState.update(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS, [
       ...hidden,
@@ -169,21 +160,15 @@ export function forgetHiddenAgent(
   );
 }
 
-/** The identifiers a selection lists for a category; `undefined` means every
- *  agent. */
+/** The identifiers a selection lists; `undefined` means every agent. */
 export function selectedIdentifiers(
   selection: Exclude<WorkspaceAgentsSelection, { readonly kind: 'inherit' }>,
-  category: AgentCategory,
   presets: readonly AgentModePreset[],
 ): readonly string[] | undefined {
   if (selection.kind === 'all') return undefined;
-  if (selection.kind === 'custom') {
-    const categorySelection = selection.agentKeys[category];
-    return categorySelection === 'all' ? undefined : categorySelection;
-  }
+  if (selection.kind === 'custom') return selection.agentKeys;
   const preset = presets.find((candidate) => candidate.id === selection.teamId);
-  if (!preset) return undefined;
-  return preset.agents[category];
+  return preset?.agents;
 }
 
 /** `entries` less the custom agents the user hid. */

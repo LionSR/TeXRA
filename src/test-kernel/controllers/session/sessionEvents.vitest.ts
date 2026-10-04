@@ -92,7 +92,6 @@ import { AppState, type StateStore } from '@platform/interfaces';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
   aggregateId as qualifyAggregateId,
-  AgentCategory,
   AgentConfigFieldsSchema,
   emptyRunEndOutput,
   LocalRuntimeStateSchema,
@@ -138,7 +137,7 @@ import { Effect, Layer } from 'effect';
 import { databaseLayer } from '@controllers/session/Database';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { nodePlatformServices } from '@platform/defaults/nodePlatform';
-import { aggregateId, AgentCategory } from '@shared/schemas';
+import { aggregateId } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 
@@ -148,7 +147,7 @@ const append = Effect.gen(function* () {
   const db = yield* Database;
   yield* db.appendAll([{ type: 'run.start', aggregateId: id,
     identity: { kind: 'agent', agent: 'chat' }, userFollowUpSupport: 'unsupported',
-    category: AgentCategory.ToolUse, parent: null, provenance: null }]);
+    parent: null, provenance: null }]);
   while (!existsSync(join(storage, 'go'))) yield* Effect.sleep('1 millis');
   const slow = new DatabaseSync(join(storage, 'texra.db'));
   slow.exec('BEGIN IMMEDIATE');
@@ -239,7 +238,6 @@ const runStart: SessionEventDraft = {
   aggregateId: qualifyAggregateId('run', RUN),
   identity: { kind: 'agent', agent: 'chat' },
   userFollowUpSupport: 'unsupported',
-  category: AgentCategory.ToolUse,
   parent: null,
   provenance: null,
 };
@@ -1071,7 +1069,7 @@ describe('Sessions owner', () => {
           const runEnd = {
             type: 'run.end',
             outcome: 'completed',
-            output: emptyRunEndOutput(AgentCategory.ToolUse),
+            output: emptyRunEndOutput(),
           } as const;
           session.publish([
             { ...runEnd, aggregateId: qualifyAggregateId('run', RUN) },
@@ -1572,7 +1570,6 @@ describe('the C1 event table and the C6 publisher', () => {
                 type: 'run.config',
                 aggregateId: runStart.aggregateId,
                 config: AgentConfigFieldsSchema.parse({
-                  agentCategory: AgentCategory.ToolUse,
                   model: 'test-model',
                 }),
               },
@@ -2101,7 +2098,6 @@ describe('the C1 event table and the C6 publisher', () => {
             data: JSON.stringify({
               identity: runStart.identity,
               userFollowUpSupport: 'unsupported',
-              category: AgentCategory.ToolUse,
               provenance: null,
               parent: null,
             }),
@@ -2117,7 +2113,6 @@ describe('the C1 event table and the C6 publisher', () => {
             data: JSON.stringify({
               identity: runStart.identity,
               userFollowUpSupport: 'unsupported',
-              category: AgentCategory.ToolUse,
               provenance: null,
               parent: null,
             }),
@@ -2158,7 +2153,6 @@ describe('the C1 event table and the C6 publisher', () => {
       return Effect.gen(function* () {
         const db = yield* Database;
         const config = AgentConfigFieldsSchema.parse({
-          agentCategory: AgentCategory.ToolUse,
           model: 'test-model',
         });
         const configured: SessionEventDraft = {

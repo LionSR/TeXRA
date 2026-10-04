@@ -15,8 +15,8 @@ math, citations, and structure intact and outputs a reviewable diff.
 - Produces a revised draft that follows your instruction.
 - Runs a built-in critique pass that rereads its own output and revises it.
 
-Polish is a **workflow agent**: it writes to disk and produces a diff.
-It does not chat, compile LaTeX, or verify citations.
+Polish is a **document task**: it writes to disk and produces a diff.
+Run as a document task, it does not call tools or verify citations.
 
 ## When to use it
 
@@ -47,20 +47,20 @@ texra run polish \
   :outputs="['executions/c4e19b07a52d/r1/intro.tex']"
 />
 
-<p class="hero-caption">Rounds stream as progress, then the path to the final revision prints on stdout. That printed path is the success signal.</p>
+<p class="hero-caption">Revisions stream as progress, then the path to the final revision prints on stdout. That printed path is the success signal.</p>
 
-Each round writes its output into the run folder, an
+Each revision writes its output into the run folder, an
 `executions/<run-id>/` folder under TeXRA's workspace storage directory,
 using the **input filename** as the document name:
 
 ```
-executions/<run-id>/r0/intro.tex   # Round 0: first revision
-executions/<run-id>/r1/intro.tex   # Round 1: critique-and-revise pass
+executions/<run-id>/r0/intro.tex   # Revision 1: first revision
+executions/<run-id>/r1/intro.tex   # Revision 2: critique-and-revise pass
 ```
 
 <PolishRoundsTree />
 
-<p class="hero-caption">Both rounds reuse your input filename: <code>r0/</code> holds the first revision, <code>r1/</code> the critique-and-revise pass you usually keep.</p>
+<p class="hero-caption">Both revisions reuse your input filename: <code>r0/</code> holds the first revision, <code>r1/</code> the critique-and-revise pass you usually keep.</p>
 
 To write the final revision next to your input instead:
 
@@ -81,7 +81,7 @@ Same run, same history, same output files, whichever surface you used.
 
 ## Reviewing the output
 
-CLI: diff the rounds against your input:
+CLI: diff the revisions against your input:
 
 ```sh
 diff -u intro.tex executions/<run-id>/r0/intro.tex
@@ -93,7 +93,7 @@ the output back into the workspace.
 
 <CompareHero />
 
-<p class="hero-caption">The ProgressBoard opens the polished round as a diff. Accept each change back into your draft.</p>
+<p class="hero-caption">The ProgressBoard opens the polished revision as a diff. Accept each change back into your draft.</p>
 
 For a **compiled PDF comparison** (additions in blue, deletions in red),
 use the LaTeXdiff feature in the TeXRA panel. Read the
@@ -101,15 +101,15 @@ use the LaTeXdiff feature in the TeXRA panel. Read the
 
 ## How the critique pass works
 
-After Round 0 produces a revision, polish re-prompts itself to check
+After the first revision, polish re-prompts itself to check
 for common failure modes:
 
 <CritiquePassCard />
 
-<p class="hero-caption">Round 1 rereads its own Round 0 output and checks six failure modes before revising again: weakened or unnecessary edits, missing math, notation used before definition, generic filler, added sentences that do not read as plain technical English, and out-of-scope changes.</p>
+<p class="hero-caption">The second revision rereads the first and checks six failure modes before revising again: weakened or unnecessary edits, missing math, notation used before definition, generic filler, added sentences that do not read as plain technical English, and out-of-scope changes.</p>
 
-The result is written to `r1/`. Use **Round 0 alone** for fast
-iteration. Use **Round 1** when the draft is close to final.
+The result is written to `r1/`. Use **the first revision** (`r0/`) for fast
+iteration. Use **the second** (`r1/`) when the draft is close to final.
 
 ## Limits
 

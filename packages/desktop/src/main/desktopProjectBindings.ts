@@ -241,10 +241,10 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         host: hosts.run,
         toolEditPreview: hosts.toolEditPreview,
         session: project.session,
-        showAgentConfigBanner: ({ agentName, category }) =>
+        showAgentConfigBanner: ({ agentName }) =>
           withProcessServices(
             runtime,
-            snapshot.showAgentConfigBanner(agentName, category),
+            snapshot.showAgentConfigBanner(agentName),
           ),
         // A resolved agent also retires the missing-agent warning.
         onLaunched: (runId) => {

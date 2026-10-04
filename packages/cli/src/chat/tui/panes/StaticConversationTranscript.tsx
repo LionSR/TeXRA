@@ -22,7 +22,6 @@ import {
   type SessionMeta,
 } from '../state/cliState';
 import {
-  ancestorPositionLabel,
   sessionView,
   runLabelOf,
   runPhaseOf,
@@ -69,7 +68,6 @@ function childHeaderFor(
     label: child.label,
     modelLabel: child.modelLabel,
     childKind: child.identity?.kind === 'script' ? 'script' : 'subagent',
-    positionText: ancestorPositionLabel(view, child.id),
     parentLabel: parent === undefined ? 'main' : runLabelOf(parent),
   };
 }

@@ -108,11 +108,9 @@ describe('CLI shell completion', () => {
         path.join(bin, 'texra'),
         `#!/usr/bin/env bash
 if [[ "$*" == "agents list --quiet --all" ]]; then
-  printf 'workflow\\tpolish\\ntoolUse\\treview\\n'
-elif [[ "$*" == "agents list --quiet --all --category toolUse" ]]; then
-  printf 'toolUse\\treview\\ntoolUse\\tlean\\n'
+  printf 'task\\tpolish\\nchat\\treview\\nchat\\tlean\\n'
 elif [[ "$*" == "agents list --quiet" ]]; then
-  printf 'workflow\\tpolish\\ntoolUse\\treview\\n'
+  printf 'task\\tpolish\\nchat\\treview\\n'
 elif [[ "$*" == "models list --quiet" ]]; then
   printf 'gpt54\\n'
 fi
@@ -134,7 +132,7 @@ printf 'run:%s\\n' "\${COMPREPLY[@]}"
 COMP_WORDS=(texra run r)
 COMP_CWORD=2
 _texra
-printf 'run-tool-use:%s\\n' "\${COMPREPLY[@]}"
+printf 'run-chat:%s\\n' "\${COMPREPLY[@]}"
 COMP_WORDS=(texra chat --agent l)
 COMP_CWORD=3
 _texra
@@ -148,7 +146,7 @@ printf 'agents-show:%s\\n' "\${COMPREPLY[@]}"
 
       expect(completions).toEqual([
         'run:polish',
-        'run-tool-use:review',
+        'run-chat:review',
         'agent-flag:lean',
         'agents-show:polish',
       ]);

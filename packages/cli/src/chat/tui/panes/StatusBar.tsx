@@ -22,12 +22,7 @@ import {
   rootRunIds as rootRunIdsSignal,
   sessionMeta as sessionMetaSignal,
 } from '../state/cliState';
-import {
-  ancestorPositionLabel,
-  sessionView,
-  runPhaseOf,
-  runViewOf,
-} from '../state/sessionView';
+import { sessionView, runPhaseOf, runViewOf } from '../state/sessionView';
 import {
   chatTuiCanStopActiveRun,
   chatTuiCanStopVisibleRun,
@@ -228,17 +223,12 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   // same list the modal and the title read.
   const attention = useSignal(attentionRequestsSignal);
 
-  // Nested-session location: the nearest ancestor's open phase or loop
-  // position, then the focused stream's label.
+  // Nested-session location: the focused stream's label.
   const focusedRunId = target.isChildRun ? displayRunId : undefined;
   const focusedLabel =
     focusedRunId === undefined
       ? undefined
       : (runViewOf(view, focusedRunId)?.label ?? focusedRunId);
-  const focusedRoundHeading =
-    focusedRunId === undefined
-      ? undefined
-      : ancestorPositionLabel(view, focusedRunId);
 
   const display = buildStatusBarDisplay(displayRun, view, {
     turn: {
@@ -265,10 +255,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     approvalPolicy: sessionMeta.approvalPolicy,
     width: columns,
     ctrlCAction: target.ctrlCAction,
-    location:
-      focusedLabel === undefined
-        ? undefined
-        : { context: focusedRoundHeading, label: focusedLabel },
+    location: focusedLabel === undefined ? undefined : { label: focusedLabel },
     foreground: {
       inputActive: props.foregroundInputActive,
     },

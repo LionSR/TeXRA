@@ -90,20 +90,3 @@ export function roundIndexedEntries<T>(
     .map(([round, items]): [number, readonly T[]] => [Number(round), items])
     .sort((a, b) => a[0] - b[0]);
 }
-
-/**
- * The rounds that hold something. A producer publishes its whole map, so the
- * fold takes the map as it is; a round with nothing in it is not a round any
- * tab shows, so files and compile failures drop it. Missing outputs keep
- * empty rounds to mean no missing files are known; validation may not have
- * run for every round.
- */
-export function nonEmptyRounds<T>(rounds: RoundIndexed<T>): RoundIndexed<T> {
-  const next: RoundIndexed<T> = {};
-  for (const key of Object.keys(rounds)) {
-    const round = Number(key);
-    const items = rounds[round];
-    if (items.length > 0) next[round] = items;
-  }
-  return next;
-}

@@ -1,6 +1,6 @@
 import { Box } from 'ink';
 
-import { AgentCategory } from '@shared/schemas';
+import { documentsOf } from '@shared/plugins/documents';
 
 import { selectedRunId as selectedRunIdSignal } from '../state/cliState';
 import { sessionView, runPhaseOf, runViewOf } from '../state/sessionView';
@@ -60,14 +60,15 @@ export function ConversationPane(
       )
     : 0;
   const detailCapacity = Math.max(0, maxRows - pendingRowReserve);
+  const documents = stream?.documentTask ? documentsOf(stream) : undefined;
   const workflowFacts =
-    stream?.category === AgentCategory.Workflow
+    stream && documents
       ? {
           taskGroups: stream.transcript.taskGroups,
           runDurableOutcome: stream.durableOutcome ?? undefined,
-          outputFilesByRound: stream.files,
-          missingOutputsByRound: stream.missingOutputs,
-          compileFailuresByRound: stream.compileFailures,
+          outputFilesByRound: documents.files,
+          missingOutputsByRound: documents.missingOutputs,
+          compileFailuresByRound: documents.compileFailures,
         }
       : undefined;
   const visibleWorkflowDetails = selectWorkflowRunDetailLines(

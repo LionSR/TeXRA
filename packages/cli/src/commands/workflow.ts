@@ -3,7 +3,8 @@ import { Effect, FileSystem, Result } from 'effect';
 
 import { deriveResumability, getRunRecords } from '@agent/storage';
 import { type AgentConfigPayload, type SessionHandle } from '@agent/runtime';
-import { AgentCategory, RUN_OUTCOME, type RunId } from '@shared/schemas';
+import { documentTaskConfig } from '@agent/runtime';
+import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
 
 import {
@@ -20,7 +21,6 @@ import {
   writeInterruptedResumeHint,
 } from '../runtime/interruptedResumeHint';
 import { writeErrorStderr } from '../runtime/logSinks';
-import { isTerminalWorkflowCheckpoint } from '../runtime/toolUseResumeData';
 import {
   buildHeadlessRunContext,
   selectCliRunModel,
@@ -71,7 +71,7 @@ import {
 } from '../runtime/workflowOutput';
 
 const MULTI_INPUT_OUTPUT_MESSAGE =
-  'Use --output-dir for multi-input workflow runs; --output is only for a single final artifact.';
+  'Use --output-dir for multi-input document tasks; --output is only for a single final artifact.';
 
 function absoluteOutputDestination(
   destination: string | undefined,
@@ -93,12 +93,12 @@ interface HeadlessRunInit {
 }
 
 /**
- * `texra run <agent>`: the one headless run command, for both agent
- * categories. The agent is resolved once and its category picks the run shape —
- * a workflow agent takes `--output`/`--output-dir` and produces document
- * artifacts, a tool-use agent takes a required instruction (`--instruction`,
- * `--instruction-file`, or both) and runs one model/tool cycle. Flags that
- * belong to the other category are usage errors.
+ * `texra run <agent>`: the one headless run command. The agent is resolved
+ * once: one with a document task runs it over `--input` files (taking
+ * `--output`/`--output-dir` and producing document artifacts); any other
+ * takes a required instruction (`--instruction`, `--instruction-file`, or
+ * both) and runs one model/tool cycle. Flags that belong to the other shape
+ * are usage errors.
  */
 export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   context: CliContext,
@@ -108,25 +108,25 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
     return yield* failUsage('Use either --output or --output-dir, not both.');
   }
   const instruction = yield* resolveFileBackedInstruction(init, context.cwd);
-  // Neither category can run this: a workflow agent needs at least one input
-  // file, a tool-use agent needs an instruction. Rejecting it before the
+  // Nothing can run this: a document task needs at least one input file, a
+  // chat needs an instruction. Rejecting it before the
   // platform init keeps a plain usage error off the agent-catalog fetch a
   // signed-in session would otherwise pay for.
   if (!instruction && init.inputFiles.length === 0) {
     return yield* failUsage(
-      'Provide --instruction or --instruction-file for a tool-use agent, or --input for a workflow agent.',
+      'Provide --instruction or --instruction-file for an agent, or --input for a document task.',
     );
   }
 
   const services = yield* initCliPlatform(context);
   // Resolve once, before stdin is read or the runtime host starts; the run
   // pins the resolved source.
-  const { category, source } = yield* resolveCliRunAgent(services, init.agent);
-  if (category === AgentCategory.ToolUse) {
+  const { task, source } = yield* resolveCliRunAgent(services, init.agent);
+  if (task === null) {
     return yield* runToolUseAgent(context, init, source, instruction, services);
   }
 
-  // A workflow agent with no `--input` cannot run, and the output probes below
+  // A document task with no `--input` cannot run, and the output probes below
   // `mkdir -p` their destination before `withExpandedRunInputs` would report
   // it. Refuse first so an invalid command leaves nothing on disk.
   if (init.inputFiles.length === 0) {
@@ -174,7 +174,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
           init.outputDir,
           runContext.cwd,
         );
-        const config: AgentConfigPayload = {
+        const config: AgentConfigPayload = documentTaskConfig({
           agent: init.agent,
           agentSource: source,
           model,
@@ -194,8 +194,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
             : {}),
           instruction,
           workingDirectory: runContext.cwd,
-          agentCategory: AgentCategory.Workflow,
-        };
+        });
 
         return yield* executeCliWorkflowConfig(config, runContext, {
           session: services.session,
@@ -225,7 +224,7 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
     : init.outputDir && '--output-dir';
   if (workflowOnlyFlag) {
     return yield* failUsage(
-      `${workflowOnlyFlag} is only available for workflow agents; "${init.agent}" is a ${AgentCategory.ToolUse} agent.`,
+      `${workflowOnlyFlag} is only available for document tasks; "${init.agent}" has no task.`,
     );
   }
   if (!instruction) {
@@ -259,7 +258,6 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
           }),
           displayInstruction: instruction,
           workingDirectory: runContext.cwd,
-          agentCategory: AgentCategory.ToolUse,
         };
 
         const run = yield* executeCliToolUseConfig(config, runContext, {
@@ -319,20 +317,10 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const outputDir = resumeWorkflowOutputDirectory(config);
     const recoveryProcessCwd = tryReadCliCwd();
     const recoveryInputIsDurable = options.recoveryInputIsDurable ?? true;
-    // Not a run a model failure stopped (`runtime.lastError`), nor one that
-    // only replays a terminal compile rejection: a resume of either would
-    // fail the same way, so the exit hint is not printed. Read from the rows,
-    // so no verdict held in memory can be missed by an interrupt.
-    const canAdvertiseInterruptedRun: CheckpointRefinement = (
-      { snapshot },
-      runId,
-    ) =>
-      snapshot.runtime.lastError != null
-        ? Effect.succeed(false)
-        : Effect.map(
-            isTerminalWorkflowCheckpoint(runId, session),
-            (terminal) => !terminal,
-          );
+    // Not a run a model failure stopped (`runtime.lastError`): read from the
+    // rows, so no verdict held in memory can be missed by an interrupt.
+    const canAdvertiseInterruptedRun: CheckpointRefinement = ({ snapshot }) =>
+      Effect.succeed(snapshot.runtime.lastError == null);
     const writeResumeHint = (
       runId: RunId,
       waitForWrite = false,
@@ -371,7 +359,6 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
         ? (runId) => writeResumeHint(runId, true)
         : undefined,
       canAdvertiseInterruptedRun,
-      expectedCategory: AgentCategory.Workflow,
       publishWorkflowOutput: (
         result,
         agentDefaultOutputFiles,
@@ -426,7 +413,9 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     }
     if (!workflowResult) {
       return yield* Effect.die(
-        new Error('Workflow output was not finalized before the run ended.'),
+        new Error(
+          'Document task output was not finalized before the run ended.',
+        ),
       );
     }
 
@@ -463,7 +452,7 @@ export const headlessRunCommand = defineCliCommand({
       alias: 'i',
       valueHint: 'file',
       description:
-        'Workspace file passed to the agent (repeatable; use `-` to read stdin; required for workflow agents)',
+        'Workspace file passed to the agent (repeatable; use `-` to read stdin; required for document tasks)',
     },
     context: {
       type: 'string',
@@ -476,13 +465,13 @@ export const headlessRunCommand = defineCliCommand({
       type: 'string',
       valueHint: 'file',
       description:
-        'Workflow agents only: output file for a single-input run (use --output-dir for multi-input)',
+        'Document tasks only: output file for a single-input run (use --output-dir for multi-input)',
     },
     'output-dir': {
       type: 'string',
       valueHint: 'directory',
       description:
-        'Workflow agents only: directory to copy outputs into for multi-input runs',
+        'Document tasks only: directory to copy outputs into for multi-input runs',
     },
     model: {
       type: 'string',
@@ -492,7 +481,7 @@ export const headlessRunCommand = defineCliCommand({
     instruction: {
       type: 'string',
       description:
-        'Instruction passed to the agent (tool-use agents need this or --instruction-file)',
+        'Instruction passed to the agent (a run that is no document task needs this or --instruction-file)',
     },
     'instruction-file': {
       type: 'string',

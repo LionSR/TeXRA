@@ -7,6 +7,7 @@
  * beside their readers under `@shared/plugins/`, which webviews can import.
  */
 
+import { DOCUMENTS_OUTPUT_ARM } from '@shared/plugins/documents';
 import { GOAL_STATE_ARM } from '@shared/plugins/goal';
 import type { JsonValue } from '@shared/schemas';
 import type { z } from 'zod';
@@ -22,7 +23,10 @@ interface PluginArm {
   readonly upcasters: readonly ((value: JsonValue) => JsonValue)[];
 }
 
-const PLUGIN_EVENT_ARMS: readonly PluginArm[] = [GOAL_STATE_ARM];
+const PLUGIN_EVENT_ARMS: readonly PluginArm[] = [
+  GOAL_STATE_ARM,
+  DOCUMENTS_OUTPUT_ARM,
+];
 
 /** Every built-in plugin's arms, by `plugin/kind`. */
 export const PLUGIN_ARMS: ReadonlyMap<string, PluginArm> = new Map(

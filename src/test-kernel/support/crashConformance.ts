@@ -69,6 +69,7 @@ import { afterEach, beforeEach, describe, expect } from 'vitest';
 import { apiKeySecretName } from '@texra-ai/llm';
 import { refresh } from '@agent/index';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { documentTaskConfig } from '@agent/output/documentRecipe';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { runAgent } from '@agent/runtime/runAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -78,7 +79,11 @@ import {
 } from '@agent/runtime/sessionGraph';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
-import { aggregateTarget, type RunId } from '@shared/schemas';
+import {
+  aggregateTarget,
+  type RunEndOutput,
+  type RunId,
+} from '@shared/schemas';
 import { ProjectDatabases } from '@shared/session/database';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
@@ -101,6 +106,10 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { generateRunId } from '@utils/core';
 
 const AGENTS = resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/agents');
+const BUNDLED_AGENTS = resolve(
+  REPO_ROOT,
+  'packages/extension/resources/agents',
+);
 const HANDOFF = 'CRASH-HANDOFF: carry on from here.';
 const VALIDATION = {
   TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1',
@@ -617,6 +626,112 @@ function violations(
   ].filter((violation) => violation !== null);
 }
 
+/**
+ * The clean pass: `launch` runs in a fresh session over the store while
+ * `steps` play the user's part, recording the commit each write transaction
+ * ended at. Resolves to those commits, the crash points, and a copy of the
+ * store they index.
+ */
+const cleanPass = (
+  roots: ReturnType<typeof testWorkspaceRoots>,
+  launch: (session: SessionHandle) => Effect.Effect<unknown, unknown>,
+  steps: (session: SessionHandle) => Effect.Effect<void, unknown>,
+) =>
+  Effect.gen(function* () {
+    const points = yield* Effect.scoped(
+      Effect.gen(function* () {
+        const session = yield* initializeDefaultSession({ roots });
+        // The session's own store handle: the process holds one per root.
+        const databases = yield* withProcessServices(
+          testRuntime(),
+          Effect.gen(function* () {
+            return yield* ProjectDatabases;
+          }),
+        );
+        const db = yield* RcMap.get(databases, roots.storage);
+        const commits: number[] = [];
+        yield* SubscriptionRef.changes(db.observedCommit).pipe(
+          Stream.runForEach((commit) =>
+            Effect.sync(() => commits.push(commit)),
+          ),
+          Effect.forkScoped,
+        );
+        yield* approveAll(session);
+        const run = yield* launch(session).pipe(Effect.forkChild);
+        yield* steps(session);
+        yield* teardownDefaultSession();
+        yield* Fiber.interrupt(run);
+        // Every transaction observed, through the store's last commit.
+        const last = Math.max(
+          ...rowsOf(roots.storage).map((row) => row.commit),
+        );
+        while (!commits.includes(last))
+          yield* Effect.sleep(Duration.millis(10));
+        return [...new Set(commits)].filter((commit) => commit > 0);
+      }),
+    );
+    const clean = join(roots.storage, 'clean.db');
+    const db = new DatabaseSync(join(roots.storage, 'texra.db'));
+    try {
+      db.exec(`VACUUM INTO '${clean}'`);
+    } finally {
+      db.close();
+    }
+    return { points, clean };
+  });
+
+/**
+ * A crash after commit `n` of the clean store and its resume: a fresh
+ * session over the truncated copy resumes `root` unless it had ended, and
+ * `steps` play the user's part again. Resolves to the prefix's rows, the
+ * resumed store's, and why the resume was refused or stalled, if it was.
+ */
+const resumeFrom = (
+  roots: ReturnType<typeof testWorkspaceRoots>,
+  clean: string,
+  n: number,
+  root: RunId,
+  steps: (
+    session: SessionHandle,
+    storage: string,
+  ) => Effect.Effect<void, unknown>,
+) =>
+  Effect.gen(function* () {
+    const storage = join(roots.storage, `crash-${n}`);
+    crashAt(clean, storage, n);
+    // The files runs keep beside the store outlive the process: a revision's
+    // reply is on disk before the row that names it commits.
+    const files = join(roots.storage, 'executions');
+    if (existsSync(files))
+      cpSync(files, join(storage, 'executions'), { recursive: true });
+    const prefix = rowsOf(storage);
+    const refused = yield* Effect.scoped(
+      Effect.gen(function* () {
+        const session = yield* initializeDefaultSession({
+          roots: { ...roots, storage },
+        });
+        yield* approveAll(session);
+        if (!prefix.some((row) => row.run === root && row.type === 'run.end')) {
+          const resumed = yield* withProcessServices(
+            testRuntime(),
+            resumeRun(root, { session }),
+          );
+          if (!('started' in resumed))
+            return `the resume was refused: ${resumed.failed}`;
+        }
+        yield* steps(session, storage);
+        return null;
+      }).pipe(
+        Effect.ensuring(teardownDefaultSession()),
+        Effect.timeout('60 seconds'),
+        Effect.catchCause((cause) =>
+          Effect.succeed(`the resume stalled: ${String(cause)}`),
+        ),
+      ),
+    );
+    return { prefix, final: rowsOf(storage), refused };
+  });
+
 export function crashConformanceSuite(plugins: string): void {
   describe(`crash-point conformance (${plugins})`, () => {
     const tempDirs = useTempDirs();
@@ -625,7 +740,9 @@ export function crashConformanceSuite(plugins: string): void {
       const agents = {
         custom: () => Effect.succeed(AGENTS),
         customConfigured: () => Effect.succeed(false),
-        builtIn: () => Effect.succeed(AGENTS),
+        // The bundled personas, `polish` among them: the golden agents
+        // resolve from the custom source first.
+        builtIn: () => Effect.succeed(BUNDLED_AGENTS),
         builtInToolUse: () => Effect.succeed(AGENTS),
       };
       return {
@@ -687,58 +804,25 @@ export function crashConformanceSuite(plugins: string): void {
           const effectsLog = join(roots.workspace!, 'effects.log');
           const root = generateRunId();
 
-          // The clean pass, recording where each write transaction ended.
-          const points = yield* Effect.scoped(
-            Effect.gen(function* () {
-              const session = yield* initializeDefaultSession({ roots });
-              // The session's own store handle: the process holds one per
-              // root.
-              const databases = yield* withProcessServices(
+          const { points, clean } = yield* cleanPass(
+            roots,
+            (session) =>
+              withProcessServices(
                 testRuntime(),
-                Effect.gen(function* () {
-                  return yield* ProjectDatabases;
-                }),
-              );
-              const db = yield* RcMap.get(databases, roots.storage);
-              const commits: number[] = [];
-              yield* SubscriptionRef.changes(db.observedCommit).pipe(
-                Stream.runForEach((commit) =>
-                  Effect.sync(() => commits.push(commit)),
+                runAgent(
+                  {
+                    config: AgentConfigSchema.parse({
+                      agent: 'golden_crash',
+                      model: 'gpt56',
+                      instruction: 'Work through the crash task.',
+                    }),
+                    runId: root,
+                  },
+                  { session },
                 ),
-                Effect.forkScoped,
-              );
-              yield* approveAll(session);
-              const config = AgentConfigSchema.parse({
-                agent: 'golden_crash',
-                model: 'gpt56',
-                agentCategory: 'toolUse',
-                instruction: 'Work through the crash task.',
-              });
-              const run = yield* withProcessServices(
-                testRuntime(),
-                runAgent({ config, runId: root }, { session }),
-              ).pipe(Effect.forkChild);
-              yield* userSteps(session, roots.storage, root);
-              yield* teardownDefaultSession();
-              yield* Fiber.interrupt(run);
-              // Every transaction observed, through the store's last commit.
-              const last = Math.max(
-                ...rowsOf(roots.storage).map((row) => row.commit),
-              );
-              while (!commits.includes(last))
-                yield* Effect.sleep(Duration.millis(10));
-              return [...new Set(commits)].filter((commit) => commit > 0);
-            }),
+              ),
+            (session) => userSteps(session, roots.storage, root),
           );
-          const clean = join(roots.storage, 'clean.db');
-          {
-            const db = new DatabaseSync(join(roots.storage, 'texra.db'));
-            try {
-              db.exec(`VACUUM INTO '${clean}'`);
-            } finally {
-              db.close();
-            }
-          }
           const cleanRows = rowsOf(roots.storage);
           const expected = outcome(cleanRows, root);
           // The clean pass crossed every boundary the suite names.
@@ -778,37 +862,13 @@ export function crashConformanceSuite(plugins: string): void {
 
           const broken: string[] = [];
           for (const n of points) {
-            const storage = join(roots.storage, `crash-${n}`);
-            crashAt(clean, storage, n);
             rmSync(effectsLog, { force: true });
-            const prefix = rowsOf(storage);
-            const refused = yield* Effect.scoped(
-              Effect.gen(function* () {
-                const session = yield* initializeDefaultSession({
-                  roots: { ...roots, storage },
-                });
-                yield* approveAll(session);
-                if (
-                  !prefix.some(
-                    (row) => row.run === root && row.type === 'run.end',
-                  )
-                ) {
-                  const resumed = yield* withProcessServices(
-                    testRuntime(),
-                    resumeRun(root, { session }),
-                  );
-                  if (!('started' in resumed))
-                    return `the resume was refused: ${resumed.failed}`;
-                }
-                yield* userSteps(session, storage, root);
-                return null;
-              }).pipe(
-                Effect.ensuring(teardownDefaultSession()),
-                Effect.timeout('60 seconds'),
-                Effect.catchCause((cause) =>
-                  Effect.succeed(`the resume stalled: ${String(cause)}`),
-                ),
-              ),
+            const { prefix, final, refused } = yield* resumeFrom(
+              roots,
+              clean,
+              n,
+              root,
+              (session, storage) => userSteps(session, storage, root),
             );
             // No file: no command ran during the resume.
             const effects = existsSync(effectsLog)
@@ -816,14 +876,7 @@ export function crashConformanceSuite(plugins: string): void {
               : [];
             const found = [
               ...(refused === null ? [] : [refused]),
-              ...violations(
-                prefix,
-                rowsOf(storage),
-                n,
-                root,
-                expected,
-                effects,
-              ),
+              ...violations(prefix, final, n, root, expected, effects),
             ];
             if (found.length > 0)
               broken.push(`after commit ${n}: ${found.join('; ')}`);
@@ -832,5 +885,133 @@ export function crashConformanceSuite(plugins: string): void {
         }),
       600_000,
     );
+    /**
+     * A document task's documents are its recipe script's settled value: a
+     * resume from any commit point ends `completed` with the clean run's
+     * documents, and a revision whose persona child ended before the crash
+     * is not run again. The polish persona and the documents plugin are
+     * TeXRA's.
+     */
+    if (plugins === 'TeXRA plugins')
+      it.live(
+        "resumes a document task from every commit point to the clean run's documents",
+        () =>
+          Effect.gen(function* () {
+            const roots = testWorkspaceRoots();
+            const root = generateRunId();
+            writeFileSync(
+              join(roots.workspace!, 'paper.tex'),
+              '\\section{Draft}\nA short draft.\n',
+            );
+            // The persona answers with the validation document, not the echo.
+            delete process.env.TEXRA_INTERNAL_VALIDATE_ECHO;
+            const ended = (storage: string) =>
+              until(storage, (rows) =>
+                rows.some((row) => row.run === root && row.type === 'run.end'),
+              );
+            const { points, clean } = yield* cleanPass(
+              roots,
+              (session) =>
+                withProcessServices(
+                  testRuntime(),
+                  runAgent(
+                    {
+                      config: AgentConfigSchema.parse(
+                        documentTaskConfig({
+                          agent: 'polish',
+                          agentSource: 'builtIn',
+                          model: 'gpt56',
+                          instruction: 'Polish the draft.',
+                          inputFiles: ['paper.tex'],
+                          workingDirectory: roots.workspace,
+                        }),
+                      ),
+                      runId: root,
+                    },
+                    { session },
+                  ),
+                ),
+              () => ended(roots.storage),
+            );
+            /** How the root ended, and the documents its end carries. */
+            const end = (rows: readonly Row[]) => {
+              const row = rows.find(
+                (row) => row.run === root && row.type === 'run.end',
+              );
+              if (row === undefined) return null;
+              const { outcome, output } = json(row) as {
+                readonly outcome: string;
+                readonly output: RunEndOutput;
+              };
+              return {
+                outcome,
+                outputs: (output.documents?.outputs ?? []).map(
+                  (file) => `${file.round} ${file.relativePath}`,
+                ),
+              };
+            };
+            const cleanRows = rowsOf(roots.storage);
+            const expected = end(cleanRows);
+            const childCalls = (rows: readonly Row[]) =>
+              rows
+                .filter(
+                  (row) => row.type === 'run.start' && row.parent === root,
+                )
+                .map((row) => (json(row).parent as { callId: string }).callId);
+            // Two revisions, each its own persona child, and both documents.
+            expect(expected).toEqual({
+              outcome: 'completed',
+              outputs: expect.arrayContaining([expect.any(String)]),
+            });
+            expect(new Set(childCalls(cleanRows)).size).toBe(2);
+
+            const broken: string[] = [];
+            for (const n of points) {
+              const { prefix, final, refused } = yield* resumeFrom(
+                roots,
+                clean,
+                n,
+                root,
+                (_, storage) => ended(storage),
+              );
+              // A call whose child ended before the crash.
+              const endedBefore = new Set(
+                prefix
+                  .filter(
+                    (row) => row.type === 'run.start' && row.parent === root,
+                  )
+                  .filter((child) =>
+                    prefix.some(
+                      (row) => row.run === child.run && row.type === 'run.end',
+                    ),
+                  )
+                  .map(
+                    (child) =>
+                      (json(child).parent as { callId: string }).callId,
+                  ),
+              );
+              const relaunched = childCalls(
+                final.filter((row) => row.commit > n),
+              ).filter((call) => endedBefore.has(call));
+              const got = end(final);
+              const found = [
+                ...(refused === null ? [] : [refused]),
+                JSON.stringify(got) === JSON.stringify(expected)
+                  ? null
+                  : `the run ended ${JSON.stringify(got)}`,
+                relaunched.length === 0
+                  ? null
+                  : `a settled revision's child launched again: ${relaunched.join(', ')}`,
+                new Set(childCalls(final)).size === 2
+                  ? null
+                  : `the revisions' children came to ${new Set(childCalls(final)).size} calls`,
+              ].filter((violation) => violation !== null);
+              if (found.length > 0)
+                broken.push(`after commit ${n}: ${found.join('; ')}`);
+            }
+            expect(broken).toEqual([]);
+          }),
+        600_000,
+      );
   });
 }

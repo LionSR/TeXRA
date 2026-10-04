@@ -17,7 +17,7 @@ import {
 } from './outputState';
 import type { RoundFileMapping } from './types';
 
-export interface RoundSummary {
+interface RoundSummary {
   filesToOpen: FileLocation[];
 }
 

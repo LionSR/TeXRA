@@ -1,7 +1,7 @@
 <script setup>
 // Frameless agent catalog for guide/built-in-agents.md's "Quick Reference". The
 // source is an 18-row markdown table whose "Type" column is the page's central
-// idea — every built-in agent is either a tool-use loop or a workflow pipeline.
+// idea — a built-in agent either chats with its tools or also runs a document task.
 // A flat table makes the reader scan that column to reconstruct the split;
 // rendering the catalog as two grouped cards makes the split the figure itself,
 // pairing directly with <AgentModeShapes> below (which then explains how each of
@@ -17,7 +17,7 @@ import StatusPill from './StatusPill.vue';
 
 const groups = [
   {
-    title: 'Tool-use',
+    title: 'Chat',
     icon: 'comments',
     agents: [
       {
@@ -48,11 +48,14 @@ const groups = [
       },
       { name: 'creator', purpose: 'Design, write, and test new TeXRA agents' },
       { name: 'setup', purpose: 'Setup wizard — diagnose, install, configure' },
-      { name: 'chat', purpose: 'General assistance & file editing (opt-in)' },
+      {
+        name: 'assistant',
+        purpose: 'General assistance & file editing (opt-in)',
+      },
     ],
   },
   {
-    title: 'Workflow',
+    title: 'Document task',
     icon: 'diagram-project',
     agents: [
       { name: 'correct', purpose: 'Fix errors without style changes' },

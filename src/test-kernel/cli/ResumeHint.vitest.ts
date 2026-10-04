@@ -8,11 +8,7 @@ import {
   type ResumeCommandOptions,
   type ResumeTarget,
 } from '@cli/chat/tui/state/resumeHint';
-import {
-  AgentCategory,
-  type RunId,
-  type TokenUsageStats,
-} from '@shared/schemas';
+import { type RunId, type TokenUsageStats } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
 import { makeRunView, viewWith } from './fixtures/sessionViewFixture';
 
@@ -51,14 +47,14 @@ describe('collectResumeTargets', () => {
     ).toEqual([{ runId: 'root', label: 'task' }]);
   });
 
-  it('lists subagents TeXRA drives, of either category', () => {
+  it('lists subagents TeXRA drives, chats and document tasks alike', () => {
     const view = viewWith([
       root(),
       child({ id: 'rev' as RunId, label: 'reviewer' }),
       child({
         id: 'flow' as RunId,
         label: 'builder',
-        category: AgentCategory.Workflow,
+        documentTask: true,
       }),
     ]);
     expect(

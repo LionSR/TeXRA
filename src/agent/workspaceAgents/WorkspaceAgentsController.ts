@@ -7,20 +7,12 @@ import type {
   StateWriteFailed,
   StateReadFailed,
 } from '@platform/interfaces';
-import type {
-  AgentCategory,
-  WorkspaceAgentsCategorySelection,
-  WorkspaceAgentsSelection,
-  AgentSource,
-  ByCategory,
-} from '@shared/schemas';
+import type { WorkspaceAgentsSelection, AgentSource } from '@shared/schemas';
 import {
-  AGENT_CATEGORIES,
   agentKeyOf,
   agentMatchesIdentifier,
   agentName,
   WorkspaceAgentsSelectionSchema,
-  byCategory,
   INHERITED_WORKSPACE_AGENTS,
 } from '@shared/schemas';
 import {
@@ -44,7 +36,6 @@ import {
 export interface WorkspaceAgentsEntry {
   readonly name: string;
   readonly source: AgentSource;
-  readonly category: AgentCategory;
 }
 
 export class InvalidAgentTeamError extends Data.TaggedError(
@@ -56,20 +47,17 @@ export interface WorkspaceAgentsControllerDeps<
 > {
   readonly repoState: StateStore;
   readonly globalState: StateStore;
-  readonly getAgents: (category: AgentCategory) => Entry[];
+  readonly getAgents: () => Entry[];
   /** The workspace's persisted custom presets, raw; `teamPresets` parses. */
   readonly getPresets?: () => Effect.Effect<unknown, StateReadFailed>;
   /**
    * Resolve one stored identifier without collapsing exact source identity.
    * The controller applies no fallback around this, so an implementation owns
-   * the whole contract: match a bare name against the category's agents, match
-   * a source-qualified key exactly, and return nothing for an entry outside
-   * `category`. `getCategoryAgent` is the production implementation.
+   * the whole contract: match a bare name against the deduplicated agents,
+   * and a source-qualified key exactly. `getCatalogAgent` is the production
+   * implementation.
    */
-  readonly resolveAgent: (
-    category: AgentCategory,
-    identifier: string,
-  ) => Entry | undefined;
+  readonly resolveAgent: (identifier: string) => Entry | undefined;
 }
 
 export class WorkspaceAgentsController<
@@ -92,8 +80,8 @@ export class WorkspaceAgentsController<
   }
 
   /** Resolve one stored identifier by the workspace agents' identity rule. */
-  resolveAgent(category: AgentCategory, identifier: string) {
-    return this.deps.resolveAgent(category, identifier);
+  resolveAgent(identifier: string) {
+    return this.deps.resolveAgent(identifier);
   }
 
   private getSelection() {
@@ -119,26 +107,22 @@ export class WorkspaceAgentsController<
     });
   }
 
-  getVisibleAgents(category: AgentCategory) {
+  getVisibleAgents() {
     return Effect.gen({ self: this }, function* () {
       const effective = yield* this.getEffectiveSelection();
       const identifiers = selectedIdentifiers(
         effective,
-        category,
         yield* this.allPresets(),
       );
       if (identifiers === undefined) {
-        return yield* visibleAgents(
-          this.deps.repoState,
-          this.deps.getAgents(category),
-        );
+        return yield* visibleAgents(this.deps.repoState, this.deps.getAgents());
       }
-      const { entries } = this.resolveIdentifiers(category, identifiers);
+      const { entries } = this.resolveIdentifiers(identifiers);
       return [
         ...entries,
         ...(yield* unlistedCustomAgents(
           this.deps.repoState,
-          this.deps.getAgents(category),
+          this.deps.getAgents(),
           entries.map(agentKeyOf),
         )),
       ];
@@ -146,12 +130,9 @@ export class WorkspaceAgentsController<
   }
 
   /** Return the effective stored identifiers, including unavailable members. */
-  getEnabledAgentKeys(category: AgentCategory) {
+  getEnabledAgentKeys() {
     return Effect.gen({ self: this }, function* () {
-      return yield* this.selectionKeys(
-        yield* this.getEffectiveSelection(),
-        category,
-      );
+      return yield* this.selectionKeys(yield* this.getEffectiveSelection());
     });
   }
 
@@ -160,18 +141,14 @@ export class WorkspaceAgentsController<
       const selection = yield* this.getSelection();
       const { effectiveSelection, missingTeamId } =
         yield* this.resolveEffectiveSelection(selection);
-      const presets = yield* this.allPresets();
-      const unresolvedNames = AGENT_CATEGORIES.flatMap((category) => {
-        const identifiers = selectedIdentifiers(
-          effectiveSelection,
-          category,
-          presets,
-        );
-        if (identifiers === undefined) return [];
-        return this.resolveIdentifiers(category, identifiers).missing.map(
-          agentName,
-        );
-      });
+      const identifiers = selectedIdentifiers(
+        effectiveSelection,
+        yield* this.allPresets(),
+      );
+      const unresolvedNames =
+        identifiers === undefined
+          ? []
+          : this.resolveIdentifiers(identifiers).missing.map(agentName);
       return {
         selection,
         effectiveSelection,
@@ -184,12 +161,10 @@ export class WorkspaceAgentsController<
 
   private selectionKeys(
     selection: Exclude<WorkspaceAgentsSelection, { readonly kind: 'inherit' }>,
-    category: AgentCategory,
   ) {
     return Effect.gen({ self: this }, function* () {
       const identifiers = selectedIdentifiers(
         selection,
-        category,
         yield* this.allPresets(),
       );
       if (identifiers === undefined) return undefined;
@@ -198,10 +173,10 @@ export class WorkspaceAgentsController<
       const keys =
         selection.kind === 'custom'
           ? unique(identifiers)
-          : this.resolveIdentifiers(category, identifiers).keys;
+          : this.resolveIdentifiers(identifiers).keys;
       const unlisted = yield* unlistedCustomAgents(
         this.deps.repoState,
-        this.deps.getAgents(category),
+        this.deps.getAgents(),
         keys,
       );
       return [...keys, ...unlisted.map(agentKeyOf)];
@@ -214,15 +189,12 @@ export class WorkspaceAgentsController<
    * entry; `keys` each identifier's canonical key, or the identifier itself
    * when it does not resolve, deduplicated in stored order.
    */
-  private resolveIdentifiers(
-    category: AgentCategory,
-    identifiers: readonly string[],
-  ) {
+  private resolveIdentifiers(identifiers: readonly string[]) {
     const entries = new Map<string, Entry>();
     const keys = new Set<string>();
     const missing: string[] = [];
     for (const identifier of identifiers) {
-      const entry = this.deps.resolveAgent(category, identifier);
+      const entry = this.deps.resolveAgent(identifier);
       if (entry) {
         const key = agentKeyOf(entry);
         entries.set(key, entry);
@@ -277,13 +249,11 @@ export class WorkspaceAgentsController<
     });
   }
 
-  private effectiveCategorySelection(category: AgentCategory) {
+  /** The keys the effective selection lists, or `null` for every agent. */
+  private effectiveKeys() {
     return Effect.gen({ self: this }, function* () {
       return (
-        (yield* this.selectionKeys(
-          yield* this.getEffectiveSelection(),
-          category,
-        )) ?? 'all'
+        (yield* this.selectionKeys(yield* this.getEffectiveSelection())) ?? null
       );
     });
   }
@@ -336,59 +306,27 @@ export class WorkspaceAgentsController<
         status: 'applied' as const,
         preset,
         resolution: planTeamRun(preset, {
-          resolveAgent: (category, identifier) =>
-            this.deps.resolveAgent(category, identifier),
+          resolveAgent: (identifier) => this.deps.resolveAgent(identifier),
         }),
       };
     });
   }
 
-  setCustom(
-    agentKeys: ByCategory<WorkspaceAgentsCategorySelection>,
+  /** Exactly the agents `agentKeys` names, in that order. */
+  setEnabledAgentKeys(
+    agentKeys: readonly string[],
   ): Effect.Effect<void, StateWriteFailed | StateReadFailed> {
     return serializeWorkspaceWrite(
       this.deps.repoState,
       Effect.gen({ self: this }, function* () {
         yield* recordCustomChoices(
           this.deps.repoState,
-          this.deps.getAgents,
+          this.deps.getAgents(),
           agentKeys,
         );
         yield* this.writeSelection({
           kind: 'custom',
-          agentKeys: byCategory((category) => {
-            const selection = agentKeys[category];
-            return selection === 'all' ? 'all' : unique(selection);
-          }),
-        });
-      }),
-    );
-  }
-
-  setEnabledAgentKeys(
-    category: AgentCategory,
-    enabledKeys: readonly string[],
-  ): Effect.Effect<void, StateWriteFailed | StateReadFailed> {
-    return serializeWorkspaceWrite(
-      this.deps.repoState,
-      // The untouched categories' keys are a read of the selection, so it has
-      // to happen while the lane is held: `byCategory` evaluates its callback
-      // at construction, which is before the lane is acquired. Two calls
-      // constructed back to back would otherwise both start from the same
-      // pre-lane snapshot and one update would be lost.
-      Effect.gen({ self: this }, function* () {
-        yield* recordCustomChoices(this.deps.repoState, this.deps.getAgents, {
-          [category]: enabledKeys,
-        });
-        return yield* this.writeSelection({
-          kind: 'custom',
-          agentKeys: yield* Effect.all(
-            byCategory((candidate) =>
-              candidate === category
-                ? Effect.succeed(unique(enabledKeys))
-                : this.effectiveCategorySelection(candidate),
-            ),
-          ),
+          agentKeys: unique(agentKeys),
         });
       }),
     );
@@ -417,7 +355,6 @@ export class WorkspaceAgentsController<
   }
 
   setAgentEnabled(input: {
-    readonly category: AgentCategory;
     readonly source: AgentSource;
     readonly name: string;
     readonly enabled: boolean;
@@ -425,16 +362,14 @@ export class WorkspaceAgentsController<
     return serializeWorkspaceWrite(
       this.deps.repoState,
       Effect.gen({ self: this }, function* () {
-        const selections = yield* Effect.all(
-          byCategory((category) => this.effectiveCategorySelection(category)),
-        );
+        const keys = yield* this.effectiveKeys();
         const target =
-          selections[input.category] === 'all'
+          keys === null
             ? (yield* visibleAgents(
                 this.deps.repoState,
-                this.deps.getAgents(input.category),
+                this.deps.getAgents(),
               )).map(agentKeyOf)
-            : [...selections[input.category]];
+            : [...keys];
         const key = agentKeyOf(input);
         const index = target.findIndex((candidate) =>
           agentMatchesIdentifier(input, candidate),
@@ -446,14 +381,14 @@ export class WorkspaceAgentsController<
         } else {
           target.splice(index, 1);
         }
-        yield* recordCustomChoices(this.deps.repoState, this.deps.getAgents, {
-          [input.category]: target,
-        });
+        yield* recordCustomChoices(
+          this.deps.repoState,
+          this.deps.getAgents(),
+          target,
+        );
         return yield* this.writeSelection({
           kind: 'custom',
-          agentKeys: byCategory((category) =>
-            category === input.category ? target : selections[category],
-          ),
+          agentKeys: target,
         });
       }),
     );
@@ -469,16 +404,13 @@ export class WorkspaceAgentsController<
         const selection = yield* this.getSelection();
         const clearSelection =
           selection.kind === 'team' && selection.teamId === teamId
-            ? this.writeSelection({
-                kind: 'custom',
-                agentKeys: yield* Effect.all(
-                  byCategory((category) =>
-                    this.selectionKeys(selection, category).pipe(
-                      Effect.map((keys) => keys ?? 'all'),
-                    ),
-                  ),
+            ? Effect.flatMap(this.selectionKeys(selection), (keys) =>
+                this.writeSelection(
+                  keys === undefined
+                    ? { kind: 'all' }
+                    : { kind: 'custom', agentKeys: keys },
                 ),
-              })
+              )
             : Effect.void;
         return yield* Effect.andThen(clearSelection, removePreset());
       }),

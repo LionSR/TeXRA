@@ -18,7 +18,7 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import { senderOf } from '@agent/followUp/followUpSender';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { AgentCategory, ToolError, type RunId } from '@shared/schemas';
+import { ToolError, USER_FOLLOW_UP_SUPPORT, type RunId } from '@shared/schemas';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { executed } from '@tools/core/result';
 import { previewLabel } from '@utils/text/stringUtils';
@@ -50,10 +50,10 @@ export const sendToRun = Effect.fn('ExecutionsTool.send')(function* (
       ),
     );
   }
-  if (recipient.category !== AgentCategory.ToolUse) {
+  if (recipient.followUpSupport === USER_FOLLOW_UP_SUPPORT.UNSUPPORTED) {
     return yield* Effect.fail(
       new ToolError(
-        `Run '${target}' is a workflow agent. Only tool-use runs take messages.`,
+        `Run '${target}' takes no messages: only a conversation does.`,
       ),
     );
   }

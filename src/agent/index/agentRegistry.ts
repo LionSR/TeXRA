@@ -7,14 +7,12 @@ import { AgentDirectories, type StateReadFailed } from '@platform/interfaces';
 import type { AgentCatalogServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
-  AgentCategory as AgentCategoryType,
   AgentDelegationScope,
   AgentOptionData,
   AgentSource,
 } from '@shared/schemas';
 import type { AgentScanIssue } from '@shared/schemas';
 import {
-  AgentCategory,
   DEFAULT_WORKFLOW_AGENT,
   agentKey,
   agentKeyOf,
@@ -47,12 +45,7 @@ export class AgentCatalogLoadError extends Data.TaggedError(
  * absent one scores `-1` in `deduplicateByName`'s `indexOf`, ranking first by
  * accident.
  */
-const LOOKUP_PRIORITY: AgentSource[] = [
-  'custom',
-  'builtInWorkflow',
-  'builtInToolUse',
-  'plugin',
-];
+const LOOKUP_PRIORITY: AgentSource[] = ['custom', 'builtIn', 'plugin'];
 
 /** The cache. Just a Map. */
 const cache = new Map<string, AgentEntry>();
@@ -109,23 +102,20 @@ const scanCatalog: Effect.Effect<
   );
   const toolUseRoots = yield* enabledToolUseRoots(toolUseDir);
   // Only custom-agent scan issues are a product surface; the rest go unused.
-  const [customScan, builtInScan, toolUseScan, pluginAgents] =
-    yield* Effect.all(
-      [
-        scanDirectory([customDir], 'custom'),
-        scanDirectory([builtInDir], 'builtInWorkflow'),
-        scanDirectory(toolUseRoots, 'builtInToolUse'),
-        scanPluginAgents,
-      ],
-      { concurrency: 'unbounded' },
-    );
+  const [customScan, builtInScan, pluginAgents] = yield* Effect.all(
+    [
+      scanDirectory([customDir], 'custom'),
+      scanDirectory([builtInDir, ...toolUseRoots], 'builtIn'),
+      scanPluginAgents,
+    ],
+    { concurrency: 'unbounded' },
+  );
 
   cache.clear();
   customScanIssues = Object.freeze(customScan.issues);
   for (const entry of [
     ...customScan.entries,
     ...builtInScan.entries,
-    ...toolUseScan.entries,
     ...pluginAgents,
   ]) {
     cache.set(agentKeyOf(entry), entry);
@@ -137,10 +127,8 @@ const scanCatalog: Effect.Effect<
 });
 
 /**
- * Category-blind catalog lookup by identifier: a "source:name" key hits its
- * entry directly, and a plain name takes the first source in
- * `LOOKUP_PRIORITY`. Callers that require a category resolve through
- * `getCategoryAgent` or `resolveAgentForLaunch` instead.
+ * Catalog lookup by identifier: a "source:name" key hits its entry directly,
+ * and a plain name takes the first source in `LOOKUP_PRIORITY`.
  */
 export function getAgent(identifier: string): AgentEntry | undefined {
   // Direct lookup for source:name format (already resolved)
@@ -162,20 +150,16 @@ export function getAgent(identifier: string): AgentEntry | undefined {
  * agents are not in the catalog, so they never answer here.
  */
 export function changedBuiltInOf(
-  entry: Pick<AgentEntry, 'name' | 'source' | 'category' | 'basedOn'>,
+  entry: Pick<AgentEntry, 'name' | 'source' | 'basedOn'>,
 ): AgentEntry | undefined {
   if (entry.source !== 'custom' || entry.basedOn == null) return undefined;
-  const builtIn = (['builtInWorkflow', 'builtInToolUse'] as const)
-    .map((source) => cache.get(agentKey(source, entry.name)))
-    .find((candidate) => candidate?.category === entry.category);
+  const builtIn = cache.get(agentKey('builtIn', entry.name));
   return builtIn && builtIn.digest !== entry.basedOn ? builtIn : undefined;
 }
 
-/** Get agents for a category, deduplicated by name. */
-export function getAgentsByCategory(category: AgentCategory): AgentEntry[] {
-  return deduplicateByName(
-    [...cache.values()].filter((e) => e.category === category),
-  );
+/** Every agent, deduplicated by name. */
+export function getCatalogAgents(): AgentEntry[] {
+  return deduplicateByName([...cache.values()]);
 }
 
 /**
@@ -260,7 +244,7 @@ export type WorkspaceAgentsStores = Pick<
  */
 export function createWorkspaceAgentsController(
   roots: WorkspaceAgentsStores,
-  getAgents: (category: AgentCategory) => AgentEntry[] = getAgentsByCategory,
+  getAgents: () => AgentEntry[] = getCatalogAgents,
 ): WorkspaceAgentsController<AgentEntry> {
   const { repoState, globalState } = roots;
   return new WorkspaceAgentsController({
@@ -268,20 +252,16 @@ export function createWorkspaceAgentsController(
     globalState,
     getAgents,
     getPresets: () => repoState.get(WorkspaceStateKey.CUSTOM_TEAMS),
-    resolveAgent: getCategoryAgent,
+    resolveAgent: getCatalogAgent,
   });
 }
 
 /**
- * Get visible agents for a category (filtered by user visibility config).
- * Agents are already deduplicated by name from the getter functions.
- * No default → undefined means "never configured" (show all).
+ * The visible agents (filtered by user visibility config), deduplicated by
+ * name. No default → undefined means "never configured" (show all).
  */
-export function getVisibleAgents(
-  stores: WorkspaceAgentsStores,
-  category: AgentCategory,
-) {
-  return createWorkspaceAgentsController(stores).getVisibleAgents(category);
+export function getVisibleAgents(stores: WorkspaceAgentsStores) {
+  return createWorkspaceAgentsController(stores).getVisibleAgents();
 }
 
 /**
@@ -295,17 +275,15 @@ export function getVisibleAgents(
 export function resolveDelegationScopeAgents(
   stores: WorkspaceAgentsStores,
   scope: AgentDelegationScope | undefined,
-  category: AgentCategoryType,
 ) {
   return Effect.gen(function* () {
-    if (!scope) return yield* getVisibleAgents(stores, category);
-    const keys = scope[category];
+    if (!scope) return yield* getVisibleAgents(stores);
 
     // Deduplicated by canonical key: two identifiers that resolve to the same
     // entry contribute it once.
     const byKey = new Map<string, AgentEntry>();
-    for (const key of keys) {
-      const entry = getCategoryAgent(category, key);
+    for (const key of scope) {
+      const entry = getCatalogAgent(key);
       if (entry) byKey.set(agentKeyOf(entry), entry);
     }
     return [...byKey.values()];
@@ -329,35 +307,26 @@ export function findAgentByIdentifier(
 }
 
 /**
- * Resolve an identifier to an agent in a category, ignoring visibility: the
- * one member identity rule the agent list, team plans and launch share. A bare
- * name matches the category's deduplicated entries; a `source:name` key
- * matches its exact entry, even one a higher-priority source shadows. An
- * entry outside `category` is no match.
+ * Resolve an identifier to an agent, ignoring visibility: the one member
+ * identity rule the agent list, team plans and launch share. A bare name
+ * matches the deduplicated entries; a `source:name` key matches its exact
+ * entry, even one a higher-priority source shadows.
  */
-export function getCategoryAgent(
-  category: AgentCategoryType,
-  identifier: string,
-): AgentEntry | undefined {
-  const entry =
-    identifier === agentName(identifier)
-      ? findAgentByIdentifier(getAgentsByCategory(category), identifier)
-      : cache.get(identifier);
-  return entry?.category === category ? entry : undefined;
+export function getCatalogAgent(identifier: string): AgentEntry | undefined {
+  return identifier === agentName(identifier)
+    ? findAgentByIdentifier(getCatalogAgents(), identifier)
+    : cache.get(identifier);
 }
 
-/** Resolve a launch by pinned source, visible agents, then full category.
+/** Resolve a launch by pinned source, visible agents, then the catalog.
  * Each tier runs only when the preceding one has no match, preserving the
  * exact agent chosen during validation even when visibility changes. Only an
- * explicit `source` (a run record's decided identity) pins, and that tier is
- * category-blind, so a caller that requires a category checks the returned
- * entry. A `source:name` identifier resolves through the category-scoped
- * tiers, which match its exact entry even when a higher-priority source
- * shadows the name, and never answer with an entry of the other category.
+ * explicit `source` (a run record's decided identity) pins. A `source:name`
+ * identifier matches its exact entry even when a higher-priority source
+ * shadows the name.
  */
 export function resolveAgentForLaunch(
   stores: WorkspaceAgentsStores,
-  category: AgentCategory,
   identifier: string,
   source?: AgentSource | null,
 ) {
@@ -366,18 +335,15 @@ export function resolveAgentForLaunch(
       (source
         ? cache.get(agentKey(source, agentName(identifier)))
         : undefined) ??
-      findAgentByIdentifier(
-        yield* getVisibleAgents(stores, category),
-        identifier,
-      ) ??
-      getCategoryAgent(category, identifier)
+      findAgentByIdentifier(yield* getVisibleAgents(stores), identifier) ??
+      getCatalogAgent(identifier)
     );
   });
 }
 
 /**
  * Deduplicate agents by name, keeping only the highest-priority source
- * (custom > builtInWorkflow > builtInToolUse > plugin) for the dropdown.
+ * (custom > builtIn > plugin) for the dropdown.
  */
 function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
   const byKey = new Map<string, AgentEntry>();
@@ -403,18 +369,12 @@ function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
 // TYPED OPTIONS BUILDER (Lit-native)
 // =============================================================================
 
-interface AgentOptionsDataPayload {
-  workflow: AgentOptionData[];
-  toolUse: AgentOptionData[];
-}
-
 function entriesToOptionData(
   entries: readonly AgentEntry[],
 ): AgentOptionData[] {
   return entries.map((entry) => ({
     value: agentKeyOf(entry),
     label: entry.name,
-    isToolUse: entry.category === AgentCategory.ToolUse,
     isOrchestrator: hasDelegationTool(entry.tools),
     source: entry.source,
     ...(entry.rounds === undefined ? {} : { rounds: entry.rounds }),
@@ -441,23 +401,18 @@ function sortAgentEntries(
   });
 }
 
-/** Compute typed agent options data for Lit-native rendering. */
+/** Compute typed agent options data for Lit-native rendering: every
+ *  visible agent, the preferred ones first. A document task carries its
+ *  `rounds`. */
 export function computeAgentOptionsData(
   stores: WorkspaceAgentsStores,
-): Effect.Effect<AgentOptionsDataPayload, StateReadFailed> {
-  return Effect.gen(function* () {
-    return {
-      workflow: entriesToOptionData(
-        sortAgentEntries(yield* getVisibleAgents(stores, 'workflow'), [
-          DEFAULT_WORKFLOW_AGENT,
-        ]),
-      ),
-      toolUse: entriesToOptionData(
-        sortAgentEntries(
-          yield* getVisibleAgents(stores, 'toolUse'),
-          PREFERRED_TOOL_USE_AGENTS,
-        ),
-      ),
-    };
-  });
+): Effect.Effect<AgentOptionData[], StateReadFailed> {
+  return Effect.map(getVisibleAgents(stores), (entries) =>
+    entriesToOptionData(
+      sortAgentEntries(entries, [
+        ...PREFERRED_TOOL_USE_AGENTS,
+        DEFAULT_WORKFLOW_AGENT,
+      ]),
+    ),
+  );
 }

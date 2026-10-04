@@ -219,10 +219,7 @@ export function createAgentPresentationHost(
     requestShowInstruction: (payload) =>
       handleRequestShowInstruction(globalState, payload),
     showAgentConfigBanner: (payload) =>
-      progressViewProvider.showAgentConfigBanner(
-        payload.agentName,
-        payload.category,
-      ),
+      progressViewProvider.showAgentConfigBanner(payload.agentName),
     requestShowError: handleRequestShowError,
     requestEnsureProgressView: (payload) =>
       handleRequestEnsureProgressView(payload, progressViewProvider),

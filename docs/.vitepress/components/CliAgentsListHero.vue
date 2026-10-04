@@ -1,9 +1,10 @@
 <script setup>
 // Terminal card for `texra agents list` — built-in-agents.md. The same catalog
 // the GUI agent picker shows, enumerated from a terminal in the real text
-// format: one `<category>\t<name>\t<description>` row per visible agent
+// format: one `<kind>\t<name>\t<description>` row per visible agent, the kind
+// `task` for an agent with a document task and `chat` otherwise
 // (packages/cli/src/runtime/agents.ts formatCliAgentList; the guide documents
-// the column order). Names and categories match the bundled agent YAMLs under
+// the column order). Names and kinds match the bundled agent YAMLs under
 // packages/extension/resources/; descriptions are abridged from them for card
 // width (the real command prints them in full).
 //
@@ -11,36 +12,36 @@
 // docs theme. A believable static slice of the catalog, not the full list.
 const rows = [
   {
-    category: 'workflow',
+    category: 'task',
     name: 'polish',
     description:
       'Rewrites and restructures text to improve clarity, flow, and readability.',
   },
   {
-    category: 'workflow',
+    category: 'task',
     name: 'correct',
     description:
       'Fixes typos, grammar, and LaTeX formatting without changing your style.',
   },
   {
-    category: 'workflow',
+    category: 'task',
     name: 'merge',
     description: 'Merges partial edits back into the full original document.',
   },
   {
-    category: 'toolUse',
+    category: 'chat',
     name: 'assistant',
     description:
       'General-purpose scientific assistant covering the full research workflow.',
   },
   {
-    category: 'toolUse',
+    category: 'chat',
     name: 'research',
     description:
       'Research assistant for analytical derivations and numerical programming.',
   },
   {
-    category: 'toolUse',
+    category: 'chat',
     name: 'lean',
     description:
       'Lean 4 proof assistant with VS Code integration and CLI fallback.',

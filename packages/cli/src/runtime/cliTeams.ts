@@ -9,7 +9,6 @@ import {
   teamAvailability,
   teamLaunchBlockReason,
   teamPlanStatus,
-  type TeamAgentAvailability,
   type TeamAvailability,
   type TeamRunPlan,
 } from '@common/teams/TeamPlan';
@@ -21,7 +20,6 @@ import {
 import type { StateStore } from '@platform/interfaces';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { filterNotNullish } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 export type CliTeamRunPlan = TeamRunPlan<AgentEntry>;
@@ -72,20 +70,12 @@ export function readCliTeamName(
 
 function cliTeamAvailabilityParts(plan: CliTeamRunPlan): string[] {
   const availability = teamAvailability(plan);
-  const parts = [
-    formatCliTeamAvailabilityPart('workflow', availability.agents.workflow),
-    formatCliTeamAvailabilityPart('tool-use', availability.agents.toolUse),
-  ].filter(filterNotNullish);
+  const parts =
+    availability.agents.total === 0
+      ? []
+      : [`agents:${availability.agents.label}`];
   if (availability.status !== 'available') parts.push(availability.status);
   return parts;
-}
-
-function formatCliTeamAvailabilityPart(
-  kind: 'workflow' | 'tool-use',
-  availability: TeamAgentAvailability,
-): string | undefined {
-  if (availability.total === 0) return undefined;
-  return `${kind}:${availability.label}`;
 }
 
 export function formatCliTeamList(plans: readonly CliTeamRunPlan[]): string {
@@ -106,13 +96,9 @@ export function formatCliTeamList(plans: readonly CliTeamRunPlan[]): string {
 }
 
 export function formatCliTeamInspection(plan: CliTeamRunPlan): string {
-  const availableWorkflowAgents = availablePresetAgents(
-    plan.preset.agents.workflow,
-    plan.missingAgents.workflow,
-  );
-  const availableToolUseAgents = availablePresetAgents(
-    plan.preset.agents.toolUse,
-    plan.missingAgents.toolUse,
+  const missing = new Set(plan.missingAgents);
+  const availableAgents = plan.preset.agents.filter(
+    (agent) => !missing.has(agent),
   );
 
   return [
@@ -121,14 +107,10 @@ export function formatCliTeamInspection(plan: CliTeamRunPlan): string {
     `Description: ${plan.preset.description}`,
     `${MULTI_AGENT_TEAM_ROOT_AGENT_LABEL}:`,
     `  ${plan.rootAgent?.name ?? '(none)'}`,
-    'Available workflow agents:',
-    formatAgentNames(availableWorkflowAgents),
-    'Available tool-use agents:',
-    formatAgentNames(availableToolUseAgents),
-    'Missing workflow agents:',
-    formatAgentNames(plan.missingAgents.workflow),
-    'Missing tool-use agents:',
-    formatAgentNames(plan.missingAgents.toolUse),
+    'Available agents:',
+    formatAgentNames(availableAgents),
+    'Missing agents:',
+    formatAgentNames(plan.missingAgents),
   ].join('\n');
 }
 
@@ -165,14 +147,10 @@ export function formatCliTeamLaunchBlockMessage(
 export function formatCliTeamRunWarnings(
   plan: CliTeamRunPlan,
 ): readonly string[] {
-  const missing = [
-    ...plan.missingAgents.workflow.map((agent) => `workflow:${agent}`),
-    ...plan.missingAgents.toolUse.map((agent) => `tool-use:${agent}`),
-  ];
-  if (missing.length === 0) return [];
+  if (plan.missingAgents.length === 0) return [];
 
   const warnings = [
-    `WARN team ${plan.preset.id} references unavailable agents: ${missing.join(', ')}`,
+    `WARN team ${plan.preset.id} references unavailable agents: ${plan.missingAgents.join(', ')}`,
   ];
 
   if (!plan.rootAgent || !hasDelegationTool(plan.rootAgent.tools)) {
@@ -193,14 +171,6 @@ export function cliTeamListRecord(plan: CliTeamRunPlan): CliTeamListRecord {
     ...plan.preset,
     availability: teamAvailability(plan),
   };
-}
-
-function availablePresetAgents(
-  presetAgents: readonly string[],
-  missingAgents: readonly string[],
-): string[] {
-  const missing = new Set(missingAgents);
-  return presetAgents.filter((agent) => !missing.has(agent));
 }
 
 function formatAgentNames(names: readonly string[]): string {

@@ -1,6 +1,6 @@
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import {
-  agentProposalCategoryLabel,
+  agentProposalLabel,
   getProposalFileGroups,
   type AgentProposalPermission,
   type BashPermission,
@@ -152,9 +152,7 @@ function agentProposalApprovalSummary(
       ...instructionLines.map((line) => `  ${line}`),
     ].join('\n');
   return [
-    `Agent proposal requested: ${proposal.agent} (${agentProposalCategoryLabel(
-      proposal.agentCategory,
-    )})`,
+    `Agent proposal requested: ${proposal.agent} (${agentProposalLabel(proposal)})`,
     `Model: ${getModelLabel(proposal.model)}`,
     ...(workingDirectory ? [`Working directory: ${workingDirectory}`] : []),
     ...fileGroups,

@@ -11,7 +11,6 @@
 import { css, html, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import type { SessionType } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import './AgentConfigBanner';
 import './ApiKeyBanner';
@@ -30,21 +29,14 @@ export class SessionBanners extends LitElement {
   `;
 
   @property({ attribute: false }) banners!: HostSnapshot['banners'];
-  /** The launcher's mode, which the agent-config banner's actions name. */
-  @property() sessionType: SessionType = 'toolUse';
-
   override render(): TemplateResult | typeof nothing {
     const { apiKey, agentConfig, dependency } = this.banners;
     let warning: TemplateResult;
     if (apiKey.visible) {
       warning = html`<api-key-banner></api-key-banner>`;
     } else if (agentConfig.visible) {
-      // The agent the banner names owns its actions: a workflow agent's
-      // missing file opens the workflow catalog. The launcher's mode stands
-      // in only for a banner raised without one.
       warning = html`<agent-config-banner
         .state=${agentConfig}
-        .sessionType=${agentConfig.sessionType ?? this.sessionType}
       ></agent-config-banner>`;
     } else if (dependency.visible) {
       warning = html`<dependency-banner

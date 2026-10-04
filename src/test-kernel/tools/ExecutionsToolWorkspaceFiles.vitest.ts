@@ -108,7 +108,6 @@ const config = {
   agent: 'chat',
   model: 'deepseek/deepseek-v4-flash',
   instruction: 'Check the proof.',
-  agentCategory: 'toolUse',
   inputFiles: [],
   outputFiles: [],
   contextFiles: [],

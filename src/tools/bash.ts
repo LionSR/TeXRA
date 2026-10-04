@@ -20,7 +20,6 @@ import {
   backgroundBashOutputData,
 } from '@shared/toolUse';
 import {
-  AgentCategory,
   ToolError,
   type ExecResult,
   type RunId,
@@ -493,7 +492,6 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
           identity: { kind: 'process', tool: 'bash' },
           userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
           parentRunId,
-          category: AgentCategory.ToolUse,
           // The run's name reaches terminals (the task list): no control characters.
           description: childRunDescription(
             stripControlCharacters(
@@ -517,7 +515,6 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
             Effect.andThen(
               createChildRun(session, runId, parentRunId, {
                 run: { kind: 'process', tool: 'bash' },
-                category: AgentCategory.ToolUse,
               }),
             ),
           ),

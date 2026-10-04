@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import {
+  isDocumentTaskConfig,
   isLoopDriven,
   type RunSnapshotPayload,
   type RunId,
@@ -24,11 +25,12 @@ export type ResumabilityDecision =
   | { readonly kind: 'unreadable'; readonly cause: string };
 
 /**
- * The one answer to "can this run resume?", whatever its category, before
- * ownership (`classifyRun` adds the claim). A snapshot continues the run
- * whatever its outcome: rows live until deletion, so a failed or cancelled
- * run continues from its last one. A loop-driven run that stopped before its
- * first snapshot and never ended reopens from its configuration.
+ * The one answer to "can this run resume?", before ownership (`classifyRun`
+ * adds the claim). A snapshot continues the run whatever its outcome: rows
+ * live until deletion, so a failed or cancelled run continues from its last
+ * one. A document task that ended does not: its recipe's result is settled,
+ * so it runs again instead. A loop-driven run that stopped before its first
+ * snapshot and never ended reopens from its configuration.
  */
 export const deriveResumability = Effect.fn('deriveResumability')(function* (
   runId: RunId,
@@ -46,12 +48,18 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
     return { kind: 'unreadable', cause };
   }
   const [records, snapshot] = read.success;
+  const ended = runEndFromEvents(records, runId) !== null;
+  const config = records.findLast((row) => row.type === 'run.config');
+  if (
+    ended &&
+    config?.type === 'run.config' &&
+    isDocumentTaskConfig(config.config)
+  )
+    return { kind: 'none' };
   if (snapshot !== null)
     return { kind: 'checkpoint', snapshot: snapshot.payload };
   const start = records.find((row) => row.type === 'run.start');
-  return start?.type === 'run.start' &&
-    isLoopDriven(start.identity) &&
-    runEndFromEvents(records, runId) === null
+  return start?.type === 'run.start' && isLoopDriven(start.identity) && !ended
     ? { kind: 'unopened' }
     : { kind: 'none' };
 });

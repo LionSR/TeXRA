@@ -1,13 +1,12 @@
 import { Effect } from 'effect';
 import { defineCommand } from 'citty';
 
-import { getCategoryAgent } from '@agent/index';
+import { getCatalogAgent } from '@agent/index';
 import type { AgentConfigPayload } from '@agent/runtime';
 import { canLaunchTeam, planTeamRuns } from '@common/teams/TeamPlan';
-import { byCategory, AgentCategory } from '@shared/schemas';
 import { filterNotNullish } from '@utils/core';
 
-import { missingToolUseAgentMessage } from '../runtime/agents';
+import { missingAgentMessage } from '../runtime/agents';
 import {
   failUsage,
   readCliStdinText,
@@ -84,7 +83,7 @@ const runTeamList = Effect.fn('runTeamList')(function* (
   services: CliPlatformServices,
 ) {
   const plans = planTeamRuns(yield* readCliTeams(services.repoState), {
-    resolveAgent: getCategoryAgent,
+    resolveAgent: getCatalogAgent,
   });
 
   emitCliResult(context, {
@@ -134,9 +133,7 @@ export const runTeam = Effect.fn('runTeam')(function* (
     return CliExitCode.Usage;
   }
   if (plan.missingAgentOverride) {
-    return yield* failUsage(
-      missingToolUseAgentMessage(plan.missingAgentOverride),
-    );
+    return yield* failUsage(missingAgentMessage(plan.missingAgentOverride));
   }
   if (!canLaunchTeam(plan)) {
     const singleAgentAdvice = plan.rootAgent
@@ -155,8 +152,8 @@ export const runTeam = Effect.fn('runTeam')(function* (
     writeTextStderr(warning);
   }
 
-  // A team run drives a tool-use orchestrator, so it follows the `chat`
-  // (tool-use) model config rather than `run` (workflow agents). Resolve the
+  // A team run drives a chat orchestrator, so it follows the `chat` model
+  // config rather than `run` (document tasks). Resolve the
   // model after agent validation so usage errors stay focused on bad agents.
   const model = yield* selectCliRunModel(context, init.model, 'chat', services);
   const runContext = buildHeadlessRunContext(context);
@@ -205,11 +202,8 @@ export const runTeam = Effect.fn('runTeam')(function* (
           }),
           displayInstruction,
           workingDirectory: runContext.cwd,
-          agentCategory: AgentCategory.ToolUse,
           cli: { teamId: plan.preset.id },
-          delegationAgentScope: byCategory((category) => [
-            ...plan.agentKeys[category],
-          ]),
+          delegationAgentScope: [...plan.agentKeys],
         };
 
         const run = yield* executeCliToolUseConfig(config, runContext, {

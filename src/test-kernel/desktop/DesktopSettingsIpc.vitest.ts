@@ -17,6 +17,7 @@ import {
   type StateStore,
 } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
+import { DocumentsStateKey } from '@shared/settingsView/documentsSettings';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -688,7 +689,7 @@ describe('desktop settings IPC', () => {
     expect(
       settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-        key: TexraStateKey.LATEXDIFF_MATH_MARKUP,
+        key: DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
         value: 'bogus',
       }),
     ).toBe(true);
@@ -750,7 +751,7 @@ describe('desktop settings IPC', () => {
 
     expect(config.lastTargetFor(AGENT_SKILLS_CONFIG_KEY)).toBeUndefined();
     expect(showInfoMessage).toHaveBeenCalledWith(
-      'Open a workspace folder before changing the “Enable skills for tool-use agents” setting.',
+      'Open a workspace folder before changing the “Enable skills for agents” setting.',
     );
     // The switch is restored from the authoritative snapshot.
     expect(findSnapshot(posted, 'skills')).toBeDefined();

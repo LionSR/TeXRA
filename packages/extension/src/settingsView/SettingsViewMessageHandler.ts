@@ -163,11 +163,11 @@ export class SettingsViewMessageHandler {
             selectFolder({ title, openLabel: 'Select Folder' }),
             (selected) => selected ?? undefined,
           ),
-        refreshCatalogs: (selectedToolUseAgent) =>
+        refreshCatalogs: (selectedAgent) =>
           progressView
             .refreshCatalogs({
               agentCatalogAlreadyFresh: true,
-              selectedToolUseAgent,
+              selectedAgent,
             })
             .pipe(Effect.asVoid),
         // The launcher's API-key banner reads the same credential probe from

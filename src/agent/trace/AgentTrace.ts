@@ -25,7 +25,7 @@ export interface StageOptions {
   readonly kind?: 'run' | 'round' | 'phase' | 'session';
   /** Zero-based stage index, currently used for round stages. */
   readonly index?: number;
-  /** Planned total count, when known, currently used for workflow rounds. */
+  /** Planned total count of a round stage, when known. */
   readonly total?: number;
   /** Parent handle for nested stages; without one the stage opens as a root. */
   readonly parent?: StageHandle;

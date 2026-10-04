@@ -16,7 +16,6 @@ import {
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
-import { AgentCategory } from '@shared/schemas';
 import type { UsageLog } from '@shared/usageLog';
 
 import { getHelperModelName } from './helperModelName';
@@ -65,7 +64,8 @@ const helperModel = Effect.fn('helperModel')(function* (
     modelId: modelName,
     config: selected.config,
     stores,
-    agentCategory: AgentCategory.Workflow,
+    // One-shot text: the whole output budget.
+    textOnly: true,
     // Helper calls are deterministic one-shots, never sampled.
     temperature: 0,
   });

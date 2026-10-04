@@ -1,4 +1,5 @@
 import { fileLocationAddressPath, roundIndexedEntries } from '@shared/schemas';
+import { documentsOf } from '@shared/plugins/documents';
 import type { RunView } from '@shared/session/sessionView';
 import { filterNotNullish } from '@utils/core';
 
@@ -12,10 +13,11 @@ import { filterNotNullish } from '@utils/core';
  */
 export function formatTaskDiagnostics(run: RunView): string {
   const model = run.modelLabel ?? run.model;
-  const outputs = roundIndexedEntries(
-    run.category === 'workflow' ? run.files : run.outputs,
-  ).filter(([, files]) => files.length > 0);
-  const failures = roundIndexedEntries(run.compileFailures).filter(
+  const documents = documentsOf(run);
+  const outputs = roundIndexedEntries(documents.files).filter(
+    ([, files]) => files.length > 0,
+  );
+  const failures = roundIndexedEntries(documents.compileFailures).filter(
     ([, rows]) => rows.length > 0,
   );
 

@@ -213,7 +213,6 @@ const runsOf = (view: SessionView) =>
   [...view.runs.values()].map((run) => ({
     id: run.id,
     label: run.label,
-    category: run.category,
     status: run.status,
     outcome: run.durableOutcome,
     parent: run.parentId,
@@ -370,7 +369,6 @@ describe('the golden 1.0 store', () => {
       ) => ({
         id,
         label,
-        category: 'toolUse',
         ...done,
         parent: null,
         children: [],
@@ -1072,7 +1070,9 @@ describe('the interrupted golden runs', () => {
               attempt,
               disposition,
               reusedFrom: settled.reusedFrom?.split('/').at(-1) ?? null,
-            }));
+            }))
+            // Concurrent calls settle in either order.
+            .toSorted((a, b) => Number(a.seq) - Number(b.seq));
         // The call settled before the kill keeps its one row; the running
         // one settles at its next attempt, from the same child.
         expect(nested(first)).toEqual([

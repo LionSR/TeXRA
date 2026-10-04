@@ -141,17 +141,17 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
         // an agent mode separately sends the chosen root to that project's
         // launcher. Each project's catalogs answer for that project: its
         // snapshot source was built over its own roots.
-        refreshCatalogs: (selectedToolUseAgent) =>
+        refreshCatalogs: (selectedAgent) =>
           Effect.gen(function* () {
             yield* bindings.eachSnapshot(
               (snapshot) => snapshot.refreshCatalogs,
             );
-            if (!selectedToolUseAgent) return;
+            if (!selectedAgent) return;
             const binding = bindings.get(project.key);
             if (!binding || binding !== documentBinding) return;
             binding.bridge.surfaceAction({
               kind: 'launch',
-              patch: { sessionType: 'toolUse', agent: selectedToolUseAgent },
+              patch: { sessionType: 'chat', agent: selectedAgent },
             });
           }),
         refreshCredentialStatus: Effect.suspend(() =>

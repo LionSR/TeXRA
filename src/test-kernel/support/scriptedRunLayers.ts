@@ -9,10 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { Effect, Layer, type Scope, SynchronizedRef } from 'effect';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import {
-  DocumentTaskSchema,
-  PersonaSchema,
-} from '@agent/core/definition/AgentDataclass';
+import { PersonaSchema } from '@agent/core/definition/AgentDataclass';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import {
@@ -29,7 +26,6 @@ import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter } from '@agent/trace';
 import {
-  AgentCategory,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   type JsonValue,
   type RetryErrorInfo,
@@ -84,6 +80,7 @@ function testBoundModel(overrides: Partial<BoundModel> = {}): BoundModel {
     backgroundCapable: false,
     persistentConnection: false,
     automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
+    textOnly: false,
     ...overrides,
   };
 }
@@ -266,7 +263,6 @@ export function testAgentRun(
     config: AgentConfigSchema.parse({
       agent: 'chat',
       model: 'test-model',
-      agentCategory: AgentCategory.ToolUse,
       instruction: 'Do the thing.',
     }),
     persona: PersonaSchema.parse({}),
@@ -292,7 +288,7 @@ export function testAgentRun(
   };
 }
 
-/** A tool-use run, or a workflow run when `rounds` is set. */
+/** A scripted conversation run. */
 export interface ScriptedRunInit {
   readonly runId: RunId;
   readonly session: SessionHandle;
@@ -311,7 +307,6 @@ export interface ScriptedRunInit {
   /** Absent means the launch had no transcript row to write. */
   readonly initialUserMessageForTranscript?: string | undefined;
   readonly onIdle?: () => void;
-  readonly rounds?: number;
 }
 
 export function agentRunTestLayer(init: ScriptedRunInit) {
@@ -331,32 +326,12 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => untrackRun(init.session.runs, handle.runId)),
       );
-      const workflow =
-        init.rounds === undefined
-          ? {}
-          : {
-              config: AgentConfigSchema.parse({
-                agent: 'correct',
-                model: 'test-model',
-                agentCategory: AgentCategory.Workflow,
-              }),
-              persona: PersonaSchema.parse({}),
-              task: DocumentTaskSchema.parse({
-                requests: Array.from(
-                  { length: init.rounds },
-                  () => 'Write the document.',
-                ),
-              }),
-              parentStage: logger.openStage('Run: correct'),
-              initialUserMessageForTranscript: 'Write the document.',
-            };
       return testAgentRun(
         { runId: init.runId, session: init.session, logger, model, scope },
         {
           config: AgentConfigSchema.parse({
             agent: 'chat',
             model: 'test-model',
-            agentCategory: AgentCategory.ToolUse,
             instruction: 'Do the thing.',
             ...(init.mediaFiles ? { mediaFiles: init.mediaFiles } : {}),
           }),
@@ -374,7 +349,6 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
                   init.initialUserMessageForTranscript,
               }
             : {}),
-          ...workflow,
         },
       );
     }),

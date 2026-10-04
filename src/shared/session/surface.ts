@@ -44,7 +44,7 @@ import type { RequestErrorWire } from './sessionFrames';
 export const LaunchSurfaceSchema = UIFileFieldsSchema.merge(
   ToolConfigFieldsSchema,
 ).extend({
-  sessionType: SessionTypeSchema.prefault('toolUse'),
+  sessionType: SessionTypeSchema.prefault('chat'),
   launchTarget: LaunchTargetSchema.prefault('agent'),
   selectedTeamId: z.string().prefault(''),
   workingDirectory: z.string().prefault(''),
@@ -449,9 +449,9 @@ export function applySurfaceAction(
       };
     case 'launch': {
       const launch = { ...surface.launch, ...action.patch };
-      // Naming an agent targets it, and only a tool-use launch runs a team.
+      // Naming an agent targets it, and only a chat launch runs a team.
       const toAgent =
-        action.patch.agent !== undefined || launch.sessionType !== 'toolUse';
+        action.patch.agent !== undefined || launch.sessionType !== 'chat';
       return {
         ...surface,
         launch: toAgent ? { ...launch, launchTarget: 'agent' } : launch,

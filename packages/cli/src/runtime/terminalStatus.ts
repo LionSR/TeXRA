@@ -4,19 +4,13 @@ import { getRunRecords } from '@agent/storage';
 import type { SessionHandle, runAgent } from '@agent/runtime';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import {
-  RUN_OUTCOME,
-  type RunOutcome,
-  RUN_PHASE,
-  type ToolUseRunEndOutputSchema,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type RunOutcome, RUN_PHASE } from '@shared/schemas';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from './exitCodes';
 import type { CliPluginPin } from '../schemas/cliOutput';
-import type { z } from 'zod';
 
 export type ExecuteAgentResult = Effect.Success<ReturnType<typeof runAgent>>;
 
@@ -56,13 +50,9 @@ export function readCliPluginPins(stores: SettingsStores) {
   );
 }
 
-export type CliToolUseRunResult = CliRunResult & {
-  readonly output: z.infer<typeof ToolUseRunEndOutputSchema>;
-};
-
-/** Display text for a finished tool-use run: the last response if present,
+/** Display text for a finished chat run: the last response if present,
  *  otherwise a terse status/run-id summary. */
-export function toolUseResultText(result: CliToolUseRunResult): string {
+export function toolUseResultText(result: CliRunResult): string {
   return (
     result.output.response.trim() ||
     `${runOutcomeToCliRunStatus(result.outcome)}\nRun: ${result.runId}`

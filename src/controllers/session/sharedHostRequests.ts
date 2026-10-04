@@ -107,10 +107,6 @@ type HostVerb<A> = Effect.Effect<
 
 type LaunchRequest = Extract<HostRequest, { kind: 'launch' }>;
 type OpenSettingsRequest = Extract<HostRequest, { kind: 'openSettings' }>;
-type AgentConfigBannerRequest = Extract<
-  HostRequest,
-  { kind: 'agentConfigBanner' }
->;
 type GettingStartedRequest = Extract<HostRequest, { kind: 'gettingStarted' }>;
 type LatexdiffsRequest = Extract<HostRequest, { kind: 'latexdiffs' }>;
 
@@ -159,10 +155,8 @@ export interface SharedHostRequestBindings {
    *  other. The caller re-reads the secret store after this returns. */
   readonly setApiKey: HostVerb<void>;
   readonly openApiKeyGuide: HostVerb<void>;
-  /** The agent settings, for the sub-tab a session type names or for none. */
-  openAgentSettings(
-    sessionType: AgentConfigBannerRequest['sessionType'] | undefined,
-  ): HostVerb<void>;
+  /** The agent settings. */
+  readonly openAgentSettings: HostVerb<void>;
   readonly openCustomAgentDirectory: HostVerb<void>;
   readonly openAgentDocs: HostVerb<void>;
   readonly recheckDependencies: HostVerb<void>;
@@ -382,7 +376,7 @@ export function handleSharedHostRequest(
         return done;
       case 'openSettings':
         yield* request.section === 'agents'
-          ? host.openAgentSettings(request.sessionType ?? undefined)
+          ? host.openAgentSettings
           : host.openSettings(request.section);
         return done;
       case 'apiKeyBanner':
@@ -391,14 +385,14 @@ export function handleSharedHostRequest(
       case 'agentConfigBanner':
         switch (request.action) {
           case 'edit':
-            yield* host.openAgentSettings(request.sessionType);
+            yield* host.openAgentSettings;
             return done;
           case 'dir':
             // Without a custom directory there is nothing to reveal, so the
             // banner's link is the agent settings instead.
             yield* request.customDirSet === true
               ? host.openCustomAgentDirectory
-              : host.openAgentSettings(undefined);
+              : host.openAgentSettings;
             return done;
           case 'docs':
             yield* host.openAgentDocs;

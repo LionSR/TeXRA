@@ -3,7 +3,6 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@shared/schemas';
 
 /**
  * Build the fabricated `AgentConfig` a tool-use child run needs to feed the
@@ -16,8 +15,5 @@ export function buildSyntheticToolUseConfig(fields: {
   readonly instruction: string;
   readonly model?: string;
 }): AgentConfig {
-  return AgentConfigSchema.parse({
-    ...fields,
-    agentCategory: AgentCategory.ToolUse,
-  });
+  return AgentConfigSchema.parse(fields);
 }
