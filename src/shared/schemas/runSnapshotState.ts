@@ -176,6 +176,7 @@ export const ModelBackendSchema = z.enum([
   'glm',
   'meta',
 ]);
+/** Who serves a run's conversation ({@link ModelBackendSchema}). */
 export type ModelBackend = z.infer<typeof ModelBackendSchema>;
 
 // ------------------------------------------------------------ flow core

@@ -3,8 +3,8 @@
  * belongs to. Each entry is a stable id plus plain data about the
  * provider, never its wire code: its display name, the API-key page
  * and environment variable, the default HTTP endpoint and its regional pair,
- * the protocol it serves a conversation on, and the setup assistant's probe
- * model.
+ * and the setup assistant's probe model. Beside it, `BACKEND_PROTOCOLS`
+ * names the protocol each provider a run can be bound to speaks.
  *
  * Derived from this list: the provider display names, key URLs, model-source
  * and API-key provider orders (`./providers.ts`), API-key env names
@@ -70,9 +70,6 @@ interface ModelProviderPlugin {
    * a plugin outside llm-zoo's `ModelProvider` (`openRouter`, `kimiCode`).
    */
   readonly baseUrl?: string | RegionalBaseUrl | null;
-  /** The protocol this provider serves a run's conversation on: present
-   *  exactly on the providers a run can be bound to (its backend). */
-  readonly protocol?: z.infer<typeof TurnProtocolSchema>;
   /** Model the setup assistant probes when this is the only credential. */
   readonly setupModel?: string;
   /** Listed as a model source in selection lists. */
@@ -92,7 +89,6 @@ const MANIFEST = [
     keyUrl: 'https://platform.openai.com/api-keys',
     apiKey: true,
     baseUrl: OPENAI_DEFAULT_ENDPOINT,
-    protocol: 'openai-responses',
     setupModel: 'openai/gpt-6.1-sol',
     modelSource: true,
   },
@@ -102,7 +98,6 @@ const MANIFEST = [
     keyUrl: 'https://console.anthropic.com/',
     apiKey: true,
     baseUrl: 'https://api.anthropic.com',
-    protocol: 'anthropic-messages',
     setupModel: 'anthropic/claude-opus-5-5',
     modelSource: true,
   },
@@ -112,7 +107,6 @@ const MANIFEST = [
     keyUrl: 'https://aistudio.google.com/app/apikey',
     apiKey: true,
     baseUrl: 'https://generativelanguage.googleapis.com',
-    protocol: 'google-interactions',
     setupModel: 'google/gemini-3.1-pro-preview',
     modelSource: true,
   },
@@ -122,7 +116,6 @@ const MANIFEST = [
     keyUrl: 'https://console.x.ai/',
     apiKey: true,
     baseUrl: 'https://api.x.ai/v1',
-    protocol: 'openai-responses',
     setupModel: 'xai/grok-4.7',
     modelSource: true,
   },
@@ -132,7 +125,6 @@ const MANIFEST = [
     keyUrl: 'https://platform.deepseek.com/api_keys',
     apiKey: true,
     baseUrl: 'https://api.deepseek.com',
-    protocol: 'openai-responses',
     setupModel: 'deepseek/deepseek-v4-pro',
     modelSource: true,
   },
@@ -153,7 +145,6 @@ const MANIFEST = [
       china: 'https://api.moonshot.cn/v1',
       international: 'https://api.moonshot.ai/v1',
     },
-    protocol: 'openai-responses',
     setupModel: 'moonshot/kimi-k3',
     modelSource: true,
   },
@@ -170,7 +161,6 @@ const MANIFEST = [
       china: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
       international: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
     },
-    protocol: 'openai-responses',
     setupModel: 'dashscope/qwen-plus',
     modelSource: true,
   },
@@ -186,7 +176,6 @@ const MANIFEST = [
       china: 'https://api.minimax.cn/v1',
       international: 'https://api.minimax.io/v1',
     },
-    protocol: 'openai-responses',
     setupModel: 'minimax/MiniMax-M3',
     modelSource: true,
   },
@@ -206,7 +195,6 @@ const MANIFEST = [
       china: 'https://open.bigmodel.cn/api/v1',
       international: 'https://api.z.ai/api/v1',
     },
-    protocol: 'openai-responses',
     setupModel: 'glm/glm-5.3',
     modelSource: true,
   },
@@ -216,7 +204,6 @@ const MANIFEST = [
     keyUrl: 'https://dev.meta.ai/',
     apiKey: true,
     baseUrl: 'https://api.meta.ai/v1',
-    protocol: 'openai-responses',
     setupModel: 'meta/muse-spark-1.3',
     modelSource: true,
   },
@@ -225,7 +212,6 @@ const MANIFEST = [
     displayName: 'OpenRouter',
     keyUrl: 'https://openrouter.ai/keys',
     apiKey: true,
-    protocol: 'openrouter-chat',
     setupModel: 'anthropic/claude-sonnet-5-5',
   },
   {
@@ -241,7 +227,6 @@ const MANIFEST = [
     id: 'copilot',
     displayName: 'Copilot',
     baseUrl: null,
-    protocol: 'vscode-lm',
     modelSource: true,
   },
   {
@@ -274,18 +259,29 @@ export type RegionalProviderId = Extract<
   { readonly baseUrl: RegionalBaseUrl }
 >['id'];
 
-/** A provider a run's conversation can be bound to: its backend. */
-export type BackendProviderId = Extract<
-  ModelProviderPluginEntry,
-  { readonly protocol: string }
->['id'];
+/**
+ * The protocol each provider a run's conversation can be bound to (its
+ * backend) serves that conversation on, keyed by plugin id.
+ */
+export const BACKEND_PROTOCOLS = Object.freeze({
+  openai: 'openai-responses',
+  anthropic: 'anthropic-messages',
+  google: 'google-interactions',
+  xai: 'openai-responses',
+  deepseek: 'openai-responses',
+  moonshot: 'openai-responses',
+  dashscope: 'openai-responses',
+  minimax: 'openai-responses',
+  glm: 'openai-responses',
+  meta: 'openai-responses',
+  openRouter: 'openrouter-chat',
+  copilot: 'vscode-lm',
+} satisfies Partial<
+  Record<ModelProviderPluginEntry['id'], z.infer<typeof TurnProtocolSchema>>
+>);
 
-/** The protocol each backend provider serves a conversation on. */
-export const BACKEND_PROTOCOLS = Object.fromEntries(
-  MANIFEST.flatMap((plugin) =>
-    'protocol' in plugin ? [[plugin.id, plugin.protocol]] : [],
-  ),
-) as Readonly<Record<BackendProviderId, z.infer<typeof TurnProtocolSchema>>>;
+/** A provider a run's conversation can be bound to: its backend. */
+export type BackendProviderId = keyof typeof BACKEND_PROTOCOLS;
 
 /** Look up a provider plugin by id. */
 export function findModelProviderPlugin(

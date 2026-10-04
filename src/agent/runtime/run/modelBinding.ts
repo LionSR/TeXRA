@@ -134,7 +134,7 @@ type ConfigurationOf<P extends HttpProtocol> = Extract<
  *  provider protocol does not compile. */
 export const PROTOCOL_BY_BACKEND: Readonly<
   Record<ModelBackend, Protocol | 'validation'>
-> = { validation: 'validation', ...BACKEND_PROTOCOLS };
+> = Object.freeze({ validation: 'validation', ...BACKEND_PROTOCOLS });
 
 type AssertNever<T extends never> = T;
 

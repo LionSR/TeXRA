@@ -153,7 +153,7 @@
   "src/shared/schemas/runHistoryEvent.ts": 15,
   "src/shared/schemas/runIdentity.ts": 1,
   "src/shared/schemas/runRecords.ts": 7,
-  "src/shared/schemas/runSnapshotState.ts": 6,
+  "src/shared/schemas/runSnapshotState.ts": 4,
   "src/shared/schemas/runState.ts": 4,
   "src/shared/schemas/scriptDelivery.ts": 2,
   "src/shared/schemas/sessionEvent.ts": 13,
