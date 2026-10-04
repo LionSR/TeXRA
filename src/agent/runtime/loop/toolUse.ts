@@ -18,11 +18,10 @@
  * attempt invokes again under its gate, a pending response dispatches what
  * is unsettled, and a halted run launched again waits for its input.
  *
- * A workflow agent's run is this loop in round mode (`./rounds`), with the
- * policy the documents plugin contributes: the same turn, run once per round
- * by the round loop, with no tools and no input.
+ * A run opened on a script (`AgentConfig.script`: a background script, a
+ * document task's recipe) makes that one call instead of asking its model
+ * and ends when it settles.
  */
-import { randomUUID } from 'node:crypto';
 
 import { Deferred, Effect, Exit, type Scope, SynchronizedRef } from 'effect';
 import { z } from 'zod';
@@ -35,7 +34,6 @@ import type { ProcessServices } from '@platform/processRuntime';
 import { LanguageModel } from '@platform/languageModel';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
-  AgentCategory,
   RUN_OUTCOME,
   type JsonValue,
   type RetryErrorInfo,
@@ -43,24 +41,21 @@ import {
   type RunUsageTotals,
 } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
-import {
-  type RunHistoryDraft,
-  type RunState,
-} from '@shared/session/runStateFold';
+import type { RunState } from '@shared/session/runStateFold';
 import { sha256 } from '@tools/catalogEntries';
-import { ToolRegistry } from '@tools/toolTable';
-import { generateShortId } from '@utils/core';
 
 import { AgentRun } from '../run/AgentRun';
 import { backgroundCompaction } from '../run/compaction';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { stored } from '../run/requestContext';
-import { dispatchFactsFor, toolDefinitionsFor } from '../run/tools';
+import { toolDefinitionsFor } from '../run/tools';
 import { claimFollowUps, type ConsumedFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
 import { Runs } from '../runRegistry';
 import {
   appendRow,
+  handedDown,
+  scriptSettlement,
   rowAggregate,
   snapshotRow,
   positionRow,
@@ -80,8 +75,6 @@ import { dispatchPendingResponse } from './toolUseDispatch';
 import { openingHooks, stopHooks } from './hooks';
 import { stepFor, type RunSystem } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
-import { roundLoop } from './rounds';
-import type { TurnResult } from '@texra-ai/llm';
 import type { RunControls } from '../RunHandle';
 import type { ChildRunTurns } from '../childRunLoop';
 
@@ -90,9 +83,6 @@ const IMMEDIATE_COMPACTION_FOLLOW_UP =
 const BLANK_TOOL_RESULT_CONTINUATION =
   'The previous assistant turn after a tool result was blank. Continue now with the final answer or next required action.';
 const FINAL_TOOL_INSTRUCTION = 'Submit the final structured output now.';
-/** The call id of a script run's one call: its nested calls are
- *  `script/<seq>`. */
-const SCRIPT_CALL_ID = 'script';
 
 type HistoryMessage = RunState['messages'][number];
 
@@ -140,8 +130,6 @@ interface ToolUseResult {
   readonly files: readonly string[];
   readonly usage: RunUsageTotals;
   readonly structured: JsonValue | undefined;
-  /** The documents a round-mode run produced, from its rows. */
-  readonly roundOutputs: RunState['roundOutputs'];
   readonly error?: RetryErrorInfo;
 }
 
@@ -166,42 +154,18 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const languageModel = yield* LanguageModel;
   const { runId, session, logger } = run;
   const isChild = () => (runs.getHandle(runId)?.parent ?? null) !== null;
-  // A run whose category a plugin drives in rounds (TeXRA's workflow
-  // agents, the documents plugin) is round mode for its whole life; a
-  // conversation's continuation is pinned by each step instead.
-  const roundMode = (yield* ToolRegistry).rounds.get(run.config.agentCategory);
-  if (
-    roundMode === undefined &&
-    run.config.agentCategory !== AgentCategory.ToolUse
-  )
-    return yield* Effect.die(
-      new Error(
-        `No plugin runs ${run.config.agentCategory} agents in this process, so run ${runId} cannot start.`,
-      ),
-    );
-  const roundPolicy =
-    roundMode === undefined ? null : yield* roundMode.open(run);
-  const rounds = roundPolicy?.rounds ?? null;
-  // A background script's run: it opens on the call its parent handed down
-  // and ends when that call settles.
-  const script =
-    run.config.agentCategory === AgentCategory.ToolUse
-      ? (run.config.backgroundScript ?? null)
-      : null;
+  // A script's run: it opens on the call it was handed and ends when that
+  // call settles.
+  const script = run.config.script ?? null;
   // A conversation claims its own input lease, never a parent's (FollowUps).
-  const followUps = rounds ? null : yield* claimFollowUps(run, runHistory);
-  // Round mode compacts only on overflow (its policy's own): rounds build
-  // on each other.
-  const compaction =
-    rounds === null
-      ? yield* backgroundCompaction({
-          runId,
-          runHistory,
-          logger,
-          invoker,
-          stores: session.roots,
-        })
-      : null;
+  const followUps = yield* claimFollowUps(run, runHistory);
+  const compaction = yield* backgroundCompaction({
+    runId,
+    runHistory,
+    logger,
+    invoker,
+    stores: session.roots,
+  });
 
   // ---------------------------------------------------------------- state
   let workspace = AgentWorkspaceState.create();
@@ -246,7 +210,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     isChild,
   };
   const openStep = (state: RunState, kind: 'request' | 'dispatch' | 'park') =>
-    Effect.tap(stepFor(run, state, rounds !== null, kind, system), (step) => {
+    Effect.tap(stepFor(run, state, kind, system), (step) => {
       if (!resumeUnseen || step.continuation === null || isChild())
         return Effect.void;
       resumeUnseen = false;
@@ -263,7 +227,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       compactionRequested = true;
       // A parked loop wakes on a synthetic turn; the compaction runs before
       // that turn's request, and the message tells the model to do nothing.
-      if (followUps !== null && !followUps.hasQueued()) {
+      if (!followUps.hasQueued()) {
         followUps.appendSynthetic(IMMEDIATE_COMPACTION_FOLLOW_UP);
       }
     },
@@ -271,7 +235,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     // park is a settled position, so the edit never cuts a turn.
     editView: (handoff) =>
       Effect.gen(function* () {
-        if (followUps === null || isChild() || run.toolPolicy.stopAfterCycle)
+        if (isChild() || run.toolPolicy.stopAfterCycle)
           return yield* Effect.fail(
             new Error(
               'Only a conversation that waits for its user can be reset.',
@@ -305,9 +269,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     const { bound, content, offered } = yield* Effect.interruptible(
       Effect.gen(function* () {
         const bound = yield* SynchronizedRef.get(run.model);
-        // A round-mode run opens with no message and offers no tools. A
-        // tool-use run's first step is recorded with its opening.
-        if (rounds) return { bound, content: null, offered: [] };
         // A script's run renders no prompt: what it runs is its call.
         if (script !== null) {
           const step = yield* openStep(opening, 'request');
@@ -324,11 +285,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           {
             workspace: session.roots.workspace,
             settings: session.roots,
+            textOnly: bound.textOnly,
           },
         );
-        systemPrompt = prompts.systemPrompt
-          ? `${prompts.systemPrompt}\n${prompts.instructionSuffix}`
-          : prompts.instructionSuffix;
+        systemPrompt = [prompts.systemPrompt, prompts.instructionSuffix]
+          .filter(Boolean)
+          .join('\n');
         // The first step renders the prompt, and stores its base text.
         const step = yield* openStep(opening, 'request');
         // The user's task is the user message.
@@ -408,82 +370,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     logger.debug('Resuming tool-use run from the run history.');
   };
 
-  /**
-   * A script's run's one response: the call its parent's model made, handed
-   * down to run here. Its origin is the run's binding and it carries no
-   * usage: no model is asked, and the parent's response paid for the call.
-   * Committed once, at its first turn, so a resume finds it pending or
-   * delivered like any response.
-   */
-  const handedDown = Effect.fn('toolUse.handedDown')(function* (
-    state: RunState,
-    call: NonNullable<typeof script>,
-  ) {
-    const bound = yield* SynchronizedRef.get(run.model);
-    const origin = bound.origin;
-    // An editor binding's turns carry no calls: its launch refuses it.
-    if (origin.protocol === 'vscode-lm')
-      return yield* Effect.die(
-        new Error(`${runId}: a script cannot run on an editor model binding`),
-      );
-    const invocation = { invocationId: randomUUID(), attempt: 1 };
-    const argumentsText = JSON.stringify(call.input);
-    const turn: TurnResult = {
-      kind: 'http',
-      providerResponseId: `script-${runId}`,
-      requestedOrigin: origin,
-      returnedModel: null,
-      modelFingerprint: null,
-      content: [
-        {
-          kind: 'local-call',
-          providerCallId: SCRIPT_CALL_ID,
-          name: call.tool,
-          argumentsText,
-        },
-      ],
-      finishReason: 'tool-calls',
-      usage: null,
-    };
-    const aggregateId = rowAggregate(runId);
-    return [
-      {
-        type: 'model.message',
-        aggregateId,
-        payload: {
-          kind: 'attempt',
-          invocation,
-          request: sha256(argumentsText),
-          origin,
-          delivery: 'blocking',
-        },
-      },
-      {
-        type: 'model.message',
-        aggregateId,
-        payload: {
-          kind: 'response',
-          responseId: randomUUID(),
-          invocation,
-          turn,
-          calls: dispatchFactsFor(
-            turn,
-            (yield* SynchronizedRef.get(run.steps))?.tools.registry,
-            logger,
-            generateShortId,
-          ),
-          usage: null,
-        },
-      },
-      positionRow(runId, state, 'response.ready'),
-    ] satisfies readonly RunHistoryDraft[];
-  });
-
   // ------------------------------------------------------------ the turn
   const runTurn = Effect.fn('toolUse.turn')(function* (
     cell: RunCell,
-    /** Round mode: open the next round, closing the completed one. */
-    advance = false,
   ): Effect.fn.Return<
     RunExit,
     Error,
@@ -492,12 +381,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     let state = yield* cell.current;
     // A turn begins at a settled boundary; a resumed one where its rows left.
     const begins =
-      advance ||
       state.phase === 'initial' ||
       state.phase === 'waiting' ||
       state.phase === 'halted';
-    /** Round mode's round: the turn's own count less one. */
-    const index = begins ? state.turn : state.turn - 1;
     let continuedAt: number | null = null;
     let finalToolAttempted = false;
     workspace.workPlan.setOnUpdate({
@@ -511,19 +397,25 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       state: at,
       outcome: 'completed',
     });
+    const scriptEnd = Effect.fn('toolUse.scriptEnd')(function* (at: RunState) {
+      const settled = yield* scriptSettlement(session, runId);
+      if (settled?.failed !== true) {
+        if (settled?.value !== undefined) run.structured.value = settled.value;
+        return completeTurn(at);
+      }
+      response = settled.reply;
+      return { state: at, outcome: 'failed' } satisfies RunExit;
+    });
     const body = Effect.gen(function* () {
       if (begins) {
         response = '';
-        const content = rounds ? yield* rounds.open(index) : null;
         state = yield* cell.append([
-          ...(advance ? [positionRow(runId, state, 'turn.end')] : []),
-          ...(content ? [appendRow(runId, [{ role: 'user', content }])] : []),
           ...snapshot(state, {}),
           positionRow(runId, { ...state, turn: state.turn + 1 }, 'turn.begin'),
         ]);
       }
       if (script !== null && state.round === 0)
-        state = yield* cell.append(yield* handedDown(state, script));
+        state = yield* cell.append(yield* handedDown(run, state, script));
       let forcedTool: string | null = null;
       /**
        * The policy a text-only response runs once it is committed: a blank
@@ -550,7 +442,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           | WorkspaceFs
           | StorageFs
         > {
-          if (rounds) return yield* rounds.afterResponse(at, cell, index, live);
           let next = at;
           const previous = next.messages.at(-2);
           if (
@@ -600,13 +491,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       let replayCommitted = true;
       for (;;) {
         state = yield* applyPendingModelSwitch(state, cell, snapshot, (at) =>
-          compaction === null
-            ? Effect.succeed(at)
-            : compaction.settle(at, 'the model is switching'),
+          compaction.settle(at, 'the model is switching'),
         );
         if (state.pendingResponse !== null) {
           // A user's follow-up to a stopped response joins its delivery.
-          const joined = followUps && (yield* followUps.joinStopped(state));
+          const joined = yield* followUps.joinStopped(state);
           const dispatched = yield* dispatchPendingResponse(
             cell,
             workspace,
@@ -616,10 +505,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           state = dispatched.state;
           joined?.delivered();
           // A script's run ends with its one call.
-          if ((dispatched.endTurn || script !== null) && !joined)
-            return completeTurn(state);
+          if (script !== null && !joined) return yield* scriptEnd(state);
+          if (dispatched.endTurn && !joined) return completeTurn(state);
           continue;
         }
+        // A script's run asks no model: delivered, it ends as its call did.
+        if (script !== null && state.round > 0) return yield* scriptEnd(state);
         if (replayCommitted) {
           replayCommitted = false;
           const last =
@@ -631,13 +522,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             if (text) response = text;
             // Its `response.finalized` is a trace row a later commit carries:
             // finalized iff one landed after the batch that made it ready.
-            const rows =
-              text && rounds === null
-                ? yield* session.readAggregate(rowAggregate(runId), [
-                    'run.position',
-                    'response.finalized',
-                  ])
-                : [];
+            const rows = text
+              ? yield* session.readAggregate(rowAggregate(runId), [
+                  'run.position',
+                  'response.finalized',
+                ])
+              : [];
             const ready = rows.findLast(
               (row) =>
                 row.type === 'run.position' &&
@@ -672,10 +562,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (state.openAttempt === null) {
           const requested = compactionRequested;
           compactionRequested = false;
-          if (compaction !== null)
-            state = yield* cell.adopt(
-              yield* compaction.atBoundary(state, bound, requested),
-            );
+          state = yield* cell.adopt(
+            yield* compaction.atBoundary(state, bound, requested),
+          );
           // A compaction replaced the history, the context updates in it
           // too: a new step renders the system text anew, each one in it.
           if (state.offeredContext === null) {
@@ -694,16 +583,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         const outcome = yield* invoker.invoke(cell, {
           tools,
           toolChoice,
-          ...(rounds
-            ? yield* rounds.request(index)
-            : {
-                system: step.system,
-                // The model call this request is: the attempt row counts a
-                // new one, a retry of the open attempt is the same call.
-                round:
-                  state.openAttempt === null ? state.round + 1 : state.round,
-                debugName: 'tooluse',
-              }),
+          system: step.system,
+          // The model call this request is: the attempt row counts a new
+          // one, a retry of the open attempt is the same call.
+          round: state.openAttempt === null ? state.round + 1 : state.round,
+          debugName: 'tooluse',
         });
         state = outcome.state;
         if (outcome.kind === 'cancelled') {
@@ -722,9 +606,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       }
     });
     return yield* stagedBy(
-      () =>
-        rounds?.stage(index) ??
-        logger.openStage('Tool-use turn', { kind: 'session' }),
+      () => logger.openStage('Tool-use turn', { kind: 'session' }),
       (exit: RunExit) => exit.outcome,
     )(body).pipe(
       Effect.ensuring(Effect.sync(() => workspace.workPlan.clearOnUpdate())),
@@ -768,7 +650,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   const loopBody = (cell: RunCell) =>
     Effect.gen(function* () {
-      if (!followUps) return yield* Effect.die(new Error(`${runId}: no lease`));
       let restoring = start.resume;
       for (;;) {
         let state = yield* cell.current;
@@ -831,7 +712,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           const consumed: ConsumedFollowUps = yield* followUps.consume(
             state,
             batch,
-            batch.kind === 'edit' && compaction !== null
+            batch.kind === 'edit'
               ? (at) => compaction.settle(at, 'the task is being reset')
               : undefined,
           );
@@ -847,8 +728,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           return finish(state, RUN_OUTCOME.CANCELLED);
         }
         // A summary the turn started lands before the turn ends.
-        if (compaction !== null)
-          state = yield* cell.adopt(yield* compaction.finish(state));
+        state = yield* cell.adopt(yield* compaction.finish(state));
         // The turn's trace rows publish fire-and-forget, so `waiting` would
         // commit ahead of them and the fold would drop its stream rows,
         // parking a run with no answer. Settling this run's publications (by
@@ -879,6 +759,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         if (run.toolPolicy.stopAfterCycle && turn.outcome === 'completed')
           return finish(state, turn.outcome);
+        if (script !== null) return finish(state, turn.outcome);
         if (turn.outcome === 'failed') continue;
         if (start.turns)
           yield* start.turns.onTurnBoundary(result(turn.outcome, state));
@@ -895,7 +776,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     files: workspace.interactions.toSnapshot().edits.map((e) => e.path),
     usage: at.usage,
     structured: run.structured.value,
-    roundOutputs: at.roundOutputs,
     ...(outcome === RUN_OUTCOME.FAILED && at.lastError !== null
       ? { error: at.lastError }
       : {}),
@@ -909,32 +789,25 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     () =>
       Effect.gen(function* () {
         yield* Effect.sync(attach);
-        return yield* Effect.acquireUseRelease(
-          enter,
-          roundPolicy ? roundLoop(roundPolicy, runTurn) : loopBody,
-          (cell, exit) =>
-            // However the run ends, a stop's interruption included, a
-            // finished summary lands before the halt (its usage is the
-            // run's); one still running stops with the run.
-            Effect.andThen(
-              compaction === null
-                ? Effect.void
-                : cell.current.pipe(
-                    Effect.flatMap((at) =>
-                      compaction.settle(at, 'the run stopped'),
-                    ),
-                    Effect.flatMap(cell.adopt),
-                    Effect.catch((error) =>
-                      Effect.sync(() =>
-                        logger.warn(
-                          'A finished background compaction could not be recorded as the run stopped',
-                          { data: error },
-                        ),
-                      ),
-                    ),
+        return yield* Effect.acquireUseRelease(enter, loopBody, (cell, exit) =>
+          // However the run ends, a stop's interruption included, a
+          // finished summary lands before the halt (its usage is the
+          // run's); one still running stops with the run.
+          Effect.andThen(
+            cell.current.pipe(
+              Effect.flatMap((at) => compaction.settle(at, 'the run stopped')),
+              Effect.flatMap(cell.adopt),
+              Effect.catch((error) =>
+                Effect.sync(() =>
+                  logger.warn(
+                    'A finished background compaction could not be recorded as the run stopped',
+                    { data: error },
                   ),
-              settleRun(cell, followUps)(exit),
+                ),
+              ),
             ),
+            settleRun(cell, followUps)(exit),
+          ),
         );
       }),
     () => Effect.sync(detach),

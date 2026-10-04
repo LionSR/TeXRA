@@ -1127,7 +1127,7 @@ Appendix.
   );
 
   // Agents like ocr/paper2slide declare one `task.outputs` entry while
-  // accepting several attached input files. documentRounds.ts then builds
+  // accepting several attached input files. The document tools then build
   // baseFiles from outputFiles, not inputFiles, so baseFiles[i] no longer
   // corresponds to inputFiles[i].
   const singleArtifactOptions: XmlManagerOptions = {

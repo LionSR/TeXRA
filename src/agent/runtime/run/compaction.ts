@@ -301,7 +301,7 @@ const land = Effect.fn('compaction.land')(function* (
  * summarize, or a summary attempt that failed, which is logged and shown,
  * never a stop).
  */
-export const compactIfNeeded = Effect.fn('compaction.check')(function* (
+const compactIfNeeded = Effect.fn('compaction.check')(function* (
   state: RunState,
   input: CompactionInput,
 ): Effect.fn.Return<

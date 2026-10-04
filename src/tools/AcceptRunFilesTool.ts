@@ -1,7 +1,7 @@
 /**
  * Tool for accepting output files from a completed run into the workspace.
  *
- * After a workflow agent completes, its output files live in run storage
+ * After a document task completes, its output files live in run storage
  * (executions/{runId}/). This tool copies those files into the workspace
  * — the programmatic equivalent of the "Accept" button in the progress view.
  *
@@ -138,7 +138,7 @@ const FileMapping = z.strictObject({
   path: z
     .string()
     .describe(
-      'Output file path (matches path attribute in subagent-result delivery)',
+      'Output file path (matches the path attribute of an <output-files> file in the delivery)',
     ),
   /**
    * Original workspace path to restore to (matches `original` attribute in
@@ -251,7 +251,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
           dest.relativePath,
         ).pipe(Effect.mapError(ensureError));
 
-        // Determine original content for diff display. In-place workflow
+        // Determine original content for diff display. In-place document
         // outputs can make source and destination the same workspace file, so
         // the pre-run snapshot is the only reliable "before" image.
         const snapshotPath = originalSnapshotPathUnder(
@@ -484,18 +484,18 @@ const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
 export const AcceptRunFilesTool = defineTool({
   name: 'accept_run_files',
   requiresApproval: 'inBody',
-  description: `Accept output files from a completed workflow run into the workspace.
+  description: `Accept output files from a completed document task into the workspace.
 
-Only workflow subagent results (category="workflow") have output files to
-accept; tool-use subagents return text and have nothing for this tool.
+Only document-task results (<subagent-result kind="document-task">) list output
+files to accept; other agents' results have nothing for this tool.
 
 Locates output files in run storage and writes them to the workspace.
 Each file goes through an approval step before writing and may be rejected.
 
 Parameters map directly to subagent-result delivery attributes:
   execution_id ← <subagent-result id="...">
-  path         ← <file path="...">
-  original     ← <file original="...">`,
+  path         ← <output-files><file path="...">
+  original     ← <output-files><file original="...">`,
   schema: AcceptRunFilesInputSchema,
   execute: executeAcceptRunFilesTool,
 });

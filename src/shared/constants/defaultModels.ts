@@ -1,7 +1,7 @@
 /**
  * The models TeXRA starts with: the run default, the helper default and the
  * curated picker list. They are the app's choices over the llm catalog, not
- * catalog facts, and stored shapes (`agentConfig.ts`, `proposalInput.ts`)
+ * catalog facts, and the stored agent config (`agentConfig.ts`)
  * prefault to them, so they live with the storage and not in
  * `@texra-ai/llm`.
  */

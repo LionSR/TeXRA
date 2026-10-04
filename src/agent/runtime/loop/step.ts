@@ -7,8 +7,8 @@
  * applies the user's plugin switches, and the installed plugins enabled and
  * trusted from any host, to the live catalog (`@tools/liveTools`), pins its
  * current generations, and resolves from them
- * the tools the run is offered (`resolveStepTools`), the continuation for
- * its agent category, if any plugin on contributes one, and the prompt
+ * the tools the run is offered (`resolveStepTools`), the continuation of a
+ * parked run, if any plugin on contributes one, and the prompt
  * contribution of each plugin on that makes one, with the process and
  * session services of the plugins it pinned: the only way a tool call or a
  * continuation reaches a plugin's services. The pin is held hand over hand: a
@@ -45,6 +45,7 @@ import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import type { PluginContext } from '@platform/processRuntime';
 import {
+  isDocumentTaskConfig,
   AGENT_SKILLS_CONFIG_KEY,
   AgentSkillsEnabledSchema,
   sameIdentity,
@@ -114,16 +115,6 @@ export interface OpenStep {
   };
   readonly holding: boolean;
 }
-
-/** A round-mode run's step: it offers no tools. */
-const NO_TOOLS: StepTools = {
-  definitions: [],
-  registry: new MapToolRegistry(new Map()),
-  offered: [],
-  services: Context.empty() as PluginContext,
-  stepRoots: [],
-  hooks: [],
-};
 
 /** Whether `b` is the set `a` records: the same tools, as the same
  *  definitions. A description change is a new set to record, though it
@@ -265,16 +256,18 @@ const openStep = Effect.fn('Step.open')(function* (
   const { roots } = run.session;
   const scope = yield* Scope.fork(run.scope);
   const step = yield* Effect.gen(function* () {
+    // No switch or approval withholds a recipe's fixed tools; else read live.
+    const recipe = isDocumentTaskConfig(run.config);
+    const off = recipe
+      ? Effect.succeed(new Set<string>())
+      : readDisabledTools(run.stores.globalState);
     const pinned = yield* live
-      .pinSwitched(readDisabledTools(run.stores.globalState), {
-        installed: true,
-      })
+      .pinSwitched(off, { installed: true })
       .pipe(Scope.provide(scope));
-    // Read live: a policy change or a host attached mid-run reaches the next
-    // step's offer.
     const resolved = yield* resolveStepTools(pinned.generation, {
       ...run.toolInputs,
       ...liveToolGates(run.session),
+      ...(recipe && { approvalPromptsUnavailable: false }),
     });
     const held = recorded === null ? null : heldToRecord(resolved, recorded);
     const tools = describedAtFreeze(
@@ -282,13 +275,11 @@ const openStep = Effect.fn('Step.open')(function* (
       state,
       run.toolInputs.tools,
     );
-    // The plugin on that continues the run's category, if any (the table
-    // rules out two), and those that add a section or skills to its text.
+    // The plugin on that continues a parked run, if any (the table rules
+    // out two), and those that add a section or skills to its text.
     const continuing =
-      pinned.plugins.find(
-        ({ continuation }) =>
-          continuation?.category === run.config.agentCategory,
-      ) ?? null;
+      pinned.plugins.find(({ continuation }) => continuation !== undefined) ??
+      null;
     const contributing = pinned.plugins.filter(
       ({ prompt, skills }) => prompt !== undefined || skills === true,
     );
@@ -495,23 +486,14 @@ const openStep = Effect.fn('Step.open')(function* (
  * like a name the run was never offered, and the step names the tool. A
  * park opens a step for its continuation, recorded like a request's. The
  * first request or dispatch step a resumed activation opens is held to the
- * record, and so is every park before it, which leaves the hold unspent. A
- * round-mode run offers no tools, and its rounds are its own continuation.
+ * record, and so is every park before it, which leaves the hold unspent.
  */
 export const stepFor = Effect.fn('Step.for')(function* (
   run: AgentRunShape,
   state: RunState,
-  roundMode: boolean,
   kind: 'request' | 'dispatch' | 'park',
   runSystem: RunSystem,
 ) {
-  if (roundMode)
-    return {
-      tools: NO_TOOLS,
-      continuation: null,
-      system: undefined,
-      rows: [],
-    };
   const open = yield* SynchronizedRef.get(run.steps);
   if (open !== null && kind === 'dispatch')
     return {

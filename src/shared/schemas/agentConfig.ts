@@ -2,13 +2,12 @@
 import { z } from 'zod';
 
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
-import { AgentCategory, AgentSourceSchema } from './agent';
+import { AgentSourceSchema } from './agent';
 import { AgentDelegationScopeSchema } from './workspaceAgents';
 import { NullableFileFieldsSchema } from './fileFields';
-import { JsonValueSchema } from './jsonValue';
 import { ToolConfigSchema } from './toolConfig';
 
-/** Agent selected when launch input omits its workflow agent. */
+/** Agent selected when launch input names none. */
 export const DEFAULT_WORKFLOW_AGENT = 'correct';
 
 /**
@@ -33,8 +32,8 @@ const CliOutputFieldsSchema = z.object({
   teamId: z.string().nullish(),
 });
 
-/** Fields shared by both category-specific config variants. */
-const AgentConfigSharedFieldsSchema = NullableFileFieldsSchema.extend({
+/** A run's launch configuration, as its `run.config` row records it. */
+const AgentConfigObjectSchema = NullableFileFieldsSchema.extend({
   agent: z.string().prefault(DEFAULT_WORKFLOW_AGENT),
   /**
    * Resolved source of `agent`. A boundary that validated the agent pins it;
@@ -60,63 +59,48 @@ const AgentConfigSharedFieldsSchema = NullableFileFieldsSchema.extend({
   cli: CliOutputFieldsSchema.nullish(),
   /** Run-scoped delegation agent list used by team runs and their children. */
   delegationAgentScope: AgentDelegationScopeSchema.nullish(),
-});
-
-const workflowFields = AgentConfigSharedFieldsSchema.extend({
-  agentCategory: z.literal(AgentCategory.Workflow),
-});
-
-const toolUseFields = AgentConfigSharedFieldsSchema.extend({
-  agentCategory: z.literal(AgentCategory.ToolUse),
   /**
    * JSON Schema (a plain object) describing a structured output the agent must
    * submit through the synthetic `submit_output` terminal tool. Serializable by
    * design: a live Zod schema or ITool must never travel through config. Absent
-   * for ordinary tool-use runs.
+   * for ordinary runs.
    */
   outputSchema: z.record(z.string(), z.unknown()).nullish(),
   /**
-   * The `script` call a parent sent to the background, which this run makes:
-   * it opens with that call as its one response, runs it as the parent's
-   * dispatch would have, and ends when it settles. Absent for every other
-   * run.
+   * The `script` call this run makes instead of asking its model: it opens
+   * with that call as its one response, offers exactly `tools`, and ends when
+   * the call settles. A script a parent sent to the background, or a
+   * document task's recipe. Absent for every other run.
    */
-  backgroundScript: z
+  script: z
     .strictObject({
-      /** The tool the parent called, and the arguments this run calls it
-       *  with. */
-      tool: z.string().min(1),
-      input: z.record(z.string(), JsonValueSchema),
+      code: z.string().min(1),
       title: z.string().min(1),
+      /** The tools the run offers the script, by name. */
+      tools: z.array(z.string().min(1)),
+      /** The script's wall-clock limit, when it set one. */
+      timeoutMs: z.int().positive().nullish(),
+      /** Who wrote it. `background`: the parent's model, sent to the
+       *  background; the run is that script, and its `agent` calls propose
+       *  themselves. `recipe`: the app (a document task's recipe); the run
+       *  is its agent's, and its `agent` calls were approved with its
+       *  launch. */
+      kind: z.enum(['background', 'recipe']),
     })
     .nullish(),
 });
 
-function validateOutputFileCount(
-  config: z.output<typeof AgentConfigSharedFieldsSchema>,
-  ctx: z.RefinementCtx,
-): void {
-  if (config.outputFiles.length > config.inputFiles.length) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['outputFiles'],
-      message:
-        'Number of output files must not be greater than the number of input files.',
-    });
-  }
-}
-
-/** Canonical current configuration; legacy input normalization belongs to the launcher. */
-export const WorkflowAgentConfigFieldsSchema = workflowFields.superRefine(
-  validateOutputFileCount,
+/** Canonical current configuration: at most as many outputs as inputs. */
+export const AgentConfigFieldsSchema = AgentConfigObjectSchema.superRefine(
+  (config, ctx) => {
+    if (config.outputFiles.length > config.inputFiles.length) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['outputFiles'],
+        message:
+          'Number of output files must not be greater than the number of input files.',
+      });
+    }
+  },
 );
-export const ToolUseAgentConfigFieldsSchema = toolUseFields.superRefine(
-  validateOutputFileCount,
-);
-export const AgentConfigFieldsSchema = z.discriminatedUnion('agentCategory', [
-  WorkflowAgentConfigFieldsSchema,
-  ToolUseAgentConfigFieldsSchema,
-]);
-export type AgentConfigInput = z.input<typeof AgentConfigSharedFieldsSchema> & {
-  agentCategory?: AgentCategory;
-};
+export type AgentConfigInput = z.input<typeof AgentConfigObjectSchema>;

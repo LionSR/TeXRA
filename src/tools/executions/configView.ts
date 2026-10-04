@@ -6,22 +6,21 @@
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 
 /**
- * Per-category config-field exclusions: `toolUse` hides the workflow-only
- * file fields, `workflow` hides the toolUse-only `toolConfig`. Unknown
+ * Per-category config-field exclusions: a conversation (`agent`) hides the
+ * document task's file fields, a `task` hides its recipe's source. Unknown
  * categories get no filtering.
  */
 const HIDDEN_CONFIG_FIELDS_BY_CATEGORY: Readonly<
   Record<string, ReadonlySet<string>>
 > = {
-  toolUse: new Set([
+  agent: new Set([
     'inputFiles',
     'contextFiles',
-    'mediaFiles',
     'outputFiles',
     'editedFile',
     'editedFiles',
   ]),
-  workflow: new Set(['toolConfig']),
+  task: new Set(['script']),
 };
 
 /**

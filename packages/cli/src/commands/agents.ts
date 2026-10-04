@@ -2,7 +2,7 @@ import { defineCommand } from 'citty';
 import { Effect, FileSystem } from 'effect';
 
 import {
-  agentSourceDirectory,
+  agentSourceRoots,
   changedBuiltInOf,
   createWorkspaceAgentsController,
   customCopyPath,
@@ -12,19 +12,17 @@ import {
   writeStampedCopy,
 } from '@agent/index';
 import { AgentDirectories } from '@platform/interfaces';
-import { agentKey, agentName } from '@shared/schemas';
+import { AGENT_SOURCE, agentKey, agentName } from '@shared/schemas';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 
 import {
   AGENT_NAME_DESCRIPTION,
-  CLI_AGENT_CATEGORY_FILTER_VALUES,
   formatCliAgentDetails,
   formatCliAgentList,
   formatCliHiddenAgentsNotice,
   formatCliNewerBuiltInNotice,
   loadCliAgentList,
   missingAgentMessage,
-  parseCliAgentCategoryFilter,
   resolveCliAgent,
   type CliAgentListOptions,
 } from '../runtime/agents';
@@ -33,7 +31,7 @@ import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
+import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult, emitPagedCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
@@ -50,7 +48,7 @@ export function listAgents(
     if (!context.quietLogs) {
       const hiddenNotice = formatCliHiddenAgentsNotice(
         result.hiddenCount,
-        options.category,
+        options.tasks === true,
       );
       if (hiddenNotice) writeTextStderr(hiddenNotice);
       for (const issue of getCustomAgentScanIssues()) {
@@ -67,7 +65,7 @@ export function listAgents(
       json: result.agents,
       ndjson: result.agents.map((agent) => ({ kind: 'agent', agent })),
       text: formatCliAgentList(result.agents, {
-        category: options.category,
+        tasks: options.tasks === true,
         showEmptyState:
           options.includeHidden !== true &&
           !context.quietLogs &&
@@ -80,8 +78,8 @@ export function listAgents(
 
 export function showAgent(context: CliContext, name: string) {
   return Effect.gen(function* () {
-    const services = yield* initCliPlatform(context);
-    const entry = yield* resolveCliAgent(services, name);
+    yield* initCliPlatform(context);
+    const entry = resolveCliAgent(name);
     if (!entry) {
       writeTextStderr(missingAgentMessage(name));
       return CliExitCode.Usage;
@@ -101,9 +99,7 @@ export function showAgent(context: CliContext, name: string) {
 
 /** The bundled agent a bare name or a bundled `source:name` key names. */
 function bundledAgentNamed(name: string) {
-  return (['builtInToolUse', 'builtInWorkflow'] as const)
-    .map((source) => getAgent(agentKey(source, agentName(name))))
-    .find((entry) => entry !== undefined);
+  return getAgent(agentKey(AGENT_SOURCE.BUILT_IN, agentName(name)));
 }
 
 /** One result shape for customize, reset and keep. */
@@ -140,8 +136,7 @@ function customizeAgent(context: CliContext, name: string) {
     const directories = yield* AgentDirectories;
     const target = customCopyPath({
       entryPath: builtIn.path,
-      source: builtIn.source,
-      sourceDir: yield* agentSourceDirectory(directories, builtIn.source),
+      sourceRoots: yield* agentSourceRoots(directories, builtIn.source),
       customDir: yield* directories.custom(),
     });
     if (!target) {
@@ -255,17 +250,15 @@ const agentsListCommand = defineCliCommand({
       description:
         'Show every agent, including agents hidden by workspace visibility settings',
     },
-    category: {
-      type: 'enum',
-      options: CLI_AGENT_CATEGORY_FILTER_VALUES,
-      description:
-        'Only list one category: workflow or toolUse (also accepts tool-use/tool_use)',
+    tasks: {
+      type: 'boolean',
+      description: 'Only list the agents that are also document tasks',
     },
   },
   run: (context, ctx) =>
     listAgents(context, {
       includeHidden: ctx.args.all === true,
-      category: parseCliAgentCategoryFilter(optString(ctx.args.category)),
+      tasks: ctx.args.tasks === true,
     }),
 });
 

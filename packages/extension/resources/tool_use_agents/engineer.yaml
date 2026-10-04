@@ -3,6 +3,7 @@ description: Software engineering team lead. Turns a coding goal into focused ta
 temperature: 0.3
 tools:
   - agent
+  - document_task
   - script
   - executions
   - accept_run_files
@@ -83,7 +84,8 @@ prompt: |
     specific specialist.
   - Subagent results arrive automatically as follow-up messages: continue
     other work meanwhile, and wait on an execution only when you cannot
-    proceed without it. Use `accept_run_files` to land workflow results.
+    proceed without it. Use `accept_run_files` to land the documents a
+    `document_task` run proposes.
   - Call `agent` directly when the next step depends on reading the last
     result. Use `script` when the whole fan-out and join is known up front:
     several agents whose results combine in code (`await Promise.all` over

@@ -14,7 +14,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { testRuntime } from '@test/support/testProcessRuntime';
-import { RUN_OUTCOME, AgentCategory } from '@shared/schemas';
+import { RUN_OUTCOME } from '@shared/schemas';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 import {
   fakeProcessServices,
@@ -112,10 +112,10 @@ describe('CLI run command, tool-use agents', () => {
     mocks.resolveCliRunAgent.mockReturnValue(
       Effect.succeed({
         name: 'chat',
-        category: AgentCategory.ToolUse,
-        source: 'builtInToolUse',
+        source: 'builtIn',
         path: '/agents/chat.yaml',
         tools: ['read_file'],
+        task: null,
       }),
     );
     mocks.selectCliRunModel.mockImplementation(
@@ -128,7 +128,6 @@ describe('CLI run command, tool-use agents', () => {
         runId: 'run-1',
         outcome: RUN_OUTCOME.COMPLETED,
         output: {
-          category: AgentCategory.ToolUse,
           response: 'Correct.',
           files: [],
         },
@@ -190,7 +189,6 @@ describe('CLI run command, tool-use agents', () => {
           runId: 'run-1',
           outcome: RUN_OUTCOME.COMPLETED,
           output: {
-            category: AgentCategory.ToolUse,
             response: 'Correct.',
             files: [],
           },
@@ -243,7 +241,7 @@ describe('CLI run command, tool-use agents', () => {
         result: {
           runId: 'run-interrupted',
           outcome: RUN_OUTCOME.CANCELLED,
-          output: { category: AgentCategory.ToolUse, response: '', files: [] },
+          output: { response: '', files: [] },
           workingDirectory: '/tmp/project',
         },
         exitCode: CliExitCode.Interrupted,
@@ -282,11 +280,12 @@ describe('CLI run command, tool-use agents', () => {
     }),
   );
 
-  // Neither category can run an invocation with no instruction and no input,
+  // Neither a chat nor a document task can run an invocation with no
+  // instruction and no input,
   // so it is refused before the platform init and the agent-catalog fetch a
   // signed-in session would otherwise pay for on a plain usage error.
   it.effect(
-    'refuses an invocation no category can run without resolving the agent',
+    'refuses an invocation nothing can run without resolving the agent',
     () =>
       Effect.gen(function* () {
         const exit = yield* Effect.exit(
@@ -299,17 +298,17 @@ describe('CLI run command, tool-use agents', () => {
         );
 
         expect(usageErrorFrom(exit).message).toBe(
-          'Provide --instruction or --instruction-file for a tool-use agent, or --input for a workflow agent.',
+          'Provide --instruction or --instruction-file for an agent, or --input for a document task.',
         );
         expect(cliInitPlatformMock.initCliPlatform).not.toHaveBeenCalled();
         expect(mocks.resolveCliRunAgent).not.toHaveBeenCalled();
       }),
   );
 
-  // The one headless `run` command carries both categories' flags, so the
-  // workflow-only destinations have to be refused once the agent is known.
+  // The one headless `run` command carries document-task flags too, so those
+  // destinations have to be refused once the agent is known to have no task.
   it.effect.each(['output', 'outputDir'] as const)(
-    'refuses the workflow-only --%s destination for a tool-use agent',
+    'refuses the document-task-only --%s destination for an agent with no task',
     (flag) =>
       Effect.gen(function* () {
         const exit = yield* Effect.exit(
@@ -323,7 +322,7 @@ describe('CLI run command, tool-use agents', () => {
         );
 
         expect(usageErrorFrom(exit).message).toBe(
-          `${flag === 'output' ? '--output' : '--output-dir'} is only available for workflow agents; "chat" is a toolUse agent.`,
+          `${flag === 'output' ? '--output' : '--output-dir'} is only available for document tasks; "chat" has no task.`,
         );
         expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
         expect(mocks.executeCliToolUseConfig).not.toHaveBeenCalled();

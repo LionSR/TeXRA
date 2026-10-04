@@ -1,14 +1,10 @@
 import { Array as Arr, Result } from 'effect';
 import {
-  AGENT_CATEGORIES,
   AGENT_MODE_PRESETS,
-  AgentCategory,
   agentKeyOf,
   agentMatchesIdentifier,
-  byCategory,
   type AgentDelegationScope,
   type AgentSource,
-  type ByCategory,
   type TeamOptionData,
 } from '@shared/schemas';
 import {
@@ -34,18 +30,16 @@ export interface TeamRunPlan<T extends TeamCatalogAgent = TeamCatalogAgent> {
   readonly preset: TeamPreset;
   readonly rootAgent?: T;
   readonly missingAgentOverride?: string;
-  readonly agentKeys: ByCategory<readonly string[]>;
-  readonly missingAgents: ByCategory<readonly string[]>;
+  readonly agentKeys: readonly string[];
+  /** Members that did not resolve, in preset-declaration order. */
+  readonly missingAgents: readonly string[];
 }
 
 /**
- * The workspace agents' member identity rule (`getCategoryAgent` in production): a bare
- * name matches within the category, a `source:name` key matches exactly.
+ * The workspace agents' member identity rule (`getCatalogAgent` in
+ * production): a bare name matches by name, a `source:name` key exactly.
  */
-type TeamAgentResolver<T> = (
-  category: AgentCategory,
-  identifier: string,
-) => T | undefined;
+type TeamAgentResolver<T> = (identifier: string) => T | undefined;
 
 interface TeamRunOptions<T extends TeamCatalogAgent> {
   readonly resolveAgent: TeamAgentResolver<T>;
@@ -56,25 +50,22 @@ export function planTeamRun<T extends TeamCatalogAgent>(
   preset: TeamPreset,
   options: TeamRunOptions<T>,
 ): TeamRunPlan<T> {
-  const resolved = byCategory((category) => {
-    const [found, missing] = Arr.partition(preset.agents[category], (name) =>
-      Result.fromNullishOr(options.resolveAgent(category, name), () => name),
-    );
-    return { resolved: found, missing };
-  });
+  const [members, missing] = Arr.partition(preset.agents, (name) =>
+    Result.fromNullishOr(options.resolveAgent(name), () => name),
+  );
   const overrideQuery = options.agentOverride?.trim();
   const overrideAgent = overrideQuery
-    ? options.resolveAgent(AgentCategory.ToolUse, overrideQuery)
+    ? options.resolveAgent(overrideQuery)
     : undefined;
   const rootAgent =
     overrideAgent ??
-    selectTeamRootAgent(resolved.toolUse.resolved, {
-      presetOrder: preset.agents.toolUse,
+    selectTeamRootAgent(members, {
+      presetOrder: preset.agents,
       presetSource: preset.source,
     });
   // A preset-chosen root is one of the resolved members; only an override
   // root can sit outside the list, and it joins the delegation scope.
-  const toolUseKeys = resolved.toolUse.resolved.map(agentKeyOf);
+  const keys = members.map(agentKeyOf);
   const overrideKey = overrideAgent && agentKeyOf(overrideAgent);
 
   return {
@@ -82,14 +73,11 @@ export function planTeamRun<T extends TeamCatalogAgent>(
     rootAgent,
     missingAgentOverride:
       overrideQuery && !overrideAgent ? overrideQuery : undefined,
-    agentKeys: {
-      workflow: resolved.workflow.resolved.map(agentKeyOf),
-      toolUse:
-        overrideKey && !toolUseKeys.includes(overrideKey)
-          ? [...toolUseKeys, overrideKey]
-          : toolUseKeys,
-    },
-    missingAgents: byCategory((category) => resolved[category].missing),
+    agentKeys:
+      overrideKey && !keys.includes(overrideKey)
+        ? [...keys, overrideKey]
+        : keys,
+    missingAgents: missing,
   };
 }
 
@@ -104,7 +92,7 @@ function teamPlanHasGaps(plan: TeamRunPlan): boolean {
   return (
     !plan.rootAgent ||
     plan.missingAgentOverride !== undefined ||
-    AGENT_CATEGORIES.some((category) => plan.missingAgents[category].length > 0)
+    plan.missingAgents.length > 0
   );
 }
 
@@ -132,7 +120,7 @@ export function teamPlanStatus(plan: TeamRunPlan): TeamPlanStatus {
   return teamPlanHasGaps(plan) ? 'degraded' : 'available';
 }
 
-export interface TeamAgentAvailability {
+interface TeamAgentAvailability {
   readonly available: number;
   readonly total: number;
   readonly missing: readonly string[];
@@ -141,7 +129,7 @@ export interface TeamAgentAvailability {
 
 export interface TeamAvailability {
   readonly status: TeamPlanStatus;
-  readonly agents: ByCategory<TeamAgentAvailability>;
+  readonly agents: TeamAgentAvailability;
   readonly rootAgent?: {
     readonly key: string;
     readonly name: string;
@@ -153,12 +141,7 @@ export interface TeamAvailability {
 export function teamAvailability(plan: TeamRunPlan): TeamAvailability {
   return {
     status: teamPlanStatus(plan),
-    agents: byCategory((category) =>
-      presetAgentAvailability(
-        plan.preset.agents[category],
-        plan.missingAgents[category],
-      ),
-    ),
+    agents: presetAgentAvailability(plan.preset.agents, plan.missingAgents),
     rootAgent: plan.rootAgent
       ? {
           key: agentKeyOf(plan.rootAgent),
@@ -179,9 +162,7 @@ function teamExecutionFields<T extends TeamCatalogAgent>(
 } {
   return {
     agent: agentKeyOf(plan.rootAgent),
-    delegationAgentScope: byCategory((category) => [
-      ...plan.agentKeys[category],
-    ]),
+    delegationAgentScope: [...plan.agentKeys],
     cli: { teamId: plan.preset.id },
   };
 }
@@ -279,11 +260,11 @@ export function formatTeamLaunchBlockedMessage(
   return `Team "${teamId}" cannot run: ${reason}.`;
 }
 
-/** Missing workflow and tool-use member names, in preset-declaration order. */
+/** Missing member names, in preset-declaration order. */
 export function missingMemberNames(
   plan: Pick<TeamRunPlan, 'missingAgents'>,
 ): string[] {
-  return AGENT_CATEGORIES.flatMap((category) => plan.missingAgents[category]);
+  return [...plan.missingAgents];
 }
 
 function selectTeamRootAgent<T extends TeamCatalogAgent>(
@@ -312,10 +293,7 @@ function selectTeamRootAgent<T extends TeamCatalogAgent>(
 /** Distinct member keys available to the run, excluding the root itself. */
 export function availableTeamMemberCount(plan: TeamRunPlan): number {
   const rootKey = plan.rootAgent ? agentKeyOf(plan.rootAgent) : undefined;
-  const memberKeys = [
-    ...plan.agentKeys.workflow,
-    ...plan.agentKeys.toolUse.filter((key) => key !== rootKey),
-  ];
+  const memberKeys = plan.agentKeys.filter((key) => key !== rootKey);
   return new Set(memberKeys).size;
 }
 

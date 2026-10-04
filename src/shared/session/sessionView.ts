@@ -15,7 +15,6 @@ import { z } from 'zod';
 import type { SessionTitleState } from '@shared/sessionTitle';
 
 import {
-  AgentCategory,
   AggregateIdSchema,
   ApprovalPolicySnapshotSchema,
   BlockedAggregateSchema,
@@ -29,7 +28,6 @@ import {
   PermissionPayloadSchema,
   PlanSchema,
   requestParksItsCaller,
-  RoundKeyedOutputSidecarValueSchemas,
   RunActionSchema,
   RunIdentitySchema,
   RunOutcomeSchema,
@@ -83,34 +81,7 @@ const RunGroupSchema = z.enum(['running', 'waiting', 'interrupted', 'recent']);
  *  table in `@shared/runs/runStatusDisplay`, not a per-host switch. */
 export type RunGroup = z.infer<typeof RunGroupSchema>;
 
-/**
- * Where a run's loop stands, in the one coordinate its category counts: a
- * workflow agent counts zero-based rounds (each round is one turn), every
- * other run its one-based turn. The row's `round` counts model calls, not
- * rounds, so no surface reads it.
- */
-const LoopCoordinateSchema = z.strictObject({
-  kind: z.enum(['round', 'turn']),
-  index: z.int().nonnegative(),
-});
-export type LoopCoordinate = z.infer<typeof LoopCoordinateSchema>;
-
-/**
- * The coordinate a run counts its position in, the one rule every surface
- * reads through `RunView.position`. `turn` is one-based (the loop commits
- * `state.turn + 1`; the child loop counts its first turn as 1). A workflow
- * agent counts rounds, one per turn: its round index is the turn less one,
- * and a run that has not opened its first turn has none.
- */
-export function loopCoordinate(
-  turn: number,
-  category: AgentCategory,
-): LoopCoordinate | null {
-  if (category !== AgentCategory.Workflow) return { kind: 'turn', index: turn };
-  return turn > 0 ? { kind: 'round', index: turn - 1 } : null;
-}
-
-const RunViewCommonSchema = z.object({
+const RunViewSchema = z.object({
   /** The run id: the aggregate's logical id, minted once at launch. */
   id: RunIdSchema,
   /** From `run.start`; every run has one. */
@@ -171,12 +142,13 @@ const RunViewCommonSchema = z.object({
   runStartedAt: z.int().positive().nullable(),
   lastTimestamp: z.number().nullable(),
   conversationProgress: ConversationProgressSchema,
-  /** Where the run's loop stands, in the coordinate its category counts,
-   *  folded from its latest `run.position`. Null before the first position
-   *  and after every activation, and null for the whole life of a run with
-   *  no loop of its own — an agent-CLI child parks through `child.park`,
-   *  which carries a phase and no position. */
-  position: LoopCoordinateSchema.nullable(),
+  /** The run's one-based turn, folded from its latest `run.position`
+   *  (the loop commits `state.turn + 1`; the row's `round` counts model
+   *  calls, so no surface reads it). Null before the first position and
+   *  after every activation, and null for the whole life of a run with no
+   *  loop of its own — an agent-CLI child parks through `child.park`, which
+   *  carries a phase and no position. */
+  turn: z.int().nonnegative().nullable(),
   followUpSupport: UserFollowUpSupportSchema,
   /** Latest `context.state`. */
   context: ContextStateDataSchema.nullable(),
@@ -235,29 +207,11 @@ const RunViewCommonSchema = z.object({
    *  any other run's newest user instruction or settled model reply. */
   latestLine: z.string().nullable(),
   transcript: TranscriptViewSchema,
-  // Shared by both categories: `output.produced` carries the complete round
-  // collection for missing outputs and compile failures. A cold listing read
-  // delivers its newest row per run, yielding the same maps as full replay.
-
-  missingOutputs: RoundKeyedOutputSidecarValueSchemas.missingOutputs,
-  compileFailures: RoundKeyedOutputSidecarValueSchemas.compileFailures,
-});
-
-const ToolUseRunViewSchema = RunViewCommonSchema.extend({
-  category: z.literal(AgentCategory.ToolUse),
+  /** A document task's run: opened on its recipe (`run.config`), it
+   *  revises files and takes no messages. */
+  documentTask: z.boolean(),
   plan: PlanSchema.nullable(),
-  outputs: RoundKeyedOutputSidecarValueSchemas.outputFiles,
 });
-
-const WorkflowRunViewSchema = RunViewCommonSchema.extend({
-  category: z.literal(AgentCategory.Workflow),
-  files: RoundKeyedOutputSidecarValueSchemas.outputFiles,
-});
-
-const RunViewSchema = z.discriminatedUnion('category', [
-  ToolUseRunViewSchema,
-  WorkflowRunViewSchema,
-]);
 export type RunView = z.infer<typeof RunViewSchema>;
 
 /**

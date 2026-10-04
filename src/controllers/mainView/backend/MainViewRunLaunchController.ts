@@ -7,6 +7,7 @@ import {
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 
 // Local imports - team launch
+import { documentTaskConfig } from '@agent/output/documentRecipe';
 import {
   formatTeamLaunchBlockedMessage,
   formatUnknownTeamMessage,
@@ -21,11 +22,11 @@ import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import type { StateReadFailed, StateStore } from '@platform/interfaces';
 import type { AgentCatalogServices } from '@platform/processRuntime';
 import {
-  AgentCategory,
   DEFAULT_TOOL_CONFIG,
   ToolConfigSchema,
   type AgentDelegationScope,
   type RunId,
+  type SessionType,
 } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { Rejected } from '@shared/session/requestErrors';
@@ -44,7 +45,7 @@ function buildLaunchRequest(
   launch: LaunchRequest['launch'],
   instruction: string,
   agent: string,
-  agentCategory: AgentCategory,
+  sessionType: SessionType,
   /** The session's storage root, under which its pasted images live. */
   storageRoot: string,
   team?: {
@@ -52,8 +53,8 @@ function buildLaunchRequest(
     readonly cli: { readonly teamId: string };
   },
 ): LaunchPreparation {
-  const isToolUse = agentCategory === AgentCategory.ToolUse;
-  if (!isToolUse && launch.inputFiles.length === 0) {
+  const task = sessionType === 'task';
+  if (task && launch.inputFiles.length === 0) {
     return {
       valid: false,
       message: 'Choose an input file first.',
@@ -61,9 +62,9 @@ function buildLaunchRequest(
     };
   }
 
-  const toolConfigResult = isToolUse
-    ? { success: true as const, data: DEFAULT_TOOL_CONFIG }
-    : ToolConfigSchema.safeParse(launch);
+  const toolConfigResult = task
+    ? ToolConfigSchema.safeParse(launch)
+    : { success: true as const, data: DEFAULT_TOOL_CONFIG };
   if (!toolConfigResult.success) {
     const issue = toolConfigResult.error.issues[0];
     const path = issue?.path.join('.') || 'toolConfig';
@@ -73,29 +74,30 @@ function buildLaunchRequest(
     };
   }
 
+  const config = {
+    agent,
+    model: launch.model,
+    instruction,
+    workingDirectory: launch.workingDirectory.trim() || undefined,
+    inputFiles: launch.inputFiles,
+    contextFiles: launch.contextFiles,
+    ...(team
+      ? {
+          delegationAgentScope: team.delegationAgentScope,
+          cli: { teamId: team.cli.teamId },
+        }
+      : {}),
+    // A task's output paths are implicit in the input list. Its definition
+    // may still declare generated filenames (`task.outputs`).
+    outputFiles: [],
+    toolConfig: toolConfigResult.data,
+    mediaFiles: launch.mediaFiles.map((file) =>
+      isPastedImage(file) ? pastedImageFullPath(storageRoot, file) : file,
+    ),
+  };
+  // A document task runs its agent's recipe over the files.
   const validation = validateRunRequest({
-    config: {
-      agent,
-      model: launch.model,
-      instruction,
-      workingDirectory: launch.workingDirectory.trim() || undefined,
-      inputFiles: launch.inputFiles,
-      contextFiles: launch.contextFiles,
-      agentCategory,
-      ...(team
-        ? {
-            delegationAgentScope: team.delegationAgentScope,
-            cli: { teamId: team.cli.teamId },
-          }
-        : {}),
-      // Workflow output paths are implicit in the input list. Agent settings
-      // may still declare generated filenames later during prompt rendering.
-      outputFiles: [],
-      toolConfig: toolConfigResult.data,
-      mediaFiles: launch.mediaFiles.map((file) =>
-        isPastedImage(file) ? pastedImageFullPath(storageRoot, file) : file,
-      ),
-    },
+    config: task ? documentTaskConfig(config) : config,
   });
 
   if (!validation.valid) {
@@ -195,7 +197,7 @@ export function prepareSurfaceLaunch(
                 launch,
                 instruction,
                 resolution.fields.agent,
-                AgentCategory.ToolUse,
+                'chat',
                 storageRoot,
                 resolution.fields,
               );

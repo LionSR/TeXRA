@@ -1547,13 +1547,11 @@ const hostSnapshot = {
     initials: 'PR',
     subtitle: SESSION_KEY,
   },
-  agentOptions: {
-    toolUse: [
-      { value: 'orchestrator', label: 'orchestrator' },
-      { value: 'research', label: 'research' },
-    ],
-    workflow: [{ value: 'correct', label: 'correct' }],
-  },
+  agentOptions: [
+    { value: 'orchestrator', label: 'orchestrator' },
+    { value: 'research', label: 'research' },
+    { value: 'correct', label: 'correct', rounds: 1 },
+  ],
   modelOptions: [
     { value: 'deepseek/deepseek-flash', label: 'DeepSeek V4 Flash' },
   ],
@@ -1600,7 +1598,6 @@ function startRun(log, { runId, agent, at, parentRunId }) {
   log.emit(runId, at, {
     type: 'run.start',
     identity: { kind: 'agent', agent },
-    category: 'toolUse',
     isRemote: false,
     userFollowUpSupport: 'nativeInteractive',
     approvalPolicy: {
@@ -1620,13 +1617,11 @@ function startRun(log, { runId, agent, at, parentRunId }) {
   });
   log.emit(runId, at, {
     type: 'run.activate',
-    category: 'toolUse',
     isRemote: false,
   });
   log.emit(runId, at, {
     type: 'run.config',
     config: {
-      agentCategory: 'toolUse',
       model: 'deepseek/deepseek-flash',
       agent,
       inputFiles: ['main.tex'],

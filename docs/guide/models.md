@@ -149,7 +149,7 @@ developers.
 | `xai/grok-4.7` | Reasoning + vision | $$$  | Medium |
 
 Direct xAI models (API key or Grok subscription) use xAI's Responses API. xAI
-keeps each response for 30 days, so a tool-use round sends only the new turn
+keeps each response for 30 days, so each model request in a chat sends only what is new
 rather than the whole conversation.
 
 Every direct provider route uses its vendor's Responses API (or Anthropic's

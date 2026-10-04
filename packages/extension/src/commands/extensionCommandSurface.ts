@@ -49,8 +49,7 @@ export function createExtensionCommandActions(
   session: SessionHandle,
 ): ExtensionCommandActions {
   return {
-    showSettings: (tab, agentSubTab) =>
-      settingsViewProvider.showSettingsView(tab, agentSubTab),
+    showSettings: (tab) => settingsViewProvider.showSettingsView(tab),
     // New Task is the header's "+" (PRD 12.4): the New-task state into
     // view with the launcher's selections as they are.
     newTask: () => progressViewProvider.showLauncher(),

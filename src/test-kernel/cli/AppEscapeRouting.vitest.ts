@@ -28,7 +28,6 @@ import {
   actOnSurface,
 } from '@cli/chat/tui/state/cliState';
 import {
-  AgentCategory,
   RUN_PHASE,
   USER_FOLLOW_UP_SUPPORT,
   type RunId,
@@ -98,12 +97,7 @@ function clearSeededRequests(): void {
   seededRequests = [];
   syncSeededView();
 }
-function seedRun(
-  id: RunId,
-  over: Partial<Omit<RunView, 'category'>> & {
-    readonly category?: RunView['category'];
-  } = {},
-): void {
+function seedRun(id: RunId, over: Partial<RunView> = {}): void {
   const current = seeded.get(id);
   seeded.set(id, makeRunView({ ...(current ?? {}), ...over, id }) as RunView);
   syncSeededView();
@@ -123,15 +117,15 @@ function seedRunMeta(
   meta: {
     identity?: RunView['identity'];
     userFollowUpSupport?: RunView['followUpSupport'];
-    agentCategory?: RunView['category'];
+    documentTask?: boolean;
   },
 ): void {
   seedRun(runId, {
     identity: meta.identity,
     followUpSupport:
       meta.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-    ...(meta.agentCategory !== undefined
-      ? { category: meta.agentCategory }
+    ...(meta.documentTask !== undefined
+      ? { documentTask: meta.documentTask }
       : {}),
   });
 }
@@ -140,7 +134,6 @@ function markToolUseAgent(...runIds: RunId[]): void {
     seedRunMeta(runId, {
       identity: { kind: 'agent', agent: 'child' },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-      agentCategory: AgentCategory.ToolUse,
     });
   }
 }
@@ -516,9 +509,6 @@ describe('App foreground Escape ownership', () => {
 
       seedRunMeta(CHILD, {
         identity: { kind: 'process', tool: 'bash' },
-        // Background Bash carries this synthetic category; identity remains
-        // authoritative for the composer capability.
-        agentCategory: AgentCategory.ToolUse,
       });
       focusRun(CHILD);
       await waitFor(() => selectedRunId.get() === CHILD);
@@ -616,25 +606,22 @@ describe('App foreground Escape ownership', () => {
       name: 'structured single-cycle workflow call',
       identity: { kind: 'agent' as const, agent: 'structured-child' },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      agentCategory: AgentCategory.ToolUse,
     },
     {
-      name: 'workflow agent',
+      name: 'document task',
       identity: { kind: 'agent' as const, agent: 'workflow-child' },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      agentCategory: AgentCategory.Workflow,
+      documentTask: true,
     },
     {
       name: 'background script',
       identity: { kind: 'script' as const, title: 'workflow-child' },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      agentCategory: AgentCategory.ToolUse,
     },
     {
       name: 'background bash process',
       identity: { kind: 'process' as const, tool: 'bash' },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      agentCategory: AgentCategory.ToolUse,
     },
     {
       name: 'terminal-backed agent',
@@ -644,13 +631,11 @@ describe('App foreground Escape ownership', () => {
         tool: 'codex',
       },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
-      agentCategory: AgentCategory.ToolUse,
     },
     {
       name: 'missing metadata',
       identity: undefined,
       userFollowUpSupport: undefined,
-      agentCategory: undefined,
     },
   ])(
     'ignores printable submission for a running $name child',
@@ -659,7 +644,7 @@ describe('App foreground Escape ownership', () => {
       seedRunMeta(CHILD, {
         identity: fixture.identity,
         userFollowUpSupport: fixture.userFollowUpSupport,
-        agentCategory: fixture.agentCategory,
+        documentTask: fixture.documentTask,
       });
       focusRun(CHILD);
       const onSubmit = vi.fn();

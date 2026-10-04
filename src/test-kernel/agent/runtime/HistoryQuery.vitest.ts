@@ -66,13 +66,12 @@ describe('HistoryQuery', () => {
           {
             type: 'run.activate',
             aggregateId: run(runId),
-            category: 'toolUse',
           },
           {
             type: 'run.end',
             aggregateId: run(runId),
             outcome: 'failed',
-            output: emptyRunEndOutput('toolUse'),
+            output: emptyRunEndOutput(),
           },
         ]);
         const ended = yield* query(
@@ -86,7 +85,6 @@ describe('HistoryQuery', () => {
           {
             type: 'run.activate',
             aggregateId: run(runId),
-            category: 'toolUse',
           },
         ]);
         const resumed = yield* query(

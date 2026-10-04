@@ -2,12 +2,12 @@ import { Deferred, Effect, Fiber } from 'effect';
 import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import type { ToolUseRunEndResult } from '@agent/runtime/RunEndResult';
+import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
-import { AgentCategory, aggregateId, RUN_OUTCOME } from '@shared/schemas';
+import { aggregateId, RUN_OUTCOME } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
   DatabaseReadFailed,
@@ -69,10 +69,10 @@ vi.mock('@agent/runtime/runClassification', async (importActual) => ({
 }));
 
 const RUN = 'aabbcc' as RunId;
-const completed: ToolUseRunEndResult = {
+const completed: RunEndResult = {
   outcome: RUN_OUTCOME.COMPLETED,
   runId: RUN,
-  output: { category: 'toolUse', response: 'done', files: [] },
+  output: { response: 'done', files: [] },
 };
 
 function snapshot() {
@@ -413,29 +413,25 @@ describe('resumeRun tool-use queue ownership', () => {
     }),
   );
 
-  it.effect('keeps a woken input on the rows for workflow records', () =>
-    Effect.gen(function* () {
-      const session = yield* createSession();
-      expect(
-        yield* session.followUps.send(
-          RUN,
-          { from: { kind: 'user' as const }, text: 'workflow input' },
-          { wake: true },
-        ),
-      ).toEqual({ kind: 'queued', read: false, wake: true });
-      readConfigMock.mockReturnValueOnce(
-        Effect.succeed({
-          ...snapshot().agentConfig,
-          agentCategory: AgentCategory.Workflow,
-        }),
-      );
-      retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
+  it.effect(
+    'keeps a woken input on the rows when nothing remains to resume',
+    () =>
+      Effect.gen(function* () {
+        const session = yield* createSession();
+        expect(
+          yield* session.followUps.send(
+            RUN,
+            { from: { kind: 'user' as const }, text: 'workflow input' },
+            { wake: true },
+          ),
+        ).toEqual({ kind: 'queued', read: false, wake: true });
+        retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
 
-      expect(yield* resumeOne(RUN, { session })).toEqual({
-        failed: 'finished',
-      });
-      expect(yield* queuedTexts(session)).toEqual(['workflow input']);
-    }),
+        expect(yield* resumeOne(RUN, { session })).toEqual({
+          failed: 'finished',
+        });
+        expect(yield* queuedTexts(session)).toEqual(['workflow input']);
+      }),
   );
 
   it.effect('refuses with `finished` when no checkpoint remains', () =>

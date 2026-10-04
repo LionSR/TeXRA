@@ -9,31 +9,25 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { agentKey, type AgentSource } from '@shared/schemas';
+import { agentKey } from '@shared/schemas';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 
 import { changedBuiltInOf, getAgent } from './agentRegistry';
-import { builtInToolUseRoots } from './BundledAgentDirectories';
 
 /**
  * Where the copy of the bundled definition at `entryPath` lands: the same
- * relative path under `customDir`, or undefined when that escapes it. A tool
- * plugin's bundled tool-use agent sits in its own root, not under the core
- * source directory, so it is relativized against the root that holds it.
+ * path, relative to the source root that holds it (`agentSourceRoots`),
+ * under `customDir`, or undefined when that escapes it.
  */
 export function customCopyPath(input: {
   readonly entryPath: string;
-  readonly source: AgentSource;
-  readonly sourceDir: string | undefined;
+  readonly sourceRoots: readonly string[];
   readonly customDir: string;
 }): string | undefined {
-  const { entryPath, sourceDir, customDir } = input;
-  const sourceRoot =
-    sourceDir && input.source === 'builtInToolUse'
-      ? (builtInToolUseRoots(sourceDir).find((root) =>
-          isStrictlyWithin(root, entryPath),
-        ) ?? sourceDir)
-      : sourceDir;
+  const { entryPath, customDir } = input;
+  const sourceRoot = input.sourceRoots.find((root) =>
+    isStrictlyWithin(root, entryPath),
+  );
   const targetPath = path.join(
     customDir,
     sourceRoot

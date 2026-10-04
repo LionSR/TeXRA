@@ -10,7 +10,6 @@ import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
-import { AgentCategory } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
@@ -106,7 +105,7 @@ describe('bindModel', () => {
               modelId,
               config: selected.config,
               stores: hostStores(),
-              agentCategory: AgentCategory.Workflow,
+              textOnly: true,
               temperature: 0,
             }),
           ),

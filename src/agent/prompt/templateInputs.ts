@@ -402,7 +402,7 @@ const getFileVars = Effect.fn('userVars.getFileVars')(function* (
     }
 
     // The rows use the read that fills the list vars and the primary pair.
-    // Tool-use agents get no card, nor do media files (no user vars).
+    // Only a document task's files get a card; media files never do (no user vars).
     const cardLabel = FILE_CATEGORY_CARD_LABEL[prefix];
     if (cardLabel != null && documentTask) {
       const readableSet = new Set(readableFiles);

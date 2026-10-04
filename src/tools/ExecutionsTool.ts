@@ -28,7 +28,6 @@ import { scriptRunCalls } from '@agent/runtime/scriptRun';
 import { HISTORY_VIEW_SUMMARY } from '@agent/runtime/historyQuery/views';
 import { StorageFs } from '@platform/rootedFs';
 import {
-  AgentCategory,
   RunIdSchema,
   ToolError,
   type RunId,
@@ -397,7 +396,7 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
   // the child-run loop delivered it (a background bash run included).
   const suppressReport =
     options.suppressAutoDeliveredSubagentReport === true &&
-    run.category === AgentCategory.ToolUse &&
+    run.identity.kind === 'agent' &&
     context.runId !== undefined &&
     run.parentId === context.runId &&
     (yield* Runs).getHandle(runId) !== undefined;

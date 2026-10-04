@@ -274,7 +274,7 @@ export function formatSubagentProgress(
 /**
  * What a child-run delivery says, without its envelope: a result's
  * `<response>` or an error's `<message>`, decoded, else the envelope's
- * one-line summary (`summarizeSubagentFollowup`), as for a workflow agent's
+ * one-line summary (`summarizeSubagentFollowup`), as for a document task's
  * result that lists only its files. Undefined for any text that is not a
  * result or error envelope. The one reading every surface uses to show an
  * `agent` call's answer, so no host prints the delivery XML.

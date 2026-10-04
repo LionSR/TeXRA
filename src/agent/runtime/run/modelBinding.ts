@@ -41,7 +41,6 @@ import type { CopilotModelRoute } from '@model/copilotRouting';
 import { longRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
 import { LanguageModel } from '@platform/languageModel';
 import {
-  AgentCategory,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   type DeclinableUsageRoute,
   type ModelBackend,
@@ -93,9 +92,11 @@ export interface BoundModel {
    *  with the binding: the invoker takes it from here, and a rebind (a
    *  manual retry, a model switch, a resume) reads it again. */
   readonly automaticRetries: number;
+  /** Bound for a text-only persona; a rebinding keeps it. */
+  readonly textOnly: boolean;
 }
 
-interface BindModelInput {
+interface BindModelInput extends Pick<BoundModel, 'textOnly'> {
   /** The run's model string, as stored; it also carries the effort, thinking and mode asked for. */
   readonly modelId: string;
   /** The config to bind: a route's overlay, else the catalog entry the model string names. */
@@ -108,7 +109,6 @@ interface BindModelInput {
   readonly ownApiKeyFallback?: boolean;
   /** Declined routes persist on this run's history, not in user preferences. */
   readonly declinedRoutes?: readonly DeclinableUsageRoute[];
-  readonly agentCategory: AgentCategory;
   /** The route default's temperature. */
   readonly temperature: number;
 }
@@ -157,12 +157,12 @@ export const backgroundDelivery = Effect.fn('backgroundDelivery')(function* (
     readonly backgroundCapable: boolean;
     readonly protocol: ModelOrigin['protocol'];
     readonly modelName: string;
-    readonly agentCategory: AgentCategory;
+    readonly textOnly: boolean;
   },
   stores: SettingsStores,
 ) {
   if (!bound.backgroundCapable) return false;
-  if (bound.agentCategory !== AgentCategory.Workflow) return false;
+  if (!bound.textOnly) return false;
   if (bound.protocol === 'google-interactions') {
     return yield* readSettingFrom<boolean>(
       stores,
@@ -185,7 +185,7 @@ const bindEditorModel = Effect.fn('bindEditorModel')(function* (
   backend: ModelBackend,
   route: CopilotModelRoute,
   reasoning: ReasoningChoice,
-  automaticRetries: number,
+  binding: Pick<BoundModel, 'automaticRetries' | 'textOnly'>,
 ): Effect.fn.Return<BoundModel, Error, Scope.Scope | LanguageModel> {
   const editor = yield* LanguageModel;
   // The discovered route carries the editor's own context ceiling and the
@@ -229,7 +229,7 @@ const bindEditorModel = Effect.fn('bindEditorModel')(function* (
     ),
     backgroundCapable: false,
     persistentConnection: false,
-    automaticRetries,
+    ...binding,
   };
 });
 
@@ -258,6 +258,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
     stores,
     MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
   );
+  const binding = { automaticRetries, textOnly: input.textOnly };
   // The wire identity the preference promises, applied to the bound config;
   // a request in a provider mode (OpenAI `pro`) keeps the pinned id.
   const requested =
@@ -285,7 +286,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
         protocol,
         codexSubscription: false,
       }),
-      automaticRetries,
+      binding,
     );
   }
   if (protocol === 'validation') {
@@ -310,7 +311,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
       ...routeKeys([requested.provider, 'validation'], requested.id),
       backgroundCapable: false,
       persistentConnection: false,
-      automaticRetries,
+      ...binding,
     };
   }
   if (
@@ -350,13 +351,12 @@ export const bindModel = Effect.fn('bindModel')(function* (
         : { kind: 'api-key', apiKey: routeBearer(credential) },
     billing: credential.usageRoute,
     options: {
-      maxOutputTokens:
-        input.agentCategory === AgentCategory.ToolUse
-          ? Math.max(
-              1,
-              Math.floor(config.maxOutputTokens * TOOL_USE_MAX_OUTPUT_FACTOR),
-            )
-          : config.maxOutputTokens,
+      maxOutputTokens: input.textOnly
+        ? config.maxOutputTokens
+        : Math.max(
+            1,
+            Math.floor(config.maxOutputTokens * TOOL_USE_MAX_OUTPUT_FACTOR),
+          ),
       temperature: input.temperature,
       reasoning,
       parallelToolCalls: yield* readSettingFrom<boolean>(
@@ -386,7 +386,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
           backgroundCapable: true,
           protocol,
           modelName: config.id,
-          agentCategory: input.agentCategory,
+          textOnly: input.textOnly,
         },
         stores,
       ),
@@ -422,6 +422,6 @@ export const bindModel = Effect.fn('bindModel')(function* (
     ),
     backgroundCapable: bound.background,
     persistentConnection: bound.persistentConnection,
-    automaticRetries,
+    ...binding,
   };
 });

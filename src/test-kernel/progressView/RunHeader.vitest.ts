@@ -4,12 +4,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import type { RunHeader } from '@progressView/frontend/components/RunHeader';
 import { ELEMENT_IDS } from '@progressView/frontend/constants';
-import {
-  AgentCategory,
-  RUN_PHASE,
-  RUN_SUBSTATE,
-  type RunId,
-} from '@shared/schemas';
+import { RUN_PHASE, RUN_SUBSTATE, type RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { runActions } from '@shared/session/runActions';
 import type { SessionView, RunView } from '@shared/session/sessionView';
@@ -109,8 +104,7 @@ describe('run-header over the fold', () => {
       const fields = {
         ...root,
         identity: { kind: 'agent', agent: 'correct' },
-        category: AgentCategory.Workflow,
-        files: {},
+        documentTask: true,
         ...over,
       } as RunView;
       const { element } = await mountHeader(view, {

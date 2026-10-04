@@ -11,13 +11,11 @@ import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
 import { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
-  AGENT_CATEGORIES,
   agentKeyOf,
   agentMatchesIdentifier,
-  byCategory,
   parseAgentModePresets,
 } from '@shared/schemas';
-import type { AgentCategory, AgentModePreset } from '@shared/schemas';
+import type { AgentModePreset } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
 /** The catalog consumes the native agent list and the same entry lookup. */
@@ -25,37 +23,33 @@ type SettingsAgentCatalogEntry = ReturnType<
   ConstructorParameters<typeof SettingsAgentCatalogController>[0]['getAgents']
 >[0];
 
-const AGENTS: Record<AgentCategory, SettingsAgentCatalogEntry[]> = {
-  workflow: [
-    {
-      source: 'plugin',
-      name: 'writer',
-      category: 'workflow',
-      description: 'Plugin writer',
-    },
-    {
-      source: 'builtInWorkflow',
-      name: 'correct',
-      category: 'workflow',
-      path: '/agents/correct.yaml',
-    },
-  ],
-  toolUse: [
-    {
-      source: 'builtInToolUse',
-      name: 'review',
-      category: 'toolUse',
-      path: '/tools/review.yaml',
-      tools: ['grep'],
-    },
-    {
-      source: 'custom',
-      name: 'customTool',
-      category: 'toolUse',
-      path: '/custom/customTool.yaml',
-    },
-  ],
-};
+const AGENTS: SettingsAgentCatalogEntry[] = [
+  {
+    source: 'plugin',
+    name: 'writer',
+    task: null,
+    description: 'Plugin writer',
+  },
+  {
+    source: 'builtIn',
+    name: 'correct',
+    task: null,
+    path: '/agents/correct.yaml',
+  },
+  {
+    source: 'builtIn',
+    name: 'review',
+    task: null,
+    path: '/tools/review.yaml',
+    tools: ['grep'],
+  },
+  {
+    source: 'custom',
+    name: 'customTool',
+    task: null,
+    path: '/custom/customTool.yaml',
+  },
+];
 
 // Raw persisted records that fail current validation but must survive
 // save/delete round-trips untouched.
@@ -64,62 +58,42 @@ const LEGACY_ICON_PRESET = {
   name: 'Legacy Team',
   description: 'test',
   icon: 'future-icon',
-  agents: {
-    workflow: [],
-    toolUse: ['review'],
-  },
+  agents: ['review'],
 };
 const MALFORMED_PRESET = { id: 'broken' };
 
 function createController(options?: {
-  agents?: Partial<Record<AgentCategory, SettingsAgentCatalogEntry[]>>;
-  enabled?: Partial<Record<AgentCategory, string[] | undefined>>;
-  visible?: Partial<Record<AgentCategory, SettingsAgentCatalogEntry[]>>;
+  agents?: SettingsAgentCatalogEntry[];
+  visible?: SettingsAgentCatalogEntry[];
   customPresets?: unknown;
   now?: number;
 }) {
+  const getAgents = () => options?.agents ?? AGENTS;
   const workspaceState = new FakeStateStore({
     [WorkspaceStateKey.CUSTOM_TEAMS]: options?.customPresets ?? [],
-    ...(options?.enabled || options?.visible
-      ? {
-          [WorkspaceStateKey.WORKSPACE_AGENTS]: {
-            kind: 'custom',
-            agentKeys: byCategory(
-              (category) =>
-                options.visible?.[category]?.map(agentKeyOf) ??
-                options.enabled?.[category] ??
-                'all',
-            ),
-          },
-        }
-      : {}),
     // A `visible` agent list is the user's choice: the custom agents it leaves out
     // were turned off.
     ...(options?.visible
       ? {
-          [WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS]: AGENT_CATEGORIES.flatMap(
-            (category) =>
-              (options.agents?.[category] ?? AGENTS[category])
-                .filter(
-                  (entry) =>
-                    entry.source === 'custom' &&
-                    !options.visible?.[category]?.includes(entry),
-                )
-                .map(agentKeyOf),
-          ),
+          [WorkspaceStateKey.WORKSPACE_AGENTS]: {
+            kind: 'custom',
+            agentKeys: options.visible.map(agentKeyOf),
+          },
+          [WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS]: getAgents()
+            .filter(
+              (entry) =>
+                entry.source === 'custom' && !options.visible?.includes(entry),
+            )
+            .map(agentKeyOf),
         }
       : {}),
   });
-  const getAgents = (category: AgentCategory) =>
-    options?.agents?.[category] ?? AGENTS[category];
   const workspaceAgents = new WorkspaceAgentsController({
     repoState: workspaceState,
     globalState: new FakeStateStore(),
     getAgents,
-    resolveAgent: (category, identifier) =>
-      getAgents(category).find((entry) =>
-        agentMatchesIdentifier(entry, identifier),
-      ),
+    resolveAgent: (identifier) =>
+      getAgents().find((entry) => agentMatchesIdentifier(entry, identifier)),
     getPresets: () =>
       workspaceState
         .get(WorkspaceStateKey.CUSTOM_TEAMS)
@@ -151,10 +125,7 @@ describe('SettingsAgentCatalogController', () => {
           name: 'Custom Team',
           description: 'test',
           icon: 'bookmark',
-          agents: {
-            workflow: ['writer'],
-            toolUse: ['review', 'missing'],
-          },
+          agents: ['writer', 'review', 'missing'],
         };
         const { workspaceAgents, workspaceState } = createController({
           customPresets: [persistedPreset],
@@ -168,15 +139,10 @@ describe('SettingsAgentCatalogController', () => {
           icon: 'bookmark',
           source: 'custom',
         });
-        assert.deepEqual(resolved.resolution.missingAgents, {
-          workflow: [],
-          toolUse: ['missing'],
-        });
-        assert.deepEqual(resolved.resolution.agentKeys.workflow, [
+        assert.deepEqual(resolved.resolution.missingAgents, ['missing']);
+        assert.deepEqual(resolved.resolution.agentKeys, [
           'plugin:writer',
-        ]);
-        assert.deepEqual(resolved.resolution.agentKeys.toolUse, [
-          'builtInToolUse:review',
+          'builtIn:review',
         ]);
 
         // The commit stores the team reference, not a frozen key snapshot: the
@@ -193,19 +159,17 @@ describe('SettingsAgentCatalogController', () => {
     () =>
       Effect.gen(function* () {
         const delegating = (name: string): SettingsAgentCatalogEntry => ({
-          source: 'builtInToolUse',
+          source: 'builtIn',
           name,
-          category: 'toolUse',
+          task: null,
           tools: ['agent'],
         });
         const { controller } = createController({
-          agents: {
-            toolUse: [delegating('engineer'), delegating('leanOrchestrator')],
-          },
+          agents: [delegating('engineer'), delegating('leanOrchestrator')],
         });
 
         assert.equal(
-          yield* controller.getPresetToolUseRoot([
+          yield* controller.getPresetRoot([
             'nonOrchestratorHelper',
             'engineer',
             'leanOrchestrator',
@@ -213,7 +177,7 @@ describe('SettingsAgentCatalogController', () => {
           'engineer',
         );
         assert.equal(
-          yield* controller.getPresetToolUseRoot([
+          yield* controller.getPresetRoot([
             'nonOrchestratorHelper',
             'leanOrchestrator',
           ]),
@@ -229,23 +193,23 @@ describe('SettingsAgentCatalogController', () => {
         const delegatingLean: SettingsAgentCatalogEntry = {
           source: 'plugin',
           name: 'lean',
-          category: 'toolUse',
+          task: null,
           tools: ['agent'],
         };
         const orchestrator: SettingsAgentCatalogEntry = {
-          source: 'builtInToolUse',
+          source: 'builtIn',
           name: 'orchestrator',
-          category: 'toolUse',
+          task: null,
           tools: ['agent'],
         };
         const { controller } = createController({
-          agents: { toolUse: [delegatingLean, orchestrator] },
+          agents: [delegatingLean, orchestrator],
         });
         const mathematician = findTeamPreset(teamPresets([]), 'mathematician');
         assert.ok(mathematician);
 
-        const preview = yield* controller.getPresetToolUseRoot(
-          mathematician.agents.toolUse,
+        const preview = yield* controller.getPresetRoot(
+          mathematician.agents,
           mathematician.id,
         );
 
@@ -255,7 +219,7 @@ describe('SettingsAgentCatalogController', () => {
         assert.equal(
           preview,
           planTeamRun(mathematician, {
-            resolveAgent: (_category, identifier) =>
+            resolveAgent: (identifier) =>
               [delegatingLean, orchestrator].find((entry) =>
                 agentMatchesIdentifier(entry, identifier),
               ),
@@ -264,7 +228,7 @@ describe('SettingsAgentCatalogController', () => {
         // The same member list previewed ad-hoc keeps custom semantics and
         // picks the preset-order-first delegating member instead.
         assert.equal(
-          yield* controller.getPresetToolUseRoot(mathematician.agents.toolUse),
+          yield* controller.getPresetRoot(mathematician.agents),
           'lean',
         );
       }),
@@ -279,32 +243,24 @@ describe('SettingsAgentCatalogController', () => {
           name: 'Custom Team',
           description: 'test',
           icon: 'bookmark',
-          agents: {
-            workflow: [],
-            toolUse: ['teamLead', 'orchestrator'],
-          },
+          agents: ['teamLead', 'orchestrator'],
         };
         const { controller } = createController({
-          agents: {
-            toolUse: [
-              {
-                source: 'custom',
-                name: 'teamLead',
-                category: 'toolUse',
-                tools: ['agent'],
-              },
-            ],
-          },
+          agents: [
+            {
+              source: 'custom',
+              name: 'teamLead',
+              task: null,
+              tools: ['agent'],
+            },
+          ],
           customPresets: [customPreset],
         });
 
         // Preset order wins for custom teams, even over the built-in root the
         // member list names.
         assert.equal(
-          yield* controller.getPresetToolUseRoot(
-            customPreset.agents.toolUse,
-            'custom-team',
-          ),
+          yield* controller.getPresetRoot(customPreset.agents, 'custom-team'),
           'teamLead',
         );
       }),
@@ -314,10 +270,7 @@ describe('SettingsAgentCatalogController', () => {
     Effect.gen(function* () {
       const state = createController({
         now: 456,
-        visible: {
-          workflow: [AGENTS.workflow[1]],
-          toolUse: [AGENTS.toolUse[0]],
-        },
+        visible: [AGENTS[1], AGENTS[2]],
       });
 
       assert.deepEqual(
@@ -325,12 +278,9 @@ describe('SettingsAgentCatalogController', () => {
         {
           id: 'custom-456',
           name: 'My Team',
-          description: 'Custom team: review, correct',
+          description: 'Custom team: correct, review',
           icon: 'bookmark',
-          agents: {
-            workflow: ['correct'],
-            toolUse: ['review'],
-          },
+          agents: ['correct', 'review'],
         },
       );
       assert.equal((yield* state.customPresets).length, 1);
@@ -365,10 +315,7 @@ describe('SettingsAgentCatalogController', () => {
         name: 'Target',
         description: 'test',
         icon: 'bookmark',
-        agents: {
-          workflow: [],
-          toolUse: [],
-        },
+        agents: [],
       };
       const state = createController({
         customPresets: [target, LEGACY_ICON_PRESET, MALFORMED_PRESET],

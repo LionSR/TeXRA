@@ -7,11 +7,10 @@ import { Deferred, Effect, Fiber } from 'effect';
 import { describe, expect, onTestFinished, vi } from 'vitest';
 
 // Local imports
-import { ToolUseAgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import * as DesktopAgentLaunch from '@desktop/main/desktopAgentLaunch';
 import { createDesktopAgentRun } from '@desktop/main/desktopAgentRun';
 import {
-  AgentCategory,
   aggregateId,
   emptyRunEndOutput,
   RUN_OUTCOME,
@@ -34,7 +33,7 @@ function completedRunEnd(runId: RunId): SessionEventDraft {
     type: 'run.end',
     aggregateId: aggregateId('run', runId),
     outcome: RUN_OUTCOME.COMPLETED,
-    output: emptyRunEndOutput(AgentCategory.ToolUse),
+    output: emptyRunEndOutput(),
   };
 }
 
@@ -75,10 +74,9 @@ describe('desktop agent run completion hook', () => {
 
       const fiber = yield* Effect.forkChild(
         run.runValidated({
-          config: ToolUseAgentConfigSchema.parse({
+          config: AgentConfigSchema.parse({
             agent: 'proofreader',
             model: 'deepseek/deepseek-v4-pro',
-            agentCategory: AgentCategory.ToolUse,
           }),
         }),
         { startImmediately: true },

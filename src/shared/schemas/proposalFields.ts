@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-import { AgentCategory, AgentSourceSchema } from './agent';
-import { requiredFileListFields } from './fileFields';
+import { AgentSourceSchema } from './agent';
+import { NullableFileFieldsSchema } from './fileFields';
 import { ToolConfigSchema } from './toolConfig';
 
 export const BaseProposalFieldsSchema = z.object({
@@ -34,11 +34,11 @@ export const BaseProposalFieldsSchema = z.object({
     .nullish(),
 });
 
-const FileFieldsSchema = z.object(requiredFileListFields);
-
-export const WorkflowSpecificFieldsSchema = FileFieldsSchema.extend({
-  toolConfig: ToolConfigSchema,
-});
+/** A document task's files and the tool configuration its options give it;
+ *  empty on a chat delegation. */
+export const TaskProposalFieldsSchema = NullableFileFieldsSchema.omit({
+  editedFile: true,
+}).extend({ toolConfig: ToolConfigSchema });
 
 /** File fields shape consumed by {@link getProposalFileGroups} — the helper
  *  behind every proposal file list (tool-row model, ProposalRequestPanel,
@@ -80,10 +80,9 @@ export function getProposalFileGroups(data: FileFields): ProposalFileGroup[] {
   ].filter((g) => g.files.length > 0);
 }
 
-export function agentProposalCategoryLabel(
-  agentCategory: AgentCategory,
-): string {
-  return agentCategory === AgentCategory.Workflow
-    ? 'workflow agent'
-    : 'tool-use agent';
+/** What a proposal launches, as its approval copy names it. */
+export function agentProposalLabel(proposal: {
+  readonly task: boolean;
+}): string {
+  return proposal.task ? 'document task' : 'agent';
 }

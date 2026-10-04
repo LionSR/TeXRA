@@ -23,7 +23,6 @@ import type {
   SessionView,
   RunView,
 } from '@shared/session/sessionView';
-import { formatLoopPositionLabel } from '@shared/runs/runStatusDisplay';
 
 /** The bound bridge, itself a signal so a computed over the view (the
  *  approval Surface's foreground) re-tracks when a chat session rebinds. */
@@ -141,25 +140,4 @@ export function runningChildCount(
   return (run?.childIds ?? []).filter(
     (id) => view.runs.get(id)?.status === RUN_PHASE.RUNNING,
   ).length;
-}
-
-/**
- * The nearest ancestor's position, for a child's location: a workflow
- * ancestor's round off `RunView.position`. A tool-use ancestor's turn is no position of the child:
- * it keeps counting after the child started, and the child's row already
- * shows its own turn, so the header and the status bar would name a third
- * `tN` that disagrees with both.
- */
-export function ancestorPositionLabel(
-  view: SessionView,
-  runId: RunId,
-): string | undefined {
-  const ancestors = runViewOf(view, runId)?.ancestors ?? [];
-  // Root first in the view; the nearest ancestor that has a position wins.
-  for (const ancestor of ancestors.toReversed()) {
-    const run = runViewOf(view, ancestor.id);
-    if (run?.position?.kind === 'round')
-      return formatLoopPositionLabel(run.position);
-  }
-  return undefined;
 }

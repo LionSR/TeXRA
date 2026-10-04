@@ -15,7 +15,6 @@ import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import {
-  AgentCategory,
   emptyRunEndOutput,
   type OfferedTool,
   RUN_OUTCOME,
@@ -54,10 +53,9 @@ interface NativeSubagentStrategyBase extends ChildRunLaunchOptions {
   readonly runId: RunId;
   readonly startedAt: number;
   readonly workingDirectory?: string;
-  /** Omit for ordinary interactive delegation; durable calls end after one cycle. */
-  readonly runMode?: 'single-cycle';
-  /** Persist the typed result without constructing fallible prose delivery. */
-  readonly resultOnly?: boolean;
+  /** An awaited call's child: it ends after one cycle, and its typed result
+   *  is persisted without the prose delivery an interactive one gets. */
+  readonly inBand?: true;
 }
 
 type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
@@ -131,16 +129,13 @@ export function createNativeSubagentStrategy(
     // `logger.openStage` on `childRun`, which native delegation never
     // passes) — its only reader is the loop's non-throwing-failure message,
     // which becomes the persisted terminal `error.message` for the run
-    // record. Keep it category-derived so a failed workflow subagent's record
-    // never reads "tool-use".
+    // record.
     stageLabel:
-      config.agentCategory === AgentCategory.ToolUse
-        ? 'Native tool-use subagent'
-        : 'Native workflow subagent',
+      config.script == null ? 'Native subagent' : 'Native document task',
 
-    // A single-cycle child has no later turn to consume a follow-up delivery;
+    // An awaited child has no later turn to consume a follow-up delivery;
     // its awaiting caller reads the persisted report/result instead.
-    ...(params.runMode === 'single-cycle' && {
+    ...(params.inBand === true && {
       deliveryMode: 'persistOnly' as const,
     }),
 
@@ -178,9 +173,7 @@ export function createNativeSubagentStrategy(
               ...executeOptions,
               // The live handle owns this edge, including a later detach.
               parentRunId: params.parentRunId,
-              ...(params.runMode === 'single-cycle'
-                ? { stopAfterCycle: true }
-                : {}),
+              ...(params.inBand === true ? { stopAfterCycle: true } : {}),
             },
           );
           return turn;
@@ -189,8 +182,7 @@ export function createNativeSubagentStrategy(
 
     isTerminal: () => true,
     isTurnInterrupted: (turn) =>
-      params.runMode !== 'single-cycle' &&
-      turn.outcome === RUN_OUTCOME.CANCELLED,
+      params.inBand !== true && turn.outcome === RUN_OUTCOME.CANCELLED,
     isTurnError: (turn) => turn.error !== undefined,
 
     formatDelivery: Effect.fn('nativeSubagent.formatDelivery')(function* (
@@ -198,7 +190,7 @@ export function createNativeSubagentStrategy(
     ) {
       if (cachedDelivery === undefined) {
         const built = yield* buildResult(turn);
-        if (params.resultOnly) return '';
+        if (params.inBand === true) return '';
         // The formatter is the one fallible step left here, and its throw is
         // this turn's failure — not a defect — exactly as it was when the
         // loop adopted this method's rejected promise.
@@ -221,7 +213,7 @@ export function createNativeSubagentStrategy(
     }),
 
     formatError: (turn, err) => {
-      if (params.resultOnly) return '';
+      if (params.inBand === true) return '';
       const wallTimeMs = Date.now() - params.startedAt;
       const result = turn ?? lastResult;
       return formatSubagentError(
@@ -240,12 +232,12 @@ export function createNativeSubagentStrategy(
       Effect.gen(function* () {
         if (isError || turn === null) {
           // Overwrite any interim success manifest from an earlier turn: the
-          // failed run's own output, or its category's empty one when the
-          // turn produced none.
+          // failed run's own output, or an empty one when the turn produced
+          // none.
           const result = turn ?? lastResult;
           return buildSubagentResultMeta(
             config.agent,
-            result?.output ?? emptyRunEndOutput(config.agentCategory),
+            result?.output ?? emptyRunEndOutput(),
             Date.now() - params.startedAt,
           );
         }

@@ -17,7 +17,7 @@ import type { RunView } from '@shared/session/sessionView';
 import { type TeXRAIconName } from '@shared/iconNames';
 import { designTokens } from '@ui/styles';
 import { focusRingStyles } from '@ui/styles/controlStyles';
-import { AGENT_DECORATORS, getAgentCategoryDecorator } from '@ui/wa/icons';
+import { AGENT_DECORATORS, type RunDecorator } from '@ui/wa/icons';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -84,7 +84,7 @@ function rollupLabel(run: RunView): string {
 function runDecorator(run: RunView) {
   const kind = run.identity.kind;
   return kind === 'agent'
-    ? getAgentCategoryDecorator(run.category)
+    ? AGENT_DECORATORS.agentRuns[run.documentTask ? 'task' : 'chat']
     : AGENT_DECORATORS.streamKinds[kind];
 }
 
@@ -111,7 +111,7 @@ export class RunTab extends LitElement {
    *  `actions` hold `delete`. */
   @property({ type: Boolean }) removable = false;
 
-  private decorator = getAgentCategoryDecorator('toolUse');
+  private decorator: RunDecorator = AGENT_DECORATORS.agentRuns.chat;
 
   /** Focus lands on the row's select button: `run-tabs` hands focus to a
    *  neighbour after deleting the focused row. */

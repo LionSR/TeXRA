@@ -18,6 +18,7 @@ import {
 import { RUN_LOG_MAX_LINES } from '@agent/codeSandbox/limits';
 import { ToolCall, type ScriptCalls } from '@agent/runtime/ToolCall';
 import {
+  JsonValueSchema,
   ToolError,
   type ToolFileAttachment,
   type ToolResultPayload,
@@ -156,10 +157,8 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
   )
     return yield* launchBackgroundScript(
       toolCall,
-      SCRIPT_TOOL,
       {
         code: input.code,
-        ...(input.title != null && { title: input.title }),
         ...(input.timeoutMs != null && { timeoutMs: input.timeoutMs }),
       },
       input.title ?? 'Script',
@@ -283,6 +282,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
     );
   if (outcome._tag === 'EndedTurn') return outcome.result;
   const { value } = outcome.result;
+  const returned = JsonValueSchema.safeParse(value);
   const log = logTail();
   const foreground =
     input.run_in_background === true
@@ -299,6 +299,9 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
         : `Script finished: ${input.title}`,
     ),
     ...(files.length > 0 && { files }),
+    // Its return as data: what a script's run ends with (a document task's
+    // documents), journaled with the call.
+    ...(returned.success && { value: returned.data }),
   };
 });
 

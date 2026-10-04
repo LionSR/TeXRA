@@ -75,12 +75,9 @@ describe('setWorkspaceCliChatAgent', () => {
         const chatSection = () =>
           readSettingFrom(testWorkspaceRoots(), 'texra.chat');
 
-        yield* setWorkspaceCliChatAgent(
-          testWorkspaceRoots(),
-          'builtInToolUse:review',
-        );
+        yield* setWorkspaceCliChatAgent(testWorkspaceRoots(), 'builtIn:review');
         expect(yield* chatSection()).toEqual({
-          agent: 'builtInToolUse:review',
+          agent: 'builtIn:review',
           model: 'deepseek/deepseek-v4-flash',
         });
         expect(
@@ -104,13 +101,10 @@ describe('setWorkspaceCliChatAgent', () => {
         'global',
       );
 
-      yield* setWorkspaceCliChatAgent(
-        testWorkspaceRoots(),
-        'builtInToolUse:review',
-      );
+      yield* setWorkspaceCliChatAgent(testWorkspaceRoots(), 'builtIn:review');
 
       expect(config.inspect('texra.chat')?.workspaceValue).toEqual({
-        agent: 'builtInToolUse:review',
+        agent: 'builtIn:review',
       });
     }),
   );

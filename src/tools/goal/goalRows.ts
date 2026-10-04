@@ -11,7 +11,7 @@
 import { DateTime, Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { AgentCategory, type RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import {
   goalStateOf,
   goalStateRow,
@@ -33,7 +33,7 @@ type GoalReader = Pick<SessionHandle, 'runView'>;
 type GoalWriter = GoalReader & Pick<SessionHandle, 'commit'>;
 
 function goalOfRunView(runId: RunId, run: RunView | undefined): Goal | null {
-  if (run?.category !== AgentCategory.ToolUse) return null;
+  if (run === undefined) return null;
   const state = goalStateOf(run);
   if (!state.active) return null;
   const { active: _active, ...goal } = state;

@@ -81,7 +81,7 @@ const COPY_DIAGNOSTICS_ACTION: RunMenuAction = {
   label: TASK_ACTIONS.copyDiagnostics,
 };
 
-const WORKFLOW_ACTIONS: readonly RunMenuAction[] = [
+const TASK_RUN_ACTIONS: readonly RunMenuAction[] = [
   {
     id: ELEMENT_IDS.RUN_NEW_BTN,
     action: 'runNew',
@@ -115,7 +115,7 @@ const WORKFLOW_ACTIONS: readonly RunMenuAction[] = [
   },
 ];
 
-const TOOL_USE_ACTIONS: readonly RunMenuAction[] = [
+const CONVERSATION_RUN_ACTIONS: readonly RunMenuAction[] = [
   {
     id: ELEMENT_IDS.COMPACT_RESPONSE_BTN,
     action: 'compact',
@@ -128,15 +128,16 @@ const TOOL_USE_ACTIONS: readonly RunMenuAction[] = [
   COPY_DIAGNOSTICS_ACTION,
 ];
 
-export const RUN_MENU_ACTIONS = {
-  workflow: WORKFLOW_ACTIONS,
-  toolUse: TOOL_USE_ACTIONS,
-};
+/** An agent run's menu: a document task's, or a conversation's. */
+export function runMenuActions(
+  documentTask: boolean,
+): readonly RunMenuAction[] {
+  return documentTask ? TASK_RUN_ACTIONS : CONVERSATION_RUN_ACTIONS;
+}
 
 /**
- * Actions for a run with no known agent category — identity still pending,
- * or a non-agent run (process, multi-agent workflow container). Only the
- * category-neutral actions; never a fabricated category's chrome.
+ * Actions for a run that is not an agent's — identity still pending, or a
+ * process or multi-agent workflow container. Only the neutral actions.
  */
 export const NEUTRAL_RUN_ACTIONS: readonly RunMenuAction[] = [
   OPEN_RUN_STORAGE_ACTION,

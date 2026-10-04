@@ -50,7 +50,7 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import type { RunId } from '@shared/schemas';
-import { AgentCategory, RUN_PHASE } from '@shared/schemas';
+import { RUN_PHASE } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import {
@@ -221,9 +221,9 @@ export async function runChat(
         modelOverride: initialResume?.config.model ?? init.modelOverride,
         envAgent: context.envAgent,
         envModel: context.envModel,
-        visibleToolUseAgents: yield* getVisibleAgents(
-          services,
-          AgentCategory.ToolUse,
+        // The implicit chat default is a persona with no document task.
+        visibleToolUseAgents: (yield* getVisibleAgents(services)).filter(
+          (agent) => agent.task === null,
         ),
       });
       const agentEntry = yield* resolveChatToolUseAgent(

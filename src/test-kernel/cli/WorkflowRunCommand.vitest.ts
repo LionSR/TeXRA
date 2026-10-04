@@ -14,6 +14,7 @@ import { it } from '@effect/vitest';
 import { Cause, Effect, Exit, Result } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
 import { getRunRecords } from '@agent/storage';
+import { documentTaskConfig } from '@agent/output/documentRecipe';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { runHeadlessAgent } from '@cli/commands/workflow';
@@ -32,7 +33,6 @@ import {
   type RunSnapshotPayload,
   type RunId,
   type SessionEventDraft,
-  AgentCategory,
 } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
@@ -107,9 +107,7 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
 const { runHeadlessAgent: nativeRun } = await import('@cli/commands/workflow');
 
 type WorkflowRunInit = Parameters<typeof runHeadlessAgent>[1];
-type WorkflowExecuteResult = CliConfigExecuteResult<
-  typeof AgentCategory.Workflow
->;
+type WorkflowExecuteResult = CliConfigExecuteResult;
 type WorkflowRunPayload = Extract<
   WorkflowExecuteResult,
   { ok: true }
@@ -197,7 +195,10 @@ function workflowRun(
   runId: string,
   overrides: Partial<
     Pick<WorkflowRunPayload, 'outcome'> &
-      Pick<WorkflowRunPayload['output'], 'outputs' | 'compileFailures'>
+      Pick<
+        NonNullable<WorkflowRunPayload['output']['documents']>,
+        'outputs' | 'compileFailures'
+      >
   > = {},
 ): WorkflowExecuteResult {
   const { outcome = RUN_OUTCOME.COMPLETED, ...output } = overrides;
@@ -208,11 +209,14 @@ function workflowRun(
     result: {
       outcome,
       output: {
-        category: AgentCategory.Workflow,
-        outputs: [],
-        compileFailures: [],
-        diffs: [],
-        ...output,
+        response: '',
+        files: [],
+        documents: {
+          outputs: [],
+          compileFailures: [],
+          diffs: [],
+          ...output,
+        },
       },
       runId: runId as RunId,
     },
@@ -364,7 +368,6 @@ const seedStartedRun = (session: SessionHandle, runId: string) =>
         type: 'run.start',
         aggregateId: aggregateId('run', runId as RunId),
         identity: { kind: 'agent', agent: 'polish' },
-        category: AgentCategory.Workflow,
         userFollowUpSupport: 'unsupported',
         parent: null,
         provenance: null,
@@ -376,48 +379,18 @@ const seedStartedRun = (session: SessionHandle, runId: string) =>
 /**
  * The checkpoint the recovery hint reads. The claim stays with the fixture
  * session: a run being finalized is one its process still holds, and the
- * metadata write below it commits against that same claim. A `terminal`
- * checkpoint is a run whose loop halted FAILED on a compile rejection.
+ * metadata write below it commits against that same claim.
  */
-const seedResumableCheckpoint = (
-  session: SessionHandle,
-  runId: string,
-  terminal = false,
-) =>
+const seedResumableCheckpoint = (session: SessionHandle, runId: string) =>
   Effect.gen(function* () {
     yield* seedStartedRun(session, runId);
     yield* session.runHistory.acquire(runId as RunId);
-    const aggregate = aggregateId('run', runId as RunId);
     yield* session.runHistory.appendBatch(runId as RunId, null, [
       {
         type: 'run.snapshot',
-        aggregateId: aggregate,
+        aggregateId: aggregateId('run', runId as RunId),
         payload: workflowSnapshot(),
       },
-      ...(terminal
-        ? [
-            // The last round closed: the loop concluded, then halted.
-            {
-              type: 'run.position' as const,
-              aggregateId: aggregate,
-              payload: {
-                family: 'toolUse' as const,
-                at: 'turn.end' as const,
-                turn: 1,
-              },
-            },
-            {
-              type: 'run.position' as const,
-              aggregateId: aggregate,
-              payload: {
-                family: 'toolUse' as const,
-                at: 'halted' as const,
-                turn: 1,
-                outcome: RUN_OUTCOME.FAILED,
-              },
-            },
-          ]
-        : []),
     ]);
   });
 
@@ -463,10 +436,16 @@ describe('CLI run command, workflow agents', () => {
     mocks.resolveCliRunAgent.mockReturnValue(
       Effect.succeed({
         name: 'polish',
-        category: AgentCategory.Workflow,
-        source: 'builtInWorkflow',
+        source: 'builtIn',
         path: '/agents/polish.yaml',
         tools: [],
+        task: {
+          rewrite: true,
+          outputs: [],
+          files: {},
+          prefix: '',
+          requests: ['Polish the documents.'],
+        },
       }),
     );
     mocks.selectCliRunModel.mockImplementation(
@@ -534,7 +513,7 @@ describe('CLI run command, workflow agents', () => {
           : undefined;
         expect(defect).toBeInstanceOf(Error);
         expect((defect as Error).message).toContain(
-          'Use --output-dir for multi-input workflow runs; --output is only for a single final artifact.',
+          'Use --output-dir for multi-input document tasks; --output is only for a single final artifact.',
         );
 
         expect(cliInitPlatformMock.initCliPlatform).toHaveBeenCalled();
@@ -621,19 +600,6 @@ describe('CLI run command, workflow agents', () => {
           );
         }),
       ),
-  );
-
-  it.effect('enforces workflow results at the shared run boundary', () =>
-    Effect.gen(function* () {
-      mockWorkflowRun(workflowRun('abc001'));
-
-      const exitCode = yield* workflowProgram();
-
-      expect(exitCode).toBe(0);
-      expect(mocks.executeCliConfig.mock.calls[0]?.[2]).toMatchObject({
-        expectedCategory: AgentCategory.Workflow,
-      });
-    }),
   );
 
   it.effect(
@@ -833,7 +799,6 @@ describe('CLI run command, workflow agents', () => {
             type: 'run.start',
             aggregateId: aggregateId('run', run.result.runId),
             identity: { kind: 'agent', agent: 'polish' },
-            category: AgentCategory.Workflow,
             userFollowUpSupport: 'unsupported',
             parent: null,
             provenance: null,
@@ -1151,7 +1116,7 @@ describe('CLI run command, workflow agents', () => {
           const emission = mocks.emitCliResult.mock.calls[0]?.[1];
           expect(emission?.json).toMatchObject({
             outcome: RUN_OUTCOME.FAILED,
-            output: { outputs: [outputSummary] },
+            output: { documents: { outputs: [outputSummary] } },
             runDirectory: '/tmp/runs/abc00a',
           });
           expect(emission?.json).not.toHaveProperty('copiedOutput');
@@ -1407,35 +1372,6 @@ describe('CLI run command, workflow agents', () => {
   );
 
   it.effect(
-    'rejects recovery advertising for terminal unresolved compile rejection',
-    () =>
-      Effect.gen(function* () {
-        mockWorkflowRun(workflowRun('abc001'));
-        yield* seedResumableCheckpoint(currentSession(), 'abc001', true);
-        // The verdict is the rows', not the snapshot's: a second run whose
-        // loop did not conclude.
-        yield* seedResumableCheckpoint(currentSession(), 'abc002');
-
-        yield* workflowProgram();
-        const canAdvertise: CheckpointRefinement | undefined =
-          mocks.executeCliConfig.mock.calls[0]?.[2].canAdvertiseInterruptedRun;
-
-        expect(
-          yield* canAdvertise!(
-            { kind: 'checkpoint', snapshot: workflowSnapshot() },
-            'abc001' as RunId,
-          ),
-        ).toBe(false);
-        expect(
-          yield* canAdvertise!(
-            { kind: 'checkpoint', snapshot: workflowSnapshot() },
-            'abc002' as RunId,
-          ),
-        ).toBe(true);
-      }),
-  );
-
-  it.effect(
     'prints the durable shutdown hint once with the persisted workspace',
     () =>
       Effect.gen(function* () {
@@ -1482,12 +1418,11 @@ describe('CLI run command, workflow agents', () => {
         // commit; the session opens the run before finalization writes it.
         yield* seedStartedRun(session, 'abc010');
         const exitCode = yield* executeCliWorkflowConfig(
-          {
+          documentTaskConfig({
             agent: 'polish',
             model: 'deepseek/deepseek-v4-flash',
             workingDirectory: persistedWorkspace,
-            agentCategory: AgentCategory.Workflow,
-          },
+          }),
           context,
           {
             session: Effect.succeed(session),
@@ -1534,12 +1469,11 @@ describe('CLI run command, workflow agents', () => {
         // launch's `run.start` commit the mock boundary skips rides with it.
         yield* seedResumableCheckpoint(session, 'abc011');
         const exitCode = yield* executeCliWorkflowConfig(
-          {
+          documentTaskConfig({
             agent: 'polish',
             model: 'deepseek/deepseek-v4-flash',
             workingDirectory: stableWorkspace,
-            agentCategory: AgentCategory.Workflow,
-          },
+          }),
           context,
           {
             session: Effect.succeed(session),

@@ -12,7 +12,6 @@ import { Effect, Layer, Schedule, Stream, SubscriptionRef } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import {
-  AgentCategory,
   DEBUG_MODE_KEY,
   referencedAggregates,
   isDisplaySessionEvent,
@@ -285,7 +284,6 @@ function blockedInputs(verdicts: readonly BlockedAggregate[]): FoldInput[] {
               at: verdict.at,
               identity: { kind: 'agent', agent: 'unknown' },
               userFollowUpSupport: 'unsupported',
-              category: AgentCategory.ToolUse,
               parent: null,
               provenance: null,
             },

@@ -47,10 +47,7 @@ function renderLoadError(err: unknown): void {
  *  them all would label a tool-use turn with the round it never left. */
 function positionLabel(position: TracePosition): string {
   const { family, at, turn } = position.payload;
-  const where =
-    turn == null
-      ? undefined
-      : formatLoopPositionLabel({ kind: 'turn', index: turn });
+  const where = turn == null ? undefined : formatLoopPositionLabel(turn);
   return `${family} ${at}${where ? ` (${where})` : ''}`;
 }
 

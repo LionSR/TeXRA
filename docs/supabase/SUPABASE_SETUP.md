@@ -190,7 +190,7 @@ CREATE TABLE profiles (
 -- Remote agents metadata table
 -- visibility: array of group names that can access the agent (e.g., ARRAY['math', 'cs'])
 -- agent_category: 'workflow' (multi-turn) or 'toolUse' (single-turn with tools)
--- tools: cached tool names from YAML for tool-use agents (e.g., ARRAY['web_search', 'arxiv_search'])
+-- tools: cached tool names from YAML for agents that declare tools (e.g., ARRAY['web_search', 'arxiv_search'])
 CREATE TABLE remote_agents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT UNIQUE NOT NULL,

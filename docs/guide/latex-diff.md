@@ -11,7 +11,7 @@ When an agent revises a derivation, proof, or section of your manuscript, you ne
 
 <p class="hero-caption">Pick a base and an edited file (or a git commit), press latexdiff, and TeXRA compiles and opens the marked-up PDF: additions underlined in blue, deletions struck through in red.</p>
 
-TeXRA generates diff files after agent runs that modify `.tex` files (such as `correct` or `polish`), comparing the agent's run-storage output (for example `r0/intro.tex` or `r1/intro.tex` for an `intro.tex` input) against the original input or the previous round's output. You can see what the agent did as soon as the run finishes.
+TeXRA generates diff files after agent runs that modify `.tex` files (such as `correct` or `polish`), comparing the agent's run-storage output (for example `r0/intro.tex` or `r1/intro.tex` for an `intro.tex` input) against the original input or the previous revision's output. You can see what the agent did as soon as the run finishes.
 
 This guide explains how to use TeXRA's LaTeXdiff features to compare arbitrary file versions and how to read the results.
 
@@ -24,9 +24,9 @@ as "Latexdiff results". To diff two arbitrary files from the terminal, use the
 to compare two LaTeX versions.
 :::
 
-### Controlling between-round diffs
+### Controlling between-revision diffs
 
-TeXRA compares each round of agent output to your original input and can also create diffs between consecutive rounds (`_diffr1r0.tex` for the r0→r1 comparison). Between-round diffs are off by default. Enable **Diff consecutive rounds** on **Settings → LaTeX → Compile & diff** (the `texra.latexdiff.generateBetweenRoundDiffs` setting). When off, the run command and progress notifications only account for the original-vs-round comparisons, so fewer diff files are created.
+TeXRA compares each revision of agent output to your original input and can also create diffs between consecutive revisions (`_diffr1r0.tex` for the r0→r1 comparison). Between-revision diffs are off by default. Enable **Diff consecutive rounds** on **Settings → LaTeX → Compile & diff** (the `texra.latexdiff.generateBetweenRoundDiffs` setting). When off, the run command and progress notifications only account for the original-vs-revision comparisons, so fewer diff files are created.
 
 ### Focusing diff PDFs on changed pages
 
@@ -113,11 +113,11 @@ TeXRA runs the same five-stage pipeline shown above. This route uses the `latexd
 
 After generating a Git-based diff with **Diff vs. commit**, you can manage the resulting files from the Commit section's **Move to Diffs folder** (<wa-icon library="texra" name="archive"></wa-icon>) and **Delete diff files** (<wa-icon library="texra" name="trash"></wa-icon>) buttons. Move to Diffs folder moves the diff `.tex` and `.pdf` into a dated folder under `Diffs/` and deletes their build files; Delete diff files removes them all.
 
-Each diff route writes its own predictably named artifacts. `latexdiff` produces `_diff.tex` and `latexdiff-vc` appends the commit hash (`-diff<hash>.tex`), both alongside the base file. Agent runs write round (`_diff.tex`) and between-round (`_diffr<newer>r<older>.tex`) diffs into the run folder. Every `.tex` compiles to a matching `.pdf`. Both buttons act on the selected commit's diff files:
+Each diff route writes its own predictably named artifacts. `latexdiff` produces `_diff.tex` and `latexdiff-vc` appends the commit hash (`-diff<hash>.tex`), both alongside the base file. Document tasks write per-revision (`_diff.tex`) and between-revision (`_diffr<newer>r<older>.tex`) diffs into the run folder. Every `.tex` compiles to a matching `.pdf`. Both buttons act on the selected commit's diff files:
 
 <DiffArtifactsHero />
 
-<p class="hero-caption">The diff file-naming scheme as one set: the base/edited source pair, then each generated diff (<code>latexdiff</code>, <code>latexdiff-vc</code> with its commit hash, and between-round) paired with its compiled PDF. Move to Diffs folder and Delete diff files file away or remove the selected commit's diff files.</p>
+<p class="hero-caption">The diff file-naming scheme as one set: the base/edited source pair, then each generated diff (<code>latexdiff</code>, <code>latexdiff-vc</code> with its commit hash, and between-revision) paired with its compiled PDF. Move to Diffs folder and Delete diff files file away or remove the selected commit's diff files.</p>
 
 ## Understanding diff output
 
@@ -265,7 +265,7 @@ The intelligent merge process:
 
 1.  **Compile first**: Compile the generated `_diff.tex` document to see the rendered changes (as shown in the slice at the top of this page). TeXRA does this automatically using LaTeX Workshop if it is installed. Live examples are embedded below.
 
-2.  **VS Code diff view**: For a quick source-level comparison, pick the original (`draft.tex`) as the base file and the generated diff source (`draft_diff.tex` for a workspace diff, `draft-diff<hash>.tex` for a commit diff, or `draft_diffr1r0.tex` between rounds) as the edited file, then press **Compare** in the LaTeXDiffs section. This opens both files side by side in VS Code's diff editor, as shown below.
+2.  **VS Code diff view**: For a quick source-level comparison, pick the original (`draft.tex`) as the base file and the generated diff source (`draft_diff.tex` for a workspace diff, `draft-diff<hash>.tex` for a commit diff, or `draft_diffr1r0.tex` between revisions) as the edited file, then press **Compare** in the LaTeXDiffs section. This opens both files side by side in VS Code's diff editor, as shown below.
 
 3.  **Verify the fragile parts**: mathematical expressions, cross-references, and citations are where AI edits most often go wrong.
 
@@ -277,8 +277,8 @@ The intelligent merge process:
 
 <div class="pdf-examples">
   <div class="pdf-tabs">
-    <button type="button" class="pdf-tab active" data-pdf="/examples/draft_polish_r0_gemini25p_diff.pdf">Round 0: Initial AI Edit</button>
-    <button type="button" class="pdf-tab" data-pdf="/examples/draft_polish_r1_gemini25p_diff.pdf">Round 1: After Reflection</button>
+    <button type="button" class="pdf-tab active" data-pdf="/examples/draft_polish_r0_gemini25p_diff.pdf">Revision 1: Initial AI Edit</button>
+    <button type="button" class="pdf-tab" data-pdf="/examples/draft_polish_r1_gemini25p_diff.pdf">Revision 2: After Reflection</button>
     <button type="button" class="pdf-tab" data-pdf="/examples/draft_polish_r1_gemini25p_diffr1r0.pdf">Reflection Changes</button>
   </div>
   <div class="pdf-viewer">
@@ -289,9 +289,9 @@ The intelligent merge process:
 
 ::: details Individual PDF examples
 
-- [Original vs. Round 0 (Initial AI Output)](/examples/draft_polish_r0_gemini25p_diff.pdf)
-- [Original vs. Round 1 (After Reflection)](/examples/draft_polish_r1_gemini25p_diff.pdf)
-- [Round 0 vs. Round 1 (Reflection Changes)](/examples/draft_polish_r1_gemini25p_diffr1r0.pdf)
+- [Original vs. Revision 1 (Initial AI Output)](/examples/draft_polish_r0_gemini25p_diff.pdf)
+- [Original vs. Revision 2 (After Reflection)](/examples/draft_polish_r1_gemini25p_diff.pdf)
+- [Revision 1 vs. Revision 2 (Reflection Changes)](/examples/draft_polish_r1_gemini25p_diffr1r0.pdf)
 - [Original Document](/examples/draft.pdf)
   :::
 

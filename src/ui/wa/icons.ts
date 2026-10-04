@@ -89,9 +89,10 @@ export const AGENT_DECORATORS = {
       hint: 'Plugin agent: From an installed Claude Code or Codex plugin',
     },
   },
-  agentCategories: {
-    workflow: { icon: 'cube', label: 'Workflow' },
-    toolUse: { icon: 'screwdriver-wrench', label: 'Tool Use' },
+  /** An agent run: a document task, or a chat. */
+  agentRuns: {
+    task: { icon: 'cube', label: 'Document task' },
+    chat: { icon: 'screwdriver-wrench', label: 'Chat' },
   },
   streamKinds: {
     process: { icon: 'terminal', label: 'Process' },
@@ -102,19 +103,7 @@ export const AGENT_DECORATORS = {
   pending: { icon: 'circle', label: 'Stream' },
 } as const;
 
-type AgentCategory = keyof typeof AGENT_DECORATORS.agentCategories;
-
 export interface RunDecorator {
   readonly icon: TeXRAIconName;
   readonly label: string;
-}
-
-export function getAgentCategoryDecorator(
-  agentCategory: string | undefined,
-): RunDecorator {
-  const categories = AGENT_DECORATORS.agentCategories;
-  return (
-    (agentCategory && categories[agentCategory as AgentCategory]) ||
-    AGENT_DECORATORS.pending
-  );
 }

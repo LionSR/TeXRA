@@ -8,7 +8,6 @@ import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 import {
-  AgentCategory,
   ToolConfigFieldsSchema,
   type CheckboxValues,
   type DocumentFileType,
@@ -68,9 +67,9 @@ export class FileSelectGroup extends LitElement {
   @property({ attribute: false }) checkboxValues: CheckboxValues =
     ToolConfigFieldsSchema.parse({});
 
-  /** The launch's run type: only a document pass (workflow) reads the
-   *  tool and auto-extract toggles. */
-  @property() sessionType: SessionType = AgentCategory.Workflow;
+  /** The launch mode: only a document task reads the tool and
+   *  auto-extract toggles. */
+  @property() sessionType: SessionType = 'task';
 
   @query('.multiple-files-list')
   private fileListElement?: HTMLElement;
@@ -240,10 +239,10 @@ export class FileSelectGroup extends LitElement {
     });
   }
 
-  /** Only a document pass (workflow) reads the tool and auto-extract
-   *  toggles, so an interactive launch shows neither menu. */
+  /** Only a document task reads the tool and auto-extract toggles, so a
+   *  chat launch shows neither menu. */
   private renderConfigMenu(): TemplateResult | typeof nothing {
-    if (this.sessionType !== AgentCategory.Workflow) return nothing;
+    if (this.sessionType !== 'task') return nothing;
     if (this.config.toolConfig === 'tool') return this.renderToolConfigMenu();
     if (this.config.toolConfig === 'autoExtract') {
       return this.renderAutoExtractMenu();

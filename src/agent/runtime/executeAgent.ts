@@ -5,21 +5,18 @@ import { Data, Effect, Fiber, Layer } from 'effect';
 import type { AgentEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import { withRevisionSpend } from '@agent/output/documentRecipe';
 import { persistedParentRunId } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 import {
+  RunDocumentsSchema,
+  RUN_OUTCOME,
   type OfferedTool,
   type RunId,
   type RequestEnsureProgressViewPayload,
   type SubagentProgressUpdate,
-} from '@shared/schemas';
-import {
-  AgentCategory,
-  RUN_OUTCOME,
-  roundOutputsToCompileFailureSummaries,
-  roundOutputsToOutputSummaries,
 } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 
@@ -30,7 +27,6 @@ import {
   type AgentLaunchContext,
 } from './AgentLaunchContext';
 import { runWithLifecycle } from './AgentRunLifecycle';
-import { type RunEndResult, type WorkflowRunEndResult } from './RunEndResult';
 import {
   generateSessionDescription,
   settleDescriptionOnExit,
@@ -44,6 +40,7 @@ import { agentRunLayer } from './run/AgentRun';
 import { runToolUse } from './loop/toolUse';
 import { runWithLaunchGuard, type RunTerminalOwner } from './runLaunchGuard';
 import { Runs } from './runRegistry';
+import type { RunEndResult } from './RunEndResult';
 import type { AgentRunServices } from './runRegistry';
 import type { SessionHandle } from './SessionHandle';
 import type { RunHandle } from './RunHandle';
@@ -60,11 +57,11 @@ export class ResumeSessionUnavailableError extends Data.TaggedError(
 }
 
 /**
- * The wiring the two tool-use entry points genuinely do not share. Everything
- * outside this union is assembled once in {@link launchToolUseRun}, so a field
- * added for one entry point cannot go missing on the other.
+ * The wiring the two entry points genuinely do not share. Everything outside
+ * this union is assembled once in {@link launchRun}, so a field added for
+ * one entry point cannot go missing on the other.
  */
-type ToolUseLaunchVariant =
+type LaunchVariant =
   | { readonly kind: 'fresh' }
   | {
       readonly kind: 'resume';
@@ -80,8 +77,7 @@ type ToolUseLaunchVariant =
  * from the roots of the session the run is on, fresh or resumed, so code
  * below the launch takes `WorkspaceFs` / `StorageFs` from context rather than
  * from the fiber's ambient roots). The follow-up lease is not here: a
- * conversation claims its own inside the loop (`claimFollowUps`), and a
- * workflow run's rounds take no input.
+ * conversation claims its own inside the loop (`claimFollowUps`).
  */
 function runLayerFor(
   ctx: AgentLaunchContext,
@@ -115,32 +111,32 @@ function runLayerFor(
 }
 
 /**
- * Run the tool-use loop for a single agent run, fresh or resumed.
+ * Run the loop for a single agent run, fresh or resumed.
  *
- * Owns all tool-use-specific wiring: progress counters and model-change side
- * effects. A failed run arrives as a FAILED result carrying
- * its structured error, so there is nothing to unwrap here.
- * The callers (`executeAgent`, `resumeToolUseFromResumeData`) own lifecycle and
- * stream-status; this function owns only what is specific to the ToolUse
- * category.
+ * Owns all run wiring: progress counters and model-change side effects, and
+ * for a document task its documents and their publication. A failed run
+ * arrives as a FAILED result carrying its structured error, so there is
+ * nothing to unwrap here. The callers (`executeAgent`,
+ * `resumeToolUseFromResumeData`) own lifecycle and stream-status.
  */
-function launchToolUseRun(
+function launchRun(
   ctx: AgentLaunchContext,
   handle: RunHandle,
-  shared: SubagentRunOptions,
-  variant: ToolUseLaunchVariant,
+  shared: SubagentRunOptions &
+    Pick<ExecuteAgentOptions, 'publishWorkflowOutput'>,
+  variant: LaunchVariant,
 ): Effect.Effect<RunEndResult, Error, AgentRunServices> {
   const toResult = (
     result: Effect.Success<ReturnType<typeof runToolUse>>,
   ): RunEndResult => ({
     outcome: result.outcome,
     output: {
-      category: 'toolUse',
       response: result.response,
       files: [...result.files],
-      ...(result.structured !== undefined
-        ? { structured: result.structured }
-        : {}),
+      // A document task's structured value is its documents (its tools').
+      ...(ctx.task !== null
+        ? { documents: RunDocumentsSchema.parse(result.structured ?? {}) }
+        : result.structured !== undefined && { structured: result.structured }),
     },
     runId: ctx.runId,
     usage: result.usage,
@@ -149,6 +145,24 @@ function launchToolUseRun(
       ? { memoryMisses: ctx.attachedMemoryMisses }
       : {}),
   });
+  /** A document task's result, with its revisions' spend, published by the
+   *  host before the terminal commit; the verdict stays this function's. */
+  const withDocuments = (ended: RunEndResult) =>
+    Effect.gen(function* () {
+      if (ctx.task === null) return ended;
+      const result = yield* withRevisionSpend(ctx.session, ended);
+      if (result.error || !shared.publishWorkflowOutput) return result;
+      const publication = yield* shared.publishWorkflowOutput(
+        result,
+        ctx.task.outputs,
+      );
+      // Output the user asked for and did not get fails the run; a stop
+      // still reads as the stop it was.
+      return publication === 'failed' &&
+        result.outcome !== RUN_OUTCOME.CANCELLED
+        ? { ...result, outcome: RUN_OUTCOME.FAILED }
+        : result;
+    });
   // A stop asked before the run was reachable is this fiber's interruption,
   // taken before the loop does any work.
   return Effect.suspend(() =>
@@ -172,6 +186,7 @@ function launchToolUseRun(
         }),
   ).pipe(
     Effect.map(toResult),
+    Effect.flatMap(withDocuments),
     Effect.provide(
       runLayerFor(
         ctx,
@@ -180,52 +195,6 @@ function launchToolUseRun(
       ),
     ),
   );
-}
-
-/**
- * A workflow agent, in round mode. The host publishes its output before the
- * run's terminal commit and reports whether that worked; the verdict stays
- * this function's. A child's one turn wraps it all.
- */
-function launchWorkflowRun(
-  ctx: AgentLaunchContext,
-  options: SubagentRunOptions &
-    Pick<ExecuteAgentOptions, 'publishWorkflowOutput'>,
-  resumed: boolean,
-): Effect.Effect<RunEndResult, Error, AgentRunServices> {
-  const program = Effect.gen(function* () {
-    const result = yield* runToolUse({ resume: resumed }).pipe(
-      Effect.provide(runLayerFor(ctx, options, undefined)),
-    );
-    const runEnd: WorkflowRunEndResult = {
-      outcome: result.outcome,
-      output: {
-        category: 'workflow',
-        outputs: roundOutputsToOutputSummaries(result.roundOutputs),
-        compileFailures: roundOutputsToCompileFailureSummaries(
-          result.roundOutputs,
-        ),
-        diffs: [],
-      },
-      runId: ctx.runId,
-      usage: result.usage,
-      ...(result.error ? { error: result.error } : {}),
-      ...(ctx.attachedMemoryMisses?.length
-        ? { memoryMisses: ctx.attachedMemoryMisses }
-        : {}),
-    };
-    if (runEnd.error || !options.publishWorkflowOutput) return runEnd;
-    const publication = yield* options.publishWorkflowOutput(
-      runEnd,
-      ctx.task?.outputs ?? [],
-    );
-    // Output the user asked for and did not get fails the run; a stop still
-    // reads as the stop it was.
-    return publication === 'failed' && runEnd.outcome !== RUN_OUTCOME.CANCELLED
-      ? { ...runEnd, outcome: RUN_OUTCOME.FAILED }
-      : runEnd;
-  });
-  return options.turns ? options.turns.turnPermit(program) : program;
 }
 
 /** Toast payload shown when the progress view cannot be opened. */
@@ -262,7 +231,7 @@ function buildFallbackNotification(config: AgentConfig): FallbackNotification {
 interface SubagentRunOptions {
   /** The child-run policy: each turn's permit, each completed turn's boundary. */
   readonly turns?: import('./childRunLoop').ChildRunTurns<RunEndResult>;
-  /** Run-scoped tools added to tool-use agents without mutating the default registry. */
+  /** Run-scoped tools added to the agent without mutating the default registry. */
   readonly tools?: readonly ITool[];
   /**
    * The launching run, for a delegated child: the parent edge on the handle,
@@ -304,7 +273,7 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    * fiber: nothing carries one.
    */
   publishWorkflowOutput?: (
-    result: WorkflowRunEndResult,
+    result: RunEndResult,
     /**
      * The `task.outputs` declared by the definition this run loaded —
      * the run's own copy, so a host never re-reads a catalog entry that may
@@ -419,12 +388,7 @@ export function executeAgent(
             withLogChannel(CHANNEL),
           );
 
-          if (config.agentCategory === AgentCategory.ToolUse) {
-            return yield* launchToolUseRun(ctx, handle, options, {
-              kind: 'fresh',
-            });
-          }
-          return yield* launchWorkflowRun(ctx, options, false);
+          return yield* launchRun(ctx, handle, options, { kind: 'fresh' });
         }).pipe(settleDescriptionOnExit(sessionDescription)),
       // The edge the lifecycle's handle is born with: the caller's own
       // parent for a fresh child.
@@ -459,7 +423,7 @@ export interface ResumeToolUseFromResumeDataOptions
 }
 
 /**
- * Resume one run, a conversation or a workflow in round mode, from its
+ * Resume one run (a conversation, or a document task's recipe) from its
  * durable cursor, in place: a standalone resume is launched through the
  * session's door (`Runs.launch`), and a recovered child's continuous driver
  * (`options.turns`) runs it inside its own launch. A standalone resume owns
@@ -492,7 +456,6 @@ export function resumeToolUseFromResumeData(
     const parentRunId = yield* persistedParentRunId(runSession, resume.runId);
     const definition = yield* prepareAgentDefinition({
       config: resume.agentConfig,
-      enforceCategory: true,
       session: runSession,
       suppressErrorNotification: true,
     });
@@ -510,13 +473,11 @@ export function resumeToolUseFromResumeData(
     return yield* runWithLifecycle(
       ctx,
       (handle) =>
-        ctx.config.agentCategory === AgentCategory.Workflow
-          ? launchWorkflowRun(ctx, options, true)
-          : launchToolUseRun(ctx, handle, options, {
-              kind: 'resume',
-              onIdle: options.onIdle,
-              isCancellationRequested: options.isCancellationRequested,
-            }),
+        launchRun(ctx, handle, options, {
+          kind: 'resume',
+          onIdle: options.onIdle,
+          isCancellationRequested: options.isCancellationRequested,
+        }),
       // Resume reads the parent edge from the persisted `run.start`.
       { parentRunId, onRun: options.onRun },
     );

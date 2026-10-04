@@ -21,7 +21,6 @@ import {
   type ExecResult,
   RunIdSchema,
   type RunId,
-  AgentCategory,
 } from '@shared/schemas';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -139,7 +138,6 @@ function registerProcessRun(instruction: string) {
       AgentConfigSchema.parse({
         agent: 'bash',
         instruction,
-        agentCategory: AgentCategory.ToolUse,
       }),
       { identity: { kind: 'process', tool: 'bash' } },
     );
@@ -172,7 +170,6 @@ function registerScriptRun(name: string, model?: string) {
         runId,
         config: AgentConfigSchema.parse({
           agent: name,
-          agentCategory: AgentCategory.ToolUse,
           model,
           instruction: `Script '${name}'`,
         }),

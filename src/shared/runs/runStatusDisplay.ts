@@ -10,7 +10,7 @@ import {
   type RunLifecycleStatus,
   type RunSubstate,
 } from '@shared/schemas';
-import type { LoopCoordinate, RunGroup } from '@shared/session/sessionView';
+import type { RunGroup } from '@shared/session/sessionView';
 
 type RunStatusDisplayKey =
   | Exclude<RunLifecycleStatus, typeof RUN_LIFECYCLE_READY>
@@ -180,29 +180,11 @@ export function formatRoundStageLabel(stage: Readonly<RoundStage>): string {
   return stage.total !== undefined ? `${current}/${stage.total}` : current;
 }
 
-/** Compact position label: `r2` (or `r2/3` against a planned round total) for
- *  a round, `t2` for the row's second turn. A total counts planned rounds, so
- *  a turn ignores it. */
+/** Compact position label: `t2` for a run's second turn. */
 export function formatLoopPositionLabel(
-  position: Readonly<LoopCoordinate>,
-  total?: number,
-): string;
-
-export function formatLoopPositionLabel(
-  position: Readonly<LoopCoordinate> | null | undefined,
-  total?: number,
-): string | undefined;
-
-export function formatLoopPositionLabel(
-  position: Readonly<LoopCoordinate> | null | undefined,
-  total?: number,
+  turn: number | null | undefined,
 ): string | undefined {
-  if (position == null) return undefined;
-  if (position.kind === 'turn') return `t${position.index}`;
-  return formatRoundStageLabel({
-    index: position.index,
-    ...(total !== undefined ? { total } : {}),
-  });
+  return turn == null ? undefined : `t${turn}`;
 }
 
 /**

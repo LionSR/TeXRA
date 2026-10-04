@@ -76,7 +76,6 @@ import {
   RUN_OUTCOME,
   RUN_PHASE,
   type RunId,
-  AgentCategory,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
 } from '@shared/schemas';
@@ -130,13 +129,12 @@ const foldParentPhase = (active: boolean) =>
         ? {
             type: 'run.activate',
             aggregateId,
-            category: AgentCategory.ToolUse,
           }
         : {
             type: 'run.end',
             aggregateId,
             outcome: RUN_OUTCOME.COMPLETED,
-            output: emptyRunEndOutput(AgentCategory.ToolUse),
+            output: emptyRunEndOutput(),
           },
     ]);
     yield* session.settlePublications();
@@ -463,7 +461,6 @@ describe('childRunLoop E2E fixtures', () => {
         // listener is not guaranteed to observe.
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          category: AgentCategory.ToolUse,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
         const launched = yield* Deferred.make<void>();
@@ -585,7 +582,6 @@ describe('childRunLoop E2E fixtures', () => {
         publishTestRunStart(session, runId);
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          category: AgentCategory.ToolUse,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
         const loop = yield* startLoop(runId, strategy, {
@@ -886,7 +882,6 @@ describe('childRunLoop E2E fixtures', () => {
         const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          category: AgentCategory.ToolUse,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
         const loop = yield* startLoop(runId, strategy, { childRun });
@@ -929,7 +924,6 @@ describe('childRunLoop E2E fixtures', () => {
         const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          category: AgentCategory.ToolUse,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
         const loop = yield* startLoop(runId, strategy, { childRun });
@@ -964,7 +958,6 @@ describe('childRunLoop E2E fixtures', () => {
         const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          category: AgentCategory.ToolUse,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
         const releaseSessionOwnership = vi.fn();
@@ -1034,7 +1027,6 @@ describe('childRunLoop E2E fixtures', () => {
         const { strategy, resolveTurn } = createFakeStrategy();
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          category: AgentCategory.ToolUse,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
         const delivered = yield* Deferred.make<void>();
@@ -1075,7 +1067,7 @@ describe('childRunLoop E2E fixtures', () => {
           outcome: RUN_OUTCOME.CANCELLED,
           error: undefined,
           usage: undefined,
-          output: { category: 'toolUse', response: '', files: [] },
+          output: { response: '', files: [] },
         });
       }),
   );
@@ -1142,7 +1134,6 @@ describe('childRunLoop E2E fixtures', () => {
         publishTestRunStart(session, runId);
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          category: AgentCategory.ToolUse,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
 
@@ -1248,7 +1239,6 @@ describe('childRunLoop E2E fixtures', () => {
         publishTestRunStart(session, runId);
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          category: AgentCategory.ToolUse,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
         const { strategy, rejectTurn } = createFakeStrategy();
@@ -1330,7 +1320,6 @@ describe('childRunLoop E2E fixtures', () => {
             PARENT_RUN_ID,
             {
               run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-              category: AgentCategory.ToolUse,
             },
           ).pipe(Effect.provideService(Runs, session.runs));
           trackedRunIds.add(second);

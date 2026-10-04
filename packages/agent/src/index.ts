@@ -61,11 +61,7 @@ export type { AgentEvent } from '@agent/trace';
 // graph — model handlers included — into the published type surface, which
 // trips the provider-type leak check in `scripts/validate-artifacts.mjs`
 // (`@anthropic-ai/sdk`).
-export type {
-  RunEndResult,
-  ToolUseRunEndResult,
-  WorkflowRunEndResult,
-} from '@agent/runtime/RunEndResult';
+export type { RunEndResult } from '@agent/runtime/RunEndResult';
 export type {
   ITool,
   IToolRegistry,

@@ -39,7 +39,6 @@ export function shouldSkipWait(session: SessionHandle, runId: RunId): boolean {
   return (
     status === RUN_PHASE.WAITING &&
     handle.identity.kind === 'agent' &&
-    handle.category === 'toolUse' &&
     handle.parent !== null
   );
 }

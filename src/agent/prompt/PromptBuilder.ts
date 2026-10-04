@@ -16,7 +16,7 @@ import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
- * Instructions appended to tool-use agent prompts at open. What depends on
+ * Instructions appended to an agent-with-tools prompt at open. What depends on
  * the model or the settings is rendered by each step (`stepInstructions`).
  */
 const TOOL_USE_INSTRUCTIONS = `<tool_use_instructions>
@@ -114,31 +114,30 @@ export function contextUpdate(told: RunContext, now: RunContext): string {
  * @param workspace The run's workspace root, whose `AGENTS.md` applies
  * @returns Full system prompt string
  */
-export const getSystemPromptWithRules = Effect.fn('prompt.systemWithRules')(
-  function* (
-    systemPrompt: string,
-    userVars: TemplateVars,
-    workspace: string | undefined,
-  ): Effect.fn.Return<string, Error, FileSystem.FileSystem> {
-    const parts = [yield* renderPrompt(systemPrompt, userVars)];
+const getSystemPromptWithRules = Effect.fn('prompt.systemWithRules')(function* (
+  systemPrompt: string,
+  userVars: TemplateVars,
+  workspace: string | undefined,
+): Effect.fn.Return<string, Error, FileSystem.FileSystem> {
+  const parts = [yield* renderPrompt(systemPrompt, userVars)];
 
-    const instructions = yield* loadAgentsMd(workspace);
-    if (instructions) parts.push(instructions);
+  const instructions = yield* loadAgentsMd(workspace);
+  if (instructions) parts.push(instructions);
 
-    // Append attached memories (read-only context from orchestrator)
-    const attachedMemories = userVars.ATTACHED_MEMORIES;
-    if (typeof attachedMemories === 'string' && attachedMemories) {
-      parts.push(attachedMemories);
-    }
+  // Append attached memories (read-only context from orchestrator)
+  const attachedMemories = userVars.ATTACHED_MEMORIES;
+  if (typeof attachedMemories === 'string' && attachedMemories) {
+    parts.push(attachedMemories);
+  }
 
-    return parts.join('\n');
-  },
-);
+  return parts.join('\n');
+});
 
 /**
  * The system text a conversation opens with: its persona's prompt rendered
  * with the project's rules (`getSystemPromptWithRules`), and the suffix of
- * tool-use instructions and workspace facts. What each step's plugins add is
+ * tool-use instructions and workspace facts, which a text-only persona (a
+ * document task's writer) goes without. What each step's plugins add is
  * appended per request (`stepInstructions`).
  */
 export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
@@ -150,6 +149,8 @@ export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
       workspace: string | undefined;
       /** The same session's setting slots, for the `<workspace_info>` git reads. */
       settings: SettingsStores;
+      /** A persona that declares no tools: no tool-use suffix. */
+      textOnly: boolean;
     },
   ): Effect.fn.Return<
     { readonly systemPrompt: string; readonly instructionSuffix: string },
@@ -161,6 +162,7 @@ export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
       userVars,
       options.workspace,
     );
+    if (options.textOnly) return { systemPrompt, instructionSuffix: '' };
     const suffixParts = [
       TOOL_USE_INSTRUCTIONS,
       yield* buildWorkspaceInfoBlock(options.workspace, options.settings),

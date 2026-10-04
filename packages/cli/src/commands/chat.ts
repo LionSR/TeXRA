@@ -34,7 +34,7 @@ export const chatCommand = withUsageSections(
     meta: { name: 'chat', description: 'Interactive tool-use chat session' },
     args: {
       ...INTERACTIVE_AGENT_GLOBAL_ARGS,
-      agent: { type: 'string', description: 'Tool-use agent for the session' },
+      agent: { type: 'string', description: 'Agent for the session' },
       model: {
         type: 'string',
         alias: 'm',

@@ -297,9 +297,9 @@ Opening VS Code from a configured terminal provides the most reliable environmen
    - Provide clear examples of desired outputs
    - Specify what should and shouldn't be changed
 
-2. **Use reflection rounds**:
+2. **Use reflection revisions**:
    - Use agents that include follow-up entries in `task.requests` (or add them via a custom agent)
-   - TeXRA runs these additional rounds when they exist, which often improves output quality
+   - TeXRA runs these additional revisions when they exist, which often improves output quality
 
 3. **Use better models**:
    - Move to more capable models for complex tasks

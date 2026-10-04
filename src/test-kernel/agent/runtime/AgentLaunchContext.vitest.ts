@@ -32,12 +32,7 @@ import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
-import {
-  RUN_OUTCOME,
-  RUN_PHASE,
-  AgentCategory,
-  type RunId,
-} from '@shared/schemas';
+import { RUN_OUTCOME, RUN_PHASE, type RunId } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
 import {
@@ -135,7 +130,6 @@ describe('AgentLaunchContext', () => {
             event: 'showAgentConfigBanner',
             payload: {
               agentName: '__missing_agent_for_launch_context_test__',
-              category: AgentCategory.Workflow,
             },
           },
         ]);
@@ -236,7 +230,6 @@ describe('AgentLaunchContext', () => {
         mocks.resolve.mockReturnValueOnce(
           Effect.succeed({
             path: '/agents/chat.yaml',
-            category: AgentCategory.ToolUse,
             persona: { prompt: '', tools: [], temperature: 1 },
             task: null,
           }),
@@ -293,7 +286,6 @@ describe('AgentLaunchContext', () => {
         mocks.resolve.mockReturnValueOnce(
           Effect.succeed({
             path: '/agents/chat.yaml',
-            category: AgentCategory.ToolUse,
             persona: { prompt: '', tools: [], temperature: 1 },
             task: null,
           }),
@@ -310,7 +302,6 @@ describe('AgentLaunchContext', () => {
               config: AgentConfigSchema.parse({
                 agent: 'chat',
                 model: 'openai/gpt-5.5-2026-04-23',
-                agentCategory: AgentCategory.ToolUse,
               }),
               runId: EXECUTION_ID,
               session,
@@ -342,7 +333,6 @@ describe('AgentLaunchContext', () => {
         mocks.resolve.mockReturnValueOnce(
           Effect.succeed({
             path: '/agents/chat.yaml',
-            category: AgentCategory.ToolUse,
             persona: { prompt: '', tools: [], temperature: 1 },
             task: null,
           }),
@@ -358,7 +348,6 @@ describe('AgentLaunchContext', () => {
         const config = AgentConfigSchema.parse({
           agent: 'chat',
           model: 'openai/gpt-5.5-2026-04-23',
-          agentCategory: AgentCategory.ToolUse,
         });
         yield* registerRun(session, EXECUTION_ID, config, {
           identity: { kind: 'agent', agent: 'chat' },
@@ -399,13 +388,11 @@ describe('AgentLaunchContext', () => {
         const config = AgentConfigSchema.parse({
           agent: 'chat',
           model: 'openai/gpt-5.5-2026-04-23',
-          agentCategory: AgentCategory.ToolUse,
         });
         const definitionMocks = () => {
           mocks.resolve.mockReturnValueOnce(
             Effect.succeed({
               path: '/agents/chat.yaml',
-              category: AgentCategory.ToolUse,
               persona: { prompt: '', tools: [], temperature: 1 },
               task: null,
             }),
@@ -487,7 +474,6 @@ describe('AgentLaunchContext', () => {
       mocks.resolve.mockReturnValueOnce(
         Effect.succeed({
           path: '/agents/chat.yaml',
-          category: AgentCategory.ToolUse,
           persona: { prompt: '', tools: [], temperature: 1 },
           task: null,
         }),
@@ -502,7 +488,6 @@ describe('AgentLaunchContext', () => {
             config: AgentConfigSchema.parse({
               agent: 'chat',
               model: 'openai/gpt-5.5-2026-04-23',
-              agentCategory: AgentCategory.ToolUse,
             }),
             runId: EXECUTION_ID,
             session,

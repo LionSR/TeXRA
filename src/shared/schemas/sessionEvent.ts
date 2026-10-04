@@ -26,8 +26,6 @@ import { parseJsonWith } from '@common/parsing/safeParseJson';
 
 import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
 import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
-import { AgentCategorySchema } from './agent';
-import { RoundOutputSchema } from './output';
 import { JsonValueSchema } from './jsonValue';
 import {
   RunEndRowSchema,
@@ -278,9 +276,6 @@ export type RunProvenance = z.infer<typeof RunProvenanceSchema>;
 const RunStartEventSchema = durable('run.start', {
   identity: RunIdentitySchema,
   userFollowUpSupport: UserFollowUpSupportSchema,
-  /** The `RunView` discriminant: `toolUse` for an agent in tool-use mode
-   *  and for a process or script run, `workflow` for a workflow agent. */
-  category: AgentCategorySchema,
   worktree: WorktreeInfoSchema.nullish(),
   /** The launching run with its creation coordinate; null for a root. */
   parent: RunParentSchema.nullable(),
@@ -321,7 +316,7 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
    * item 8); the CLI projection writes it verbatim as a `run.activate`
    * progress record. `run.start` is the creation fact and happens once.
    */
-  durable('run.activate', { category: AgentCategorySchema }),
+  durable('run.activate', {}),
   /** What the run runs with, written at registration and then only when it
    *  changes: the newest row is the configuration every reader reads. */
   durable('run.config', { config: RunRecordFieldsSchema }),
@@ -341,7 +336,6 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
    */
   durable('run.end', RunEndRowSchema.shape),
   durable('conversation.progress', { progress: ConversationProgressSchema }),
-  durable('output.produced', { rounds: z.array(RoundOutputSchema) }),
   durable('run.fact', { fact: RunFactSchema }),
   /**
    * A child driven by the child loop, which has no run history or rounds, parks
@@ -612,7 +606,7 @@ export function listingTypeOf(
     case 'child.turn':
       // A priced turn is never "latest of type" (`listingKeyOf`). Run-history
       // rows stay out: a cold hydrate never pulls a `run.snapshot` into every
-      // renderer (`run.position`, `output.produced` are listing rows). Keyed
+      // renderer (`run.position` is a listing row). Keyed
       // records fold whole; the fold suite pins this list.
       return null;
     case 'request.opened':

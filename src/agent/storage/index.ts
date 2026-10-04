@@ -19,7 +19,6 @@ export { finalizeRun, registerRun } from './runLifecycle';
 export {
   type AgentRunListingEntry,
   type BlockedRunListingEntry,
-  runOutputReader,
   listRuns,
   isUserVisibleRun,
 } from './runListing';

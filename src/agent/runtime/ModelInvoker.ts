@@ -54,7 +54,6 @@ import type { LanguageModel } from '@platform/languageModel';
 import { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
-  AgentCategory,
   MESSAGE_TYPES,
   toRetryErrorInfo,
   type DeclinableUsageRoute,
@@ -154,7 +153,7 @@ const PARTIAL_TEXT_TAIL_MAX = 4096;
 
 export interface InvokeRequest {
   readonly system: string | undefined;
-  /** The tools this turn advertises; a workflow round advertises none. */
+  /** The tools this turn advertises; a text-only persona advertises none. */
   readonly tools: TurnRequest['tools'];
   readonly toolChoice: TurnRequest['toolChoice'];
   /** The turn's round ordinal, for debug file naming. */
@@ -240,7 +239,6 @@ export const modelInvokerLayer = (): Layer.Layer<
       const binders = yield* Effect.context<Binders>();
       const attribution = {
         agentName: usageAgentName(run.config.agent, run.config.agentSource),
-        agentCategory: run.config.agentCategory,
         runId,
       };
 
@@ -270,7 +268,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             backgroundCapable: bound.backgroundCapable,
             protocol: bound.origin.protocol,
             modelName: bound.config.id,
-            agentCategory: run.config.agentCategory,
+            textOnly: bound.textOnly,
           },
           session.roots,
         );
@@ -558,9 +556,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           ) {
             const reduced = reducedOutputBudget(
               bound.contextWindow - inputTokens,
-              run.config.agentCategory === AgentCategory.ToolUse
-                ? TOOL_USE_SAFETY_BUFFER
-                : TOKEN_SAFETY_BUFFER,
+              bound.textOnly ? TOKEN_SAFETY_BUFFER : TOOL_USE_SAFETY_BUFFER,
             );
             logContextManagementEvent(
               logger,
@@ -753,7 +749,7 @@ export const modelInvokerLayer = (): Layer.Layer<
                   stores: run.stores,
                   backend: failed.backend,
                   declinedRoutes,
-                  agentCategory: run.config.agentCategory,
+                  textOnly: failed.textOnly,
                   temperature: run.persona.temperature,
                 }),
           )

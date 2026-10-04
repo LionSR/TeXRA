@@ -22,7 +22,6 @@ import type {
   RunOutcome,
 } from '@shared/schemas';
 import {
-  AgentCategory,
   agentName as baseAgentName,
   emptyRunEndOutput,
   RUN_OUTCOME,
@@ -209,7 +208,7 @@ const finalizeRunTerminalBody = Effect.fn('finalizeRunTerminal.body')(
       drainFailure !== undefined || outcome === reported
         ? reportedError
         : undefined;
-    const output = params.output ?? emptyRunEndOutput(handle.category);
+    const output = params.output ?? emptyRunEndOutput();
     // Write the terminal row BEFORE untrack so the registry's terminal listener
     // event never precedes it. The row carries the classified error `kind`
     // (when any) and the flow's output; `finalizeRun` adds the usage totals
@@ -328,20 +327,16 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
   const { runId, session } = ctx;
   const runs = yield* Runs;
   const agentIdentifier = ctx.config.agent;
-  const script =
-    ctx.config.agentCategory === AgentCategory.ToolUse
-      ? ctx.config.backgroundScript
-      : null;
+  const script = ctx.config.script ?? null;
   const handle = new RunHandle(
     {
       runId,
       // The identity its launch registered: a background script's run is
-      // the parent's agent making one call.
+      // the parent's agent making one call; a recipe's is its agent's.
       identity:
-        script == null
-          ? { kind: 'agent', agent: agentIdentifier }
-          : { kind: 'script', title: script.title },
-      category: ctx.config.agentCategory,
+        script?.kind === 'background'
+          ? { kind: 'script', title: script.title }
+          : { kind: 'agent', agent: agentIdentifier },
     },
     options?.parentRunId ?? null,
     ctx.logger,
@@ -423,7 +418,6 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
       ? {
           ...(carried ??
             buildTerminalRunEndResult(
-              handle.category,
               outcome,
               runId,
               ctx.attachedMemoryMisses,
@@ -445,7 +439,6 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
     }
     if (kind === 'abort') {
       return buildTerminalRunEndResult(
-        handle.category,
         resolvedOutcome,
         runId,
         ctx.attachedMemoryMisses,

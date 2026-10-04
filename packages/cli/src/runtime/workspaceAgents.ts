@@ -2,11 +2,7 @@ import { Effect } from 'effect';
 
 import { createWorkspaceAgentsController } from '@agent/index';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import {
-  type WorkspaceAgentsCategorySelection,
-  type WorkspaceAgentsSelection,
-  type ByCategory,
-} from '@shared/schemas';
+import type { WorkspaceAgentsSelection } from '@shared/schemas';
 import { cliCommandDefaults } from './cliConfig';
 
 /** The workspace agents controller's own snapshot shape — derived, never restated. */
@@ -14,10 +10,11 @@ type WorkspaceAgentsSnapshot = Effect.Success<
   ReturnType<ReturnType<typeof createWorkspaceAgentsController>['snapshot']>
 >;
 
-/** The agent list snapshot plus the two facts only the CLI resolves. */
+/** The agent list snapshot plus the two facts only the CLI resolves. The
+ *  enabled keys are `'all'` when no custom list narrows them. */
 export type CliWorkspaceAgentsRecord = WorkspaceAgentsSnapshot & {
   readonly defaultChatAgent?: string;
-  readonly agentKeys: ByCategory<WorkspaceAgentsCategorySelection>;
+  readonly agentKeys: readonly string[] | 'all';
 };
 
 /**
@@ -30,12 +27,7 @@ export const readCliWorkspaceAgents = Effect.fn('readCliWorkspaceAgents')(
     return {
       ...(yield* workspaceAgents.snapshot()),
       defaultChatAgent: cliCommandDefaults(roots, 'chat').agent,
-      agentKeys: {
-        workflow:
-          (yield* workspaceAgents.getEnabledAgentKeys('workflow')) ?? 'all',
-        toolUse:
-          (yield* workspaceAgents.getEnabledAgentKeys('toolUse')) ?? 'all',
-      },
+      agentKeys: (yield* workspaceAgents.getEnabledAgentKeys()) ?? 'all',
     } satisfies CliWorkspaceAgentsRecord;
   },
 );
@@ -56,16 +48,16 @@ function formatSelection(selection: WorkspaceAgentsSelection): string {
 export function formatCliWorkspaceAgents(
   record: CliWorkspaceAgentsRecord,
 ): string {
-  const formatCategory = (
-    selection: WorkspaceAgentsCategorySelection,
-  ): string => (selection === 'all' ? 'all' : selection.join(', ') || '(none)');
   const lines = [
     `Workspace agents: ${formatSelection(record.selection)}`,
     `Effective agents: ${formatSelection(record.effectiveSelection)}`,
     `Default team: ${record.defaultTeamId ?? '(none)'}`,
     `Default chat agent: ${record.defaultChatAgent ?? '(automatic)'}`,
-    `Workflow agents: ${formatCategory(record.agentKeys.workflow)}`,
-    `Tool-use agents: ${formatCategory(record.agentKeys.toolUse)}`,
+    `Enabled agents: ${
+      record.agentKeys === 'all'
+        ? 'all'
+        : record.agentKeys.join(', ') || '(none)'
+    }`,
   ];
   if (record.unresolvedNames.length > 0) {
     lines.push(`Unavailable members: ${record.unresolvedNames.join(', ')}`);

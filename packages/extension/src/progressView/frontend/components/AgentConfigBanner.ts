@@ -2,7 +2,6 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import { html, LitElement, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import { AgentCategory, type SessionType } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { designTokens, commonViewStyles, bannerStyles } from '@ui/styles';
@@ -18,15 +17,11 @@ export class AgentConfigBanner extends LitElement {
     visible: false,
   };
 
-  /** The category this banner's actions edit; its container resolves it. */
-  @property() sessionType: SessionType = AgentCategory.Workflow;
-
   private handleAction(action: 'edit' | 'dir' | 'docs'): void {
     this.dispatchEvent(
       SessionUiEvents.host({
         kind: 'agentConfigBanner',
         action,
-        sessionType: this.sessionType,
         customDirSet: this.state.customDirSet,
       }),
     );

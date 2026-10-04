@@ -57,7 +57,7 @@ import {
   type SessionView,
 } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
+import { isDocumentTaskConfig, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { heldElsewhereBy } from '@shared/session/database';
 import type {
   RunStopReason,
@@ -513,7 +513,6 @@ export function createChatSessionController(
             { config: registeredConfig, runId },
             {
               session: runtimeSession,
-              enforceCategory: true,
               ...(previousRootRunId !== undefined && {
                 continues: previousRootRunId,
               }),
@@ -590,11 +589,11 @@ export function createChatSessionController(
           refuseResume(`Task not found: ${id}`);
           return;
         }
-        // A workflow takes no chat: it resumes beside this one, as
+        // A document task takes no chat: it resumes beside this one, as
         // `/resume all` resumes it, and joins the agent list.
-        if (config.agentCategory !== AgentCategory.ToolUse) {
+        if (isDocumentTaskConfig(config)) {
           endResumeUnstarted(() =>
-            appendLocalNotice(`Resuming workflow ${id}. Tab lists it.`),
+            appendLocalNotice(`Resuming document task ${id}. Tab lists it.`),
           );
           yield* Effect.forkDetach(agentRuns.resumeBeside(id));
           return;
@@ -866,7 +865,6 @@ export function createChatSessionController(
             model: selection.model,
             instruction,
             ...(displayInstruction !== undefined ? { displayInstruction } : {}),
-            agentCategory: AgentCategory.ToolUse,
             workingDirectory: cwd,
             ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
             ...(meta.cliTeamId ? { cli: { teamId: meta.cliTeamId } } : {}),

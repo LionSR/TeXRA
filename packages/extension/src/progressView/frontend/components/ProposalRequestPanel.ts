@@ -18,9 +18,8 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import type {
   AgentProposalPermission,
   PermissionPayload,
-  WorkflowAgentProposalPermission,
 } from '@shared/schemas';
-import { AgentCategory, getProposalFileGroups } from '@shared/schemas';
+import { getProposalFileGroups } from '@shared/schemas';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { getModelLabel } from '@shared/model/modelLabel';
 import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '@shared/session/approvalDecision';
@@ -105,7 +104,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
       (this.permission.modelOptionsData ?? []).length > 0
         ? nothing
         : html` on ${getModelLabel(data.model)}`;
-    return data.agentCategory === AgentCategory.Workflow
+    return data.task
       ? html`Run${agent === nothing ? ' an agent' : agent}${model}`
       : html`Delegate a
         task${agent === nothing ? '' : html` to${agent}`}${model}`;
@@ -139,7 +138,6 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     const data = this.permission.data;
     const modelOptions = this.permission.modelOptionsData ?? [];
     const agentOptions = this.permission.agentOptionsData ?? [];
-    const isWorkflow = data.agentCategory === AgentCategory.Workflow;
 
     // The transport ships option data only for proposals whose approval
     // honors a model/agent override; the pickers render iff it arrived.
@@ -180,7 +178,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
       body = html`${pickers} ${this.renderScriptSummary(data, data.script)}`;
     else
       body = html`${pickers} ${this.renderInstruction(data.instruction)}
-      ${isWorkflow ? this.renderExtractFlags(data) : nothing}
+      ${data.task ? this.renderExtractFlags(data) : nothing}
       ${this.renderProposalFiles(data)}`;
     return this.renderCard(
       body,
@@ -272,7 +270,8 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   private renderProposalFiles(
     data: AgentProposalPermission,
   ): TemplateResult | typeof nothing {
-    const groups = getProposalFileGroups(data);
+    // Only a document task revises files; a chat delegation names none.
+    const groups = data.task ? getProposalFileGroups(data) : [];
     const workingDirectoryRow = this.renderWorkingDirectory(data);
     if (groups.length === 0 && workingDirectoryRow === nothing) return nothing;
     return html`<div class="workflow-proposal__files">
@@ -287,7 +286,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   }
 
   private renderExtractFlags(
-    data: WorkflowAgentProposalPermission,
+    data: AgentProposalPermission,
   ): TemplateResult | typeof nothing {
     const flags: string[] = [];
     if (data.toolConfig.autoExtractFigure) flags.push('Extract figures');

@@ -89,14 +89,15 @@ const WRAPPED_EDIT_APPROVAL_ENV = Object.freeze({
   HARNESS_EDIT_APPROVAL: '1',
   HARNESS_EDIT_APPROVAL_WRAPPED_CONTEXT: '1',
 });
-const PHYSICIST_LOCAL_TOOL_USE_AGENTS = [
+const PHYSICIST_AGENTS = [
   'research',
   'review',
   'latexFixer',
   'numerics',
   'presenter',
+  'correct',
+  'polish',
 ].join('||');
-const PHYSICIST_WORKFLOW_AGENTS = ['correct', 'polish'].join('||');
 const TWO_OPENAI_MODELS = [
   'openai/gpt-5.5-2026-04-23',
   'openai/gpt-5.5-pro-2026-04-23',
@@ -343,7 +344,7 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '2',
       HARNESS_QUEUED_FOLLOWUPS:
-        '<subagent-result id="child-q" agent="reviewer" category="toolUse" status="completed"><response>All good &lt;ok&gt;</response></subagent-result>',
+        '<subagent-result id="child-q" agent="reviewer" status="completed"><response>All good &lt;ok&gt;</response></subagent-result>',
     },
     bootExpect: 'queued 1',
     keys: ['/status', '\r'],
@@ -361,7 +362,7 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '2',
       HARNESS_QUEUED_FOLLOWUPS:
-        '<subagent-progress id="child-q" agent="review" category="toolUse" type="plan" status="cleared"/>',
+        '<subagent-progress id="child-q" agent="review" type="plan" status="cleared"/>',
     },
     bootExpect: 'queued 1',
     frame: 'viewport',
@@ -605,25 +606,18 @@ const SCENARIOS = [
     frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
-      HARNESS_VISIBLE_TOOL_USE_AGENTS: PHYSICIST_LOCAL_TOOL_USE_AGENTS,
-      HARNESS_VISIBLE_WORKFLOW_AGENTS: PHYSICIST_WORKFLOW_AGENTS,
+      HARNESS_VISIBLE_AGENTS: PHYSICIST_AGENTS,
     },
     keys: ['/', `${ESC}/agent\r`],
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/agent',
-      'Tool-use agents',
-      'Workflows',
-      'correct',
-      'polish',
+      'Agents',
+      'correct · document task',
+      'polish · document task',
       'Choose an agent, or a team it leads, for this chat.',
     ],
-    unexpect: [
-      '//agent',
-      'Harness received: //agent',
-      '/agent - error',
-      'more workflows',
-    ],
+    unexpect: ['//agent', 'Harness received: //agent', '/agent - error'],
   },
   {
     name: 'slash-palette-csi-escape-ignored',
@@ -669,20 +663,17 @@ const SCENARIOS = [
     // read-only `texra chat --agent <name>` hint.
     env: {
       HARNESS_ENTRIES: '4',
-      HARNESS_VISIBLE_TOOL_USE_AGENTS: PHYSICIST_LOCAL_TOOL_USE_AGENTS,
-      HARNESS_VISIBLE_WORKFLOW_AGENTS: PHYSICIST_WORKFLOW_AGENTS,
+      HARNESS_VISIBLE_AGENTS: PHYSICIST_AGENTS,
     },
     keys: ['/agent', '\r'],
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/agent',
-      'Tool-use agents',
+      'Agents',
       'research',
       'review',
       'latexFixer',
-      'Workflows',
-      'correct',
-      'polish',
+      'correct · document task',
       'Current: chat (hidden from picker)',
       'Choose an agent, or a team it leads, for this chat.',
       'Esc cancel',
@@ -695,7 +686,6 @@ const SCENARIOS = [
       'latexDiff',
       'lean',
       'setup',
-      'more workflows',
       'tool-use; built-in',
       'delegating; built-in',
       'orchestrator; built-in',
@@ -707,20 +697,17 @@ const SCENARIOS = [
     cols: 80,
     env: {
       HARNESS_ENTRIES: '4',
-      HARNESS_VISIBLE_TOOL_USE_AGENTS: PHYSICIST_LOCAL_TOOL_USE_AGENTS,
-      HARNESS_VISIBLE_WORKFLOW_AGENTS: PHYSICIST_WORKFLOW_AGENTS,
+      HARNESS_VISIBLE_AGENTS: PHYSICIST_AGENTS,
     },
     keys: ['/agent', '\r'],
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/agent',
-      'Tool-use agents',
+      'Agents',
       'research',
       'review',
       'latexFixer',
-      'Workflows',
-      'correct',
-      'polish',
+      'correct · document task',
       'Current: chat (hidden from picker)',
       'Choose an agent, or a team it leads, for this chat.',
       'Esc cancel',
@@ -733,7 +720,6 @@ const SCENARIOS = [
       'latexDiff',
       'lean',
       'setup',
-      'more workflows',
       'tool-use; built-in',
       'delegating; built-in',
       'orchestrator; built-in',
@@ -1092,8 +1078,7 @@ const SCENARIOS = [
     cols: 80,
     env: {
       HARNESS_ENTRIES: '4',
-      HARNESS_VISIBLE_TOOL_USE_AGENTS: PHYSICIST_LOCAL_TOOL_USE_AGENTS,
-      HARNESS_VISIBLE_WORKFLOW_AGENTS: PHYSICIST_WORKFLOW_AGENTS,
+      HARNESS_VISIBLE_AGENTS: PHYSICIST_AGENTS,
     },
     keys: ['/agent', '\r'],
     frame: 'viewport',
@@ -1101,9 +1086,8 @@ const SCENARIOS = [
     expect: [
       '/agent',
       'Current: chat (hidden from picker)',
-      'Tool-use agents',
-      '+9 more',
-      'Workflows · texra run <name>',
+      'Agents',
+      '+11 more',
       '↑/↓ navigate',
       '1-9/a-z/Enter select',
       'Esc close',
@@ -1738,7 +1722,7 @@ const SCENARIOS = [
     expect: [
       'Spawn review?',
       FULL_WIDTH_AGENT_PROPOSAL_BORDER_80,
-      'Category: tool-use agent',
+      'Kind: agent',
       'Review the mathematical proof',
       'more rows',
       'scroll prompt',
@@ -1821,7 +1805,7 @@ const SCENARIOS = [
       // The proposal card names the model by its catalogue label, not its
       // persisted id; the label itself belongs to llm-zoo, so pin the prefix.
       'Model: DeepSeek',
-      'Category: tool-use agent',
+      'Kind: agent',
       'Include a short independent enumeration',
       'previous, 1 more rows',
       'scroll prompt',

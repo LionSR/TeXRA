@@ -1,7 +1,8 @@
-# Tool-Use Agent Schema & Reference
+# Agent Schema & Reference
 
-Tool-use agents are interactive, multi-turn conversational agents with tool
-calling. They access files ONLY through their declared tools (`read_file`,
+Every agent is a persona: a `prompt`, its `tools` and a `temperature`. Run
+with a prompt (a chat, or an `agent` call), it works in multiple turns with
+tool calling. They access files ONLY through their declared tools (`read_file`,
 `write_file`, `bash`, `grep`, etc.) — no pre-loaded content. The user's
 instruction arrives as the user message, not through a template variable.
 
@@ -28,11 +29,12 @@ reader for the old nested `settings:` / `prompts:` format.
 
 ## Critical rules
 
-- A tool-use (chat) agent has no `task` block. A file with `task` is a
-  document task (see `workflow_schema.md`) and cannot declare `tools`.
+- An agent with a `task` block is also a document task (see
+  `document_task_schema.md`). It works text-only, so it cannot declare
+  `tools`. Write an agent that needs tools without a `task` block.
 - There is no request template: the user's instruction is sent as the user
   message. Do not add a field for it.
-- `prompt` is the system prompt. Do not use any workflow-only variables
+- `prompt` is the system prompt. Do not use the document task variables
   (`INPUT_FILE`, `INPUT_CONTENT`, `ALL_INPUTS`, `ALL_CONTEXTS`,
   `INPUT_FILES`, `OUTPUT_FILES`).
 - `temperature` is optional, between 0 and 1, and defaults to 1.0. There is

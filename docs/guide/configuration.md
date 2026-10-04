@@ -180,7 +180,7 @@ The **LaTeX** view contains the settings that remain useful to change:
 
 - compile and diff behavior (auto-compile, opening the PDF, repairing failed
   compiles, only changed pages in diff PDFs, math markup in diffs, and diffs
-  between rounds);
+  between consecutive revisions);
 - formatter selection; and
 - inline criticism display (VS Code only).
 

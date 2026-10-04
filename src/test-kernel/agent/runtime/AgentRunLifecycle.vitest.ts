@@ -11,7 +11,7 @@ import {
   finalizeRunTerminal,
   runWithLifecycle,
 } from '@agent/runtime/AgentRunLifecycle';
-import { type ToolUseRunEndResult } from '@agent/runtime/RunEndResult';
+import { type RunEndResult } from '@agent/runtime/RunEndResult';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
@@ -20,7 +20,6 @@ import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
   agentKey,
-  AgentCategory,
 } from '@shared/schemas';
 import type { RunId, RunOutcome } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -87,16 +86,13 @@ async function initLifecycleTestPlatform(firstRunDone: boolean) {
 
 let lifecycleFixtureCounter = 0;
 
-function lifecycleFixture(
-  agent = 'test-agent',
-  category: AgentCategory = AgentCategory.ToolUse,
-): {
+function lifecycleFixture(agent = 'test-agent'): {
   runId: RunId;
   ctx: AgentLaunchContext;
 } {
   const runId =
     `e${(lifecycleFixtureCounter++).toString(16).padStart(5, '0')}` as RunId;
-  const ctx = createTestLaunchContext({ runId, agent, category });
+  const ctx = createTestLaunchContext({ runId, agent });
   // A run is registered before its lifecycle runs: an activation commits
   // onto the run's rows.
   publishTestRunStart(ctx.session, runId);
@@ -108,12 +104,11 @@ const PARENT_RUN_ID = 'aa0001' as RunId;
 
 /** What a tool-use run that produced no output ends with on its `run.end`. */
 const EMPTY_TOOL_USE_OUTPUT = {
-  category: 'toolUse',
   response: '',
   files: [],
 } as const;
 
-function toolUseResult(runId: RunId, outcome: RunOutcome): ToolUseRunEndResult {
+function toolUseResult(runId: RunId, outcome: RunOutcome): RunEndResult {
   return { outcome, runId, output: { ...EMPTY_TOOL_USE_OUTPUT, files: [] } };
 }
 
@@ -149,7 +144,7 @@ describe('runWithLifecycle', () => {
     {
       label:
         'does not complete first-run onboarding for qualified setup sessions',
-      agent: agentKey('builtInToolUse', SETUP_AGENT_NAME),
+      agent: agentKey('builtIn', SETUP_AGENT_NAME),
       expectedDone: false,
     },
     {
@@ -532,7 +527,7 @@ describe('runWithLifecycle', () => {
       const carriedResult = {
         outcome: RUN_OUTCOME.FAILED,
         runId,
-        output: { category: 'toolUse' as const, response: '', files: [] },
+        output: { response: '', files: [] },
         error: { message: 'subagent failed', userRetryable: false },
       };
 
@@ -562,7 +557,6 @@ describe('runWithLifecycle', () => {
                 outcome: RUN_OUTCOME.FAILED,
                 runId,
                 output: {
-                  category: 'toolUse' as const,
                   response: 'partial answer',
                   files: [],
                 },
@@ -611,7 +605,6 @@ describe('runWithLifecycle', () => {
                 outcome: RUN_OUTCOME.FAILED,
                 runId,
                 output: {
-                  category: 'toolUse' as const,
                   response: '',
                   files: [],
                 },

@@ -11,7 +11,7 @@ import { Effect } from 'effect';
 import { AgentConfigSchema, type AgentConfigPayload } from '@agent/runtime';
 import type { ServiceClient } from '@controllers/server/client';
 import type { TaskSummary } from '@controllers/server/protocol';
-import { AgentCategory, type RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { RequestErrorWire } from '@shared/session/sessionFrames';
 import { generateRunId } from '@utils/core';
@@ -156,14 +156,14 @@ const startCommand = defineCliCommand({
   meta: {
     name: 'start',
     description:
-      'Start a tool-use agent as a task in the TeXRA service and print its id',
+      'Start an agent as a task in the TeXRA service and print its id',
   },
   args: {
     ...GLOBAL_ARGS,
     agent: {
       type: 'positional',
       required: true,
-      description: 'Tool-use agent name from `texra agents list`',
+      description: 'Agent name from `texra agents list`',
     },
     instruction: {
       type: 'string',
@@ -182,12 +182,6 @@ const startCommand = defineCliCommand({
         );
       const services = yield* initCliPlatform(context);
       const agent = yield* resolveCliRunAgent(services, ctx.args.agent);
-      if (agent.category !== AgentCategory.ToolUse)
-        return yield* Effect.fail(
-          new CliUsageError(
-            `"${ctx.args.agent}" is a ${agent.category} agent; \`texra tasks start\` runs tool-use agents.`,
-          ),
-        );
       const model = yield* selectCliRunModel(
         context,
         optString(ctx.args.model),
@@ -207,7 +201,6 @@ const startCommand = defineCliCommand({
         }),
         displayInstruction: instruction,
         workingDirectory: context.cwd,
-        agentCategory: AgentCategory.ToolUse,
       };
       const config = yield* Effect.try({
         try: () => AgentConfigSchema.parse(payload),

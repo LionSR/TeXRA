@@ -38,7 +38,8 @@ function buildAgentTooltip(opt: AgentOptionData): string {
   // The two built-in sources carry no origin hint and have no row here.
   if (opt.source !== undefined && opt.source in properties)
     hints.push(properties[opt.source as keyof typeof properties].hint);
-  if (opt.isToolUse) hints.push('Can execute tools and code');
+  if (opt.rounds !== undefined)
+    hints.push(`Document task: ${opt.rounds} revisions over your files`);
 
   return hints.join('\n');
 }
@@ -51,7 +52,6 @@ function renderAgentOption(opt: AgentOptionData): TemplateResult {
       value=${opt.value}
       title=${tooltip || nothing}
       data-label=${opt.label}
-      data-tool-use=${opt.isToolUse ? 'true' : nothing}
     >
       ${
         opt.isOrchestrator

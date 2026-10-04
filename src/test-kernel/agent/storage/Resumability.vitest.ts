@@ -6,7 +6,6 @@ import { deriveResumability, finalizeRun } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   aggregateId,
-  AgentCategory,
   emptyRunEndOutput,
   type RunSnapshotPayload,
   RUN_OUTCOME,
@@ -68,7 +67,7 @@ describe('deriveResumability', () => {
             type: 'run.end',
             aggregateId: aggregateId('run', runId),
             outcome,
-            output: emptyRunEndOutput(AgentCategory.ToolUse),
+            output: emptyRunEndOutput(),
           },
         ]),
       );

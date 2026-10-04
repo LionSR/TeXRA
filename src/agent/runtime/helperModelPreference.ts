@@ -19,15 +19,14 @@ import {
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 
-import { AgentCategory } from '@shared/schemas';
 import { getHelperModelName } from './helperModelName';
 
 const CHANNEL = 'helperModelPreference';
 
 /**
  * Swap `config`'s model for the configured helper model, or return it unchanged
- * when the helper model already equals it, a tool-use agent's helper model can't
- * call functions, or the helper model is unavailable.
+ * when the helper model already equals it, the helper model can't call
+ * functions (the agent needs its tools), or the helper model is unavailable.
  *
  * `stores` are the secret store and the session's setting slots the launching
  * run already holds, so the preference and the availability answer are read
@@ -41,13 +40,10 @@ export const applyHelperModelPreference = Effect.fn(
 
   const helperModelConfig = modelConfig(helperModel);
 
-  // A tool-use agent (e.g. latexFixer) needs its tools, so do not assign a
-  // helper model that does not declare function calling — not only one that
+  // The agent (e.g. latexFixer) needs its tools, so do not assign a helper
+  // model that does not declare function calling — not only one that
   // explicitly sets the capability to false.
-  if (
-    config.agentCategory === AgentCategory.ToolUse &&
-    !helperModelConfig?.capabilities.supportsFunctionCalling
-  ) {
+  if (!helperModelConfig?.capabilities.supportsFunctionCalling) {
     yield* Effect.logWarning(
       `Keeping ${config.model} for ${config.agent}: helper model ${helperModel} does not support function calling.`,
     ).pipe(withLogChannel(CHANNEL));

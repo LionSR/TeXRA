@@ -70,7 +70,7 @@ import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApproval
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import {
-  AgentCategory,
+  DEFAULT_TOOL_CONFIG,
   type AgentProposalPermission,
   type PermissionPayload,
   type RequestDecision,
@@ -213,7 +213,12 @@ function proposalPayload(
     instruction,
     memories: [],
     workingDirectory: null,
-    agentCategory: AgentCategory.ToolUse,
+    inputFiles: [],
+    contextFiles: [],
+    mediaFiles: [],
+    outputFiles: [],
+    task: false,
+    toolConfig: DEFAULT_TOOL_CONFIG,
   };
 }
 

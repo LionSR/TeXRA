@@ -8,51 +8,37 @@ import {
   type WorkspaceAgentsEntry,
 } from '@agent/workspaceAgents/WorkspaceAgentsController';
 import type { StateStore } from '@platform/interfaces';
-import {
-  agentMatchesIdentifier,
-  type AgentCategory,
-  type AgentModePreset,
-} from '@shared/schemas';
+import { agentMatchesIdentifier, type AgentModePreset } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
-const agents: Record<AgentCategory, WorkspaceAgentsEntry[]> = {
-  workflow: [
-    { category: 'workflow', source: 'builtInWorkflow', name: 'write' },
-    { category: 'workflow', source: 'custom', name: 'review' },
-  ],
-  toolUse: [
-    { category: 'toolUse', source: 'builtInToolUse', name: 'lead' },
-    { category: 'toolUse', source: 'custom', name: 'search' },
-  ],
-};
+const agents: WorkspaceAgentsEntry[] = [
+  { source: 'builtIn', name: 'write' },
+  { source: 'custom', name: 'review' },
+  { source: 'builtIn', name: 'lead' },
+  { source: 'custom', name: 'search' },
+];
 
 const preset: AgentModePreset = {
   id: 'test-team',
   name: 'Test team',
   description: 'A deterministic test workspaceAgents.',
   icon: 'bookmark',
-  agents: {
-    workflow: ['write'],
-    toolUse: ['lead'],
-  },
+  agents: ['write', 'lead'],
 };
 
 function controller(
   workspaceState: StateStore,
   overrides: Partial<WorkspaceAgentsControllerDeps> = {},
 ): WorkspaceAgentsController {
-  const getAgents =
-    overrides.getAgents ?? ((category: AgentCategory) => agents[category]);
+  const getAgents = overrides.getAgents ?? (() => agents);
   return new WorkspaceAgentsController({
     repoState: workspaceState,
     globalState: new FakeStateStore(),
     getAgents,
     getPresets: () => Effect.succeed([preset]),
-    resolveAgent: (category, identifier) =>
-      getAgents(category).find((entry) =>
-        agentMatchesIdentifier(entry, identifier),
-      ),
+    resolveAgent: (identifier) =>
+      getAgents().find((entry) => agentMatchesIdentifier(entry, identifier)),
     ...overrides,
   });
 }
@@ -78,12 +64,11 @@ describe('WorkspaceAgentsController', () => {
         kind: 'team',
         teamId: 'test-team',
       });
-      // The team names `lead`; a custom agent it does not name is shown too.
+      // The team names `write` and `lead`; a custom agent it does not name is
+      // shown too.
       expect(
-        (yield* workspaceAgents.getVisibleAgents('toolUse')).map(
-          (agent) => agent.name,
-        ),
-      ).toEqual(['lead', 'search']);
+        (yield* workspaceAgents.getVisibleAgents()).map((agent) => agent.name),
+      ).toEqual(['write', 'lead', 'review', 'search']);
     }),
   );
 
@@ -94,7 +79,6 @@ describe('WorkspaceAgentsController', () => {
       yield* workspaceAgents.setAll();
 
       yield* workspaceAgents.setAgentEnabled({
-        category: 'toolUse',
         source: 'custom',
         name: 'search',
         enabled: false,
@@ -102,18 +86,13 @@ describe('WorkspaceAgentsController', () => {
 
       expect((yield* workspaceAgents.snapshot()).selection).toEqual({
         kind: 'custom',
-        agentKeys: {
-          workflow: 'all',
-          toolUse: ['builtInToolUse:lead'],
-        },
+        agentKeys: ['builtIn:write', 'custom:review', 'builtIn:lead'],
       });
       // Turned off, it stays off under a team that does not name it.
       yield* workspaceAgents.setTeam('test-team');
       expect(
-        (yield* workspaceAgents.getVisibleAgents('toolUse')).map(
-          (agent) => agent.name,
-        ),
-      ).toEqual(['lead']);
+        (yield* workspaceAgents.getVisibleAgents()).map((agent) => agent.name),
+      ).toEqual(['write', 'lead', 'review']);
     }),
   );
 
@@ -127,17 +106,10 @@ describe('WorkspaceAgentsController', () => {
           }),
         );
         expect(
-          (yield* workspaceAgents.getVisibleAgents('toolUse')).map(
+          (yield* workspaceAgents.getVisibleAgents()).map(
             (agent) => agent.name,
           ),
-        ).toEqual(['lead']);
-        // Editing one category leaves the others symbolic, so agents added
-        // later still appear there.
-        yield* workspaceAgents.setEnabledAgentKeys('workflow', ['write']);
-        expect((yield* workspaceAgents.snapshot()).selection).toEqual({
-          kind: 'custom',
-          agentKeys: { workflow: ['write'], toolUse: 'all' },
-        });
+        ).toEqual(['write', 'review', 'lead']);
       }),
   );
 
@@ -145,13 +117,11 @@ describe('WorkspaceAgentsController', () => {
     Effect.gen(function* () {
       const workspaceAgents = controller(new FakeStateStore());
       // The CLI writes bare names (`--tool-use lead,search`).
-      yield* workspaceAgents.setEnabledAgentKeys('toolUse', ['lead', 'search']);
+      yield* workspaceAgents.setEnabledAgentKeys(['lead', 'search']);
       yield* workspaceAgents.setTeam('test-team');
       expect(
-        (yield* workspaceAgents.getVisibleAgents('toolUse')).map(
-          (agent) => agent.name,
-        ),
-      ).toEqual(['lead', 'search']);
+        (yield* workspaceAgents.getVisibleAgents()).map((agent) => agent.name),
+      ).toEqual(['write', 'lead', 'search']);
     }),
   );
 
@@ -166,8 +136,7 @@ describe('WorkspaceAgentsController', () => {
           }),
         });
         yield* inherited.setAgentEnabled({
-          category: 'workflow',
-          source: 'builtInWorkflow',
+          source: 'builtIn',
           name: 'write',
           enabled: true,
         });
@@ -181,8 +150,7 @@ describe('WorkspaceAgentsController', () => {
         const team = controller(new FakeStateStore());
         yield* team.setTeam('test-team');
         yield* team.setAgentEnabled({
-          category: 'toolUse',
-          source: 'builtInToolUse',
+          source: 'builtIn',
           name: 'lead',
           enabled: true,
         });
@@ -194,7 +162,6 @@ describe('WorkspaceAgentsController', () => {
         const all = controller(new FakeStateStore());
         yield* all.setAll();
         yield* all.setAgentEnabled({
-          category: 'toolUse',
           source: 'custom',
           name: 'search',
           enabled: true,
@@ -204,13 +171,13 @@ describe('WorkspaceAgentsController', () => {
   );
 
   it.effect(
-    'preserves unresolved team members when another category changes',
+    'preserves unresolved team members when a toggle rewrites the list',
     () =>
       Effect.gen(function* () {
         const unavailablePreset: AgentModePreset = {
           ...preset,
           id: 'partly-unavailable',
-          agents: { ...preset.agents, workflow: ['write', 'future-reviewer'] },
+          agents: ['write', 'future-reviewer', 'lead'],
         };
         const workspaceState = new FakeStateStore();
         const workspaceAgents = controller(workspaceState, {
@@ -218,14 +185,15 @@ describe('WorkspaceAgentsController', () => {
         });
         yield* workspaceAgents.setTeam(unavailablePreset.id);
 
-        expect(yield* workspaceAgents.getEnabledAgentKeys('workflow')).toEqual([
-          'builtInWorkflow:write',
+        expect(yield* workspaceAgents.getEnabledAgentKeys()).toEqual([
+          'builtIn:write',
           'future-reviewer',
+          'builtIn:lead',
           'custom:review',
+          'custom:search',
         ]);
 
         yield* workspaceAgents.setAgentEnabled({
-          category: 'toolUse',
           source: 'custom',
           name: 'search',
           enabled: false,
@@ -233,14 +201,12 @@ describe('WorkspaceAgentsController', () => {
 
         expect((yield* workspaceAgents.snapshot()).selection).toEqual({
           kind: 'custom',
-          agentKeys: {
-            workflow: [
-              'builtInWorkflow:write',
-              'future-reviewer',
-              'custom:review',
-            ],
-            toolUse: ['builtInToolUse:lead'],
-          },
+          agentKeys: [
+            'builtIn:write',
+            'future-reviewer',
+            'builtIn:lead',
+            'custom:review',
+          ],
         });
       }),
   );
@@ -258,9 +224,7 @@ describe('WorkspaceAgentsController', () => {
       expect((yield* workspaceAgents.snapshot()).effectiveSelection).toEqual({
         kind: 'all',
       });
-      expect(yield* workspaceAgents.getVisibleAgents('toolUse')).toEqual(
-        agents.toolUse,
-      );
+      expect(yield* workspaceAgents.getVisibleAgents()).toEqual(agents);
       expect((yield* workspaceAgents.snapshot()).missingTeamId).toBe(
         'deleted-team',
       );
@@ -286,10 +250,12 @@ describe('WorkspaceAgentsController', () => {
 
         expect((yield* workspaceAgents.snapshot()).selection).toEqual({
           kind: 'custom',
-          agentKeys: {
-            workflow: ['builtInWorkflow:write', 'custom:review'],
-            toolUse: ['builtInToolUse:lead', 'custom:search'],
-          },
+          agentKeys: [
+            'builtIn:write',
+            'builtIn:lead',
+            'custom:review',
+            'custom:search',
+          ],
         });
       }),
   );
@@ -298,30 +264,24 @@ describe('WorkspaceAgentsController', () => {
     'matches source-qualified custom selections by exact identity',
     () =>
       Effect.gen(function* () {
-        const duplicateAgents: Record<AgentCategory, WorkspaceAgentsEntry[]> = {
-          workflow: [],
-          toolUse: [
-            { category: 'toolUse', source: 'custom', name: 'review' },
-            { category: 'toolUse', source: 'plugin', name: 'review' },
-          ],
-        };
+        const duplicateAgents: WorkspaceAgentsEntry[] = [
+          { source: 'custom', name: 'review' },
+          { source: 'plugin', name: 'review' },
+        ];
         const workspaceAgents = controller(
           new FakeStateStore({
             [WorkspaceStateKey.WORKSPACE_AGENTS]: {
               kind: 'custom',
-              agentKeys: {
-                workflow: [],
-                toolUse: ['plugin:review'],
-              },
+              agentKeys: ['plugin:review'],
             },
             // Hidden, so only the exact identity decides what shows.
             [WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS]: ['custom:review'],
           }),
-          { getAgents: (category) => duplicateAgents[category] },
+          { getAgents: () => duplicateAgents },
         );
 
-        expect(yield* workspaceAgents.getVisibleAgents('toolUse')).toEqual([
-          { category: 'toolUse', source: 'plugin', name: 'review' },
+        expect(yield* workspaceAgents.getVisibleAgents()).toEqual([
+          { source: 'plugin', name: 'review' },
         ]);
       }),
   );
@@ -343,7 +303,7 @@ describe('WorkspaceAgentsController', () => {
         const hidden = () =>
           workspaceState.get(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS);
 
-        yield* workspaceAgents.setEnabledAgentKeys('toolUse', []);
+        yield* workspaceAgents.setEnabledAgentKeys([]);
         expect(yield* hidden()).toEqual(['custom:review', 'custom:search']);
 
         yield* workspaceAgents.forgetDeletedAgent('review');
@@ -351,40 +311,33 @@ describe('WorkspaceAgentsController', () => {
       }),
   );
 
-  it.effect(
-    'serializes concurrent category changes through one workspace owner',
-    () =>
-      Effect.gen(function* () {
-        const workspaceState = new FakeStateStore();
-        const first = controller(workspaceState);
-        const second = controller(workspaceState);
-        yield* first.setAll();
+  it.effect('serializes concurrent toggles through one workspace owner', () =>
+    Effect.gen(function* () {
+      const workspaceState = new FakeStateStore();
+      const first = controller(workspaceState);
+      const second = controller(workspaceState);
+      yield* first.setAll();
 
-        yield* Effect.all(
-          [
-            first.setAgentEnabled({
-              category: 'workflow',
-              source: 'custom',
-              name: 'review',
-              enabled: false,
-            }),
-            second.setAgentEnabled({
-              category: 'toolUse',
-              source: 'custom',
-              name: 'search',
-              enabled: false,
-            }),
-          ],
-          { concurrency: 'unbounded' },
-        );
+      yield* Effect.all(
+        [
+          first.setAgentEnabled({
+            source: 'custom',
+            name: 'review',
+            enabled: false,
+          }),
+          second.setAgentEnabled({
+            source: 'custom',
+            name: 'search',
+            enabled: false,
+          }),
+        ],
+        { concurrency: 'unbounded' },
+      );
 
-        expect((yield* first.snapshot()).selection).toEqual({
-          kind: 'custom',
-          agentKeys: {
-            workflow: ['builtInWorkflow:write'],
-            toolUse: ['builtInToolUse:lead'],
-          },
-        });
-      }),
+      expect((yield* first.snapshot()).selection).toEqual({
+        kind: 'custom',
+        agentKeys: ['builtIn:write', 'builtIn:lead'],
+      });
+    }),
   );
 });

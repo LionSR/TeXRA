@@ -216,25 +216,26 @@ Full patterns: AGENTS.md "Zod v4 Schema Patterns".
 
 Core lives in `src/agent/`: `core/` is the host-agnostic domain model (see
 `src/agent/core/README.md`); `runtime/loop/` holds the one run program
-(`toolUse.ts`), a plain Effect loop over the run history that workflow agents
-run in round mode (`rounds.ts`), with `runtime/run/` the per-run services it
+(`toolUse.ts`), a plain Effect loop over the run history, with
+`runtime/run/` the per-run services it
 takes from context (`AgentRun`, model binding, pricing, media, tools) and
 `runtime/ModelInvoker.ts` the one service that calls the `packages/llm`
 `Model`. `core/tools/` holds `toolCallParsing`, which parses a response's
-tool calls. `output/` is the documents plugin a workflow round runs
-(`documentRounds.ts`) and its output pipeline. Provider APIs are reached
+tool calls. `output/` holds the document recipe (`documentRecipe.ts`), the
+script a document task's run executes over the documents plugin's tools
+(`src/tools/documents/`), and its output pipeline. Provider APIs are reached
 only through the `packages/llm` `Model` that `runtime/run/modelBinding.ts`
 binds; the `helperModel` path binds through that same route. New agents come
-from the built-in `creator` tool-use agent or the settings view's "Create from
-template". Agents are configured by YAML in
-`packages/extension/resources/agents/`, one unified YAML per agent covering
-single and multi-document output.
+from the built-in `creator` agent or the settings view's "Create from
+template". Agents are flat persona YAML (`name`, `description`, `prompt`,
+`tools`, `temperature`) in `packages/extension/resources/`; a `task:` block
+makes one also launchable as a document task.
 
 **Launch executions via `runAgent`** (`src/agent/runtime/runAgent.ts`) — it
 assigns a `runId`, registers the run, and opens workflow output. Use the
 lower-level `executeAgent` only when you already own the `runId` (subagent
-dispatch). `runAgent` launches fresh runs only: a persisted run of either
-category resumes through `resumeRun`, which continues it with
+dispatch). `runAgent` launches fresh runs only: a persisted run resumes
+through `resumeRun`, which continues it with
 `resumeToolUseFromResumeData`. Loop conventions and the
 write points: AGENTS.md "Patterns across the codebase" (Run loop
 architecture).

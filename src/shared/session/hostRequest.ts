@@ -15,7 +15,6 @@ import {
   CurrentFileTypeSchema,
   DocumentFileTypeSchema,
   GettingStartedActionSchema,
-  SessionTypeSchema,
   RunIdSchema,
 } from '@shared/schemas';
 
@@ -101,7 +100,6 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
     section: z
       .enum(['agents', 'teams', 'models', 'plugins', 'general'])
       .nullish(),
-    sessionType: SessionTypeSchema.nullish(),
   }),
   /** The launcher's pickers: `fileType` chooses the dialog and names the
    *  `Surface.launch` field the paths return to. */
@@ -188,7 +186,6 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('agentConfigBanner'),
     action: z.enum(['edit', 'dir', 'docs']),
-    sessionType: SessionTypeSchema,
     customDirSet: z.boolean().nullish(),
   }),
   z.object({ kind: z.literal('recheckDependencies') }),

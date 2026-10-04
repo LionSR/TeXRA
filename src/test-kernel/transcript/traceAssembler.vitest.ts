@@ -14,7 +14,6 @@ import {
   MESSAGE_TYPES,
   type RunId,
   type RunOutcome,
-  AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -54,7 +53,6 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
     agent: 'orchestrator',
     model: 'deepseek/deepseek-v4-flash',
     instruction: 'Solve the problem.',
-    agentCategory: AgentCategory.ToolUse,
     workingDirectory: '/workspace',
     ...overrides,
   });
@@ -77,7 +75,7 @@ async function writeRun(
           type: 'run.end',
           aggregateId: aggregateId('run', runId),
           outcome: meta.outcome,
-          output: emptyRunEndOutput(AgentCategory.ToolUse),
+          output: emptyRunEndOutput(),
         },
       ]),
     );

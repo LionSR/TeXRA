@@ -180,6 +180,9 @@ export type ToolCallShape = {
         | 'delegationAgentScope'
         | 'steps'
         | 'scope'
+        | 'task'
+        | 'opening'
+        | 'fileService'
       >;
       /** Where the call's requests open. */
       readonly requests: CallRequests;
