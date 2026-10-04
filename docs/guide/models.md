@@ -176,7 +176,7 @@ desktop model lists. If Copilot quota is exhausted, the retry panel can start a
 new run through the corresponding provider model once a usable provider API
 key is available.
 
-Using your own provider API key? TeXRA stores keys in VS Code's secret storage; they are never written to settings files.
+Using your own provider API key? TeXRA stores keys in `~/.texra/secrets.json`, a file only your user can read, shared by the extension, the desktop app and the CLI; they are never written to settings files.
 
 1.  **Open Settings**: Select the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon in the TeXRA panel header, or run **TeXRA: Open Settings** from the Command Palette.
 2.  **Go to the Models page**: The **API keys** list shows every provider with its current key status (`Set`, `Env`, or `Not set`).

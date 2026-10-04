@@ -151,9 +151,9 @@ the **Settings → Models → Subscriptions** tab can also route models through 
 GitHub Copilot subscription, with no provider API key needed. Connect one
 from that tab, or with `texra auth chatgpt login` / `/login` in the CLI.
 
-API keys, whichever mode you use, stay on your machine: VS Code's
-built-in Secret Storage in the extension, an owner-only `secrets.json`
-under `~/.texra` for the CLI. You can also supply them via environment
+API keys, whichever mode you use, stay on your machine, in one owner-only
+`secrets.json` under `~/.texra` that the extension, the desktop app and the
+CLI share (readable by your user alone; not keychain-encrypted). You can also supply them via environment
 variables or a `.env` file in your project (extension only).
 
 ## Support

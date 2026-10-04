@@ -5,7 +5,8 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { CliSecrets, cliSecretsPath } from '@cli/runtime/cliSecrets';
+import { emitAppSignal } from '@eventBus/AppSignals';
+import { FileSecrets, secretsPath } from '@platform/defaults/fileSecrets';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { withEnv } from '@test/support/testEnv';
 
@@ -18,7 +19,7 @@ function withSecretsRootEffect<A, E, R>(
 ): Effect.Effect<A, E, R> {
   return withTempDirEffect('texra-cli-secrets-', (root) => {
     const storageRoot = path.join(root, 'storage');
-    return run({ root, storageRoot, secretsPath: cliSecretsPath(storageRoot) });
+    return run({ root, storageRoot, secretsPath: secretsPath(storageRoot) });
   });
 }
 
@@ -33,7 +34,9 @@ describe('CLI secrets', () => {
       Effect.gen(function* () {
         yield* withSecretsRootEffect(({ secretsPath }) =>
           Effect.gen(function* () {
-            const secrets = new CliSecrets(secretsPath);
+            const secrets = new FileSecrets(secretsPath, (key) =>
+              emitAppSignal('credentialChanged', { key }),
+            );
             yield* secrets.set('EXISTING_KEY', 'existing-value');
 
             // Corrupt the on-disk file to simulate a non-ENOENT read failure
@@ -76,7 +79,9 @@ describe('CLI secrets', () => {
       Effect.gen(function* () {
         yield* withSecretsRootEffect(({ secretsPath }) =>
           Effect.gen(function* () {
-            const secrets = new CliSecrets(secretsPath);
+            const secrets = new FileSecrets(secretsPath, (key) =>
+              emitAppSignal('credentialChanged', { key }),
+            );
 
             // Two overlapping mutations on the same instance, started before
             // either resolves. Without intra-process serialization, each opens
@@ -106,7 +111,9 @@ describe('CLI secrets', () => {
       Effect.gen(function* () {
         yield* withSecretsRootEffect(({ secretsPath }) =>
           Effect.gen(function* () {
-            const secrets = new CliSecrets(secretsPath);
+            const secrets = new FileSecrets(secretsPath, (key) =>
+              emitAppSignal('credentialChanged', { key }),
+            );
             yield* secrets.set('GOOD_KEY', 'good-value');
             yield* Effect.promise(() =>
               fs.writeFile(
@@ -144,7 +151,9 @@ describe('CLI secrets', () => {
                 Effect.promise(() => fs.chmod(root, 0o700)),
               );
 
-              const secrets = new CliSecrets(secretsPath);
+              const secrets = new FileSecrets(secretsPath, (key) =>
+                emitAppSignal('credentialChanged', { key }),
+              );
 
               expect(
                 yield* secrets.get('TEXRA_CLI_SECRETS_MISSING_KEY'),
@@ -160,7 +169,9 @@ describe('CLI secrets', () => {
     Effect.gen(function* () {
       yield* withSecretsRootEffect(({ secretsPath }) =>
         Effect.gen(function* () {
-          const secrets = new CliSecrets(secretsPath);
+          const secrets = new FileSecrets(secretsPath, (key) =>
+            emitAppSignal('credentialChanged', { key }),
+          );
           yield* secrets.set('TEXRA_CLI_SECRETS_TEST_KEY', 'test-key');
 
           const fileStat = yield* Effect.promise(() => fs.stat(secretsPath));

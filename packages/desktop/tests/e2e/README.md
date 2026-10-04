@@ -47,26 +47,9 @@ module as CommonJS, then fails on named exports). The shared fixture loader in
 and project-record operations with esbuild. Both E2E launches and the packaged
 application smoke use that loader, without duplicating SQL or persisted schemas.
 
-## macOS keychain caveat
+## Saved keys
 
-The harness sets `TEXRA_DISABLE_KEYCHAIN=1` (see `electronApp.ts`) which the
-secrets layer (`packages/desktop/src/main/platform/electronSecrets.ts`)
-honors by skipping `safeStorage` entirely:
-
-- `getSecretStorageMode()` returns `'unavailable'` without touching
-  `safeStorage`.
-- `ElectronSecrets.get()` returns `undefined` for any persisted key (env-var
-  API key overrides still work).
-- `ElectronSecrets.set()` silently no-ops with a one-time `console.warn`.
-
-This keeps headless Playwright runs from blocking on the macOS keychain
-prompt and preserves the renderer bootstrap fallback for
-`Cannot read properties of undefined (reading 'kind')`. To run locally exactly
-as CI does, prefix your invocation:
-
-```bash
-TEXRA_DISABLE_KEYCHAIN=1 pnpm --filter @texra/desktop test:e2e
-```
-
-Persisted secret reads/writes are disabled in this mode by design — it is a
-test-harness shim only and not exposed as a user-facing toggle.
+The app keeps saved keys in the shared owner-only `secrets.json` under its
+data root, which the harness points at a throwaway user-data directory
+(`TEXRA_DESKTOP_E2E_USER_DATA_PATH`), so no run touches the keychain or the
+developer's own keys.

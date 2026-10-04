@@ -86,7 +86,7 @@ export const bootstrapHost = Effect.fn('bootstrapHost')(function* (
   // GoTrue's PKCE verifiers and the pending sign-in records in the secret
   // store. Delete them by name, never reading a value; once gone, the listing
   // finds nothing and this is a no-op. A store that cannot list its keys
-  // (an editor without `SecretStorage.keys()`) still loses the fixed names.
+  // still loses the fixed names.
   // A failure only leaves them for the next start.
   yield* secrets.listStoredKeys().pipe(
     Effect.catchIf(

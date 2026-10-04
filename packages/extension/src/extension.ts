@@ -56,11 +56,12 @@ import {
   registerInlineComments,
 } from '@frontend/comments/inlineComments';
 import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
-import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { withLogChannel } from '@logger/effectLog';
 import { setLogSink } from '@logger/logSink';
+import { nodeFileServices } from '@platform/defaults/jsonStore';
+import { FileSecrets, secretsPath } from '@platform/defaults/fileSecrets';
 import { AppState } from '@platform/interfaces';
 import type { ToolMissingHandler } from '@platform/interfaces';
 import {
@@ -71,7 +72,6 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type LanguageModelPort,
 } from '@platform/languageModel';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
@@ -149,7 +149,12 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     workspaceRoot,
   );
   const globalStorage = resolveGlobalStoragePath(DEFAULT_NODE_STORAGE_ROOT);
-  const secrets = new VscodeSecrets(context);
+  // The one credential store every host shares (`~/.texra/secrets.json`):
+  // the background service reads the keys this window saves.
+  const secrets = new FileSecrets(
+    secretsPath(DEFAULT_NODE_STORAGE_ROOT),
+    (key) => emitAppSignal('credentialChanged', { key }),
+  );
   const appState = Layer.effect(
     AppState,
     Effect.map(GlobalDatabase, (database) =>
@@ -362,8 +367,8 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   installUnhandledRejectionSurface(context.subscriptions);
   if (vscode.workspace.workspaceFolders?.length !== 1) {
     registerWelcomeView(context);
-    // Credential-only platform. Every sign-in path stores into SecretStorage
-    // (the `Secrets` service) and the global `~/.texra` config — none of it
+    // Credential-only platform. Every sign-in path stores into the shared
+    // secrets file (the `Secrets` service) and the global `~/.texra` config — none of it
     // needs a folder — so the walkthrough's credential buttons work before
     // one is open. Agents still require the workspace-backed platform below;
     // opening a folder reloads the window into that path (welcomeView.ts).
@@ -450,7 +455,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
 const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   context: vscode.ExtensionContext,
   languageModel: LanguageModelPort,
-  secrets: PlatformSecrets,
+  secrets: FileSecrets,
   runtime: ProcessRuntime,
   roots: WorkspaceRoots,
 ) {
@@ -534,6 +539,10 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     runtimeSession,
   );
   registerWalkthroughWorkspaceAction(context, true, runtime);
+  // Keys another window or the service writes reach this one's surfaces.
+  yield* Effect.forkScoped(
+    secrets.watch().pipe(Effect.provide(nodeFileServices)),
+  );
   yield* registerFileDecorations(context, runtimeSession);
 
   // VS Code's event emitters don't await async listeners, so we funnel
@@ -551,11 +560,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     );
 
   context.subscriptions.push(
-    // The VS Code store's half of `credentialChanged`: SecretStorage reports
-    // every committed write, other windows' included, so the signal lives here.
-    context.secrets.onDidChange(({ key }) => {
-      emitAppSignal('credentialChanged', { key });
-    }),
     // Lean/LaTeX extension installed or removed → re-probe so the Tools tab
     // reflects the new state without the user clicking Re-check.
     vscode.extensions.onDidChange(() => {
