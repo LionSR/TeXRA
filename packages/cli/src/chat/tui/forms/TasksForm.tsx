@@ -191,6 +191,15 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
   const inquiries = level.requests.filter(
     (request) => request.payload.kind === 'externalInquiry',
   ).length;
+  // Previews of settled requests go: each holds two whole documents.
+  useEffect(() => {
+    const open = new Set(level.requests.map((request) => request.requestId));
+    setPreviews((held) =>
+      [...held.keys()].every((id) => open.has(id))
+        ? held
+        : new Map([...held].filter(([id]) => open.has(id))),
+    );
+  }, [level.requests]);
   // An edit's preview is the service's to hand over: fetch it once.
   const asked = useRef(new Set<string>());
   useEffect(() => {
@@ -290,11 +299,15 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
         title={`${task.label} · ${status}`}
         footer={
           <KeyHints
+            // While a request is on screen its card owns Esc (reject or
+            // skip); detaching waits until it is answered.
             hints={[
               ...(composing
                 ? [{ key: 'Enter', action: 'send a follow-up' }]
                 : []),
-              { key: 'Esc', action: 'detach (the task keeps running)' },
+              ...(answering
+                ? []
+                : [{ key: 'Esc', action: 'detach (the task keeps running)' }]),
             ]}
             confirmCancel={false}
           />
@@ -315,12 +328,29 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
                 const message = text.trim();
                 if (!message) return;
                 setDraft('');
-                act((ready) =>
-                  ready.request({
-                    kind: 'followUp.send',
-                    runId: task.runId,
-                    text: message,
-                  }),
+                act(
+                  (ready) =>
+                    ready
+                      .request({
+                        kind: 'followUp.send',
+                        runId: task.runId,
+                        text: message,
+                      })
+                      .pipe(
+                        Effect.map((outcome) => {
+                          // Queued but not taken: the run did not wake, and
+                          // waits for a resume before it reads the message.
+                          if (
+                            outcome.kind === 'followUp' &&
+                            outcome.wake === 'failed'
+                          )
+                            setNotice(
+                              'The message is queued, but the task did not wake to read it.',
+                            );
+                        }),
+                      ),
+                  // Not sent: the draft comes back to send again.
+                  () => setDraft((held) => held || message),
                 );
               }}
             />

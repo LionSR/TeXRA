@@ -11,7 +11,7 @@ import type {
   TaskSummary,
   ToolEditPreview,
 } from '@controllers/server/protocol';
-import type { RuntimeRequest } from '@shared/session/runtimeRequest';
+import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import {
   attentionOf,
   type RunView,
@@ -29,7 +29,7 @@ export interface AttachedTaskLevel {
 
 /** What the attached view does to the task, each a request to the service. */
 export interface AttachedTaskActions {
-  readonly request: (request: RuntimeRequest) => Effect.Effect<void, Error>;
+  readonly request: (request: RuntimeRequest) => Effect.Effect<Outcome, Error>;
   readonly preview: (
     requestId: string,
   ) => Effect.Effect<ToolEditPreview | null, Error>;
@@ -68,7 +68,6 @@ export function followAttachedTask(
               ? error
               : new Error(describeWireRefusal(error)),
           ),
-          Effect.asVoid,
         ),
       preview: (requestId) =>
         client['request.preview']({
