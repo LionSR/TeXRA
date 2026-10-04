@@ -1,4 +1,4 @@
-import { Deferred, Effect, Fiber, Result, type Scope } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Result, Scope } from 'effect';
 
 /**
  * The one resume entry point. Every host continues a persisted run through
@@ -183,25 +183,30 @@ const resumeHere = Effect.fn('resumeHere')(function* (
   // Deleted, or its input closed, while those reads ran.
   if (cancelled() || session.events.inputClosed(aggregateId('run', runId)))
     return REFUSED;
+  // Every resume reads the run's state under its claim and holds it until
+  // the launched run holds its own, so two processes never both launch it,
+  // neither launches from a state read before the other ran, and a host is
+  // refused before it rearranges itself. A claim this process holds, or one
+  // whose owner is provably dead, is taken over.
+  const claim = yield* Scope.make();
+  yield* Effect.addFinalizer(() => Scope.close(claim, Exit.void));
+  const heldBy = yield* holdClaim(session, runId).pipe(Scope.provide(claim));
+  if (heldBy !== null) {
+    yield* session.markUnreadable(runId, runHeldMessage(ownerPid(heldBy)));
+    return { failed: 'owned_elsewhere' };
+  }
   const retrieved = yield* retrieveSessionResumeData(runId, config, session);
   if (cancelled()) return REFUSED;
   if (!retrieved) {
+    // Classified free of the hold taken here, which it would read as ours.
+    yield* Scope.close(claim, Exit.void);
     const classification = yield* classifyRun(runId, session);
     return {
       failed: yield* recordRunRefusal(runId, session, classification),
     };
   }
-  const resume = retrieved;
-  // Every resume holds the run's claim from here until the launched run
-  // holds its own, so two processes never both launch it and a host is
-  // refused before it rearranges itself: a claim this process holds, or
-  // one whose owner is provably dead, is taken over.
-  const heldBy = yield* holdClaim(session, runId);
   yield* session.clearUnreadable(runId);
-  if (heldBy !== null) {
-    yield* session.markUnreadable(runId, runHeldMessage(ownerPid(heldBy)));
-    return { failed: 'owned_elsewhere' };
-  }
+  const resume = retrieved;
   // An agent or plugin this process cannot run now leaves the run
   // interrupted with the reason (D5), for the session's follower to
   // resume once it is back; nothing is launched. Another process's run
