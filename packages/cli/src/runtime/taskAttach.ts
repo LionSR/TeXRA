@@ -14,6 +14,7 @@ import {
   Data,
   Effect,
   Fiber,
+  LogLevel,
   Option,
   type Scope,
   Stream,
@@ -54,11 +55,19 @@ export class TaskWatchEnded extends Data.TaggedError('TaskWatchEnded')<{
 }
 
 /** The task's own rows in one frame, as `texra run`'s progress records. */
-function writeProgress(frame: EventsFrame, aggregate: string): void {
+function writeProgress(
+  frame: EventsFrame,
+  aggregate: string,
+  includeDebugLogs: boolean,
+): void {
   for (const { read, event } of frame.events) {
     // The listing repeats a run's newest rows; its history and the tail
     // carry each row once.
     if (read === 'listing' || event.aggregateId !== aggregate) continue;
+    // A debug log row is a diagnostic: only `--verbose` prints it, as in
+    // `texra run`'s projection.
+    if (!includeDebugLogs && event.type === 'log' && event.level === 'debug')
+      continue;
     const { type, ...payload } = event;
     writeNdjsonStdout({
       kind: 'progress',
@@ -83,6 +92,7 @@ export const attachTask = Effect.fn('attachTask')(
     TaskWatchEnded,
     WebviewSessions | Scope.Scope
   > {
+    const includeDebugLogs = yield* LogLevel.isEnabled('Debug');
     const graph = yield* WebviewSessions.open(task.workspace);
     const aggregate = aggregateId('run', task.runId);
     const aggregates = [{ id: aggregate, fromSeq: 0 }];
@@ -105,7 +115,8 @@ export const attachTask = Effect.fn('attachTask')(
     }).pipe(
       Stream.runForEach((frame) =>
         Effect.sync(() => {
-          if (output.format === 'ndjson') writeProgress(frame, aggregate);
+          if (output.format === 'ndjson')
+            writeProgress(frame, aggregate, includeDebugLogs);
         }).pipe(Effect.andThen(graph.frames.feed(frame))),
       ),
       Effect.forkScoped,

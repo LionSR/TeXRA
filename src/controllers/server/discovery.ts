@@ -59,7 +59,14 @@ export function servicePaths(storageRoot: string): ServicePaths {
       socketDirectory: runDirectory,
     };
   }
-  const socketDirectory = path.join(tmpdir(), `texra-${tag}`);
+  // The system temp folder, unless it is itself too deep: `/tmp` always fits.
+  const fits = (base: string): boolean =>
+    Buffer.byteLength(path.join(base, `texra-${tag}`, 'serve.sock')) <=
+    MAX_UNIX_SOCKET_PATH;
+  const socketDirectory = path.join(
+    fits(tmpdir()) ? tmpdir() : '/tmp',
+    `texra-${tag}`,
+  );
   return {
     runDirectory,
     record,
