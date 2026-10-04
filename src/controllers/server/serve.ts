@@ -31,7 +31,11 @@ import { RpcSerialization, RpcServer } from 'effect/rpc';
 
 import type { ProcessServices } from '@platform/processRuntime';
 
-import { probeService, type ServiceUnavailable } from './client';
+import {
+  probeService,
+  WINDOWS_UNSUPPORTED,
+  type ServiceUnavailable,
+} from './client';
 import {
   prepareServiceDirectories,
   removeServiceFiles,
@@ -99,6 +103,13 @@ export const serve = Effect.fn('server.serve')(function* (
   ServiceAlreadyRunning | ServiceListenFailed | ServiceUnavailable,
   ProcessServices | ServiceProjects | Scope.Scope
 > {
+  if (process.platform === 'win32')
+    return yield* Effect.fail(
+      new ServiceListenFailed({
+        socket: '',
+        cause: new Error(WINDOWS_UNSUPPORTED),
+      }),
+    );
   const fs = yield* FileSystem.FileSystem;
   const projects = yield* ServiceProjects;
   const paths = servicePaths(projects.storageRoot);
@@ -160,7 +171,6 @@ export const serve = Effect.fn('server.serve')(function* (
   const protocol = yield* listen.pipe(
     Effect.catch((failed) =>
       Effect.gen(function* () {
-        if (process.platform === 'win32') return yield* Effect.fail(failed);
         const stale = yield* socketIno;
         const answer = yield* probeService(paths.socket);
         if (answer !== null)
@@ -176,14 +186,13 @@ export const serve = Effect.fn('server.serve')(function* (
     ),
   );
   clients = protocol.clientIds.pipe(Effect.map((ids) => ids.size));
-  if (process.platform !== 'win32')
-    yield* fs
-      .chmod(paths.socket, 0o600)
-      .pipe(
-        Effect.mapError(
-          (cause) => new ServiceListenFailed({ socket: paths.socket, cause }),
-        ),
-      );
+  yield* fs
+    .chmod(paths.socket, 0o600)
+    .pipe(
+      Effect.mapError(
+        (cause) => new ServiceListenFailed({ socket: paths.socket, cause }),
+      ),
+    );
   yield* Effect.forkScoped(
     RpcServer.make(TexraRpcs).pipe(
       Effect.provide(
@@ -223,7 +232,7 @@ export const serve = Effect.fn('server.serve')(function* (
     }
     // Another service took the socket path over (two started at once):
     // this one can no longer be reached, so it leaves.
-    if (listening !== undefined && process.platform !== 'win32') {
+    if (listening !== undefined) {
       const current = yield* socketIno;
       if (current !== listening && running === 0) {
         yield* Deferred.succeed(ended, 'replaced');

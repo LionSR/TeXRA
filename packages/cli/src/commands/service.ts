@@ -146,7 +146,10 @@ function stopService(context: CliContext) {
     if (info === null) return null;
     yield* Effect.scoped(
       Effect.gen(function* () {
-        const { client } = yield* connectCliService(context.storageRoot);
+        const { client } = yield* connectCliService(
+          context.storageRoot,
+          context.version,
+        );
         yield* client['service.stop']({ drain: false });
       }),
     );
@@ -209,7 +212,7 @@ const restartCommand = defineCliCommand({
     Effect.gen(function* () {
       yield* stopService(context);
       const { info } = yield* Effect.scoped(
-        connectCliService(context.storageRoot),
+        connectCliService(context.storageRoot, context.version),
       );
       emitStatus(context, info);
       return CliExitCode.Success;

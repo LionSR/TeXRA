@@ -493,9 +493,10 @@ texra serve             # run it in the foreground, logging to stderr
 The service listens on a socket in `~/.texra/run/` that only your user can
 open, and writes its log to `~/.texra/run/serve.log`. A newer TeXRA that
 finds an older service asks it to finish its running tasks and exit, and
-starts its own beside it. The service reads provider keys from its own
-environment when it starts: after you export or remove a key, run `texra
-service restart`.
+starts its own beside it. The service reads provider keys from its
+environment, and your settings, when it starts: after you export or remove
+a key, or edit `config.json`, run `texra service restart`. The service does
+not run on Windows yet.
 
 ## Tools and integrations
 

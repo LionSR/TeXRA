@@ -190,8 +190,10 @@ export const listTasks = Effect.fn('taskList.listTasks')(function* (
   }
   const newest = tasks.toSorted((a, b) => b.launchedAt - a.launchedAt);
   const live = newest.filter((task) => task.live);
-  return [...live, ...newest.filter((task) => !task.live)].slice(
-    0,
-    Math.max(TASK_LIST_LIMIT, live.length),
-  );
+  // Every live task is kept past the limit; the list stays newest first.
+  const kept = new Set([
+    ...live,
+    ...newest.slice(0, Math.max(0, TASK_LIST_LIMIT - live.length)),
+  ]);
+  return newest.filter((task) => kept.has(task));
 });

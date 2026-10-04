@@ -230,11 +230,15 @@ export function probeCliService(
   );
 }
 
-/** Connect to the storage root's service, starting it when none answers. */
+/** Connect to the storage root's service, starting it when none answers
+ *  and retiring one older than this build (`version`). */
 export function connectCliService(
   storageRoot: string,
+  version: string,
 ): Effect.Effect<ServiceConnection, Error, Scope.Scope> {
   return quietClient.pipe(
-    Effect.andThen(ensureService(storageRoot, startCliService(storageRoot))),
+    Effect.andThen(
+      ensureService(storageRoot, version, startCliService(storageRoot)),
+    ),
   );
 }

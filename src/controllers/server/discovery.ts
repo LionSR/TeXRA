@@ -4,7 +4,8 @@
  * directory is the user's alone (0700), which is what keeps the socket
  * private. A storage root whose socket path would pass the Unix limit
  * keeps its socket in a private directory under the system temp folder,
- * named by a hash of the root; on Windows the socket is a named pipe.
+ * named by a hash of the root. Windows has no service yet: a named pipe
+ * there would take the default ACL, which is not the user's alone.
  */
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
@@ -34,11 +35,11 @@ export interface ServicePaths {
   readonly runDirectory: string;
   /** `serve.json`, the running service's {@link ServiceRecord}. */
   readonly record: string;
-  /** The socket path or pipe name clients connect to. */
+  /** The socket path clients connect to. */
   readonly socket: string;
-  /** The private directory the socket lives in, when it is not
-   *  `runDirectory` (a long root's temp fallback); null on Windows. */
-  readonly socketDirectory: string | null;
+  /** The private directory the socket lives in: `runDirectory`, or a
+   *  long root's temp fallback. */
+  readonly socketDirectory: string;
 }
 
 /** The service files of `storageRoot` (`~/.texra` in production). */
@@ -49,14 +50,6 @@ export function servicePaths(storageRoot: string): ServicePaths {
     .update(path.resolve(storageRoot))
     .digest('hex')
     .slice(0, 16);
-  if (process.platform === 'win32') {
-    return {
-      runDirectory,
-      record,
-      socket: `\\\\.\\pipe\\texra-${tag}`,
-      socketDirectory: null,
-    };
-  }
   const local = path.join(runDirectory, 'serve.sock');
   if (Buffer.byteLength(local) <= MAX_UNIX_SOCKET_PATH) {
     return {
@@ -82,11 +75,10 @@ export function prepareServiceDirectories(
 ): Effect.Effect<void, PlatformError.PlatformError, FileSystem.FileSystem> {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    for (const directory of new Set(
-      [paths.runDirectory, paths.socketDirectory].filter(
-        (entry): entry is string => entry !== null,
-      ),
-    )) {
+    for (const directory of new Set([
+      paths.runDirectory,
+      paths.socketDirectory,
+    ])) {
       yield* fs.makeDirectory(directory, { recursive: true, mode: 0o700 });
       yield* fs.chmod(directory, 0o700);
     }
@@ -146,7 +138,7 @@ export function writeServiceRecord(
 }
 
 /** What identifies one service's own files: its pid, and the inode of the
- *  socket it bound (absent on Windows, whose pipe has no file). */
+ *  socket it bound (absent when it could not be read). */
 export interface ServiceOwnership {
   readonly pid: number;
   readonly socketIno: number | undefined;
@@ -166,7 +158,7 @@ export function removeServiceFiles(
     const record = yield* readServiceRecord(paths);
     if (record?.pid === own.pid)
       yield* fs.remove(paths.record, { force: true });
-    if (process.platform === 'win32' || own.socketIno === undefined) return;
+    if (own.socketIno === undefined) return;
     const current = yield* fs.stat(paths.socket).pipe(
       Effect.map((info) => Option.getOrUndefined(info.ino)),
       Effect.orElseSucceed(() => undefined),

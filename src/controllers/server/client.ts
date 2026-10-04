@@ -8,6 +8,7 @@
  */
 import * as NodeSocket from '@effect/platform-node/NodeSocket';
 import { Data, Effect, Layer, Schedule, type Scope } from 'effect';
+import { lt as semverLt, valid as semverValid } from 'semver';
 import { RpcClient, RpcSerialization, type RpcClientError } from 'effect/rpc';
 
 import { servicePaths } from './discovery';
@@ -35,11 +36,28 @@ export class ServiceUnavailable extends Data.TaggedError('ServiceUnavailable')<{
   }
 }
 
+/** Why no service runs on Windows yet: a named pipe there takes the
+ *  default ACL, which other local users can read and pre-create. */
+export const WINDOWS_UNSUPPORTED =
+  'The TeXRA service does not run on Windows yet.';
+
 /** How long a started service has to answer its first hello: it loads the
  *  agent catalog first, which a loaded machine makes slow. */
 const START_TIMEOUT = '60 seconds';
 /** How long a service that accepts the connection may take to say hello. */
 const HELLO_TIMEOUT = '10 seconds';
+
+/** A service the caller should retire: an older protocol, or an older
+ *  build of this one (a development build, versioned `unknown`, never is). */
+function isOlder(info: ServiceInfo, version: string): boolean {
+  if (info.protocol !== PROTOCOL_VERSION)
+    return info.protocol < PROTOCOL_VERSION;
+  return (
+    semverValid(info.version) !== null &&
+    semverValid(version) !== null &&
+    semverLt(info.version, version)
+  );
+}
 
 /** A client over `socket`, held for the caller's scope. Nothing connects
  *  until the first call. */
@@ -94,12 +112,18 @@ export function probeService(
 /**
  * Connect to this storage root's service, starting it with `start` (which
  * spawns the service detached and returns) when none answers, and retiring
- * one that speaks an older protocol first.
+ * one that speaks an older protocol or runs an older build than `version`
+ * first.
  */
 export const ensureService = Effect.fn('server.ensureService')(function* (
   storageRoot: string,
+  version: string,
   start: Effect.Effect<void, Error>,
 ): Effect.fn.Return<ServiceConnection, ServiceUnavailable, Scope.Scope> {
+  if (process.platform === 'win32')
+    return yield* Effect.fail(
+      new ServiceUnavailable({ reason: WINDOWS_UNSUPPORTED }),
+    );
   const { socket } = servicePaths(storageRoot);
   let info = yield* probeService(socket);
   if (info !== null && info.protocol > PROTOCOL_VERSION)
@@ -108,8 +132,10 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
         reason: `The running TeXRA service (${info.version}, pid ${info.pid}) speaks protocol ${info.protocol}; this TeXRA speaks ${PROTOCOL_VERSION}. Update TeXRA, or stop the service with \`texra service stop\`.`,
       }),
     );
-  if (info !== null && info.protocol < PROTOCOL_VERSION) {
+  let retired: number | null = null;
+  if (info !== null && isOlder(info, version)) {
     const retiring = info;
+    retired = info.pid;
     yield* Effect.logInfo(
       `Retiring the TeXRA service ${info.version} (protocol ${info.protocol}): it finishes its running tasks and exits.`,
     );
@@ -140,7 +166,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     // retiring service: all wait for this protocol's own service.
     info = yield* probeService(socket).pipe(
       Effect.flatMap((answer) =>
-        answer?.protocol === PROTOCOL_VERSION
+        answer?.protocol === PROTOCOL_VERSION && answer.pid !== retired
           ? Effect.succeed(answer)
           : Effect.fail(new ServiceUnavailable({ reason: 'not yet up' })),
       ),

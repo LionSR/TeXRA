@@ -74,7 +74,7 @@ const ServiceInfoSchema = z.object({
   /** The build that is serving: the package version. */
   version: z.string(),
   pid: z.int().positive(),
-  /** Where clients connect: a Unix socket path or a Windows pipe name. */
+  /** Where clients connect: the Unix socket path. */
   socket: z.string(),
   startedAt: z.int().positive(),
   clients: z.int().nonnegative(),
