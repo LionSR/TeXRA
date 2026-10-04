@@ -705,6 +705,10 @@ show` print the same notice, and the new `texra agents customize`,
 
 - **Gemini calls work again.** After a change on Google's side, every
   Gemini request failed with a validation error before any output arrived.
+- **Gemini agents can call tools again, and background Gemini runs
+  complete.** A Gemini turn that called a tool failed as soon as the call
+  arrived, and a Gemini run in the background failed when its answer was
+  collected.
 - **A crash no longer undoes a Stop, a finished agent or a bypass turned
   off.** A task you stopped mid-turn, killed before it finished stopping,
   came back as interrupted, and with "Always resume" it carried on the turn
