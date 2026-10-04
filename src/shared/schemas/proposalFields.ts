@@ -83,6 +83,11 @@ export function getProposalFileGroups(data: FileFields): ProposalFileGroup[] {
 /** What a proposal launches, as its approval copy names it. */
 export function agentProposalLabel(proposal: {
   readonly task: boolean;
+  readonly toolConfig?: { readonly reflect?: boolean };
 }): string {
-  return proposal.task ? 'document task' : 'agent';
+  if (!proposal.task) return 'agent';
+  // A reflecting task also runs a critic after every revision but the last.
+  return proposal.toolConfig?.reflect
+    ? 'document task, with critic'
+    : 'document task';
 }

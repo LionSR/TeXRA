@@ -51,7 +51,7 @@ for (let revision = 0; revision < revisions; revision += 1) {
   if (context.reflect && revision + 1 < revisions) {
     const review = await tools.document_review({ revision });
     const critic = await agent(review.prompt, {
-      agentName: 'critic',
+      agentName: 'builtIn:critic',
       label: \`Critique \${revision + 1}\`,
     });
     critique = critic.response;
