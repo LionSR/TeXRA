@@ -18,7 +18,8 @@
  * - `task.watch`: a project's session feed (a stream of `EventsFrame`s)
  *   for one `Subscribe`, the frames the webview bridge already carries.
  * - `task.request`: one `RuntimeRequest` (send, approve, stop, fork, …).
- * - `task.start` / `task.resume`: launch or continue a task in the service.
+ * - `task.start` / `task.resume`: launch or continue a task in the service;
+ *   `task.ended`: the outcome it ends with.
  * - `task.model`: switch a running task's model.
  * - `project.policy`: the approval policy of a project's session.
  * - `host.attach` / `host.focus` / `host.answer`: a window offering its host
@@ -33,7 +34,7 @@ import { z } from 'zod';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
-import { RunIdSchema } from '@shared/schemas';
+import { RunIdSchema, RunOutcomeSchema } from '@shared/schemas';
 
 import {
   OutcomeSchema,
@@ -52,7 +53,7 @@ import {
 
 /** Bumped whenever a procedure or a payload changes shape. A client newer
  *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 /** `value` as JSON carries it: an absent field (`undefined`) is left out,
  *  which the wire's JSON check otherwise refuses. */
@@ -194,6 +195,12 @@ export const TexraRpcs = RpcGroup.make(
      *  null when something it needs (its agent, a plugin) is missing, so it
      *  stays interrupted. */
     success: zodWire(RunIdSchema.nullable()),
+    error: zodWire(TaskFailedSchema),
+  }),
+  /** The outcome a task's current activation ends with, once it ends. */
+  Rpc.make('task.ended', {
+    payload: { workspace, runId: zodWire(RunIdSchema) },
+    success: zodWire(RunOutcomeSchema),
     error: zodWire(TaskFailedSchema),
   }),
   Rpc.make('request.preview', {

@@ -1013,7 +1013,10 @@ prompt: |
     },
     /** One read of the project's store, closed again for the next writer. */
     readStore: (sql) => {
-      const [project] = readdirSync(storage);
+      // The project's store: a service also keeps a no-workspace one.
+      const project = readdirSync(storage).find((name) =>
+        name.startsWith('work-'),
+      );
       const db = new DatabaseSync(path.join(storage, project, 'texra.db'), {
         readOnly: true,
       });
@@ -1292,6 +1295,9 @@ async function validateInterruptedTasks() {
   const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-interrupted-'));
   try {
     const project = echoProject(cwd);
+    // The chat is its task's writer here, so killing it is the crash this
+    // recovers from: a service would keep the task running past the kill.
+    project.ptyEnv.TEXRA_NO_SERVICE = '1';
     const globalStorage = path.join(
       cwd,
       'home',
@@ -1921,6 +1927,9 @@ async function validateOpenTimePrompt() {
   const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-open-prompt-'));
   try {
     const project = echoProject(cwd);
+    // The chat is its task's writer here, so killing it is the crash this
+    // recovers from: a service would keep the task running past the kill.
+    project.ptyEnv.TEXRA_NO_SERVICE = '1';
     const source = project.firstRun('First message');
     const activations = () =>
       project.readStore(

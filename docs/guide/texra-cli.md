@@ -477,10 +477,11 @@ with no window of the project open, the task runs as a headless run does.
 
 `texra chat` (and a bare `texra`) is a client of the service: the
 conversation's runs run there, so `/tasks` in another terminal lists it and
-can attach to it while it works. When the service cannot start, the chat
-runs in its own process and says so once; other terminals then do not see
-it. `texra run`, `-p` and `--output-format ndjson` always run in their own
-process.
+can attach to it while it works. `texra resume <id>` of a conversation the
+service is running continues it there. When the service cannot start, or
+`TEXRA_NO_SERVICE=1` is set, the chat runs in its own process and says so
+once; other terminals then do not see it. `texra run`, `-p` and
+`--output-format ndjson` always run in their own process.
 
 ```bash
 texra tasks list                                   # every project's tasks, newest first

@@ -27,7 +27,7 @@ import {
   Unavailable,
   type RequestError,
 } from '@shared/session/requestErrors';
-import type { TranscriptSubscription } from '@shared/schemas';
+import { RUN_OUTCOME, type TranscriptSubscription } from '@shared/schemas';
 import { isLiveRun } from '@shared/session/sessionView';
 import type {
   EventsFrame,
@@ -228,6 +228,18 @@ export const serviceSessionBackend = Effect.fn('serviceSessionBackend')(
             ),
         };
       },
+      ended: (runId) =>
+        client['task.ended']({ workspace, runId }).pipe(
+          // The service went before the run ended: the chat holds it no more.
+          Effect.catch((error) =>
+            Effect.logWarning(
+              `The TeXRA service stopped before task ${runId} ended`,
+            ).pipe(
+              Effect.annotateLogs({ data: error }),
+              Effect.as(RUN_OUTCOME.CANCELLED),
+            ),
+          ),
+        ),
       preview: (requestId) =>
         client['request.preview']({ workspace, requestId }).pipe(
           Effect.mapError((error) => new Error(error.message)),

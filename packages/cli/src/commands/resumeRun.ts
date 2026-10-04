@@ -21,6 +21,7 @@ import { pathExists } from '@utils/files/fsDurability';
 import { executeCliWorkflowConfig } from './workflow';
 import { formatResumeCommand } from '../chat/tui/state/resumeHint';
 import { describeRequestError } from '../chat/tui/state/transcript';
+import { heldByService } from '../runtime/cliService';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { cliErrorMessage, writeTextStderr } from '../runtime/logSinks';
@@ -164,6 +165,13 @@ export function runResumeCommand(
     const classification = yield* classifyRun(id, session);
     switch (classification.kind) {
       case 'held_elsewhere':
+        // A conversation the service holds continues there: the chat is
+        // its client, so the service stays the run's one writer.
+        if (
+          config.agentCategory === AgentCategory.ToolUse &&
+          (yield* heldByService(context.storageRoot, classification.owner))
+        )
+          break;
         writeTextStderr(runHeldByProcessMessage(id, classification.owner));
         return CliExitCode.Usage;
       case 'owned_here':

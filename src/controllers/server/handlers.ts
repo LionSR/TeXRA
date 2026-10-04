@@ -25,6 +25,7 @@ import { runAgent } from '@agent/runtime/runAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { launchOnRun } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { frameSubscription } from '@controllers/session/SessionFramer';
+import { runEnded } from '@controllers/session/sessionBackend';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
@@ -216,6 +217,8 @@ export const serviceHandlers = TexraRpcs.toLayer(
             ).pipe(Stream.ensuring(session.subscriptions.set(port, [])));
           }),
         ),
+      'task.ended': ({ workspace, runId }) =>
+        Effect.flatMap(open(workspace), (session) => runEnded(session, runId)),
       'request.preview': ({ workspace, requestId }) =>
         open(workspace).pipe(
           Effect.flatMap((session) => hosts.preview(session, requestId)),
@@ -300,6 +303,9 @@ export const serviceHandlers = TexraRpcs.toLayer(
         Effect.gen(function* () {
           yield* refuseWhileDraining;
           const session = yield* open(workspace);
+          // A run this service is running needs no resume: the client that
+          // asks takes it up where it is (a chat left it waiting here).
+          if (session.runs.isLive(runId)) return runId;
           return yield* admit<RunId | null>(runs, (admitted) =>
             Effect.gen(function* () {
               const result = yield* resumeRun(runId, {

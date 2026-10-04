@@ -1,11 +1,12 @@
 /**
  * The chat's run boundary when its runs run in the TeXRA service: the same
  * launch and resume the controller drives in-process, answered by the
- * service. A launch or resume is admitted there; the run's end is read from
- * the view the service's frames fold here, which is how the chat holds its
- * turn until the run ends, as `runAgent` and a resume's `completion` do.
+ * service. A launch or resume is admitted there, and the service says when
+ * the run ends: the chat holds its turn until then, as `runAgent` and a
+ * resume's `completion` do. The view folded here could still show the
+ * run's previous end right after a resume.
  */
-import { Effect, Option, Stream, SubscriptionRef } from 'effect';
+import { Effect } from 'effect';
 
 import type {
   ResumeRunOptions,
@@ -16,8 +17,7 @@ import type {
 } from '@agent/runtime';
 import type { SessionBackend } from '@controllers/session/sessionBackend';
 import type { ProcessServices } from '@platform/processRuntime';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import { RUN_OUTCOME, type RunId, type RunOutcome } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 /** The run boundary `ChatSessionController` takes. */
 export interface ChatAgentRuns {
@@ -32,27 +32,6 @@ export interface ChatAgentRuns {
   /** Resume a run beside the chat (a workflow), which the chat does not
    *  adopt; its refusal is told where it runs. */
   readonly resumeBeside: (runId: RunId) => Effect.Effect<void>;
-}
-
-/** The outcome `runId` ends with, once the view holds its end. */
-function ended(
-  backend: SessionBackend,
-  runId: RunId,
-): Effect.Effect<RunOutcome> {
-  return SubscriptionRef.changes(backend.view).pipe(
-    Stream.map((view) => view.runs.get(runId)),
-    Stream.filter(
-      (run) => run !== undefined && isTerminalOutcomePhase(run.status),
-    ),
-    Stream.runHead,
-    Effect.map((head) =>
-      Option.match(head, {
-        // The view ended under the wait: the chat is closing.
-        onNone: () => RUN_OUTCOME.CANCELLED,
-        onSome: (run) => run?.durableOutcome ?? RUN_OUTCOME.COMPLETED,
-      }),
-    ),
-  );
 }
 
 /** The chat's run boundary over the service's `backend`. */
@@ -70,7 +49,7 @@ export function serviceAgentRuns(backend: SessionBackend): ChatAgentRuns {
           onRunResolved: options.onRunResolved,
         })
         .pipe(
-          Effect.andThen(ended(backend, runId)),
+          Effect.andThen(backend.ended(runId)),
           Effect.map((outcome) => ({ outcome })),
         );
     },
@@ -100,7 +79,7 @@ export function serviceAgentRuns(backend: SessionBackend): ChatAgentRuns {
             Effect.as<ResumeRunResult>({
               started: true,
               delivered: true,
-              completion: ended(backend, resumed.runId),
+              completion: backend.ended(resumed.runId),
             }),
           );
         }),
