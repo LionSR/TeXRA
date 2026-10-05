@@ -155,6 +155,10 @@ export function probeSdkBinaryStatus(config: {
         },
       }),
     );
+    if (importFailure !== undefined) {
+      return { ok: false as const, message: importFailure };
+    }
+
     const binaryPath = yield* config
       .findBinary()
       .pipe(
