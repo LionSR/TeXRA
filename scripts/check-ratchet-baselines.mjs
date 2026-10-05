@@ -27,6 +27,7 @@ const rootDir = path.resolve(
 );
 const baselineDir = 'config/ratchets';
 const base = process.env.TEXRA_RATCHET_BASE ?? 'origin/main';
+const REFUTED_CANDIDATES = `${baselineDir}/refuted-candidates.json`;
 const git = (...args) =>
   execFileSync('git', args, {
     cwd: rootDir,
@@ -181,12 +182,13 @@ function checkBaseline(file, previous, current) {
     if (grows)
       problems.push(`${file}: ${current.shape}.${key}: ${old} → ${value}`);
   }
-  // Numeric rows largest first, each taking the smallest sufficient donor, so a
-  // pure rename passes whatever the key order, even when several rows move.
-  const numeric = (v) => (typeof v === 'number' ? v : 0);
-  removed.sort((a, b) => numeric(a) - numeric(b));
+  // Strongest rows first, each taking the weakest sufficient donor, so a pure
+  // rename passes whatever the order, even when several rows move at once.
+  const rank = (v) =>
+    typeof v === 'number' ? v : v === 'value' ? 2 : v === 'type-only' ? 1 : 0;
+  removed.sort((a, b) => rank(a) - rank(b));
   for (const [key, value] of added.toSorted(
-    (a, b) => numeric(b[1]) - numeric(a[1]),
+    (a, b) => rank(b[1]) - rank(a[1]),
   )) {
     const donor = removed.findIndex((old) => donates(old, value));
     if (donor >= 0) removed.splice(donor, 1);
@@ -211,6 +213,13 @@ function baselineFiles(dir) {
 function main() {
   // ls-tree failing is a missing base, not a new file. A later git-show failure
   // also propagates; only a path absent from this tree is a new baseline.
+  try {
+    git('rev-parse', '--verify', `${base}^{commit}`);
+  } catch {
+    throw new Error(
+      `base ${base} is not available locally; run \`git fetch origin\` (or set TEXRA_RATCHET_BASE)`,
+    );
+  }
   const baseFiles = new Set(
     git('ls-tree', '-r', '--name-only', base, '--', baselineDir)
       .trim()
@@ -231,7 +240,8 @@ function main() {
       continue;
     }
     const previous = readBaseline(file, git('show', `${base}:${file}`));
-    if (current.shape !== 'candidates')
+    // Refuted candidates record refusals; adding one only restricts.
+    if (file !== REFUTED_CANDIDATES)
       problems.push(...checkBaseline(file, previous, current));
   }
   const present = new Set(files);
