@@ -440,8 +440,13 @@ function ChatGptProgressStep(props: {
           .pipe(Effect.mapError(ensureError));
         props.onSuccess(account);
       }).pipe(
+        // An unmount's interrupt is no sign-in failure: it reports nothing.
         Effect.catchCause((cause) =>
-          Effect.sync(() => props.onError(toErrorMessage(Cause.squash(cause)))),
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.failCause(cause)
+            : Effect.sync(() =>
+                props.onError(toErrorMessage(Cause.squash(cause))),
+              ),
         ),
       ),
     );
