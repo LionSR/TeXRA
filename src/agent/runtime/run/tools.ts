@@ -7,32 +7,14 @@
  * window is a duplicate that never executes.
  */
 import { Effect, Result } from 'effect';
-import { JsonObjectSchema, type TurnRequest } from '@texra-ai/llm';
 import type { RuntimeToolRegistry as IToolRegistry } from '@agent/runtime/ToolServices';
 import { partitionDuplicateCalls } from '@agent/core/tools/toolCallParsing';
 import type { AgentTrace } from '@agent/trace';
 import { safeParseJson } from '@common/parsing/safeParseJson';
-import type { DispatchFacts, ToolDefinition } from '@shared/schemas';
+import type { DispatchFacts } from '@shared/schemas';
 import type { HistoryMessage } from '@shared/session/historyTurns';
 import { isObject } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
-
-import { convertToolSchema } from './toolSchema';
-
-type ToolDefinitions = NonNullable<TurnRequest['tools']>;
-
-/** The package's uniform tool definitions for the run's resolved tool list. */
-export function toolDefinitionsFor(
-  definitions: readonly ToolDefinition[],
-): ToolDefinitions {
-  return definitions.map((definition) => ({
-    name: definition.name,
-    description: definition.description ?? '',
-    parameters: JsonObjectSchema.parse(
-      convertToolSchema(definition) ?? { type: 'object', properties: {} },
-    ),
-  }));
-}
 
 /** One local call of a pending response. */
 export interface LocalCall {
