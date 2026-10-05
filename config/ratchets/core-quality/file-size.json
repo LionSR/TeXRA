@@ -45,7 +45,7 @@
   "packages/harness/src/tools/delegation/AgentTool.ts": 759,
   "packages/harness/src/tools/delegation/inBandSubagentRun.ts": 483,
   "packages/harness/src/tools/ExecutionsTool.ts": 869,
-  "packages/harness/src/tools/liveTools.ts": 409,
+  "packages/harness/src/tools/liveTools.ts": 404,
   "packages/harness/src/tools/memory/memoryFileSystem.ts": 443,
   "packages/harness/src/tools/memory/MemoryTool.ts": 632,
   "packages/harness/src/tools/toolAvailability.ts": 437,
