@@ -26,6 +26,7 @@ import {
   type ToolBindingPayload,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
+import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import { generateShortId } from '@utils/core';
 import { dispatchFactsFor } from '../run/tools';
@@ -284,3 +285,22 @@ export const scriptSettlement = Effect.fn('toolUse.scriptSettlement')(
       : { failed: false, reply: '', value: result.value };
   },
 );
+
+/** The `followup.consumed` rows of the run's pending requests of `kind`,
+ *  or of every kind. */
+export const consumedRows = (
+  runId: RunId,
+  controls: readonly QueuedFollowUp[],
+  kind?: NonNullable<QueuedFollowUp['control']>['kind'],
+): Extract<RunHistoryDraft, { type: 'followup.consumed' }>[] =>
+  controls.flatMap(({ followUpId, control }) =>
+    control !== undefined && (kind === undefined || control.kind === kind)
+      ? [
+          {
+            type: 'followup.consumed' as const,
+            aggregateId: rowAggregate(runId),
+            followUpId,
+          },
+        ]
+      : [],
+  );

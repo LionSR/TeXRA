@@ -9,19 +9,21 @@ import { selectModel } from '@texra-ai/llm';
 import { resolveModelRoute, routeBackend } from '@agent/runtime/modelRoutes';
 import { decideReasoning } from '@model/reasoningLevel';
 import { LanguageModel } from '@platform/languageModel';
+import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
 import { bindModel, PROTOCOL_BY_BACKEND } from '../run/modelBinding';
-import { rowAggregate, type SnapshotPatch } from './rows';
+import { consumedRows, rowAggregate, type SnapshotPatch } from './rows';
 import type { HttpClient } from 'effect/http';
 import type { RunCell } from './runProgram';
 
-/** Record a host-admitted model switch: the edit that drops the
- *  continuation and the snapshot naming the new model, committed inside the
- *  swap, so the new binding goes into force only once its rows have. The
- *  snapshot's `modelId` is the run's one model fact; the run's configuration
- *  row keeps the model it was launched with. */
+/** Apply the model switches the run's input queues (the latest wins): the
+ *  edit that drops the continuation, the snapshot naming the new model and
+ *  the requests' `followup.consumed`, committed inside the swap, so the new
+ *  binding goes into force only once its rows have. The snapshot's `modelId`
+ *  is the run's one model fact; the run's configuration row keeps the model
+ *  it was launched with. */
 export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
   function* (
     state: RunState,
@@ -34,23 +36,28 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
     /** What must settle on the view before the switch's edit: a background
      *  compaction, which lands or stops. */
     beforeEdit: (state: RunState) => Effect.Effect<RunState, Error>,
+    /** The run's pending requests; its model switches are applied. */
+    controls: readonly QueuedFollowUp[],
   ): Effect.fn.Return<
     RunState,
     Error,
     AgentRun | LanguageModel | HttpClient.HttpClient
   > {
     const run = yield* AgentRun;
-    const model = run.pendingModelSwitch.value;
-    run.pendingModelSwitch.value = null;
-    if (model === null) return state;
+    const switches = controls.flatMap((f) =>
+      f.control?.kind === 'model' ? [{ ...f, model: f.control.model }] : [],
+    );
+    const model = switches.at(-1)?.model;
+    if (model === undefined) return state;
+    const consumed = consumedRows(run.runId, controls, 'model');
     const current = yield* SynchronizedRef.get(run.model);
-    if (current.modelId === model) return state;
+    if (current.modelId === model) return yield* cell.append(consumed);
     const selected = selectModel(model);
+    // A switch that cannot apply fails the run: its `run.end` consumes the
+    // request, so no resume meets it again.
     if (!selected) {
       return yield* Effect.fail(new Error(`Model ${model} is not registered`));
     }
-    // The switch is claimed above, so this settles exactly the edits before
-    // it: no other switch can land between.
     state = yield* cell.adopt(yield* beforeEdit(state));
     let switched = state;
     yield* run.swapModel(() =>
@@ -65,6 +72,7 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
           temperature: run.persona.temperature,
         });
         switched = yield* cell.append([
+          ...consumed,
           {
             type: 'context.edit',
             aggregateId: rowAggregate(run.runId),
@@ -172,9 +180,14 @@ export function modelSwitchPort(
           },
         );
       }
-      // Bound and recorded by the loop at its next model boundary: the rows
-      // that record the switch belong to the fiber holding the run's state.
-      run.pendingModelSwitch.value = model;
+      // Queued on the run's input, durable at once; the loop binds and
+      // records it at its next model boundary, which consumes it. A switch
+      // back to the current model is queued too: the latest request wins.
+      yield* run.session.followUps.send(run.runId, {
+        text: `/model ${model}`,
+        from: { kind: 'user' },
+        control: { kind: 'model', model },
+      });
     }),
   };
 }

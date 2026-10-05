@@ -1,5 +1,5 @@
 {
-  "src/agent/runtime/run/AgentRun.ts": 4,
+  "src/agent/runtime/run/AgentRun.ts": 3,
   "src/agent/runtime/runRegistry.ts": 8,
   "src/agent/runtime/SessionHandle.ts": 31,
   "src/shared/session/database.ts": 4

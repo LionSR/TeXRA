@@ -77,10 +77,11 @@ export function queuedRow(
   hold: QueuedFollowUp['holdUntil'],
   relationOf: (sender: RunId) => RunRelation,
 ): QueuedFollowUp {
-  const { from, deliveryId, mediaFiles, ...content } = item;
+  const { from, deliveryId, mediaFiles, control, ...content } = item;
   return {
     followUpId: deliveryId ?? randomUUID(),
     ...(hold ? { holdUntil: hold } : {}),
+    ...(control ? { control } : {}),
     content: {
       ...content,
       mediaFiles: mediaFiles?.slice(),

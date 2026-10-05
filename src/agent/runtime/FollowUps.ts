@@ -84,6 +84,12 @@ export interface JoinedFollowUps {
   readonly delivered: () => void;
 }
 
+/** A turn's end, committed in the batch that consumes the next input. */
+export interface Boundary {
+  readonly rows: readonly RunHistoryDraft[];
+  readonly loop: ToolUseLoopState;
+}
+
 export interface ConsumedFollowUps {
   readonly state: RunState;
   /** False when every item was a progress notice of an ended child: the
@@ -93,8 +99,10 @@ export interface ConsumedFollowUps {
 
 export interface FollowUps {
   readonly hasQueued: () => boolean;
-  /** Queue one maintenance turn; a pending one is not duplicated. */
-  readonly appendSynthetic: (text: string) => void;
+  /** The run's own pending requests (`/compact`, a model switch). */
+  readonly controls: () => readonly QueuedFollowUp[];
+  /** The queued messages a take would read now, without taking them. */
+  readonly takeQueued: () => FollowUpBatch | null;
   /** Queue a view edit, taken at the loop's next park before any input:
    *  false while another is queued or once the input has ended. */
   readonly editView: (edit: ViewEdit) => boolean;
@@ -128,6 +136,10 @@ export interface FollowUps {
     /** What the batch commits on: `state`, moved first by a step that
      *  must precede it (a background compaction a reset settles). */
     prepare?: (state: RunState) => Effect.Effect<RunState, Error>,
+    /** The turn boundary this batch commits with (input already queued
+     *  when the turn ended): its rows, and the loop state its one
+     *  snapshot records. */
+    boundary?: Boundary,
   ) => Effect.Effect<
     ConsumedFollowUps,
     Error,
@@ -144,12 +156,6 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   // Ended with the scope; the run's settleRun arm ends it first, saying
   // whether the run takes more input.
   const input = yield* session.followUps.open(runId);
-  let syntheticPending = false;
-
-  const taken = (batch: FollowUpBatch | null) => {
-    if (batch?.kind === 'synthetic') syntheticPending = false;
-    return batch;
-  };
 
   /** The canonical user message of one batch: every item's text as its
    *  own part, media parts after the item they arrived with. */
@@ -361,6 +367,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
       current: RunState,
       batch: FollowUpBatch,
       prepare?: (state: RunState) => Effect.Effect<RunState, Error>,
+      boundary?: Boundary,
     ): Effect.fn.Return<
       ConsumedFollowUps,
       Error,
@@ -368,23 +375,21 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     > {
       const state = prepare === undefined ? current : yield* prepare(current);
       const joined = yield* batchRows(state, batch);
+      const loop = boundary?.loop ?? state.loop;
       const committed = yield* Effect.uninterruptible(
         runHistory.appendBatch(runId, state, [
+          ...(boundary?.rows ?? []),
           ...joined.rows,
           // The input that recovers a failed run clears the error fact in
           // the same transaction, so a resume taken between this batch and
           // the next turn's snapshot does not read the run as still failed.
-          ...(joined.turn
-            ? [
-                ...snapshotRow(runId, state, {
-                  runtime: { lastError: null },
-                  ...(state.loop
-                    ? { state: { ...state.loop, ...joined.recorded } }
-                    : {}),
-                }),
-                positionRow(runId, state, 'turn.ready'),
-              ]
+          ...(joined.turn || boundary
+            ? snapshotRow(runId, state, {
+                ...(joined.turn ? { runtime: { lastError: null } } : {}),
+                ...(loop ? { state: { ...loop, ...joined.recorded } } : {}),
+              })
             : []),
+          ...(joined.turn ? [positionRow(runId, state, 'turn.ready')] : []),
         ]),
       );
       joined.delivered();
@@ -413,29 +418,21 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
 
   return {
     hasQueued: () => input.hasQueued(),
-    appendSynthetic: (text) => {
-      if (syntheticPending) return;
-      syntheticPending = true;
-      input.wake(text);
-    },
+    controls: () => input.controls(),
+    takeQueued: () => input.takeQueued(),
     editView: (edit) => input.editView(edit),
-    wait: Effect.map(input.take, taken),
+    wait: input.take,
     joinStopped: (state) =>
       state.at === 'halted' &&
       // Only a user stop joins: that halt carries no error fact to clear and
       // no turn.ready row to write, which is why the join skips `consume`'s.
       state.outcome === 'cancelled' &&
-      input.hasQueued() &&
-      !syntheticPending
+      input.hasQueued()
         ? Effect.flatMap(input.take, (batch) => {
-            // `!syntheticPending`: no maintenance wake is queued, so this
-            // take is follow-ups, which stay queued until consumed, and a
-            // declined batch is left for the ordinary wait.
-            if (batch?.kind === 'synthetic') {
-              return Effect.die(
-                new Error('joinStopped took a wake none was pending.'),
-              );
-            }
+            // A take reads what the rows queue and consumes nothing, so a
+            // declined batch, or a `/compact`'s wake, is left for the
+            // ordinary wait.
+            if (batch?.kind === 'synthetic') return Effect.succeed(null);
             // A view edit waits for the park this stopped turn ends at.
             if (batch?.kind === 'edit') {
               if (!input.editView(batch.edit))

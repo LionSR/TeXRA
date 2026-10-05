@@ -208,6 +208,24 @@ function outcome(rows: readonly Row[], root: string) {
       return `${first} (+${rest.length})`;
     }),
     edits: of(root, 'context.edit').map((row) => payload(row).cause),
+    // Each request the user made, queued once and consumed once; and the
+    // model the run ends on.
+    requests: of(root, 'followup.queued').flatMap((row) => {
+      const { followUpId, control } = json(row) as {
+        readonly followUpId: string;
+        readonly control?: { readonly kind: string };
+      };
+      if (control === undefined) return [];
+      const consumed = of(root, 'followup.consumed').filter(
+        (done) => json(done).followUpId === followUpId,
+      );
+      return [`${control.kind} consumed ${consumed.length}`];
+    }),
+    model: of(root, 'run.snapshot')
+      .flatMap((row) => [
+        (payload(row).runtime as { readonly modelId: string }).modelId,
+      ])
+      .at(-1),
     // What each executed call returned, by call: a retried call returns
     // what its first attempt would have.
     settled: [
@@ -341,10 +359,22 @@ const parkedAfter = (rows: readonly Row[], root: string, count: number) => {
   );
 };
 
+/** The model the user switches the run to. */
+const SWITCH_TO = 'gpt55';
+
+/** Whether the root holds a queued request of `kind`. */
+const requested = (rows: readonly Row[], root: string, kind: string) =>
+  rows.some(
+    (row) =>
+      row.run === root &&
+      row.type === 'followup.queued' &&
+      (json(row).control as { kind?: string } | undefined)?.kind === kind,
+  );
+
 /**
  * The user's part, each step issued only if its rows are not committed: a
- * handoff once the run parks, a compaction once it has answered the
- * handoff, then, once it has answered from the summary, a fork of the
+ * handoff once the run parks, a model switch and a compaction once it has
+ * answered the handoff, then, once it has answered from the summary, a fork of the
  * conversation.
  */
 const userSteps = (session: SessionHandle, storage: string, root: RunId) =>
@@ -357,7 +387,16 @@ const userSteps = (session: SessionHandle, storage: string, root: RunId) =>
         handoff: HANDOFF,
       });
     }
-    if (!editsOf(rowsOf(storage), root).includes('compaction')) {
+    // A switch, then a compaction, each asked for once: a request whose
+    // row is committed is the resumed run's to apply.
+    if (!requested(rowsOf(storage), root, 'model')) {
+      yield* until(storage, (rows) => parkedAfter(rows, root, 2));
+      const controls = session.runs.getHandle(root)?.controls;
+      if (controls === undefined)
+        return yield* Effect.die('the parked run has no live controls');
+      yield* controls.switchModel(SWITCH_TO);
+    }
+    if (!requested(rowsOf(storage), root, 'compact')) {
       yield* until(storage, (rows) => parkedAfter(rows, root, 2));
       yield* session.requests.request({ kind: 'run.compact', runId: root });
     }
@@ -832,7 +871,9 @@ export function crashConformanceSuite(plugins: string): void {
               `Model saw: ${HANDOFF} (+0)`,
               'Model saw: [Previous conversation summary]\n\nThe golden chat so far. (+0)',
             ],
-            edits: ['handoff', 'compaction'],
+            edits: ['handoff', 'compaction', 'compaction'],
+            requests: ['model consumed 1', 'compact consumed 1'],
+            model: SWITCH_TO,
             children: 1,
             childAnswers: ['Child result.'],
             forks: [

@@ -62,7 +62,7 @@ type RequestState = {
 /** A follow-up queued for the run and not yet consumed, as its row holds it. */
 export type QueuedFollowUp = Pick<
   Extract<SessionEvent, { type: 'followup.queued' }>,
-  'followUpId' | 'content' | 'holdUntil'
+  'followUpId' | 'content' | 'holdUntil' | 'control'
 >;
 
 /**
@@ -320,8 +320,7 @@ export function applyRunRow(
     }
     case 'followup.queued': {
       // Queued input may precede everything else a run writes, so it opens
-      // the slice the way the loop's own first step does. A replayed
-      // delivery id is the same follow-up, already queued once.
+      // the slice; a replayed delivery id is already queued once.
       const rows = slice ?? freshRunRows();
       if (rows.followUpIds.has(row.followUpId)) return { kind: 'unchanged' };
       const followUps = writable(pass, rows.followUps, (f) => [...f]);
@@ -329,6 +328,7 @@ export function applyRunRow(
         followUpId: row.followUpId,
         content: row.content,
         ...(row.holdUntil ? { holdUntil: row.holdUntil } : {}),
+        ...(row.control ? { control: row.control } : {}),
       });
       const followUpIds = writable(
         pass,

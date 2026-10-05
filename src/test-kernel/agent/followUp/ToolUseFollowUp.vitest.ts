@@ -594,23 +594,29 @@ describe('Inbox readers', () => {
     }),
   );
 
-  it.effect('never lets a maintenance wake share a batch with follow-ups', () =>
+  it.effect('wakes for a /compact alone, never in a batch with messages', () =>
     Effect.gen(function* () {
-      const pending: QueuedFollowUp[] = [];
-      const input = new RunInput(() => pending);
-      input.wake('compact');
       const followUp = (text: string) => ({
         followUpId: text,
         content: { text, from: { kind: 'user' as const } },
       });
+      const pending: QueuedFollowUp[] = [
+        { ...followUp('/compact'), control: { kind: 'compact' } },
+      ];
+      const input = new RunInput(() => pending);
+
+      expect(yield* input.take).toMatchObject({
+        kind: 'synthetic',
+        text: expect.stringContaining('immediate context compaction'),
+      });
       pending.push(followUp('first'), followUp('second'));
       input.notify();
-
-      expect(yield* input.take).toEqual({ kind: 'synthetic', text: 'compact' });
+      // Messages first; the request stays queued for the boundary.
       expect(yield* input.take).toEqual({
         kind: 'followUps',
         followUps: [followUp('first'), followUp('second')],
       });
+      expect(input.controls()).toHaveLength(1);
       input.end();
       expect(yield* input.take).toBeNull();
     }),

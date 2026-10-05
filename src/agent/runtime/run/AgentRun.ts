@@ -142,13 +142,6 @@ export interface AgentRunShape {
    * together rather than one after another.
    */
   readonly scope: Scope.Scope;
-  /**
-   * A switch the host admitted (the registry name of the next model),
-   * applied by the loop at its next model boundary so the run history rows that
-   * record it are appended by the one fiber that holds the run's state. A
-   * plain slot: the host's request is synchronous.
-   */
-  readonly pendingModelSwitch: { value: string | null };
   readonly callbacks: RunCallbacks;
 }
 
@@ -319,7 +312,6 @@ export const agentRunLayer = (
             return replacement;
           }),
         );
-      const pendingModelSwitch: { value: string | null } = { value: null };
 
       return {
         runId,
@@ -344,7 +336,6 @@ export const agentRunLayer = (
         swapModel,
         declinedRoutes,
         scope,
-        pendingModelSwitch,
         callbacks: input.callbacks,
       };
     }),

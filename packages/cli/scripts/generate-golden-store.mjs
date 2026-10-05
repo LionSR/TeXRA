@@ -476,7 +476,9 @@ async function generate(root) {
   tty.write('\r');
   await until(
     'the queued follow-up',
-    () => chatRows(`e.type = 'followup.queued'`) === 3,
+    () =>
+      chatRows(`e.type = 'followup.queued'
+        AND json_extract(e.data, '$.control') IS NULL`) === 3,
     tty,
   );
   tty.write('\x03');

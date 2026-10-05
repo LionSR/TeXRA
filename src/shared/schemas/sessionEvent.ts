@@ -324,21 +324,15 @@ export const PluginFactDraftSchema = durable('plugin.fact', {
  */
 const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   RunStartDraftSchema,
-  /**
-   * Every activation of a run, the first launch and each resume (PRD 6,
-   * item 8); the CLI projection writes it verbatim as a `run.activate`
-   * progress record. `run.start` is the creation fact and happens once.
-   */
+  /** Every activation of a run, the first launch and each resume (PRD 6,
+   *  item 8); `run.start` is the creation fact and happens once. */
   durable('run.activate', {}),
   /** What the run runs with, written at registration and then only when it
    *  changes: the newest row is the configuration every reader reads. */
   durable('run.config', { config: RunRecordFieldsSchema }),
   durable('run.model', { model: z.string().min(1) }), // projected (`projections.ts`), never stored
-  /**
-   * The parent edge severed: a child promoted to the top level by a stop
-   * that detaches its children. The only fact after `run.start` that moves
-   * the edge; a run never acquires a new parent.
-   */
+  /** The parent edge severed by a stop that detaches the run: the only
+   *  fact after `run.start` that moves the edge. */
   durable('run.detach', {}),
   /**
    * The terminal fact (one run model, section 3.3): outcome, the classified
@@ -371,26 +365,29 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
     by: z.enum(['model', 'user']),
   }),
   PluginFactDraftSchema,
-  /**
-   * Input a run has not taken yet (one run model, section 3.7), whole, so a
-   * crash loses nothing. `followUpId` is the producer's delivery id when it
-   * has one, else minted at admission. Pending is queued without consumed.
-   */
+  /** Input a run has not taken yet (one run model, section 3.7), whole, so
+   *  a crash loses nothing; `followUpId` is the producer's delivery id or
+   *  minted. Pending is queued without consumed. */
   durable('followup.queued', {
     followUpId: z.string().min(1),
     content: FollowUpContentSchema,
     /** Held until a take also carries an instruction (a pause notice). */
     holdUntil: z.enum(['instruction']).optional(),
+    /** A request of the run's own, consumed by the batch that applies it. */
+    control: z
+      .discriminatedUnion('kind', [
+        z.object({ kind: z.literal('compact') }),
+        z.object({ kind: z.literal('model'), model: z.string().min(1) }),
+      ])
+      .optional(),
   }),
   /** The follow-up became the message a turn carries (C3), in that
    *  message's batch: never delivered twice. */
   durable('followup.consumed', { followUpId: z.string().min(1) }),
   /**
-   * A run asking a person (one run model, section 3.7): what the UI shows
-   * (diff, command, question), never host handles. `thread` names an earlier
-   * request this one continues, which is the whole of the inquiry's
-   * multi-turn: an inquiry is a request whose thread names its predecessor.
-   * Pending is the fold, opened without decided.
+   * A run asking a person (one run model, section 3.7): what the UI shows,
+   * never host handles. `thread` names an earlier request this one
+   * continues (an inquiry's multi-turn). Pending is opened without decided.
    */
   durable('request.opened', {
     requestId: z.string().min(1),

@@ -53,6 +53,7 @@ import { claimFollowUps, type ConsumedFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
 import { Runs } from '../runRegistry';
 import {
+  consumedRows,
   appendRow,
   handedDown,
   scriptSettlement,
@@ -78,8 +79,6 @@ import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
 import type { RunControls } from '../RunHandle';
 import type { ChildRunBoundary } from '../childRunLoop';
 
-const IMMEDIATE_COMPACTION_FOLLOW_UP =
-  'The user requested immediate context compaction. Do not start a new task; continue only far enough for the runtime to process any available context compaction, and do not claim that compaction has completed.';
 const BLANK_TOOL_RESULT_CONTINUATION =
   'The previous assistant turn after a tool result was blank. Continue now with the final answer or next required action.';
 const FINAL_TOOL_INSTRUCTION = 'Submit the final structured output now.';
@@ -95,21 +94,6 @@ const answerOf = (
       part.kind === 'message' ? part.content.map((piece) => piece.text) : [],
     )
     .join('');
-
-/** Whether the view ends on the request a `/compact` queued: its compaction
- *  is still owed, since the edit that compacts replaces the view holding it. */
-const owesCompaction = (
-  message: { readonly role: string } | undefined,
-): boolean => {
-  if (message?.role !== 'user' || !('content' in message)) return false;
-  const { content } = message;
-  return (
-    Array.isArray(content) &&
-    content.length === 1 &&
-    (content[0] as { readonly text?: unknown }).text ===
-      IMMEDIATE_COMPACTION_FOLLOW_UP
-  );
-};
 
 export interface ToolUseStart {
   /** The caller launched this as a resume; the run history decides what it is. */
@@ -173,8 +157,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   let memoryMisses = run.opening?.attachedMemoryMisses ?? [];
   let systemPrompt: string | undefined;
   let response = '';
-  // A `/compact` the host admitted: done at the next model boundary.
-  let compactionRequested = false;
 
   /** The family state every snapshot of this run carries. The instruction
    *  and activated skills are the folded state's: only the transaction that
@@ -223,13 +205,14 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   let live = false;
   const controls: RunControls = {
     oneShot: run.toolPolicy.stopAfterCycle === true,
+    // Queued on the run's input, durable at once: the next model boundary
+    // compacts and consumes it, and a parked loop wakes for that turn.
     requestImmediateCompaction(): void {
-      compactionRequested = true;
-      // A parked loop wakes on a synthetic turn; the compaction runs before
-      // that turn's request, and the message tells the model to do nothing.
-      if (!followUps.hasQueued()) {
-        followUps.appendSynthetic(IMMEDIATE_COMPACTION_FOLLOW_UP);
-      }
+      session.followUps.sendDetached(runId, {
+        text: '/compact',
+        from: { kind: 'user' },
+        control: { kind: 'compact' },
+      });
     },
     // Applied at the loop's next park, before any input it takes there: a
     // park is a settled position, so the edit never cuts a turn.
@@ -490,8 +473,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       // skip the blank-turn continuation and the forced structured output.
       let replayCommitted = true;
       for (;;) {
-        state = yield* applyPendingModelSwitch(state, cell, snapshot, (at) =>
-          compaction.settle(at, 'the model is switching'),
+        state = yield* applyPendingModelSwitch(
+          state,
+          cell,
+          snapshot,
+          (at) => compaction.settle(at, 'the model is switching'),
+          followUps.controls(),
         );
         if (state.pendingResponse !== null) {
           // A user's follow-up to a stopped response joins its delivery.
@@ -560,10 +547,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // admits the round, then the invocation. An open attempt's history
         // is fixed; it is neither compacted nor re-admitted.
         if (state.openAttempt === null) {
-          const requested = compactionRequested;
-          compactionRequested = false;
+          // The queued `/compact`s are consumed by the edit that answers
+          // them, or, with nothing to summarize, by this round's admission.
+          const requests = consumedRows(runId, followUps.controls(), 'compact');
           state = yield* cell.adopt(
-            yield* compaction.atBoundary(state, bound, requested),
+            yield* compaction.atBoundary(state, bound, requests),
           );
           // A compaction replaced the history, the context updates in it
           // too: a new step renders the system text anew, each one in it.
@@ -572,7 +560,15 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             state = yield* cell.append(step.rows);
             tools = toolDefinitionsFor(step.tools.definitions);
           }
-          const admitted = snapshot(state, {});
+          const unanswered = followUps
+            .controls()
+            .filter((f) =>
+              requests.some(({ followUpId }) => followUpId === f.followUpId),
+            );
+          const admitted = [
+            ...consumedRows(runId, unanswered, 'compact'),
+            ...snapshot(state, {}),
+          ];
           if (admitted.length > 0) state = yield* cell.append(admitted);
         }
         const toolChoice =
@@ -622,29 +618,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     if (entry._tag === 'fresh')
       return yield* makeRunCell(runId, yield* openFresh(entry.opening));
     restore(entry.loaded);
-    // The flag a `/compact` set died with the process; its request did not.
-    // It is owed until a model boundary passed it: the boundary that runs
-    // the compaction either replaces the view (the request goes with it)
-    // or, when there is nothing to summarize, goes on to an attempt.
-    if (owesCompaction(entry.loaded.messages.at(-1))) {
-      const rows = yield* session.readAggregate(rowAggregate(runId), [
-        'model.message',
-      ]);
-      const asked = rows.findLast(
-        (row) =>
-          row.type === 'model.message' &&
-          row.payload.kind === 'append' &&
-          owesCompaction(row.payload.messages.at(-1)),
-      );
-      compactionRequested =
-        asked !== undefined &&
-        !rows.some(
-          (row) =>
-            row.type === 'model.message' &&
-            row.payload.kind === 'attempt' &&
-            row.commit > asked.commit,
-        );
-    }
     return yield* makeRunCell(runId, entry.loaded);
   });
 
@@ -732,22 +705,38 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // publications (by run id) orders them before `waiting`. A failure
         // ends the run, the `artifact-drain` marker on its last row.
         yield* session.settlePublications(runId, { consume: false });
-        // The turn boundary, in one batch: a completed turn's Stop hooks, the
-        // snapshot, then the steps; `waiting` parks the run, so open streaming
-        // rows close here. A child's turn the run goes on from settles here.
-        const goesOn = script === null && !run.toolPolicy.stopAfterCycle;
+        // The turn boundary, in one batch: Stop hooks, the snapshot, the
+        // steps (`waiting` closes open streams), a child's settlement, and
+        // input already queued, admitted under a fresh step as a park's is.
+        const goesOn =
+          script === null &&
+          !run.toolPolicy.stopAfterCycle &&
+          turn.outcome === 'completed';
         const settlement =
-          start.turns && goesOn && turn.outcome === 'completed'
+          start.turns && goesOn
             ? yield* start.turns.settleBoundary(result(turn.outcome, state))
             : null;
-        state = yield* cell.append([
-          ...(yield* stopHooks(run, turn, response)),
-          ...snapshot(state, {}),
+        const hooks = yield* stopHooks(run, turn, response);
+        const ending = [
           positionRow(runId, state, 'turn.end'),
           ...session.streamClosureFacts(runId),
           positionRow(runId, state, 'waiting'),
           ...(settlement?.rows ?? []),
-        ]);
+        ];
+        const next = goesOn ? followUps.takeQueued() : null;
+        const pin =
+          next !== null && !isChild() ? yield* openStep(state, 'park') : null;
+        state =
+          next === null
+            ? yield* cell.append([...hooks, ...snapshot(state, {}), ...ending])
+            : yield* cell.adopt(
+                (yield* followUps.consume(state, next, undefined, {
+                  rows: [...hooks, ...ending, ...(pin?.rows ?? [])],
+                  loop: loopState(state),
+                })).state,
+              );
+        // A turn's end is idle even when it took its next input with it.
+        if (next !== null) run.callbacks.onIdle?.();
         if (turn.outcome === 'completed') {
           const interactions = workspace.interactions;
           const cost = state.usage.totalCost;
