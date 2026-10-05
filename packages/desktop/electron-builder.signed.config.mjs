@@ -63,6 +63,12 @@ export default {
     notarize: macSigningReady,
     forceCodeSigning: macSigningReady,
   },
+  // electron-builder notarizes only the app; the workflow notarizes and
+  // staples the signed DMG after packaging.
+  dmg: {
+    ...baseConfig.dmg,
+    sign: macSigningReady,
+  },
   win: {
     ...baseConfig.win,
     ...(azureSignOptions
