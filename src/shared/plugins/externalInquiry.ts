@@ -7,7 +7,7 @@
  * global database (`InquiryRecords`); this row only displays it. Core folds
  * the row without reading it (`SessionView.pluginFacts`); this module is its
  * schema, its writer and its one reader, beside the service over the
- * thread records. Browser-safe: it imports only schemas and `effect`.
+ * thread records. Browser-safe: it imports only schemas, `zod` and `effect`.
  */
 import { Context, type Effect } from 'effect';
 import { z } from 'zod';

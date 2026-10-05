@@ -26,7 +26,11 @@ import {
   WORKSPACE_STORES,
 } from '@shared/session/valueFamily';
 import { PLUGIN_ARMS } from '@tools/pluginArms';
-import { REPO_ROOT } from '../support/repoScan';
+import {
+  productionFilesUnder,
+  productionRoots,
+  REPO_ROOT,
+} from '../support/repoScan';
 
 /**
  * The release watermark of the session store
@@ -51,7 +55,8 @@ interface Versioned {
   readonly schema: z.ZodType;
 }
 
-/** Every current-value family, each declared by its owner. */
+/** Every current-value family, each declared by its owner; the first case
+ *  checks this list against the declarations in the production tree. */
 const VALUE_FAMILIES = [
   APP_STATE,
   REPO_STATE,
@@ -108,6 +113,17 @@ describe('row versions', () => {
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain('model.message');
     expect(names).toContain('current-value.app-state');
+    const declared = productionRoots()
+      .flatMap(productionFilesUnder)
+      .flatMap((file) => [
+        ...readFileSync(resolve(REPO_ROOT, file), 'utf8').matchAll(
+          /:\s*ValueFamily<[^=]*=\s*\{\s*name:\s*'([^']+)'/g,
+        ),
+      ])
+      .map((match) => match[1]);
+    expect(declared.toSorted()).toEqual(
+      VALUE_FAMILIES.map(({ name }) => name).toSorted(),
+    );
   });
 
   it.each(VERSIONED)(
