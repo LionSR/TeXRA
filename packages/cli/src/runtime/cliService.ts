@@ -132,23 +132,37 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
   >();
   const sessions = new Map<string, SessionHandle>();
   const lanes = new Map<string, PerKeyLane>();
+  // Each project's approval policy as its config last read: a change there
+  // (`texra config`, any window's settings) applies at the next call, and
+  // a policy a window told the service holds until the config changes.
+  const configuredPolicy = new Map<string, TexraApprovalPolicy>();
+  const followPolicy = (root: string, session: SessionHandle) =>
+    Effect.map(
+      readSettingFrom<TexraApprovalPolicy>(
+        session.roots,
+        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+      ),
+      (policy) => {
+        if (configuredPolicy.get(root) === policy) return;
+        configuredPolicy.set(root, policy);
+        session.setApprovalPolicy(policy);
+      },
+    );
   const open = (workspace: string) => {
     const root = canonicalizeWorkspacePath(workspace);
     return Effect.gen(function* () {
       const held = sessions.get(root);
-      if (held !== undefined) return held;
+      if (held !== undefined) {
+        yield* followPolicy(root, held);
+        return held;
+      }
       const roots = yield* openRoots(root);
       const session = yield* openSessionEffect({
         roots,
         responseTextProcessing: createTexraResponseTextProcessing(),
         interruptedTasks: 'offer',
       });
-      session.setApprovalPolicy(
-        yield* readSettingFrom<TexraApprovalPolicy>(
-          roots,
-          TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-        ),
-      );
+      yield* followPolicy(root, session);
       sessions.set(root, session);
       return session;
     }).pipe(

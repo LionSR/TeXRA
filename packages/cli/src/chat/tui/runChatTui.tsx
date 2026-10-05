@@ -387,7 +387,7 @@ export async function runChat(
           Effect.sync(() =>
             appendLocalNotice(
               client === null
-                ? 'The TeXRA service is offline. Reconnecting…'
+                ? 'The TeXRA service is offline; TeXRA is reconnecting. If another window runs a newer TeXRA, update this one.'
                 : 'Reconnected to the TeXRA service.',
             ),
           ),

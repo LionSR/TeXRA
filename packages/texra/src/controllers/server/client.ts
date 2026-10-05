@@ -13,7 +13,6 @@ import * as NodeSocket from '@effect/platform-node/NodeSocket';
 import {
   Data,
   Deferred,
-  Duration,
   Effect,
   Exit,
   Layer,
@@ -232,11 +231,8 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
   options: {
     /** Runs whenever the connection ends (see {@link connectService}). */
     readonly onDisconnect?: Effect.Effect<void>;
-    /** How long a started service has to answer. */
-    readonly within?: Duration.Input;
   } = {},
 ): Effect.fn.Return<ServiceConnection, ServiceUnavailable, Scope.Scope> {
-  const within = options.within ?? START_TIMEOUT;
   if (process.platform === 'win32')
     return yield* Effect.fail(
       new ServiceUnavailable({ reason: WINDOWS_UNSUPPORTED }),
@@ -283,14 +279,14 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
           : Effect.fail(new ServiceUnavailable({ reason: 'not yet up' })),
       ),
       Effect.retry(Schedule.spaced('200 millis')),
-      Effect.timeout(within),
+      Effect.timeout(START_TIMEOUT),
       Effect.catch(() => Effect.succeed(null)),
     );
   }
   if (info === null)
     return yield* Effect.fail(
       new ServiceUnavailable({
-        reason: `The TeXRA service did not answer within ${Duration.format(Duration.fromInputUnsafe(within))} (its log: ${servicePaths(storageRoot).log}).`,
+        reason: `The TeXRA service did not answer within ${START_TIMEOUT} (its log: ${servicePaths(storageRoot).log}).`,
       }),
     );
   const { socket } = info;
@@ -312,11 +308,6 @@ export interface ServiceLink {
   readonly client: SubscriptionRef.SubscriptionRef<ServiceClient | null>;
 }
 
-/** How long a link that lost its service waits for another to answer
- *  before it starts one: a newer build that retired the service is starting
- *  its own, which an older window must not race with one of its build. */
-const RECONNECT_WAIT = '15 seconds';
-
 /** Between attempts to reach a service that went away: from half a second,
  *  growing, never more than ten seconds apart. */
 const RECONNECT = Schedule.min([
@@ -335,16 +326,12 @@ export const linkService = Effect.fn('server.linkService')(function* (
   storageRoot: string,
   start: Effect.Effect<void, Error>,
 ): Effect.fn.Return<ServiceLink, ServiceUnavailable, Scope.Scope> {
-  const connect = (
-    begin: Effect.Effect<void, Error>,
-    within?: Duration.Input,
-  ) =>
+  const connect = (begin: Effect.Effect<void, Error>) =>
     Effect.gen(function* () {
       const scope = yield* Scope.make();
       const lost = yield* Deferred.make<void>();
       const connection = yield* ensureService(storageRoot, begin, {
         onDisconnect: Effect.asVoid(Deferred.succeed(lost, undefined)),
-        ...(within !== undefined && { within }),
       }).pipe(
         Scope.provide(scope),
         Effect.onError(() => Scope.close(scope, Exit.void)),
@@ -367,14 +354,23 @@ export const linkService = Effect.fn('server.linkService')(function* (
         yield* Effect.logWarning(
           `The TeXRA service (pid ${current.connection.info.pid}) went away; reconnecting.`,
         );
-        // A service that answers meanwhile is taken; none, and the link
-        // starts one, as at startup.
-        current = yield* connect(Effect.void, RECONNECT_WAIT).pipe(
+        // A newer build that retired the service is starting its own: the
+        // link waits the whole startup window for one to answer, so an
+        // older window never races it with one of its build, and starts
+        // one itself only when none came, as at startup.
+        let told = '';
+        current = yield* connect(Effect.void).pipe(
           Effect.catch(() => connect(start)),
+          // Said once per reason: a newer protocol's service stays until it
+          // exits, and the link keeps trying meanwhile.
           Effect.tapError((error) =>
-            Effect.logWarning(
-              `The TeXRA service is not back yet: ${error.message}`,
-            ),
+            Effect.suspend(() => {
+              if (error.message === told) return Effect.void;
+              told = error.message;
+              return Effect.logWarning(
+                `The TeXRA service is not back yet: ${error.message}`,
+              );
+            }),
           ),
           // RECONNECT never ends, so the retry never fails.
           Effect.retry(RECONNECT),

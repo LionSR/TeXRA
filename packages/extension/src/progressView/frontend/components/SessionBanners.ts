@@ -44,8 +44,8 @@ export class SessionBanners extends LitElement {
         id: 'serviceOfflineBanner',
         role: 'status',
         body: html`<span
-          >The TeXRA service is offline. Reconnecting… Tasks already started
-          keep running in it.</span
+          >The TeXRA service is offline; TeXRA is reconnecting. If another
+          window runs a newer TeXRA, update this one.</span
         >`,
       });
     } else if (apiKey.visible) {

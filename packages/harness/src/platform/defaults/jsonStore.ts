@@ -180,19 +180,29 @@ export class JsonStore {
     follow: ((error: Error) => void) | undefined,
   ) {
     this.follow = follow;
-    if (follow !== undefined) this.version = fileVersion(filePath);
   }
 
-  /** A following store's view, brought up to the file's current version. */
+  /**
+   * A following store's view, brought up to the file's current version.
+   * The version is read before the record and again after it, so a write
+   * landing between the two is read next time rather than taken for the
+   * version already held. A file that cannot be probed or read keeps the
+   * view and is reported once per failure.
+   */
   private current(): JsonRecord {
-    if (this.follow === undefined) return this.data;
-    const version = fileVersion(this.filePath);
-    if (version === this.version) return this.data;
-    this.version = version;
+    const follow = this.follow;
+    if (follow === undefined) return this.data;
     try {
-      this.data = readJsonRecordSync(this.filePath);
+      const version = fileVersion(this.filePath);
+      if (version === this.version) return this.data;
+      const data = readJsonRecordSync(this.filePath);
+      this.data = data;
+      this.version =
+        fileVersion(this.filePath) === version ? version : undefined;
     } catch (error) {
-      this.follow(ensureError(error));
+      const failed = `failed:${ensureError(error).message}`;
+      if (this.version !== failed) follow(ensureError(error));
+      this.version = failed;
     }
     return this.data;
   }

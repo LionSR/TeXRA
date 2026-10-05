@@ -1,4 +1,4 @@
-// The desktop's presentation of one paper's session and its launch path.
+// The desktop's presentation of one project's session and its launch path.
 //
 // The session's facts reach the renderer through the fold and the framer;
 // what remains host-side is what a session asks its host to do with no
@@ -90,7 +90,7 @@ export interface DesktopAgentRun {
 }
 
 /**
- * The run wiring of one paper, in the scope that opens it: closing the scope
+ * The run wiring of one project, in the scope that opens it: closing the scope
  * detaches the host interactions, stops the session-event follower and
  * settles once every staged tool-edit preview is gone.
  */
