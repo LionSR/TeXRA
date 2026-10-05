@@ -17,7 +17,6 @@ import {
   RunSnapshotPayloadSchema,
   requestParksItsCaller,
   type CommitOrdinal,
-  type DispatchFacts,
   type HookOutcomes,
   type InvocationRef,
   type JsonValue,
@@ -27,13 +26,11 @@ import {
   type RunSnapshotPayload,
   type RetryErrorInfo,
   type RunUsageTotals,
-  type ScriptCallPayload,
   type SessionEvent,
   type SessionEventDraft,
   type SnapshotRuntime,
   type StateOperation,
   type ToolBindingPayload,
-  type ToolResultPayload,
 } from '@shared/schemas';
 import { isObject } from '@utils/core';
 import {
@@ -50,7 +47,12 @@ import {
   type SharedRunRow,
   writable,
 } from './runRows';
-import { openAttemptAfter, type OpenAttempt } from './openAttempt';
+import {
+  openAttemptAfter,
+  pendingResponseOf,
+  type OpenAttempt,
+  type PendingResponse,
+} from './inFlight';
 import { mutate } from './stateOperation';
 import type { HistoryMessage, Live, RunHistoryRow } from './historyTurns';
 import type { z } from 'zod';
@@ -110,31 +112,6 @@ export class RunHistoryInconsistent extends Data.TaggedError(
 const LoopStateSchema = RunSnapshotPayloadSchema.shape.state;
 type LoopState = z.output<typeof LoopStateSchema>;
 
-type Settlement = Pick<
-  ToolResultPayload,
-  'attempt' | 'disposition' | 'duplicateOf' | 'result' | 'attachments'
->;
-
-/** A call a `script` call's guest issued, as its `script.call` row recorded
- *  it, and the commit of its settlement once one is recorded: a resumed
- *  script is handed its settled calls in that order. */
-type ScriptCall = ScriptCallPayload & {
-  readonly settledAt: CommitOrdinal | null;
-};
-
-type PendingResponse = {
-  readonly responseId: string;
-  readonly invocation: InvocationRef;
-  readonly turn: TurnResult;
-  readonly calls: readonly DispatchFacts[];
-  /** The calls its `script` calls issued, by call id. None enters history:
-   *  the delivering append carries the results of `calls` alone. */
-  readonly scriptCalls: Readonly<Record<string, ScriptCall>>;
-  /** Committed settlements by call id, exactly one per settled call, a
-   *  script's calls included. */
-  readonly settled: Readonly<Record<string, Settlement>>;
-};
-
 type PendingIntent = {
   readonly attempt: number;
   readonly responseId: string;
@@ -149,7 +126,8 @@ type PendingIntent = {
  * from the row that produced it.
  */
 export type RunState = RunPosition & {
-  /** Model calls: a new invocation's `attempt` row counts one, a retry none. */
+  /** Responses: a new invocation's `attempt` row counts one, a retry none,
+   *  and a script run's `handed-down` call one. */
   readonly round: number;
   /** The last folded row. */
   readonly commit: CommitOrdinal;
@@ -543,16 +521,17 @@ function foldRow(
           }
           return Result.succeed({
             ...settled,
-            pendingResponse: {
-              responseId: p.responseId,
-              invocation: p.invocation,
-              turn: p.turn,
-              calls: p.calls,
-              scriptCalls: byId([]),
-              settled: {},
-            },
+            pendingResponse: pendingResponseOf(p),
           });
         }
+        case 'handed-down':
+          if (state.openAttempt !== null || state.pendingResponse !== null)
+            return outOfOrder(`handed-down ${p.responseId} over an open call`);
+          return Result.succeed({
+            ...state,
+            round: state.round + 1,
+            pendingResponse: pendingResponseOf(p),
+          });
         case 'append': {
           const pending = state.pendingResponse;
           if (pending === null || pending.responseId !== p.sourceResponse) {
@@ -580,17 +559,13 @@ function foldRow(
           pass.add(pendingIntents);
           return Result.succeed({
             ...state,
-            messages: appended(
-              state,
-              assistantMessageFromResult(pending.turn),
-              ...p.messages,
-            ),
+            messages: appended(state, pending.assistant, ...p.messages),
             pendingResponse: null,
             pendingIntents,
           });
         }
       }
-      // Exhaustive over `ModelMessagePayloadSchema`'s kinds: a sixth arm is a
+      // Exhaustive over `ModelMessagePayloadSchema`'s kinds: a new arm is a
       // compile error here, never a silently ignored row.
       return p satisfies never;
     }

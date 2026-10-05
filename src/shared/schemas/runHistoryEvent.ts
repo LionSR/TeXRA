@@ -123,11 +123,8 @@ export type DispatchFacts = z.infer<typeof DispatchFactsSchema>;
 
 export const ModelMessagePayloadSchema = z
   .discriminatedUnion('kind', [
-    /**
-     * A billed request is about to leave the process. Carries no history,
-     * only the address of the rest it sends (`requestContext.ts`). A
-     * background script run's opening one (`handedDown`) sends nothing.
-     */
+    /** A billed request is about to leave the process. Carries no history,
+     *  only the address of the rest it sends (`requestContext.ts`). */
     z.strictObject({
       kind: z.literal('attempt'),
       invocation: InvocationRefSchema,
@@ -142,24 +139,20 @@ export const ModelMessagePayloadSchema = z
       providerResponseId: z.string().min(1),
       returnedModel: z.string().min(1).nullable(),
     }),
-    /**
-     * The commit barrier: the accepted remote operation, committed before
-     * `observe` is called. `deadlineAtMs` is the limit admitted with the
-     * submission, never one recomputed from current settings; the package
-     * produces neither it nor an attempt, so both ride the envelope (D2).
-     */
+    /** The commit barrier: the accepted remote operation, committed before
+     *  `observe` is called. `deadlineAtMs` is the limit admitted with the
+     *  submission, never one recomputed from current settings; the package
+     *  produces neither it nor an attempt, so both ride the envelope (D2). */
     z.strictObject({
       kind: z.literal('accepted'),
       invocation: InvocationRefSchema,
       operation: StoredOperationSchema,
       deadlineAtMs: z.int().positive(),
     }),
-    /**
-     * A user stop cancelled the accepted operation; `evidence` is the
-     * provider's reply verbatim. It retires the operation, so a resume starts
-     * a new attempt instead of observing work the user stopped. A cancel that
-     * failed leaves no row, and the still-live operation stays observable.
-     */
+    /** A user stop cancelled the accepted operation; `evidence` is the
+     *  provider's reply verbatim. It retires the operation, so a resume starts
+     *  a new attempt instead of observing work the user stopped. A cancel that
+     *  failed leaves no row, and the still-live operation stays observable. */
     z.strictObject({
       kind: z.literal('cancelled'),
       invocation: InvocationRefSchema,
@@ -190,6 +183,13 @@ export const ModelMessagePayloadSchema = z
        * Never restored from a snapshot; the rows are the only carrier.
        */
       usage: NormalizedUsageSchema.nullable(),
+    }),
+    /** The call the app hands a script's run: no model, attempt or usage. */
+    z.strictObject({
+      kind: z.literal('handed-down'),
+      responseId: ResponseIdSchema,
+      call: DispatchFactsSchema,
+      argumentsText: z.string(),
     }),
     /**
      * Canonical messages appended to history, verbatim. When

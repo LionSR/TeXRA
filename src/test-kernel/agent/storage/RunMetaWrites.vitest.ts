@@ -163,11 +163,11 @@ describe('run metadata updates', () => {
         });
       }),
   );
-  // A document task's recipe is a script's run of the user's model; on an
-  // editor (Copilot) binding its handed-down call still commits, as round
-  // mode's document tasks did before the recipe replaced them.
+  // A document task's recipe is a script's run of the user's model. Its
+  // call is handed down by the app, not made by a model, so it commits on
+  // any binding (an editor's included) and records no model origin.
   it.effect(
-    "commits a script run's handed-down call on an editor binding",
+    "commits a script run's handed-down call with no model origin",
     () =>
       Effect.gen(function* () {
         yield* session.runHistory.acquire(id);
@@ -188,27 +188,25 @@ describe('run metadata updates', () => {
         ]);
         const run = {
           runId: id,
-          model: yield* SynchronizedRef.make({
-            origin: {
-              protocol: 'vscode-lm',
-              codecVersion: 1,
-              requestedModel: 'gpt-test',
-              deployment: { vendor: 'copilot', version: 'gpt-test' },
-            },
-          }),
           steps: yield* SynchronizedRef.make(null),
           logger: {},
         };
         const rows = yield* handedDown(
-          // The only fields `handedDown` reads: the binding's origin, no step.
+          // The only fields `handedDown` reads: no step, so no registry.
           run as unknown as Parameters<typeof handedDown>[0],
           opened,
           { code: 'return 1;', title: 'polish', tools: [], kind: 'recipe' },
         );
+        expect(
+          rows.map((row) =>
+            row.type === 'model.message' ? row.payload.kind : row.type,
+          ),
+        ).toEqual(['handed-down', 'run.position']);
         const state = yield* session.runHistory.appendBatch(id, opened, rows);
         expect(state.pendingResponse?.calls.map((c) => c.toolName)).toEqual([
           'script',
         ]);
+        expect(state.pendingResponse?.assistant.origin).toBeNull();
       }),
   );
 });

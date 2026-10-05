@@ -153,7 +153,8 @@ export const StoredMessageSchema = z.discriminatedUnion('role', [
   }),
   z.strictObject({
     role: z.literal('assistant'),
-    origin: StoredOriginSchema,
+    /** `null`: no model produced it (a call the application handed down). */
+    origin: StoredOriginSchema.nullable(),
     content: StoredContentSchema,
   }),
   z.strictObject({

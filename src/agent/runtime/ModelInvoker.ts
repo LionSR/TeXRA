@@ -99,7 +99,7 @@ import {
   checkRecordedRequest,
   recordedRequest,
 } from './run/requestContext';
-import { dispatchFactsFor } from './run/tools';
+import { dispatchFactsFor, localCallsOf } from './run/tools';
 import {
   retryRow,
   retryRows,
@@ -456,7 +456,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         const usage = priceTurnUsage(bound, turn.usage, responseTimeMs);
         const responseId = randomUUID();
         const calls = dispatchFactsFor(
-          turn,
+          turn.kind === 'http' ? localCallsOf(turn.content) : [],
           (yield* SynchronizedRef.get(run.steps))?.tools.registry,
           logger,
           generateShortId,

@@ -309,7 +309,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const { responseId } = pending;
   // A stored call with no intent never ran; a script's (no model) starts.
   const replan = cell.opened.pendingResponse?.responseId === responseId;
-  const calls = localCallsOf(pending.turn);
+  const calls = localCallsOf(pending.assistant.content);
   // The calls answer the instruction the committed state records.
   const at = initial.loop?.instruction;
   const userInstruction =

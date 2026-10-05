@@ -74,12 +74,14 @@ export const originOf = <P extends z.infer<typeof OriginSchema>['protocol']>(
     codecVersion: 1 as const,
   });
 
-/** Compares the complete non-secret binding, not runtime lineage. */
+/** Compares the complete non-secret binding, not runtime lineage. A `null`
+ *  left side (content no model produced) matches no binding. */
 export function sameModelOrigin(
-  left: ModelOrigin,
+  left: ModelOrigin | null,
   right: ModelOrigin,
 ): boolean {
   if (
+    left === null ||
     left.protocol !== right.protocol ||
     left.codecVersion !== right.codecVersion ||
     left.requestedModel !== right.requestedModel
