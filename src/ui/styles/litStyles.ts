@@ -209,13 +209,29 @@ export const designTokens: CSSResult = css`
     background-color: var(--wa-color-editor-selection);
   }
 
-  /* The desktop window has no title bar, so its headers are drag regions,
-     and Electron hands a real click over one to the window, not the page.
-     A menu that opens across a header is clickable only if it is no-drag
-     itself. Outside Electron the property is ignored. */
-  wa-dropdown::part(menu),
-  wa-dropdown::part(submenu),
-  wa-select::part(listbox) {
+  /* The desktop window has no title bar, so its header rows are drag
+     regions, and Electron hands a real click over one to the window, not
+     the page. The drag value is inherited, through shadow roots too, so a
+     control or a dropdown's menu inside a header is dead to the mouse
+     unless it says no-drag itself. A dialog opened from elsewhere can still
+     overlap a header, so it opts out as well. Outside Electron the property
+     is ignored. */
+  button,
+  input,
+  textarea,
+  select,
+  a[href],
+  wa-button,
+  wa-input,
+  wa-textarea,
+  wa-select,
+  wa-checkbox,
+  wa-switch,
+  wa-tag,
+  wa-badge,
+  wa-dropdown,
+  wa-dialog::part(dialog),
+  wa-drawer::part(dialog) {
     -webkit-app-region: no-drag;
   }
 

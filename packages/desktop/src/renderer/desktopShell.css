@@ -513,10 +513,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   -webkit-app-region: drag;
 }
 
-.shell-header wa-button {
-  -webkit-app-region: no-drag;
-}
-
 .shell-header-button-slot {
   position: relative;
   display: inline-flex;
@@ -715,7 +711,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
 .shell-workbench-close {
   align-self: center;
   margin: 0 8px;
-  -webkit-app-region: no-drag;
 }
 
 body[data-desktop-platform='darwin'] .shell-frame-collapsed .shell-header,
