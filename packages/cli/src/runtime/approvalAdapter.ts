@@ -24,8 +24,8 @@ import type {
   UserQuestionPermission,
 } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
+import { TOOL_OUTCOME_COPY } from '@shared/transcript/toolOutcome';
 import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-import { TOOL_OUTCOME_COPY } from '@ui/transcript/toolOutcome';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   type CliApprovalContent,

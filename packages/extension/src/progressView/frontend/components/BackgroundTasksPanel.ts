@@ -38,11 +38,11 @@ import {
   type RunView,
 } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
-import { SessionUiEvents } from '@shared/session/uiEvents';
-import { TickerController } from '@shared/litControllers/TickerController';
 import type { TeXRAIconName } from '@shared/iconNames';
+import { dispatchedChildren } from '@shared/transcript';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { TickerController } from '@texra/shared/litControllers/TickerController';
 import { designTokens, commonViewStyles } from '@ui/styles';
-import { dispatchedChildren } from '@ui/transcript';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { NESTED_AGENT } from '@ui/copy/nestedRuns';
 import {

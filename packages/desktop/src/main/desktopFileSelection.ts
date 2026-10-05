@@ -2,13 +2,13 @@ import { resolve } from 'node:path';
 
 import { Effect, FileSystem, type PlatformError } from 'effect';
 
+import { relativeToRoot } from '@texra-ai/harness/node';
+import type { FileOptions } from '@shared/schemas';
 import {
   getFileListConfig,
   type ListableFileType,
-} from '@common/files/fileListingRules';
-import { workspaceFileOptions } from '@controllers/session/workspaceFileOptions';
-import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
-import type { FileOptions } from '@shared/schemas';
+} from '@texra/common/files/fileListingRules';
+import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
 import { normalizeFilePath } from '@utils/core';
 
 interface DesktopFileSelectionDialogOptions {

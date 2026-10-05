@@ -1,37 +1,41 @@
 import { app } from 'electron';
 import { Effect, Layer, Scope } from 'effect';
 
+import {
+  AgentDirectories,
+  AppState,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+  type PlatformSecrets,
+  type AgentDirectoriesPort,
+  type StateStore,
+  type WorkspaceRoots,
+} from '@texra-ai/harness';
+import {
+  createNodeWorkspaceRoots,
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@texra-ai/harness/node';
 import { AgentDirectoryService } from '@agent/index';
-import { bootstrapHost } from '@controllers/hostBootstrap';
+import { globalDatabaseLayer } from '@controllers/session/Database';
+import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import {
   appStateStoreFromDatabase,
   openProjectStateStore,
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
-import { installProcessRuntime } from '@controllers/session/sessionLayer';
-import { globalDatabaseLayer } from '@controllers/session/Database';
 import { emitAppSignal } from '@eventBus/AppSignals';
-import type { ProcessServices } from '@platform/processRuntime';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { AgentDirectoriesPort, StateStore } from '@platform/interfaces';
-import { AgentDirectories, AppState } from '@platform/interfaces';
-import type { PlatformSecrets } from '@platform/secrets';
-import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
-import { nodeFileServices } from '@platform/defaults/jsonStore';
-import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
-import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
-import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
+import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
+import { nodeFileServices } from '@platform/defaults/jsonStore';
+import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
+import type { ProcessServices } from '@platform/processRuntime';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
-import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
 import { GlobalDatabase } from '@shared/session/database';
-import { TEXRA_SETTING_ROWS } from '@shared/settingsView/texraSettings';
 import { usageLogLayer } from '@telemetry/UsageLogService';
+import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
+import { bootstrapHost } from '@texra/controllers/hostBootstrap';
+import { texraPlugins } from '@texra/tools/registry';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
-import { texraPlugins } from '@tools/registry';
 import { processEnvConfigLayer } from '@utils/system/envFlags';
 
 // Local file imports

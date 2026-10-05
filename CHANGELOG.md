@@ -784,6 +784,14 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A resumed task no longer asks whether a command ran that never
+  started.** A task stopped while a command waited for your approval, or
+  just before it asked, used to come back asking "did this run?" about a
+  command that never ran. A command now counts as started only once its
+  approval is given and it begins, so the resume asks for the approval
+  again, or runs the command under the answer you already gave. A task
+  whose tool calls run side by side also no longer stops with an internal
+  error when you answer such a question while another call finishes.
 - **A task saved by an older TeXRA no longer reads as corrupt.** A task
   whose stored shape this version no longer reads now says it was made by
   an older TeXRA and can't be opened here, instead of calling it corrupt,
@@ -794,7 +802,10 @@ show` print the same notice, and the new `texra agents customize`,
   service by it, so a preview extension, whose Marketplace number differs
   from the CLI's, no longer retires a service of its own build. A service
   that retired an older one no longer disappears a moment later: the old
-  service's exit could remove the new one's socket.
+  service's exit could remove the new one's socket. Each service now
+  listens on a socket of its own, which its record names, so an older
+  service that finishes its last task after a newer one started never
+  takes the newer one's socket with it.
 - **Desktop header controls and menus take clicks again.** The "+" menu of
   a side or bottom panel (Files, Terminal, Browser, Logs), a tab's menu, and
   the task header's controls (the "More" button and its menu, renaming, the
@@ -1636,6 +1647,16 @@ show` print the same notice, and the new `texra agents customize`,
   `--input` is no longer a required flag, because a tool-use run may take none.
   A name carried by both categories is refused rather than resolved to one of
   them: the error names both candidates and their source-qualified spellings.
+- **`@texra-ai/harness` exports the platform's ports and a request's
+  refusals.** The root entry now exports the port types an `AgentPlatform`
+  implements, the failures its stores answer with, the services a plugin's
+  code reads them as, the request errors `Session.request` fails with, and
+  the availability contract; `@texra-ai/harness/node` exports the Node
+  building blocks `nodePlatform` is made of.
+- **A plugin can own one request kind's decisions (`Plugin.decision`).** The
+  harness runs the owning plugin's hook before a decision on a pending request
+  of that kind commits. `installProcessRuntime` has no `setup` option: a host
+  passes its setup capabilities with its plugin list.
 
 #### Bug Fixes
 

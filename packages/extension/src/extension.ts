@@ -7,6 +7,19 @@ import { Cause, Data, Effect, Exit, Layer, Result, Scope } from 'effect';
 
 // Local imports
 import {
+  AppState,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+  type LanguageModelPort,
+  WorkspaceRoots,
+  ToolMissingHandler,
+} from '@texra-ai/harness';
+import {
+  createNodeWorkspaceRoots,
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+  canonicalizeWorkspacePath,
+} from '@texra-ai/harness/node';
+import {
   closeAllSessions,
   initializeDefaultSession,
   teardownDefaultSession,
@@ -22,16 +35,12 @@ import {
   disposeProcessRuntime,
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
-import { serviceSessionBackend } from '@controllers/server/serviceBackend';
-import { localSessionBackend } from '@controllers/session/sessionBackend';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import {
   appStateStoreFromDatabase,
   openProjectStateStore,
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
-import { bootstrapHost } from '@controllers/hostBootstrap';
-import { fromHost } from '@controllers/session/hostCallFailure';
 import { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
@@ -64,27 +73,14 @@ import { withLogChannel } from '@logger/effectLog';
 import { setLogSink } from '@logger/logSink';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
-import { AppState } from '@platform/interfaces';
-import type { ToolMissingHandler } from '@platform/interfaces';
 import {
   withProcessServices,
   type ProcessRuntime,
 } from '@platform/processRuntime';
-import {
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
-  type LanguageModelPort,
-} from '@platform/languageModel';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
-import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
-import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { StorageFs, withSessionFs } from '@platform/rootedFs';
 import {
   formatTexraApprovalPolicy,
@@ -92,17 +88,21 @@ import {
   texraApprovalPolicyLabel,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import type { CommandId } from '@shared/commands/catalog';
 import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { GlobalDatabase } from '@shared/session/database';
-import { TEXRA_SETTING_ROWS } from '@shared/settingsView/texraSettings';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { usageLogLayer } from '@telemetry/UsageLogService';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
+import { serviceSessionBackend } from '@texra/controllers/server/serviceBackend';
+import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
+import type { CommandId } from '@texra/shared/commands/catalog';
+import { fromHost } from '@texra/controllers/session/hostCallFailure';
+import { bootstrapHost } from '@texra/controllers/hostBootstrap';
+import { texraPlugins } from '@texra/tools/registry';
+import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
+import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
-import { texraPlugins } from '@tools/registry';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
-import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
-import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -187,6 +187,9 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         LeanLanguageServices,
         Effect.map(AppState, createVscodeLeanLanguageServices),
       ),
+      // The editor's commands, extensions and terminal, for the setup tools
+      // and the Lean 4 probe.
+      setup: vscodeSetupPlatform,
     }),
     settings: TEXRA_SETTING_ROWS,
     mcpConfigPath: USER_MCP_CONFIG_PATH,
@@ -197,7 +200,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     languageModel: extras.languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
     agentDirectories: agentDirectoriesLayer(context.extensionPath),
     toolMissingReporter: extras.toolMissingHandler,
-    setup: vscodeSetupPlatform,
     usageLog: usageLogLayer({
       version: extensionVersion,
       editorType: vscode.env.appName || undefined,

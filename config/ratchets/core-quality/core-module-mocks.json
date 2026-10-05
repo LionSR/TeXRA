@@ -20,7 +20,6 @@
   "src/test-kernel/cli/History.vitest.ts": 1,
   "src/test-kernel/cli/ModelAccessSelection.vitest.ts": 2,
   "src/test-kernel/cli/TuiApprovalRetry.vitest.ts": 1,
-  "src/test-kernel/controllers/session/hostDraftRequests.vitest.ts": 2,
   "src/test-kernel/controllers/SettingsMemoryController.vitest.ts": 2,
   "src/test-kernel/controllers/SetupLaunch.vitest.ts": 1,
   "src/test-kernel/frontend/CodexSubscriptionSignIn.vitest.ts": 1,

@@ -34,7 +34,7 @@ import type {
   ToolFileListSection,
   ToolFileSection,
   ToolSection,
-} from '@ui/transcript';
+} from '@shared/transcript';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { assertNever } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';

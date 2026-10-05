@@ -8,7 +8,6 @@ import { Effect, FileSystem, PlatformError } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { publishCompiledPdfArtifact } from '@agent/output/compiledPdfArtifacts';
 import type { RunId } from '@shared/schemas';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -16,6 +15,7 @@ import {
   makeTempDir as makeSharedTempDir,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
+import { publishCompiledPdfArtifact } from '@texra/agent/output/compiledPdfArtifacts';
 import {
   createExternalLocation,
   createRunStorageLocation,

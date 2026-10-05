@@ -212,9 +212,9 @@ export const terminalParts = Effect.fn('llm.responses.terminalParts')(
     const calls = snapshot.some((item) => item.kind === 'local-call');
     // An incomplete response cannot leave a dispatchable call.
     if (response.status === 'incomplete' && calls) return yield* rejected();
-    let finishReason: HttpTurnResult['finishReason'] = calls
-      ? 'tool-calls'
-      : 'stop';
+    // A completed response states no reason, and its snapshot may restate
+    // only part of what streamed: the settled content decides.
+    let finishReason: HttpTurnResult['finishReason'] | null = null;
     if (response.status === 'incomplete')
       finishReason =
         incomplete === 'max_output_tokens' ? 'length' : 'content-filter';

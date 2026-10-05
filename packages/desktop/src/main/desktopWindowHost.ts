@@ -6,10 +6,13 @@
 import { app, dialog, shell, type BrowserWindow } from 'electron';
 import { Cause, Effect } from 'effect';
 
-import { ExternalOpenFailed, type NotificationFailed } from '@hosts/uiHosts';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { INSTRUCTION_ACTION, type InstructionAction } from '@shared/schemas';
 import type { DownMessage } from '@shared/session/sessionFrames';
+import {
+  ExternalOpenFailed,
+  type NotificationFailed,
+} from '@texra/hosts/uiHosts';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
 import { createDesktopDialogs } from './desktopDialogs.js';

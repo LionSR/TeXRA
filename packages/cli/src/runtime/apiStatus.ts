@@ -5,13 +5,12 @@ import {
   configuredApiKeyProviders,
   providerDisplayName,
 } from '@texra-ai/llm';
-import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { formatSubscriptionUsageSummary } from '@shared/subscriptionUsagePresentation';
 import type { SubscriptionUsageSnapshot } from '@shared/schemas';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
 import { SUBSCRIPTION_AUTH_COPY } from '@shared/model/accountAuth';
+import { formatSubscriptionUsageSummary } from '@texra/shared/subscriptionUsagePresentation';
+import { SubscriptionUsageService } from '@texra/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 
 import {
@@ -23,6 +22,7 @@ import {
   type CliModelAccessStatus,
 } from './modelAccessRoute';
 import { readCliModelAccessStatus } from './modelAccessSelection';
+import type { PlatformSecrets } from '@texra-ai/harness';
 
 /** The one method this module needs, derived from the service that owns it —
  *  the same narrowing the desktop credential controller uses. */

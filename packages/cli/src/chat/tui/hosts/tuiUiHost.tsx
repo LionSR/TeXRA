@@ -25,7 +25,7 @@ import type {
   PromptInputOptions,
   PromptMessageItem,
   PromptMessageOptions,
-} from '@hosts/uiHosts';
+} from '@texra/hosts/uiHosts';
 
 import { TextEntryForm } from '../forms/_shared/TextEntryForm';
 import { ListForm } from '../forms/_shared/ListForm';

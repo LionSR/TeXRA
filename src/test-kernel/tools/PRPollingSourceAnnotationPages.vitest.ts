@@ -18,13 +18,16 @@ import { FakeSecrets } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
 // Local imports - tools
-import { fetchAnnotations } from '@tools/github/checkRunsClient';
+import { fetchAnnotations } from '@texra/tools/github/checkRunsClient';
 import {
   PRPollingSource,
   type PRSubscriptionState,
-} from '@tools/github/PRPollingSource';
-import type { GhCheckAnnotation, GhCheckRun } from '@tools/github/prTypes';
-import type { PollHookRejected } from '@tools/github/PollingSourceBase';
+} from '@texra/tools/github/PRPollingSource';
+import type {
+  GhCheckAnnotation,
+  GhCheckRun,
+} from '@texra/tools/github/prTypes';
+import type { PollHookRejected } from '@texra/tools/github/PollingSourceBase';
 
 // Local imports - test fixtures
 import {
@@ -39,8 +42,10 @@ const mocks = vi.hoisted(() => ({
 // Stub the GitHub client at its module boundary. The importOriginal spread
 // keeps the real error classes, so the source's own instanceof checks run
 // against the classes production reaches, not against look-alikes.
-vi.mock('@tools/github/githubClient', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tools/github/githubClient')>()),
+vi.mock('@texra/tools/github/githubClient', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@texra/tools/github/githubClient')
+  >()),
   ghGet: mocks.ghGet,
 }));
 

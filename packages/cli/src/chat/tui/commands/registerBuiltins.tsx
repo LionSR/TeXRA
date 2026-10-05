@@ -3,28 +3,27 @@
 
 import { Effect, Result, type Scope } from 'effect';
 
+import { type RunId } from '@texra-ai/harness/schemas';
 import type { SessionHandle } from '@agent/runtime';
-import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
-import { parseCliHistoryId } from '@cli/runtime/history';
-import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import type {
   CliLogoutTarget,
   LoginFormValue,
 } from '@cli/runtime/loginOptions';
+import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
+import { parseCliHistoryId } from '@cli/runtime/history';
+import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
 import {
   installPlugins,
   parsePluginOrigin,
 } from '@common/plugins/installedPlugins';
-import type { ServiceConnection } from '@controllers/server/client';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
+import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   localSessionBackend,
   type SessionBackend,
-} from '@controllers/session/sessionBackend';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
-import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import { type RunId } from '@shared/schemas';
-import type { SettingsStores } from '@shared/config/settingsAccess';
+} from '@texra/controllers/session/sessionBackend';
+import type { ServiceConnection } from '@texra/controllers/server/client';
 import { RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { PLUGINS_TUI } from '@ui/copy/plugins';
 
@@ -86,6 +85,7 @@ import {
   type FormActionHandler,
   modelAccessContribution,
 } from './modelAccessContribution';
+import type { PlatformSecrets } from '@texra-ai/harness';
 
 type SelectHandler<T> = (value: T) => SlashCommandEffect;
 

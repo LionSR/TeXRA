@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 // Local imports
 import type { SessionMeta } from '@cli/chat/tui/state/cliState';
 import type { RunId } from '@shared/schemas';
+import type { TranscriptRow } from '@shared/transcript';
 import {
   FakeStdin,
   FakeStdout,
@@ -23,7 +24,6 @@ import {
   textRowFixture,
   toolRowFixture,
 } from '@test/support/transcriptRowFixtures';
-import type { TranscriptRow } from '@ui/transcript';
 import {
   bindTestSessionView,
   makeRunView,

@@ -7,7 +7,6 @@ import { beforeEach, describe, expect } from 'vitest';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import {
   resolveGlobalStoragePath,
@@ -29,6 +28,7 @@ import { installPlatform } from '@test/support/setupPlatform';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { seedRunRecord } from '@test/support/runRecordSeeds';
+import { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
 
 const TEMPLATE =
   '<!doctype html><html><head><title>t</title>' +

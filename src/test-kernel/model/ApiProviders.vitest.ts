@@ -23,7 +23,7 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { withEnv } from '@test/support/testEnv';
-import { UnsetApiKeyTool } from '@tools/setup/UnsetApiKeyTool';
+import { UnsetApiKeyTool } from '@texra/tools/setup/UnsetApiKeyTool';
 
 function createSecrets(initial: Record<string, string> = {}): {
   secrets: PlatformSecrets;

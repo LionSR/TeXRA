@@ -12,15 +12,14 @@ import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports
-import type { RunId } from '@shared/schemas';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 import { unseenRuns } from '@shared/session/unseenRuns';
-import { SessionUiEvents } from '@shared/session/uiEvents';
 import {
   RUN_GROUP_LABELS,
   RUN_GROUP_ORDER,
 } from '@shared/runs/runStatusDisplay';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { designTokens, commonViewStyles } from '@ui/styles';
 
 // Side-effect imports - register WA components
@@ -34,6 +33,7 @@ import { renderEmptyState } from '@ui/wa/emptyState';
 import { layoutStyles } from '../styles/logStyles';
 import { runTabsContainerStyles } from './RunTabsContainer.styles';
 import { getComposedPathElement } from '../utils';
+import type { RunId } from '@texra-ai/harness/schemas';
 import type { RunTab } from './RunTab';
 import './RunTab';
 

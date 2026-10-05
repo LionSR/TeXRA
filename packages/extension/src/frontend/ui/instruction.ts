@@ -5,14 +5,14 @@ import * as vscode from 'vscode';
 // Local imports
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { withLogChannel } from '@logger/effectLog';
+import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
+import { INSTRUCTION_PREFIX } from '@shared/state/stateKeys';
+import { ensureError } from '@utils/errors/errorMessage';
 import type {
   StateStore,
   StateReadFailed,
   StateWriteFailed,
-} from '@platform/interfaces';
-import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
-import { INSTRUCTION_PREFIX } from '@shared/state/stateKeys';
-import { ensureError } from '@utils/errors/errorMessage';
+} from '@texra-ai/harness';
 
 const NEVER_REMIND = 'Never remind again';
 const CHANNEL = 'instruction';

@@ -4,7 +4,7 @@ import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import { confirmCardContentWidth } from '@cli/tui/ui/theme';
 import type { ToolOutcomePermission } from '@shared/schemas';
 import type { SurfaceDecision } from '@shared/session/approvalDecision';
-import { TOOL_OUTCOME_COPY } from '@ui/transcript/toolOutcome';
+import { TOOL_OUTCOME_COPY } from '@shared/transcript/toolOutcome';
 import { ConfirmCard } from './ConfirmCard';
 import {
   ScrollableModalText,

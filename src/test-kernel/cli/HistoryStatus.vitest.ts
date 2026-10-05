@@ -13,7 +13,6 @@ import {
   initializeDefaultSession,
   teardownDefaultSession,
 } from '@agent/runtime/sessionGraph';
-import { documentTaskConfig } from '@agent/output/documentRecipe';
 import { cliRunStanding } from '@cli/runtime/toolUseResumeData';
 import {
   formatCliHistoryDetailsText,
@@ -36,6 +35,7 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 
 const TOOL_USE_CONFIG: AgentConfig = AgentConfigSchema.parse({
   agent: 'orchestrator',

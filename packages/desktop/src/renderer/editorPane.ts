@@ -18,12 +18,12 @@ import '@awesome.me/webawesome/dist/components/tree-item/tree-item.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 
 import type { Theme } from '@shared/schemas';
-import { monacoLanguageForPath } from '@shared/monaco/monacoLanguage';
+import { monacoLanguageForPath } from '@texra/shared/monaco/monacoLanguage';
 import {
   loadMonaco,
   monacoThemeForHostTheme,
   type MonacoModule,
-} from '@shared/monaco/monacoLoader';
+} from '@texra/shared/monaco/monacoLoader';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLoadingState } from '@ui/wa/loadingState';

@@ -8,9 +8,9 @@ import {
   type SkillDisplayItem,
 } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { applyStateSettingUpdate } from '@shared/settingsView/handlers/stateSettingWrite';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
+import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
 import { AsyncListForm } from './_shared/ListForm';

@@ -29,7 +29,7 @@ import type {
   PhaseRow,
   ProgressStatusRow,
   UserRow,
-} from '@ui/transcript';
+} from '@shared/transcript';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers

@@ -10,19 +10,19 @@
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - types
+import { NotificationFailed, type DiffSource } from '@texra/hosts/uiHosts';
 import type {
   ToolEditApprovalHost,
   ToolEditPreview,
   ToolEditPreviewContext,
-} from '@controllers/approval/ToolEditApprovalController';
-import { hostFailure } from '@controllers/session/hostCallFailure';
-import { NotificationFailed, type DiffSource } from '@hosts/uiHosts';
-import type { HostRequestFailure } from '@shared/session/requestErrors';
-import type { BuildDisplayFn } from '@tools/latex/latexPreview';
-import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
+} from '@texra/controllers/approval/ToolEditApprovalController';
+import { hostFailure } from '@texra/controllers/session/hostCallFailure';
+import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
+import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { HostRequestFailure } from '@texra-ai/harness';
 
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopSpawn } from './desktopWindows.js';

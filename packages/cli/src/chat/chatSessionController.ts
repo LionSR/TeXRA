@@ -42,12 +42,8 @@ import {
   type TurnOutcome,
 } from '@cli/runtime/terminalStatus';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
-import type { SessionBackend } from '@controllers/session/sessionBackend';
-import type { WindowHost } from '@controllers/server/windowHost';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
-import type { DisposableStore } from '@platform/disposable';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   acceptsFollowUp,
@@ -58,11 +54,10 @@ import {
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { isDocumentTaskConfig, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { heldElsewhereBy } from '@shared/session/database';
-import type {
-  RunStopReason,
-  RuntimeRequest,
-} from '@shared/session/runtimeRequest';
 import { escapeText } from '@shared/utils/xmlEscape';
+import type { DisposableStore } from '@texra/platform/disposable';
+import type { WindowHost } from '@texra/controllers/server/windowHost';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { generateRunId } from '@utils/core';
@@ -101,6 +96,11 @@ import {
   moveLocalTranscriptToRun,
   reportRequestDefect,
 } from './tui/state/transcript';
+import type {
+  RunStopReason,
+  RuntimeRequest,
+  PlatformSecrets,
+} from '@texra-ai/harness';
 import type { FollowUpDeliveryQueue } from './followUpDeliveryQueue';
 import type { ChatAgentRuns } from './serviceAgentRuns';
 import type { SessionRequests } from './tui/state/approvalQueue';

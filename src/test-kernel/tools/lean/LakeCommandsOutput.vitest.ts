@@ -12,7 +12,7 @@ import { describe, expect } from 'vitest';
 
 // Local imports
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { runLakeCommand } from '@tools/lean/direct/lakeCommands';
+import { runLakeCommand } from '@texra/tools/lean/direct/lakeCommands';
 
 describe('runLakeCommand output failures', () => {
   const LAKE_BUILD = {

@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
 
+import { type RunId } from '@texra-ai/harness/schemas';
 import {
   appendLocalNotice,
   appendLocalRequestRefusal,
@@ -11,7 +12,6 @@ import {
   parseTexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
-import { type RunId } from '@shared/schemas';
 import { RUN_GRANT_NOUN } from '@ui/copy/delegationApproval';
 
 import { type SlashCommandContext } from './slashContext';

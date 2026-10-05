@@ -24,7 +24,7 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
+import { AcceptRunFilesTool } from '@texra/tools/AcceptRunFilesTool';
 import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
 // Local file imports

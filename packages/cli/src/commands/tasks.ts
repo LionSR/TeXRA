@@ -9,11 +9,9 @@ import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 
 import { AgentConfigSchema, type AgentConfigPayload } from '@agent/runtime';
-import type { ServiceClient } from '@controllers/server/client';
-import type { TaskSummary } from '@controllers/server/protocol';
-import type { RunId } from '@shared/schemas';
-import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { RequestErrorWire } from '@shared/session/sessionFrames';
+import type { TaskSummary } from '@texra/controllers/server/protocol';
+import type { ServiceClient } from '@texra/controllers/server/client';
 import { generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -31,6 +29,8 @@ import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
+import type { Outcome, RuntimeRequest } from '@texra-ai/harness';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The text width an attach lays rows out at when stdout is not a terminal,
  *  so a saved transcript does not depend on who saved it. */

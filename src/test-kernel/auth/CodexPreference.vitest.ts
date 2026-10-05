@@ -13,7 +13,7 @@ import { installPlatform } from '@test/support/setupPlatform';
 
 const CODEX_PREFER_SUBSCRIPTION_KEY = 'texra.chatgptCodex.preferSubscription';
 
-describe('Codex subscription preference (src/model/subscriptionAccess.ts)', () => {
+describe('Codex subscription preference (packages/harness/src/model/subscriptionAccess.ts)', () => {
   it.effect(
     'writes workspace preference when workspace config already controls it',
     () =>

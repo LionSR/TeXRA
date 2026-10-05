@@ -14,7 +14,7 @@ import {
   type StatItem,
   type TranscriptRow,
   type TranscriptText,
-} from '@ui/transcript';
+} from '@shared/transcript';
 import { formatBytes } from '@utils/text/stringUtils';
 
 // A body block can be arbitrarily large (a 50 KB tool dump, a long error

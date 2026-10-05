@@ -8,8 +8,9 @@
 import { Cause, Effect, Exit, Fiber, Result, Scope } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
-import { getVisibleAgents } from '@agent/index';
+import { aggregateId } from '@texra-ai/harness';
 import type { AgentConfig } from '@agent/runtime';
+import { getVisibleAgents } from '@agent/index';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { reachCliService } from '@cli/runtime/cliService';
 
@@ -31,24 +32,22 @@ import {
   clearTerminalScrollback,
 } from '@cli/tui/terminalCleanup';
 import { cliSecrets } from '@cli/runtime/cliSecrets';
-import { localSessionBackend } from '@controllers/session/sessionBackend';
-import { serviceSessionBackend } from '@controllers/server/serviceBackend';
-import { attachWindowHost } from '@controllers/server/windowHost';
-import { DisposableStore } from '@platform/disposable';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
-import { aggregateId } from '@shared/schemas';
 import {
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import type { RunId } from '@shared/schemas';
 import { RUN_PHASE } from '@shared/schemas';
-import { subscribeToSignalChanges } from '@shared/signals';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import {
   isActivePhase,
   isTranscriptSettlementPhase,
 } from '@shared/runs/runStatus';
+import { DisposableStore } from '@texra/platform/disposable';
+import { subscribeToSignalChanges } from '@texra/shared/signals';
+import { attachWindowHost } from '@texra/controllers/server/windowHost';
+import { serviceSessionBackend } from '@texra/controllers/server/serviceBackend';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { serviceAgentRuns } from '../serviceAgentRuns';
 
@@ -111,6 +110,7 @@ import {
   TuiSession,
 } from './state/sessionRunState';
 import { createSessionExitController } from './sessionExitController';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 interface ChatResult {
   exitCode: number;

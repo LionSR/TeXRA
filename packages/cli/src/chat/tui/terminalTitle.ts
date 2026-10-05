@@ -10,8 +10,8 @@ import {
   TERMINAL_TAB_TITLE,
   type SessionTitleState,
 } from '@shared/sessionTitle';
-import { subscribeToSignalChanges } from '@shared/signals';
 import { isWorkingRun } from '@shared/session/sessionView';
+import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { stripControlCharacters } from '@utils/text/stringUtils';
 
 import { rootRunIds } from './state/cliState';

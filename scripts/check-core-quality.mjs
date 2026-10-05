@@ -20,7 +20,7 @@
 //   node scripts/check-core-quality.mjs            check
 //   node scripts/check-core-quality.mjs --update   lower baselines, rewrite reports
 //   node scripts/check-core-quality.mjs --report   per-package totals and hotspots
-//   node scripts/check-core-quality.mjs --update --move src/agent/=packages/harness/src/
+//   node scripts/check-core-quality.mjs --update --move packages/harness/src/agent/=packages/harness/src/
 //     carry a moved file's or directory's rows to its new path (a rename is
 //     not a new site); with --update only, and the counts still only shrink
 

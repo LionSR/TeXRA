@@ -1,4 +1,4 @@
-import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
+import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 
 /** A `/login` request: one subscription provider and its sign-in transport. */
 export interface CliLoginSlashArgs {

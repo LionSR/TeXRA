@@ -5,11 +5,11 @@ import { resolve } from 'node:path';
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
+import { TEXRA_PLUGIN_CARDS } from '@texra/tools/pluginCards';
+import { texraPlugins } from '@texra/tools/registry';
 import { harnessBuiltins } from '@tools/builtinPlugins';
 import { PLUGIN_ARMS } from '@tools/pluginArms';
-import { TEXRA_PLUGIN_CARDS } from '@tools/pluginCards';
 import type { Plugin } from '@tools/plugins';
-import { texraPlugins } from '@tools/registry';
 import {
   ALL_HOST_PRODUCTION_ROOTS,
   collectModuleSpecifiers,
@@ -25,7 +25,7 @@ import {
  * own row kinds (`PLUGIN_EVENT_ARMS`) and its services (a `Plugin`'s
  * `processLayer` and `sessionLayer`). Failure modes guarded:
  *
- * - core (`src/shared`, `src/agent`) imports a plugin's arm, so a plugin's
+ * - core (the harness's `shared/`, `agent/`) imports a plugin's arm, so a plugin's
  *   row kind is hard-coded in core again and a new stateful plugin edits
  *   core;
  * - a plugin row is drafted anywhere but its plugin's arm module, or a
@@ -38,9 +38,9 @@ import {
  *   plugin with its services erased (`PluginContext` in `processRuntime.ts`),
  *   so no `ProcessServices` arm names one.
  */
-const PLUGIN_ARM_MODULES = /^src\/shared\/plugins\//;
+const PLUGIN_ARM_MODULES = /^packages\/harness\/src\/shared\/plugins\//;
 const PLUGIN_ARM_IMPORT = /^@shared\/plugins\/|^@tools\/pluginArms$/;
-const CORE = /^src\/(?:shared|agent)\//;
+const CORE = /^packages\/harness\/src\/(?:shared|agent)\//;
 const APPEND_PORTS =
   /^@(?:controllers\/session\/Database|shared\/session\/database|agent\/runtime\/SessionEvents)$/;
 const PLUGIN_ROW = /type:\s*'plugin\.fact'/;
@@ -53,26 +53,29 @@ const PLUGIN_SERVICES: readonly {
   {
     tag: 'GitHubSubscriptions',
     users:
-      /^src\/tools\/(?:github\/|integrationPlugins\.ts$)|^src\/controllers\/settingsView\/githubSubscriptions\.ts$/,
+      /^packages\/texra\/src\/(?:tools\/(?:github\/|integrationPlugins\.ts$)|controllers\/settingsView\/githubSubscriptions\.ts$)/,
   },
-  { tag: 'CodexThreads', users: /^src\/tools\/codex\.ts$/ },
-  { tag: 'ClaudeAgentSessions', users: /^src\/tools\/claudeAgent\.ts$/ },
+  { tag: 'CodexThreads', users: /^packages\/texra\/src\/tools\/codex\.ts$/ },
+  {
+    tag: 'ClaudeAgentSessions',
+    users: /^packages\/texra\/src\/tools\/claudeAgent\.ts$/,
+  },
   // The Lean 4 plugin's port: its tools and probe, and the VS Code host's
   // bridge, which that host passes as the plugin's layer.
   {
     tag: 'LeanLanguageServices',
     users:
-      /^src\/tools\/(?:lean\/|pluginAvailability\.ts$)|^packages\/extension\/src\/(?:extension\.ts|frontend\/lean\/VscodeIntegration\.ts)$/,
+      /^packages\/texra\/src\/tools\/(?:lean\/|pluginAvailability\.ts$)|^packages\/extension\/src\/(?:extension\.ts|frontend\/lean\/VscodeIntegration\.ts)$/,
   },
   // The `core` plugin's Comments UI port: its tool.
-  { tag: 'InlineComments', users: /^src\/tools\/comment\// },
+  { tag: 'InlineComments', users: /^packages\/texra\/src\/tools\/comment\// },
 ];
 /** Where the services are declared, typed and built. */
 const SERVICE_HOMES = new Set([
-  'src/tools/agentCliSessionStores.ts',
-  'src/tools/integrationPlugins.ts',
-  'src/tools/registry.ts',
-  'src/platform/processRuntime.ts',
+  'packages/texra/src/tools/agentCliSessionStores.ts',
+  'packages/texra/src/tools/integrationPlugins.ts',
+  'packages/texra/src/tools/registry.ts',
+  'packages/harness/src/platform/processRuntime.ts',
 ]);
 
 const files = () => ALL_HOST_PRODUCTION_ROOTS.flatMap(productionFilesUnder);

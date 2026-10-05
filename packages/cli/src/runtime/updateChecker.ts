@@ -3,17 +3,18 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
 import { Cause, Effect, Exit, Result } from 'effect';
+import { canonicalizeWorkspacePath } from '@texra-ai/harness/node';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
-import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import type { ProcessServices } from '@platform/processRuntime';
-import { UPDATE_CHECK_SKIP_ENV } from '@utils/system/semverUpdateCheck';
-import { executeCommand } from '@utils/system/execUtils';
-import { isEnvFlagEnabled } from '@utils/system/envFlags';
+import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
+import { UPDATE_CHECK_SKIP_ENV } from '@texra/utils/system/semverUpdateCheck';
 import {
   fetchJsonStringField,
   runDailyUpdateCheck,
   type UpdateCheckFetchResult,
-} from '@utils/system/updateCheck';
+} from '@texra/utils/system/updateCheck';
+import { executeCommand } from '@utils/system/execUtils';
+import { isEnvFlagEnabled } from '@utils/system/envFlags';
 
 import {
   readCliAmbientState,
@@ -314,7 +315,10 @@ export function notifyCliUpdate(
             normalized === '' || normalized === 'y' || normalized === 'yes';
         }),
       stampFailure: 'ignore',
-    }).pipe(Effect.catchCause(() => Effect.undefined));
+    }).pipe(
+      Effect.provide(updateCheckRecordsLayer),
+      Effect.catchCause(() => Effect.undefined),
+    );
     if (!latest) return;
     if (!confirmed) {
       writeTextStderr(

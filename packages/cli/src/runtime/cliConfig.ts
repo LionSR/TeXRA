@@ -15,13 +15,12 @@ import {
 } from '@platform/defaults/jsonConfigProvider';
 import { nodeFileServices, type JsonStore } from '@platform/defaults/jsonStore';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
-import type { ConfigProvider } from '@platform/interfaces';
 
 // Local imports - shared
 import { canonicalConfigKey } from '@shared/config/configKeys';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
 import { installSettingsCatalog } from '@shared/state/stateSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 // Local imports - tools
 import { mcpConfigWarnings, USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
@@ -32,6 +31,7 @@ import {
   writeSettingTo,
 } from '@utils/config/platformSettings';
 import { isObject } from '@utils/core';
+import type { ConfigProvider } from '@texra-ai/harness';
 
 /**
  * The model a `texra` command starts on when nothing else names one.

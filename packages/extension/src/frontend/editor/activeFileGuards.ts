@@ -9,8 +9,8 @@ import {
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import type { NotificationFailed } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
+import type { NotificationFailed } from '@texra/hosts/uiHosts';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import { ensureError } from '@utils/errors/errorMessage';
 

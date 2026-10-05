@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SETUP_MODEL_BY_PROVIDER } from '@model/setupModelDefaults';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -9,6 +8,7 @@ import {
 import type { ModelOptionData, UsageRoute } from '@shared/schemas';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
+import { SETUP_MODEL_BY_PROVIDER } from '@texra/model/setupModelDefaults';
 
 /**
  * The setup launch model is the picker's verdict over the provider setup
@@ -51,9 +51,9 @@ vi.mock('@utils/config/providerConfig', () => ({
 }));
 
 const { buildDesktopSetupRunRequest } =
-  await import('@controllers/onboarding/setupLaunch');
+  await import('@texra/controllers/onboarding/setupLaunch');
 const { resolveSetupLaunchModel } =
-  await import('@model/setupCredentialAccess');
+  await import('@texra/model/setupCredentialAccess');
 
 beforeEach(() => {
   mocks.rows.clear();

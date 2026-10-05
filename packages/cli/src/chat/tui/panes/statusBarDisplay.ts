@@ -12,7 +12,6 @@ import {
   texraApprovalPolicyLabel,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { contextGaugeBand, roundedContextPercent } from '@shared/contextGauge';
 import {
   type ContextStateData,
   type SubscriptionUsageSnapshot,
@@ -24,6 +23,10 @@ import {
 } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
 import type { RunView, SessionView } from '@shared/session/sessionView';
+import {
+  contextGaugeBand,
+  roundedContextPercent,
+} from '@texra/shared/contextGauge';
 import { AGENT_LIST, NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { APPROVAL_BYPASS_BADGE } from '@ui/copy/approvalBypass';
 import { assertNever, filterNotNullish, unique } from '@utils/core';

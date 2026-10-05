@@ -3,23 +3,22 @@ import path from 'node:path';
 
 import { Effect, FileSystem, Result } from 'effect';
 
+import { DatabaseOpenFailed, type ConfigProvider } from '@texra-ai/harness';
+import { canonicalizeWorkspacePath } from '@texra-ai/harness/node';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
-import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
-import type { ConfigProvider } from '@platform/interfaces';
+import {
+  CLI_OUTPUT_FORMATS,
+  CLI_OUTPUT_FORMAT_CONFIG_KEY,
+  type CliOutputFormat,
+} from '@shared/schemas';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT,
   parseTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import {
-  CLI_OUTPUT_FORMATS,
-  CLI_OUTPUT_FORMAT_CONFIG_KEY,
-  type CliOutputFormat,
-} from '@shared/schemas';
-import { DatabaseOpenFailed } from '@shared/session/database';
 import type { SkillSourceOptions } from '@skills/skillSources';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { absentReason } from '@utils/files/fsEntryExists';

@@ -39,6 +39,8 @@
  *   interrupted, which an automatic resume carries on);
  * - a person is asked whether to run again an awaited child that had
  *   ended cleanly before the crash;
+ * - a person is asked whether a command ran that the crash stopped before
+ *   its body started (before its approval);
  * - a bypass turned off is acknowledged before its row is durable (a
  *   resume would restore it on).
  */
@@ -69,7 +71,6 @@ import { afterEach, beforeEach, describe, expect } from 'vitest';
 import { apiKeySecretName } from '@texra-ai/llm';
 import { refresh } from '@agent/index';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { documentTaskConfig } from '@agent/output/documentRecipe';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { runAgent } from '@agent/runtime/runAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -103,6 +104,7 @@ import {
 } from '@test/support/tempDirPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { generateRunId } from '@utils/core';
 
 const AGENTS = resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/agents');
@@ -541,6 +543,22 @@ function violations(
       ? [{ callId: boundTo.get(decided.requestId), commit: row.commit }]
       : [];
   });
+  // A command's body runs only once approved, so a command the prefix never
+  // approved cannot have started: asking whether it ran is a false question.
+  const isCommand = (callId: unknown) =>
+    /validation-(bash-\d+|script-\d+\/1)$/.test(String(callId));
+  const askedAboutUnstarted = final.some((row) => {
+    if (row.commit <= n || row.type !== 'request.opened') return false;
+    const { requestId } = json(row) as { readonly requestId: string };
+    const callId = boundTo.get(requestId);
+    return (
+      questions.has(requestId) &&
+      isCommand(callId) &&
+      !approvals.some(
+        (approval) => approval.callId === callId && approval.commit <= n,
+      )
+    );
+  });
   const unapproved = resumed.filter(
     (row) =>
       payload(row).disposition === 'executed' &&
@@ -647,6 +665,9 @@ function violations(
       ? null
       : 'an unfinished command ran again with no one asked',
     unapproved.length === 0 ? null : 'a command ran before its approval',
+    askedAboutUnstarted
+      ? 'a person was asked whether a command that never started ran'
+      : null,
     unaskedRelaunches.length === 0
       ? null
       : 'a child launched again with no one asked',
@@ -957,6 +978,26 @@ export function crashConformanceSuite(plugins: string): void {
             const consumed = new Set(ids(rows, 'followup.consumed'));
             return settled(rows).every((id) => consumed.has(id));
           };
+          /** Every result read, and every child the resume launched (a
+           *  command it re-ran after its outcome was unknown) settled. */
+          const quiet = (rows: readonly Row[], n: number) =>
+            allRead(rows) &&
+            rows
+              .filter(
+                (row) =>
+                  row.commit > n &&
+                  row.type === 'run.start' &&
+                  row.parent === root,
+              )
+              .every((child) =>
+                rows.some(
+                  (row) =>
+                    row.run === child.run &&
+                    (row.type === 'run.end' ||
+                      (row.type === 'child.turn' &&
+                        json(row).phase === 'settled')),
+                ),
+              );
           const { points, clean } = yield* cleanPass(
             roots,
             (session) =>
@@ -996,7 +1037,7 @@ export function crashConformanceSuite(plugins: string): void {
               clean,
               n,
               root,
-              (_, storage) => until(storage, allRead),
+              (_, storage) => until(storage, (rows) => quiet(rows, n)),
             );
             const twice = (type: string) =>
               ids(final, type).filter(

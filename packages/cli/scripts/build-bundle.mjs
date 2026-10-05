@@ -91,7 +91,7 @@ try {
     },
     outfile,
     minify: !harness,
-    // SDK error classification (src/common/errors/sdkError/) reads
+    // SDK error classification (packages/harness/src/common/errors/sdkError/) reads
     // `constructor.name` off the prototype chain, so minified class names
     // would silently misclassify provider errors in the published binary.
     keepNames: true,

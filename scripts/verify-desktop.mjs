@@ -507,7 +507,7 @@ const bundledRuntimeResourceDirs = [
 ];
 // The Codex and Claude Code SDKs each pull a per-platform package carrying a
 // 250-410 MiB native CLI binary. The desktop app resolves a user-installed CLI
-// at runtime (src/tools/codexImport.ts, src/tools/claudeAgentImport.ts), so
+// at runtime (packages/texra/src/tools/codexImport.ts, packages/texra/src/tools/claudeAgentImport.ts), so
 // none of these packages may ship inside the app — keeping the SDKs in
 // devDependencies is what stops electron-builder from copying them.
 const forbiddenNativeCliPackages = [

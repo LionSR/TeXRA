@@ -8,7 +8,6 @@ import { describe, expect } from 'vitest';
 import { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
-import { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   agentKeyOf,
@@ -17,6 +16,7 @@ import {
 } from '@shared/schemas';
 import type { AgentModePreset } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
+import { SettingsAgentCatalogController } from '@texra/controllers/settingsView/SettingsAgentCatalogController';
 
 /** The catalog consumes the native agent list and the same entry lookup. */
 type SettingsAgentCatalogEntry = ReturnType<

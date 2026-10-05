@@ -14,8 +14,8 @@ import type { RunId } from '@shared/schemas';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { noPluginHold } from '@test/support/testPluginServices';
-import { CodexThreads as CodexThreadsService } from '@tools/agentCliSessionStores';
-import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
+import { CodexThreads as CodexThreadsService } from '@texra/tools/agentCliSessionStores';
+import { AgentCliSessionRegistry } from '@texra/tools/agentCliSessionRegistry';
 
 const mocks = vi.hoisted(() => ({
   registerRun: vi.fn(),
@@ -78,7 +78,7 @@ vi.mock('@agent/runtime/childRunLoop', () => ({
   startChildRunLoop: mocks.startChildRunLoop,
 }));
 
-vi.mock('@tools/codexConfig', () => ({
+vi.mock('@texra/tools/codexConfig', () => ({
   codexRun: () =>
     Effect.succeed({
       ref: 'openai/gpt-6.1-sol',
@@ -88,10 +88,10 @@ vi.mock('@tools/codexConfig', () => ({
     }),
 }));
 
-vi.mock('@tools/codexImport', async (importActual) => {
+vi.mock('@texra/tools/codexImport', async (importActual) => {
   const { Effect: EffectModule } = await import('effect');
   return {
-    ...(await importActual<typeof import('@tools/codexImport')>()),
+    ...(await importActual<typeof import('@texra/tools/codexImport')>()),
     // The client over whatever class the case's SDK import yields.
     openCodexClient: () =>
       mocks.importCodexClass().pipe(
@@ -103,7 +103,7 @@ vi.mock('@tools/codexImport', async (importActual) => {
   };
 });
 
-import { CodexTool } from '@tools/codex';
+import { CodexTool } from '@texra/tools/codex';
 import { createFakeAgentCliChildRun } from '../support/agentCliResumeTestUtils';
 
 const parentRunId = 'parent-run' as RunId;

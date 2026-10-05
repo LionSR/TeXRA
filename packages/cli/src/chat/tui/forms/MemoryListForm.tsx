@@ -10,11 +10,11 @@ import {
   runCliMemory,
 } from '@cli/runtime/memory';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { MemoryViewItem } from '@shared/tools/memoryView';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 
 import { AsyncListForm } from './_shared/ListForm';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 
 interface MemoryListFormProps {
   /** The process runtime the listing runs on, from the surface that

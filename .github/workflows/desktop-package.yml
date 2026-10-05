@@ -56,7 +56,7 @@ jobs:
     needs: require-green-ci
     if: ${{ !failure() && !cancelled() && inputs.run_desktop_installers }}
     runs-on: macos-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       CSC_LINK: ${{ secrets.DESKTOP_MACOS_CSC_LINK }}
       CSC_KEY_PASSWORD: ${{ secrets.DESKTOP_MACOS_CSC_KEY_PASSWORD }}
@@ -102,6 +102,15 @@ jobs:
             unset APPLE_API_ISSUER
           fi
           pnpm --filter @texra/desktop exec electron-builder --config ${{ steps.desktop-signing.outputs.electron_builder_config }} --publish never
+
+      - name: Notarize macOS DMG
+        if: steps.desktop-signing.outputs.signed == 'true'
+        run: |
+          for dmg in packages/desktop/dist-packaged/*.dmg; do
+            xcrun notarytool submit "$dmg" --key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" --wait
+            xcrun stapler staple "$dmg"
+            xcrun stapler validate "$dmg"
+          done
 
       - name: Smoke-test macOS packaged desktop app
         run: >-
