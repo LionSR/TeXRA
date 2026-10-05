@@ -57,17 +57,9 @@ export interface ModelOptionStores extends SettingsStores {
   readonly globalState: StateStore;
 }
 
-/** Internal detail for availability prose; the wire kind remains missing-key. */
-type UnavailableReason = 'openrouter-missing-key';
-
-/** Availability verdict and captured routing facts; later presentation is pure. */
+/** Availability verdict; its wording reads the route it was decided over. */
 interface ModelAvailabilityStatus {
   kind: ModelAvailabilityKind;
-  reason?: UnavailableReason;
-  /** The discovered route's config, on `copilot-allowed` only. */
-  copilotConfig?: ModelConfig;
-  /** The dispatch path's own wording, on the two unavailable Copilot kinds. */
-  copilotReason?: string;
   /** The subscription paying for the next request; absent means own keys. */
   usageRoute?: UsageRoute;
 }
@@ -93,22 +85,24 @@ interface UnavailableReasonContext {
   readonly model: string;
   /** The model source the route bills, for the missing-key sentence. */
   readonly source: string;
-  readonly reason: UnavailableReason | undefined;
-  /** The Copilot wording captured when this model was routed, if it took that branch. */
-  readonly copilotReason: string | undefined;
+  readonly route: ModelRoute<CopilotModelRoute>;
 }
 
 /**
- * Unavailable reason for both Copilot kinds; see the comment at its use sites
- * in {@link UNAVAILABLE_REASON_BUILDERS}.
+ * Unavailable reason for both Copilot kinds: the dispatch path's own wording
+ * for the route the model was decided onto, so the picker shows the sentence
+ * a run would fail with. Only an allowed route has no reason, and an allowed
+ * route never reaches an unavailable kind.
  */
 function copilotUnavailableReason({
   model,
-  copilotReason,
+  route,
 }: UnavailableReasonContext): string {
   return (
-    copilotReason ??
-    `Model "${model}" is currently unavailable through Copilot in VS Code.`
+    copilotRouteUnavailableReason(
+      model,
+      route.kind === 'copilot' ? route.route : undefined,
+    ) ?? `Model "${model}" is currently unavailable through Copilot in VS Code.`
   );
 }
 
@@ -126,15 +120,13 @@ const UNAVAILABLE_REASON_BUILDERS: Record<
     `Model "${model}" is retired and no longer available from its provider. Choose an active model.`,
   'provider-unavailable': ({ model }) =>
     `Model "${model}" requires a provider request mode that OpenRouter does not support. Disable OpenRouter and use the provider API directly.`,
-  'missing-key': ({ model, source, reason }) => {
-    if (reason === 'openrouter-missing-key') {
+  'missing-key': ({ model, source, route }) => {
+    if (route.kind === 'openrouter') {
       return `Model "${model}" requires an OpenRouter API key.`;
     }
     const providerName = providerDisplayName(source);
     return `Model "${model}" requires your ${providerName} API key. Provide it to continue.`;
   },
-  // Both Copilot arms ship the dispatch path's own wording, captured when the
-  // model was routed, so the picker shows the sentence a run would fail with.
   'copilot-consent-required': copilotUnavailableReason,
   'copilot-unavailable': copilotUnavailableReason,
   // Unreachable from `modelUnavailableReasonFrom` (it answers "not recognized"
@@ -200,31 +192,19 @@ type RoutedModels = ReadonlyMap<string, RoutedModel>;
  * Stage 1: what the decided route means for availability, free of any key
  * status. A route that comes down to a direct provider key answers with that
  * provider, so the batch read that follows consults exactly the providers the
- * routes reached. A Copilot route takes the carried route's config, or the
- * sentence an unavailable route is explained with, so no later step goes back
- * to the editor.
+ * routes reached. The discovered Copilot route rides on the decision, so the
+ * row's config and an unavailable route's sentence read it there, never the
+ * editor.
  */
 function routeGate(
-  model: string,
   route: ModelRoute<CopilotModelRoute>,
   ctx: ModelRouteContext,
 ): RouteGate {
   switch (route.kind) {
-    case 'copilot': {
+    case 'copilot':
       // Consent and temporary unavailability are route states on the one
       // canonical row, never a reason to fall back to another transport.
-      const access = route.route?.access ?? 'unavailable';
-      if (access === 'allowed') {
-        return {
-          kind: 'copilot-allowed',
-          copilotConfig: route.route?.effectiveConfig,
-        };
-      }
-      return {
-        kind: `copilot-${access}`,
-        copilotReason: copilotRouteUnavailableReason(model, route.route),
-      };
-    }
+      return { kind: `copilot-${route.route?.access ?? 'unavailable'}` };
     case 'openrouter-unsupported':
       return { kind: 'provider-unavailable' };
     case 'chatgpt-subscription':
@@ -234,7 +214,7 @@ function routeGate(
     case 'openrouter':
       return ctx.hasOpenRouter
         ? { kind: 'openrouter-key' }
-        : { kind: 'missing-key', reason: 'openrouter-missing-key' };
+        : { kind: 'missing-key' };
     case 'api-key':
       return route.usageRoute === 'api-key'
         ? { needsProviderKey: route.provider }
@@ -397,9 +377,7 @@ function routeModels(
         rawConfig,
         config: routeConfig(rawConfig, route, ctx.facts),
         route,
-        gate: rawConfig.retired
-          ? { kind: 'retired' }
-          : routeGate(model, route, ctx),
+        gate: rawConfig.retired ? { kind: 'retired' } : routeGate(route, ctx),
       });
     }
     return routed;
@@ -591,7 +569,10 @@ function buildModelOptionData(
     decision.gate,
     ctx.keyStatuses,
   );
-  const optionConfig = availability.copilotConfig ?? config;
+  const optionConfig =
+    route.kind === 'copilot' && route.route?.access === 'allowed'
+      ? route.route.effectiveConfig
+      : config;
   const source = modelSource(route, optionConfig);
   const reasoning =
     availability.kind === 'copilot-allowed'
@@ -716,9 +697,9 @@ export const readProspectiveUsageRoute = Effect.fn('readProspectiveUsageRoute')(
 
 /**
  * A human-readable reason why a model is unavailable, or `null` if available.
- * Pure — including the two Copilot kinds, whose sentence was worded when the
- * model was routed. `inputs` must have been read for a list containing `model`
- * (a single `[model]` list is the usual one).
+ * Pure — including the two Copilot kinds, whose sentence is worded from the
+ * route the model was decided onto. `inputs` must have been read for a list
+ * containing `model` (a single `[model]` list is the usual one).
  */
 export function modelUnavailableReasonFrom(
   inputs: ModelAvailabilityInputs,
@@ -742,8 +723,7 @@ export function modelUnavailableReasonFrom(
   return UNAVAILABLE_REASON_BUILDERS[kind]({
     model,
     source: modelSource(decision.route, decision.config),
-    reason: availability.reason,
-    copilotReason: availability.copilotReason,
+    route: decision.route,
   });
 }
 
