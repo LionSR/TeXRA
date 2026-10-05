@@ -1,9 +1,12 @@
 /**
- * Where a client finds the service: `<storageRoot>/run/` holds the socket
- * and `serve.json`, the running service's pid, protocol and build. The
- * directory is the user's alone (0700), which is what keeps the socket
+ * Where a client finds the service: `<storageRoot>/run/serve.json`, the
+ * running service's pid, protocol, build and socket. Each service listens
+ * on a socket of its own (`serve-<pid>.sock`), so a retired service that
+ * exits while its successor serves removes only its own file (closing a
+ * Unix socket server unlinks its path, whatever file is there by then).
+ * The directory is the user's alone (0700), which is what keeps the socket
  * private. A storage root whose socket path would pass the Unix limit
- * keeps its socket in a private directory under `/tmp`, named by the user
+ * keeps its sockets in a private directory under `/tmp`, named by the user
  * and a hash of the root. Windows has no service yet: a named pipe
  * there would take the default ACL, which is not the user's alone.
  */
@@ -11,7 +14,7 @@ import { createHash } from 'node:crypto';
 import { lstatSync } from 'node:fs';
 import * as path from 'node:path';
 
-import { Effect, FileSystem, Option, PlatformError } from 'effect';
+import { Effect, FileSystem, PlatformError } from 'effect';
 import { z } from 'zod';
 
 import { absentReason } from '@utils/files/fsEntryExists';
@@ -37,12 +40,16 @@ export interface ServicePaths {
   readonly record: string;
   /** `serve.log`: what a detached service writes. */
   readonly log: string;
-  /** The socket path clients connect to. */
-  readonly socket: string;
-  /** The private directory the socket lives in: `runDirectory`, or a
-   *  long root's temp fallback. */
+  /** The private directory the sockets live in: `runDirectory`, or a long
+   *  root's temp fallback. */
   readonly socketDirectory: string;
+  /** The socket the service of process `pid` listens on. */
+  readonly socketFor: (pid: number) => string;
 }
+
+/** A service's socket file name, which names its process. */
+const SOCKET_NAME = /^serve-(\d+)\.sock$/;
+const socketName = (pid: number) => `serve-${pid}.sock`;
 
 /** The service files of `storageRoot` (`~/.texra` in production). */
 export function servicePaths(storageRoot: string): ServicePaths {
@@ -53,14 +60,15 @@ export function servicePaths(storageRoot: string): ServicePaths {
     .update(path.resolve(storageRoot))
     .digest('hex')
     .slice(0, 16);
-  const local = path.join(runDirectory, 'serve.sock');
+  // Sized for the longest pid a socket can name.
+  const local = path.join(runDirectory, socketName(4_294_967_295));
   if (Buffer.byteLength(local) <= MAX_UNIX_SOCKET_PATH) {
     return {
       runDirectory,
       record,
       log,
-      socket: local,
       socketDirectory: runDirectory,
+      socketFor: (pid) => path.join(runDirectory, socketName(pid)),
     };
   }
   // `/tmp`, not the per-user temp folder: a client and the service it
@@ -74,8 +82,8 @@ export function servicePaths(storageRoot: string): ServicePaths {
     runDirectory,
     record,
     log,
-    socket: path.join(socketDirectory, 'serve.sock'),
     socketDirectory,
+    socketFor: (pid) => path.join(socketDirectory, socketName(pid)),
   };
 }
 
@@ -124,7 +132,7 @@ function ownDirectory(
 /** The record a running service wrote, or null when there is none. A
  *  record that does not parse is reported and read as none: the next
  *  service to start writes a fresh one. */
-function readServiceRecord(
+export function readServiceRecord(
   paths: ServicePaths,
 ): Effect.Effect<ServiceRecord | null, never, FileSystem.FileSystem> {
   return Effect.gen(function* () {
@@ -173,34 +181,20 @@ export function writeServiceRecord(
   });
 }
 
-/** What identifies one service's own files: its pid, and the inode of the
- *  socket it bound (absent when it could not be read). */
-export interface ServiceOwnership {
-  readonly pid: number;
-  readonly socketIno: number | undefined;
-}
-
 /**
- * Remove the record and socket a service left, each only while it is still
- * that service's: a record naming another pid, or a socket file that is
- * not the one it bound, belongs to a successor that took the path over.
+ * Remove the files a service of process `pid` left: its socket, and the
+ * record while it still names `pid` (a successor's record is the
+ * successor's).
  */
 export function removeServiceFiles(
   paths: ServicePaths,
-  own: ServiceOwnership,
+  pid: number,
 ): Effect.Effect<void, never, FileSystem.FileSystem> {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const record = yield* readServiceRecord(paths);
-    if (record?.pid === own.pid)
-      yield* fs.remove(paths.record, { force: true });
-    if (own.socketIno === undefined) return;
-    const current = yield* fs.stat(paths.socket).pipe(
-      Effect.map((info) => Option.getOrUndefined(info.ino)),
-      Effect.orElseSucceed(() => undefined),
-    );
-    if (current === own.socketIno)
-      yield* fs.remove(paths.socket, { force: true });
+    if (record?.pid === pid) yield* fs.remove(paths.record, { force: true });
+    yield* fs.remove(paths.socketFor(pid), { force: true });
   }).pipe(
     Effect.catch((error) =>
       Effect.logWarning('Could not remove the service files').pipe(
@@ -208,4 +202,37 @@ export function removeServiceFiles(
       ),
     ),
   );
+}
+
+/** Remove the sockets of services whose process is gone (one that was
+ *  killed leaves its file). */
+export function removeDeadSockets(
+  paths: ServicePaths,
+): Effect.Effect<void, never, FileSystem.FileSystem> {
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    for (const name of yield* fs.readDirectory(paths.socketDirectory)) {
+      const pid = Number(SOCKET_NAME.exec(name)?.[1]);
+      if (Number.isInteger(pid) && !processAlive(pid))
+        yield* fs.remove(path.join(paths.socketDirectory, name), {
+          force: true,
+        });
+    }
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.logWarning("Could not remove dead services' sockets").pipe(
+        Effect.annotateLogs({ data: error }),
+      ),
+    ),
+  );
+}
+
+/** Whether process `pid` runs (one of another user counts as running). */
+function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
 }
