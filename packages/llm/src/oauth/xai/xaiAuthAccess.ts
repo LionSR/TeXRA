@@ -20,18 +20,14 @@ import type { Effect } from 'effect';
 
 const CHANNEL = 'xaiAuth';
 
-const coordinatorFor = createSecretBackedCoordinator({
+/** The coordinator for the caller's secret store. */
+export const xaiCoordinator: (
+  secrets: CredentialStore,
+) => SubscriptionOAuthCoordinator<XaiSession> = createSecretBackedCoordinator({
   secretKey: XAI_SESSION_SECRET_KEY,
   makeCoordinator: (storage) =>
     new SubscriptionOAuthCoordinator({ storage, policy: XAI_POLICY }),
 });
-
-/** The coordinator for the caller's secret store. */
-export function xaiCoordinator(
-  secrets: CredentialStore,
-): SubscriptionOAuthCoordinator<XaiSession> {
-  return coordinatorFor(secrets);
-}
 
 /** Signed-in status, read from the caller's secret store. */
 export function getXaiStatus(

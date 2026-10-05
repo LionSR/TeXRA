@@ -108,9 +108,10 @@ export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
     pkce: { verifier: string; challenge: string; method: 'S256' },
     state: string,
   ): SubscriptionAuthorizeRequest;
-  /** Map a token response into the stored session. */
+  /** Map a token response (and the refresh token it renews) into the session. */
   buildSession(
     tokens: SubscriptionTokenResponse,
+    refreshToken: string,
     nowMs: number,
     previous?: S,
   ): S;
@@ -173,16 +174,6 @@ function formGrantClient(endpoint: OAuthFormEndpoint): SubscriptionOAuthClient {
 /** A program failure as its caller sees it: a port rejection is its cause. */
 function callerFailure(error: MachineFailure): Error {
   return error instanceof AuthPortError ? ensureError(error.cause) : error;
-}
-
-/**
- * A policy throw: a {@link SubscriptionOAuthError} stays first-class so the
- * machine can read its `kind`; anything else is that call's rejection.
- */
-function asMachineFailure(cause: unknown): MachineFailure {
-  return cause instanceof SubscriptionOAuthError
-    ? cause
-    : new AuthPortError({ cause });
 }
 
 export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
@@ -301,11 +292,18 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   private buildSession(
     tokens: SubscriptionTokenResponse,
     previous?: S,
-  ): Effect.Effect<S, MachineFailure> {
-    return Effect.try({
-      try: () => this.policy.buildSession(tokens, this.now(), previous),
-      catch: asMachineFailure,
-    });
+  ): Effect.Effect<S, SubscriptionOAuthError> {
+    const refreshToken = tokens.refresh_token ?? previous?.refreshToken;
+    return refreshToken
+      ? Effect.succeed(
+          this.policy.buildSession(tokens, refreshToken, this.now(), previous),
+        )
+      : Effect.fail(
+          new SubscriptionOAuthError({
+            message: 'OAuth response did not include a refresh token.',
+            kind: 'config',
+          }),
+        );
   }
 
   private readonly stableSession = Effect.fn(
