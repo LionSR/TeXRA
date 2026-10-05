@@ -26,10 +26,7 @@ import type {
   GlobalDatabase,
   ProjectDatabases,
 } from '@shared/session/database';
-import type { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
-import type { InquiryRecords } from '@shared/plugins/externalInquiry';
 import type { UsageLog } from '@shared/usageLog';
-import type { SetupPlatform } from '@texra/tools/setup/platform';
 import type { LiveTools } from '@tools/liveTools';
 import type { ToolAvailability } from '@tools/toolAvailabilityService';
 import type { ToolRegistry } from '@tools/toolTable';
@@ -43,8 +40,7 @@ import type { Secrets } from './secrets';
 
 /**
  * The runtime over the process-lifetime services every entry provides: the
- * cohort-A tags beside the records, the
- * language-model bridge and the HTTP client, merged once in
+ * cohort-A tags, the language-model bridge and the HTTP client, merged once in
  * `installProcessRuntime`'s `services` layer, plus the standard library's
  * `FileSystem`, `Path` and `ChildProcessSpawner`, which the same install
  * provides from `@effect/platform-node` so a program that reads a file or
@@ -52,7 +48,7 @@ import type { Secrets } from './secrets';
  * layer of its own, and
  * `GlobalStorageFs`, the cross-workspace storage view every session of the
  * process shares, `GlobalDatabase`, that same root's one database handle,
- * which the records above and the CLI's input history read through,
+ * which the app's records and the CLI's input history read through,
  * `ProjectDatabases`, whose project-scoped borrows share each persistent
  * connection between application state and a session graph, `ToolRegistry`,
  * the plugin table every run's offered tools are rebuilt from,
@@ -68,13 +64,10 @@ export type ProcessServices =
   | GlobalDatabase
   | ProjectDatabases
   | HttpClient.HttpClient
-  | InquiryRecords
-  | UpdateCheckRecords
   | Secrets
   | AppState
   | LanguageModel
   | AgentDirectories
-  | SetupPlatform
   | AgentEngine
   | UsageLog
   | ToolRegistry

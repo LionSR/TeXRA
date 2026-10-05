@@ -42,11 +42,11 @@ import {
   requestParksItsCaller,
 } from '@shared/schemas';
 import type { LocalRuntimeState, RunAction, RunId } from '@shared/schemas';
-import { InquiryRecords } from '@shared/plugins/externalInquiry';
 import {
   DatabaseClaimRefused,
   DatabaseNotOwner,
   DatabaseWriteFailed,
+  GlobalDatabase,
   type AggregateState,
   type Database,
   type DeletionMode,
@@ -60,7 +60,7 @@ import {
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import { runActionRefusal } from '@shared/session/runActions';
-import { recordInquiryDecision } from '@texra/tools/inquiry/inquiryActions';
+import type { ToolTable } from '@tools/toolTable';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -86,7 +86,8 @@ export function sessionRequests(
   approvals: SessionApprovals,
   log: SessionRequestLog,
   local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
-  inquiryRecords: Context.Service.Shape<typeof InquiryRecords>,
+  plugins: ToolTable,
+  globalDatabase: Context.Service.Shape<typeof GlobalDatabase>,
 ): SessionRequests {
   /**
    * One in-process serial lane per request id. `decideRequest`'s checked
@@ -111,12 +112,13 @@ export function sessionRequests(
       session,
       approvals,
       decisionLanes,
+      plugins,
       req,
       log,
       admitted,
       heldHere,
     ).pipe(
-      Effect.provideService(InquiryRecords, inquiryRecords),
+      Effect.provideService(GlobalDatabase, globalDatabase),
       Effect.provideService(Runs, session.runs),
     );
   });
@@ -293,23 +295,21 @@ function settled(runId: RunId): Unavailable {
  * surfaces deciding at once record one decision and the loser hears that the
  * request was settled rather than overwriting it.
  *
- * An inquiry's answer is also recorded on its thread and delivered as a
- * follow-up, since an inquiry never parks its run. That record lives in the
- * cross-project inquiry database, so it cannot share the run's transaction;
- * it is written first, because a process that exits in the gap then leaves
- * the request pending and answerable, rather than settled with nothing
- * recorded on the thread and no way to ask again. Two surfaces of this
- * process therefore cannot run this in parallel: the whole decision takes
- * the request's lane ({@link decisionLanes}), so the second reads a request
- * already decided instead of answering its thread behind the first.
+ * The plugin that owns the request's kind records its side first (an
+ * inquiry's answer, on its cross-project thread): that record cannot share
+ * the run's transaction, and a process that exits in the gap then leaves the
+ * request pending and answerable. So the whole decision takes the request's
+ * lane ({@link decisionLanes}): a second surface of this process reads a
+ * request already decided instead of recording behind the first.
  */
 function decide(
   session: SessionHandle,
   decisionLanes: Map<string, PerKeyLane>,
+  plugins: ToolTable,
   req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
   admitted: AggregateState,
   heldHere: boolean,
-): Effect.Effect<Outcome, RequestError, InquiryRecords> {
+): Effect.Effect<Outcome, RequestError, GlobalDatabase> {
   // A run whose owner is gone (proved dead, or a claim already released)
   // takes no append until this process holds its claim: the decision
   // acquires it with the fencing resume uses and gives it back, so a later
@@ -334,13 +334,11 @@ function decide(
         }),
       );
     }
-    if (pending.payload.kind === 'externalInquiry') {
-      yield* recordInquiryDecision(
-        pending.payload.data,
-        req.decision,
-        session,
-      ).pipe(Effect.orDie);
-    }
+    const hook = plugins.decisions.get(pending.payload.kind);
+    if (hook !== undefined)
+      yield* hook
+        .record({ payload: pending.payload, decision: req.decision, session })
+        .pipe(Effect.orDie);
     const recorded = yield* session
       .decideRequest(req.runId, req.requestId, req.decision)
       .pipe(
@@ -427,11 +425,12 @@ function handle(
   session: SessionHandle,
   approvals: SessionApprovals,
   decisionLanes: Map<string, PerKeyLane>,
+  plugins: ToolTable,
   req: RuntimeRequest,
   log: SessionRequestLog,
   admitted: AggregateState,
   heldHere: boolean,
-): Effect.Effect<Outcome, RequestError, InquiryRecords | Runs> {
+): Effect.Effect<Outcome, RequestError, GlobalDatabase | Runs> {
   switch (req.kind) {
     case 'run.stop':
       return Effect.gen(function* () {
@@ -540,7 +539,7 @@ function handle(
         ),
       );
     case 'request.decide':
-      return decide(session, decisionLanes, req, admitted, heldHere);
+      return decide(session, decisionLanes, plugins, req, admitted, heldHere);
     case 'policy.set':
       return withRunClaim(
         session,

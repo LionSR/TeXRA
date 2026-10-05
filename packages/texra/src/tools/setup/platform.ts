@@ -1,7 +1,7 @@
 /**
  * VS Code-free platform adapter for setup tools.
  *
- * Setup tools live in the `@tools/*` VS Code-free zone. Each reads its
+ * Setup tools live in the app's VS Code-free zone. Each reads its
  * credentials from the `Secrets` service directly; hosts provide only the
  * capabilities that actually vary, as the `SetupPlatform` service.
  *
@@ -101,9 +101,9 @@ export interface SetupPlatformShape {
 
 /**
  * The host's setup capabilities as an Effect service
- * (`@texra/setup/SetupPlatform`, injection plan §5 row 13), provided once by
- * the composition root through `installProcessRuntime`; a setup tool reads
- * it with `yield* SetupPlatform`.
+ * (`@texra/setup/SetupPlatform`), served by the setup plugin's process layer
+ * over what the host passes `texraPlugins`; a setup tool reads it with
+ * `yield* SetupPlatform`.
  */
 export class SetupPlatform extends Context.Service<
   SetupPlatform,

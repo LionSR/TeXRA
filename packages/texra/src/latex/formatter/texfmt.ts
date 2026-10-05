@@ -4,7 +4,7 @@ import { Effect } from 'effect';
 // Local imports - log
 import { withLogChannel } from '@logger/effectLog';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { runToolWithCheck } from '@utils/system/toolUtils';
+import { runToolWithCheck } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 
 export const TEXFMT_CONFIG_KEY = 'texra.latex.texfmtConfig';

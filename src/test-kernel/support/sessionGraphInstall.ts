@@ -15,7 +15,6 @@ import {
   fakeHostAppState,
   fakeHostLanguageModel,
   fakeHostSecrets,
-  fakeSetupPlatform,
 } from './setupPlatform';
 
 /**
@@ -73,7 +72,6 @@ export async function installTestSessionGraph(
     appState: AppState.layer(fakeHostAppState),
     languageModel: fakeHostLanguageModel,
     agentDirectories: AgentDirectories.layer(fakeHostAgentDirectories),
-    setup: fakeSetupPlatform,
     toolAvailability: unprobedToolAvailability,
     // The harness reports no usage; the telemetry suite starts its own.
     usageLog: UsageLog.disabled,

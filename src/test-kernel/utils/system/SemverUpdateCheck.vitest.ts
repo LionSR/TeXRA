@@ -7,10 +7,12 @@ import { TestClock } from 'effect/testing';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
-import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
-import { runDailyUpdateCheck } from '@utils/system/updateCheck';
+import {
+  runDailyUpdateCheck,
+  UpdateCheckRecords,
+} from '@texra/utils/system/updateCheck';
 
 describe('runDailyUpdateCheck', () => {
   const nowMs = Date.UTC(2026, 0, 1);

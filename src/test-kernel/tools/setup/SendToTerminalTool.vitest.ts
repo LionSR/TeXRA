@@ -18,7 +18,7 @@ import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { SendToTerminalTool } from '@texra/tools/setup/SendToTerminalTool';
 
 // Local file imports
-import { createFakeSetupPlatform } from './fixtures';
+import { createFakeSetupPlatform, withSetup } from './fixtures';
 
 interface RunRecord {
   name: string;
@@ -61,9 +61,11 @@ const callTool = (
 ) =>
   tool.call(input).pipe(
     Effect.provide(
-      nativeToolTestLayer({
-        run: { runId, session: testDefaultSession(), toolPolicy: {} },
-      }),
+      withSetup(
+        nativeToolTestLayer({
+          run: { runId, session: testDefaultSession(), toolPolicy: {} },
+        }),
+      ),
     ),
   );
 

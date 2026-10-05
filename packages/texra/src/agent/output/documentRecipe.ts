@@ -10,14 +10,8 @@
  * one value the source takes; a run records the source it ran, so a resume
  * replays the same program.
  */
-import { Effect } from 'effect';
-
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { RunEndResult } from '@agent/runtime/RunEndResult';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { withChildSpend } from '@agent/storage/runRecords';
 import { agentKey } from '@shared/schemas';
-import type { DatabaseReadFailed } from '@shared/session/database';
 
 /** The tools the recipe calls: what a document task's run offers it. */
 const DOCUMENT_TASK_TOOLS = [
@@ -86,12 +80,3 @@ export function documentTaskConfig<
     },
   };
 }
-
-/** A document task's result with its revisions' spend (`withChildSpend`). */
-export const withRevisionSpend = (
-  session: SessionHandle,
-  ended: RunEndResult,
-): Effect.Effect<RunEndResult, DatabaseReadFailed> =>
-  withChildSpend(session, ended.runId, ended.usage).pipe(
-    Effect.map((usage) => ({ ...ended, usage })),
-  );

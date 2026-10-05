@@ -1,8 +1,13 @@
-import { Clock, Duration, Effect } from 'effect';
+import { Clock, Context, Duration, Effect } from 'effect';
 import { HttpClient, HttpClientResponse } from 'effect/http';
 
 import { withLogChannel } from '@logger/effectLog';
-import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
+import {
+  UpdateCheckRecordSchema,
+  type UpdateCheckHost,
+  type UpdateCheckRecord,
+} from '@shared/schemas';
+import type { ValueFamily } from '@shared/session/valueFamily';
 import { isObject } from '@utils/core';
 
 import {
@@ -11,6 +16,31 @@ import {
 } from './semverUpdateCheck';
 import type { Cause } from 'effect';
 import type { HttpClientError } from 'effect/http';
+
+/** The global root's update-check record of each host, keyed by the host. */
+export const UPDATE_CHECKS: ValueFamily<UpdateCheckRecord> = {
+  name: 'update-check',
+  schema: UpdateCheckRecordSchema,
+  deletable: false,
+};
+
+/** Each host's last update check and the last release it announced. */
+export class UpdateCheckRecords extends Context.Service<
+  UpdateCheckRecords,
+  {
+    readonly read: (
+      host: UpdateCheckHost,
+    ) => Effect.Effect<UpdateCheckRecord | null, Error>;
+    readonly recordChecked: (
+      host: UpdateCheckHost,
+      at: number,
+    ) => Effect.Effect<void, Error>;
+    readonly recordNotified: (
+      host: UpdateCheckHost,
+      version: string,
+    ) => Effect.Effect<void, Error>;
+  }
+>()('@texra/UpdateCheckRecords') {}
 
 /** Result of consulting an update source. */
 export interface UpdateCheckFetchResult {

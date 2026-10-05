@@ -89,10 +89,7 @@ import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withProcessServices } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
-import {
-  InquiryRecords,
-  inquiryThreadRow,
-} from '@shared/plugins/externalInquiry';
+import { inquiryThreadRow } from '@shared/plugins/externalInquiry';
 import {
   aggregateId as qualifyAggregateId,
   AgentConfigFieldsSchema,
@@ -104,7 +101,7 @@ import {
   type SessionEventDraft,
   type InquiryThreadSummary,
 } from '@shared/schemas';
-import { Database } from '@shared/session/database';
+import { Database, GlobalDatabase } from '@shared/session/database';
 import { runActions } from '@shared/session/runActions';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { RunHistory, RunHistoryRefused } from '@shared/session/runHistory';
@@ -124,8 +121,8 @@ import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import '@test/support/sessionGraphTestSetup';
 import { identityReads } from '@test/support/sessionGraphInstall';
 import { REPO_ROOT } from '@test/support/repoScan';
-import { inquiryRecordsLayer } from '@texra/controllers/session/inquiryRecords';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
+import { toolTable } from '@tools/toolTable';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** A second OS process's writer: this build's `Database` over the store at
@@ -782,7 +779,8 @@ describe('Sessions owner', () => {
           createSessionApprovals(),
           { ...db, removeRun: (yield* SessionEvents).removeRun },
           local,
-          yield* InquiryRecords,
+          toolTable([]),
+          yield* GlobalDatabase,
         );
         // The displayed fold was built as SELF and considers this run writable.
         // This requesting process is OTHER; it must respect the current claim.
@@ -817,16 +815,10 @@ describe('Sessions owner', () => {
       }).pipe(
         Effect.provide(graph([runStart])),
         Effect.provide(
-          inquiryRecordsLayer.pipe(
-            Layer.provide(
-              globalDatabaseLayer(
-                createFakeWorkspaceRoots().globalStorage,
-              ).pipe(
-                Layer.provide(ProcessIdentity.layer(SELF)),
-                Layer.provide(nodePlatformLayer),
-                Layer.orDie,
-              ),
-            ),
+          globalDatabaseLayer(createFakeWorkspaceRoots().globalStorage).pipe(
+            Layer.provide(ProcessIdentity.layer(SELF)),
+            Layer.provide(nodePlatformLayer),
+            Layer.orDie,
           ),
         ),
       ),
@@ -851,7 +843,8 @@ describe('Sessions owner', () => {
               resumeBlocked: [],
             }),
           ),
-          yield* InquiryRecords,
+          toolTable([]),
+          yield* GlobalDatabase,
         );
         yield* settle(view.ref, (v) => v.runs.has(RUN));
         // The host rendered Delete session from this view; by the time the
@@ -899,16 +892,10 @@ describe('Sessions owner', () => {
       }).pipe(
         Effect.provide(graph([runStart])),
         Effect.provide(
-          inquiryRecordsLayer.pipe(
-            Layer.provide(
-              globalDatabaseLayer(
-                createFakeWorkspaceRoots().globalStorage,
-              ).pipe(
-                Layer.provide(ProcessIdentity.layer(SELF)),
-                Layer.provide(nodePlatformLayer),
-                Layer.orDie,
-              ),
-            ),
+          globalDatabaseLayer(createFakeWorkspaceRoots().globalStorage).pipe(
+            Layer.provide(ProcessIdentity.layer(SELF)),
+            Layer.provide(nodePlatformLayer),
+            Layer.orDie,
           ),
         ),
       ),

@@ -10,28 +10,26 @@ import {
   DEPENDENCY_INSTALL_COMMANDS,
   HOMEBREW_INSTALL_COMMAND,
   IMAGE_LATEX_TOOLS,
-  LATEX_WORKSHOP_EXT_ID,
   normalizePlatform,
   PROBED_LATEX_TOOLS,
   SCOOP_INSTALL_COMMAND,
   SUPPORTED_LATEX_COMPILERS,
   type ProbedLatexTool,
 } from '@texra/shared/constants/latexToolchain';
-import { SetupPlatform } from '@texra/tools/setup/platform';
+import { checkToolInstalled } from '@texra/utils/system/toolChecks';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { findToolInCommonPaths } from '@utils/system/binaryResolver';
-import {
-  checkToolInstalled,
-  detectPackageManager,
-} from '@utils/system/toolUtils';
+import { detectPackageManager } from '@utils/system/toolUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'LatexToolingController';
 
-/** The recommended editor settings the host reports as applied. */
-export type LatexRecommendedStatus = Pick<
+/** The editor's side of the LaTeX status, as the host reports it: which
+ *  recommended settings are applied, and whether LaTeX Workshop is
+ *  installed. */
+export type LatexEditorStatus = Pick<
   LatexSettingsStatus,
-  'outDir' | 'autoRevealExclude'
+  'outDir' | 'autoRevealExclude' | 'latexWorkshopInstalled'
 >;
 
 const ALLOWED_INSTALL_COMMANDS: ReadonlySet<string> = new Set([
@@ -49,17 +47,12 @@ export function isAllowedLatexInstallCommand(command: string): boolean {
 }
 
 /**
- * The LaTeX settings status: the tool probes, the LaTeX Workshop extension
- * as the host's setup platform reports it, and the recommended settings the
- * host reads.
+ * The LaTeX settings status: the tool probes, and the editor's side the
+ * host reports.
  */
 export function detectLatexSettingsStatus(
-  recommended: LatexRecommendedStatus,
-): Effect.Effect<
-  LatexSettingsStatus,
-  never,
-  ChildProcessSpawner | SetupPlatform
-> {
+  editor: LatexEditorStatus,
+): Effect.Effect<LatexSettingsStatus, never, ChildProcessSpawner> {
   const platform = normalizePlatform(process.platform);
   return Effect.gen(function* () {
     const installed = Object.fromEntries(
@@ -87,14 +80,11 @@ export function detectLatexSettingsStatus(
       },
       { concurrency: 'unbounded' },
     );
-    const setup = yield* SetupPlatform;
     return {
-      ...recommended,
+      ...editor,
       texDistributionInstalled: SUPPORTED_LATEX_COMPILERS.some(
         (compiler) => installed[compiler],
       ),
-      latexWorkshopInstalled:
-        setup.extensions?.isInstalled(LATEX_WORKSHOP_EXT_ID) ?? false,
       latexdiffInstalled: installed.latexdiff,
       latexindentInstalled: installed.latexindent && installed.perl,
       texcountInstalled: installed.texcount,

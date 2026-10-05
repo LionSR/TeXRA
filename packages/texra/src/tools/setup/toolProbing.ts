@@ -8,7 +8,7 @@ import {
   LATEX_WORKSHOP_EXT_ID,
   PROBED_LATEX_TOOLS,
 } from '@texra/shared/constants/latexToolchain';
-import { checkToolInstalled } from '@utils/system/toolUtils';
+import { checkToolInstalled } from '@texra/utils/system/toolChecks';
 import { findToolInCommonPaths } from '@utils/system/binaryResolver';
 
 import type { SetupPlatformShape } from './platform';

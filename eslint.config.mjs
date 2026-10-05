@@ -208,19 +208,6 @@ const HARNESS_NO_APP_IMPORT_PATTERNS = [
       'The harness imports nothing from the app (packages/texra); take the value as an input, or move the module.',
   },
 ];
-// The harness files that still import the app: the composition root's setup
-// platform and record layers, the run engine's document-task hook, the
-// inquiry decision and the LaTeX tool table (split design M2/M3 leftovers,
-// #13719). Shrink-only: delete an entry when its import goes.
-const HARNESS_APP_IMPORT_RESIDENTS = [
-  'packages/harness/src/agent/runtime/executeAgent.ts',
-  'packages/harness/src/agent/runtime/index.ts',
-  'packages/harness/src/controllers/session/SessionRequests.ts',
-  'packages/harness/src/controllers/session/sessionLayer.ts',
-  'packages/harness/src/platform/processRuntime.ts',
-  'packages/harness/src/tools/toolProbes.ts',
-  'packages/harness/src/utils/system/toolUtils.ts',
-];
 
 const AGENT_CORE_RESTRICTED_IMPORT_PATTERNS = [
   {
@@ -852,11 +839,10 @@ export default tseslint.config(
     },
   },
 
-  // The harness imports nothing from the app, except the residents named
-  // above.
+  // The harness imports nothing from the app: the app plugs in as an input
+  // (its plugin list, a host's layers), never as an import.
   {
     files: ['packages/harness/src/**/*.{ts,tsx,mts}'],
-    ignores: HARNESS_APP_IMPORT_RESIDENTS,
     rules: {
       'no-restricted-imports': [
         'error',

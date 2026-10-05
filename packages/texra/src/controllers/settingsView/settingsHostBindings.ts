@@ -15,7 +15,7 @@ import type {
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
-import type { LatexRecommendedStatus } from '@texra/controllers/settingsView/LatexToolingController';
+import type { LatexEditorStatus } from '@texra/controllers/settingsView/LatexToolingController';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import type { SettingsViewOutboundMessage } from '@texra/shared/settingsView/settingsViewMessages';
 
@@ -55,8 +55,9 @@ export interface SettingsHostBindings {
   stateSettingApplied(key: string): HostEffect;
   /** Run a command in a terminal the user sees and can type into. */
   runInTerminal(name: string, command: string): HostEffect;
-  /** Which recommended editor settings the LaTeX page shows as applied. */
-  latexRecommendedStatus(): LatexRecommendedStatus;
+  /** The editor's side of the LaTeX page: its recommended settings applied,
+   *  and LaTeX Workshop installed. */
+  latexEditorStatus(): LatexEditorStatus;
   /** A workspace-target config write needs an open folder (the extension). */
   readonly requiresOpenWorkspace?: () => boolean;
 }

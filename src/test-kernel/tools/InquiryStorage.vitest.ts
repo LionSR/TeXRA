@@ -11,7 +11,7 @@ import { RunIdSchema, ToolError } from '@shared/schemas';
 import { InquiryRecords } from '@shared/plugins/externalInquiry';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { inquiryRecordsLayer } from '@texra/controllers/session/inquiryRecords';
+import { inquiryRecordsLayer } from '@texra/tools/inquiry/inquiryRecords';
 
 const RUN_A = RunIdSchema.parse('1a1a1a1a1a1a');
 const RUN_B = RunIdSchema.parse('1b1b1b1b1b1b');

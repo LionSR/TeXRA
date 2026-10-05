@@ -1,12 +1,13 @@
 /** The update-check row of the global root, on the process's one handle. */
-import { Context, Effect, Layer, Result } from 'effect';
+import { Effect, Layer, Result, type Context } from 'effect';
 import type { UpdateCheckRecord } from '@shared/schemas';
 import { GlobalDatabase } from '@shared/session/database';
 import {
   UPDATE_CHECKS,
   UpdateCheckRecords,
-} from '@shared/session/updateCheckRecords';
+} from '@texra/utils/system/updateCheck';
 
+/** {@link UpdateCheckRecords} on the process's handle on the global root. */
 export const updateCheckRecordsLayer = Layer.effect(
   UpdateCheckRecords,
   Effect.map(

@@ -144,7 +144,7 @@ export function inquiryThreadsUnder(
 }
 
 /** The canonical thread records in the global database, independent of
- *  any project's display lifetime (`@controllers/session/inquiryRecords`). */
+ *  any project's display lifetime (`@texra/tools/inquiry/inquiryRecords`). */
 export class InquiryRecords extends Context.Service<
   InquiryRecords,
   {

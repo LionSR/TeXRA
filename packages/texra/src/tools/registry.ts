@@ -82,9 +82,10 @@ import { OpenPdfTool } from './OpenPdfTool';
  * on top of shell would be a second, weaker approval surface that every
  * reviewer keeps finding bypasses for.
  *
- * Credentials come from the `Secrets` service and the host-varying
- * capabilities from the `SetupPlatform` service, both provided by the host's
- * composition root through `installProcessRuntime`.
+ * Credentials come from the `Secrets` service, which the host's composition
+ * root provides through `installProcessRuntime`, and the host-varying
+ * capabilities from the `SetupPlatform` service, the setup plugin's process
+ * layer over what the host passes `texraPlugins`.
  */
 import { ProbeEnvironmentTool } from './setup/ProbeEnvironmentTool';
 import { VerifySetupTool } from './setup/VerifySetupTool';
@@ -95,6 +96,7 @@ import { InstallVscodeExtensionTool } from './setup/InstallVscodeExtensionTool';
 import { ReadConfigTool, UpdateConfigTool } from './setup/ConfigTools';
 import { SendToTerminalTool } from './setup/SendToTerminalTool';
 import { ApplyTeamTool } from './setup/ApplyTeamTool';
+import { SetupPlatform, type SetupPlatformShape } from './setup/platform';
 
 /** TeXRA's filter on `write_file`: a `.tex` file's content goes through the
  *  replacement rules of the call's workspace. */
@@ -159,22 +161,25 @@ const core = (provider?: InlineCommentProvider) =>
     }),
   });
 
-/** The onboarding agent's narrow set, one responsibility per tool. */
-const setup: Plugin = {
-  id: 'setup',
-  tools: {
-    probe_environment: ProbeEnvironmentTool,
-    verify_setup: VerifySetupTool,
-    unset_api_key: UnsetApiKeyTool,
-    list_api_keys: ListApiKeysTool,
-    invoke_command: InvokeCommandTool,
-    install_vscode_extension: InstallVscodeExtensionTool,
-    read_config: ReadConfigTool,
-    update_config: UpdateConfigTool,
-    send_to_terminal: SendToTerminalTool,
-    apply_team: ApplyTeamTool,
-  },
-};
+/** The onboarding agent's narrow set, one responsibility per tool, over the
+ *  host's setup capabilities. */
+const setup = (platform: SetupPlatformShape) =>
+  definePlugin<SetupPlatform>({
+    id: 'setup',
+    processLayer: { layer: SetupPlatform.layer(platform) },
+    tools: {
+      probe_environment: ProbeEnvironmentTool,
+      verify_setup: VerifySetupTool,
+      unset_api_key: UnsetApiKeyTool,
+      list_api_keys: ListApiKeysTool,
+      invoke_command: InvokeCommandTool,
+      install_vscode_extension: InstallVscodeExtensionTool,
+      read_config: ReadConfigTool,
+      update_config: UpdateConfigTool,
+      send_to_terminal: SendToTerminalTool,
+      apply_team: ApplyTeamTool,
+    },
+  });
 
 /** Document tasks: the tools their recipe calls, launching one as a child
  *  (`document_task`), and accepting the documents a run produced into the
@@ -207,6 +212,9 @@ export const texraPlugins = (
     readonly lean?: ProcessPluginLayer<LeanLanguageServices>['layer'];
     /** The host's Comments UI behind `inline_comment`. */
     readonly inlineComments?: InlineCommentProvider;
+    /** The host's setup capabilities (VS Code's commands, extensions and
+     *  terminal); none elsewhere. */
+    readonly setup?: SetupPlatformShape;
   } = {},
 ): readonly Plugin[] => [
   fileOps({ writeFilter: texWriteFilter }),
@@ -218,9 +226,7 @@ export const texraPlugins = (
   goal,
   wolfram,
   zotero,
-  host.lean === undefined
-    ? lean4
-    : { ...lean4, processLayer: { layer: host.lean } },
+  lean4({ setup: host.setup ?? {}, services: host.lean }),
   multiAgent,
   githubActivity,
   externalInquiry,
@@ -228,7 +234,7 @@ export const texraPlugins = (
   claudeAgent,
   core(host.inlineComments),
   codemode,
-  setup,
+  setup(host.setup ?? {}),
   {
     id: 'copilot',
     toggle: 'on',

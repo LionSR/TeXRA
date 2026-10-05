@@ -56,7 +56,7 @@ export function settingsToolCommands(ports: {
   const postLatexStatus = bindings.post(
     Effect.map(
       Effect.suspend(() =>
-        detectLatexSettingsStatus(bindings.latexRecommendedStatus()),
+        detectLatexSettingsStatus(bindings.latexEditorStatus()),
       ),
       (settings) => ({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,

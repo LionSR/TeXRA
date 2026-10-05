@@ -5,12 +5,13 @@ import { describe, expect, vi } from 'vitest';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { checkForDesktopUpdate } from '@desktop/main/desktopUpdateChecker';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
+import type { GlobalDatabase } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
-import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { withEnv } from '@test/support/testEnv';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
+import { UpdateCheckRecords } from '@texra/utils/system/updateCheck';
 
 import type { HttpClient } from 'effect/http';
 
@@ -28,7 +29,11 @@ const runCheck = (
     ...overrides,
   }).pipe(withEnv(env));
 const withRecords = <A, E>(
-  program: Effect.Effect<A, E, UpdateCheckRecords | HttpClient.HttpClient>,
+  program: Effect.Effect<
+    A,
+    E,
+    UpdateCheckRecords | GlobalDatabase | HttpClient.HttpClient
+  >,
 ) =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -39,7 +44,7 @@ const withRecords = <A, E>(
       return yield* program.pipe(
         Effect.provide(
           updateCheckRecordsLayer.pipe(
-            Layer.provide(
+            Layer.provideMerge(
               globalDatabaseLayer(storage).pipe(
                 Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
                 Layer.provide(nodeSpawnerLayer),

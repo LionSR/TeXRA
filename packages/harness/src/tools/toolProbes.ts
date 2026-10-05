@@ -16,7 +16,6 @@ import {
 } from '@common/errors/errorPredicates';
 import type { Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { SetupPlatform } from '@texra/tools/setup/platform';
 import { scopedClient } from '@tools/timeouts';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import { isWSL } from '@utils/system/wslDetect';
@@ -67,21 +66,16 @@ export type ToolProbeError = ToolProbeFailed | SecretsFailed;
 
 /**
  * The process services a plugin's availability callbacks read: provider
- * credentials, the host's setup capabilities for the one plugin whose
- * availability depends on the editor host (Lean 4's VS Code extension), the
- * HTTP client the Zotero probes request through, the spawner every probe
- * runs its child processes on, and the filesystem the CLI binary probes look
- * in. All five are `ProcessServices` arms, so every caller of the
- * availability surface already holds them. A plugin's probe may also read
- * its own process services (`definePlugin`), which it is served while its
- * layer is up.
+ * credentials, the HTTP client a localhost probe requests through, the
+ * spawner every probe runs its child processes on, and the filesystem the
+ * CLI binary probes look in. All four are `ProcessServices` arms, so every
+ * caller of the availability surface already holds them. A plugin's probe
+ * may also read its own process services (`definePlugin`), which it is
+ * served while its layer is up; what its host passes it (an editor's
+ * extensions) it closes over.
  */
 export type ToolProbeServices =
-  | Secrets
-  | FileSystem.FileSystem
-  | SetupPlatform
-  | HttpClient.HttpClient
-  | ChildProcessSpawner;
+  Secrets | FileSystem.FileSystem | HttpClient.HttpClient | ChildProcessSpawner;
 
 /** A plugin that is probed but needs nothing installed: always available. */
 export const ALWAYS_AVAILABLE: ToolAvailabilityChecks = {

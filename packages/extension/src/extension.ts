@@ -187,6 +187,9 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         LeanLanguageServices,
         Effect.map(AppState, createVscodeLeanLanguageServices),
       ),
+      // The editor's commands, extensions and terminal, for the setup tools
+      // and the Lean 4 probe.
+      setup: vscodeSetupPlatform,
     }),
     settings: TEXRA_SETTING_ROWS,
     mcpConfigPath: USER_MCP_CONFIG_PATH,
@@ -197,7 +200,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     languageModel: extras.languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
     agentDirectories: agentDirectoriesLayer(context.extensionPath),
     toolMissingReporter: extras.toolMissingHandler,
-    setup: vscodeSetupPlatform,
     usageLog: usageLogLayer({
       version: extensionVersion,
       editorType: vscode.env.appName || undefined,

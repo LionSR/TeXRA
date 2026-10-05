@@ -94,7 +94,6 @@ import {
   type SessionCloseReport,
   type SessionEvent,
 } from '@shared/schemas';
-import { InquiryRecords } from '@shared/plugins/externalInquiry';
 import { closesRunWindow } from '@shared/session/runRows';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import { SessionInputs } from '@shared/session/sessionInputs';
@@ -104,7 +103,7 @@ import {
   ProjectDatabases,
   type DatabaseOpenFailed,
   type DatabaseReadFailed,
-  type GlobalDatabase,
+  GlobalDatabase,
   type SessionOpenError,
 } from '@shared/session/database';
 import type { UsageLog } from '@shared/usageLog';
@@ -113,9 +112,6 @@ import {
   settingsCatalog,
   type StateSettingEntry,
 } from '@shared/state/stateSettings';
-import { SetupPlatform } from '@texra/tools/setup/platform';
-import { inquiryRecordsLayer } from '@texra/controllers/session/inquiryRecords';
-import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
 import { releaseRunResources } from '@tools/approval';
 import { LiveTools } from '@tools/liveTools';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
@@ -123,6 +119,7 @@ import type { Plugin } from '@tools/plugins';
 import { drainPlugins, sessionPluginLayers } from '@tools/pluginLayers';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
+import { ToolRegistry } from '@tools/toolTable';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { followInterruptedTasks } from '@tools/interruptedTasks';
 import { processEnvConfigLayer } from '@utils/system/envFlags';
@@ -211,7 +208,8 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
       const eventLog = yield* Database;
       const identity = yield* ProcessIdentity;
       const runHistory = yield* RunHistory;
-      const inquiryRecords = yield* InquiryRecords;
+      const plugins = yield* ToolRegistry;
+      const globalDatabase = yield* GlobalDatabase;
       const view = yield* SessionViewService;
       const local = yield* LocalRuntimeSource;
       const inputs = yield* SessionInputs;
@@ -496,7 +494,8 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
             approvals,
             { ...eventLog, removeRun },
             local.ref,
-            inquiryRecords,
+            plugins,
+            globalDatabase,
           ),
           now,
         };
@@ -1016,7 +1015,6 @@ interface ProcessRuntimeOptions {
    * discovery discovers nothing and binding an editor model fails.
    */
   readonly languageModel: LanguageModelPort;
-  readonly setup?: Context.Service.Shape<typeof SetupPlatform>;
   /** The dependency probes every tool gate and Tools dashboard read: absent,
    *  every host's; a test harness passes one that starts no probe. */
   readonly toolAvailability?: typeof toolAvailabilityLayer;
@@ -1066,7 +1064,6 @@ export function installProcessRuntime({
   languageModel,
   agentDirectories,
   toolMissingReporter,
-  setup = {},
   toolAvailability = toolAvailabilityLayer,
   usageLog,
   globalDatabase: globalDatabaseOption,
@@ -1085,8 +1082,6 @@ export function installProcessRuntime({
     Layer.orDie,
   );
   const services = Layer.mergeAll(
-    inquiryRecordsLayer,
-    updateCheckRecordsLayer,
     Secrets.layer(secrets),
     LanguageModel.layer(languageModel),
     // The follower registers each plugin's agent directory off the catalog.
@@ -1097,7 +1092,6 @@ export function installProcessRuntime({
     toolMissingReporter === undefined
       ? Layer.empty
       : ToolMissingReporter.layer(toolMissingReporter),
-    SetupPlatform.layer(setup),
     catalog,
     Layer.succeed(AgentEngine)({
       executeAgent,

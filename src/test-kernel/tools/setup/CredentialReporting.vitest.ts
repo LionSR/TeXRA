@@ -17,7 +17,7 @@ import { VerifySetupTool } from '@texra/tools/setup/VerifySetupTool';
 import * as setupPlatformModule from '@texra/tools/setup/platform';
 
 // Local file imports
-import { createFakeSetupPlatform } from './fixtures';
+import { createFakeSetupPlatform, withSetup } from './fixtures';
 
 const mocks = vi.hoisted(() => ({
   locateTool:
@@ -86,7 +86,7 @@ describe('setup credential reporting', () => {
           ),
         );
         const result = yield* ProbeEnvironmentTool.call({}).pipe(
-          Effect.provide(nativeToolTestLayer()),
+          Effect.provide(withSetup(nativeToolTestLayer())),
         );
 
         assert.match(outputOf(result), /"host": "cli"/);
@@ -110,7 +110,7 @@ describe('setup credential reporting', () => {
       );
 
       const result = yield* ProbeEnvironmentTool.call({}).pipe(
-        Effect.provide(nativeToolTestLayer()),
+        Effect.provide(withSetup(nativeToolTestLayer())),
       );
 
       assert.equal(result.status, 'executed');
@@ -128,7 +128,7 @@ describe('setup credential reporting', () => {
         installChatGptOnlySetupPlatform();
 
         const result = yield* VerifySetupTool.call({}).pipe(
-          Effect.provide(nativeToolTestLayer()),
+          Effect.provide(withSetup(nativeToolTestLayer())),
         );
 
         assert.equal(result.status, 'executed');
