@@ -12,9 +12,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test-live.json"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "0.129.0",
-    "@google/genai": "2.24.0",
-    "@openrouter/sdk": "1.4.2",
+    "@anthropic-ai/sdk": "0.131.0",
+    "@google/genai": "2.26.0",
+    "@openrouter/sdk": "1.4.19",
     "llm-zoo": "catalog:",
     "openai": "7.20.0",
     "ws": "8.22.0"
