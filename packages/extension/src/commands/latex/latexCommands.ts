@@ -165,7 +165,6 @@ export function handleGetTeXCount(
                 relativePath,
                 {
                   mode: countingMode.value,
-                  channel: CHANNEL,
                   settings: session.roots,
                 },
               );

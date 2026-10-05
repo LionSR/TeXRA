@@ -39,8 +39,9 @@ import {
   AGENT_TOOL_NAME,
   DOCUMENT_TASK_TOOL_NAME,
 } from '@shared/constants/delegationTools';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { unique } from '@utils/core';
-import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const availableModelNames = (models: readonly ModelOptionData[]): string[] =>
@@ -99,7 +100,12 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
     return {
       agents,
       models,
-      worktree: chats ? yield* isWorktreeSupportEnabled(stores) : null,
+      worktree: chats
+        ? yield* readSettingFrom<boolean>(
+            stores,
+            WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
+          )
+        : null,
     } satisfies DelegationTargets;
   },
 );

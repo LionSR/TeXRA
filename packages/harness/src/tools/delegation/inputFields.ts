@@ -18,12 +18,13 @@ import { displayToStoragePath } from '@common/memory/memoryUtils';
 import type { RunId } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { errorResult } from '@tools/core/result';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { runStorageLocationUnder } from '@utils/files/runStorageFs';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { entryExists } from '@utils/files/fsEntryExists';
-import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import {
   ensureError,
   extractErrorMessage,
@@ -75,9 +76,11 @@ export const rejectUnusableWorkingDirectory = Effect.fn(function* (
   workingDirectory: string | undefined,
 ) {
   if (!workingDirectory) return null;
-  if (!(yield* isWorktreeSupportEnabled(stores))) {
-    return errorResult(WORKTREE_DISABLED_MESSAGE);
-  }
+  const worktrees = yield* readSettingFrom<boolean>(
+    stores,
+    WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
+  );
+  if (!worktrees) return errorResult(WORKTREE_DISABLED_MESSAGE);
   const fs = yield* FileSystem.FileSystem;
   const stat = yield* Effect.result(fs.stat(workingDirectory));
   if (Result.isFailure(stat)) {

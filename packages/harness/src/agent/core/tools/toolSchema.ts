@@ -2,7 +2,7 @@
  * Provider-neutral tool parameter schemas: a tool definition's Zod schema or
  * pre-built JSON Schema, normalized to the object shape every function-calling
  * API accepts (top-level discriminated unions flattened, the dialect URI
- * stripped). The run's `Tools` service builds the package's uniform tool
+ * stripped). The tool catalog builds the package's uniform tool
  * definitions from it; the structured-output tool builder shares it.
  */
 import { toJSONSchema } from 'zod';

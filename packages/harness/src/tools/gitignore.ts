@@ -28,7 +28,7 @@ const EMPTY_GITIGNORE_MATCHER: GitignoreMatcher = {
 
 /**
  * Read one policy file by its absolute path, through the process filesystem:
- * the two policies live in two different roots (the workspace and the user's
+ * the policies live in two different roots (the workspace and the user's
  * home), and each path here is already absolute.
  */
 const readGitignoreFile = Effect.fn('readGitignoreFile')(function* (
@@ -49,17 +49,6 @@ const readGitignoreFile = Effect.fn('readGitignoreFile')(function* (
   );
 });
 
-const readWorkspaceGitignore = (relativePath: string, workspacePath: string) =>
-  readGitignoreFile(path.join(workspacePath, relativePath.replace(/^\/+/, '')));
-
-const readGlobalGitignore = () => {
-  const homeDirectory = safeHomedir();
-  if (!homeDirectory) {
-    return Effect.succeed<GitignoreSource | null>(null);
-  }
-  return readGitignoreFile(path.join(homeDirectory, '.gitignore_global'));
-};
-
 /**
  * Build the ignore matcher for `workspacePath` from its ignore policy files.
  * The root is the caller's — the `WorkspaceFs` of the session the call works
@@ -75,11 +64,14 @@ export const getGitignoreMatcher = Effect.fn('getGitignoreMatcher')(function* (
     return EMPTY_GITIGNORE_MATCHER;
   }
 
+  const homeDirectory = safeHomedir();
   const sources = (yield* Effect.all(
     [
-      readGlobalGitignore(),
-      readWorkspaceGitignore('.gitignore_global', workspacePath),
-      readWorkspaceGitignore('.gitignore', workspacePath),
+      homeDirectory
+        ? readGitignoreFile(path.join(homeDirectory, '.gitignore_global'))
+        : Effect.succeed(null),
+      readGitignoreFile(path.join(workspacePath, '.gitignore_global')),
+      readGitignoreFile(path.join(workspacePath, '.gitignore')),
     ],
     // The three policies were read together and fail fast, as Promise.all did.
     { concurrency: 'unbounded' },

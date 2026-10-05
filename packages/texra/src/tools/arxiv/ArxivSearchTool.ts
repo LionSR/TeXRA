@@ -7,19 +7,19 @@ import arxivClient, {
   abstract as abstractQuery,
   category as catQuery,
 } from 'arxiv-client';
-import { Effect } from 'effect';
+import { Clock, Duration, Effect, Semaphore } from 'effect';
 import { z } from 'zod';
 
 // Local imports
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
 import { withLogChannel } from '@logger/effectLog';
-import { rateLimitedApiCall } from '@texra/tools/support/rateLimiter';
+import { ToolError } from '@shared/schemas';
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { pluralize } from '@utils/text/stringUtils';
-import { ensureError } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 type Category = Parameters<typeof catQuery>[0];
 
@@ -31,6 +31,25 @@ const DEFAULT_RESULTS = 10;
 const RATE_LIMIT_DELAY_MS = 3000;
 /** Deadline for one arXiv request (the client sets no timeout of its own). */
 const TIMEOUT_MS = 30_000;
+
+/**
+ * The arXiv rate limit is a property of the remote API, shared by every call
+ * in the process, so its state is module-level: `Effect.provide` builds a
+ * layer afresh per tool call, which would give each call a limiter of its
+ * own and no limit at all. One permit, so waiters take their slot in arrival
+ * order, and an interrupted waiter gives its place back.
+ */
+const arxivGate = Semaphore.makeUnsafe(1);
+let nextRequestAt = 0;
+const awaitArxivSlot = Semaphore.withPermit(arxivGate)(
+  Effect.gen(function* () {
+    const now = yield* Clock.currentTimeMillis;
+    if (now < nextRequestAt) {
+      yield* Effect.sleep(Duration.millis(nextRequestAt - now));
+    }
+    nextRequestAt = (yield* Clock.currentTimeMillis) + RATE_LIMIT_DELAY_MS;
+  }),
+);
 
 /** One hit as the tool emits it (built from already-typed arxiv-client
  *  entries, not a parse boundary). */
@@ -149,12 +168,25 @@ const searchArxiv = Effect.fn('ArxivSearchTool.execute')(function* (
     client = client.sortOrder(input.sortOrder);
   }
 
-  const entries = yield* rateLimitedApiCall(
-    'arxiv',
-    RATE_LIMIT_DELAY_MS,
-    TIMEOUT_MS,
-    'Failed to query arXiv API',
-    () => client.execute(),
+  yield* awaitArxivSlot;
+  // The client takes no AbortSignal: an interrupted or timed-out request is
+  // abandoned and settles in the background, which is safe for a read.
+  const entries = yield* Effect.tryPromise({
+    try: () => client.execute(),
+    catch: (cause) =>
+      new ToolError(`Failed to query arXiv API: ${toErrorMessage(cause)}`, {
+        cause,
+      }),
+  }).pipe(
+    Effect.timeoutOrElse({
+      duration: Duration.millis(TIMEOUT_MS),
+      orElse: () =>
+        Effect.fail(
+          new ToolError(
+            `Failed to query arXiv API: timed out after ${TIMEOUT_MS} ms`,
+          ),
+        ),
+    }),
   );
 
   const results: ArxivSearchResult[] = entries.map((entry) => {
