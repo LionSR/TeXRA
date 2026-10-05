@@ -177,7 +177,7 @@ const RunViewSchema = z.object({
   }),
   approval: z.enum(['none', 'own', 'descendant']),
   /** This process cannot act on it: another live owner, unreadable (5.2), or
-   *  `blocked`, a row this build cannot read (a newer TeXRA's, or corrupt). */
+   *  `blocked`, a row this build cannot read (a newer or older TeXRA's, or corrupt). */
   readOnly: z.boolean(),
   blocked: BlockedAggregateSchema.shape.reason.nullable(),
   /** What a resume of this run waits for in this process (`statusDetail`

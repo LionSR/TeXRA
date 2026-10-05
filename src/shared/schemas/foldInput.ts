@@ -106,9 +106,10 @@ export type ExistenceReconciliation = z.infer<
 >;
 
 /**
- * An aggregate whose rows this build cannot read whole: a row of a newer
- * version or an unknown kind (a later build wrote it), or one that fails
- * its own version's schema. The listing delivers what decodes and this
+ * An aggregate whose rows this build cannot read whole: a row a later build
+ * wrote (`newer`: a newer version or an unknown kind), an earlier shape of
+ * its version (`older`), or one not JSON or with a blob missing or altered
+ * (`corrupt`). The listing delivers what decodes and this
  * verdict beside it; the fold marks the run blocked, and every run history read
  * and claim of it is refused.
  */
@@ -117,7 +118,7 @@ export const BlockedAggregateSchema = z.object({
   aggregateId: AggregateIdSchema,
   /** The incarnation the verdict is about. */
   uid: z.string(),
-  reason: z.enum(['newer', 'unknown', 'corrupt']),
+  reason: z.enum(['newer', 'older', 'corrupt']),
   type: z.string(),
   version: z.int().nonnegative(),
   /** The envelope of the row that blocked it: for a run whose `run.start`

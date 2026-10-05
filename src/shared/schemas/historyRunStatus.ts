@@ -11,7 +11,7 @@ export const HISTORY_RUN_STATUS = {
   COMPLETED: RUN_OUTCOME.COMPLETED,
   CANCELLED: RUN_OUTCOME.CANCELLED,
   FAILED: RUN_OUTCOME.FAILED,
-  /** A row of the run is a newer TeXRA's, or corrupt: listed, never opened. */
+  /** A row of the run is a newer or older TeXRA's, or corrupt: listed, never opened. */
   BLOCKED: 'blocked',
   UNKNOWN: 'unknown',
 } as const;

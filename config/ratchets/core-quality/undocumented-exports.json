@@ -90,7 +90,7 @@
   "src/controllers/session/hostRunActions.ts": 2,
   "src/controllers/session/hostSnapshotSource.ts": 1,
   "src/controllers/session/projections.ts": 6,
-  "src/controllers/session/rowCodec.ts": 4,
+  "src/controllers/session/rowCodec.ts": 3,
   "src/controllers/session/runActionGuard.ts": 1,
   "src/controllers/session/SessionBridge.ts": 1,
   "src/controllers/session/sessionInputs.ts": 1,
