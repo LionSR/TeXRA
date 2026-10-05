@@ -445,7 +445,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   const activationScope = yield* Scope.Scope;
   yield* withProcessServices(
     runtime,
-    activateWorkspace(context, languageModel, secrets, runtime, roots).pipe(
+    activateWorkspace(context, secrets, runtime, roots).pipe(
       Effect.provideService(Scope.Scope, activationScope),
     ),
   );
@@ -459,17 +459,21 @@ const activateExtension = Effect.fn('activateExtension')(function* (
 /** The workspace path's activation, over the process runtime it just built. */
 const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   context: vscode.ExtensionContext,
-  languageModel: LanguageModelPort,
   secrets: FileSecrets,
   runtime: ProcessRuntime,
   roots: WorkspaceRoots,
 ) {
   const { globalState } = roots;
-  context.subscriptions.push(
-    languageModel.onDidChange(() =>
-      emitAppSignal('languageModelsChanged', undefined),
-    ),
-  );
+  // Compatible editors may omit the language-model API. Its events belong
+  // to this extension lifetime; shared model consumers read the port itself.
+  if (typeof vscode.lm?.selectChatModels === 'function') {
+    const changed = (): void =>
+      emitAppSignal('languageModelsChanged', undefined);
+    context.subscriptions.push(
+      vscode.lm.onDidChangeChatModels(changed),
+      context.languageModelAccessInformation.onDidChange(changed),
+    );
+  }
   // Every window is a client of the one background service, so its tasks
   // keep running when it closes and other windows and terminals see them.
   // A window that cannot reach it runs them here, and says so once.
