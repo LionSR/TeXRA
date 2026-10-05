@@ -9,7 +9,9 @@ import type { AgentConfig } from './AgentConfig';
 /**
  * The canonical run configuration (`RunRecordFieldsSchema`, the `run.config`
  * row's field): a real `AgentConfig` for agent runs, the honest minimal
- * record for everything else.
+ * record for everything else. The union keeps the strict non-agent arm
+ * first: the agent arm's prefaults would fabricate an agent config out of
+ * any object.
  */
 export type RunRecord = z.output<typeof RunRecordFieldsSchema>;
 
