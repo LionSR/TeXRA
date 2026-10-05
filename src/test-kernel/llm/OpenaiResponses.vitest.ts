@@ -20,10 +20,7 @@ import {
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { ContinuationSchema } from '../../../packages/llm/src/message.js';
 import { openaiResponsesModel } from '../../../packages/llm/src/api/openaiResponses.js';
-import {
-  RESPONSES_PREFIX_DOMAIN,
-  openaiResponsesContinuation,
-} from '../../../packages/llm/src/api/openaiResponsesLower.js';
+import { RESPONSES_PREFIX_DOMAIN } from '../../../packages/llm/src/api/openaiResponsesLower.js';
 import { openaiResponsesWebSocketModel } from '../../../packages/llm/src/api/openaiResponsesWebSocket.js';
 import { admittedFingerprint } from '../../../packages/llm/src/api/prefixFingerprint.js';
 import type { OpenAIResponsesConfiguration } from '../../../packages/llm/src/turn.js';
@@ -1199,14 +1196,9 @@ describe('native OpenAI Responses protocol', () => {
         ]);
         const terminal = resumed.at(-1);
         assert(terminal?.kind === 'completed');
-        const continuation = yield* openaiResponsesContinuation(
-          configuration,
-          turn,
-          terminal.result,
-        );
-        assert(continuation && 'responseId' in continuation.anchor);
         // An observed background turn anchors exactly as a foreground one does.
-        expect(terminal.result.continuation).toEqual(continuation);
+        const continuation = terminal.result.continuation;
+        assert(continuation && 'responseId' in continuation.anchor);
         expect(continuation).toMatchObject({
           coveredMessages: 2,
           anchor: { kind: 'stored', responseId: 'resp_1', coveredItems: 5 },
@@ -2330,9 +2322,6 @@ describe('native OpenAI Responses protocol', () => {
         expect(body).not.toHaveProperty('temperature');
         assert(result.providerResponseId !== null);
         expect(result.continuation).toBeUndefined();
-        expect(
-          yield* openaiResponsesContinuation(configuration, turn, result),
-        ).toBeUndefined();
         expect(
           (yield* model.prepareTurn({ ...REQUEST, system: '  ' })).system,
         ).toBe("Follow the user's instructions.");
