@@ -297,15 +297,13 @@ const complete = Effect.fn('llm.completeTurn')(function* (turn: Assembly) {
     return yield* fail(turn, 'ended without an identified terminal result');
   const content = yield* settle(turn, turn.finish.snapshot);
   const calls = content.some((part) => part.kind === 'local-call');
-  const evidence = turn.finish.finish.finishEvidence;
-  // A completed Responses turn states no finish reason, and its terminal
-  // snapshot may restate only a subset of the streamed items, so the settled
-  // content decides between a tool-call finish and a plain stop.
-  let reason = turn.finish.finish.finishReason;
-  if (evidence?.kind === 'openai-responses' && evidence.status === 'completed')
-    reason = calls ? 'tool-calls' : 'stop';
+  const reason =
+    turn.finish.finish.finishReason ?? (calls ? 'tool-calls' : 'stop');
   // A tool-call finish names calls, and a plain stop leaves none.
-  if ((reason === 'tool-calls' && !calls) || (reason === 'stop' && calls))
+  if (
+    (reason === 'tool-calls' || reason === 'stop') &&
+    calls !== (reason === 'tool-calls')
+  )
     return yield* fail(turn, 'returned inconsistent tool calls and finish');
   const result = TurnResultSchema.safeParse({
     kind: 'http',
