@@ -5,9 +5,6 @@ import {
 } from '@texra-ai/llm';
 import { Context, Effect, Layer, type Scope } from 'effect';
 
-// Local imports - platform
-import type { Disposable } from './interfaces';
-
 /** One editor language model the host discovered, as the picker lists it. */
 export interface LanguageModelInfo {
   readonly id: string;
@@ -44,12 +41,6 @@ export interface LanguageModelPort {
     selector?: LanguageModelSelector,
   ): Effect.Effect<readonly LanguageModelInfo[], Error>;
   /**
-   * The host's catalogue or the caller's access to it changed. One event,
-   * because every consumer recomputes the same derived value from both:
-   * `LanguageModelInfo.access` folds access into each catalogue entry.
-   */
-  onDidChange(listener: () => void): Disposable;
-  /**
    * The editor's model for one discovered route, live in the caller's scope
    * (its request handle and uploads close with it). The run layer binds
    * `vscode-lm` models through this.
@@ -63,7 +54,6 @@ export interface LanguageModelPort {
 export const UNAVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = Object.freeze(
   {
     selectModels: () => Effect.succeed([]),
-    onDidChange: () => ({ dispose() {} }),
     acquire: () =>
       Effect.fail(
         new ModelError({

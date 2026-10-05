@@ -8,7 +8,6 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 // Shared mock registrations must evaluate before anything that loads
 // the mocked modules — keep these imports immediately after the vitest
 // import (enforced by architecture/supportMockImportOrder.vitest.ts).
-import { agentCatalogMock } from '@test/support/agentCatalogMock';
 import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 import { cliOutputMock } from '@test/support/cliOutputMock';
@@ -251,14 +250,9 @@ describe('CLI team run command', () => {
       'blocked preset message',
     );
     mocks.formatCliTeamRunWarnings.mockReturnValue([]);
-    mocks.planTeamRuns.mockImplementation((presets) =>
-      presets.map((preset: unknown) =>
-        mocks.planTeamRun(preset, {
-          resolveAgent: agentCatalogMock.getCatalogAgent,
-        }),
-      ),
+    mocks.planTeamRuns.mockImplementation((presets, options) =>
+      presets.map((preset: unknown) => mocks.planTeamRun(preset, options)),
     );
-    agentCatalogMock.getCatalogAgents.mockReturnValue([ORCHESTRATOR_AGENT]);
     mocks.planTeamRun.mockReturnValue(teamPlan());
     mocks.executeCliToolUseConfig.mockResolvedValue({
       ok: true,
