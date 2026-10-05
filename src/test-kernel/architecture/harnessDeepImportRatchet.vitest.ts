@@ -1,14 +1,15 @@
 // The harness deep-import ratchet (split design §4, ruling SQ2). The app
-// (packages/texra) and the hosts (cli, desktop, extension) should reach the
-// harness only through its package name and subpaths (`@texra-ai/harness`,
-// `/node`, `/plugins`, `/schemas`). Each `@agent/*`, `@platform/*`, `@shared/*`
-// … specifier they import instead pins a harness-internal module from outside
-// it. The baseline is each package's exact set of DISTINCT harness-internal
-// specifiers, and it only shrinks: a live specifier absent from the baseline is
-// a new edge, and a baseline specifier with no live import is stale headroom
-// that could absorb a future edge. Remove a deep import by giving the symbol a
-// documented public export with a consumer, or by moving the module to the
-// package that owns it; then shrink config/ratchets/harness-deep-import-baseline.json.
+// (packages/texra), the hosts (cli, desktop, extension) and the trace viewer
+// should reach the harness only through its package name and subpaths
+// (`@texra-ai/harness`, `/node`, `/plugins`, `/schemas`). Each `@agent/*`,
+// `@platform/*`, `@shared/*` … specifier they import instead pins a
+// harness-internal module from outside it. The baseline is each package's
+// exact set of DISTINCT harness-internal specifiers, and it only shrinks: a
+// live specifier absent from the baseline is a new edge, and a baseline
+// specifier with no live import is stale headroom that could absorb a future
+// edge. Remove a deep import by giving the symbol a documented public export
+// with a consumer, or by moving the module to the package that owns it; then
+// shrink config/ratchets/harness-deep-import-baseline.json.
 
 // Node imports
 import { readFileSync } from 'node:fs';
@@ -25,7 +26,13 @@ import {
   sourceFilesUnder,
 } from '../support/repoScan';
 
-const PACKAGES = ['cli', 'desktop', 'extension', 'texra'] as const;
+const PACKAGES = [
+  'cli',
+  'desktop',
+  'extension',
+  'texra',
+  'trace-viewer',
+] as const;
 
 type Package = (typeof PACKAGES)[number];
 

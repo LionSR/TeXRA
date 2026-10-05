@@ -1,5 +1,5 @@
 {
-  "semantics": "Distinct harness-internal specifiers (a tsconfig alias that names packages/harness/src: @agent, @common, @controllers, @eventBus, @hosts, @logger, @model, @platform, @shared, @skills, @tools, @transcript, @utils) that each app and host package imports from its src (packages/texra, packages/cli, packages/desktop, packages/extension), per the split design §4 and ruling SQ2: the app and hosts should reach the harness only through @texra-ai/harness and its subpaths. Set-based and shrink-only: a live specifier absent from a package's list is a new deep import and fails; a listed specifier with no live import is stale headroom and also fails (remove it here). SQ2 set the start at 254 distinct specifiers (256 at cb311a7a05, 501 per-package rows); remove a deep import by giving the symbol a documented public export with a consumer, or by moving the module to the package that owns it.",
+  "semantics": "Distinct harness-internal specifiers (a tsconfig alias that names packages/harness/src, such as @agent, @common, @controllers, @eventBus, @logger, @model, @platform, @shared, @skills, @tools, @transcript and @utils) that each app, host and viewer package imports from its src (packages/texra, packages/cli, packages/desktop, packages/extension, packages/trace-viewer), per the split design §4 and ruling SQ2: they should reach the harness only through @texra-ai/harness and its subpaths. Set-based and shrink-only: a live specifier absent from a package's list is a new deep import and fails; a listed specifier with no live import is stale headroom and also fails (remove it here). The split design counted 254 distinct specifiers when SQ2 was ruled; at cb311a7a05 (M8's end) the count was 256 distinct and 501 per-package rows for the four app and host packages. Remove a deep import by giving the symbol a documented public export with a consumer, or by moving the module to the package that owns it.",
   "hosts": {
     "cli": [
       "@agent/followUp",
@@ -457,6 +457,16 @@
       "@utils/text/unifiedDiff",
       "@utils/text/xmlCdata",
       "@utils/text/xmlExtraction"
+    ],
+    "trace-viewer": [
+      "@shared/hostBridgeTypes",
+      "@shared/runs/runStatusDisplay",
+      "@shared/schemas",
+      "@shared/session/hostSnapshot",
+      "@shared/session/sessionFrames",
+      "@transcript",
+      "@transcript/traceDocumentSchema",
+      "@utils/errors/errorMessage"
     ]
   }
 }
