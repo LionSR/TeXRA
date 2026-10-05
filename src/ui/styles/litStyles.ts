@@ -209,6 +209,16 @@ export const designTokens: CSSResult = css`
     background-color: var(--wa-color-editor-selection);
   }
 
+  /* The desktop window has no title bar, so its headers are drag regions,
+     and Electron hands a real click over one to the window, not the page.
+     A menu that opens across a header is clickable only if it is no-drag
+     itself. Outside Electron the property is ignored. */
+  wa-dropdown::part(menu),
+  wa-dropdown::part(submenu),
+  wa-select::part(listbox) {
+    -webkit-app-region: no-drag;
+  }
+
   /* Honor the OS-level reduced-motion preference inside every shadow root
      that adopts the token sheet: collapse animations and transitions to a
      single imperceptible frame instead of removing end states. */

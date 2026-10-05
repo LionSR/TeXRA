@@ -761,6 +761,10 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Desktop menus take clicks again.** The "+" menu of a side or bottom
+  panel (Files, Terminal, Browser, Logs), a tab's menu and a task's "More"
+  menu opened but ignored the mouse: they overlap the window's drag areas,
+  which macOS treated as a place to move the window.
 - **The desktop installers build again, and the macOS app is signed and
   notarized,** so macOS opens it without a Gatekeeper warning.
 - **Document tasks run on a VS Code editor model (Copilot) again.** Since
