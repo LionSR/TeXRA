@@ -1692,45 +1692,59 @@ describe('the C1 event table and the C6 publisher', () => {
     },
   );
 
-  it.effect(
-    'lists a run whose own run.start a newer build wrote as blocked',
-    () => {
-      // The unreadable row is the one that creates the run: without it the
-      // run would vanish from every listing instead of reading as blocked.
-      const storage = workspace();
-      return Effect.gen(function* () {
-        yield* Database.pipe(
-          Effect.flatMap((database) => database.appendAll([runStart, waiting])),
-          Effect.provide(substrate(storage)),
-        );
-        yield* Effect.sync(() => {
-          const raw = reader(storage);
-          try {
-            raw.exec(`UPDATE event SET version = 2 WHERE type = 'run.start';
-            UPDATE stored_kind SET version = 2 WHERE type = 'run.start';`);
-          } finally {
-            raw.close();
-          }
-        });
-        yield* Effect.gen(function* () {
-          const view = yield* SessionViewService;
-          yield* settle(view.ref, (v) => v.runs.has(RUN));
-          const run = (yield* SubscriptionRef.get(view.ref)).runs.get(RUN);
-          expect(run).toMatchObject({ blocked: 'newer', readOnly: true });
-          const refused = yield* Effect.flip(
-            (yield* Database).acquireClaims([runStart.aggregateId]),
+  // A newer build's version, and an earlier shape of this version.
+  for (const [reason, edit] of [
+    [
+      'newer',
+      `UPDATE event SET version = 2 WHERE type = 'run.start';
+      UPDATE stored_kind SET version = 2 WHERE type = 'run.start';`,
+    ],
+    ['older', `UPDATE event SET data = '{}' WHERE type = 'run.start';`],
+  ] as const)
+    it.effect(
+      `lists a run whose own run.start is ${reason} as blocked`,
+      () => {
+        // The unreadable row is the one that creates the run: without it the
+        // run would vanish from every listing instead of reading as blocked.
+        const storage = workspace();
+        return Effect.gen(function* () {
+          yield* Database.pipe(
+            Effect.flatMap((database) =>
+              database.appendAll([runStart, waiting]),
+            ),
+            Effect.provide(substrate(storage)),
           );
-          expect(refused).toMatchObject({
-            _tag: 'DatabaseWriteFailed',
-            cause: { _tag: 'DatabaseAggregateBlocked', type: 'run.start' },
+          yield* Effect.sync(() => {
+            const raw = reader(storage);
+            try {
+              raw.exec(edit);
+            } finally {
+              raw.close();
+            }
           });
-        }).pipe(
-          Effect.provide(graph([], substrate(storage).pipe(Layer.orDie))),
-          Effect.scoped,
-        );
-      });
-    },
-  );
+          yield* Effect.gen(function* () {
+            const view = yield* SessionViewService;
+            yield* settle(view.ref, (v) => v.runs.has(RUN));
+            const run = (yield* SubscriptionRef.get(view.ref)).runs.get(RUN);
+            expect(run).toMatchObject({ blocked: reason, readOnly: true });
+            const refused = yield* Effect.flip(
+              (yield* Database).acquireClaims([runStart.aggregateId]),
+            );
+            expect(refused).toMatchObject({
+              _tag: 'DatabaseWriteFailed',
+              cause: {
+                _tag: 'DatabaseAggregateBlocked',
+                reason,
+                type: 'run.start',
+              },
+            });
+          }).pipe(
+            Effect.provide(graph([], substrate(storage).pipe(Layer.orDie))),
+            Effect.scoped,
+          );
+        });
+      },
+    );
 
   it.effect('refuses a store of a newer schema and changes nothing', () => {
     const storage = workspace();

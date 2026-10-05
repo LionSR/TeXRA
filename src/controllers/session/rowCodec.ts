@@ -205,7 +205,7 @@ export type RowVerdict =
     }
   | (BlockedAggregate & { readonly error?: unknown });
 
-/** Where a row failed, never a stored value (a JSON parse error quotes it). */
+/** Where a row failed, never its stored text (a JSON parse error quotes it). */
 function causeOf(error: unknown): string {
   if (error instanceof SyntaxError) return 'not JSON';
   const issue = error instanceof z.ZodError ? error.issues[0] : undefined;
