@@ -129,9 +129,11 @@ jobs:
           system-prompt-file: .trusted-actions/.github/prompts/claude-code-review-system-prompt.md
 
       # The action hides the agent's transcript, so a denied tool call is only
-      # a count in the log. Name each one (tool and a truncated input) so the
-      # allowlist can be fixed instead of guessed at. Annotations go through
-      # GitHub's secret masking; the step summary does not, so it gets no input.
+      # a count in the log. Name each one so the allowlist can be fixed instead
+      # of guessed at. The input stays hidden, as the action intends: secret
+      # masking misses unregistered values, so a denial shows only its tool
+      # and, for Bash, the program and a word-shaped subcommand (the prefix an
+      # allowlist pattern like Bash(gh pr:*) matches), never its arguments.
       - name: Report denied tool calls
         continue-on-error: true
         if: always() && steps.claude-review.outcome != 'skipped'
@@ -143,9 +145,9 @@ jobs:
             echo "::warning title=No execution log::$EXECUTION_FILE is missing; denied tool calls cannot be reported."
             exit 0
           fi
-          # A result without the field is not "no denials": say so.
-          if ! jq -e '[.[]? | select(.type == "result")] | last | has("permission_denials")' "$EXECUTION_FILE" >/dev/null; then
-            echo "::warning title=No denial list::the execution log's result carries no permission_denials; denied tool calls cannot be reported."
+          # A result without the list is not "no denials": say so.
+          if ! jq -e '[.[]? | select(.type == "result")] | last | .permission_denials | type == "array"' "$EXECUTION_FILE" >/dev/null; then
+            echo "::warning title=No denial list::the execution log's result carries no permission_denials array; denied tool calls cannot be reported."
             exit 0
           fi
           denials=$(jq -c '[.[]? | select(.type == "result")] | last | .permission_denials[]' "$EXECUTION_FILE")
@@ -158,10 +160,17 @@ jobs:
             echo
           } >> "$GITHUB_STEP_SUMMARY"
           while IFS= read -r denial; do
-            tool=$(jq -r '.tool_name' <<<"$denial")
-            input=$(jq -r '.tool_input.command // .tool_input.file_path // (.tool_input | tostring)' <<<"$denial" | tr '\n' ' ' | cut -c1-200)
-            echo "::warning title=Denied tool call::$tool: $input"
-            echo "- \`$tool\`" >> "$GITHUB_STEP_SUMMARY"
+            name=$(jq -r '.tool_name | tostring' <<<"$denial" | tr -cd 'A-Za-z0-9_.-')
+            if [ "$name" = "Bash" ]; then
+              # Program name, then the next word only when it is a bare
+              # lowercase word (a subcommand), never a path, URL or value.
+              name=$(jq -r '.tool_input.command // "" | tostring' <<<"$denial" | head -n1 |
+                awk '{ p = $1; sub(/.*\//, "", p); gsub(/[^A-Za-z0-9_.-]/, "", p)
+                       s = ($2 ~ /^[a-z][a-z-]*$/) ? " " $2 : ""
+                       printf "Bash(%s%s)", p, s }')
+            fi
+            echo "::warning title=Denied tool call::$name"
+            echo "- \`$name\`" >> "$GITHUB_STEP_SUMMARY"
           done <<<"$denials"
 
       - name: Check for Claude quota errors and post comment
