@@ -8,8 +8,9 @@
 import { Cause, Effect, Exit, Fiber, Result, Scope } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
-import { getVisibleAgents } from '@agent/index';
+import { aggregateId } from '@texra-ai/harness';
 import type { AgentConfig } from '@agent/runtime';
+import { getVisibleAgents } from '@agent/index';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { reachCliService } from '@cli/runtime/cliService';
 
@@ -32,12 +33,10 @@ import {
 } from '@cli/tui/terminalCleanup';
 import { cliSecrets } from '@cli/runtime/cliSecrets';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
-import { aggregateId } from '@shared/schemas';
 import {
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import type { RunId } from '@shared/schemas';
 import { RUN_PHASE } from '@shared/schemas';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import {
@@ -111,6 +110,7 @@ import {
   TuiSession,
 } from './state/sessionRunState';
 import { createSessionExitController } from './sessionExitController';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 interface ChatResult {
   exitCode: number;

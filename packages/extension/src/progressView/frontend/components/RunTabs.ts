@@ -12,7 +12,6 @@ import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports
-import type { RunId } from '@shared/schemas';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 import { unseenRuns } from '@shared/session/unseenRuns';
@@ -34,6 +33,7 @@ import { renderEmptyState } from '@ui/wa/emptyState';
 import { layoutStyles } from '../styles/logStyles';
 import { runTabsContainerStyles } from './RunTabsContainer.styles';
 import { getComposedPathElement } from '../utils';
+import type { RunId } from '@texra-ai/harness/schemas';
 import type { RunTab } from './RunTab';
 import './RunTab';
 

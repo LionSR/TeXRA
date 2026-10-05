@@ -15,7 +15,6 @@ import { HttpClient, HttpClientError, HttpClientRequest } from 'effect/http';
 
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
-import type { AppState, ConfigProvider } from '@platform/interfaces';
 import { TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import { UsageLog, UsageLogResponseSchema } from '@shared/usageLog';
 import type {
@@ -30,6 +29,7 @@ import {
   toErrorMessage,
 } from '@utils/errors/errorMessage';
 import { isEnvFlagEnabled } from '@utils/system/envFlags';
+import type { AppState, ConfigProvider } from '@texra-ai/harness';
 
 const CHANNEL = 'UsageLogService';
 

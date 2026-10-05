@@ -19,6 +19,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 
+import { Internal, type RequestError } from '@texra-ai/harness';
 import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { runAgent } from '@agent/runtime/runAgent';
@@ -26,7 +27,6 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ProcessServices } from '@platform/processRuntime';
 import { RUN_PHASE, type RunId } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
-import { Internal, type RequestError } from '@shared/session/requestErrors';
 import {
   RequestErrorWireSchema,
   type RequestErrorWire,

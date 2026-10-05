@@ -20,10 +20,10 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 
+import { ToolContext } from '@texra-ai/harness';
+import { Secrets } from '@texra-ai/harness';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { ToolContext } from '@agent/core/tools/ToolTypes';
 import { requireToolRun } from '@agent/runtime/RunCall';
-import { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { parseWorkingDirectory } from '@tools/pathResolution';

@@ -28,7 +28,6 @@ import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
@@ -39,6 +38,7 @@ import {
   EXTENSION_COMMAND_HANDLERS,
   type ExtensionCommandActions,
 } from './extensionCommandHandlers';
+import type { PlatformSecrets } from '@texra-ai/harness';
 
 const externalOpener = new VscodeExternalOpener();
 

@@ -7,13 +7,11 @@
 
 import { Effect, Exit, Scope } from 'effect';
 
-import type { AgentDirectoriesPort } from '@platform/interfaces';
 import {
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
 } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
 import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
@@ -44,6 +42,8 @@ import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 import { desktopSpawner } from './desktopWindows.js';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
+import type { PlatformSecrets } from '@texra-ai/harness';
+import type { AgentDirectoriesPort } from '@texra-ai/harness';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
 import type {
   DesktopProject,

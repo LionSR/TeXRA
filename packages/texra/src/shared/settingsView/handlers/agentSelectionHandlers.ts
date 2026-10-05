@@ -1,5 +1,4 @@
 import { Effect } from 'effect';
-import type { StateStore, StateReadFailed } from '@platform/interfaces';
 import { readCustomAgentDir } from '@shared/config/settingsAccess';
 /**
  * Agent selection / custom-directory / mode-preset outbound message builders.
@@ -15,6 +14,7 @@ import type {
   AgentSelectionItem,
   UpdateCustomAgentDirMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
+import type { StateStore, StateReadFailed } from '@texra-ai/harness';
 
 export interface AgentSelectionPorts {
   buildSelectionItems(): Effect.Effect<AgentSelectionItem[], StateReadFailed>;

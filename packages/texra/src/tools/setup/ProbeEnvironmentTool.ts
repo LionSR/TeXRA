@@ -7,9 +7,9 @@ import { z } from 'zod';
 
 // Local imports
 import { API_KEY_PROVIDER_IDS, lookupApiKeyOrigin } from '@texra-ai/llm';
-import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { ToolContext } from '@texra-ai/harness';
+import { Secrets } from '@texra-ai/harness';
 import { withLogChannel } from '@logger/effectLog';
-import { Secrets } from '@platform/secrets';
 import { nodeHostEnvironment } from '@platform/defaults/nodeHostEnvironment';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import {
@@ -17,12 +17,13 @@ import {
   LATEX_WORKSHOP_EXT_ID,
 } from '@texra/shared/constants/latexToolchain';
 import { resolveGitHubTokenSource } from '@texra/tools/github/githubAuth';
+import { detectPackageManager } from '@texra/utils/system/toolChecks';
 import { executed } from '@tools/core/result';
 import { defineTool } from '@tools/core/define';
-import { detectPackageManager } from '@utils/system/toolUtils';
 import { extendEnvPath, safeHomedir } from '@utils/system/platformPaths';
 
 // Local file imports
+
 import { getChatGptSubscriptionStatus, SetupPlatform } from './platform';
 import { collectCoreSetupStatus, locateTool } from './toolProbing';
 

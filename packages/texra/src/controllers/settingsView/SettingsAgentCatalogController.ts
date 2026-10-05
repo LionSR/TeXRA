@@ -5,7 +5,6 @@ import { Effect, Result } from 'effect';
 import type { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset, type TeamPreset } from '@common/teams/TeamPresets';
-import type { StateStore } from '@platform/interfaces';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   agentKeyOf,
@@ -18,6 +17,7 @@ import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { type AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import { byName, isObject } from '@utils/core';
+import type { StateStore } from '@texra-ai/harness';
 
 interface SettingsAgentCatalogEntry {
   name: string;

@@ -23,7 +23,6 @@ import * as path from 'node:path';
 
 import { Effect } from 'effect';
 
-import type { StateReadFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ClaudeAgentPermissionMode } from '@shared/schemas';
 import { ClaudeAgentStateKey } from '@texra/shared/settingsView/integrationSettings';
@@ -34,6 +33,7 @@ import {
 } from '@texra/tools/support/externalBinaryUtils';
 import { readSettingUnlessOverridden } from '@utils/config/platformSettings';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
+import type { StateReadFailed } from '@texra-ai/harness';
 // Mirror the native `query` signature exactly (no hand-rolled structural copy).
 type QueryFn = typeof import('@anthropic-ai/claude-agent-sdk').query;
 

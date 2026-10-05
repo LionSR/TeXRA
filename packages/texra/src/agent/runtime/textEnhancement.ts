@@ -6,11 +6,11 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { LanguageModel } from '@platform/languageModel';
 import type { UsageLog } from '@shared/usageLog';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { extractTextFromTag } from '@utils/text/xmlExtraction';
+import type { LanguageModel } from '@texra-ai/harness';
 import type { HttpClient } from 'effect/http';
 
 const CHANNEL = 'TextEnhancement';

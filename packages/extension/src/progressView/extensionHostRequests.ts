@@ -14,60 +14,58 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Effect, FileSystem } from 'effect';
 
-import type { SessionHandle } from '@agent/runtime';
-import { handleMerge } from '@commands/agent/mergeCommands';
-import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
-import {
-  createFileSelectionPickers,
-  getCurrentFile,
-} from '@commands/files/fileSelectionCommands';
-import { openFile, openLabel } from '@commands/files/openFileCommands';
-import { findCommitInHistory } from '@commands/git/gitCommands';
-import { handleClean } from '@commands/housekeeping/cleanCommands';
-import { handlePack } from '@commands/housekeeping/packCommands';
-import {
-  handleAcceptEdited,
-  handleCompare,
-} from '@commands/latex/compareCommands';
-import {
-  handleLatexdiff,
-  handleLatexdiffCommitAction,
-  handleRunLatexdiff,
-} from '@commands/latex/latexdiffCommands';
-import { getIncludedExtensions } from '@common/files/fileTypeUtils';
-import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
-import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
-import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
-import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
-import { withLogChannel } from '@logger/effectLog';
 import {
   AgentDirectories,
   type StateStore,
   type StateReadFailed,
   type StateWriteFailed,
-} from '@platform/interfaces';
-import type { LanguageModel } from '@platform/languageModel';
-import {
-  withProcessServices,
-  type ProcessRuntime,
-  type ProcessServices,
-} from '@platform/processRuntime';
-import { withSessionFs, WorkspaceFs, type StorageFs } from '@platform/rootedFs';
-import type { PlatformSecrets } from '@platform/secrets';
-import latexPreamble from '@resources/templates/chatExport.tex';
-import {
-  GETTING_STARTED_COMMANDS,
-  isMultipleDocumentFileType,
-  type RunId,
-} from '@shared/schemas';
-import type { HostRequest } from '@shared/session/hostRequest';
+} from '@texra-ai/harness';
 import {
   Cancelled,
   Rejected,
   type HostRequestFailure,
   type RequestRefusal,
-} from '@shared/session/requestErrors';
+} from '@texra-ai/harness';
+import type { SessionHandle } from '@agent/runtime';
+import {
+  handleLatexdiff,
+  handleLatexdiffCommitAction,
+  handleRunLatexdiff,
+} from '@commands/latex/latexdiffCommands';
+import {
+  handleAcceptEdited,
+  handleCompare,
+} from '@commands/latex/compareCommands';
+import { handlePack } from '@commands/housekeeping/packCommands';
+import { handleClean } from '@commands/housekeeping/cleanCommands';
+import { findCommitInHistory } from '@commands/git/gitCommands';
+import { openFile, openLabel } from '@commands/files/openFileCommands';
+import {
+  createFileSelectionPickers,
+  getCurrentFile,
+} from '@commands/files/fileSelectionCommands';
+import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
+import { handleMerge } from '@commands/agent/mergeCommands';
+import { getIncludedExtensions } from '@common/files/fileTypeUtils';
+import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
+import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
+import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
+import { withLogChannel } from '@logger/effectLog';
+import { withSessionFs, WorkspaceFs, type StorageFs } from '@platform/rootedFs';
+import {
+  withProcessServices,
+  type ProcessRuntime,
+  type ProcessServices,
+} from '@platform/processRuntime';
+import latexPreamble from '@resources/templates/chatExport.tex';
+import type { HostRequest } from '@shared/session/hostRequest';
+import {
+  GETTING_STARTED_COMMANDS,
+  isMultipleDocumentFileType,
+  type RunId,
+} from '@shared/schemas';
 import type {
   HostOutcome,
   SurfaceActionMessage,
@@ -117,6 +115,8 @@ import {
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
+import type { PlatformSecrets } from '@texra-ai/harness';
+import type { LanguageModel } from '@texra-ai/harness';
 
 const CHANNEL = 'ExtensionHostRequests';
 

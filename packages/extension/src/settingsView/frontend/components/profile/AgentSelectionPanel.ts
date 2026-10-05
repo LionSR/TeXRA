@@ -15,7 +15,6 @@ import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { AgentSource } from '@shared/schemas';
 import {
   AGENT_SOURCE,
   agentKey as agentKeyFromSourceName,
@@ -41,6 +40,7 @@ import { getBasename } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 import { agentSelectionPanelStyles } from './AgentSelectionPanel.styles';
 import { renderNewerBuiltInNotice } from './newerBuiltInNotice';
+import type { AgentSource } from '@texra-ai/harness/schemas';
 
 /** Shorthand: derive the canonical key from an AgentSelectionItem. */
 function agentKey(agent: AgentSelectionItem): string {

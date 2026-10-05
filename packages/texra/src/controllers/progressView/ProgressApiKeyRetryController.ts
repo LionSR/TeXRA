@@ -1,7 +1,7 @@
 import { Data, Effect, Equal, Redacted } from 'effect';
 
 // Local imports
-import type { RunId } from '@shared/schemas';
+import type { RunId } from '@texra-ai/harness/schemas';
 import type { ApiKeyProviderId, SecretsFailed } from '@texra-ai/llm';
 
 interface ProgressApiKeyRetryRequest {

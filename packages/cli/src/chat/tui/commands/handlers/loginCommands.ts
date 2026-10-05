@@ -19,7 +19,6 @@ import {
   type CliLogoutTarget,
 } from '@cli/runtime/loginOptions';
 import type { AgentCatalogServices } from '@platform/processRuntime';
-import type { Secrets, PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
 import {
@@ -33,6 +32,7 @@ import {
   type SlashCommandOutput,
   transcriptSlashCommandOutput,
 } from './slashContext';
+import type { Secrets, PlatformSecrets } from '@texra-ai/harness';
 
 const CHAT_LOGIN_USAGE = [
   'Usage: /login chatgpt [--no-browser] [--device]',

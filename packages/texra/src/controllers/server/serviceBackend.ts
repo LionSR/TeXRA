@@ -18,17 +18,17 @@ import {
 } from 'effect';
 
 import {
-  buildTerminalRunEndResult,
-  type RunEndResult,
-} from '@agent/runtime/RunEndResult';
-import {
   Cancelled,
   Internal,
   NotOwner,
   Rejected,
   Unavailable,
   type RequestError,
-} from '@shared/session/requestErrors';
+} from '@texra-ai/harness';
+import {
+  buildTerminalRunEndResult,
+  type RunEndResult,
+} from '@agent/runtime/RunEndResult';
 import {
   RUN_OUTCOME,
   type RunId,

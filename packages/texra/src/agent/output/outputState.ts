@@ -12,8 +12,6 @@
  */
 
 import type { AgentTrace } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   MESSAGE_TYPES,
   type CompileFailure,
@@ -24,6 +22,8 @@ import {
 } from '@shared/schemas';
 import { RunFileService } from '@utils/files/runStorage';
 import { formatResultCount } from '@utils/text/stringUtils';
+import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 export interface OutputState {
   rounds: Map<number, RoundOutput>;

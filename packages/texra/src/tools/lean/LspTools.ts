@@ -1,10 +1,7 @@
 import { Cause, Effect, Scope } from 'effect';
 import { z } from 'zod';
 
-import {
-  ToolContext,
-  type ToolContextShape,
-} from '@agent/core/tools/ToolTypes';
+import { ToolContext, type ToolContextShape } from '@texra-ai/harness';
 import { callerRun, type ToolRun, type RunCall } from '@agent/runtime/RunCall';
 import { withLogChannel } from '@logger/effectLog';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';

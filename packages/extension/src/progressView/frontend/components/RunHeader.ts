@@ -12,7 +12,6 @@ import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
-import type { RunId } from '@shared/schemas';
 import { goalStateOf, type GoalState } from '@shared/plugins/goal';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import type { TeXRAIconName } from '@shared/iconNames';
@@ -42,6 +41,7 @@ import {
 } from '../constants';
 import { progressBadgeLabel } from '../formatters/progressBadgeFormatter';
 import { renderRunGrantChips, runGrantStyles } from './runGrantChips';
+import type { RunId } from '@texra-ai/harness/schemas';
 import type WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 

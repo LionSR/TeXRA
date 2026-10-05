@@ -15,6 +15,7 @@ import { basename, dirname, join } from 'node:path';
 
 import { Data, Effect, FileSystem, type PlatformError } from 'effect';
 
+import { Rejected } from '@texra-ai/harness';
 import {
   passesFileFilters,
   prepareFileFilters,
@@ -25,7 +26,6 @@ import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { onAppSignal } from '@eventBus/AppSignals';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { HostRequest } from '@shared/session/hostRequest';
-import { Rejected } from '@shared/session/requestErrors';
 import type { HostOutcome } from '@shared/session/sessionFrames';
 import { normalizeFilePath } from '@utils/core';
 import { locateInWorkspace } from '@utils/files/workspaceFS';

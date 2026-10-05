@@ -4,7 +4,6 @@ import { Effect, FileSystem, Result } from 'effect';
 import { deriveResumability, getRunRecords } from '@agent/storage';
 import { type AgentConfigPayload, type SessionHandle } from '@agent/runtime';
 import { DEFAULT_TOOL_CONFIG, RUN_OUTCOME, type RunId } from '@shared/schemas';
-import type { SessionOpenError } from '@shared/session/database';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 
 import {
@@ -69,6 +68,7 @@ import {
   resumeWorkflowOutputDirectory,
   resumeWorkflowOutputFile,
 } from '../runtime/workflowOutput';
+import type { SessionOpenError } from '@texra-ai/harness';
 
 const MULTI_INPUT_OUTPUT_MESSAGE =
   'Use --output-dir for multi-input document tasks; --output is only for a single final artifact.';

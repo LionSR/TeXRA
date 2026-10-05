@@ -20,9 +20,9 @@
 // Third-party imports
 import { Effect, Stream, type FileSystem } from 'effect';
 import { z } from 'zod';
-import type { RunCall } from '@agent/runtime/RunCall';
 
 // Local imports
+import { ToolContext } from '@texra-ai/harness';
 import {
   emitToolUseCard,
   endOpenToolUseCards,
@@ -34,10 +34,9 @@ import {
 } from '@agent/trace';
 import type { Runs } from '@agent/runtime/runRegistry';
 import type { ChildRunPort } from '@agent/runtime/childRunLoop';
-import { ToolContext } from '@agent/core/tools/ToolTypes';
+import type { RunCall } from '@agent/runtime/RunCall';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { withLogChannel } from '@logger/effectLog';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   CodexApprovalPolicy,
   RunId,
@@ -83,6 +82,7 @@ import {
   buildCodexThreadToolLog,
   buildCodexTurnToolLog,
 } from './codexShared';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

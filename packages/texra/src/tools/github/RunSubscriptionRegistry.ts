@@ -18,8 +18,8 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
-import type { Disposable } from '@platform/interfaces';
-import type { RunId } from '@shared/schemas';
+import type { Disposable } from '@texra-ai/harness';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 import type { GitHubServices } from './githubClient';
 import type { PollEventListener } from './PollingSourceBase';

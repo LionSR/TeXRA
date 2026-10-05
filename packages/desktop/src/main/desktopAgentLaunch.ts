@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
 
+import { Cancelled } from '@texra-ai/harness';
 import {
   presentRunFailure,
   selectAutoOpenFinalOutput,
@@ -12,15 +13,14 @@ import {
   type ProcessRuntime,
   withProcessServices,
 } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { RequestOpenFilePayload } from '@shared/schemas';
-import { Cancelled } from '@shared/session/requestErrors';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@utils/files/fileLocation';
+import type { PlatformSecrets } from '@texra-ai/harness';
 import type { DesktopAgentRun } from './desktopAgentRun.js';
 
 interface DesktopAgentLaunchContext {

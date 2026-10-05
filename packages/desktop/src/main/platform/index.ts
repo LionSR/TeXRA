@@ -1,31 +1,28 @@
 import { app } from 'electron';
 import { Effect, Layer, Scope } from 'effect';
 
+import { AgentDirectories, AppState } from '@texra-ai/harness';
+import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@texra-ai/harness';
+import { createNodeWorkspaceRoots } from '@texra-ai/harness/node';
+import {
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@texra-ai/harness/node';
 import { AgentDirectoryService } from '@agent/index';
+import { globalDatabaseLayer } from '@controllers/session/Database';
+import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import {
   appStateStoreFromDatabase,
   openProjectStateStore,
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
-import { installProcessRuntime } from '@controllers/session/sessionLayer';
-import { globalDatabaseLayer } from '@controllers/session/Database';
 import { emitAppSignal } from '@eventBus/AppSignals';
-import type { ProcessServices } from '@platform/processRuntime';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { AgentDirectoriesPort, StateStore } from '@platform/interfaces';
-import { AgentDirectories, AppState } from '@platform/interfaces';
-import type { PlatformSecrets } from '@platform/secrets';
-import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
-import { nodeFileServices } from '@platform/defaults/jsonStore';
-import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
-import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
-import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
+import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
+import { nodeFileServices } from '@platform/defaults/jsonStore';
+import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
+import type { ProcessServices } from '@platform/processRuntime';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
-import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
 import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
@@ -41,6 +38,9 @@ import {
   resolveDesktopMainDir,
   resolveResourcesPath,
 } from './paths.js';
+import type { PlatformSecrets } from '@texra-ai/harness';
+import type { AgentDirectoriesPort, StateStore } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 interface ElectronPlatformInitResult {
   /**
    * The no-workspace roots: what the window shows before a folder is open,

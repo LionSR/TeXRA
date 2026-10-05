@@ -6,7 +6,6 @@ import type { AgentTrace } from '@agent/trace';
 import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
 import { hasLatexCompiler } from '@latex/latexToolchain';
 import type { WorkspaceFs } from '@platform/rootedFs';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   fileLocationDisplayPath,
   isGenericOutputStem,
@@ -37,6 +36,7 @@ import {
 } from './compiledPdfArtifacts';
 import { combineFailureLogExcerpts } from './compileFailureRoundContext';
 import { getOutputFilesByRound, type OutputState } from './outputState';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 interface CompileCheckContext {

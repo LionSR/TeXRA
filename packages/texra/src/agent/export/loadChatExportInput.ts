@@ -23,12 +23,12 @@ import { Data, DateTime, Effect } from 'effect';
 
 import { getRunRecords } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ChatExportInput, ExportNode } from '@agent/export/schemas';
-import type { RunId } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
 import { readCompletedRunConversation } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { RunId } from '@texra-ai/harness/schemas';
+import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 /**
  * A stored run's export input could not be read: the run record read or the

@@ -4,7 +4,6 @@ import { Effect } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
-import type { StateReadFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { isClaudeCodeModel } from '@shared/schemas';
 import type {
@@ -24,6 +23,7 @@ import {
   selectAgentCliModel,
   type AgentCliModelRule,
 } from './agentCliModel';
+import type { StateReadFailed } from '@texra-ai/harness';
 import type { ModelConfig } from 'llm-zoo';
 
 import type {

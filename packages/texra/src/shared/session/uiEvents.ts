@@ -10,8 +10,8 @@
  * a harness that assigns fixtures simply ignores them.
  */
 import type { HostRequest } from '@shared/session/hostRequest';
-import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SurfaceAction } from '@shared/session/surface';
+import type { RuntimeRequest } from '@texra-ai/harness';
 
 const SESSION_UI_EVENT = {
   runtime: 'runtime-request',

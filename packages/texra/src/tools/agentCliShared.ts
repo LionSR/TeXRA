@@ -5,8 +5,7 @@
 import { Effect, type Context } from 'effect';
 
 // Local imports
-import { registerRun } from '@agent/storage';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { ToolContext, type ToolContextShape } from '@texra-ai/harness';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import type { Runs } from '@agent/runtime/runRegistry';
@@ -15,10 +14,7 @@ import type {
   ChildRunPorts,
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
-import {
-  ToolContext,
-  type ToolContextShape,
-} from '@agent/core/tools/ToolTypes';
+import { registerRun } from '@agent/storage';
 import {
   requireToolRun,
   type ToolRun,
@@ -51,6 +47,7 @@ import {
 } from '@tools/delegation/detachedChildRun';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { previewLabel } from '@utils/text/stringUtils';
+import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 import type {
   AgentCliSessionEntry,

@@ -1,7 +1,7 @@
 /**
  * Whether a command-line tool is installed: one probe that runs its version
- * command (falling back to a common-paths lookup), the image processor that
- * PDF rasterization and image resizing pick, and the system package managers.
+ * command (falling back to a common-paths lookup), and the image processor
+ * that PDF rasterization and image resizing pick.
  * Which tools an app needs, and how it tells the user to install a missing
  * one, are the app's own table (TeXRA's: `@texra/utils/system/toolChecks`).
  */
@@ -18,7 +18,7 @@ import { withLogChannel } from '@logger/effectLog';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { extendEnvPath, whichOnExtendedPath } from './platformPaths';
+import { extendEnvPath } from './platformPaths';
 import { resolveOptionalCommand } from './binaryResolver';
 import { executeCommand } from './execUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -220,56 +220,3 @@ export const detectImageTool = Effect.fn('toolUtils.detectImageTool')(
     return null;
   },
 );
-
-/** Package managers TeXRA knows how to install dependencies with. */
-export const SYSTEM_PACKAGE_MANAGERS = ['brew', 'apt', 'scoop'] as const;
-
-export type SystemPackageManager = (typeof SYSTEM_PACKAGE_MANAGERS)[number];
-
-// Platform-aware probe order: check the platform's native PM first so that
-// cross-platform installs (e.g. Linuxbrew on Linux) don't shadow the PM that
-// DEPENDENCY_INSTALL_COMMANDS actually uses for that platform.
-const PREFERRED_PACKAGE_MANAGER: Readonly<
-  Partial<Record<NodeJS.Platform, SystemPackageManager>>
-> = Object.freeze({ darwin: 'brew', linux: 'apt', win32: 'scoop' });
-
-/**
- * Detect the first available package manager on the system.
- * Returns 'brew', 'apt', 'scoop', or null if none found. Each answer comes
- * from {@link hasPackageManager}, which owns the probe cache.
- */
-export function detectPackageManager(): SystemPackageManager | null {
-  const first = PREFERRED_PACKAGE_MANAGER[process.platform];
-  const managers = first
-    ? [first, ...SYSTEM_PACKAGE_MANAGERS.filter((name) => name !== first)]
-    : SYSTEM_PACKAGE_MANAGERS;
-
-  for (const name of managers) {
-    if (hasPackageManager(name)) return name;
-  }
-  return null;
-}
-
-const packageManagerAvailability = new Map<SystemPackageManager, boolean>();
-
-/**
- * Whether one specific package manager is installed.
- *
- * Callers that only have an install command for some managers need this rather
- * than {@link detectPackageManager}: that one answers "which manager does this
- * platform use", so on a Linux box with both apt and Linuxbrew it returns
- * `apt` and a brew-only command map would never match. Each answer is probed
- * once and cached, including misses. The answer is a PATH lookup, not a
- * spawn, so it stays synchronous for the install-command getters; a present
- * but broken binary counts as installed, and the install command it picks
- * then fails visibly. Each caller surfaces the boolean (or
- * `detectPackageManager`'s null) itself.
- */
-export function hasPackageManager(name: SystemPackageManager): boolean {
-  const cached = packageManagerAvailability.get(name);
-  if (cached !== undefined) return cached;
-
-  const available = whichOnExtendedPath(name) !== null;
-  packageManagerAvailability.set(name, available);
-  return available;
-}

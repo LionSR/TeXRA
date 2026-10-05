@@ -16,8 +16,8 @@ import type {
   RunEndResult,
 } from '@agent/runtime';
 import type { ProcessServices } from '@platform/processRuntime';
-import type { RunId } from '@shared/schemas';
 import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The run boundary `ChatSessionController` takes. */
 export interface ChatAgentRuns {

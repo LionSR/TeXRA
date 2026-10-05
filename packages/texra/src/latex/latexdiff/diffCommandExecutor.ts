@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 
 // Internal imports
 import { withLogChannel } from '@logger/effectLog';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ExecResult } from '@shared/schemas';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
@@ -12,6 +11,7 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 
 // Local file imports
 import { LATEX_CITATION_COMMANDS } from '../latexParsingUtils';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const LATEXDIFF_PICTURE_ENVIRONMENTS =

@@ -1,5 +1,5 @@
-import type { Disposable } from '@platform/interfaces';
 import { throwAggregated } from '@utils/core';
+import type { Disposable } from '@texra-ai/harness';
 
 type DisposableLike = Disposable | (() => void);
 

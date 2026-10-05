@@ -13,7 +13,7 @@
 
 import { Context, type Effect } from 'effect';
 
-import type { RunId } from '@shared/schemas';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 import type { LeanServerInfo } from './leanServerRegistry';
 import type {

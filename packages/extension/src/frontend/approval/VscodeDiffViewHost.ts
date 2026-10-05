@@ -1,7 +1,6 @@
 import { Effect, FileSystem, Option } from 'effect';
 import * as vscode from 'vscode';
 
-import type { RequestRefusal } from '@shared/session/requestErrors';
 import { type DiffSource, type DiffViewHost } from '@texra/hosts/uiHosts';
 import {
   fromHost,
@@ -11,6 +10,7 @@ import {
 import { REVEAL_TIMEOUT_MS } from '@tools/approval/toolEditApproval';
 
 import { firstEventOrTimeout } from '../vscode/vscodeEventWait';
+import type { RequestRefusal } from '@texra-ai/harness';
 
 /**
  * The failure of a `vscode.*` call this host lifted through `fromHost`: the

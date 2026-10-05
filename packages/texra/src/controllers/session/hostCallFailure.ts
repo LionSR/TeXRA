@@ -10,10 +10,7 @@
  */
 import { Data, Effect } from 'effect';
 
-import {
-  isRequestRefusal,
-  type RequestRefusal,
-} from '@shared/session/requestErrors';
+import { isRequestRefusal, type RequestRefusal } from '@texra-ai/harness';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**

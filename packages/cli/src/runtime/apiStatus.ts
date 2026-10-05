@@ -5,7 +5,6 @@ import {
   configuredApiKeyProviders,
   providerDisplayName,
 } from '@texra-ai/llm';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SubscriptionUsageSnapshot } from '@shared/schemas';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
@@ -23,6 +22,7 @@ import {
   type CliModelAccessStatus,
 } from './modelAccessRoute';
 import { readCliModelAccessStatus } from './modelAccessSelection';
+import type { PlatformSecrets } from '@texra-ai/harness';
 
 /** The one method this module needs, derived from the service that owns it —
  *  the same narrowing the desktop credential controller uses. */

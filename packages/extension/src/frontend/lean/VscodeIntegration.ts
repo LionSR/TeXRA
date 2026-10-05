@@ -17,7 +17,6 @@ import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
 import { withLogChannel } from '@logger/effectLog';
-import type { StateStore } from '@platform/interfaces';
 import {
   LEAN4_EXTENSION_ID,
   type FetchDiagnosticsResult,
@@ -36,6 +35,7 @@ import {
 import type { LeanLanguageServicesShape } from '@texra/tools/lean/leanLanguageServices';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import type { StateStore } from '@texra-ai/harness';
 
 const CHANNEL = 'VscodeLeanIntegration';
 

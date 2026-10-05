@@ -18,7 +18,7 @@ import { StatusCodes } from 'http-status-codes';
 import { z } from 'zod';
 
 // Local imports
-import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { ToolContext } from '@texra-ai/harness';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import {

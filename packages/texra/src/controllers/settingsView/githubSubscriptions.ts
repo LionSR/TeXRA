@@ -2,9 +2,9 @@
 import { type Context, Effect, Option } from 'effect';
 
 // Local imports - GitHub subscriptions
-import type { RunId } from '@shared/schemas';
 import { GitHubSubscriptions } from '@texra/tools/github/subscriptionBindings';
 import { LiveTools } from '@tools/liveTools';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 interface GitHubSubscriptionOwner {
   readonly runId: RunId;

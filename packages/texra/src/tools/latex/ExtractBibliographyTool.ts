@@ -4,8 +4,9 @@ import * as nodePath from 'node:path';
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
+import { ToolContext } from '@texra-ai/harness';
+import { relativeToRoot } from '@texra-ai/harness/node';
 import type { RunCall } from '@agent/runtime/RunCall';
-import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - tools
 import {
@@ -13,7 +14,6 @@ import {
   loadBibliographyEntries,
   summarizeBibliographyEntries,
 } from '@latex/extractBibliography';
-import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceFs } from '@platform/rootedFs';
 import type { ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';

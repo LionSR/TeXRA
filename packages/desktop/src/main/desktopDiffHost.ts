@@ -7,7 +7,6 @@ import {
   type ProcessRuntime,
   withProcessServices,
 } from '@platform/processRuntime';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   ExternalOpenFailed,
   type DiffSource,
@@ -31,6 +30,7 @@ import {
   tryShowInRenderer,
   type DesktopOverlayPostOptions,
 } from './desktopIpcTypes.js';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 
 /**
  * The temp directories holding the external-editor patch files of every

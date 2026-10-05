@@ -2,11 +2,11 @@ import { resolve } from 'node:path';
 
 import { Effect, FileSystem, type PlatformError } from 'effect';
 
+import { relativeToRoot } from '@texra-ai/harness/node';
 import {
   getFileListConfig,
   type ListableFileType,
 } from '@common/files/fileListingRules';
-import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import type { FileOptions } from '@shared/schemas';
 import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
 import { normalizeFilePath } from '@utils/core';

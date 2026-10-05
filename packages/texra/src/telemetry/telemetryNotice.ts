@@ -1,6 +1,6 @@
 import { Effect, Result } from 'effect';
 
-import { AppState, type ConfigProvider } from '@platform/interfaces';
+import { AppState, type ConfigProvider } from '@texra-ai/harness';
 import { TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 

@@ -27,7 +27,6 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { RetryPermission } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { HostRequest } from '@shared/session/hostRequest';
@@ -53,6 +52,7 @@ import {
   useHostCapability,
 } from './approvalQueue';
 import { appendLocalNotice } from './transcript';
+import type { PlatformSecrets } from '@texra-ai/harness';
 
 /**
  * What this host holds for its lifetime: the session its denial notices read

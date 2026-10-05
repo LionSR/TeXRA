@@ -12,7 +12,6 @@ import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import { disablePlugin, enablePlugin } from '@common/plugins/pluginTrust';
 import type { PluginReview } from '@common/plugins/pluginTrust';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { buildPluginRows } from '@texra/controllers/settingsView/pluginRows';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 import {
@@ -29,6 +28,7 @@ import {
 } from '@ui/copy/plugins';
 
 import { AsyncListForm } from './_shared/ListForm';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 
 interface PluginsListFormProps {
   readonly availableRows?: number;

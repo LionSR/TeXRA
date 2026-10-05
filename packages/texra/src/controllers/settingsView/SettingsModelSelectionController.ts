@@ -16,22 +16,21 @@ import {
   MODEL_SOURCE_ORDER,
   resolveModelSource,
 } from '@texra-ai/llm';
+import { StateReadFailed, StateWriteFailed } from '@texra-ai/harness';
 import { getHelperModelName } from '@agent/runtime/helperModelName';
-import {
-  reasoningEffortOverrides,
-  supportsReasoningLevel,
-} from '@model/reasoningLevel';
-import {
-  preferredCopilotRouteModels,
-  type CopilotModelRoute,
-} from '@model/copilotRouting';
 import {
   getEnabledModels,
   setModelEnabled,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
-import { StateReadFailed, StateWriteFailed } from '@platform/interfaces';
-import type { PlatformSecrets } from '@platform/secrets';
+import {
+  preferredCopilotRouteModels,
+  type CopilotModelRoute,
+} from '@model/copilotRouting';
+import {
+  reasoningEffortOverrides,
+  supportsReasoningLevel,
+} from '@model/reasoningLevel';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { type ModelOptionData } from '@shared/schemas';
@@ -43,6 +42,7 @@ import {
 } from '@texra/shared/settingsView/settingsViewMessages';
 import { byName } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
+import type { PlatformSecrets } from '@texra-ai/harness';
 
 interface SettingsModelSelectionControllerDeps<R> {
   /**

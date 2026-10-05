@@ -8,9 +8,7 @@ import { Effect, Scope, Semaphore, Stream, SubscriptionRef } from 'effect';
 import { app, clipboard, dialog, Menu } from 'electron';
 import { z } from 'zod';
 
-import type { AgentDirectoriesPort, StateStore } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages.js';
 import { DESKTOP_WORKSPACE_INBOUND_COMMANDS } from '../shared/desktopWorkspaceMessages.js';
@@ -59,6 +57,8 @@ import {
 } from './desktopWindows.js';
 import { isFatalDesktopShutdownRequested } from './fatalStartupError.js';
 import { installDesktopHostBridge } from './hostBridge.js';
+import type { PlatformSecrets } from '@texra-ai/harness';
+import type { AgentDirectoriesPort, StateStore } from '@texra-ai/harness';
 import type {
   DesktopProjectRegistry,
   DesktopProjectsState,

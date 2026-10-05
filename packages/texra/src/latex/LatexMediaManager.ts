@@ -6,7 +6,6 @@ import { Effect, FileSystem } from 'effect';
 
 // Local imports
 import type { WorkspaceFs } from '@platform/rootedFs';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
 import { ToolConfig } from '@shared/schemas';
 import { filterNotNullish, unique } from '@utils/core';
@@ -26,6 +25,7 @@ import {
 } from './latexParsingUtils';
 import { TikzPictureManager } from './TikzPictureManager';
 import { compileLatex2Pdf } from './texTools';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** LaTeX project siblings that should always ride alongside the main file. */

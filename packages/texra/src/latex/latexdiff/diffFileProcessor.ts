@@ -1,12 +1,12 @@
 import { Effect, FileSystem, PlatformError } from 'effect';
 
-import type { ConfigProvider } from '@platform/interfaces';
 import replacementEngine, {
   logReplacementDiagnostics,
   type ReplacementConfigRead,
 } from '@replacement/engine';
 import type { FileLocation } from '@shared/schemas';
 import { readNormalizedFile } from '@utils/files/fsDurability';
+import type { ConfigProvider } from '@texra-ai/harness';
 
 /** LaTeX starred math environments that need label removal during diff processing. */
 const STAR_ENVIRONMENTS = [

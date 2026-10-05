@@ -6,9 +6,9 @@
  */
 import { Effect, type Scope } from 'effect';
 
+import { Rejected } from '@texra-ai/harness';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunAction, RunId } from '@shared/schemas';
-import { Rejected } from '@shared/session/requestErrors';
 import { runActionRefusal } from '@shared/session/runActions';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

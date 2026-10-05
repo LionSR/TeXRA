@@ -3,16 +3,16 @@ import { Data, Effect } from 'effect';
 
 // Local imports - secrets
 import { apiKeySecretName, isApiProvider } from '@texra-ai/llm';
-import type { StateReadFailed } from '@platform/interfaces';
-import type { PlatformSecrets } from '@platform/secrets';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
-// Local imports - hosts
 import type {
   ExternalOpenFailed,
   ExternalOpener,
   PromptFailed,
   PromptHost,
 } from '@texra/hosts/uiHosts';
+import type { StateReadFailed } from '@texra-ai/harness';
+import type { PlatformSecrets } from '@texra-ai/harness';
+// Local imports - hosts
 // Local imports - model
 // Local imports - platform
 

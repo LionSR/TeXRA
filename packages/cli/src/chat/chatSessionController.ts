@@ -44,7 +44,6 @@ import {
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   acceptsFollowUp,
@@ -55,10 +54,6 @@ import {
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { isDocumentTaskConfig, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { heldElsewhereBy } from '@shared/session/database';
-import type {
-  RunStopReason,
-  RuntimeRequest,
-} from '@shared/session/runtimeRequest';
 import { escapeText } from '@shared/utils/xmlEscape';
 import type { DisposableStore } from '@texra/platform/disposable';
 import type { WindowHost } from '@texra/controllers/server/windowHost';
@@ -101,6 +96,8 @@ import {
   moveLocalTranscriptToRun,
   reportRequestDefect,
 } from './tui/state/transcript';
+import type { RunStopReason, RuntimeRequest } from '@texra-ai/harness';
+import type { PlatformSecrets } from '@texra-ai/harness';
 import type { FollowUpDeliveryQueue } from './followUpDeliveryQueue';
 import type { ChatAgentRuns } from './serviceAgentRuns';
 import type { SessionRequests } from './tui/state/approvalQueue';

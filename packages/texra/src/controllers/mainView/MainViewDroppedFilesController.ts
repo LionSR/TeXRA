@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports
-import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
-import { Rejected } from '@shared/session/requestErrors';
+import { Rejected } from '@texra-ai/harness';
+import { relativeToRoot } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**

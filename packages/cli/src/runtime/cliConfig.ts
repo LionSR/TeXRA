@@ -15,7 +15,6 @@ import {
 } from '@platform/defaults/jsonConfigProvider';
 import { nodeFileServices, type JsonStore } from '@platform/defaults/jsonStore';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
-import type { ConfigProvider } from '@platform/interfaces';
 
 // Local imports - shared
 import { canonicalConfigKey } from '@shared/config/configKeys';
@@ -32,6 +31,7 @@ import {
   writeSettingTo,
 } from '@utils/config/platformSettings';
 import { isObject } from '@utils/core';
+import type { ConfigProvider } from '@texra-ai/harness';
 
 /**
  * The model a `texra` command starts on when nothing else names one.

@@ -15,8 +15,8 @@ import { buildToolDashboardItems } from '@texra/controllers/settingsView/ToolDas
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 import { readMcpConfig, USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
-import type { ToolProbeInputs } from '@tools/toolProbes';
 import type { ExternalToolCheckResult } from '@tools/toolAvailabilityService';
+import type { ToolProbeInputs } from '@texra-ai/harness';
 
 /**
  * Build the rows, the MCP config file they read, and what that file's

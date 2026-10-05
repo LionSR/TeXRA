@@ -39,13 +39,10 @@ import {
 } from 'effect';
 
 // Local imports
+import { Rejected, type HostRequestFailure } from '@texra-ai/harness';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  Rejected,
-  type HostRequestFailure,
-} from '@shared/session/requestErrors';
 import type { RequestDecision, SessionEvent } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import {

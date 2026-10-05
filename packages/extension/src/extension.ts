@@ -6,6 +6,17 @@ import * as vscode from 'vscode';
 import { Cause, Data, Effect, Exit, Layer, Result, Scope } from 'effect';
 
 // Local imports
+import { AppState } from '@texra-ai/harness';
+import {
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+  type LanguageModelPort,
+} from '@texra-ai/harness';
+import { createNodeWorkspaceRoots } from '@texra-ai/harness/node';
+import {
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@texra-ai/harness/node';
+import { canonicalizeWorkspacePath } from '@texra-ai/harness/node';
 import {
   closeAllSessions,
   initializeDefaultSession,
@@ -60,27 +71,14 @@ import { withLogChannel } from '@logger/effectLog';
 import { setLogSink } from '@logger/logSink';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
-import { AppState } from '@platform/interfaces';
-import type { ToolMissingHandler } from '@platform/interfaces';
 import {
   withProcessServices,
   type ProcessRuntime,
 } from '@platform/processRuntime';
-import {
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
-  type LanguageModelPort,
-} from '@platform/languageModel';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
-import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
-import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { StorageFs, withSessionFs } from '@platform/rootedFs';
 import {
   formatTexraApprovalPolicy,
@@ -112,6 +110,8 @@ import { reachExtensionService } from './common/extensionService';
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands } from './commands';
+import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { ToolMissingHandler } from '@texra-ai/harness';
 
 const EXTENSION_CHANNEL = 'extension';
 

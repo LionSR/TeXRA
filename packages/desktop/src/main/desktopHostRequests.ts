@@ -8,40 +8,38 @@
 import path from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, SubscriptionRef } from 'effect';
-import { presentRunFailure, type SessionHandle } from '@agent/runtime';
 import {
-  latexdiffPackMessage,
-  runPackLatexdiffvc,
-} from '@housekeeping/packLatexdiffvc';
+  Cancelled,
+  Rejected,
+  Unavailable,
+  type HostRequestFailure,
+} from '@texra-ai/harness';
+import { presentRunFailure, type SessionHandle } from '@agent/runtime';
 import {
   fileOpResultMessage,
   packRunOutputs,
   runCleanRunDir,
 } from '@housekeeping/runDirOps';
+import {
+  latexdiffPackMessage,
+  runPackLatexdiffvc,
+} from '@housekeeping/packLatexdiffvc';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { withLogChannel } from '@logger/effectLog';
-import type { AgentDirectoriesFailed } from '@platform/interfaces';
-import {
-  withProcessServices,
-  type ProcessRuntime,
-  type ProcessServices,
-} from '@platform/processRuntime';
 import {
   sessionFsLayer,
   type GlobalStorageFs,
   type StorageFs,
   type WorkspaceFs,
 } from '@platform/rootedFs';
-import type { PlatformSecrets } from '@platform/secrets';
-import latexPreamble from '@resources/templates/chatExport.tex';
-import { type FileOpResult, type RunId } from '@shared/schemas';
-import type { HostRequest } from '@shared/session/hostRequest';
 import {
-  Cancelled,
-  Rejected,
-  Unavailable,
-  type HostRequestFailure,
-} from '@shared/session/requestErrors';
+  withProcessServices,
+  type ProcessRuntime,
+  type ProcessServices,
+} from '@platform/processRuntime';
+import latexPreamble from '@resources/templates/chatExport.tex';
+import type { HostRequest } from '@shared/session/hostRequest';
+import { type FileOpResult, type RunId } from '@shared/schemas';
 import type {
   HostOutcome,
   SurfaceActionMessage,
@@ -85,6 +83,8 @@ import {
   vsCodeOnlyGettingStartedMessage,
 } from '../shared/desktopCommandSurface.js';
 import { DesktopProgressFileActions } from './desktopProgressFileActions.js';
+import type { PlatformSecrets } from '@texra-ai/harness';
+import type { AgentDirectoriesFailed } from '@texra-ai/harness';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
 import type { DesktopAgentRun } from './desktopAgentRun.js';

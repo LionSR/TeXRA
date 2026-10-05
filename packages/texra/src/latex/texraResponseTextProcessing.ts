@@ -1,8 +1,8 @@
 import { Effect } from 'effect';
-import type { ConfigProvider } from '@platform/interfaces';
 import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
+import type { ConfigProvider } from '@texra-ai/harness';
 
 /**
  * TeXRA's LaTeX-aware provider-output policy, which hosts pass as a session's

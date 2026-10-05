@@ -39,16 +39,16 @@ import {
 } from 'effect';
 import { z } from 'zod';
 
-import { withLogChannel } from '@logger/effectLog';
-import type { ProcessServices } from '@platform/processRuntime';
-import type { HostRequest } from '@shared/session/hostRequest';
-import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import {
   Internal,
   isRequestRefusal,
   type HostRequestFailure,
   type RequestError,
-} from '@shared/session/requestErrors';
+} from '@texra-ai/harness';
+import { withLogChannel } from '@logger/effectLog';
+import type { ProcessServices } from '@platform/processRuntime';
+import type { HostRequest } from '@shared/session/hostRequest';
+import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import {
   UpMessageSchema,
   type DownMessage,

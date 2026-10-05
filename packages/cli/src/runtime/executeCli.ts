@@ -1,5 +1,6 @@
 import { Cause, Deferred, Effect, Exit, Result, Scope } from 'effect';
 
+import { RUN_OUTCOME, type RunId } from '@texra-ai/harness/schemas';
 import {
   runAgent,
   SESSION_CLOSE_DEADLINE_MS,
@@ -18,7 +19,6 @@ import {
   withProcessServices,
   type ProcessRuntime,
 } from '@platform/processRuntime';
-import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import {
   DatabaseNotOwner,
   type SessionOpenError,

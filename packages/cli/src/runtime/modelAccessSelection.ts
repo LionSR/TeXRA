@@ -1,7 +1,7 @@
 import { Data, Effect } from 'effect';
 
 import { hasUsableApiKey } from '@texra-ai/llm';
-import { Secrets, type PlatformSecrets } from '@platform/secrets';
+import { Secrets, type PlatformSecrets } from '@texra-ai/harness';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
 import {

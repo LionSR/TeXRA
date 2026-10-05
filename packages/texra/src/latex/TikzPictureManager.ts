@@ -6,7 +6,6 @@ import { Effect, FileSystem } from 'effect';
 
 // Local imports - log
 import { withLogChannel } from '@logger/effectLog';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
 import { renderPrompt } from '@utils/prompt';
 import { pathToLocationIn } from '@utils/files/fileLocation';
@@ -15,6 +14,7 @@ import { normalizeLineEndings } from '@utils/text/stringUtils';
 // Local imports - latex utils
 import { compileLatex2Pdf } from './texTools';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 
 /**
  * Create a standalone LaTeX file for a TikZ picture

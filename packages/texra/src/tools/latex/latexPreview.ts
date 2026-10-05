@@ -15,7 +15,6 @@ import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import { withLogChannel } from '@logger/effectLog';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   LATEXDIFF_TEMP_FILE_LOCATIONS,
   type FileLocation,
@@ -29,6 +28,7 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { entryTypeIn } from '@utils/files/fsEntryExists';
 import { isStrictlyWithin } from '@utils/core/pathCore';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'latexPreview';

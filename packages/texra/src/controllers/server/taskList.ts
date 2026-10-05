@@ -21,6 +21,7 @@ import {
 } from 'effect';
 import { z } from 'zod';
 
+import { resolveWorkspaceStoragePath } from '@texra-ai/harness/node';
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
@@ -30,7 +31,6 @@ import {
 } from '@controllers/session/sessionSources';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
-import { resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import {
   ownerIdentity,

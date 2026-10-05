@@ -38,6 +38,14 @@
  */
 import { Effect, Layer, Stream } from 'effect';
 
+import {
+  AgentDirectories,
+  AppState,
+  StateWriteFailed,
+  type StateStore,
+} from '@texra-ai/harness';
+import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@texra-ai/harness';
+import { resolveGlobalStoragePath } from '@texra-ai/harness/node';
 import { installedProcessRuntime } from '@agent/runtime';
 import { AgentDirectoryService } from '@agent/index';
 import { appStateStoreFromDatabase } from '@controllers/session/appStateStore';
@@ -47,16 +55,8 @@ import {
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
 import type { MinimumLogLevel } from '@logger/effectDiagnostics';
-import {
-  AgentDirectories,
-  AppState,
-  StateWriteFailed,
-  type StateStore,
-} from '@platform/interfaces';
-import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
-import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';

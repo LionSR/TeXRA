@@ -18,14 +18,11 @@ import {
 } from '@latex/latexdiff/latexdiffCopy';
 import { runLatexdiffForRun } from '@latex/latexdiff/diffOperations';
 import type { DiffRunOutcome } from '@latex/latexdiff/types';
-import type { StateReadFailed } from '@platform/interfaces';
 import {
   type ProcessRuntime,
   type ProcessServices,
   withProcessServices,
 } from '@platform/processRuntime';
-import type { RunId } from '@shared/schemas';
-import type { Rejected } from '@shared/session/requestErrors';
 import type { NotificationFailed, PromptFailed } from '@texra/hosts/uiHosts';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
@@ -37,6 +34,9 @@ import {
   createExternalLocation,
   pathToLocationIn,
 } from '@utils/files/fileLocation';
+import type { Rejected } from '@texra-ai/harness';
+import type { RunId } from '@texra-ai/harness/schemas';
+import type { StateReadFailed } from '@texra-ai/harness';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 const DESKTOP_LATEXDIFF_CHANNEL = 'DesktopProgressFileActions';

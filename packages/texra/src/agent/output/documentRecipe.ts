@@ -10,8 +10,8 @@
  * one value the source takes; a run records the source it ran, so a resume
  * replays the same program.
  */
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { agentKey } from '@shared/schemas';
+import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 /** The tools the recipe calls: what a document task's run offers it. */
 const DOCUMENT_TASK_TOOLS = [

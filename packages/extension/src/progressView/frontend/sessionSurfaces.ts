@@ -11,10 +11,8 @@
  */
 import { signal, type Signal } from '@lit-labs/signals';
 
-import type { RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
-import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { Response, UpMessage } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 import {
@@ -43,6 +41,8 @@ import {
   type WebviewSession,
   type WebviewTransport,
 } from './sessionTransport';
+import type { RuntimeRequest } from '@texra-ai/harness';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /** One open session as the root holds it: its three records as signals. */
 interface SessionSurface {

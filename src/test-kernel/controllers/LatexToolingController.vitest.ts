@@ -23,9 +23,6 @@ vi.mock('@texra/utils/system/toolChecks', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@texra/utils/system/toolChecks')>()),
   checkToolInstalled: (tool: string) =>
     Effect.sync(() => probes.checkToolInstalled(tool)),
-}));
-vi.mock('@utils/system/toolUtils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@utils/system/toolUtils')>()),
   detectPackageManager: () => null,
 }));
 vi.mock('@utils/system/binaryResolver', async (importOriginal) => ({

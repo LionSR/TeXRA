@@ -25,7 +25,6 @@ import * as path from 'node:path';
 
 import { Effect, type FileSystem } from 'effect';
 
-import type { StateReadFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { CodexSandboxMode } from '@shared/schemas';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
@@ -38,6 +37,7 @@ import {
 import { inheritedEnv } from '@utils/system/envFlags';
 import { readSettingUnlessOverridden } from '@utils/config/platformSettings';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
+import type { StateReadFailed } from '@texra-ai/harness';
 
 // The native `Codex` class value; `typeof` gives its construct signature
 // (`new (options?: CodexOptions) => Codex`) so construction stays type-checked.

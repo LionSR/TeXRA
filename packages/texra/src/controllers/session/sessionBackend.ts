@@ -11,6 +11,11 @@
  */
 import { Effect, Option, Stream, SubscriptionRef } from 'effect';
 
+import {
+  Unavailable,
+  type RequestError,
+  type RequestRefusal,
+} from '@texra-ai/harness';
 import { resumeOnSession } from '@agent/followUp/ToolUseFollowUp';
 import {
   buildTerminalRunEndResult,
@@ -28,17 +33,12 @@ import {
   type TranscriptSubscription,
 } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
-import {
-  Unavailable,
-  type RequestError,
-  type RequestRefusal,
-} from '@shared/session/requestErrors';
-import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
 import { isLiveRun, type SessionView } from '@shared/session/sessionView';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import { launchOnRun } from '@texra/controllers/mainView/backend/MainViewRunLaunchController';
 import type { ToolEditPreview } from '@texra/controllers/server/protocol';
+import type { Outcome, RuntimeRequest } from '@texra-ai/harness';
 
 /** What a window asks of a live run's loop: its model switch. */
 type RunModelControls = Pick<

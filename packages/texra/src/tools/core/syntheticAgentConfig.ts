@@ -1,8 +1,5 @@
 // Local imports
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
+import { AgentConfigSchema, type AgentConfig } from '@texra-ai/harness/schemas';
 
 /**
  * Build the fabricated `AgentConfig` a tool-use child run needs to feed the

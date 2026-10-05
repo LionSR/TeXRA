@@ -15,14 +15,14 @@ import { Effect, type FileSystem, type PlatformError } from 'effect';
 import type { ChatExportInput } from '@agent/export/schemas';
 import { withLogChannel } from '@logger/effectLog';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
-import type { RunId } from '@shared/schemas';
-import type { Rejected } from '@shared/session/requestErrors';
 import type {
   ExternalOpenFailed,
   MessageHost,
   NotificationFailed,
 } from '@texra/hosts/uiHosts';
 import type { ChatExportInputUnreadable } from '@texra/agent/export/loadChatExportInput';
+import type { RunId } from '@texra-ai/harness/schemas';
+import type { Rejected } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { TranscriptExportFailed } from './transcriptExportFailure';
 import type {

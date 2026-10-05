@@ -15,6 +15,13 @@ import {
   type Path,
 } from 'effect';
 
+import { AppState } from '@texra-ai/harness';
+import { createNodeWorkspaceRoots } from '@texra-ai/harness/node';
+import { canonicalizeWorkspacePath } from '@texra-ai/harness/node';
+import {
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@texra-ai/harness/node';
 import { openSessionEffect, type SessionHandle } from '@agent/runtime';
 import {
   openProjectStateStore,
@@ -23,15 +30,8 @@ import {
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { setLogSink, silentLogSink, writeLogLine } from '@logger/logSink';
 import { JsonStore } from '@platform/defaults/jsonStore';
-import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@platform/defaults/nodeStores';
-import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
-import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
-import { AppState } from '@platform/interfaces';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,

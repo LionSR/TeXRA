@@ -16,7 +16,6 @@ import { isCtrlInput } from '@cli/tui/inputKeys';
 import { COLOR_BORDER, COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { textInputCappedRowCount } from '../input/textInputDisplay';
@@ -49,6 +48,7 @@ import {
   takeDraftRestoreRequests,
 } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { CursorEdit } from '../input/textInputEditing';
 import type { InputHistory } from '../history/inputHistory';
 

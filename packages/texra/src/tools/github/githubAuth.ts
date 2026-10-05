@@ -16,7 +16,7 @@ import {
   resolveCredential,
   type SecretsFailed,
 } from '@texra-ai/llm';
-import type { PlatformSecrets } from '@platform/secrets';
+import type { PlatformSecrets } from '@texra-ai/harness';
 
 /** SecretStorage key under which the GitHub PAT is persisted. */
 export const GITHUB_TOKEN_STORAGE_KEY = 'github.token';

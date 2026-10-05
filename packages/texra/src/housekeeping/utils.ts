@@ -5,8 +5,8 @@ import * as path from 'node:path';
 import { Data, Effect, FileSystem, type PlatformError } from 'effect';
 
 // Local imports
+import { relativeToRoot } from '@texra-ai/harness/node';
 import { withLogChannel } from '@logger/effectLog';
-import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import type { FileOpResult } from '@shared/schemas';
 import { type RootedFileSystem } from '@utils/files/rootedFileSystem';
 import { toErrorMessage } from '@utils/errors/errorMessage';
