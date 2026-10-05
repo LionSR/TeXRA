@@ -76,11 +76,11 @@ export function httpErrorMessage(
 export function formatProviderHttpError(err: unknown): ProviderError {
   const rawErrorBody = detectRawErrorBody(err);
   const extractedMessage = extractErrorMessage(err);
-  const hasMissingApiKey = hasMissingApiKeyErrorMarker(err);
+  const exceedsContextWindow = hasContextWindowErrorMarker(err);
   let classification: ProviderErrorClassification | undefined;
-  if (hasMissingApiKey) {
+  if (hasMissingApiKeyErrorMarker(err)) {
     classification = { kind: 'missing-api-key' };
-  } else if (hasContextWindowErrorMarker(err)) {
+  } else if (exceedsContextWindow) {
     classification = { kind: 'context-window' };
   }
 
@@ -116,16 +116,14 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   // retry resends the same oversized payload and fails again. Guarded on the
   // status code so a retryable failure keeps its retry affordance.
   if (
-    hasContextWindowErrorMarker(err) &&
+    exceedsContextWindow &&
     (statusCode === undefined || !isRetryableStatusCode(statusCode))
   ) {
     return terminalError(
       `${extractedMessage ?? 'Conversation exceeds the model context window.'} ` +
         'Retrying would resend the same oversized request. Start a new ' +
         'session, or reduce attached files and tool output.',
-      hasMissingApiKey
-        ? { kind: 'missing-api-key' }
-        : { kind: 'context-window' },
+      classification,
     );
   }
 

@@ -204,27 +204,6 @@ export const getBase64EncodedMedia = Effect.fn('img.getBase64EncodedMedia')(
   },
 );
 
-/** The number of pages in the PDF at an absolute path; 0 if it is missing or unreadable. */
-export const countPdfPages = Effect.fn('img.countPdfPages')(
-  function* (pdfPath: string) {
-    const fs = yield* FileSystem.FileSystem;
-    if (!(yield* fs.exists(pdfPath))) {
-      yield* Effect.logDebug(`PDF file not found: ${pdfPath}`).pipe(
-        withLogChannel(CHANNEL),
-      );
-      return 0;
-    }
-    const bytes = yield* fs.readFile(pdfPath);
-    return yield* pdfPageCount(bytes);
-  },
-  Effect.catchTag(['PlatformError', 'MediaConversionFailed'], (error) =>
-    Effect.logError(`Error counting PDF pages: ${error.message}`).pipe(
-      withLogChannel(CHANNEL),
-      Effect.as(0),
-    ),
-  ),
-);
-
 /**
  * Convert a single page of an already-resolved PDF to a base64 encoded PNG.
  * The caller owns resolving the path, verifying the image tool, and creating
@@ -286,64 +265,43 @@ const singlePagePdf2Png = Effect.fn('img.singlePagePdf2Png')(function* (
 const PDF_MAX_PAGES = 100;
 
 /**
- * One base64 encoded PNG per page of the PDF at an absolute path; null if it
- * is missing, has no pages, or cannot be rasterized.
+ * One base64 encoded PNG per page of the PDF at an absolute path, at most
+ * {@link PDF_MAX_PAGES} of them, plus the PDF's own page count so the caller
+ * can say when pages were left out. A missing, unreadable, empty or
+ * unrasterizable PDF fails with the reason.
  */
-export const processPdf2Png = Effect.fn('img.processPdf2Png')(
-  function* (pdfPath: string) {
-    const fs = yield* FileSystem.FileSystem;
-    if (!(yield* fs.exists(pdfPath))) {
-      yield* Effect.logDebug(`PDF file not found: ${pdfPath}`).pipe(
-        withLogChannel(CHANNEL),
-      );
-      return null;
-    }
+export const processPdf2Png = Effect.fn('img.processPdf2Png')(function* (
+  pdfPath: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const pageCount = yield* pdfPageCount(yield* fs.readFile(pdfPath));
+  if (pageCount === 0) {
+    return yield* new MediaConversionFailed({ message: 'PDF has no pages.' });
+  }
 
-    const bytes = yield* fs.readFile(pdfPath);
-    const pageCount = yield* pdfPageCount(bytes);
-    if (pageCount === 0) {
-      return null;
-    }
+  const tool = yield* detectImageTool();
+  if (!tool) {
+    return yield* new MediaConversionFailed({
+      message: 'GraphicsMagick/ImageMagick is not installed.',
+    });
+  }
 
-    const tool = yield* detectImageTool();
-    if (!tool) {
-      return yield* new MediaConversionFailed({
-        message: 'GraphicsMagick/ImageMagick is not installed.',
-      });
-    }
-
-    // Private per-conversion directory so the release below can delete every
-    // page it holds without touching pages a concurrent conversion is reading.
-    return yield* Effect.acquireUseRelease(
-      fs.makeTempDirectory({ prefix: 'texra-pdf-conversion-' }),
-      (tempDir) =>
-        Effect.gen(function* () {
-          const pagesToConvert = Math.min(pageCount, PDF_MAX_PAGES);
-          if (pagesToConvert < pageCount) {
-            // The cap protects against pathological PDFs, but dropping pages
-            // silently lets a model reason about a paper it has only part of.
-            yield* Effect.logWarning(
-              `Rasterizing only the first ${pagesToConvert} of ${pageCount} pages from ${pdfPath}; the rest are not attached.`,
-            ).pipe(withLogChannel(CHANNEL));
-          }
-          const base64Images: string[] = [];
-          for (let pageNum = 1; pageNum <= pagesToConvert; pageNum++) {
-            base64Images.push(
-              yield* singlePagePdf2Png(pdfPath, pageNum, tempDir, tool),
-            );
-          }
-          yield* Effect.logDebug(
-            `Successfully converted ${base64Images.length} pages from ${pdfPath}`,
-          ).pipe(withLogChannel(CHANNEL));
-          return base64Images;
-        }),
-      (tempDir) => removeTemporary(fs, tempDir, 'temporary directory'),
-    );
-  },
-  Effect.catchTag(['PlatformError', 'MediaConversionFailed'], (error) =>
-    Effect.logError(`Error processing PDF input: ${error.message}`).pipe(
-      withLogChannel(CHANNEL),
-      Effect.as(null),
-    ),
-  ),
-);
+  // Private per-conversion directory so the release below can delete every
+  // page it holds without touching pages a concurrent conversion is reading.
+  const pages = yield* Effect.acquireUseRelease(
+    fs.makeTempDirectory({ prefix: 'texra-pdf-conversion-' }),
+    (tempDir) =>
+      Effect.gen(function* () {
+        const base64Images: string[] = [];
+        const pagesToConvert = Math.min(pageCount, PDF_MAX_PAGES);
+        for (let pageNum = 1; pageNum <= pagesToConvert; pageNum++) {
+          base64Images.push(
+            yield* singlePagePdf2Png(pdfPath, pageNum, tempDir, tool),
+          );
+        }
+        return base64Images;
+      }),
+    (tempDir) => removeTemporary(fs, tempDir, 'temporary directory'),
+  );
+  return { pages, pageCount };
+});

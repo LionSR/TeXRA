@@ -72,12 +72,6 @@ interface ModelAvailabilityStatus {
   usageRoute?: UsageRoute;
 }
 
-function availabilityStatus(
-  kind: ModelAvailabilityKind,
-): ModelAvailabilityStatus {
-  return { kind };
-}
-
 /**
  * Every kind whose {@link MODEL_AVAILABILITY_STATUS} entry is
  * `available: false` — derived, not hand-listed, so a kind can't be added to
@@ -147,17 +141,6 @@ const UNAVAILABLE_REASON_BUILDERS: Record<
   // first), but an `available: false` kind the table must still cover.
   'unknown-model': ({ model }) => `Model "${model}" is not recognized.`,
 };
-
-/**
- * Ship the resolved verdict on the option row: the kind alone, which
- * `MODEL_AVAILABILITY_STATUS` words for whichever surface renders it.
- */
-function withAvailabilityFields(
-  option: ModelOptionData,
-  availability: ModelAvailabilityStatus,
-): ModelOptionData {
-  return { ...option, availability: availability.kind };
-}
 
 /**
  * Which providers have a usable API key, as plain data — the only provider-key
@@ -233,33 +216,33 @@ function routeGate(
       const access = route.route?.access ?? 'unavailable';
       if (access === 'allowed') {
         return {
-          ...availabilityStatus('copilot-allowed'),
+          kind: 'copilot-allowed',
           copilotConfig: route.route?.effectiveConfig,
         };
       }
       return {
-        ...availabilityStatus(`copilot-${access}`),
+        kind: `copilot-${access}`,
         copilotReason: copilotRouteUnavailableReason(model, route.route),
       };
     }
     case 'openrouter-unsupported':
-      return availabilityStatus('provider-unavailable');
+      return { kind: 'provider-unavailable' };
     case 'chatgpt-subscription':
       return { kind: 'subscription-access', usageRoute: route.kind };
     case 'xai-subscription':
       return { kind: 'xai-subscription-access', usageRoute: route.kind };
     case 'openrouter':
       return ctx.hasOpenRouter
-        ? availabilityStatus('openrouter-key')
+        ? { kind: 'openrouter-key' }
         : { kind: 'missing-key', reason: 'openrouter-missing-key' };
     case 'api-key':
       return route.usageRoute === 'api-key'
         ? { needsProviderKey: route.provider }
         : { needsProviderKey: route.provider, usageRoute: route.usageRoute };
     case 'no-api-key':
-      return availabilityStatus('missing-key');
+      return { kind: 'missing-key' };
     case 'validation':
-      return availabilityStatus('provider-key');
+      return { kind: 'provider-key' };
   }
 }
 
@@ -285,7 +268,7 @@ function resolveModelAvailability(
       `Model "${model}" routes to the "${provider}" API key, but that provider's key status was never read. A route decision reached the verdict without passing through the batch read.`,
     );
   }
-  if (!usable) return availabilityStatus('missing-key');
+  if (!usable) return { kind: 'missing-key' };
   return { kind: 'provider-key', usageRoute: gate.usageRoute };
 }
 
@@ -415,7 +398,7 @@ function routeModels(
         config: routeConfig(rawConfig, route, ctx.facts),
         route,
         gate: rawConfig.retired
-          ? availabilityStatus('retired')
+          ? { kind: 'retired' }
           : routeGate(model, route, ctx),
       });
     }
@@ -600,10 +583,7 @@ function buildModelOptionData(
   ctx: ModelAvailabilityContext,
 ): ModelOptionData {
   if (!decision) {
-    return withAvailabilityFields(
-      { value: model, label: model },
-      availabilityStatus('unknown-model'),
-    );
+    return { value: model, label: model, availability: 'unknown-model' };
   }
   const { rawConfig, config, route } = decision;
   const availability = resolveModelAvailability(
@@ -630,14 +610,14 @@ function buildModelOptionData(
   ) {
     routeLabel = `Via ${route.kind === 'openrouter' ? 'OpenRouter' : providerDisplayName(source)}`;
   }
-  return withAvailabilityFields(
-    {
-      ...buildBaseModelOption(model, optionConfig, rawConfig, source),
-      ...(reasoning ? { reasoning } : {}),
-      ...(routeLabel ? { routeLabel } : {}),
-    },
-    availability,
-  );
+  // The row ships the verdict's kind alone; `MODEL_AVAILABILITY_STATUS`
+  // words it for whichever surface renders it.
+  return {
+    ...buildBaseModelOption(model, optionConfig, rawConfig, source),
+    ...(reasoning ? { reasoning } : {}),
+    ...(routeLabel ? { routeLabel } : {}),
+    availability: availability.kind,
+  };
 }
 
 /**

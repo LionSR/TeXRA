@@ -18,8 +18,8 @@ import type { CredentialStore, SecretsFailed } from '@texra-ai/llm';
  * {@link PlatformSecrets.set} and {@link PlatformSecrets.delete}
  * carry one extra rule, ruled for host-controller study Q2: a credential
  * commit survives cancellation. The uninterruptible region is the commit
- * itself and nothing before it — for the file-backed stores it begins once
- * the write lane has been entered, inside `JsonStore.set`, so a write still
+ * itself and nothing before it — for the file-backed store it begins once
+ * the write lane has been entered, inside `FileSecrets`, so a write still
  * queued behind another one can be cancelled. Everything that
  * prepares a write — the lane wait, opening the store — stays interruptible, because interruption there means
  * nothing was written. A post-commit step cannot run as a step after the
