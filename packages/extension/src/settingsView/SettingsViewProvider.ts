@@ -20,8 +20,7 @@ import {
   postToWebview,
   SettingsViewMessageHandler,
 } from './SettingsViewMessageHandler';
-import type { PlatformSecrets } from '@texra-ai/harness';
-import type { StateStore } from '@texra-ai/harness';
+import type { PlatformSecrets, StateStore } from '@texra-ai/harness';
 
 function isReadyMessage(message: unknown): boolean {
   return (

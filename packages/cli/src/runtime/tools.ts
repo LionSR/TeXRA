@@ -9,8 +9,7 @@ import type { ToolDashboardItem } from '@texra/shared/settingsView/settingsViewM
 import type { ToolPluginSetup } from '@texra/tools/pluginCards';
 import { setToolEnabled } from '@tools/toolAvailability';
 import { ToolRegistry } from '@tools/toolTable';
-import type { ToolProbeInputs } from '@texra-ai/harness';
-import type { StateStore } from '@texra-ai/harness';
+import type { ToolProbeInputs, StateStore } from '@texra-ai/harness';
 
 type CliToolGuideKind = 'install' | 'auth';
 

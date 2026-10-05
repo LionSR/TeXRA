@@ -22,7 +22,7 @@ import { Effect, Stream, type FileSystem } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { ToolContext } from '@texra-ai/harness';
+import { ToolContext, type WorkspaceRoots } from '@texra-ai/harness';
 import {
   emitToolUseCard,
   endOpenToolUseCards,
@@ -82,7 +82,6 @@ import {
   buildCodexThreadToolLog,
   buildCodexTurnToolLog,
 } from './codexShared';
-import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

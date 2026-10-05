@@ -7,8 +7,7 @@ import { z } from 'zod';
 
 // Local imports
 import { API_KEY_PROVIDER_IDS, lookupApiKeyOrigin } from '@texra-ai/llm';
-import { ToolContext } from '@texra-ai/harness';
-import { Secrets } from '@texra-ai/harness';
+import { ToolContext, Secrets } from '@texra-ai/harness';
 import { withLogChannel } from '@logger/effectLog';
 import { nodeHostEnvironment } from '@platform/defaults/nodeHostEnvironment';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';

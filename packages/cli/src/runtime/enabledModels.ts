@@ -18,13 +18,16 @@ import {
   modelConfig,
   modelRefOf,
 } from '@texra-ai/llm';
-import { StateWriteFailed } from '@texra-ai/harness';
+import {
+  StateWriteFailed,
+  type StateReadFailed,
+  type StateStore,
+} from '@texra-ai/harness';
 import { getEnabledModels, setModelEnabled } from '@model/computeModelOptions';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getModelLabel } from '@shared/model/modelLabel';
 
 import { knownCliModelIds, resolveKnownCliModelId } from './cliConfig';
-import type { StateReadFailed, StateStore } from '@texra-ai/harness';
 
 export interface CliEnabledModelRow {
   readonly id: string;

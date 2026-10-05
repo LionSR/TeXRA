@@ -16,9 +16,9 @@ import {
 } from 'effect';
 
 import { AppState } from '@texra-ai/harness';
-import { createNodeWorkspaceRoots } from '@texra-ai/harness/node';
-import { canonicalizeWorkspacePath } from '@texra-ai/harness/node';
 import {
+  createNodeWorkspaceRoots,
+  canonicalizeWorkspacePath,
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';

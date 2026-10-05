@@ -3,8 +3,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { ToolContext } from '@texra-ai/harness';
-import { Secrets } from '@texra-ai/harness';
+import { ToolContext, Secrets } from '@texra-ai/harness';
 import { withLogChannel } from '@logger/effectLog';
 import { ToolError } from '@shared/schemas';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';

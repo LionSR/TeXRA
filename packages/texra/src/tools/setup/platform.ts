@@ -13,7 +13,7 @@ import { Context, Data, Effect, Layer } from 'effect';
 
 // Local imports
 import { getCodexStatus } from '@texra-ai/llm/node';
-import { Secrets } from '@texra-ai/harness';
+import { Secrets, type LanguageModel } from '@texra-ai/harness';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError } from '@shared/schemas';
@@ -23,7 +23,6 @@ import type {
   TerminalRunResult,
 } from '@texra/hosts/uiHosts';
 import { CHATGPT_SETUP_MODEL } from '@texra/model/setupModelDefaults';
-import type { LanguageModel } from '@texra-ai/harness';
 
 /**
  * A host command that was dispatched and rejected (the VS Code host's own

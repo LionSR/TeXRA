@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { Cancelled } from '@texra-ai/harness';
+import { Cancelled, type PlatformSecrets } from '@texra-ai/harness';
 import {
   presentRunFailure,
   selectAutoOpenFinalOutput,
@@ -20,7 +20,6 @@ import {
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@utils/files/fileLocation';
-import type { PlatformSecrets } from '@texra-ai/harness';
 import type { DesktopAgentRun } from './desktopAgentRun.js';
 
 interface DesktopAgentLaunchContext {

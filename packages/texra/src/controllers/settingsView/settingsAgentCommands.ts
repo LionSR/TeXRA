@@ -8,7 +8,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { AgentDirectories } from '@texra-ai/harness';
+import { AgentDirectories, type WorkspaceRoots } from '@texra-ai/harness';
 import {
   agentSourceRoots,
   changedBuiltInOf,
@@ -38,7 +38,6 @@ import {
 } from '@texra/shared/settingsView/handlers/agentSelectionHandlers';
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { registerCustomAgentRoot } from '@tools/agentCatalogFollower';
-import type { WorkspaceRoots } from '@texra-ai/harness';
 
 import type {
   SettingsHostBindings,

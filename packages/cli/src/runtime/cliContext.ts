@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import { Effect, FileSystem, Result } from 'effect';
 
-import { DatabaseOpenFailed } from '@texra-ai/harness';
+import { DatabaseOpenFailed, type ConfigProvider } from '@texra-ai/harness';
 import { canonicalizeWorkspacePath } from '@texra-ai/harness/node';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { MinimumLogLevel } from '@logger/effectDiagnostics';
@@ -28,7 +28,6 @@ import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { isCliSupportedModelId, loadCliStartupConfig } from './cliConfig';
 import { resolveCliResourcesPath } from './resourcesPath';
-import type { ConfigProvider } from '@texra-ai/harness';
 
 type CliMode = 'headless' | 'interactive';
 

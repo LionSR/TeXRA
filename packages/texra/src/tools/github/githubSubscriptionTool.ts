@@ -20,8 +20,7 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 
-import { ToolContext } from '@texra-ai/harness';
-import { Secrets } from '@texra-ai/harness';
+import { ToolContext, Secrets } from '@texra-ai/harness';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import type { SettingsStores } from '@shared/config/settingsAccess';

@@ -27,8 +27,7 @@ import type { ChatExportInput, ExportNode } from '@agent/export/schemas';
 import type { RunView } from '@shared/session/sessionView';
 import { readCompletedRunConversation } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { RunId } from '@texra-ai/harness/schemas';
-import type { AgentConfig } from '@texra-ai/harness/schemas';
+import type { RunId, AgentConfig } from '@texra-ai/harness/schemas';
 
 /**
  * A stored run's export input could not be read: the run record read or the

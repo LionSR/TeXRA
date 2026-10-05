@@ -77,9 +77,9 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createExtensionHostRequests } from './extensionHostRequests';
 import { RequestAttention } from './requestAttention';
-import type { PlatformSecrets } from '@texra-ai/harness';
-import type { LanguageModel } from '@texra-ai/harness';
 import type {
+  PlatformSecrets,
+  LanguageModel,
   StateStore,
   StateReadFailed,
   StateWriteFailed,

@@ -43,8 +43,8 @@ import {
   AppState,
   StateWriteFailed,
   type StateStore,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@texra-ai/harness';
-import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@texra-ai/harness';
 import { resolveGlobalStoragePath } from '@texra-ai/harness/node';
 import { installedProcessRuntime } from '@agent/runtime';
 import { AgentDirectoryService } from '@agent/index';

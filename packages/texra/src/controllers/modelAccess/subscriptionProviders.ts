@@ -31,7 +31,11 @@ import {
   xaiLoginWithLoopback,
 } from '@texra-ai/llm/node';
 import { codexAccountLabel, xaiAccountLabel } from '@texra-ai/llm';
-import { Secrets, type PlatformSecrets } from '@texra-ai/harness';
+import {
+  Secrets,
+  type PlatformSecrets,
+  ConfigWriteFailed,
+} from '@texra-ai/harness';
 import { withLogChannel } from '@logger/effectLog';
 import {
   isPreferSubscription,
@@ -43,7 +47,6 @@ import type {
   SubscriptionAuthStatus,
 } from '@shared/model/subscriptionAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { ConfigWriteFailed } from '@texra-ai/harness';
 import type { HttpClient } from 'effect/http';
 
 const CHANNEL = 'subscriptionProviders';

@@ -4,9 +4,13 @@ import { Buffer } from 'node:buffer';
 import { Deferred, Effect, Fiber, FileSystem } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { AppState } from '@texra-ai/harness';
-import { Secrets } from '@texra-ai/harness';
-import { Cancelled, Rejected } from '@texra-ai/harness';
+import {
+  AppState,
+  Secrets,
+  Cancelled,
+  Rejected,
+  type LanguageModel,
+} from '@texra-ai/harness';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { resolveRouteCredential } from '@agent/runtime/modelRoutes';
 import { withLogChannel } from '@logger/effectLog';
@@ -28,7 +32,6 @@ import {
   sweepStaleFiles,
   type PastedImageSaveFailed,
 } from '@texra/utils/files/pastedImageUtils';
-import type { LanguageModel } from '@texra-ai/harness';
 import type { HttpClient } from 'effect/http';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

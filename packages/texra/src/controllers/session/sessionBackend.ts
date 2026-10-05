@@ -15,6 +15,8 @@ import {
   Unavailable,
   type RequestError,
   type RequestRefusal,
+  Outcome,
+  RuntimeRequest,
 } from '@texra-ai/harness';
 import { resumeOnSession } from '@agent/followUp/ToolUseFollowUp';
 import {
@@ -38,7 +40,6 @@ import { isLiveRun, type SessionView } from '@shared/session/sessionView';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import { launchOnRun } from '@texra/controllers/mainView/backend/MainViewRunLaunchController';
 import type { ToolEditPreview } from '@texra/controllers/server/protocol';
-import type { Outcome, RuntimeRequest } from '@texra-ai/harness';
 
 /** What a window asks of a live run's loop: its model switch. */
 type RunModelControls = Pick<

@@ -6,10 +6,13 @@ import {
   AppState,
   type StateStore,
   type StateWriteFailed,
+  Secrets,
+  type PlatformSecrets,
+  type WorkspaceRoots,
+  type SessionOpenError,
 } from '@texra-ai/harness';
-import { Secrets, type PlatformSecrets } from '@texra-ai/harness';
-import { createNodeWorkspaceRoots } from '@texra-ai/harness/node';
 import {
+  createNodeWorkspaceRoots,
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
@@ -51,8 +54,6 @@ import {
 } from './logSinks';
 import { CliExitCode } from './exitCodes';
 import { terminalForegroundHeld } from './foregroundCommand';
-import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { SessionOpenError } from '@texra-ai/harness';
 import type { CliContext } from './cliContext';
 
 type CliShutdownSignal = 'SIGINT' | 'SIGTERM';

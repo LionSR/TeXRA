@@ -52,8 +52,7 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { renderPrompt } from '@utils/prompt';
-import type { DocumentTask } from '@texra-ai/harness/schemas';
-import type { AgentConfig } from '@texra-ai/harness/schemas';
+import type { DocumentTask, AgentConfig } from '@texra-ai/harness/schemas';
 
 /** What the documents read of the run their tool call serves. */
 type DocumentRun = Pick<

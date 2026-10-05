@@ -14,9 +14,9 @@ import {
   type PlatformError,
 } from 'effect';
 
-import { createNodeWorkspaceRoots } from '@texra-ai/harness/node';
-import { canonicalizeWorkspacePath } from '@texra-ai/harness/node';
 import {
+  createNodeWorkspaceRoots,
+  canonicalizeWorkspacePath,
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';

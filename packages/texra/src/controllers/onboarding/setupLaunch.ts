@@ -7,8 +7,7 @@ import {
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
-import type { PlatformSecrets } from '@texra-ai/harness';
-import type { LanguageModel } from '@texra-ai/harness';
+import type { PlatformSecrets, LanguageModel } from '@texra-ai/harness';
 
 /** Instruction handed to the setup agent when launched. Shared by every host. */
 export const SETUP_INSTRUCTION =

@@ -6,17 +6,19 @@ import * as vscode from 'vscode';
 import { Cause, Data, Effect, Exit, Layer, Result, Scope } from 'effect';
 
 // Local imports
-import { AppState } from '@texra-ai/harness';
 import {
+  AppState,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type LanguageModelPort,
+  WorkspaceRoots,
+  ToolMissingHandler,
 } from '@texra-ai/harness';
-import { createNodeWorkspaceRoots } from '@texra-ai/harness/node';
 import {
+  createNodeWorkspaceRoots,
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
+  canonicalizeWorkspacePath,
 } from '@texra-ai/harness/node';
-import { canonicalizeWorkspacePath } from '@texra-ai/harness/node';
 import {
   closeAllSessions,
   initializeDefaultSession,
@@ -110,8 +112,6 @@ import { reachExtensionService } from './common/extensionService';
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands } from './commands';
-import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { ToolMissingHandler } from '@texra-ai/harness';
 
 const EXTENSION_CHANNEL = 'extension';
 

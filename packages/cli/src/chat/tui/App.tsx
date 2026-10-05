@@ -92,8 +92,7 @@ import {
   runningChildCount,
 } from './state/sessionView';
 import { useSignal } from './state/useSignal';
-import type { PlatformSecrets } from '@texra-ai/harness';
-import type { RuntimeRequest } from '@texra-ai/harness';
+import type { PlatformSecrets, RuntimeRequest } from '@texra-ai/harness';
 import type { InputHistory } from './history/inputHistory';
 import type { PastedImageEntry } from './input/draftAttachments';
 

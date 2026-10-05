@@ -8,8 +8,7 @@ import { readCustomAgentDir } from '@shared/config/settingsAccess';
  */
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { AgentModePreset } from '@shared/schemas';
-import type { AgentScanIssue } from '@shared/schemas';
+import type { AgentModePreset, AgentScanIssue } from '@shared/schemas';
 import type {
   AgentSelectionItem,
   UpdateCustomAgentDirMessage,

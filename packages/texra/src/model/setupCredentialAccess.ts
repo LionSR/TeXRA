@@ -11,8 +11,7 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import { isModelOptionAvailable } from '@shared/schemas';
 import { SETUP_MODEL_BY_PROVIDER } from '@texra/model/setupModelDefaults';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
-import type { PlatformSecrets } from '@texra-ai/harness';
-import type { LanguageModel } from '@texra-ai/harness';
+import type { PlatformSecrets, LanguageModel } from '@texra-ai/harness';
 
 /**
  * The setup assistant's launch model: the first provider setup model the

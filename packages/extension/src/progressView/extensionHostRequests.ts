@@ -19,12 +19,12 @@ import {
   type StateStore,
   type StateReadFailed,
   type StateWriteFailed,
-} from '@texra-ai/harness';
-import {
   Cancelled,
   Rejected,
   type HostRequestFailure,
   type RequestRefusal,
+  PlatformSecrets,
+  LanguageModel,
 } from '@texra-ai/harness';
 import type { SessionHandle } from '@agent/runtime';
 import {
@@ -115,8 +115,6 @@ import {
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
-import type { PlatformSecrets } from '@texra-ai/harness';
-import type { LanguageModel } from '@texra-ai/harness';
 
 const CHANNEL = 'ExtensionHostRequests';
 

@@ -27,8 +27,11 @@ import {
 } from '@texra/model/setupCredentialAccess';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { PlatformSecrets } from '@texra-ai/harness';
-import type { StateReadFailed, StateWriteFailed } from '@texra-ai/harness';
+import type {
+  PlatformSecrets,
+  StateReadFailed,
+  StateWriteFailed,
+} from '@texra-ai/harness';
 
 const CHANNEL = 'SetupAssistant';
 /**

@@ -1,10 +1,17 @@
 import { app } from 'electron';
 import { Effect, Layer, Scope } from 'effect';
 
-import { AgentDirectories, AppState } from '@texra-ai/harness';
-import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@texra-ai/harness';
-import { createNodeWorkspaceRoots } from '@texra-ai/harness/node';
 import {
+  AgentDirectories,
+  AppState,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+  type PlatformSecrets,
+  type AgentDirectoriesPort,
+  type StateStore,
+  type WorkspaceRoots,
+} from '@texra-ai/harness';
+import {
+  createNodeWorkspaceRoots,
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
@@ -38,9 +45,6 @@ import {
   resolveDesktopMainDir,
   resolveResourcesPath,
 } from './paths.js';
-import type { PlatformSecrets } from '@texra-ai/harness';
-import type { AgentDirectoriesPort, StateStore } from '@texra-ai/harness';
-import type { WorkspaceRoots } from '@texra-ai/harness';
 interface ElectronPlatformInitResult {
   /**
    * The no-workspace roots: what the window shows before a folder is open,

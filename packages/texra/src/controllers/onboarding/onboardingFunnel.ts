@@ -30,8 +30,8 @@ import type {
   StateStore,
   StateReadFailed,
   StateWriteFailed,
+  LanguageModel,
 } from '@texra-ai/harness';
-import type { LanguageModel } from '@texra-ai/harness';
 
 interface OnboardingFunnelInputs {
   /** A usable credential exists (a subscription or any provider API key). */

@@ -12,8 +12,8 @@ import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { kickoffDesktopSetup } from './desktopAgentLaunch.js';
 import { createDesktopOnboardingIpc } from './desktopOnboardingIpc.js';
-import type { PlatformSecrets } from '@texra-ai/harness';
 import type {
+  PlatformSecrets,
   StateReadFailed,
   StateStore,
   StateWriteFailed,

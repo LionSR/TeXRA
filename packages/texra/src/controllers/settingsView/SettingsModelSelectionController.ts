@@ -16,7 +16,11 @@ import {
   MODEL_SOURCE_ORDER,
   resolveModelSource,
 } from '@texra-ai/llm';
-import { StateReadFailed, StateWriteFailed } from '@texra-ai/harness';
+import {
+  StateReadFailed,
+  StateWriteFailed,
+  type PlatformSecrets,
+} from '@texra-ai/harness';
 import { getHelperModelName } from '@agent/runtime/helperModelName';
 import {
   getEnabledModels,
@@ -42,7 +46,6 @@ import {
 } from '@texra/shared/settingsView/settingsViewMessages';
 import { byName } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
-import type { PlatformSecrets } from '@texra-ai/harness';
 
 interface SettingsModelSelectionControllerDeps<R> {
   /**

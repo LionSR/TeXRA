@@ -10,8 +10,7 @@ import type {
   PromptFailed,
   PromptHost,
 } from '@texra/hosts/uiHosts';
-import type { StateReadFailed } from '@texra-ai/harness';
-import type { PlatformSecrets } from '@texra-ai/harness';
+import type { StateReadFailed, PlatformSecrets } from '@texra-ai/harness';
 // Local imports - hosts
 // Local imports - model
 // Local imports - platform

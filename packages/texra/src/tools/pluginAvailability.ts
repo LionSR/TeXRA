@@ -9,7 +9,11 @@ import { Effect, Option } from 'effect';
 
 // Local imports
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@texra-ai/llm';
-import { Secrets } from '@texra-ai/harness';
+import {
+  Secrets,
+  type ToolAvailabilityChecks,
+  type ToolProbeServices,
+} from '@texra-ai/harness';
 import { withLogChannel } from '@logger/effectLog';
 import {
   importCodexClass,
@@ -45,10 +49,6 @@ import { isGitRepository } from '@utils/git/isGitRepository';
 import { envVar } from '@utils/system/envFlags';
 import { findToolInCommonPaths } from '@utils/system/binaryResolver';
 import { formatResultCount } from '@utils/text/stringUtils';
-import type {
-  ToolAvailabilityChecks,
-  ToolProbeServices,
-} from '@texra-ai/harness';
 
 const CHANNEL = 'pluginAvailability';
 

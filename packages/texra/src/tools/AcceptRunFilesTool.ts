@@ -27,8 +27,10 @@ import {
   ToolError,
   type EditRecord,
   type ToolResult,
+  RequestRefusal,
+  RunId,
+  FileLocation,
 } from '@shared/schemas';
-import type { RequestRefusal, RunId, FileLocation } from '@shared/schemas';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import {

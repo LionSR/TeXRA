@@ -24,8 +24,7 @@
 // Third-party imports
 import { Effect, Stream, type FileSystem } from 'effect';
 import { z } from 'zod';
-import { ToolContext, type ToolContextShape } from '@texra-ai/harness';
-import { Secrets } from '@texra-ai/harness';
+import { ToolContext, type ToolContextShape, Secrets } from '@texra-ai/harness';
 import type { RunCall } from '@agent/runtime/RunCall';
 
 // Local imports

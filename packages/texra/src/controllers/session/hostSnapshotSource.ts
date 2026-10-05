@@ -10,7 +10,11 @@
  * its missing tools; the desktop keeps both in Settings).
  */
 import { Cause, Data, Effect, Exit, type FileSystem } from 'effect';
-import { AgentDirectories } from '@texra-ai/harness';
+import {
+  AgentDirectories,
+  type LanguageModel,
+  type PlatformSecrets,
+} from '@texra-ai/harness';
 import { computeAgentOptionsData } from '@agent/index';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import {
@@ -28,8 +32,6 @@ import type {
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import { readRecentCommits } from '@texra/utils/git/repositoryOverview';
 import { readSettingFrom } from '@utils/config/platformSettings';
-import type { LanguageModel } from '@texra-ai/harness';
-import type { PlatformSecrets } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 type Banners = HostSnapshot['banners'];

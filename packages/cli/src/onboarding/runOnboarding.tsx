@@ -52,8 +52,7 @@ import { signInCliSubscription } from '../runtime/subscriptionLogin';
 import { commitOnboardingProviderApiKey } from '../chat/tui/hosts/cliProviderKeys';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { isLikelyRemoteSession } from '../runtime/remoteSession';
-import type { StateWriteFailed } from '@texra-ai/harness';
-import type { PlatformSecrets } from '@texra-ai/harness';
+import type { StateWriteFailed, PlatformSecrets } from '@texra-ai/harness';
 
 /**
  * Human-facing "we stored your key here" line. Naming the exact secret entry

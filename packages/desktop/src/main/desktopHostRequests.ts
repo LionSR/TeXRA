@@ -13,6 +13,8 @@ import {
   Rejected,
   Unavailable,
   type HostRequestFailure,
+  PlatformSecrets,
+  AgentDirectoriesFailed,
 } from '@texra-ai/harness';
 import { presentRunFailure, type SessionHandle } from '@agent/runtime';
 import {
@@ -83,8 +85,6 @@ import {
   vsCodeOnlyGettingStartedMessage,
 } from '../shared/desktopCommandSurface.js';
 import { DesktopProgressFileActions } from './desktopProgressFileActions.js';
-import type { PlatformSecrets } from '@texra-ai/harness';
-import type { AgentDirectoriesFailed } from '@texra-ai/harness';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
 import type { DesktopAgentRun } from './desktopAgentRun.js';

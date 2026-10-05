@@ -11,7 +11,11 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { AppState } from '@texra-ai/harness';
+import {
+  AppState,
+  type ToolProbeInputs,
+  type SettingHost,
+} from '@texra-ai/harness';
 import type {
   ToolCommandKind,
   ToolDashboardItem,
@@ -27,8 +31,6 @@ import {
   ToolAvailability,
   type ExternalToolCheckResult,
 } from '@tools/toolAvailabilityService';
-import type { ToolProbeInputs } from '@texra-ai/harness';
-import type { SettingHost } from '@texra-ai/harness';
 
 // ============================================================
 // Tool terminal actions

@@ -51,8 +51,7 @@ import {
   latexEditorStatus,
   vscodeLatexSettingsHandlers,
 } from './handlers/latexSettingsHandlers';
-import type { PlatformSecrets } from '@texra-ai/harness';
-import type { StateStore } from '@texra-ai/harness';
+import type { PlatformSecrets, StateStore } from '@texra-ai/harness';
 
 /** The webview shapes SettingsView dispatches for. */
 type SettingsWebview = vscode.WebviewView | vscode.WebviewPanel;

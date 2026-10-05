@@ -96,8 +96,11 @@ import {
   moveLocalTranscriptToRun,
   reportRequestDefect,
 } from './tui/state/transcript';
-import type { RunStopReason, RuntimeRequest } from '@texra-ai/harness';
-import type { PlatformSecrets } from '@texra-ai/harness';
+import type {
+  RunStopReason,
+  RuntimeRequest,
+  PlatformSecrets,
+} from '@texra-ai/harness';
 import type { FollowUpDeliveryQueue } from './followUpDeliveryQueue';
 import type { ChatAgentRuns } from './serviceAgentRuns';
 import type { SessionRequests } from './tui/state/approvalQueue';

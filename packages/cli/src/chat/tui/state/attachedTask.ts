@@ -5,7 +5,11 @@
 
 import { Effect, type Scope, Stream } from 'effect';
 
-import { aggregateId } from '@texra-ai/harness';
+import {
+  aggregateId,
+  type Outcome,
+  type RuntimeRequest,
+} from '@texra-ai/harness';
 import { describeWireRefusal, watchTask } from '@cli/runtime/taskAttach';
 import {
   attentionOf,
@@ -17,7 +21,6 @@ import type {
   ToolEditPreview,
 } from '@texra/controllers/server/protocol';
 import type { ServiceConnection } from '@texra/controllers/server/client';
-import type { Outcome, RuntimeRequest } from '@texra-ai/harness';
 
 /** One level of the attached task, as the view paints it. */
 export interface AttachedTaskLevel {

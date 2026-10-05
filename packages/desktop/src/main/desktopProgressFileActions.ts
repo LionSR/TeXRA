@@ -34,9 +34,8 @@ import {
   createExternalLocation,
   pathToLocationIn,
 } from '@utils/files/fileLocation';
-import type { Rejected } from '@texra-ai/harness';
+import type { Rejected, StateReadFailed } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
-import type { StateReadFailed } from '@texra-ai/harness';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 const DESKTOP_LATEXDIFF_CHANNEL = 'DesktopProgressFileActions';

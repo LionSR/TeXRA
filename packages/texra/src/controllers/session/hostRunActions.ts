@@ -16,12 +16,15 @@ import {
   lookupApiKey,
   type SecretsFailed,
 } from '@texra-ai/llm';
-import { Secrets } from '@texra-ai/harness';
 import {
+  Secrets,
   isRequestRefusal,
   Rejected,
   Unavailable,
   type RequestRefusal,
+  DatabaseReadFailed,
+  AppState,
+  StateReadFailed,
 } from '@texra-ai/harness';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -58,10 +61,7 @@ import {
   type ProgressFollowUpModelOption,
   type ProgressFollowUpState,
 } from '../progressView/ProgressFollowUpController';
-import type { DatabaseReadFailed } from '@texra-ai/harness';
-import type { AppState, StateReadFailed } from '@texra-ai/harness';
-import type { RunEndResult } from '@texra-ai/harness/schemas';
-import type { AgentConfig } from '@texra-ai/harness/schemas';
+import type { RunEndResult, AgentConfig } from '@texra-ai/harness/schemas';
 import type { SessionBackend } from './sessionBackend';
 
 const CHANNEL = 'HostRunActions';
