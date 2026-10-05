@@ -63,14 +63,7 @@ interface ChildRunDelivery {
 export function formatDelivery(delivery: ChildRunDelivery): string {
   const attributes: readonly DeliveryEnvelopeAttribute[] = [
     { name: 'id', value: delivery.runId },
-    ...(delivery.prompt !== undefined
-      ? [
-          {
-            name: 'prompt',
-            value: delivery.prompt.slice(0, DELIVERY_PROMPT_MAX),
-          },
-        ]
-      : []),
+    { name: 'prompt', value: delivery.prompt?.slice(0, DELIVERY_PROMPT_MAX) },
     ...(delivery.attributes ?? []),
   ];
   const attrs = attributes

@@ -22,10 +22,7 @@ import {
   type RunOutcome,
 } from '@shared/schemas';
 import type { UsageLog } from '@shared/usageLog';
-import {
-  isNonEmptyString,
-  truncateWithEllipsis,
-} from '@utils/text/stringUtils';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import type { HttpClient } from 'effect/http';
 
 const CHANNEL = 'SessionDescription';
@@ -151,7 +148,6 @@ export const generateSessionDescription = Effect.fn(
           ),
       }),
     );
-    if (!isNonEmptyString(text)) return;
     const description = cleanSessionDescription(text);
     if (!description) return;
 

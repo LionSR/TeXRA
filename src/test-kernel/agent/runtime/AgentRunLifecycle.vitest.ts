@@ -811,7 +811,6 @@ describe('finalizeRunTerminal', () => {
         storageMocks.finalizeRun.mockReturnValueOnce(
           Effect.succeed({
             ok: false,
-            outcomePersisted: false,
             error: durabilityError,
           }),
         );
@@ -836,7 +835,6 @@ describe('finalizeRunTerminal', () => {
         // The sink renders the raw payload once; the durability facts ride it.
         const data = String(warning?.annotations.data);
         expect(data).toContain(`"runId": "${runId}"`);
-        expect(data).toContain('"outcomePersisted": false');
         expect(data).toContain('metadata disk write failed');
       }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
   );

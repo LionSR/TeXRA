@@ -133,10 +133,7 @@ describe('deriveResumability', () => {
 
         expect(
           yield* finalizeRun(session, { runId, outcome: RUN_OUTCOME.FAILED }),
-        ).toMatchObject({
-          ok: false,
-          outcomePersisted: false,
-        });
+        ).toMatchObject({ ok: false });
 
         expect(yield* deriveResumability(runId, session)).toMatchObject({
           kind: 'checkpoint',
