@@ -7,8 +7,8 @@
  * view-title menus can differ between the New-task state and a
  * conversation.
  */
-import { hostBridge } from '@shared/hostBridge';
-import { createWebviewStorage } from '@shared/state/PersistedState';
+import { hostBridge } from '@texra/shared/hostBridge';
+import { createWebviewStorage } from '@texra/shared/state/PersistedState';
 
 import { createSessionSurfaces } from './sessionSurfaces';
 import type { ProgressApp } from './ProgressApp';

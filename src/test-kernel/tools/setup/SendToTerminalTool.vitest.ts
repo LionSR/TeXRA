@@ -10,11 +10,11 @@ import { describe } from 'vitest';
 
 // Local imports
 
-import type { TerminalRunResult } from '@hosts/uiHosts';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import type { TerminalRunResult } from '@texra/hosts/uiHosts';
 import { SendToTerminalTool } from '@texra/tools/setup/SendToTerminalTool';
 
 // Local file imports

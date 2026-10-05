@@ -22,8 +22,8 @@ import {
 import { customElement, property } from 'lit/decorators.js';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { postMessage } from '@shared/hostBridge';
-import { toolDependencyStatusLabel } from '@shared/tools/toolDependencyStatusLabels';
+import { postMessage } from '@texra/shared/hostBridge';
+import { toolDependencyStatusLabel } from '@texra/shared/tools/toolDependencyStatusLabels';
 import type { PluginActionMessage } from '@texra/shared/settingsView/pluginMessages';
 import type {
   PluginRow,

@@ -12,7 +12,7 @@ export interface KeyValueStore {
  * rapid updates.
  *
  * @example
- * import { hostBridge } from '@shared/hostBridge';
+ * import { hostBridge } from '@texra/shared/hostBridge';
  * const storage = createWebviewStorage(hostBridge);
  */
 export function createWebviewStorage(hostBridge: {

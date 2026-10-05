@@ -63,9 +63,10 @@ Things the tree won't tell you:
   reach the harness through the path aliases, but that surface is
   **frozen, not open**: `eslint.config.mjs` forbids `packages/harness/src/**`,
   `packages/texra/src/**` and `packages/llm/src/**` from importing host layers, and the ratchets in
-  `config/ratchets/` freeze the remaining edges — `host-agent-import-baseline`
-  (no NEW distinct `@agent/*` deep-import specifier from a host, type-only
-  included), `host-agent-mock`,
+  `config/ratchets/` freeze the remaining edges — `harness-deep-import-baseline`
+  (no NEW distinct harness-internal specifier, `@agent/*`, `@shared/*`,
+  `@platform/*` …, from the app or a host, type-only included; reach the
+  harness through `@texra-ai/harness` instead), `host-agent-mock`,
   `architecture-edges`, plus `refuted-candidates` (the costed-and-refused
   refactors, with their ruling anchors). ESLint's `no-restricted-syntax` fails
   an `Effect.run*` call outside `packages/{extension,desktop,cli}/src/` and the

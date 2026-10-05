@@ -13,16 +13,16 @@ import { Context, Data, Effect, Layer } from 'effect';
 
 // Local imports
 import { getCodexStatus } from '@texra-ai/llm/node';
-import type {
-  TerminalRunFailed,
-  TerminalRunRequest,
-  TerminalRunResult,
-} from '@hosts/uiHosts';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
 import { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError } from '@shared/schemas';
+import type {
+  TerminalRunFailed,
+  TerminalRunRequest,
+  TerminalRunResult,
+} from '@texra/hosts/uiHosts';
 import { CHATGPT_SETUP_MODEL } from '@texra/model/setupModelDefaults';
 
 /**

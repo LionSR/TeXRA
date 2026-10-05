@@ -18,7 +18,7 @@ import '@ui/wa/spinner';
 import type { RunId } from '@shared/schemas';
 import type { RunView, SessionView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
-import { SessionUiEvents } from '@shared/session/uiEvents';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { designTokens } from '@ui/styles';
 import { getComposedPathElement } from '../utils';
 import { logStyles } from '../styles/logStyles';

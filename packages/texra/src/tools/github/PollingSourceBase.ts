@@ -27,9 +27,9 @@ import { emitAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
 
 import type { Disposable } from '@platform/interfaces';
+import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';
 import { jitteredExponentialBackoffMs } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
-import { unrefSleepClock } from '@utils/system/unrefSleepClock';
 import {
   type ConditionalResponse,
   GitHubAuthError,

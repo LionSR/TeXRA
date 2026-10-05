@@ -5,7 +5,7 @@ import type { SessionSurfaces } from '@progressView/frontend/sessionSurfaces';
 import type { Theme } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostOutcome } from '@shared/session/sessionFrames';
-import { postMessage } from '@shared/hostBridge';
+import { postMessage } from '@texra/shared/hostBridge';
 
 import {
   DesktopShellStateSchema,

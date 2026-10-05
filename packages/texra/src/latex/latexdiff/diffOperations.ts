@@ -30,8 +30,8 @@ import {
 } from '@shared/schemas';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
+import { getSafeDocumentRelativePath } from '@texra/utils/files/outputFileUtils';
 import { readSettingFrom } from '@utils/config/platformSettings';
-import { getSafeDocumentRelativePath } from '@utils/files/outputFileUtils';
 
 // Local file imports
 import { LaTeXdiffService } from '../latexdiff';

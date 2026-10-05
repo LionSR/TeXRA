@@ -38,9 +38,9 @@ import {
   type RunView,
 } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
-import { SessionUiEvents } from '@shared/session/uiEvents';
 import type { TeXRAIconName } from '@shared/iconNames';
 import { dispatchedChildren } from '@shared/transcript';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { TickerController } from '@texra/shared/litControllers/TickerController';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';

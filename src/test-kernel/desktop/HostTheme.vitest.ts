@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Subject under test - the host-neutral theme helpers shared between the
 // VS Code webviews and the Electron renderer.
-import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin';
+import { resolvePostMessageTargetOrigin } from '@texra/shared/postMessageOrigin';
 import { applyHostBodyTheme } from '@ui/wa/hostTheme';
 
 const originalGlobals = {

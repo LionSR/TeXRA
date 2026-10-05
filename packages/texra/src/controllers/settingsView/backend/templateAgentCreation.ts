@@ -9,7 +9,7 @@ import {
   AGENT_TEMPLATE_FILES,
   DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
   renderAgentTemplateString,
-} from '@agent/templates/agentTemplateRenderer';
+} from '@texra/agent/templates/agentTemplateRenderer';
 // Local imports - utilities
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { entryExists } from '@utils/files/fsEntryExists';

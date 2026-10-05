@@ -10,13 +10,13 @@ import {
   EXPENSIVE_MODEL_HINT,
 } from '@texra-ai/llm';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { postMessage } from '@shared/hostBridge';
 import { MODEL_AVAILABILITY_STATUS } from '@shared/schemas';
 import {
   REASONING_LEVEL_LABELS,
   REASONING_LEVEL_OPTIONS,
 } from '@shared/model/reasoningLabels';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { postMessage } from '@texra/shared/hostBridge';
 import {
   type ModelSelectionItem,
   type ProviderKeyStatus,

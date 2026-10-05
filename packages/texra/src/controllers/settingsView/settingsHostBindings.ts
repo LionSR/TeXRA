@@ -6,15 +6,15 @@
 import { Cause, Effect } from 'effect';
 
 import { formatError } from '@common/errors/errorFormatUtils';
+import { withLogChannel } from '@logger/effectLog';
+import type { ProcessServices } from '@platform/processRuntime';
+import type { RunId } from '@shared/schemas';
 import type {
   ExternalOpener,
   MessageHost,
   NotificationFailed,
   PromptHost,
-} from '@hosts/uiHosts';
-import { withLogChannel } from '@logger/effectLog';
-import type { ProcessServices } from '@platform/processRuntime';
-import type { RunId } from '@shared/schemas';
+} from '@texra/hosts/uiHosts';
 import type { LatexEditorStatus } from '@texra/controllers/settingsView/LatexToolingController';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import type { SettingsViewOutboundMessage } from '@texra/shared/settingsView/settingsViewMessages';

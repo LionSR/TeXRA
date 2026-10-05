@@ -27,8 +27,6 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
-import { runActionGuard } from '@controllers/session/runActionGuard';
-import type { MessageHost, NotificationFailed } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
 import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
 import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
@@ -44,6 +42,8 @@ import {
   Unavailable,
   type RequestRefusal,
 } from '@shared/session/requestErrors';
+import type { MessageHost, NotificationFailed } from '@texra/hosts/uiHosts';
+import { runActionGuard } from '@texra/controllers/session/runActionGuard';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { entryExists } from '@utils/files/fsEntryExists';
 import {

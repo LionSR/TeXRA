@@ -10,7 +10,7 @@ import { StorageFs } from '@platform/rootedFs';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - filesystem
-import { PASTED_DIR, isPastedImage } from './pastedImageName';
+import { PASTED_DIR, isPastedImage } from '@utils/files/pastedImageName';
 
 const CHANNEL = 'pastedImage';
 

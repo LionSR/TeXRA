@@ -39,7 +39,6 @@
   "packages/harness/src/tools/pluginLayers.ts": 2,
   "packages/harness/src/tools/plugins.ts": 2,
   "packages/harness/src/tools/structuredOutput.ts": 2,
-  "packages/harness/src/tools/support/externalBinaryUtils.ts": 2,
   "packages/harness/src/tools/toolProbes.ts": 2,
   "packages/harness/src/tools/web/WebFetchTool.ts": 5,
   "packages/llm/src/api/openaiResponses.ts": 1,

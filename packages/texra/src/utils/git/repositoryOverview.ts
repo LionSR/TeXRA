@@ -22,7 +22,10 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import { executeCommand } from '@utils/system/execUtils';
 import { isGitRepository } from '@utils/git/isGitRepository';
 
-import { COMMIT_LABEL_FORMAT, splitCommitLines } from './commitLogFormat';
+import {
+  COMMIT_LABEL_FORMAT,
+  splitCommitLines,
+} from '@utils/git/commitLogFormat';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**

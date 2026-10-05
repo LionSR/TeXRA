@@ -1,6 +1,6 @@
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@settingsView/frontend';
-import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin';
+import { resolvePostMessageTargetOrigin } from '@texra/shared/postMessageOrigin';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsViewMessages';
 
 import { buildDesktopSettingsTabMessage } from '../shared/desktopCommandSurface';

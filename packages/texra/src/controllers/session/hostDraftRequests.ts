@@ -6,7 +6,6 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { resolveRouteCredential } from '@agent/runtime/modelRoutes';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { polishTextWithAI } from '@agent/runtime/textEnhancement';
 import { withLogChannel } from '@logger/effectLog';
 import { readProviderEndpoints } from '@model/modelRoute';
 import { AppState } from '@platform/interfaces';
@@ -18,17 +17,18 @@ import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import type { HostOutcome } from '@shared/session/sessionFrames';
 import type { UsageLog } from '@shared/usageLog';
+import { polishTextWithAI } from '@texra/agent/runtime/textEnhancement';
 import {
   recordingsDir,
   startRecording,
   validateRecordingFile,
   transcribeRecording,
-} from '@tools/media/audio';
+} from '@texra/tools/media/audio';
 import {
   savePastedImageBuffer,
   sweepStaleFiles,
   type PastedImageSaveFailed,
-} from '@utils/files/pastedImageUtils';
+} from '@texra/utils/files/pastedImageUtils';
 import type { HttpClient } from 'effect/http';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

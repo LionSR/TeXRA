@@ -11,7 +11,7 @@ import replacementEngine, {
 } from '@replacement/engine';
 import type { FileLocation, OutputFileInfo } from '@shared/schemas';
 import { OUTPUT_DOCUMENT_TAG, OUTPUT_DOCUMENTS_TAG } from '@shared/schemas';
-import { getExtractedDocOutputFileName } from '@utils/files/outputFileUtils';
+import { getExtractedDocOutputFileName } from '@texra/utils/files/outputFileUtils';
 import { entryTypeAt } from '@utils/files/fsDurability';
 import {
   createExternalLocation,

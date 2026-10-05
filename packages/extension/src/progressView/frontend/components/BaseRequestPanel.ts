@@ -35,8 +35,8 @@ import {
 } from '@shared/session/approvalDecision';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { RequestAnswerability } from '@shared/session/sessionView';
-import { SessionUiEvents } from '@shared/session/uiEvents';
 import type { TeXRAIconName } from '@shared/iconNames';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import {
   commonViewStyles,
   designTokens,

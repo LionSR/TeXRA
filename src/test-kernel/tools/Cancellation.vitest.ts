@@ -6,8 +6,8 @@ import { describe, expect } from 'vitest';
 
 // Local imports
 import { ToolError } from '@shared/schemas';
+import { rateLimitedApiCall } from '@texra/tools/support/rateLimiter';
 import { withRequestTimeout } from '@tools/timeouts';
-import { rateLimitedApiCall } from '@tools/support/rateLimiter';
 
 /** The rate-limited lookup of `operation` as a tool program runs it. */
 const lookup = <T>(operation: () => Promise<T>) =>

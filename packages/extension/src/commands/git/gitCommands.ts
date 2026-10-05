@@ -23,9 +23,9 @@ import {
 import { withLogChannel } from '@logger/effectLog';
 import { WorkspaceFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
+import { COMMIT_HASH_PATTERN } from '@texra/utils/git/commitHashPattern';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { COMMIT_HASH_PATTERN } from '@utils/git/commitHashPattern';
 import { COMMIT_LABEL_FORMAT } from '@utils/git/commitLogFormat';
 import { executeCommand } from '@utils/system/execUtils';
 import { whichOnExtendedPath } from '@utils/system/platformPaths';

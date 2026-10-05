@@ -30,9 +30,9 @@ import type { HostRequest } from '@shared/session/hostRequest';
 import { Rejected } from '@shared/session/requestErrors';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
+import { pastedImageFullPath } from '@texra/utils/files/pastedImageUtils';
 import { assertNever } from '@utils/core';
 import { isPastedImage } from '@utils/files/pastedImageName';
-import { pastedImageFullPath } from '@utils/files/pastedImageUtils';
 
 type LaunchRequest = Extract<HostRequest, { kind: 'launch' }>;
 

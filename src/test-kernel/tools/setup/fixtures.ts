@@ -2,8 +2,8 @@
 import { Effect, Layer } from 'effect';
 
 // Local imports
-import type { TerminalRunResult } from '@hosts/uiHosts';
 import { fakeSetupPlatform } from '@test/support/setupPlatform';
+import type { TerminalRunResult } from '@texra/hosts/uiHosts';
 import {
   SetupPlatform,
   type SetupPlatformShape,

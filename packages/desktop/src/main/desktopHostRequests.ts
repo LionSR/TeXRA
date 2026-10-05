@@ -9,7 +9,6 @@ import path from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, SubscriptionRef } from 'effect';
 import { presentRunFailure, type SessionHandle } from '@agent/runtime';
-import { ExternalOpenFailed } from '@hosts/uiHosts';
 import {
   latexdiffPackMessage,
   runPackLatexdiffvc,
@@ -47,6 +46,7 @@ import type {
   HostOutcome,
   SurfaceActionMessage,
 } from '@shared/session/sessionFrames';
+import { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 
 import type { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
 import { exportRunTranscript } from '@texra/controllers/progressView/exportTranscript';

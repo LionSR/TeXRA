@@ -3,18 +3,18 @@ import { Data, Effect } from 'effect';
 
 // Local imports - secrets
 import { apiKeySecretName, isApiProvider } from '@texra-ai/llm';
-import { storeCredential } from '@common/secrets/storeCredential';
+import type { StateReadFailed } from '@platform/interfaces';
+import type { PlatformSecrets } from '@platform/secrets';
+import { storeCredential } from '@texra/common/secrets/storeCredential';
 // Local imports - hosts
 import type {
   ExternalOpenFailed,
   ExternalOpener,
   PromptFailed,
   PromptHost,
-} from '@hosts/uiHosts';
+} from '@texra/hosts/uiHosts';
 // Local imports - model
-import type { StateReadFailed } from '@platform/interfaces';
 // Local imports - platform
-import type { PlatformSecrets } from '@platform/secrets';
 
 interface SettingsProfileKeyControllerDeps {
   /** The process secret store the host holds, where the keys are written. */

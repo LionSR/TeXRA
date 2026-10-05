@@ -28,7 +28,7 @@ import type {
 import type { InquiryThreadRecord } from '@shared/plugins/externalInquiry';
 import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import type { Surface } from '@shared/session/surface';
-import { SessionUiEvents } from '@shared/session/uiEvents';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { CopyButtonController } from '@texra/shared/litControllers/CopyButtonController';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderDotMeta } from '@ui/wa/metaStrip';

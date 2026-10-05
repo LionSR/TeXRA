@@ -24,13 +24,13 @@ import { cliExternalOpener } from '@cli/runtime/hosts/cliExternalOpener';
 // Local imports - event bus
 import { onAppSignal } from '@eventBus/AppSignals';
 // Local imports - hosts
-import { PromptFailed, type PromptHost } from '@hosts/uiHosts';
 // Local imports - model
 // Local imports - platform
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 // Local imports - shared
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { PromptFailed, type PromptHost } from '@texra/hosts/uiHosts';
 import {
   ProviderKeyActionFailed,
   SettingsProfileKeyController,

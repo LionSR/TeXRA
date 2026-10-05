@@ -1,5 +1,5 @@
+import type { Disposable } from '@platform/interfaces';
 import { throwAggregated } from '@utils/core';
-import type { Disposable } from './interfaces';
 
 type DisposableLike = Disposable | (() => void);
 

@@ -5,15 +5,14 @@ import { join } from 'node:path';
 import { Effect, FileSystem, type PlatformError } from 'effect';
 
 // Local imports
-import { byString, normalizeFilePath } from '@utils/core';
-import { absentReason } from '@utils/files/fsEntryExists';
-
 import {
   passesFileFilters,
   prepareFileFilters,
   shouldVisitDirectory,
   type FileFilterConfig,
-} from './fileListingRules';
+} from '@common/files/fileListingRules';
+import { byString, normalizeFilePath } from '@utils/core';
+import { absentReason } from '@utils/files/fsEntryExists';
 
 interface WorkspaceFileListingOptions {
   root: string;

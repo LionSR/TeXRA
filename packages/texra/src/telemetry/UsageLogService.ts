@@ -24,12 +24,12 @@ import type {
   UsageLogResponse,
 } from '@shared/usageLog';
 import { readOrCreateInstallId } from '@telemetry/installId';
+import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';
 import {
   extractErrorMessage,
   toErrorMessage,
 } from '@utils/errors/errorMessage';
 import { isEnvFlagEnabled } from '@utils/system/envFlags';
-import { unrefSleepClock } from '@utils/system/unrefSleepClock';
 
 const CHANNEL = 'UsageLogService';
 

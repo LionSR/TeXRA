@@ -22,13 +22,13 @@ import '@progressView/frontend/ProgressApp';
 import './TexraDiffView';
 import type { ProgressApp } from '@progressView/frontend/ProgressApp';
 import { createSessionSurfaces } from '@progressView/frontend/sessionSurfaces';
-import { hostBridge, postMessage } from '@shared/hostBridge';
 import { DESKTOP_THEME_KIND } from '@shared/schemas';
-import { applyShellAction, type Shell } from '@shared/session/shell';
+import { hostBridge, postMessage } from '@texra/shared/hostBridge';
+import { applyShellAction, type Shell } from '@texra/shared/session/shell';
 import {
   PersistedState,
   type KeyValueStore,
-} from '@shared/state/PersistedState';
+} from '@texra/shared/state/PersistedState';
 
 import { formatDesktopAccelerator } from '@texra/shared/commands/accelerators';
 

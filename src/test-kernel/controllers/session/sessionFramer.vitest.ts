@@ -22,10 +22,6 @@ import { describe, expect, vi } from 'vitest';
 
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import {
-  frameSubscription,
-  type FramerSource,
-} from '@controllers/session/SessionFramer';
-import {
   LocalRuntimeSource,
   TextChunkSource,
   TranscriptSubscriptions,
@@ -65,6 +61,10 @@ import {
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import {
+  frameSubscription,
+  type FramerSource,
+} from '@texra/controllers/session/SessionFramer';
 import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import { SessionBridge } from '@texra/controllers/session/SessionBridge';
 import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer';

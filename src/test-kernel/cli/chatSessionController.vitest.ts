@@ -101,7 +101,6 @@ import {
   TuiSession,
   type RootRunSettled,
 } from '@cli/chat/tui/state/sessionRunState';
-import { DisposableStore } from '@platform/disposable';
 import {
   aggregateId,
   emptyRunEndOutput,
@@ -132,6 +131,7 @@ import {
   fakeProcessServices,
   setupPlatform,
 } from '@test/support/setupPlatform';
+import { DisposableStore } from '@texra/platform/disposable';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   bindTestSessionView,

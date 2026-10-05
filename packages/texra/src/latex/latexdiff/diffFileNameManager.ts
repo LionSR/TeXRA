@@ -3,9 +3,9 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
+import { COMMIT_HASH_HEX_RANGE } from '@texra/utils/git/commitHashPattern';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
-import { COMMIT_HASH_HEX_RANGE } from '@utils/git/commitHashPattern';
 
 type GeneratedLatexdiffArtifactKind =
   'workspaceDiff' | 'versionControlDiff' | 'betweenRoundDiff';

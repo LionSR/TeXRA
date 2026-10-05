@@ -7,7 +7,7 @@ import {
   isUnsupported,
   UnsupportedCommandError,
   type HandlerRegistry,
-} from '@shared/utils/dispatcher';
+} from '@texra/shared/utils/dispatcher';
 import type { SettingsViewInboundMessage } from '@texra/shared/settingsView/settingsViewMessages';
 
 /** Settings commands are programs; only the native host entry executes them. */

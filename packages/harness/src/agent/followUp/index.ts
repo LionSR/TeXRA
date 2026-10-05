@@ -6,8 +6,8 @@
  * session (`resumeOnSession`) and wording a refusal
  * (`describeFollowUpFailure`, `presentFollowUpResult`), decoupling host code
  * from the follow-up internals' file layout, per the module-level barrel
- * pattern set by `@agent/runtime` (#10011). The R-b deep-import width ratchet
- * (`config/ratchets/host-agent-import-baseline.json`) records each host's
+ * pattern set by `@agent/runtime` (#10011). The harness deep-import ratchet
+ * (`config/ratchets/harness-deep-import-baseline.json`) records each host's
  * single `@agent/followUp` specifier.
  *
  * Internal follow-up modules keep importing each other by direct path;

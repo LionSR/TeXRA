@@ -7,8 +7,8 @@ import { describe, expect, it } from 'vitest';
 import { it as effectIt } from '@effect/vitest';
 import { Cause, Effect, Exit, FileSystem, Path } from 'effect';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { pastedImageFullPath } from '@texra/utils/files/pastedImageUtils';
 import { getMimeType } from '@utils/files/mimeUtils';
-import { pastedImageFullPath } from '@utils/files/pastedImageUtils';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { rootedFileSystem } from '@utils/files/rootedFileSystem';
 

@@ -12,7 +12,6 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared schemas
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { postMessage } from '@shared/hostBridge';
 import {
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
@@ -21,6 +20,7 @@ import {
 } from '@shared/schemas';
 import type { AgentScanIssue } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { postMessage } from '@texra/shared/hostBridge';
 import {
   type AgentSelectionItem,
   type SettingsSectionName,

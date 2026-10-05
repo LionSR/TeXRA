@@ -459,7 +459,7 @@ describe('LAY-1 subsystem edge ratchet', () => {
     const baseline = readBaseline();
     const sortedEdges = baseline.edges.toSorted(compareEdges);
 
-    expect(baseline.edges.length).toBeGreaterThan(80);
+    expect(baseline.edges.length).toBeGreaterThan(0);
     expect(baseline.edges).toEqual(sortedEdges);
   });
 

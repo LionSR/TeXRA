@@ -37,8 +37,8 @@ import {
   buildAgentSelectionMessage,
   buildCustomAgentDirMessage,
 } from '@texra/shared/settingsView/handlers/agentSelectionHandlers';
+import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { registerCustomAgentRoot } from '@tools/agentCatalogFollower';
-import { allSettledVoid } from '@utils/core/allSettledVoid';
 
 import type {
   SettingsHostBindings,

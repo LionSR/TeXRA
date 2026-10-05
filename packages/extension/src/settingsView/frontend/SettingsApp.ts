@@ -7,8 +7,8 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { postMessage } from '@shared/hostBridge';
-import { isUnrecognizedCommand } from '@shared/utils/dispatcher';
+import { postMessage } from '@texra/shared/hostBridge';
+import { isUnrecognizedCommand } from '@texra/shared/utils/dispatcher';
 import { SignalWatcher } from '@texra/shared/signals';
 import { installToolbarTooltips } from '@texra/shared/litControllers/TooltipController';
 

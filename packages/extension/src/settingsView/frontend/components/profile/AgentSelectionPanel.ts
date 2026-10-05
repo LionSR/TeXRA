@@ -15,7 +15,6 @@ import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { postMessage } from '@shared/hostBridge';
 import type { AgentSource } from '@shared/schemas';
 import {
   AGENT_SOURCE,
@@ -23,6 +22,7 @@ import {
   isPackagedAgentSource,
 } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/iconNames';
+import { postMessage } from '@texra/shared/hostBridge';
 import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import {
   commonViewStyles,
