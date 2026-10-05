@@ -724,11 +724,13 @@ const shortcuts = createDesktopShortcutRegistry({
   document,
   actions: desktopRendererCommandActions,
   openCommands: () => palette.open(),
+  platform: rendererPlatform,
 });
 const palette = createDesktopCommandPalette({
   document,
   actions: desktopRendererCommandActions,
   getShortcuts: () => shortcuts.entries(),
+  platform: rendererPlatform,
 });
 document.body.append(palette.element);
 shortcuts.subscribe((entries) => {

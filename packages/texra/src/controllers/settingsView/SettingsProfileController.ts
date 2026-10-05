@@ -13,7 +13,6 @@ import {
 import {
   getProviderDisplayName,
   getProviderEndpoint,
-  getProviderKeyUrl,
   supportsCustomEndpoint,
 } from '@utils/config/providerConfig';
 
@@ -70,7 +69,6 @@ export class SettingsProfileController {
           provider,
           displayName: yield* this.getProviderDisplayName(provider),
           status: secretStatuses[provider] ?? 'not-set',
-          keyUrl: (yield* getProviderKeyUrl(this.deps.stores, provider)) ?? '',
           customEndpoint: yield* getProviderEndpoint(
             this.deps.stores,
             provider,

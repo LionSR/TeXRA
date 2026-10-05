@@ -1,9 +1,5 @@
 // Local imports - shared schemas and constants
-import {
-  API_KEY_PROVIDER_IDS,
-  PROVIDER_DISPLAY_NAMES,
-  PROVIDER_URLS,
-} from '@texra-ai/llm';
+import { API_KEY_PROVIDER_IDS, PROVIDER_DISPLAY_NAMES } from '@texra-ai/llm';
 import type { ProviderKeyStatus } from '@texra/shared/settingsView/settingsViewMessages';
 
 /**
@@ -17,7 +13,6 @@ const DEFAULT_PROVIDER_KEY_STATUSES: readonly ProviderKeyStatus[] =
         provider,
         displayName: PROVIDER_DISPLAY_NAMES[provider] ?? provider,
         status: 'not-set' as const,
-        keyUrl: PROVIDER_URLS[provider] ?? '',
         customEndpoint: '',
         supportsCustomEndpoint: false,
         providerSettings: [],
