@@ -539,7 +539,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     (r) => r.runId === run.id && requestParksItsCaller(r.payload),
   );
   const interrupted = !isTerminalOutcomePhase(run.status) && !held && !paused;
-  const waiting = pendingOwn && held;
+  const waiting = pendingOwn && held && !isTerminalOutcomePhase(run.status);
   const durableOutcome =
     isTerminalOutcomePhase(run.status) &&
     (!own || sessionIndexesOf(view).ended.has(run.id))
