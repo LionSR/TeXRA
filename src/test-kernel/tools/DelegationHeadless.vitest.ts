@@ -121,7 +121,6 @@ vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
             Effect.succeed({
               ok: false as const,
               error,
-              outcomePersisted: false,
             }),
           onSuccess: () => actual.finalizeRun(session, input),
         }),

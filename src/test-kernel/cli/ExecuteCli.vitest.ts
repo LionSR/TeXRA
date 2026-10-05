@@ -1125,7 +1125,7 @@ describe('executeCliRequest', () => {
             { cause: persistenceError },
           ),
         );
-        return { ok: false, error: persistenceError, outcomePersisted: false };
+        return { ok: false, error: persistenceError };
       });
       const published = yield* Deferred.make<LeaseOptions>();
       const hangingRun = stubHangingRun(published);
@@ -1196,7 +1196,7 @@ describe('executeCliRequest', () => {
         );
         mocks.finalizeRun.mockImplementation(async (input) => {
           input.report?.(new Error('terminal metadata disk full'));
-          return { ok: false, outcomePersisted: false };
+          return { ok: false };
         });
         const published = yield* Deferred.make<LeaseOptions>();
         const hangingRun = stubHangingRun(published);

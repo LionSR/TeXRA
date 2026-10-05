@@ -221,7 +221,6 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
     if (Exit.isSuccess(exit)) {
       const { turn, responseTimeMs } = exit.value;
       const usage = priceTurnUsage(bound, turn.usage, responseTimeMs);
-      yield* flush;
       yield* reportUsage(
         yield* UsageLog,
         bound,

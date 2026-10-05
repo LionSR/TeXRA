@@ -215,7 +215,6 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
       yield* logLifecycleWarning('Failed to finalize durable run state', {
         agentIdentifier: handle.agentName,
         runId: handle.runId,
-        outcomePersisted: finalization.outcomePersisted,
         error: finalization.error,
       });
     }

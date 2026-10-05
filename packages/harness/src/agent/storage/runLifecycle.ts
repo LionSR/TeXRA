@@ -301,7 +301,6 @@ export type FinalizeRunResult =
   | {
       readonly ok: false;
       readonly error: unknown;
-      readonly outcomePersisted: boolean;
     };
 
 /**
@@ -368,7 +367,7 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   if (Exit.isFailure(owned)) {
     const error = ensureError(Cause.squash(owned.cause));
     input.report?.(error);
-    return { ok: false, error, outcomePersisted: false };
+    return { ok: false, error };
   }
   const status = yield* Effect.exit(
     session.updateRecordFacts(runId, (rows) =>
@@ -421,7 +420,7 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
         { cause: error },
       ),
     );
-    return { ok: false, error, outcomePersisted: false };
+    return { ok: false, error };
   }
   return { ok: true, outcome: status.value };
 });

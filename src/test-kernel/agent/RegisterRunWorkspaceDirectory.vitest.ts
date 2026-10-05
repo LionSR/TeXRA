@@ -164,7 +164,7 @@ describe('run registration and finalization', () => {
           runId,
           outcome: 'failed',
         });
-        expect(result).toMatchObject({ ok: false, outcomePersisted: false });
+        expect(result).toMatchObject({ ok: false });
         if (!result.ok) expect(result.error).toBe(failure);
       }),
   );
