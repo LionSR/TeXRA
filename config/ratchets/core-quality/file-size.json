@@ -21,7 +21,7 @@
   "src/agent/runtime/loop/step.ts": 553,
   "src/agent/runtime/loop/toolUse.ts": 818,
   "src/agent/runtime/loop/toolUseDispatch.ts": 1506,
-  "src/agent/runtime/ModelInvoker.ts": 1128,
+  "src/agent/runtime/ModelInvoker.ts": 1127,
   "src/agent/runtime/ModelRetryGate.ts": 435,
   "src/agent/runtime/modelRoutes.ts": 450,
   "src/agent/runtime/run/compaction.ts": 458,

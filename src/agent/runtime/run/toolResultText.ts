@@ -20,18 +20,6 @@ const MAX_TOOL_RESULT_TEXT_LENGTH = 200_000;
 export const TOOL_RESULT_TRUNCATION_HEAD_CHARS = 4_000;
 export const TOOL_RESULT_TRUNCATION_TAIL_CHARS = 50_000;
 
-const DEFAULT_ATTACHMENT_MIME_TYPE = 'application/octet-stream';
-
-function describeAttachments(
-  attachments: readonly ToolFileAttachment[],
-): string[] {
-  return attachments.map((file) => {
-    const filePath = file.path || 'attachment';
-    const mimeType = file.mimeType || DEFAULT_ATTACHMENT_MIME_TYPE;
-    return `- ${filePath} (${mimeType})`;
-  });
-}
-
 /**
  * The summary of an attachment set the model must read back itself: the list
  * of paths and MIME types, plus the hint naming the tool that opens them.
@@ -39,7 +27,12 @@ function describeAttachments(
 export function formatAttachmentSummary(
   attachments: readonly ToolFileAttachment[],
 ): string {
-  const notes = describeAttachments(attachments).join('\n');
+  const notes = attachments
+    .map(
+      (file) =>
+        `- ${file.path || 'attachment'} (${file.mimeType || 'application/octet-stream'})`,
+    )
+    .join('\n');
   return `Attachments available:\n${notes}\nUse the read_file tool to read them.`;
 }
 

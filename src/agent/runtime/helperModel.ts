@@ -9,7 +9,6 @@
  */
 import { Data, Effect, Exit, Ref, Scope } from 'effect';
 
-import { selectModel } from '@texra-ai/llm';
 import {
   modelUnavailableReasonFrom,
   readModelAvailabilityInputs,
@@ -53,16 +52,11 @@ const helperModel = Effect.fn('helperModel')(function* (
   const modelName = yield* getHelperModelName(stores);
   const inputs = yield* readModelAvailabilityInputs(stores, [modelName]);
   const reason = modelUnavailableReasonFrom(inputs, modelName);
+  // An available model is a recognized one (`modelUnavailableReasonFrom`
+  // routes only catalog models), so the binding finds its catalog entry.
   if (reason) return yield* new HelperModelUnavailable({ message: reason });
-  const selected = selectModel(modelName);
-  if (!selected) {
-    return yield* new HelperModelUnavailable({
-      message: `Model "${modelName}" is not recognized.`,
-    });
-  }
   return yield* bindModel({
     modelId: modelName,
-    config: selected.config,
     stores,
     // One-shot text: the whole output budget.
     textOnly: true,
