@@ -1,7 +1,6 @@
 // Third-party imports
 import { z } from 'zod';
 import type { ToolFileAttachment } from '@shared/schemas';
-import { clamp } from '@utils/core';
 
 /** Canonical 1-based inclusive line range for tool view_range fields. */
 export const ViewRangeSchema = z
@@ -13,39 +12,19 @@ export const ViewRangeSchema = z
 /** Maximum lines returned in a single file view before truncation. */
 const READ_FILE_MAX_LINES = 2000;
 
-/** Default width for line number padding */
-const LINE_NUMBER_WIDTH = 6;
-
-/**
- * Slice an array using a 1-based inclusive `[start, end]` line range, clamped
- * to the array bounds. Canonical semantics shared by every tool that slices
- * file/output lines by view range (read_file, executions).
- */
-function sliceLineRange<T>(
-  lines: readonly T[],
-  start: number,
-  end: number,
-): T[] {
-  const from = Math.max(start - 1, 0);
-  const to = clamp(end, from, lines.length);
-  return lines.slice(from, to);
-}
-
 /**
  * Format lines with line numbers for display in tool output.
  * @param lines - Array of lines to format
  * @param startingLine - 1-based line number for the first line (default: 1)
- * @param width - Padding width for line numbers (default: 6)
  * @returns Array of formatted lines with line number prefix and tab separator
  */
 export function formatLinesWithNumbers(
   lines: string[],
   startingLine: number = 1,
-  width: number = LINE_NUMBER_WIDTH,
 ): string[] {
   return lines.map((line, index) => {
     const lineNumber = startingLine + index;
-    const prefix = lineNumber.toString().padStart(width, ' ');
+    const prefix = lineNumber.toString().padStart(6, ' ');
     return `${prefix}\t${line}`;
   });
 }
@@ -100,7 +79,7 @@ export function formatFileView({
   const rangeSize = Math.max(endLine - startLine + 1, 0);
   const truncated = rangeSize > maxLines;
   const visibleEndLine = Math.min(endLine, startLine + maxLines - 1);
-  const visibleLines = sliceLineRange(lines, startLine, visibleEndLine);
+  const visibleLines = lines.slice(startLine - 1, Math.max(visibleEndLine, 0));
   const visibleCount = visibleLines.length;
 
   // -- output ---------------------------------------------------------------
