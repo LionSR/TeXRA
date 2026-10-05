@@ -68,7 +68,9 @@ Things the tree won't tell you:
   included), `host-agent-mock`,
   `architecture-edges`, plus `refuted-candidates` (the costed-and-refused
   refactors, with their ruling anchors). ESLint's `no-restricted-syntax` fails
-  an `Effect.run*` call outside `packages/{extension,desktop,cli,harness}/src/`
+  an `Effect.run*` call outside `packages/{extension,desktop,cli}/src/` and the
+  SDK entry files (`packages/harness/src/{index,node,plugins,schemas}.ts`,
+  `packages/harness/src/effect/`)
   (webview frontends excluded) or a named runtime entry carved out in
   `eslint.config.mjs` (whole-file; the receiver is checked in review), as does
   `new AbortController()` outside its two ledger residents, and `no-warning-comments` fails on any `@adapter-until`

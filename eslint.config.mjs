@@ -1066,7 +1066,7 @@ export default tseslint.config(
     },
   },
 
-  // Effect runs belong at a host entry (packages/{extension,desktop,cli,harness}/src)
+  // Effect runs belong at a host entry (packages/{extension,desktop,cli}/src, or the SDK entry files and packages/harness/src/effect)
   // or at a webview/runtime composition root that owns its runtime (owner
   // ruling 2026-09-06, Effect 4 migration R1; 2026-09-14 for the named
   // entries, which are exempt whole-file: that the run is on the entry's own
@@ -1083,7 +1083,7 @@ export default tseslint.config(
         'Build <wa-icon> markup via waIcon() from @ui/wa/webAwesomeIcons instead of a hand-rolled template.',
     };
     const runMessage =
-      'Effect runs belong at a host entry (packages/{extension,desktop,cli,harness}/src) or a named runtime entry in eslint.config.mjs. Convert this file and its callers so the run moves there.';
+      'Effect runs belong at a host entry (packages/{extension,desktop,cli}/src, or the SDK entry files and packages/harness/src/effect) or a named runtime entry in eslint.config.mjs. Convert this file and its callers so the run moves there.';
     // `runMain` is `NodeRuntime.runMain`, the run of a process or worker entry.
     const runNames = '/^run(Promise|PromiseExit|Sync|Fork|Callback|Main)$/';
     const run = [
