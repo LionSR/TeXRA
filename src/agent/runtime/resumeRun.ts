@@ -289,14 +289,9 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   const admitted = new Set<string>();
   const isAdmitted = (input: { readonly followUpId: string }): boolean =>
     admitted.has(input.followUpId);
-  // What its children settled and a crash kept from its inbox comes first.
-  yield* relayChildDeliveries(session, runId).pipe(
-    Effect.catch((error) =>
-      Effect.logWarning(
-        `Run ${runId}: its children's settled results could not be relayed`,
-      ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
-    ),
-  );
+  // What its children settled and a crash kept from its inbox comes first:
+  // a relay that fails fails the resume, which a later one retries.
+  yield* relayChildDeliveries(session, runId);
   const queuedInput = queuedFollowUps(session, runId);
   const resumed = yield* Effect.result(
     Effect.gen(function* () {

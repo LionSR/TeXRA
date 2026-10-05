@@ -141,6 +141,24 @@ export const relayDelivery = Effect.fn('childSettlement.relay')(function* (
           Effect.annotateLogs({ data }),
           withLogChannel(CHANNEL),
         );
+  // Only a settlement that committed is relayed: a refused batch (its
+  // `run.end`, say) leaves the parent nothing to read.
+  if (item.from.kind !== 'run') return;
+  const sender = item.from.runId;
+  const settled = yield* session.readAggregate(aggregateId('run', sender), [
+    'child.turn',
+  ]);
+  if (
+    !settled.some(
+      (row) =>
+        row.type === 'child.turn' &&
+        row.delivery?.followUpId === item.deliveryId,
+    )
+  )
+    return yield* warn(
+      'Turn result not delivered: its settlement did not commit. The result remains in the run report.',
+      { runId: sender, parentRunId: to },
+    );
   const sent = yield* session.followUps.send(to, item, { wake: true });
   if (sent.kind === 'refused')
     return yield* warn(

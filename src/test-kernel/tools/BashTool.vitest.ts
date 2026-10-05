@@ -731,18 +731,26 @@ describe('BashTool', () => {
 
         resolveCommand(DONE_EXEC_RESULT);
 
-        // The manifest is what `/result` reads: a run never reads as
-        // completed while its result is missing.
+        // The manifest is what `/result` reads, and it rides the run's end:
+        // with that batch refused, the run has neither, never an end
+        // without its result.
         yield* Effect.promise(() =>
           vi.waitFor(() =>
             assert.equal(session.runs.getHandle(runId), undefined),
           ),
         );
-        assert.notEqual(
-          (yield* records.readRunEnd())?.outcome,
-          RUN_OUTCOME.COMPLETED,
-        );
+        assert.equal(yield* records.readRunEnd(), null);
         assert.equal(yield* records.readResultMeta(), null);
+        // Nor does the parent read a result the child never ended with.
+        assert.deepEqual(
+          session.events
+            .pendingFollowUps(aggregateId('run', parentRunId))
+            .filter(
+              ({ content: { from } }) =>
+                from.kind === 'run' && from.runId === runId,
+            ),
+          [],
+        );
         detachBackgroundRun(recorded, parentRunId);
       }).pipe(
         Effect.provide(

@@ -1000,8 +1000,9 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
                 } else {
                   // A native run's lifecycle is its one terminal writer, and
                   // its fiber has exited by now. A failure or stop can precede
-                  // that lifecycle (an end it wrote stands); a last turn no
-                  // `run.end` carried settles alone.
+                  // that lifecycle (an end it wrote stands). A launch that
+                  // returned its last turn with no lifecycle to settle it (a
+                  // strategy that writes no `run.end`) settles it alone.
                   const abnormal = stoppedAtExit || sawTurnFailure;
                   if (abnormal && (yield* runSession.ownsRun(runId)))
                     yield* endRunOutsideLifecycle(
