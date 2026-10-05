@@ -5,9 +5,9 @@ import { ToolContext } from '@texra-ai/harness';
 import type { RunCall } from '@agent/runtime/RunCall';
 
 // Local imports - tools
-import { resolveToolPath } from '@common/files/pathResolution';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import type { ToolResult } from '@shared/schemas';
+import { resolveToolPath } from '@tools/pathResolution';
 import { formatToolOutput } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
 import { unique } from '@utils/core';

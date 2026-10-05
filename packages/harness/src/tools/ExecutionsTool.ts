@@ -26,7 +26,6 @@ import { Runs } from '@agent/runtime/runRegistry';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { scriptRunCalls } from '@agent/runtime/scriptRun';
 import { HISTORY_VIEW_SUMMARY } from '@agent/runtime/historyQuery/views';
-import { assertNoParentTraversal } from '@common/files/pathResolution';
 import { StorageFs } from '@platform/rootedFs';
 import {
   RunIdSchema,
@@ -37,6 +36,7 @@ import {
 import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { isLiveRun, type SessionView } from '@shared/session/sessionView';
+import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { readCompletedRunConversation } from '@transcript';
 import { assertNever, unique } from '@utils/core';

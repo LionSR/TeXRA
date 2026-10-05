@@ -25,22 +25,22 @@ import {
 } from 'effect';
 
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
+import { withLogChannel } from '@logger/effectLog';
+import { StorageFs } from '@platform/rootedFs';
+import type { MemoryViewItem } from '@shared/tools/memoryView';
 import {
   MAX_PINNED_MEMORIES,
   MAX_PREVIEW_LINES,
   MAX_PREVIEW_CHARS,
-} from '@common/memory/constants';
-import { relativeToDisplayPath } from '@common/memory/memoryUtils';
+} from '@tools/memory/constants';
+import { relativeToDisplayPath } from '@tools/memory/memoryUtils';
 import {
   buildFile,
   parseFrontmatter,
   formatAttribution,
   setPinnedMeta,
   type MemoryFileMeta,
-} from '@common/memory/memoryMeta';
-import { withLogChannel } from '@logger/effectLog';
-import { StorageFs } from '@platform/rootedFs';
-import type { MemoryViewItem } from '@shared/tools/memoryView';
+} from '@tools/memory/memoryMeta';
 import { pathExists, readNormalizedFile } from '@utils/files/fsDurability';
 import {
   normalizeLineEndings,

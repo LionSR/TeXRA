@@ -18,7 +18,6 @@ import { ToolContext, type ToolContextShape } from '@texra-ai/harness';
 import { getRunRecords } from '@agent/storage';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { requireToolRun, type RunCall } from '@agent/runtime/RunCall';
-import { assertNoParentTraversal } from '@common/files/pathResolution';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { WorkspaceFs } from '@platform/rootedFs';
@@ -32,6 +31,7 @@ import {
   RunId,
   FileLocation,
 } from '@shared/schemas';
+import { assertNoParentTraversal } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import {
   buildApprovalRejectedResult,

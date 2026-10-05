@@ -3,14 +3,14 @@ import { z } from 'zod';
 import { ToolContext } from '@texra-ai/harness';
 import type { RunCall } from '@agent/runtime/RunCall';
 import {
-  resolveToolPath,
-  type WorkspacePathResolution,
-} from '@common/files/pathResolution';
-import {
   ToolError,
   type ToolFileAttachment,
   type ToolResult,
 } from '@shared/schemas';
+import {
+  resolveToolPath,
+  type WorkspacePathResolution,
+} from '@tools/pathResolution';
 import { buildFileAttachment } from '@tools/attachments';
 import { formatToolOutput } from '@tools/formatting';
 import { executed } from '@tools/core/result';

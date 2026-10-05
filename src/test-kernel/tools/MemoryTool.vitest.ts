@@ -9,10 +9,10 @@ import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { MEMORY_DISPLAY_ROOT } from '@common/memory/constants';
 import { StorageFs } from '@platform/rootedFs';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
 import { MemoryTool } from '@tools/memory/MemoryTool';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 

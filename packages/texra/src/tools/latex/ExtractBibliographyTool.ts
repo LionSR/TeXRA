@@ -10,16 +10,13 @@ import type { RunCall } from '@agent/runtime/RunCall';
 
 // Local imports - tools
 import {
-  resolveToolPath,
-  type ToolPathCall,
-} from '@common/files/pathResolution';
-import {
   extractBibliographyContext,
   loadBibliographyEntries,
   summarizeBibliographyEntries,
 } from '@latex/extractBibliography';
 import { WorkspaceFs } from '@platform/rootedFs';
 import type { ToolResult } from '@shared/schemas';
+import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { formatToolOutput } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';

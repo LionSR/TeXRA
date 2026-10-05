@@ -30,7 +30,6 @@ import {
   attachErrorPresentationClaimed,
   hasErrorPresentationClaimed,
 } from '@common/errors/sdkError/errorMetadata';
-import { parseWorkingDirectory } from '@common/files/pathResolution';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
@@ -41,6 +40,7 @@ import {
   type AttachedMemoryMiss,
   type RunId,
 } from '@shared/schemas';
+import { parseWorkingDirectory } from '@tools/pathResolution';
 import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { ToolRegistry } from '@tools/toolTable';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';

@@ -8,11 +8,8 @@ import { z } from 'zod';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports
-import {
-  resolveToolPath,
-  type ToolPathCall,
-} from '@common/files/pathResolution';
 import { ToolError, ToolResult } from '@shared/schemas';
+import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
 import { executed } from '@tools/core/result';

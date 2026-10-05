@@ -1,13 +1,10 @@
 import { Effect } from 'effect';
 
-import { MEMORY_DISPLAY_ROOT } from '@common/memory/constants';
-import {
-  displayToStoragePath,
-  toDisplayPath,
-} from '@common/memory/memoryUtils';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { withSessionFs, type StorageFs } from '@platform/rootedFs';
 import type { MemoryViewItem } from '@shared/tools/memoryView';
+import { displayToStoragePath, toDisplayPath } from '@tools/memory/memoryUtils';
+import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
 import { loadMemoryPreview } from '@tools/memory/memoryFileSystem';
 import { filterNotNullish, normalizeFilePath } from '@utils/core';
 import {

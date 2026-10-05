@@ -26,6 +26,7 @@
   "packages/harness/src/tools/approval/approvedWrite.ts": 1,
   "packages/harness/src/tools/core/inputSchema.ts": 1,
   "packages/harness/src/tools/delegation/AgentTool.ts": 1,
+  "packages/harness/src/tools/pathResolution.ts": 1,
   "packages/harness/src/tools/pluginCatalog.ts": 1,
   "packages/harness/src/tools/plugins.ts": 1,
   "packages/harness/src/tools/serverHolds.ts": 1,

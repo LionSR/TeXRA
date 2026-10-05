@@ -5,11 +5,11 @@ import { z } from 'zod';
 // Local imports
 import type { RunCall } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { ToolError, type ToolResult } from '@shared/schemas';
 import {
   resolveToolPath,
   type ToolPathResolution,
-} from '@common/files/pathResolution';
-import { ToolError, type ToolResult } from '@shared/schemas';
+} from '@tools/pathResolution';
 import { buildBytesAttachment, buildFileAttachment } from '@tools/attachments';
 import { formatFileView } from '@tools/formatting';
 import { recordToolFileRead } from '@tools/fileInteractions';

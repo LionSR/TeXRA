@@ -9,15 +9,12 @@ import { callerRun } from '@agent/runtime/RunCall';
 // Local imports
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import {
-  resolveToolPath,
-  type ToolPathCall,
-} from '@common/files/pathResolution';
-import {
   fileLocationDisplayPath,
   ToolError,
   type FileLocation,
   type RunStorageFileLocation,
 } from '@shared/schemas';
+import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { defineTool } from '@tools/core/define';

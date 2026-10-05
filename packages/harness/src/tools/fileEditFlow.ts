@@ -8,10 +8,10 @@ import type { RunCall } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - shared schemas
-import { resolveToolPath } from '@common/files/pathResolution';
 import type { AgentCatalogServices } from '@platform/processRuntime';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, type ToolResult } from '@shared/schemas';
+import { resolveToolPath } from '@tools/pathResolution';
 
 // Local imports - tools
 import { reloadAgentCatalog } from '@tools/agentCatalogFollower';

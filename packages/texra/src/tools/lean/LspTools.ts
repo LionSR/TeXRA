@@ -3,9 +3,9 @@ import { z } from 'zod';
 
 import { ToolContext, type ToolContextShape } from '@texra-ai/harness';
 import { callerRun, type ToolRun, type RunCall } from '@agent/runtime/RunCall';
-import { resolveToolPath } from '@common/files/pathResolution';
 import { withLogChannel } from '@logger/effectLog';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
+import { resolveToolPath } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
 import { nullishWithDefault } from '@tools/core/inputSchema';

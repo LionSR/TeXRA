@@ -193,7 +193,7 @@ export interface CallRequests {
  * Where a call works: the session's roots (its workspace folder, the
  * setting slots and its storage), the run's working directory, and the
  * read-only roots the call's step admits (the skills it lists or its user
- * activated). A tool path resolves against it (`@common/files/pathResolution`).
+ * activated). A tool path resolves against it (`@tools/pathResolution`).
  * `workingDirectory` is already absolute or absent: the run decides it once
  * where it is launched (`assembleAgentLaunchContext`).
  */

@@ -13,8 +13,8 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 import { ToolContext } from '@agent/core/tools/ToolTypes';
-import { assertWritable, resolveToolPath } from '@common/files/pathResolution';
 import type { ToolResult } from '@shared/schemas';
+import { assertWritable, resolveToolPath } from '@tools/pathResolution';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,

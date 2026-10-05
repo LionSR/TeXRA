@@ -5,11 +5,11 @@ import type { RunCall } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports
+import { ToolError, type ToolFileAttachment } from '@shared/schemas';
 import {
   resolveToolPath,
   type ToolPathResolution,
-} from '@common/files/pathResolution';
-import { ToolError, type ToolFileAttachment } from '@shared/schemas';
+} from '@tools/pathResolution';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { entryExists } from '@utils/files/fsEntryExists';
