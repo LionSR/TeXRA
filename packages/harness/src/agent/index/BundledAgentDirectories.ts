@@ -39,31 +39,22 @@ export function installPluginAgentDirectories(
 
 /**
  * The roots of the `builtInToolUse` source: the core bundled directory the
- * host's agent directories name, then each installed plugin's, except those
- * in `disabledPlugins`.
- */
-export function builtInToolUseRoots(
-  coreDirectory: string,
-  disabledPlugins: ReadonlySet<string> = new Set(),
-): readonly string[] {
-  return [
-    coreDirectory,
-    ...[...pluginAgentDirectories].flatMap(([id, directory]) =>
-      disabledPlugins.has(id) ? [] : [directory],
-    ),
-  ];
-}
-
-/**
- * The `builtInToolUse` roots the agent catalog scans. A plugin is one on/off
- * unit, so the user's switch (`texra.tools.disabled`) that withholds its
- * tools drops its agents too; toggling a plugin refreshes the catalog. A
- * failed dependency probe does not: a probe answers per workspace, the
- * catalog is the process's, and a plugin's agents may be what helps the user
- * set the dependency up.
+ * host's agent directories name, then each installed plugin's that is on. A
+ * plugin is one on/off unit, so the user's switch (`texra.tools.disabled`)
+ * that withholds its tools drops its agents too, wherever agents are found:
+ * the catalog's scan and a copy's source root alike (`agentSourceRoots`).
+ * Toggling a plugin refreshes the catalog. A failed dependency probe does
+ * not drop them: a probe answers per workspace, the catalog is the
+ * process's, and a plugin's agents may be what helps the user set the
+ * dependency up.
  */
 export const enabledToolUseRoots = (coreDirectory: string) =>
   AppState.pipe(
     Effect.flatMap(readDisabledTools),
-    Effect.map((disabled) => builtInToolUseRoots(coreDirectory, disabled)),
+    Effect.map((disabled): readonly string[] => [
+      coreDirectory,
+      ...[...pluginAgentDirectories].flatMap(([id, directory]) =>
+        disabled.has(id) ? [] : [directory],
+      ),
+    ]),
   );

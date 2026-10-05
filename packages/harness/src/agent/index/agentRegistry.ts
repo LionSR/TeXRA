@@ -26,7 +26,7 @@ import { byName } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { scanDirectory } from './agentYamlScanner';
-import { enabledToolUseRoots } from './BundledAgentDirectories';
+import { agentSourceRoots } from './AgentDirectoryService';
 import { scanPluginAgents } from './pluginAgents';
 import type { AgentEntry } from './agentEntry';
 
@@ -86,26 +86,26 @@ const scanCatalog: Effect.Effect<
   const startTime = yield* Clock.currentTimeMillis;
 
   const dirs = yield* AgentDirectories;
-  const [customDir, builtInDir, toolUseDir] = yield* Effect.all(
-    [dirs.custom(), dirs.builtIn(), dirs.builtInToolUse()],
+  const [customRoots, builtInRoots] = yield* Effect.all(
+    [agentSourceRoots(dirs, 'custom'), agentSourceRoots(dirs, 'builtIn')],
     { concurrency: 'unbounded' },
   ).pipe(
     // The port names its own failure; the catalog load is what the caller
     // asked for, so it carries the reason and the original cause up.
-    Effect.mapError(
-      (failure) =>
+    Effect.catchTag('AgentDirectoriesFailed', (failure) =>
+      Effect.fail(
         new AgentCatalogLoadError({
           message: failure.message,
           cause: failure.cause,
         }),
+      ),
     ),
   );
-  const toolUseRoots = yield* enabledToolUseRoots(toolUseDir);
   // Only custom-agent scan issues are a product surface; the rest go unused.
   const [customScan, builtInScan, pluginAgents] = yield* Effect.all(
     [
-      scanDirectory([customDir], 'custom'),
-      scanDirectory([builtInDir, ...toolUseRoots], 'builtIn'),
+      scanDirectory(customRoots, 'custom'),
+      scanDirectory(builtInRoots, 'builtIn'),
       scanPluginAgents,
     ],
     { concurrency: 'unbounded' },
