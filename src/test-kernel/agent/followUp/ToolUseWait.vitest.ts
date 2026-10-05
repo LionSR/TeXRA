@@ -1007,16 +1007,16 @@ describe('the host wiring a run attaches', () => {
         const detach = vi.fn();
         const blockedFs = {
           ...processFs,
-          exists: (target: string) =>
+          stat: (target: string) =>
             path.basename(target) === 'AGENTS.md'
               ? Deferred.succeed(entered, undefined).pipe(
                   Effect.andThen(Deferred.await(release)),
                   Effect.onInterrupt(() =>
                     Deferred.succeed(interrupted, undefined),
                   ),
-                  Effect.andThen(processFs.exists(target)),
+                  Effect.andThen(processFs.stat(target)),
                 )
-              : processFs.exists(target),
+              : processFs.stat(target),
         };
         const fiber = yield* Effect.forkChild(
           loopProgram(

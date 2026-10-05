@@ -122,8 +122,12 @@ function withStubbedFiles<A, E, R>(program: Effect.Effect<A, E, R>) {
     return yield* program.pipe(
       Effect.provideService(WorkspaceFs, {
         ...workspaceFs,
-        exists: (target: string) =>
-          Effect.succeed(workspaceReads.get(target)?.exists ?? false),
+        // A declared file answers as one; anything else is the real
+        // view's own `NotFound`.
+        stat: (target: string) =>
+          workspaceReads.get(target)?.exists
+            ? Effect.succeed(fileInfo)
+            : workspaceFs.stat(target),
         readFile: (target: string) =>
           Effect.succeed(
             Buffer.from(workspaceReads.get(target)?.content ?? '', 'utf-8'),
@@ -137,10 +141,6 @@ function withStubbedFiles<A, E, R>(program: Effect.Effect<A, E, R>) {
       }),
       Effect.provideService(FileSystem.FileSystem, {
         ...processFs,
-        exists: (target: string) =>
-          runStorageEntries.has(target)
-            ? Effect.succeed(true)
-            : processFs.exists(target),
         // The entry probe reads a link through `readLink`, so a seeded
         // symlink answers here and everything else falls through.
         readLink: (target: string) =>

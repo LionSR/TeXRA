@@ -115,7 +115,7 @@ function entryTypeOf(entry: {
  * `entryExists` in `fsEntryExists.ts`. A
  * caller asking whether a dependency, figure, bibliography or input *file* is
  * unusable wants the follow; a caller asking whether the path names an entry
- * wants `readLink` first and this as the fallback (`entryExists`).
+ * wants `entryExists`.
  *
  * The caller passes the filesystem it probes with, so a rooted view answers
  * for the paths inside its root and the process filesystem answers for the
