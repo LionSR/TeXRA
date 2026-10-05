@@ -157,7 +157,6 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
     // The call's own setting slots.
     settings: call.roots,
     channel: CHANNEL,
-    truncate: false,
     maxBuffer: GREP_MAX_BUFFER_CHARS,
   });
 

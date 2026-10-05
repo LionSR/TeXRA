@@ -31,7 +31,6 @@ import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 import type { ApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
 import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
 import {
-  computeLineChangeSummary,
   firstChangedLine,
   type ToolEditApprovalRequest,
 } from '@tools/approval/toolEditApproval';
@@ -173,10 +172,8 @@ class VscodeToolEditPreview implements ToolEditPreview {
   }
 
   private title(): string {
-    const { added, removed } = computeLineChangeSummary(
-      this.request.originalContent,
-      this.request.proposedContent,
-    );
+    const { addedLines: added, removedLines: removed } =
+      this.request.permission;
     const changeParts: string[] = [];
     if (added > 0) changeParts.push(`+${added}`);
     if (removed > 0) changeParts.push(`-${removed}`);

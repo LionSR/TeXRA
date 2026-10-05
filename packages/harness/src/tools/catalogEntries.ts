@@ -7,13 +7,30 @@
 import { hash } from 'node:crypto';
 
 // Third-party imports
+import { JsonObjectSchema, type TurnRequest } from '@texra-ai/llm';
 import stableStringify from 'safe-stable-stringify';
 
 // Local imports - agent runtime
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
-import { toolDefinitionsFor } from '@agent/runtime/run/tools';
+import { convertToolSchema } from '@agent/core/tools/toolSchema';
+import type { ToolDefinition } from '@shared/schemas';
 import type { Generation } from '@tools/liveRegistry';
 import { withoutSchemaDescriptions } from '@tools/schemaIdentity';
+
+type ToolDefinitions = NonNullable<TurnRequest['tools']>;
+
+/** The package's uniform tool definitions for the run's resolved tool list. */
+export function toolDefinitionsFor(
+  definitions: readonly ToolDefinition[],
+): ToolDefinitions {
+  return definitions.map((definition) => ({
+    name: definition.name,
+    description: definition.description ?? '',
+    parameters: JsonObjectSchema.parse(
+      convertToolSchema(definition) ?? { type: 'object', properties: {} },
+    ),
+  }));
+}
 
 /** One tool in the catalog, with the identity a step records. */
 export interface ToolEntry {
