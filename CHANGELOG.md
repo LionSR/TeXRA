@@ -774,6 +774,10 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A task saved by an older TeXRA no longer reads as corrupt.** A task
+  whose stored shape this version no longer reads now says it was made by
+  an older TeXRA and can't be opened here, instead of calling it corrupt,
+  and the log names the field that did not match.
 - **Desktop header controls and menus take clicks again.** The "+" menu of
   a side or bottom panel (Files, Terminal, Browser, Logs), a tab's menu, and
   the task header's controls (the "More" button and its menu, renaming, the

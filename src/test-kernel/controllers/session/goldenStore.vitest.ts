@@ -521,7 +521,7 @@ describe('the golden 1.0 store', () => {
         const runs = runsOf(yield* SubscriptionRef.get(view.ref));
         expect(runs.filter((run) => run.blocked !== null)).toEqual([
           expect.objectContaining({ id: NEWER, blocked: 'newer' }),
-          expect.objectContaining({ id: UNKNOWN, blocked: 'unknown' }),
+          expect.objectContaining({ id: UNKNOWN, blocked: 'newer' }),
         ]);
         expect(
           runs.filter((run) => run.blocked === null).map((run) => run.status),

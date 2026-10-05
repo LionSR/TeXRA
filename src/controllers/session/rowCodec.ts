@@ -8,9 +8,10 @@
  * below it reads a payload field.
  *
  * - **Versions.** A row is written at its kind's version (`ROW_KINDS`); an
- *   older one is upcast step by step, a newer or unknown one `Blocked`, one
- *   failing its schema `Corrupt` (a plugin row's, named by its kind). A
- *   plugin value carries its arm's version and is upcast through the arm.
+ *   older one is upcast step by step. One of a newer version or unknown kind
+ *   blocks its aggregate `newer`, one failing its version's schema `older`
+ *   (an earlier shape), one unreadable `corrupt`. A plugin value carries
+ *   its arm's version and is upcast through the arm.
  * - **Blobs.** A payload string of 4096+ characters is stored once per store,
  *   zstd of its JSON encoding (lone surrogates survive) under that text's
  *   sha256; the row keeps `{"$b": digest}` (a payload's own `$b` key is
@@ -28,6 +29,7 @@ import { withLogChannel } from '@logger/effectLog';
 import {
   AggregateIdSchema,
   aggregateTarget,
+  BlockedAggregateSchema,
   DISPLAY_EVENT_TYPES,
   ROW_KINDS,
   SessionEventDraftSchema,
@@ -190,7 +192,7 @@ export function encodeDraft(draft: SessionEventDraft): EncodedRow {
 /**
  * A selected row: its event; a plugin row this build does not read (its
  * plugin absent, or its value newer than the arm), kept as written; or the
- * verdict that blocks its aggregate.
+ * verdict that blocks its aggregate, with the error its row failed on.
  */
 export type RowVerdict =
   | { readonly _tag: 'event'; readonly event: SessionEvent }
@@ -201,7 +203,14 @@ export type RowVerdict =
        *  plugin must not write the kind over it. */
       readonly newer: BlockedAggregate | null;
     }
-  | BlockedAggregate;
+  | (BlockedAggregate & { readonly error?: unknown });
+
+/** Where a row failed, never a stored value (a JSON parse error quotes it). */
+function causeOf(error: unknown): string {
+  if (error instanceof SyntaxError) return 'not JSON';
+  const issue = error instanceof z.ZodError ? error.issues[0] : undefined;
+  return issue ? `${issue.code} at "${issue.path.join('.')}"` : String(error);
+}
 
 const RowSchema = z.object({
   commit: z.int(),
@@ -256,7 +265,7 @@ export function decodeRow(
     commit: row.commit,
     at: row.at,
   });
-  if (!hasKind(row.type)) return blocked('unknown');
+  if (!hasKind(row.type)) return blocked('newer');
   const kind = ROW_KINDS[row.type];
   const stored = row.version ?? kind.version;
   if (stored > kind.version) return blocked('newer');
@@ -268,11 +277,11 @@ export function decodeRow(
       const field = JsonObjectSchema.parse(data.payload);
       // The value is stored canonical, so its text hashes to its address.
       const text = z.string().parse(field.value);
-      if (sha256(text) !== field.digest) return blocked('corrupt');
+      if (sha256(text) !== field.digest) throw new Error('digest mismatch');
       data = { ...data, payload: { ...field, value: JSON.parse(text) } };
     }
-  } catch {
-    return blocked('corrupt');
+  } catch (error) {
+    return { ...blocked('corrupt'), error };
   }
   const parsed = SessionEventSchema.safeParse({
     ...data,
@@ -283,7 +292,7 @@ export function decodeRow(
     at: row.at,
     type: row.type,
   });
-  if (!parsed.success) return blocked('corrupt');
+  if (!parsed.success) return { ...blocked('older'), error: parsed.error };
   const event = parsed.data;
   if (event.type !== 'plugin.fact') return { _tag: 'event', event };
   const name = `${event.plugin}/${event.kind}`;
@@ -300,8 +309,8 @@ export function decodeRow(
   let value = event.value;
   for (const step of arm.upcasters.slice(event.version - 1))
     value = step(value);
-  if (!arm.schema.safeParse(value).success)
-    return { ...blocked('corrupt'), type: `plugin.fact/${name}` };
+  const { error } = arm.schema.safeParse(value);
+  if (error) return { ...blocked('older'), error, type: `plugin.fact/${name}` };
   return {
     _tag: 'event',
     event: { ...event, version: arm.version, value },
@@ -347,24 +356,18 @@ function cardResult(
   );
 }
 
-/** The stored kinds whose rows this build cannot read: an unknown type (all
- *  of its rows) or a newer version (those above this build's). */
-interface UnreadableKind {
-  readonly type: string;
-  readonly above: number;
-  readonly reason: 'newer' | 'unknown';
-}
-
+/** The stored kinds a later build wrote, with the version above which their
+ *  rows are newer: every row of an unknown type, or those above this build's. */
 export function unreadableKinds(
   stored: readonly Readonly<Record<string, unknown>>[],
-): readonly UnreadableKind[] {
-  return stored.flatMap((input): UnreadableKind[] => {
+): readonly { readonly type: string; readonly above: number }[] {
+  return stored.flatMap((input) => {
     const { type, version } = z
       .object({ type: z.string(), version: z.int() })
       .parse(input);
-    if (!hasKind(type)) return [{ type, above: 0, reason: 'unknown' }];
+    if (!hasKind(type)) return [{ type, above: 0 }];
     const current = ROW_KINDS[type].version;
-    return version > current ? [{ type, above: current, reason: 'newer' }] : [];
+    return version > current ? [{ type, above: current }] : [];
   });
 }
 
@@ -395,19 +398,19 @@ export function verdictBook(
     for (const [id, verdict] of blocked)
       if (!uids.has(verdict.uid)) blocked.delete(id);
   });
-  const block = (verdict: BlockedAggregate) =>
+  const block = (verdict: BlockedAggregate, error?: unknown) =>
     blocked.has(verdict.aggregateId)
       ? Effect.void
       : Effect.sync(() => blocked.set(verdict.aggregateId, verdict)).pipe(
           Effect.andThen(
             Effect.logWarning(
-              `${path} holds a ${verdict.reason} ${verdict.type} row (version ${verdict.version}) of ${verdict.aggregateId}; it stays in the store, and the aggregate is shown blocked and refused to every run history read and claim.`,
+              `${path} holds a ${verdict.reason} ${verdict.type} row (version ${verdict.version}) of ${verdict.aggregateId}${error === undefined ? '' : ` (${causeOf(error)})`}; it stays in the store, and the aggregate is shown blocked and refused to every run history read and claim.`,
             ),
           ),
           withLogChannel(CHANNEL),
         );
-  /** A read's events, and whether it skipped a row of a newer or unknown
-   *  kind (a later build can read it; a corrupt row no build can). */
+  /** A read's events, and whether it skipped a newer row (a later build
+   *  can read it; an older or corrupt one no build can). */
   const decodeAll = (rows: readonly Readonly<Record<string, unknown>>[]) =>
     Effect.gen(function* () {
       const fresh: string[] = [];
@@ -417,8 +420,9 @@ export function verdictBook(
         const verdict = decodeRow(row);
         if (verdict._tag === 'event') events.push(verdict.event);
         else if (verdict._tag === 'blocked') {
-          skipped ||= verdict.reason !== 'corrupt';
-          yield* block(verdict);
+          const { error, ...aggregate } = verdict;
+          skipped ||= aggregate.reason === 'newer';
+          yield* block(aggregate, error);
         } else if (!leftOut.has(verdict.kind)) {
           leftOut.add(verdict.kind);
           fresh.push(verdict.kind);
@@ -446,16 +450,13 @@ export function verdictBook(
               ...aggregateColumns(only),
             ]);
         for (const row of rows) {
-          const verdict: BlockedAggregate = {
+          const verdict = BlockedAggregateSchema.parse({
+            ...row,
             _tag: 'blocked',
             aggregateId: aggregateOf(row.kind, row.logicalId),
-            uid: z.string().parse(row.uid),
-            reason: kind.reason,
+            reason: 'newer',
             type: kind.type,
-            version: z.int().parse(row.version),
-            commit: z.int().parse(row.commit),
-            at: z.int().parse(row.at),
-          };
+          });
           found.push(verdict);
           yield* block(verdict);
         }
@@ -473,7 +474,6 @@ export function verdictBook(
       ? Effect.void
       : Effect.fail(failed(new DatabaseAggregateBlocked(verdict)));
   };
-  /** In the caller's transaction: plugin kind `name`'s rows, and any corrupt one. */
   /** The rows bearing on writing kind `name`; a row too corrupt to name
    *  its kind bears on every kind. */
   const concerns = (v: RowVerdict, name: string): boolean => {

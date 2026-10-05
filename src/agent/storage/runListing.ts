@@ -69,7 +69,7 @@ export type RunListingEntry =
     })
   | BlockedRunListingEntry;
 
-/** A run whose record a newer TeXRA wrote (or is corrupt): listed with its
+/** A run whose record a newer or older TeXRA wrote (or is corrupt): listed with its
  *  status `blocked`, never opened. */
 export type BlockedRunListingEntry = RunListingBase & {
   kind: 'blocked';

@@ -22,6 +22,7 @@ import type {
   SessionEvent,
   SessionEventDraft,
 } from '@shared/schemas';
+import { RUN_BLOCKED_COPY } from '@shared/runs/runStatusDisplay';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { ValueFamily } from './valueFamily';
 
@@ -190,8 +191,8 @@ export class CurrentValueNewer extends Data.TaggedError('CurrentValueNewer')<{
 
 /**
  * A run history read or claim of an aggregate this build cannot read whole
- * (`BlockedAggregate`): a later build wrote a row of it, or a row is
- * corrupt. Nothing is read or claimed, so no run state is ever folded from
+ * (`BlockedAggregate`): a later build wrote a row of it, an earlier build
+ * wrote an older shape, or a row is corrupt. Nothing is read or claimed, so no run state is ever folded from
  * part of its rows. It rides as the cause of the read's `DatabaseReadFailed`
  * or the claim's `DatabaseWriteFailed`, as `DatabaseClaimRefused` does.
  */
@@ -203,10 +204,7 @@ export class DatabaseAggregateBlocked extends Data.TaggedError(
   readonly type: string;
   readonly version: number;
 }> {
-  override readonly message =
-    this.reason === 'corrupt'
-      ? `Row ${this.type} of ${this.aggregateId} is corrupt; the run cannot be opened.`
-      : `The run ${this.aggregateId} holds a ${this.type} row (version ${this.version}) written by a newer TeXRA; update TeXRA to open it.`;
+  override readonly message = `${RUN_BLOCKED_COPY[this.reason]} (run ${this.aggregateId}, its ${this.type} row, version ${this.version})`;
 }
 
 /**

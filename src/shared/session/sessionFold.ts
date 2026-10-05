@@ -73,7 +73,7 @@ import {
   isTranscriptSettlementPhase,
 } from '@shared/runs/runStatus';
 import {
-  runBlockedMessage,
+  RUN_BLOCKED_COPY,
   runHeldMessage,
   runInterruptedMessage,
   runResumeBlockedMessage,
@@ -554,7 +554,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
       ? run.status
       : null;
   const unreadable = run.blocked
-    ? runBlockedMessage(run.blocked)
+    ? RUN_BLOCKED_COPY[run.blocked]
     : local.unreadable.find((u) => u.runId === run.id)?.detail;
   const children = run.childIds.flatMap((childId) => {
     const child = view.runs.get(childId);
