@@ -173,7 +173,10 @@ function sourceFilesUnder(
 }
 
 function productionSrcFiles(): string[] {
-  return sourceFilesUnder('src', { excludeTestKernel: true });
+  return [
+    ...sourceFilesUnder('src', { excludeTestKernel: true }),
+    ...sourceFilesUnder('packages/texra/src'),
+  ];
 }
 
 function importsMatching(file: string, patterns: readonly RegExp[]): boolean {
