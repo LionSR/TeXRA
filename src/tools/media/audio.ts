@@ -15,7 +15,6 @@ import {
   Stream,
 } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
-import OpenAI from 'openai';
 
 import type { ApiKeyRouteCredential } from '@agent/runtime/modelRoutes';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
@@ -248,8 +247,10 @@ export function transcribeRecording(
   return Effect.tryPromise({
     // The transcription endpoint is an OpenAI SDK operation the llm package
     // does not model, so the client is built here — the one foreign call this
-    // module wraps.
+    // module wraps. Imported lazily so the SDK stays out of the desktop
+    // startup graph.
     try: async (signal) => {
+      const { default: OpenAI } = await import('openai');
       const client = new OpenAI({
         apiKey: credential.apiKey,
         baseURL: credential.endpoint,
