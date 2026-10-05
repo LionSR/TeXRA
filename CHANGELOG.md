@@ -1638,10 +1638,8 @@ show` print the same notice, and the new `texra agents customize`,
   them: the error names both candidates and their source-qualified spellings.
 - **A plugin can own one request kind's decisions (`Plugin.decision`).** The
   harness runs the owning plugin's hook before a decision on a pending request
-  of that kind commits; TeXRA's external-inquiry plugin records its answers
-  this way. The harness no longer imports TeXRA's setup platform, inquiry
-  records or update-check records: a host passes its setup capabilities to
-  `texraPlugins({ setup })`, and `installProcessRuntime` has no `setup` option.
+  of that kind commits. `installProcessRuntime` has no `setup` option: a host
+  passes its setup capabilities with its plugin list.
 
 #### Bug Fixes
 

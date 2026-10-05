@@ -207,7 +207,7 @@ type RunToolOptions = {
  * Interruption tears the spawned process down: `executeCommand` is an Effect
  * whose own finalizer terminates the child, so there is nothing to thread.
  */
-export const runToolWithCheck = Effect.fn('toolUtils.runToolWithCheck')(
+export const runToolWithCheck = Effect.fn('toolChecks.runToolWithCheck')(
   function* (
     toolName: string,
     args: string[],
