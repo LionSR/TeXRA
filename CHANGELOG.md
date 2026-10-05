@@ -1636,6 +1636,12 @@ show` print the same notice, and the new `texra agents customize`,
   `--input` is no longer a required flag, because a tool-use run may take none.
   A name carried by both categories is refused rather than resolved to one of
   them: the error names both candidates and their source-qualified spellings.
+- **`@texra-ai/harness` exports the platform's ports and a request's
+  refusals.** The root entry now exports the port types an `AgentPlatform`
+  implements, the failures its stores answer with, the services a plugin's
+  code reads them as, the request errors `Session.request` fails with, and
+  the availability contract; `@texra-ai/harness/node` exports the Node
+  building blocks `nodePlatform` is made of.
 - **A plugin can own one request kind's decisions (`Plugin.decision`).** The
   harness runs the owning plugin's hook before a decision on a pending request
   of that kind commits. `installProcessRuntime` has no `setup` option: a host
