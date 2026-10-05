@@ -73,8 +73,8 @@ export const toolDigests = (
   const [definition] = toolDefinitionsFor([tool.definition]);
   return {
     digest: sha256({
-      name: definition!.name,
-      parameters: withoutSchemaDescriptions(definition!.parameters),
+      name: definition.name,
+      parameters: withoutSchemaDescriptions(definition.parameters),
     }),
     shown: sha256(definition),
   };

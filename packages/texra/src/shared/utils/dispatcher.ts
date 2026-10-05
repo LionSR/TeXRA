@@ -136,7 +136,7 @@ function isZodError(error: unknown): error is z.ZodError {
     typeof error === 'object' &&
     error !== null &&
     'issues' in error &&
-    Array.isArray((error as { issues: unknown }).issues)
+    Array.isArray(error.issues)
   );
 }
 
