@@ -108,52 +108,6 @@ export function probeZoteroBbt(
   );
 }
 
-/**
- * Import a CLI's SDK as a classified probe. The importers re-raise a missing
- * package as their own install-guidance error with the original attached as
- * `cause`, so "the package isn't installed" is read off the cause chain's
- * error code rather than off the message text.
- */
-function importProbedSdk(
-  importSdk: () => Effect.Effect<unknown, Error>,
-): Effect.Effect<unknown, ToolProbeFailed> {
-  return Effect.suspend(importSdk).pipe(
-    Effect.mapError(
-      (cause) =>
-        new ToolProbeFailed({
-          reason: causeChain(cause).some(isModuleNotFoundError)
-            ? 'module-not-found'
-            : 'sdk-import-failed',
-          message: toErrorMessage(cause),
-          cause,
-        }),
-    ),
-  );
-}
-
-/** Resolve a CLI's native binary as a classified probe. */
-function findProbedBinary(
-  findBinary: () => Effect.Effect<
-    string | undefined,
-    Error,
-    ChildProcessSpawner | FileSystem.FileSystem
-  >,
-): Effect.Effect<
-  string | undefined,
-  ToolProbeFailed,
-  ChildProcessSpawner | FileSystem.FileSystem
-> {
-  return Effect.mapError(
-    findBinary(),
-    (cause) =>
-      new ToolProbeFailed({
-        reason: 'binary-lookup-failed',
-        message: toErrorMessage(cause),
-        cause,
-      }),
-  );
-}
-
 /** Appended to install hints when running under WSL, where side matters. */
 function wslInstallHint(): string {
   return isWSL ? ' (run this inside WSL, not on the Windows side)' : '';
@@ -165,9 +119,10 @@ export type SdkBinaryStatus =
 
 /**
  * Human-readable probe shared by the SDK-backed CLI integrations (Codex,
- * Claude Code): import the SDK (classifying a missing package specially), then
- * resolve the native binary (appending {@link wslInstallHint} when it is
- * absent). Callers own only the final "ready" line.
+ * Claude Code): import the SDK, then resolve the native binary (appending
+ * {@link wslInstallHint} when it is absent). A missing package reads as the
+ * importer's own install guidance, found on the cause chain's error code
+ * rather than in the message text. Callers own only the final "ready" line.
  */
 export function probeSdkBinaryStatus(config: {
   importSdk: () => Effect.Effect<unknown, Error>;
@@ -176,7 +131,6 @@ export function probeSdkBinaryStatus(config: {
     Error,
     ChildProcessSpawner | FileSystem.FileSystem
   >;
-  missingPackageMessage: string;
   importFailedLabel: string;
   binaryNotFoundMessage: string;
   classifyImportError?: (msg: string) => string | undefined;
@@ -188,24 +142,31 @@ export function probeSdkBinaryStatus(config: {
   return Effect.gen(function* () {
     // Only the import is classified into a message; a binary-resolution
     // failure stays on the error channel.
-    const importFailure = yield* importProbedSdk(config.importSdk).pipe(
-      Effect.as(undefined),
-      Effect.catchTag('ToolProbeFailed', (failure) => {
-        if (failure.reason === 'module-not-found') {
-          return Effect.succeed(config.missingPackageMessage);
-        }
-        const classified = config.classifyImportError?.(failure.message);
-        if (classified != null) return Effect.succeed(classified);
-        return Effect.succeed(
-          `${config.importFailedLabel}: ${failure.message}`,
-        );
+    const importFailure = yield* Effect.suspend(config.importSdk).pipe(
+      Effect.match({
+        onSuccess: () => undefined,
+        onFailure: (cause) => {
+          const message = toErrorMessage(cause);
+          if (causeChain(cause).some(isModuleNotFoundError)) return message;
+          return (
+            config.classifyImportError?.(message) ??
+            `${config.importFailedLabel}: ${message}`
+          );
+        },
       }),
     );
     if (importFailure !== undefined) {
       return { ok: false as const, message: importFailure };
     }
 
-    const binaryPath = yield* findProbedBinary(config.findBinary);
+    const binaryPath = yield* config
+      .findBinary()
+      .pipe(
+        Effect.mapError(
+          (cause) =>
+            new ToolProbeFailed({ message: toErrorMessage(cause), cause }),
+        ),
+      );
     if (!binaryPath) {
       return {
         ok: false as const,

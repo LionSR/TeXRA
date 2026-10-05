@@ -152,16 +152,17 @@ function codexTurnSummary(state: CodexTurnState): string {
   }
 }
 
-export function buildCodexTurnToolLog(options?: {
-  wallTimeMs?: number | null;
-  state?: CodexTurnState;
+export function buildCodexTurnToolLog({
+  state,
+  wallTimeMs,
+  error,
+}: {
+  state: CodexTurnState;
+  wallTimeMs?: number;
   error?: string;
 }): ToolUseLog {
-  const state = options?.state ?? (options?.error ? 'failed' : 'completed');
   const roundedMs =
-    options?.wallTimeMs == null
-      ? undefined
-      : Math.max(0, Math.round(options.wallTimeMs));
+    wallTimeMs == null ? undefined : Math.max(0, Math.round(wallTimeMs));
   const input: CodexTurnToolInput = {
     state,
     ...(roundedMs != null && {
@@ -176,7 +177,7 @@ export function buildCodexTurnToolLog(options?: {
     // A failed turn is a failed card so the progress view shows failure
     // chrome; the error message is attached when the caller has one (turn.failed
     // / stream error) but omitted for abort or an early stream end.
-    ...(state === 'failed' && options?.error && { error: options.error }),
+    ...(state === 'failed' && error && { error }),
     status: codexCardStatus(state === 'running', state === 'failed'),
   };
 }

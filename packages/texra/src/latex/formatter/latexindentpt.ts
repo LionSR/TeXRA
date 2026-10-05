@@ -40,39 +40,34 @@ const cleanupIndentLog = Effect.fn('latex.cleanupIndentLog')(function* (
 });
 
 /**
- * Delete latexindent's `<base>.tex.bak*` and `<base>.bak*` backups in a
- * directory, found by a plain name prefix over one listing so a directory or
- * base name holding glob metacharacters still names its own backups.
+ * The files in `dir` whose names start with one of `prefixes`, found by a
+ * plain name prefix over one listing so a path holding glob metacharacters
+ * (or a Windows backslash) still names its own files. Directories are left
+ * out, as glob's nodir did: a non-recursive remove of an empty directory
+ * would succeed (rmdir) and delete it. An absent `dir` lists nothing; any
+ * other listing failure is warned about and lists nothing too.
  */
-const cleanupBackupFiles = Effect.fn('latex.cleanupBackupFiles')(function* (
-  fileBaseName: string,
-  fileDir: string,
+export const filesByPrefix = Effect.fn('latex.filesByPrefix')(function* (
+  dir: string,
+  prefixes: ReadonlyArray<string>,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const names = yield* fs
-    .readDirectory(fileDir)
+    .readDirectory(dir)
     .pipe(
-      Effect.catch((err) =>
-        err.reason._tag === 'NotFound'
+      Effect.catch((error) =>
+        error.reason._tag === 'NotFound'
           ? Effect.succeed<ReadonlyArray<string>>([])
-          : Effect.logWarning(
-              `Error listing ${fileDir} for backup files: ${toErrorMessage(err)}`,
-            ).pipe(
-              withLogChannel(CHANNEL),
+          : Effect.logWarning(`Failed to list ${dir}`).pipe(
+              Effect.annotateLogs({ data: error }),
               Effect.as<ReadonlyArray<string>>([]),
             ),
       ),
     );
-  // Files only, as glob's nodir did: a non-recursive remove of an empty
-  // directory would succeed (rmdir) and delete it.
-  const backupFiles = yield* Effect.filter(
+  return yield* Effect.filter(
     names
-      .filter(
-        (name) =>
-          name.startsWith(`${fileBaseName}.tex.bak`) ||
-          name.startsWith(`${fileBaseName}.bak`),
-      )
-      .map((name) => path.join(fileDir, name)),
+      .filter((name) => prefixes.some((prefix) => name.startsWith(prefix)))
+      .map((name) => path.join(dir, name)),
     (candidate) =>
       entryTypeIn(fs, candidate).pipe(
         Effect.map((type) => type !== undefined && type !== 'Directory'),
@@ -81,6 +76,18 @@ const cleanupBackupFiles = Effect.fn('latex.cleanupBackupFiles')(function* (
         Effect.catch(() => Effect.succeed(true)),
       ),
   );
+});
+
+/** Delete latexindent's `<base>.tex.bak*` and `<base>.bak*` backups in a directory. */
+const cleanupBackupFiles = Effect.fn('latex.cleanupBackupFiles')(function* (
+  fileBaseName: string,
+  fileDir: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const backupFiles = yield* filesByPrefix(fileDir, [
+    `${fileBaseName}.tex.bak`,
+    `${fileBaseName}.bak`,
+  ]).pipe(withLogChannel(CHANNEL));
 
   for (const backupFile of backupFiles) {
     const removed = yield* fs.remove(backupFile, { force: true }).pipe(

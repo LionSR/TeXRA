@@ -212,8 +212,6 @@ export const GITHUB_AVAILABILITY: ToolAvailabilityChecks = {
 const CODEX_SDK_PROBE = {
   importSdk: importCodexClass,
   findBinary: findCodexBinaryPath,
-  missingPackageMessage:
-    '@openai/codex-sdk not found. Install with: npm install -g @openai/codex',
   importFailedLabel: 'Codex SDK import failed',
   classifyImportError: (msg: string) =>
     msg.includes('Unsupported platform')
@@ -227,8 +225,6 @@ const CODEX_SDK_PROBE = {
 const CLAUDE_CODE_SDK_PROBE = {
   importSdk: importClaudeAgentSdk,
   findBinary: findClaudeBinaryPath,
-  missingPackageMessage:
-    '@anthropic-ai/claude-agent-sdk not found. Reinstall TeXRA or run: npm install @anthropic-ai/claude-agent-sdk',
   importFailedLabel: 'Claude Code SDK import failed',
   binaryNotFoundMessage:
     'Claude Code SDK loaded but native `claude` binary not found. ' +
