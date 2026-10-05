@@ -104,7 +104,16 @@ jobs:
 
       # The ratchets and cheap invariant scripts (`npm run gate:invariants`).
       - name: Check invariants
-        run: pnpm run gate:invariants
+        env:
+          TEXRA_RATCHET_BASE: origin/${{ github.base_ref || 'main' }}
+        run: |
+          # Checkout is shallow. Comparing blobs needs only the base tip, and
+          # a push to main already has it; fetch only when the ref is missing.
+          if ! git rev-parse --verify "$TEXRA_RATCHET_BASE^{commit}" >/dev/null 2>&1; then
+            git fetch --no-tags --depth=1 origin \
+              "+refs/heads/${TEXRA_RATCHET_BASE#origin/}:refs/remotes/$TEXRA_RATCHET_BASE"
+          fi
+          pnpm run gate:invariants
 
       # Every function that owns a deno.json is validated, so a new edge
       # function cannot ship untested by being omitted from this list. Needs
