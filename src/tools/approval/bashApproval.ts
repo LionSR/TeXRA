@@ -1,7 +1,8 @@
 import { Effect } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { requireToolRun, type RunCall } from '@agent/runtime/RunCall';
 import {
   BASH_APPROVAL_CONFIG_KEY,
   type BashPermission,
@@ -77,18 +78,12 @@ function prepareBashApprovalPrompt(
  */
 export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
   request: BashApprovalRequest,
-): Effect.fn.Return<BashDecision, Error, ToolCall> {
-  const call = yield* ToolCall;
+): Effect.fn.Return<BashDecision, Error, ToolContext | RunCall> {
+  const { env, run, requests } = yield* requireToolRun('A bash approval');
   const approvalsEnabled = yield* readSettingFrom<boolean>(
-    call.roots,
+    env.roots,
     BASH_APPROVAL_CONFIG_KEY,
   );
-  if (call.run === undefined) {
-    return yield* Effect.fail(
-      new Error('A bash approval needs an active run.'),
-    );
-  }
-  const { run, requests } = call;
   const { session, runId } = run;
   const granted = () =>
     (request.grant === 'shell'

@@ -4,7 +4,7 @@ import * as nodePath from 'node:path';
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - tools
 import { ToolError, type ToolResult } from '@shared/schemas';
@@ -229,7 +229,6 @@ export const GrepTool = defineTool({
     'Search file contents using regex patterns. For surrounding lines use -C with output_mode "content".',
   schema: GrepInputSchema,
   execute: Effect.fn('GrepTool.call')(function* (input: GrepInput) {
-    const call = yield* ToolCall;
-    return yield* runGrep(call, input);
+    return yield* runGrep((yield* ToolContext).env, input);
   }),
 });

@@ -64,7 +64,7 @@ export function parseWorkingDirectory(
  * workspace folder and the setting slots containment policy is read from),
  * the run's working directory, and the read-only roots the call's step
  * admits (the skills it lists or its user activated; none outside a run).
- * A tool's `ToolCall` satisfies it structurally.
+ * A tool's `ToolContext.env` satisfies it structurally.
  * `workingDirectory` is already absolute or absent: the run decides it once
  * where it is launched (`assembleAgentLaunchContext`).
  */

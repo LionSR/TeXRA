@@ -21,14 +21,14 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { requireToolRun } from '@agent/runtime/RunCall';
 import { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
-import { requireToolRun } from '@tools/core/toolRun';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 
@@ -599,8 +599,8 @@ export const GitHubSubscriptionTool = defineTool({
   schema: GitHubSubscriptionInputSchema,
   execute: (input: GitHubSubscriptionInput) =>
     Effect.gen(function* () {
-      const toolCall = yield* ToolCall;
-      const { run } = yield* requireToolRun('github_subscription', toolCall);
+      const toolCall = yield* ToolContext;
+      const { run } = yield* requireToolRun('github_subscription');
       switch (input.command) {
         case 'subscribe':
           return yield* execSubscribe(input, run.runId, run.session);
@@ -611,8 +611,8 @@ export const GitHubSubscriptionTool = defineTool({
         case 'find_current':
           return yield* execFindCurrent(
             input,
-            toolCall.workingDirectory,
-            toolCall.roots,
+            toolCall.env.workingDirectory,
+            toolCall.env.roots,
           );
       }
     }),

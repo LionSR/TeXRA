@@ -106,7 +106,8 @@ export {
 } from '../core/state/runRequests';
 
 // Native tool host capabilities, supplied per standalone invocation.
-export { ToolCall } from './ToolCall';
+export { ToolContext } from '@agent/core/tools/ToolTypes';
+export { IssuingScript, RunCall, ScriptCalls } from './RunCall';
 
 // A workflow run's delivered outputs with their diffs, for a host that prints them.
 export { withWorkflowDiffs } from './subagentResults';

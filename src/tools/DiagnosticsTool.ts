@@ -3,7 +3,8 @@
 // Third-party imports
 import { Effect } from 'effect';
 import { z } from 'zod';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { callerRun } from '@agent/runtime/RunCall';
 
 // Local imports
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
@@ -193,14 +194,14 @@ const addCriticism = Effect.fn('DiagnosticsTool.addCriticism')(function* (
 const diagnose = Effect.fn('DiagnosticsTool.call')(function* (
   input: DiagnosticsInput,
 ) {
-  const call = yield* ToolCall;
-  const interactions = call.run?.session.interactions;
+  const { env } = yield* ToolContext;
+  const interactions = (yield* callerRun)?.session.interactions;
   if (!interactions)
     return yield* Effect.fail(
       new ToolError('Diagnostics requires an active session.'),
     );
   const ports: DiagnosticsPorts = {
-    call,
+    call: env,
     readDiagnostics: interactions.readDiagnostics,
     addCriticism: interactions.addCriticism,
   };

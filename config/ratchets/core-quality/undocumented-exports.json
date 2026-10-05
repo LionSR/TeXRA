@@ -73,7 +73,6 @@
   "src/agent/runtime/scriptRun.ts": 1,
   "src/agent/runtime/SessionHandle.ts": 1,
   "src/agent/runtime/subagentResults.ts": 1,
-  "src/agent/runtime/ToolCall.ts": 1,
   "src/agent/runtime/ToolServices.ts": 2,
   "src/agent/storage/childRunDeliveryPersistence.ts": 1,
   "src/agent/storage/conversationFormat.ts": 1,

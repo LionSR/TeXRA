@@ -1,9 +1,10 @@
 // Third-party imports
 import { Context, Effect, Option } from 'effect';
 import { z } from 'zod';
+import type { RunCall } from '@agent/runtime/RunCall';
 
 // Internal imports
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 import { withLogChannel } from '@logger/effectLog';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { resolveToolPath } from '@tools/pathResolution';
@@ -200,9 +201,9 @@ function threadNotFound(threadId: string): ToolResult {
 const addThread = Effect.fn('InlineCommentTool.addThread')(function* (
   input: AddCommentInput,
 ) {
-  const call = yield* ToolCall;
+  const call = yield* ToolContext;
   const { path, line, endLine, body } = input;
-  const resolved = yield* resolveToolPath(call, path).pipe(
+  const resolved = yield* resolveToolPath(call.env, path).pipe(
     Effect.catch(addCommentFailure),
   );
   const provider = yield* requireProvider;
@@ -255,11 +256,11 @@ const setThreadResolved = Effect.fn('InlineCommentTool.setResolved')(function* (
 const listThreads = Effect.fn('InlineCommentTool.list')(function* (
   input: ListCommentInput,
 ) {
-  const call = yield* ToolCall;
+  const call = yield* ToolContext;
   const absolutePath =
     input.path == null
       ? undefined
-      : (yield* resolveToolPath(call, input.path ?? undefined)).absolute;
+      : (yield* resolveToolPath(call.env, input.path ?? undefined)).absolute;
   const threads = (yield* requireProvider).list({ absolutePath });
   if (threads.length === 0) {
     return executed(
@@ -275,7 +276,7 @@ const listThreads = Effect.fn('InlineCommentTool.list')(function* (
 
 function inlineComment(
   input: InlineCommentInput,
-): Effect.Effect<ToolResult, ToolError, ToolCall> {
+): Effect.Effect<ToolResult, ToolError, ToolContext | RunCall> {
   switch (input.command) {
     case 'add':
       return addThread(input);

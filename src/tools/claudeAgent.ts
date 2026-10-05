@@ -24,6 +24,7 @@
 // Third-party imports
 import { Effect, Stream, type FileSystem } from 'effect';
 import { z } from 'zod';
+import type { RunCall } from '@agent/runtime/RunCall';
 
 // Local imports
 import {
@@ -35,7 +36,10 @@ import {
 } from '@agent/trace';
 import type { Runs } from '@agent/runtime/runRegistry';
 import type { ChildRunPort } from '@agent/runtime/childRunLoop';
-import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
+import {
+  ToolContext,
+  type ToolContextShape,
+} from '@agent/core/tools/ToolTypes';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { Secrets } from '@platform/secrets';
 import {
@@ -508,24 +512,25 @@ function buildClaudeAgentLaunch(params: {
 
 function executeClaudeAgentTool(input: ClaudeAgentInput) {
   return Effect.gen(function* () {
-    return yield* run(input, yield* ToolCall);
+    return yield* run(input, yield* ToolContext);
   });
 }
 
 const run = Effect.fn('ClaudeAgentTool.run')(function* (
   input: ClaudeAgentInput,
-  toolCall: ToolCallShape,
+  toolCall: ToolContextShape,
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
   | Secrets
-  | ToolCall
+  | ToolContext
+  | RunCall
   | Runs
   | ClaudeAgentSessions
   | ChildProcessSpawner
   | FileSystem.FileSystem
 > {
-  const { roots } = toolCall;
+  const { roots } = toolCall.env;
   const permissionMode = yield* claudeAgentPermissionMode(input, roots);
   const claudeRun = yield* readClaudeCodeRun(roots, input);
   const sessionId = input.session_id ?? undefined;
@@ -582,10 +587,15 @@ const launchClaudeAgentSession = Effect.fn(
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
-  Secrets | ToolCall | Runs | ChildProcessSpawner | FileSystem.FileSystem
+  | Secrets
+  | ToolContext
+  | RunCall
+  | Runs
+  | ChildProcessSpawner
+  | FileSystem.FileSystem
 > {
   const config = yield* getClaudeAgentConfig;
-  const { roots } = yield* ToolCall;
+  const { roots } = (yield* ToolContext).env;
   // Mirrors codex so subagents can see the project: a call from inside the
   // workspace runs in that directory with read access to the workspace root
   // for sibling files; an out-of-workspace cwd runs isolated. The SDK's

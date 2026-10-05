@@ -22,7 +22,7 @@ import {
 } from '@agent/output/outputState';
 import { checkExpectedOutputs } from '@agent/output/outputValidation';
 import { summarizeRound } from '@agent/output/roundSummary';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { requireToolRun } from '@agent/runtime/RunCall';
 import { documentsSummary } from '@shared/plugins/documents';
 import {
   fileLocationDisplayPath,
@@ -41,7 +41,6 @@ import {
 } from '@tools/documents/documentState';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
-import { requireToolRun } from '@tools/core/toolRun';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
 /** A revision of a document task, by its zero-based index. */
@@ -54,7 +53,7 @@ export const RevisionSchema = z
 export const documentsOfCall = Effect.fn('documents.ofCall')(function* (
   tool: string,
 ) {
-  const { run } = yield* requireToolRun(tool, yield* ToolCall);
+  const { run } = yield* requireToolRun(tool);
   return yield* openDocuments(run);
 });
 

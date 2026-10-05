@@ -12,7 +12,7 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 import { ToolError } from '@shared/schemas';
 import {
   settingSchemaWithoutPrefault,
@@ -78,8 +78,8 @@ Accepts any key starting with \`texra.\`. Returns the current resolved value (wo
   schema: ReadConfigInputSchema,
   execute: (input: ReadConfigInput) =>
     Effect.gen(function* () {
-      const call = yield* ToolCall;
-      const value = call.roots.config.get(input.key);
+      const call = yield* ToolContext;
+      const value = call.env.roots.config.get(input.key);
       const json = JSON.stringify(value, null, 2) ?? 'undefined';
       const description = TEXRA_SETTINGS.byKey(input.key)?.description;
       return executed(
@@ -124,8 +124,8 @@ const updateConfig = Effect.fn('UpdateConfigTool.execute')(function* (
     );
   }
 
-  const call = yield* ToolCall;
-  const config = call.roots.config;
+  const call = yield* ToolContext;
+  const config = call.env.roots.config;
   const previous = config.get(input.key);
   const target = input.target === 'workspace' ? 'workspace' : 'global';
   yield* config.update(input.key, parsed.data, target);

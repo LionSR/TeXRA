@@ -18,7 +18,7 @@ import { StatusCodes } from 'http-status-codes';
 import { z } from 'zod';
 
 // Local imports
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import {
@@ -35,7 +35,7 @@ const ZOTERO_CONNECTOR_TIMEOUT_MS = 30_000; // 30 s
 /** The configured Zotero port: one port for both the Connector API and the
  *  Better BibTeX JSON-RPC (different paths). Every reader takes it from the
  *  configuration it was handed — a tool from its call
- *  (`call.roots.config.get(ZOTERO_PORT_KEY)`), the dashboard's
+ *  (`call.env.roots.config.get(ZOTERO_PORT_KEY)`), the dashboard's
  *  availability group from its probe inputs. */
 export const ZOTERO_PORT_KEY = 'texra.bib.zoteroPort';
 
@@ -55,8 +55,11 @@ export const withZoteroPort =
   ) =>
   (input: I): Effect.Effect<ToolResult, Error, ToolServices> =>
     Effect.gen(function* () {
-      const call = yield* ToolCall;
-      return yield* run(input, call.roots.config.get<number>(ZOTERO_PORT_KEY));
+      const call = yield* ToolContext;
+      return yield* run(
+        input,
+        call.env.roots.config.get<number>(ZOTERO_PORT_KEY),
+      );
     });
 
 function zoteroUrl(port: number, pathname: string): string {

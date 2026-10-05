@@ -10,7 +10,6 @@ import { beforeEach, afterEach, describe, vi } from 'vitest';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
-import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 
 import { formatToolResultAsText } from '@agent/runtime/run/toolResultText';
@@ -166,7 +165,6 @@ function backgroundBashCall(parentRunId: RunId) {
   }).pipe(
     Effect.provide(
       nativeToolTestLayer({
-        tracker: new FileInteractionState(),
         run: {
           session: testDefaultSession(),
           runId: parentRunId,
@@ -206,7 +204,6 @@ describe('BashTool', () => {
       const result = yield* BashTool.call({ command: 'echo long' }).pipe(
         Effect.provide(
           nativeToolTestLayer({
-            tracker: new FileInteractionState(),
             run: {
               session: testDefaultSession(),
               runId: 'bash-tool' as RunId,
@@ -913,10 +910,7 @@ describe('BashTool', () => {
           BashTool.call({ command: 'echo long' }).pipe(
             Effect.provide(
               nativeToolTestLayer({
-                tracker: new FileInteractionState(),
-                hooks: {
-                  onToolOutput: (chunk) => hookCalls.push(`output:${chunk}`),
-                },
+                emit: (chunk) => hookCalls.push(`output:${chunk}`),
                 run: {
                   session: testDefaultSession(),
                   runId: 'bash-tool' as RunId,

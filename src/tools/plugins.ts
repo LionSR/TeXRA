@@ -42,8 +42,10 @@ import type {
  * own record, keyed by `id` (TeXRA's is `@tools/pluginCards`).
  */
 export interface Plugin {
-  /** Stable, persisted identifier (the switch key, and the plugin a run's
-   *  offered tool records). */
+  /** Stable, persisted identifier (the switch key, the plugin a run's
+   *  offered tool records, and the name of its `resources/plugins/<id>/`
+   *  directory): lowercase letters, digits and dashes, starting with a
+   *  letter or digit. A list with any other id is refused. */
   readonly id: string;
   /** Its tools, by registered name. */
   readonly tools?: Readonly<Record<string, RuntimeTool>>;

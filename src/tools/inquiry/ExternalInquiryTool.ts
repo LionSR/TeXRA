@@ -19,7 +19,7 @@
 import { Cause, Effect } from 'effect';
 import { z } from 'zod';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { callerRun } from '@agent/runtime/RunCall';
 import { withLogChannel } from '@logger/effectLog';
 import {
   InquiryRecords,
@@ -206,16 +206,16 @@ Do not treat paper-specific claims from the external model as automatically veri
 
 function executeExternalInquiryTool(input: InquiryInput) {
   return Effect.gen(function* () {
-    const toolCall = yield* ToolCall;
-    const runId = toolCall.run?.runId;
+    const run = yield* callerRun;
+    const runId = run?.runId;
     switch (input.command) {
       case 'ask':
-        if (!toolCall.run?.session.interactions) {
+        if (!run?.session.interactions) {
           return yield* Effect.fail(
             new ToolError('inquiry requires a session with host interactions.'),
           );
         }
-        return yield* executeAsk(input, runId, toolCall.run.session);
+        return yield* executeAsk(input, runId, run.session);
       case 'read':
         return yield* executeRead(input);
       case 'list':

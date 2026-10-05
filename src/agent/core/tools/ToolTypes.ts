@@ -1,10 +1,26 @@
 /**
- * Core tool type definitions: ITool, IToolRegistry, MapToolRegistry.
+ * The tool contract: a tool (`ITool`), its registry, its guard, and what
+ * its body reads of its own call (`ToolContext`: its id, where it works, how
+ * it asks a person, where its transient output goes). What the harness's
+ * built-in tools read of a call made under a run is `@agent/runtime/RunCall`.
  */
 
-import type { ToolDefinition, ToolResult } from '@shared/schemas';
+import { Context, type Effect } from 'effect';
+
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import type {
+  PermissionPayload,
+  RequestDecision,
+  ToolDefinition,
+  ToolResult,
+} from '@shared/schemas';
+import type {
+  DatabaseNotOwner,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
+import type { RunHistoryRefused } from '@shared/session/runHistory';
 import type { SettingHost } from '@shared/state/stateSettings';
-import type { Effect } from 'effect';
+import type { StepRoot } from '@utils/files/externalRoots';
 
 /**
  * The guard the run loop applies before a tool's body runs, declared on the
@@ -150,3 +166,58 @@ export class MapToolRegistry<E = Error, R = never> implements IToolRegistry<
     return this.tools.has(name);
   }
 }
+
+/**
+ * The requests one tool call raises, opened through its run's loop. The first
+ * request an attempt raises commits with the `tool.binding` that ties it to
+ * the call, so a person's pending approval outlives the process that asked:
+ * a resume re-enters the call, and the call re-enters that same request.
+ */
+export interface CallRequests {
+  /** The id the call's next request opens under: the request a resumed call
+   *  left standing, when its id has this prefix, else a fresh
+   *  `<prefix>-<id>`. A request is staged under this id before it opens. */
+  readonly nextId: (prefix: string) => string;
+  /** Open the request (or re-enter the standing one) and wait for its
+   *  decision, as `SessionHandle.openRequest` does. */
+  readonly open: (
+    payload: PermissionPayload,
+    options?: { readonly onNeverCommitted?: Effect.Effect<void> },
+  ) => Effect.Effect<
+    RequestDecision,
+    DatabaseNotOwner | DatabaseWriteFailed | RunHistoryRefused
+  >;
+}
+
+/**
+ * Where a call works: the session's roots (its workspace folder, the
+ * setting slots and its storage), the run's working directory, and the
+ * read-only roots the call's step admits (the skills it lists or its user
+ * activated). A tool path resolves against it (`@tools/pathResolution`).
+ * `workingDirectory` is already absolute or absent: the run decides it once
+ * where it is launched (`assembleAgentLaunchContext`).
+ */
+export interface ToolEnv {
+  readonly roots: WorkspaceRoots;
+  readonly workingDirectory?: string;
+  readonly stepRoots?: readonly StepRoot[];
+}
+
+/** What every tool call knows of itself. */
+export interface ToolContextShape {
+  /** The call's id, as the model (or the host) issued it. */
+  readonly callId: string;
+  /** Where the call works. */
+  readonly env: ToolEnv;
+  /** Where the call's requests to a person open; absent for a standalone
+   *  host invocation outside an agent run, which has nobody to ask. */
+  readonly requests?: CallRequests;
+  /** Transient output for the call's card while it runs, never a row. */
+  readonly emit: (text: string) => void;
+}
+
+/** The tool call the running tool serves. */
+export class ToolContext extends Context.Service<
+  ToolContext,
+  ToolContextShape
+>()('@texra/agent/ToolContext') {}

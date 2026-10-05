@@ -5,9 +5,10 @@ import { it } from '@effect/vitest';
 import { Effect, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { Runs } from '@agent/runtime/runRegistry';
+import type { RunToolCall } from '@agent/runtime/RunCall';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import type { RunId } from '@shared/schemas';
@@ -17,7 +18,6 @@ import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
 import { fakeProcessServices } from '@test/support/setupPlatform';
-import type { RunToolCall } from '@tools/core/toolRun';
 
 const mocks = vi.hoisted(() => ({
   startChildRunLoop: vi.fn(),
@@ -70,8 +70,14 @@ describe('launchDetachedSubagent child run launch', () => {
 
   const roots = createFakeWorkspaceRoots();
   const parent: RunToolCall = {
-    roots,
-    tracker: new FileInteractionState(),
+    callId: 'parent-call',
+    env: { roots },
+    emit: () => undefined,
+    workspace: AgentWorkspaceState.create(),
+    responseId: 'parent-response',
+    instruction: undefined,
+    attempt: 1,
+    logId: 'parent-card',
     requests: {
       nextId: (prefix: string) => prefix,
       open: () => Effect.die(new Error('This fixture opens no request.')),

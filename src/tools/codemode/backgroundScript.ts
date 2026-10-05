@@ -13,11 +13,11 @@ import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { offeredBy } from '@agent/runtime/loop/step';
 import { createScriptRunStrategy } from '@agent/runtime/scriptRun';
 import { registerRun } from '@agent/storage/runLifecycle';
+import type { RunToolCall } from '@agent/runtime/RunCall';
 import { withLogChannel } from '@logger/effectLog';
 import { USER_FOLLOW_UP_SUPPORT, type RunId } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import { executed } from '@tools/core/result';
-import type { RunToolCall } from '@tools/core/toolRun';
 import { agentChildRunId, earlierChild } from '@tools/delegation/agentChild';
 import { childRunDescription } from '@tools/delegation/childRun';
 import { startDetachedChildRunLoop } from '@tools/delegation/detachedChildRun';
@@ -53,7 +53,8 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
   if (earlier !== null) return receipt(title, earlier, true);
   const bound = yield* SynchronizedRef.get(run.model);
   const runId = agentChildRunId(call);
-  const workingDirectory = call.workingDirectory ?? run.config.workingDirectory;
+  const workingDirectory =
+    call.env.workingDirectory ?? run.config.workingDirectory;
   const parentOffered = yield* offeredBy(run);
   // The parent's agent, model and tools, opened on the call rather than on
   // a prompt: it reads no input files and renders no instruction.
@@ -102,10 +103,8 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
         identity: { kind: 'script', title },
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
         parentRunId,
-        ...(call.logId !== undefined && { parentCard: call.logId }),
-        ...(call.toolCallId !== undefined && {
-          parentCallId: call.toolCallId,
-        }),
+        parentCard: call.logId,
+        parentCallId: call.callId,
         description: childRunDescription(title),
       });
       yield* startDetachedChildRunLoop({

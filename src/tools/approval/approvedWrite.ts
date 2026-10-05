@@ -7,7 +7,8 @@ import * as nodePath from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { ToolCall } from '@agent/runtime/ToolCall';
+import type { RunCall } from '@agent/runtime/RunCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError } from '@shared/schemas';
 import { recordToolFileRead } from '@tools/fileInteractions';
@@ -85,9 +86,9 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
   ): Effect.fn.Return<
     WriteApprovedContentResult,
     Error,
-    ToolCall | FileSystem.FileSystem | WorkspaceFs
+    ToolContext | RunCall | FileSystem.FileSystem | WorkspaceFs
   > {
-    yield* ToolCall;
+    yield* ToolContext;
     const workspace = nodePath.isAbsolute(path)
       ? undefined
       : yield* WorkspaceFs;

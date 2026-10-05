@@ -65,7 +65,7 @@ const WORKTREE_DISABLED_MESSAGE =
  * The `working_directory` gate, over the settings of the project the call
  * belongs to: the worktree opt-in first, then that the path is an existing
  * directory. It lives here beside the field it guards, but runs in the tool's
- * `execute`, where `call.roots` names that project — the schema is static,
+ * `execute`, where `call.env.roots` names that project — the schema is static,
  * parsed once by the tool facade before any call exists, so a gate in its
  * transform could only ever answer for whichever workspace the process came
  * up in.
@@ -138,7 +138,7 @@ export const workingDirectoryField = z
     // Neither the worktree opt-in nor the path's existence is checked here:
     // this transform runs on the tool facade's one parse of a static schema,
     // before any call exists. Both run in `execute`, through
-    // `rejectUnusableWorkingDirectory`, where `call.roots` names the project.
+    // `rejectUnusableWorkingDirectory`, where `call.env.roots` names the project.
     return parsed.success;
   });
 

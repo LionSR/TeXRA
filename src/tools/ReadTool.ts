@@ -3,7 +3,8 @@ import { Effect, FileSystem, Scope } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { ToolCall } from '@agent/runtime/ToolCall';
+import type { RunCall } from '@agent/runtime/RunCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { buildBytesAttachment, buildFileAttachment } from '@tools/attachments';
 import { formatFileView } from '@tools/formatting';
@@ -115,16 +116,16 @@ const read = Effect.fn('ReadFileTool.execute')(function* (
 ): Effect.fn.Return<
   ToolResult,
   Error,
-  ToolCall | Scope.Scope | FileSystem.FileSystem
+  ToolContext | RunCall | Scope.Scope | FileSystem.FileSystem
 > {
-  const call = yield* ToolCall;
+  const call = yield* ToolContext;
   // Local reads finish in milliseconds, so no mid-read cancellation is
   // needed — but a queued call must not start after the batch aborted.
   const signal = yield* Effect.abortSignal;
   if (signal.aborted) {
     return yield* Effect.fail(new ToolError('Cancelled before execution.'));
   }
-  const resolved = yield* resolveToolPath(call, input.path);
+  const resolved = yield* resolveToolPath(call.env, input.path);
   const displayPath = resolved.display;
   const filePath = resolved.fsPath;
 
@@ -241,7 +242,11 @@ const returnBinaryAttachment = Effect.fn('ReadFileTool.returnBinaryAttachment')(
     input: ReadInput,
     kind: AttachmentKind,
     resolved: ToolPathResolution,
-  ): Effect.fn.Return<ToolResult, Error, ToolCall | FileSystem.FileSystem> {
+  ): Effect.fn.Return<
+    ToolResult,
+    Error,
+    ToolContext | RunCall | FileSystem.FileSystem
+  > {
     const copy = ATTACHMENT_COPY[kind];
     const attachment = yield* buildFileAttachment({
       filePath: resolved.fsPath,

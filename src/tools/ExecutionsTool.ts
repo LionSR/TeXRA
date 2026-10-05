@@ -21,7 +21,7 @@ import {
   resolveRunWorkspaceFilePath,
 } from '@agent/storage';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { requireToolRun } from '@agent/runtime/RunCall';
 import { Runs } from '@agent/runtime/runRegistry';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { scriptRunCalls } from '@agent/runtime/scriptRun';
@@ -38,7 +38,6 @@ import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { isLiveRun, type SessionView } from '@shared/session/sessionView';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
-import { requireToolRun } from '@tools/core/toolRun';
 import { readCompletedRunConversation } from '@transcript';
 import { assertNever, unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -159,7 +158,7 @@ function formatSizedEntryLines(entries: readonly SizedEntry[]): string[] {
 const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
   input: ExecutionsToolInput,
 ) {
-  const { run } = yield* requireToolRun('executions', yield* ToolCall);
+  const { run } = yield* requireToolRun('executions');
   const context: RunToolContext = {
     session: run.session,
     runId: run.runId,

@@ -16,7 +16,11 @@ import { Effect, FileSystem } from 'effect';
 // Local imports
 import { getRunRecords } from '@agent/storage';
 import type { ToolServices } from '@agent/runtime/ToolServices';
-import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
+import {
+  ToolContext,
+  type ToolContextShape,
+} from '@agent/core/tools/ToolTypes';
+import { requireToolRun, type RunCall } from '@agent/runtime/RunCall';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { WorkspaceFs } from '@platform/rootedFs';
@@ -30,7 +34,6 @@ import {
 import type { RequestRefusal, RunId, FileLocation } from '@shared/schemas';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
-import { requireToolRun } from '@tools/core/toolRun';
 import {
   buildApprovalRejectedResult,
   requestToolEditApproval,
@@ -181,12 +184,12 @@ function executeAcceptRunFilesTool(
   input: AcceptRunFilesInput,
 ): Effect.Effect<ToolResult, Error, ToolServices> {
   return Effect.gen(function* () {
-    const call = yield* ToolCall;
+    const call = yield* ToolContext;
     const {
       run: { session },
-    } = yield* requireToolRun('accept_run_files', call);
+    } = yield* requireToolRun('accept_run_files');
     const directory = yield* findExistingRunStoragePathUnder(
-      call.roots.storage,
+      call.env.roots.storage,
       input.execution_id,
     );
     if (
@@ -205,11 +208,11 @@ function executeAcceptRunFilesTool(
 
 const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
   input: AcceptRunFilesInput,
-  call: ToolCallShape,
+  call: ToolContextShape,
 ): Effect.fn.Return<
   ToolResult,
   Error,
-  ToolCall | FileSystem.FileSystem | WorkspaceFs
+  ToolContext | RunCall | FileSystem.FileSystem | WorkspaceFs
 > {
   const { execution_id: runId, files, strip_criticize } = input;
 
@@ -229,7 +232,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
         const destPath = mapping.original ?? mapping.path;
         // The call's own workspace root, as data: the source may resolve
         // under any root, but the destination is this session's.
-        const dest = locateInWorkspace(call.roots.workspace, destPath);
+        const dest = locateInWorkspace(call.env.roots.workspace, destPath);
         if (dest.kind === 'external') {
           return yield* Effect.fail(
             new ToolError(`original must be inside the workspace: ${destPath}`),
@@ -255,7 +258,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
         // outputs can make source and destination the same workspace file, so
         // the pre-run snapshot is the only reliable "before" image.
         const snapshotPath = originalSnapshotPathUnder(
-          call.roots.storage,
+          call.env.roots.storage,
           runId,
           dest.relativePath,
         );
@@ -393,7 +396,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
 
   // Phase 3: Clean up diff files from workspace for accepted files
   const cleaned = yield* cleanupAcceptedWorkspaceDiffFiles(
-    call.roots.workspace,
+    call.env.roots.workspace,
     acceptedEntries,
   );
   for (const f of cleaned) {
@@ -425,14 +428,14 @@ const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
   function* (
     runId: RunId,
     runPath: string,
-    call: ToolCallShape,
+    call: ToolContextShape,
   ): Effect.fn.Return<
     FileLocation,
     Error,
     FileSystem.FileSystem | WorkspaceFs
   > {
     const entry = yield* inspectRunStorageEntryUnder(
-      call.roots.storage,
+      call.env.roots.storage,
       runId,
       runPath,
     );
@@ -462,7 +465,7 @@ const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
 
     // Fall back to workspace
     const workspaceFs = yield* WorkspaceFs;
-    const wsLoc = locateInWorkspace(call.roots.workspace, runPath);
+    const wsLoc = locateInWorkspace(call.env.roots.workspace, runPath);
     if (
       wsLoc.kind !== 'external' &&
       (yield* entryExists(workspaceFs, wsLoc.relativePath).pipe(

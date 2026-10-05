@@ -19,11 +19,10 @@ import { z } from 'zod';
 
 // Local imports
 import type { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { requireToolRun, type RunToolCall } from '@agent/runtime/RunCall';
 import { withLogChannel } from '@logger/effectLog';
 import { goalElapsedMs, type Goal } from '@shared/plugins/goal';
 import type { Plan, RunId, ToolResult } from '@shared/schemas';
-import { ToolError } from '@shared/schemas';
 import { refusalOf } from '@shared/session/approvalDecision';
 import {
   clearGoal,
@@ -37,7 +36,6 @@ import {
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
-import type { RunToolCall } from '@tools/core/toolRun';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 
@@ -288,20 +286,13 @@ const executeUpdate = Effect.fn('PlanTool.executeUpdate')(function* (
   call: RunToolCall,
   plan: Plan,
 ) {
-  if (!call.workPlanState) {
-    return yield* Effect.fail(
-      new ToolError(
-        'plan(update) requires an active agent tool-use turn: there is no work plan to update.',
-      ),
-    );
-  }
-
-  call.workPlanState.updatePlan(plan);
+  const { workPlan } = call.workspace;
+  workPlan.updatePlan(plan);
 
   // Every update is a (re-)proposal: with no step statuses to record,
   // the only reason to call update is a new or changed objective, and
   // that decision belongs to the user.
-  return yield* requestApproval(call, plan, call.run.runId, call.workPlanState);
+  return yield* requestApproval(call, plan, call.run.runId, workPlan);
 });
 
 const executePause = Effect.fn('PlanTool.executePause')(function* (
@@ -391,13 +382,5 @@ Commands:
 pause/complete only affect autonomous goals; with no goal running they return guidance for ordinary chat.`,
   schema: PlanToolInputSchema,
   execute: (input: PlanToolInput) =>
-    Effect.gen(function* () {
-      const call = yield* ToolCall;
-      if (call.run === undefined) {
-        return yield* Effect.fail(
-          new ToolError('plan requires an active agent run.'),
-        );
-      }
-      return yield* planCommand(call, input);
-    }),
+    Effect.flatMap(requireToolRun('plan'), (call) => planCommand(call, input)),
 });

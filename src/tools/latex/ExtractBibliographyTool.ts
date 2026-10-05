@@ -4,7 +4,8 @@ import * as nodePath from 'node:path';
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import type { RunCall } from '@agent/runtime/RunCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - tools
 import {
@@ -73,9 +74,9 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
   }: ExtractBibliographyInput): Effect.fn.Return<
     ToolResult,
     Error,
-    ToolCall | WorkspaceFs | FileSystem.FileSystem
+    ToolContext | RunCall | WorkspaceFs | FileSystem.FileSystem
   > {
-    const call = yield* ToolCall;
+    const call = yield* ToolContext;
     const { path, display } = yield* resolveLatexFile(texPath);
 
     const context = yield* extractBibliographyContext(path.absolute);
@@ -85,10 +86,10 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
 
     // Use provided bibPath, or fall back to configured default
     const effectiveBibPath =
-      bibPath || call.roots.config.get<string>('texra.bib.defaultPath');
+      bibPath || call.env.roots.config.get<string>('texra.bib.defaultPath');
 
     if (effectiveBibPath) {
-      const resolved = yield* resolveToolPath(call, effectiveBibPath);
+      const resolved = yield* resolveToolPath(call.env, effectiveBibPath);
       // `fsPath` records where the bibliography landed: workspace-relative
       // inside the session's folder, absolute for a path the caller chose
       // outside it. So the confined `WorkspaceFs` view of this call's own
@@ -113,7 +114,7 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
     const missingBibliographyNote =
       missingBibliographyFiles.length > 0
         ? `Missing bibliography files: ${yield* formatPathList(
-            call,
+            call.env,
             missingBibliographyFiles,
           )}.`
         : undefined;
