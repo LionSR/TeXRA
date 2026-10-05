@@ -355,8 +355,8 @@ function validateTeamListAvailability() {
       `team list NDJSON should include planned availability\nstdout:\n${ndjson.stdout}`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
-    rmSync(home, { recursive: true, force: true });
+    removeScratch(cwd);
+    removeScratch(home);
   }
 }
 
@@ -431,8 +431,8 @@ function validateToolsCommand() {
       'tools list NDJSON records should have kind=tool-status',
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
-    rmSync(home, { recursive: true, force: true });
+    removeScratch(cwd);
+    removeScratch(home);
   }
 }
 
@@ -666,7 +666,7 @@ async function validateChatOnboardingPicker(options) {
       );
     }
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeScratch(root);
   }
 }
 
@@ -811,7 +811,7 @@ function validateRunCommand() {
       'run NDJSON should include a result record',
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -867,7 +867,7 @@ function validateToolUseAgentRunCommand() {
       'agent run should return the validation model response',
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -947,7 +947,7 @@ prompt: |
       `history query run should return the query page for its own run (artifact: ${artifactPath})\nresponse:\n${response}`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1105,6 +1105,29 @@ const VIEW_ROWS = `SELECT s.logical_id AS run, e.seq, e.type,
    FROM event e JOIN event_sequence s ON s.id = e.aggregate
    WHERE e.type IN ('run.start', 'context.edit') ORDER BY e."commit"`;
 
+/**
+ * Remove a scratch directory, first stopping any TeXRA service a chat in it
+ * started: its record names its pid, and a conversation parked there would
+ * otherwise keep it running after its home is gone.
+ */
+function removeScratch(dir) {
+  const records = spawnSync(
+    'find',
+    [dir, '-name', 'serve.json', '-path', '*/.texra/run/*'],
+    {
+      encoding: 'utf8',
+    },
+  );
+  for (const file of records.stdout.split('\n').filter(Boolean)) {
+    try {
+      process.kill(JSON.parse(readFileSync(file, 'utf8')).pid, 'SIGTERM');
+    } catch {
+      // Gone already, or the record is unreadable: nothing left to stop.
+    }
+  }
+  rmSync(dir, { recursive: true, force: true });
+}
+
 function writeArtifact(name, value) {
   const artifactDir = path.join(validationRoot, 'artifacts');
   mkdirSync(artifactDir, { recursive: true });
@@ -1188,7 +1211,7 @@ async function validateForkResetHandoff() {
       `the fork should record its seed, the handoff and the reset as context.edit rows, got ${causes.join()} (artifact: ${artifactPath})`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1247,7 +1270,7 @@ async function validateTuiForkHandoffReset() {
       `the fork should record its seed, the handoff and the reset, got ${causes.join()} (artifact: ${artifactPath})`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1293,7 +1316,7 @@ async function validateBackgroundCompaction() {
       `the summary should land as one edit of the three messages before the second turn's request (artifact: ${artifactPath})`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1396,7 +1419,7 @@ async function validateInterruptedTasks() {
       `the chat should leave the task blocked while its agent is missing and resume it once the agent is back (artifact: ${artifactPath})\noutput:\n${stripVTControlCharacters(chat.output).slice(-3000)}`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1501,7 +1524,7 @@ async function validateServiceChatsSeeEachOther() {
       cwd: project.work,
       env,
     });
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1646,7 +1669,7 @@ prompt: |
       cwd: project.work,
       env,
     });
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1800,7 +1823,7 @@ prompt: |
       cwd: project.work,
       env,
     });
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1924,7 +1947,7 @@ async function validateServiceSharedTask() {
       cwd: project.work,
       env,
     });
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -2054,7 +2077,7 @@ async function validateOpenTimePrompt() {
       `/rename should write the user's title (artifact: ${artifactPath})`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -2157,7 +2180,7 @@ prompt: |
       `the script result should carry all structured mathematical results\nresponse:\n${response}`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -2269,7 +2292,7 @@ function validateTeamRunCommand() {
       'team run NDJSON should include a preset result record with the selected root agent',
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 

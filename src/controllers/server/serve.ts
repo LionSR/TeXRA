@@ -6,7 +6,8 @@
  * - a stop: `service.stop` without a drain, or the host's own shutdown;
  * - a drain (`service.stop` with `drain`, the upgrade path): the record and
  *   the socket path are released at once, so a newer service can start
- *   while this one finishes the tasks it runs, and it exits when they end;
+ *   while this one finishes the tasks at work, and it exits when they end
+ *   (a conversation parked here stops with it, resumable);
  * - idleness: no client connected and no task running for `idleAfter`.
  *
  * It never starts at login: a client starts it detached when none answers.
@@ -225,16 +226,19 @@ export const serve = Effect.fn('server.serve')(function* (
   let idleSince: number | null = null;
   const check = Effect.gen(function* () {
     const running = yield* runningTasks(projects);
+    // A drained or replaced service waits for the tasks at work; a
+    // conversation parked here is stopped with the service, resumable.
+    const working = yield* runningTasks(projects, false);
     const now = yield* Clock.currentTimeMillis;
     if (yield* Ref.get(draining)) {
-      if (running === 0) yield* Deferred.succeed(ended, 'drained');
+      if (working === 0) yield* Deferred.succeed(ended, 'drained');
       return;
     }
     // Another service took the socket path over (two started at once):
     // this one can no longer be reached, so it leaves.
     if (listening !== undefined) {
       const current = yield* socketIno;
-      if (current !== listening && running === 0) {
+      if (current !== listening && working === 0) {
         yield* Deferred.succeed(ended, 'replaced');
         return;
       }
