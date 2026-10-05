@@ -56,7 +56,7 @@ import {
 } from '@shared/schemas';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
-import { sha256, toolDigests } from '@tools/catalogEntries';
+import { sha256, toolDefinitionsFor, toolDigests } from '@tools/catalogEntries';
 import { LiveTools } from '@tools/liveTools';
 import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { readDisabledTools } from '@tools/plugins';
@@ -67,7 +67,6 @@ import type { StepRoot } from '@utils/files/externalRoots';
 import { declaredToolNames, resolveStepTools } from '../agentToolResolution';
 import { liveToolGates } from '../requestPolicy';
 import { blobRows, contextAt, stored } from '../run/requestContext';
-import { toolDefinitionsFor } from '../run/tools';
 import { appendRow, rowAggregate } from './rows';
 import { stepHooks, type StepHook } from './hooks';
 import type { AgentRunShape } from '../run/AgentRun';

@@ -42,13 +42,12 @@ import {
 } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runStateFold';
-import { sha256 } from '@tools/catalogEntries';
+import { sha256, toolDefinitionsFor } from '@tools/catalogEntries';
 
 import { AgentRun } from '../run/AgentRun';
 import { backgroundCompaction } from '../run/compaction';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { stored } from '../run/requestContext';
-import { toolDefinitionsFor } from '../run/tools';
 import { claimFollowUps, type ConsumedFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
 import { Runs } from '../runRegistry';
