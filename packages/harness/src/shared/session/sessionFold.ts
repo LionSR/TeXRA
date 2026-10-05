@@ -556,10 +556,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   const unreadable = run.blocked
     ? RUN_BLOCKED_COPY[run.blocked]
     : local.unreadable.find((u) => u.runId === run.id)?.detail;
-  const children = run.childIds.flatMap((childId) => {
-    const child = view.runs.get(childId);
-    return child === undefined ? [] : [child];
-  });
+  const children = run.childIds.flatMap((id) => view.runs.get(id) ?? []);
   const rollup = rollupOf(children);
   const treeUsage = sumUsageStats([
     run.usage,

@@ -36,7 +36,7 @@
   "packages/harness/src/shared/session/database.ts": 453,
   "packages/harness/src/shared/session/runRows.ts": 426,
   "packages/harness/src/shared/session/runStateFold.ts": 845,
-  "packages/harness/src/shared/session/sessionFold.ts": 1316,
+  "packages/harness/src/shared/session/sessionFold.ts": 1314,
   "packages/harness/src/shared/session/sessionView.ts": 473,
   "packages/harness/src/shared/session/surface.ts": 494,
   "packages/harness/src/shared/session/transcriptState.ts": 429,
