@@ -111,6 +111,8 @@ export const discoverCopilotRoutes = Effect.fn(
   return entries;
 });
 
+const RouteModelsSchema = z.array(z.string()).prefault([]);
+
 /**
  * Persisted canonical model ids whose Copilot route the user prefers, read
  * from the process global state the caller holds (the `AppState` service, or
@@ -122,11 +124,7 @@ export const discoverCopilotRoutes = Effect.fn(
  */
 export function preferredCopilotRouteModels(state: Pick<StateStore, 'get'>) {
   return Effect.map(
-    readState(
-      state,
-      GlobalStateKey.COPILOT_ROUTE_MODELS,
-      z.array(z.string()).prefault([]),
-    ),
+    readState(state, GlobalStateKey.COPILOT_ROUTE_MODELS, RouteModelsSchema),
     liveRouteModels,
   );
 }
@@ -145,22 +143,39 @@ export function prefersCopilotRoute(
   });
 }
 
-/** Persist (or clear) the Copilot route preference for one base model. */
+/**
+ * Persist (or clear) the Copilot route preference for one base model. A
+ * stored list that fails the reader's schema reads as empty, as it does for
+ * the reader, and is replaced with a warning.
+ */
 export function setCopilotRoutePreference(
   model: string,
   preferred: boolean,
   state: StateStore,
 ) {
+  let invalid: z.ZodError | undefined;
   return state
     .modify(GlobalStateKey.COPILOT_ROUTE_MODELS, (stored) => {
-      const current = liveRouteModels((stored as string[] | undefined) ?? []);
+      const parsed = RouteModelsSchema.safeParse(stored);
+      invalid = parsed.error;
+      const current = liveRouteModels(parsed.data ?? []);
       return Result.succeed(
         preferred
           ? [...new Set([...current, model])]
           : current.filter((entry) => entry !== model),
       );
     })
-    .pipe(Effect.asVoid);
+    .pipe(
+      Effect.tap(() =>
+        invalid === undefined
+          ? Effect.void
+          : Effect.logWarning(
+              `Replaced an invalid stored ${GlobalStateKey.COPILOT_ROUTE_MODELS}.`,
+              z.prettifyError(invalid),
+            ),
+      ),
+      Effect.asVoid,
+    );
 }
 
 /**
