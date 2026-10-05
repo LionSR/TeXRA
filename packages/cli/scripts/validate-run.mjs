@@ -355,8 +355,8 @@ function validateTeamListAvailability() {
       `team list NDJSON should include planned availability\nstdout:\n${ndjson.stdout}`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
-    rmSync(home, { recursive: true, force: true });
+    removeScratch(cwd);
+    removeScratch(home);
   }
 }
 
@@ -431,8 +431,8 @@ function validateToolsCommand() {
       'tools list NDJSON records should have kind=tool-status',
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
-    rmSync(home, { recursive: true, force: true });
+    removeScratch(cwd);
+    removeScratch(home);
   }
 }
 
@@ -666,7 +666,7 @@ async function validateChatOnboardingPicker(options) {
       );
     }
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeScratch(root);
   }
 }
 
@@ -811,7 +811,7 @@ function validateRunCommand() {
       'run NDJSON should include a result record',
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -867,7 +867,7 @@ function validateToolUseAgentRunCommand() {
       'agent run should return the validation model response',
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -947,7 +947,7 @@ prompt: |
       `history query run should return the query page for its own run (artifact: ${artifactPath})\nresponse:\n${response}`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1026,7 +1026,10 @@ prompt: |
     },
     /** One read of the project's store, closed again for the next writer. */
     readStore: (sql) => {
-      const [project] = readdirSync(storage);
+      // The project's store: a service also keeps a no-workspace one.
+      const project = readdirSync(storage).find((name) =>
+        name.startsWith('work-'),
+      );
       const db = new DatabaseSync(path.join(storage, project, 'texra.db'), {
         readOnly: true,
       });
@@ -1101,6 +1104,29 @@ const VIEW_ROWS = `SELECT s.logical_id AS run, e.seq, e.type,
      json_array_length(e.data, '$.payload.messages') AS messages
    FROM event e JOIN event_sequence s ON s.id = e.aggregate
    WHERE e.type IN ('run.start', 'context.edit') ORDER BY e."commit"`;
+
+/**
+ * Remove a scratch directory, first stopping any TeXRA service a chat in it
+ * started: its record names its pid, and a conversation parked there would
+ * otherwise keep it running after its home is gone.
+ */
+function removeScratch(dir) {
+  const records = spawnSync(
+    'find',
+    [dir, '-name', 'serve.json', '-path', '*/.texra/run/*'],
+    {
+      encoding: 'utf8',
+    },
+  );
+  for (const file of records.stdout.split('\n').filter(Boolean)) {
+    try {
+      process.kill(JSON.parse(readFileSync(file, 'utf8')).pid, 'SIGTERM');
+    } catch {
+      // Gone already, or the record is unreadable: nothing left to stop.
+    }
+  }
+  rmSync(dir, { recursive: true, force: true });
+}
 
 function writeArtifact(name, value) {
   const artifactDir = path.join(validationRoot, 'artifacts');
@@ -1185,7 +1211,7 @@ async function validateForkResetHandoff() {
       `the fork should record its seed, the handoff and the reset as context.edit rows, got ${causes.join()} (artifact: ${artifactPath})`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1244,7 +1270,7 @@ async function validateTuiForkHandoffReset() {
       `the fork should record its seed, the handoff and the reset, got ${causes.join()} (artifact: ${artifactPath})`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1290,7 +1316,7 @@ async function validateBackgroundCompaction() {
       `the summary should land as one edit of the three messages before the second turn's request (artifact: ${artifactPath})`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1305,6 +1331,9 @@ async function validateInterruptedTasks() {
   const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-interrupted-'));
   try {
     const project = echoProject(cwd);
+    // The chat is its task's writer here, so killing it is the crash this
+    // recovers from: a service would keep the task running past the kill.
+    project.ptyEnv.TEXRA_NO_SERVICE = '1';
     const globalStorage = path.join(
       cwd,
       'home',
@@ -1390,7 +1419,7 @@ async function validateInterruptedTasks() {
       `the chat should leave the task blocked while its agent is missing and resume it once the agent is back (artifact: ${artifactPath})\noutput:\n${stripVTControlCharacters(chat.output).slice(-3000)}`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1495,7 +1524,7 @@ async function validateServiceChatsSeeEachOther() {
       cwd: project.work,
       env,
     });
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1640,7 +1669,7 @@ prompt: |
       cwd: project.work,
       env,
     });
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1794,7 +1823,7 @@ prompt: |
       cwd: project.work,
       env,
     });
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1918,7 +1947,7 @@ async function validateServiceSharedTask() {
       cwd: project.work,
       env,
     });
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1934,6 +1963,9 @@ async function validateOpenTimePrompt() {
   const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-open-prompt-'));
   try {
     const project = echoProject(cwd);
+    // The chat is its task's writer here, so killing it is the crash this
+    // recovers from: a service would keep the task running past the kill.
+    project.ptyEnv.TEXRA_NO_SERVICE = '1';
     const source = project.firstRun('First message');
     const activations = () =>
       project.readStore(
@@ -2045,7 +2077,7 @@ async function validateOpenTimePrompt() {
       `/rename should write the user's title (artifact: ${artifactPath})`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -2148,7 +2180,7 @@ prompt: |
       `the script result should carry all structured mathematical results\nresponse:\n${response}`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -2260,7 +2292,7 @@ function validateTeamRunCommand() {
       'team run NDJSON should include a preset result record with the selected root agent',
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 

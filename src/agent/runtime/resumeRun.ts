@@ -62,7 +62,7 @@ export type ResumeRunResult =
 
 export interface ResumeRunOptions extends Pick<
   ResumeToolUseFromResumeDataOptions,
-  'publishWorkflowOutput' | 'beforeRunEnd' | 'onRunClaimed'
+  'publishWorkflowOutput' | 'beforeRunEnd' | 'onRunClaimed' | 'onRun'
 > {
   /** Session owning the resumed run's coordination state. */
   readonly session: SessionHandle;
@@ -225,6 +225,7 @@ const runLaunchOptions = (options: ResumeRunOptions) => ({
   publishWorkflowOutput: options.publishWorkflowOutput,
   beforeRunEnd: options.beforeRunEnd,
   onRunClaimed: options.onRunClaimed,
+  onRun: options.onRun,
 });
 
 /** The follow-ups still queued on the run, folded from its durable rows. */

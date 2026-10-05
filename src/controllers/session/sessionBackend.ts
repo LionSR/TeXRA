@@ -9,7 +9,7 @@
  * switch, the approval policy),
  * not a mirror of `SessionHandle`.
  */
-import { Effect, type Stream, type SubscriptionRef } from 'effect';
+import { Effect, Option, Stream, SubscriptionRef } from 'effect';
 
 import { resumeOnSession } from '@agent/followUp/ToolUseFollowUp';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
@@ -20,7 +20,12 @@ import type { ToolEditPreview } from '@controllers/server/protocol';
 import { launchOnRun } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import type { RunId, TranscriptSubscription } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  type RunId,
+  type RunOutcome,
+  type TranscriptSubscription,
+} from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import {
   Unavailable,
@@ -29,7 +34,7 @@ import {
 } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
-import type { SessionView } from '@shared/session/sessionView';
+import { isLiveRun, type SessionView } from '@shared/session/sessionView';
 
 import { frameSubscription } from './SessionFramer';
 
@@ -85,6 +90,9 @@ export interface SessionBackend {
   readonly preview: (
     requestId: string,
   ) => Effect.Effect<ToolEditPreview | null, Error>;
+  /** The outcome `runId`'s current activation ends with, once it has
+   *  ended: what a launch or a resume waits on. */
+  readonly ended: (runId: RunId) => Effect.Effect<RunOutcome>;
   /** A live run's model switch, while its loop runs; undefined otherwise. */
   readonly controls: (runId: RunId) => RunModelControls | undefined;
   /** The session's approval policy, from this window's settings. */
@@ -109,6 +117,35 @@ interface SessionLaunchOptions {
   readonly suppressErrorNotification?: boolean;
   /** The chat's previous root: its approval bypasses carry over. */
   readonly continues?: RunId;
+}
+
+/**
+ * The outcome `runId` ends with in `session`, the process running it: once
+ * every owner of the run has left, as its view holds that end. A run the
+ * view no longer lists was deleted, which ends it as cancelled.
+ */
+export function runEnded(
+  session: SessionHandle,
+  runId: RunId,
+): Effect.Effect<RunOutcome> {
+  return session.runs.awaitDrained(runId).pipe(
+    Effect.andThen(
+      SubscriptionRef.changes(session.view).pipe(
+        Stream.map((view) => view.runs.get(runId)),
+        Stream.filter((run) => run === undefined || !isLiveRun(run)),
+        Stream.runHead,
+      ),
+    ),
+    Effect.map((head) =>
+      Option.match(head, {
+        onNone: () => RUN_OUTCOME.CANCELLED,
+        onSome: (run) =>
+          run === undefined
+            ? RUN_OUTCOME.CANCELLED
+            : (run.durableOutcome ?? RUN_OUTCOME.COMPLETED),
+      }),
+    ),
+  );
 }
 
 /** The backend of a session this process holds. */
@@ -142,6 +179,7 @@ export function localSessionBackend(session: SessionHandle): SessionBackend {
       }),
     request: (request) => session.requests.request(request),
     controls: (runId) => session.runs.getHandle(runId)?.controls,
+    ended: (runId) => runEnded(session, runId),
     resume: (runId) =>
       Effect.flatMap(resumeOnSession(runId, session), (resumed) => {
         // A blocked resume is asked for, not refused: the task's own line

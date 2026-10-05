@@ -379,6 +379,13 @@ All notable changes to this project will be documented in this file.
   says the window went or did not answer in time, and with no window of
   the project open the task runs as a headless run does.
 
+- **`texra resume` continues a conversation the service is running
+  (CLI).** Resuming a chat's task that the background service still holds
+  (left waiting when its terminal closed) continues it there, with
+  `--handoff` and `--reset` applied by the service, instead of refusing it
+  as held by another process. `TEXRA_NO_SERVICE=1` runs a chat in its own
+  process, as on Windows.
+
 - **Every chat is a task of the background service (CLI).** `texra chat`
   and a bare `texra` run their conversation's runs in the TeXRA service, so
   another terminal's `/tasks` lists the conversation and attaches to it

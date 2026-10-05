@@ -199,6 +199,9 @@ function scenario(root) {
     LANG: 'C',
     TEXRA_NO_UPDATE_CHECK: '1',
     TEXRA_NO_TELEMETRY: '1',
+    // Each chat is its runs' writer, so killing it is the crash the
+    // conformance suite resumes from; a service would outlive the kill.
+    TEXRA_NO_SERVICE: '1',
     TEXRA_INTERNAL_VALIDATE_MODEL: '1',
     TEXRA_INTERNAL_VALIDATE_MODEL_FLAG: flag,
     TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT: '1',

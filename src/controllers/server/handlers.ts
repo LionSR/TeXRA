@@ -25,15 +25,16 @@ import { runAgent } from '@agent/runtime/runAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { launchOnRun } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { frameSubscription } from '@controllers/session/SessionFramer';
+import { runEnded } from '@controllers/session/sessionBackend';
 import type { ProcessServices } from '@platform/processRuntime';
-import type { RunId } from '@shared/schemas';
+import { RUN_PHASE, type RunId } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import { Internal, type RequestError } from '@shared/session/requestErrors';
 import {
   RequestErrorWireSchema,
   type RequestErrorWire,
 } from '@shared/session/sessionFrames';
-import { isLiveRun } from '@shared/session/sessionView';
+import { isLiveRun, type SessionView } from '@shared/session/sessionView';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -76,18 +77,44 @@ export class ServiceControl extends Context.Service<
   }
 >()('@texra/server/ServiceControl') {}
 
-/** The tasks the service runs now, across its open projects. */
+/** The tasks the service runs now, across its open projects; with
+ *  `parked` false, only those at work, not a conversation waiting for its
+ *  next message. */
 export const runningTasks = Effect.fn('server.runningTasks')(function* (
   projects: Context.Service.Shape<typeof ServiceProjects>,
+  parked = true,
 ): Effect.fn.Return<number> {
   let running = 0;
   for (const session of (yield* projects.opened).values()) {
     const view = yield* SubscriptionRef.get(session.view);
     for (const run of view.runs.values())
-      if (run.ownedHere && isLiveRun(run)) running += 1;
+      if (
+        run.ownedHere &&
+        isLiveRun(run) &&
+        (parked || run.status !== RUN_PHASE.WAITING)
+      )
+        running += 1;
   }
   return running;
 });
+
+/** The live run `runId` continues in: itself, or the live run its parent
+ *  chain reaches; null when `runId` is not live here. */
+function liveRoot(
+  view: SessionView,
+  session: SessionHandle,
+  runId: RunId,
+): RunId | null {
+  if (!session.runs.isLive(runId)) return null;
+  let root = runId;
+  for (
+    let parent = view.runs.get(root)?.parentId;
+    parent != null && session.runs.isLive(parent);
+    parent = view.runs.get(root)?.parentId
+  )
+    root = parent;
+  return root;
+}
 
 /** A request error in its wire shape: the fields the wire schema names. */
 const wireError = (error: RequestError): RequestErrorWire =>
@@ -216,6 +243,8 @@ export const serviceHandlers = TexraRpcs.toLayer(
             ).pipe(Stream.ensuring(session.subscriptions.set(port, [])));
           }),
         ),
+      'task.ended': ({ workspace, runId }) =>
+        Effect.flatMap(open(workspace), (session) => runEnded(session, runId)),
       'request.preview': ({ workspace, requestId }) =>
         open(workspace).pipe(
           Effect.flatMap((session) => hosts.preview(session, requestId)),
@@ -252,12 +281,14 @@ export const serviceHandlers = TexraRpcs.toLayer(
                 session,
                 preferHelperModel,
                 ownApiKeyFallback,
+                // Admitted once the run is registered, so a `task.ended`
+                // that follows the answer finds it.
                 onRun: launchOnRun(session.approvals, {
                   approveDelegatedWork,
+                  onRun: (registered) =>
+                    Deferred.succeed(admitted, registered).pipe(Effect.asVoid),
                 }),
                 ...(continues !== null && { continues }),
-                onRunResolved: (resolved) =>
-                  Deferred.doneUnsafe(admitted, Effect.succeed(resolved)),
               },
             ),
           );
@@ -299,13 +330,34 @@ export const serviceHandlers = TexraRpcs.toLayer(
         Effect.gen(function* () {
           yield* refuseWhileDraining;
           const session = yield* open(workspace);
+          // A run this service is running needs no resume: the client that
+          // asks takes up the conversation it belongs to, where it is (a
+          // chat left it waiting here).
+          const live = liveRoot(
+            yield* SubscriptionRef.get(session.view),
+            session,
+            runId,
+          );
+          if (live !== null) return live;
           return yield* admit<RunId | null>(runs, (admitted) =>
             Effect.gen(function* () {
+              let resolved: RunId = runId;
               const result = yield* resumeRun(runId, {
                 session,
+                // Admitted once the resumed generation is registered (the
+                // parent, for an owned child), so a `task.ended` that
+                // follows the answer waits for it.
+                onRun: (registered) =>
+                  Deferred.succeed(admitted, registered).pipe(Effect.asVoid),
                 onResumeResolved: (resumed) =>
-                  Deferred.succeed(admitted, resumed).pipe(Effect.asVoid),
+                  Effect.sync(() => {
+                    resolved = resumed;
+                  }),
               });
+              // A resume that joined one already in flight registers no
+              // generation of its own: the run is registered by now.
+              if ('started' in result)
+                yield* Deferred.succeed(admitted, resolved);
               // Blocked, not failed: it stays interrupted until what it needs is back.
               if ('failed' in result && result.failed === 'blocked')
                 return yield* Deferred.succeed(admitted, null);
