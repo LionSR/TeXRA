@@ -22,6 +22,7 @@ import { formatTaskDiagnostics } from '@ui/copy/taskDiagnostics';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { statusIndicatorStyles } from '@ui/styles/statusIndicatorStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
+import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import '@progressView/frontend/components/ToolTimer';
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -42,7 +43,6 @@ import {
 import { progressBadgeLabel } from '../formatters/progressBadgeFormatter';
 import { renderRunGrantChips, runGrantStyles } from './runGrantChips';
 import type { RunId } from '@texra-ai/harness/schemas';
-import type WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 /** A window-level item the shell appends to the run's menu: pop out,
@@ -526,9 +526,7 @@ export class RunHeader extends LitElement {
       <wa-dropdown
         placement="bottom-end"
         @wa-select=${(event: WaSelectEvent) => {
-          const { item } = event.detail;
-          if (item.localName !== 'wa-dropdown-item') return;
-          const { value } = item as WaDropdownItem;
+          const value = selectedItemValue(event);
           if (value === RENAME_TASK) {
             this.startRename();
             return;

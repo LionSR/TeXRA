@@ -8,6 +8,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - Web Awesome
+import { selectedItemValue } from './selectTemplates';
 import { waIcon } from './webAwesomeIcons';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 import type { IconActionButtonOptions } from './actionButtons';
@@ -34,12 +35,6 @@ interface SplitButtonMenuOptions {
 interface SplitButtonMenuParts {
   readonly menu: TemplateResult;
   readonly tooltip: TemplateResult;
-}
-
-function selectedItemValue(event: WaSelectEvent): string {
-  const { item } = event.detail;
-  if (item.localName !== 'wa-dropdown-item' || !('value' in item)) return '';
-  return typeof item.value === 'string' ? item.value : '';
 }
 
 /**

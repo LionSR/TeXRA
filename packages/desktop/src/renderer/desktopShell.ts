@@ -19,6 +19,7 @@ import { unseenRuns } from '@shared/session/unseenRuns';
 import type { TeXRAIconName } from '@shared/iconNames';
 import type { Shell } from '@texra/shared/session/shell';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
+import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { nextTablistIndex } from '@ui/wa/tablistKeyboardNav';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -27,6 +28,7 @@ import {
   type WorkbenchPlacement,
   type WorkbenchTab,
 } from '../shared/desktopShellState.js';
+import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 /** One open project as the rail lists it: how its host names it, its session,
  *  its surface. */
@@ -349,11 +351,11 @@ function openTabContextMenu(event: MouseEvent): void {
 }
 
 function handleTabMenuSelect(
-  event: CustomEvent<{ item: HTMLElement & { value?: string } }>,
+  event: WaSelectEvent,
   tabId: string,
   callbacks: WorkbenchTabsCallbacks,
 ): void {
-  switch (event.detail.item.value) {
+  switch (selectedItemValue(event)) {
     case 'close':
       callbacks.onClose(tabId);
       break;
@@ -438,11 +440,8 @@ export function workbenchTabsTemplate(
               <wa-dropdown
                 class="shell-workbench-tab-menu"
                 placement="bottom-start"
-                @wa-select=${(
-                  event: CustomEvent<{
-                    item: HTMLElement & { value?: string };
-                  }>,
-                ) => handleTabMenuSelect(event, tab.id, callbacks)}
+                @wa-select=${(event: WaSelectEvent) =>
+                  handleTabMenuSelect(event, tab.id, callbacks)}
               >
                 <button
                   slot="trigger"
@@ -475,10 +474,8 @@ export function workbenchTabsTemplate(
       <wa-dropdown
         class="shell-workbench-add"
         placement="bottom-end"
-        @wa-select=${(
-          event: CustomEvent<{ item: HTMLElement & { value?: string } }>,
-        ) => {
-          const kind = event.detail.item.value;
+        @wa-select=${(event: WaSelectEvent) => {
+          const kind = selectedItemValue(event);
           if (
             kind === 'files' ||
             kind === 'terminal' ||

@@ -346,8 +346,8 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
 // launcher, its conversation branch the selected run. `rerenderShell`
 // hands it the active project's session.
 const conversationView = document.createElement('progress-app') as ProgressApp;
-conversationView.placement = 'desktop';
-// The attribute is what the element's desktop styles select on.
+// The attribute sets the `placement` property and is what the element's
+// desktop styles select on.
 conversationView.setAttribute('placement', 'desktop');
 conversationView.setAttribute('data-desktop-view', 'progress');
 
