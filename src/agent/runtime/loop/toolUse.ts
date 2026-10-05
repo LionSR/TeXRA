@@ -30,7 +30,6 @@ import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { FollowUpBatch } from '@agent/followUp/RunInput';
 import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { logUserMessage } from '@agent/trace';
-import { toolDefinitionsFor } from '@agent/core/tools/toolSchema';
 import type { ProcessServices } from '@platform/processRuntime';
 import { LanguageModel } from '@platform/languageModel';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
@@ -43,7 +42,7 @@ import {
 } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runStateFold';
-import { sha256 } from '@tools/catalogEntries';
+import { sha256, toolDefinitionsFor } from '@tools/catalogEntries';
 
 import { AgentRun } from '../run/AgentRun';
 import { backgroundCompaction } from '../run/compaction';
