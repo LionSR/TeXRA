@@ -237,7 +237,7 @@ describe('Shared layer dependency direction', () => {
 
 describe('Latex layer dependency direction', () => {
   it('does not grow latex-to-agent imports', () => {
-    const offenders = sourceFilesUnder('src/latex')
+    const offenders = sourceFilesUnder('packages/texra/src/latex')
       .filter((file) => importsMatching(file, AGENT_IMPORT_PATTERNS))
       .map(toRepoPath)
       .toSorted();
