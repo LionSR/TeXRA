@@ -220,11 +220,11 @@ describe('VS Code-free zones never import vscode', () => {
 });
 
 describe('Shared layer dependency direction', () => {
-  // `src/ui` is held to the same rule as `src/shared`: the toolkit renders a
+  // The UI kit is held to the same rule as `src/shared`: the toolkit renders a
   // host-neutral view model handed to it, so an `@agent/*` import there would
   // be the run system leaking into the render layer.
   it('does not grow shared-to-agent imports', () => {
-    const offenders = ['src/shared', 'src/ui']
+    const offenders = ['src/shared', 'packages/texra/src/ui']
       .flatMap((root) => sourceFilesUnder(root))
       .filter((file) => importsMatching(file, AGENT_IMPORT_PATTERNS))
       .map(toRepoPath)
