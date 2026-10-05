@@ -172,6 +172,13 @@ function settledResult(result: ToolResult): Settlement['result'] {
   return { ...rest, diagnostics: JsonValueSchema.parse(diagnostics) };
 }
 
+/** A duplicate's copy of its primary's result: no edits, no files. */
+const withoutEffects = (result: Settlement['result']): Settlement['result'] => {
+  if (result.status !== 'executed') return result;
+  const { edits: _edits, files: _files, ...rest } = result;
+  return rest;
+};
+
 const endsTurn = (settlement: Pick<Settlement, 'result'>): boolean =>
   settlement.result.status === 'executed' && settlement.result.endTurn === true;
 
@@ -1290,34 +1297,24 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     ProcessServices | Runs | WorkspaceFs | StorageFs | FileSystem.FileSystem
   > {
     const status = recordOf(yield* cell.current, fact.callId)?.status;
-    if (status === undefined) {
-      return yield* Effect.die(new Error(`No record of ${fact.callId}`));
-    }
     const call = calls[fact.ordinal];
-    if (call === undefined) {
-      return yield* Effect.die(new Error(`No call at ordinal ${fact.ordinal}`));
-    }
+    const primaryAt =
+      fact.duplicateOf === null ? null : ordinalOf.get(fact.duplicateOf);
+    if (status === undefined || call === undefined || primaryAt === undefined)
+      return yield* Effect.die(
+        new Error(`${fact.callId} is not a call of its response as stored`),
+      );
     const attempt = Math.max(1, attemptOf(status));
     if (status.kind === 'settled') {
       // Settled before: nothing to do.
-    } else if (fact.duplicateOf !== null) {
-      yield* lanes.finished(ordinalOf.get(fact.duplicateOf) ?? -1);
+    } else if (fact.duplicateOf !== null && primaryAt !== null) {
+      yield* lanes.finished(primaryAt);
       const primary = settledOf(yield* cell.current, fact.duplicateOf);
       if (primary !== null)
         yield* settle(fact, attempt, {
           disposition: 'duplicate',
           duplicateOf: fact.duplicateOf,
-          result:
-            primary.result.status === 'executed'
-              ? (() => {
-                  const {
-                    edits: _edits,
-                    files: _files,
-                    ...rest
-                  } = primary.result;
-                  return rest;
-                })()
-              : primary.result,
+          result: withoutEffects(primary.result),
           attachments: [],
           stateMutation: [],
         });
