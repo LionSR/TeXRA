@@ -62,7 +62,6 @@ import {
   type UserQuestionPermission,
 } from '@shared/schemas';
 import { goalStateOf } from '@shared/plugins/goal';
-import { subscribeToSignalChanges } from '@shared/signals';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   isInFlightPhase,
@@ -78,6 +77,7 @@ import {
   PROCESS,
   tail,
 } from '@test/shared/session/fanOutScenario';
+import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { clearGoal, setGoalSessionAutoApproval, startGoal } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';

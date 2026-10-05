@@ -14,9 +14,7 @@ import {
 } from 'effect';
 import { afterEach, describe, expect, onTestFinished, vi } from 'vitest';
 
-import type { ToolEditPreview } from '@controllers/approval/ToolEditApprovalController';
 import type { DesktopToolEditApprovalUi } from '@desktop/main/desktopToolEditApproval';
-import type { DiffSource } from '@hosts/uiHosts';
 import type { RunId } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -28,6 +26,8 @@ import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
+import type { DiffSource } from '@texra/hosts/uiHosts';
+import type { ToolEditPreview } from '@texra/controllers/approval/ToolEditApprovalController';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -82,7 +82,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
   const [{ requestToolEditApproval }, controllerModule, desktopModule] =
     await Promise.all([
       import('@tools/approval/toolEditApproval'),
-      import('@controllers/approval/ToolEditApprovalController'),
+      import('@texra/controllers/approval/ToolEditApprovalController'),
       import('@desktop/main/desktopToolEditApproval'),
     ]);
   return {
@@ -493,10 +493,10 @@ describe('desktop tool edit approval', () => {
     () =>
       Effect.gen(function* () {
         const runLatexdiff = vi.fn(() => Effect.void);
-        mocks.doMock('@tools/latex/latexPreview', async () => {
+        mocks.doMock('@texra/tools/latex/latexPreview', async () => {
           const actual = await vi.importActual<
-            typeof import('@tools/latex/latexPreview')
-          >('@tools/latex/latexPreview');
+            typeof import('@texra/tools/latex/latexPreview')
+          >('@texra/tools/latex/latexPreview');
           return { ...actual, runLatexdiff };
         });
 

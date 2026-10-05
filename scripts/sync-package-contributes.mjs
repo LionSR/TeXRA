@@ -31,7 +31,7 @@ try {
   await build({
     absWorkingDir: rootDir,
     entryPoints: {
-      commandCatalog: 'src/shared/commands/catalog.ts',
+      commandCatalog: 'packages/texra/src/shared/commands/catalog.ts',
     },
     bundle: true,
     format: 'cjs',

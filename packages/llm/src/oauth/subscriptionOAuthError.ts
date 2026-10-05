@@ -7,10 +7,9 @@ import { Data } from 'effect';
  * - `expired`   — no usable session / cannot refresh.
  * - `transient` — 5xx / network blip: keep the session, retry later.
  * - `config`    — misconfiguration (e.g. missing refresh token).
- * - `pending`   — device-code authorization not completed yet.
  */
 export type SubscriptionOAuthErrorKind =
-  'fatal' | 'expired' | 'transient' | 'config' | 'pending';
+  'fatal' | 'expired' | 'transient' | 'config';
 
 export class SubscriptionOAuthError extends Data.TaggedError(
   'SubscriptionOAuthError',

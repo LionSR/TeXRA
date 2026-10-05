@@ -11,7 +11,8 @@ import {
   CODEX_DEVICE_TOKEN_URL,
   CODEX_DEVICE_USERCODE_URL,
 } from '../../../packages/llm/src/oauth/codex/codexConstants.js';
-import type { CodexSessionCoordinator } from '../../../packages/llm/src/oauth/codex/CodexSessionCoordinator.js';
+import type { SubscriptionOAuthCoordinator } from '../../../packages/llm/src/oauth/SubscriptionOAuthCoordinator.js';
+import type { CodexSession } from '../../../packages/llm/src/oauth/codex/codexSessionTypes.js';
 
 /**
  * Drive the flow through the wire: the usercode endpoint answers once, and
@@ -41,8 +42,10 @@ function deviceEndpointsFetch(
   });
 }
 
-function coordinatorStub(): CodexSessionCoordinator {
-  return { completeDeviceLogin: vi.fn() } as unknown as CodexSessionCoordinator;
+function coordinatorStub(): SubscriptionOAuthCoordinator<CodexSession> {
+  return {
+    loginWithCode: vi.fn(),
+  } as unknown as SubscriptionOAuthCoordinator<CodexSession>;
 }
 
 /** Let the flow's fiber cross its pending `fetch` promises and reach its next wait. */
@@ -86,7 +89,7 @@ describe('Codex device login', () => {
         expect(
           Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause),
         ).toBe(true);
-        expect(coordinator.completeDeviceLogin).not.toHaveBeenCalled();
+        expect(coordinator.loginWithCode).not.toHaveBeenCalled();
       }),
   );
 
@@ -103,7 +106,7 @@ describe('Codex device login', () => {
         const store = createDeferred<{ accessToken: string }>();
         const coordinator = coordinatorStub();
         const storeEntered = yield* Deferred.make<void>();
-        vi.mocked(coordinator.completeDeviceLogin).mockImplementation(() => {
+        vi.mocked(coordinator.loginWithCode).mockImplementation(() => {
           Deferred.doneUnsafe(storeEntered, Effect.void);
           return Effect.promise(() => store.promise) as never;
         });
@@ -122,7 +125,7 @@ describe('Codex device login', () => {
         yield* settle;
         yield* TestClock.adjust('5 seconds');
         yield* Deferred.await(storeEntered);
-        expect(coordinator.completeDeviceLogin).toHaveBeenCalledOnce();
+        expect(coordinator.loginWithCode).toHaveBeenCalledOnce();
 
         // The store is uninterruptible: start the interrupt now, so it is
         // pending before resolving the store rather than queued behind this

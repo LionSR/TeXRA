@@ -23,7 +23,7 @@ import {
   executionsWaitTimeoutSeconds,
 } from '@shared/toolUse';
 import type { TeXRAIconName } from '@shared/iconNames';
-import type { TranscriptRowBase } from '@ui/transcript';
+import type { TranscriptRowBase } from '@shared/transcript';
 import { isObject } from '@utils/core';
 
 // Side-effect import to register <terminal-output> custom element

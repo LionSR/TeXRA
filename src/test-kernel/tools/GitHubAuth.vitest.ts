@@ -8,7 +8,7 @@ import {
   getGitHubToken,
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
-} from '@tools/github/githubAuth';
+} from '@texra/tools/github/githubAuth';
 
 /** Secret/env fixture for one row of a token-precedence table. */
 interface TokenCase {

@@ -1,9 +1,20 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 
 // Local imports
-import type { TerminalRunResult } from '@hosts/uiHosts';
-import type { SetupPlatformShape } from '@tools/setup/platform';
+import { fakeSetupPlatform } from '@test/support/setupPlatform';
+import type { TerminalRunResult } from '@texra/hosts/uiHosts';
+import {
+  SetupPlatform,
+  type SetupPlatformShape,
+} from '@texra/tools/setup/platform';
+
+/** `layer` with the setup plugin's service over the installed host's setup
+ *  platform, for a setup tool called outside a run's step. */
+export const withSetup = <A, E, R>(
+  layer: Layer.Layer<A, E, R>,
+): Layer.Layer<A | SetupPlatform, E, R> =>
+  Layer.merge(layer, SetupPlatform.layer(fakeSetupPlatform));
 
 /**
  * Build a fully stubbed host-varying setup platform for tool unit tests.

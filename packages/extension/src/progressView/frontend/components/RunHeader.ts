@@ -12,12 +12,11 @@ import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
-import type { RunId } from '@shared/schemas';
 import { goalStateOf, type GoalState } from '@shared/plugins/goal';
 import type { SessionView, RunView } from '@shared/session/sessionView';
-import { SessionUiEvents } from '@shared/session/uiEvents';
-import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import type { TeXRAIconName } from '@shared/iconNames';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { CopyButtonController } from '@texra/shared/litControllers/CopyButtonController';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { formatTaskDiagnostics } from '@ui/copy/taskDiagnostics';
 import { designTokens, commonViewStyles } from '@ui/styles';
@@ -42,6 +41,7 @@ import {
 } from '../constants';
 import { progressBadgeLabel } from '../formatters/progressBadgeFormatter';
 import { renderRunGrantChips, runGrantStyles } from './runGrantChips';
+import type { RunId } from '@texra-ai/harness/schemas';
 import type WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 

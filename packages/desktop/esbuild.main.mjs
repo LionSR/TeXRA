@@ -7,6 +7,7 @@ import { rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { buildIdentityDefine } from '../../scripts/build-identity.mjs';
 import { codeSandboxWorker } from '../../scripts/code-sandbox-worker.mjs';
 import { esmCjsGlobalsBanner } from '../../scripts/esm-cjs-globals-banner.mjs';
 import { stubInternalValidationModel } from '../../scripts/stub-internal-validation-model.mjs';
@@ -64,6 +65,7 @@ const options = {
   tsconfig: 'tsconfig.main.json',
   target: 'node22',
   banner: { js: esmCjsGlobalsBanner },
+  define: buildIdentityDefine(),
   plugins: [stubInternalValidationModel, codeSandboxWorker],
 };
 

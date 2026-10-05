@@ -27,7 +27,7 @@ import { JsonObjectSchema, originOf, sameModelOrigin } from '../protocol.js';
 import { ModelError, fillModelError, sdkModelError } from '../errors.js';
 import { parseOutboundToolArguments, sdkStream } from './transport.js';
 import { filesApiUploads, type UploadCache } from './uploadCache.js';
-import type { PartEvent } from './parts.js';
+import type { InputPart, PartEvent } from './parts.js';
 import type { ModelOrigin } from '../protocol.js';
 import type {
   ContentBlockParam,
@@ -182,10 +182,7 @@ function sdkFailure(cause: unknown): ModelError {
 }
 
 const inputPart = Effect.fn('llm.anthropic.inputPart')(function* (
-  part: Extract<
-    ResolvedTurn['messages'][number],
-    { role: 'user' }
-  >['content'][number],
+  part: InputPart,
   /** The live file id this binding holds for some bytes, or `null`. */
   fileIdFor: (base64: string) => string | null,
 ) {
@@ -304,16 +301,10 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
     } else if (message.role === 'tool') {
       const content: ToolResultBlockParam[] = [];
       for (const result of message.results) {
-        const call = calls[result.callOrdinal];
-        if (call === undefined)
-          return yield* new ModelError({
-            kind: 'unsupported',
-            message:
-              'Anthropic tool results require their original provider call IDs.',
-          });
         content.push({
           type: 'tool_result',
-          tool_use_id: call.providerCallId,
+          // The canonical grammar guarantees adjacent, complete ordinals.
+          tool_use_id: calls[result.callOrdinal].providerCallId,
           is_error: result.status === 'error',
           content: yield* Effect.forEach(result.content, lowerPart),
         });

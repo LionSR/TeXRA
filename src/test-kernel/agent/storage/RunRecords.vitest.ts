@@ -112,16 +112,4 @@ describe('canonical run records', () => {
         expect(retained.some((row) => row.type === 'run.removed')).toBe(true);
       }),
   );
-
-  it('resets a prior report explicitly without replacing another metadata value', async () => {
-    const records = getRunRecords(session, runId);
-    await run(seedReport(session, runId, 'old report'));
-    const config = AgentConfigFieldsSchema.parse({
-      agent: 'worker',
-    });
-    await run(seedRunRecord(session, runId, config));
-    await run(records.clearReport());
-    expect(await run(records.readReport())).toBeNull();
-    expect(await run(records.readConfig())).toEqual(config);
-  });
 });

@@ -11,10 +11,8 @@ import { computed, signal } from '@lit-labs/signals';
 import { Cause, Effect } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import type { RunId } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
-import type { RequestError } from '@shared/session/requestErrors';
-import { transcriptText, type TranscriptRow } from '@ui/transcript';
+import { transcriptText, type TranscriptRow } from '@shared/transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   CLI_LOCAL_RUN_ID,
@@ -26,6 +24,8 @@ import {
   sessionRunIds,
 } from './cliState';
 import { currentView, runViewOf } from './sessionView';
+import type { RequestError } from '@texra-ai/harness';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /**
  * The runs whose transcript tier this terminal keeps resident: its

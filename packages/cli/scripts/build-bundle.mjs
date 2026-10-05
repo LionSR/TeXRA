@@ -6,6 +6,8 @@ import { chmod } from 'node:fs/promises';
 
 import { fileURLToPath, URL } from 'node:url';
 
+import { buildIdentityDefine } from '../../../scripts/build-identity.mjs';
+
 const reactDevtoolsStub = fileURLToPath(
   new URL('./react-devtools-core-stub.mjs', import.meta.url),
 );
@@ -61,6 +63,7 @@ try {
     external: ['fsevents'],
     loader: { '.wasm': 'binary' },
     define: {
+      ...buildIdentityDefine(),
       'process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL': JSON.stringify(
         includeInternalValidationModel ? '1' : '',
       ),
@@ -88,7 +91,7 @@ try {
     },
     outfile,
     minify: !harness,
-    // SDK error classification (src/common/errors/sdkError/) reads
+    // SDK error classification (packages/harness/src/common/errors/sdkError/) reads
     // `constructor.name` off the prototype chain, so minified class names
     // would silently misclassify provider errors in the published binary.
     keepNames: true,

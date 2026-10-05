@@ -1,4 +1,4 @@
-// Suites for src/utils/system (execUtils, workspaceInfo, binaryResolver,
+// Suites for packages/harness/src/utils/system (execUtils, workspaceInfo, binaryResolver,
 // toolUtils).
 
 // Node imports

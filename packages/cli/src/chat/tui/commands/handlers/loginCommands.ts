@@ -18,21 +18,21 @@ import {
   type CliLoginSlashArgs,
   type CliLogoutTarget,
 } from '@cli/runtime/loginOptions';
-import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
 import type { AgentCatalogServices } from '@platform/processRuntime';
-import type { Secrets, PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
 import {
   ACCOUNT_OUTCOME,
   SUBSCRIPTION_AUTH_COPY,
 } from '@shared/model/accountAuth';
+import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   type SlashCommandOutput,
   transcriptSlashCommandOutput,
 } from './slashContext';
+import type { Secrets, PlatformSecrets } from '@texra-ai/harness';
 
 const CHAT_LOGIN_USAGE = [
   'Usage: /login chatgpt [--no-browser] [--device]',

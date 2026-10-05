@@ -8,10 +8,10 @@ import { Effect, Stream } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
-import type { RunId } from '@shared/schemas';
 import { attentionOf, type SessionView } from '@shared/session/sessionView';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
+import type { RunId } from '@texra-ai/harness/schemas';
 import type * as vscode from 'vscode';
 
 /** What the provider lends: its two surfaces, read at use, and its moves. */

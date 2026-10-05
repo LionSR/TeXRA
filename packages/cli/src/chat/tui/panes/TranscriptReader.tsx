@@ -14,13 +14,13 @@ import { useInput, useWindowSize } from 'ink';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { ReaderPanel, readerLayout } from '@cli/tui/ui/BorderedPanel';
 import { CLOSE_HINTS, READER_SCROLL_HINTS } from '@cli/tui/ui/KeyHints';
-import type { RunId } from '@shared/schemas';
 import type { TranscriptView } from '@shared/session/sessionView';
 
 import { ScrollableModalText } from '../modals/ScrollableModalText';
 import { sessionView, runViewOf } from '../state/sessionView';
 import { transcriptToLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
+import type { RunId } from '@texra-ai/harness/schemas';
 const EMPTY_TRANSCRIPT_TEXT = '(no output yet)';
 const EMPTY_TRANSCRIPT: Pick<TranscriptView, 'rows'> = { rows: [] };
 

@@ -7,7 +7,7 @@
 import { isDeepStrictEqual } from 'node:util';
 
 // Local imports - canonical model contract
-import type { TurnResult } from '../turn.js';
+import type { ResolvedTurn, TurnResult } from '../turn.js';
 
 /** A completed provider turn: the HTTP arm of `TurnResult`. */
 export type HttpTurnResult = Extract<
@@ -16,6 +16,11 @@ export type HttpTurnResult = Extract<
 >;
 /** One canonical content part of a completed turn. */
 export type Part = HttpTurnResult['content'][number];
+/** One part of a user turn or a tool result. */
+export type InputPart = Extract<
+  ResolvedTurn['messages'][number],
+  { role: 'user' }
+>['content'][number];
 
 /**
  * What every codec reports a response as. A part opens at its position in
@@ -56,10 +61,12 @@ export type PartEvent =
   | { readonly kind: 'usage'; readonly usage: HttpTurnResult['usage'] }
   | {
       readonly kind: 'finish';
+      /** A `null` reason leaves it to the settled content: a tool-call
+       *  finish when it holds calls, else a plain stop. */
       readonly finish: Pick<
         HttpTurnResult,
-        'finishReason' | 'stopSequence' | 'finishEvidence' | 'refusalEvidence'
-      >;
+        'stopSequence' | 'finishEvidence' | 'refusalEvidence'
+      > & { readonly finishReason: HttpTurnResult['finishReason'] | null };
       /** The provider's terminal statement of the content. */
       readonly snapshot?: readonly Part[];
     };

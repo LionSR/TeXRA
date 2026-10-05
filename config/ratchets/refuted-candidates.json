@@ -8,12 +8,12 @@
       "ruling": ".agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
       "symbols": [
         {
-          "file": "src/platform/interfaces.ts",
+          "file": "packages/harness/src/platform/interfaces.ts",
           "symbol": "ConfigProvider",
           "signature": "export interface ConfigProvider { get<T>(key: string, defaultValue?: T): T; update<T>( key: string, value: T, target?: ConfigTarget, ): Effect.Effect<void, ConfigWriteFailed>; inspect<T = unknown>(key: string): ConfigInspection<T>; }"
         },
         {
-          "file": "src/platform/defaults/jsonConfigProvider.ts",
+          "file": "packages/harness/src/platform/defaults/jsonConfigProvider.ts",
           "symbol": "JsonConfigProvider",
           "signature": "export class JsonConfigProvider implements ConfigProvider { private readonly workspaceStore: ConfigStore; private readonly globalStore: ConfigStore; private readonly localStore: ConfigStore; constructor({ workspace, global, local }: JsonConfigProviderOptions) {…} get<T>(key: string, defaultValue?: T): T {…} update<T>( key: string, value: T, target: ConfigTarget = 'workspace', ): Effect.Effect<void, ConfigWriteFailed> {…} inspect<T = unknown>(key: string): ConfigInspection<T> {…} }"
         }
@@ -26,7 +26,7 @@
       "ruling": ".agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
       "symbols": [
         {
-          "file": "src/utils/core/perKeyQueue.ts",
+          "file": "packages/harness/src/utils/core/perKeyQueue.ts",
           "symbol": "withPerKeyLane",
           "signature": "export function withPerKeyLane<Key, RefusalE = never>( lanes: PerKeyLanes<Key>, key: Key, refuseClaim?: (occupant: PerKeyLane | undefined) => RefusalE | undefined, ): <A, E, R>( self: Effect.Effect<A, E, R>, ) => Effect.Effect<A, E | RefusalE, R> {…}"
         }
@@ -39,7 +39,7 @@
       "ruling": ".agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
       "symbols": [
         {
-          "file": "src/agent/runtime/ModelRetryGate.ts",
+          "file": "packages/harness/src/agent/runtime/ModelRetryGate.ts",
           "symbol": "ModelRetryGate",
           "signature": "export class ModelRetryGate { static readonly make: Effect.Effect<ModelRetryGate, never, Scope.Scope> = Effect.gen(function* () {…}); private readonly routes = new Map<string, RouteState>(); private closed = false; private constructor(private readonly scope: Scope.Scope) {…} withRoutes( routes: readonly [RoutePolicy, ...RoutePolicy[]], options: RouteOptions, ): <A, E, R>(attempt: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R> {…} private settle( acquired: readonly AcquiredRoute[], exit: Exit.Exit<unknown, unknown>, baseBackoffMs: number, ): Effect.Effect<void> {…} private acquireAll( routes: readonly RoutePolicy[], onWait: RouteOptions['onWait'], ): Effect.Effect<AcquiredRoute[]> {…} private isCurrentPermit(route: string, permit: RetryPermit): boolean {…} private close(): Effect.Effect<void> {…} private acquire( route: string, onWait: RouteOptions['onWait'], ): Effect.Effect<RetryPermit> {…} private leave(state: RouteState, waiter: Waiter): Effect.Effect<void> {…} private acquireHealthy(route: string): RetryPermit | undefined {…} private markRouteFailure( route: string, permit: RetryPermit, baseBackoffMs: number, failure: RouteFailure, ): Effect.Effect<void> {…} private markReachable( route: string, permit: RetryPermit, ): Effect.Effect<void> {…} private abandonAll(acquired: readonly AcquiredRoute[]): Effect.Effect<void> {…} private abandon(route: string, permit: RetryPermit): Effect.Effect<void> {…} private abandonRoute( state: RouteState, permit: RetryPermit, ): Effect.Effect<void> {…} private cancelProbe(state: RouteState): Effect.Effect<void> {…} private scheduleProbe(state: RouteState): Effect.Effect<void> {…} }"
         }
@@ -47,12 +47,12 @@
     },
     {
       "id": "EFF-ADOPT-timeouts-already-effect",
-      "candidate": "src/tools/timeouts.ts onto Effect timeouts and Schedule",
+      "candidate": "packages/harness/src/tools/timeouts.ts onto Effect timeouts and Schedule",
       "why": "Already Effect.timeoutOrElse and Schedule. The one real item in this area is the duplicated [1, 2) backoff spelling, which moves to a host-neutral module; the module itself is not the candidate.",
       "ruling": ".agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
       "symbols": [
         {
-          "file": "src/tools/timeouts.ts",
+          "file": "packages/harness/src/tools/timeouts.ts",
           "symbol": "retryTransientFetch",
           "signature": "export const retryTransientFetch = Effect.fn('timeouts.retryTransientFetch')( <T, E extends Error, R>( request: Effect.Effect<T, E, R | Scope.Scope>, options: RetryTransientFetchOptions<E>, ) => {…}, );"
         }
@@ -65,7 +65,7 @@
       "ruling": ".agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md#2-changes",
       "symbols": [
         {
-          "file": "src/utils/core/index.ts",
+          "file": "packages/harness/src/utils/core/index.ts",
           "symbol": "jitteredExponentialBackoffMs",
           "signature": "export function jitteredExponentialBackoffMs( baseMs: number, failures: number, maxMs: number, unitRandom: number, jitterFraction = 0.2, ): number {…}"
         }
@@ -78,7 +78,7 @@
       "ruling": ".agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#8-refuted-candidates-do-not-re-mine",
       "symbols": [
         {
-          "file": "src/utils/system/execUtils.ts",
+          "file": "packages/harness/src/utils/system/execUtils.ts",
           "symbol": "executeCommand",
           "signature": "export const executeCommand = Effect.fn('executeCommand')(function* ( command: string | string[], options: ExecuteCommandBaseOptions, ): Effect.fn.Return<ExecResult, never, ChildProcessSpawner> {…});"
         }
@@ -117,7 +117,7 @@
       "ruling": ".agents/docs/implemented/architecture/2026-08-01-architecture-rulings-ledger.md#service-scopes-heldsessions-and-externalroots-stay-ruled-2026-09-20",
       "symbols": [
         {
-          "file": "src/controllers/session/sessionLayer.ts",
+          "file": "packages/harness/src/controllers/session/sessionLayer.ts",
           "symbol": "HeldSessions",
           "signature": "type HeldSessions = Map<SessionKey, SessionHandle>;"
         }
@@ -130,7 +130,7 @@
       "ruling": ".agents/docs/implemented/architecture/2026-08-01-architecture-rulings-ledger.md#service-scopes-heldsessions-and-externalroots-stay-ruled-2026-09-20",
       "symbols": [
         {
-          "file": "src/utils/files/externalRoots.ts",
+          "file": "packages/harness/src/utils/files/externalRoots.ts",
           "symbol": "registerExternalRoot",
           "signature": "export function registerExternalRoot( absolutePath: string, options: ExternalRootOptions, ): void {…}"
         }

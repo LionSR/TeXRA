@@ -19,14 +19,14 @@ import {
   type SessionHandle,
   type ValidatedRunRequest,
 } from '@agent/runtime';
-import { launchOnRun } from '@controllers/mainView/backend/MainViewRunLaunchController';
-import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
-import { attachSessionHost } from '@controllers/session/attachSessionHost';
 import {
   type ProcessRuntime,
   withProcessServices,
 } from '@platform/processRuntime';
 import type { RequestOpenFilePayload, RunId } from '@shared/schemas';
+import { launchOnRun } from '@texra/controllers/mainView/backend/MainViewRunLaunchController';
+import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
+import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
 
 import {
   DesktopToolEditApprovalHost,

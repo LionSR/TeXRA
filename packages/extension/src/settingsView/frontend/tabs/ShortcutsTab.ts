@@ -6,12 +6,12 @@ import { customElement, state } from 'lit/decorators.js';
 import {
   detectBrowserPlatform,
   formatDesktopAccelerator,
-} from '@shared/commands/accelerators';
+} from '@texra/shared/commands/accelerators';
 import {
   getDesktopShortcutService,
   keyboardEventToAccelerator,
   type DesktopShortcutEntry,
-} from '@shared/commands/shortcutPreferences';
+} from '@texra/shared/commands/shortcutPreferences';
 import {
   commonViewStyles,
   designTokens,

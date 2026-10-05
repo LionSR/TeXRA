@@ -12,7 +12,7 @@ import {
   type PromptInputOptions,
   type PromptMessageItem,
   type PromptMessageOptions,
-} from '@hosts/uiHosts';
+} from '@texra/hosts/uiHosts';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**

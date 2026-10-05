@@ -13,8 +13,8 @@ import {
   hostStores,
   installPlatform,
 } from '@test/support/setupPlatform';
-import { wolfram, zotero } from '@tools/integrationPlugins';
-import { texraPlugins } from '@tools/registry';
+import { wolfram, zotero } from '@texra/tools/integrationPlugins';
+import { texraPlugins } from '@texra/tools/registry';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 
 /** Let a forked probe reach the call it will be interrupted in. */

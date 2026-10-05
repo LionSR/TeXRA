@@ -38,13 +38,21 @@ for (const forbidden of [
     throw new Error(`Forbidden declaration text remains: ${forbidden}`);
   }
 }
+// Specifier positions only: a service key such as `'@texra/platform/AppState'`
+// is a string, not an import of the `@texra/*` alias.
 for (const alias of internalAliases) {
   const quotedAlias = new RegExp(
-    `['"]${alias.replaceAll('/', '\\/')}(?:/|['"])`,
+    `(?:\\bfrom\\s*|\\bimport\\s*\\(\\s*|\\bimport\\s+)['"]${alias.replaceAll('/', '\\/')}(?:/|['"])`,
   );
   if (quotedAlias.test(declarationText)) {
     throw new Error(`Unresolved internal declaration alias remains: ${alias}`);
   }
+}
+const distManifest = JSON.parse(
+  await readFile(path.join(distRoot, 'package.json'), 'utf8'),
+);
+if (distManifest.type !== 'module') {
+  throw new Error('dist/package.json must mark the built output as ESM.');
 }
 if (allFiles.some((file) => file.endsWith('.map'))) {
   throw new Error('Source or declaration maps must not be published.');

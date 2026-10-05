@@ -281,7 +281,7 @@
     color-mix(in srgb, var(--desktop-color-focus) 20%, transparent);
 
   /* The semantic tokens (type ramp, control geometry, overlays, seams,
-     motion) are not declared here: src/ui/styles/litStyles.ts defines them
+     motion) are not declared here: packages/texra/src/ui/styles/litStyles.ts defines them
      once for `:root` and `:host`, and the renderer adopts that sheet on its
      document. This file sets only the --desktop-* palette and the --wa-*
      inputs those tokens read. */

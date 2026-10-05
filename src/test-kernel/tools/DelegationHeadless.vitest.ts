@@ -6,7 +6,6 @@ import { Deferred, Effect, Exit, Fiber, Stream } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { documentTaskConfig } from '@agent/output/documentRecipe';
 import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
@@ -28,6 +27,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { agentTool } from '@tools/delegation/AgentTool';
 import {
   executeSubagentInBand as executeSubagentInBandEffect,
@@ -121,7 +121,6 @@ vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
             Effect.succeed({
               ok: false as const,
               error,
-              outcomePersisted: false,
             }),
           onSuccess: () => actual.finalizeRun(session, input),
         }),

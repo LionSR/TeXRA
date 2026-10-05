@@ -1,7 +1,7 @@
 import { Data, Effect, FileSystem, type Path } from 'effect';
 
 import type { ProjectDatabases } from '@shared/session/database';
-import type { SettingsTarget } from '@shared/settingsView/settingsViewMessages';
+import type { SettingsTarget } from '@texra/shared/settingsView/settingsViewMessages';
 import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopLayoutPanel,

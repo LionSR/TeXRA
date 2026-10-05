@@ -7,7 +7,7 @@ import {
   definedHandler,
   dispatchCommandFromRegistry,
   type CommandHandler,
-} from '@shared/commands/registry';
+} from '@texra/shared/commands/registry';
 
 interface TestActions {
   noop(): void;

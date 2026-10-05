@@ -101,7 +101,7 @@ vi.mock('@cli/runtime/cliService', () => ({
   reachCliService: () => Effect.fail(new Error('no TeXRA service in tests')),
 }));
 
-vi.mock('@model/setupCredentialAccess', () => ({
+vi.mock('@texra/model/setupCredentialAccess', () => ({
   hasUsableSetupCredential: mocks.hasUsableSetupCredential,
 }));
 

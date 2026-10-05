@@ -11,15 +11,15 @@ import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
 import { codingPlanForApiProvider } from '@texra-ai/llm';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { postMessage } from '@shared/hostBridge';
+import { providerEndpointKey } from '@shared/state/providerSettings';
+import type { SubscriptionUsageSnapshots } from '@shared/schemas';
+import { postMessage } from '@texra/shared/hostBridge';
+import { createEvent } from '@texra/shared/utils/events';
+import { TickerController } from '@texra/shared/litControllers/TickerController';
 import type {
   ProviderKeyStatus,
   ProviderSetting,
-} from '@shared/settingsView/settingsViewMessages';
-import { TickerController } from '@shared/litControllers/TickerController';
-import { providerEndpointKey } from '@shared/state/providerSettings';
-import type { SubscriptionUsageSnapshots } from '@shared/schemas';
-import { createEvent } from '@shared/utils/events';
+} from '@texra/shared/settingsView/settingsViewMessages';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderIconActionButton } from '@ui/wa/actionButtons';

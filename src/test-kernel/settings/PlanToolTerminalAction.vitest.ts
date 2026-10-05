@@ -3,16 +3,16 @@ import '@test/support/defaultSessionTestSetup';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { planToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
+import { planToolTerminalAction } from '@texra/controllers/settingsView/ToolDashboardData';
 
 const mocks = vi.hoisted(() => ({
   packageManager: null as 'brew' | 'apt' | 'scoop' | null,
   isWindows: false,
 }));
 
-vi.mock('@utils/system/toolUtils', async (importOriginal) => {
+vi.mock('@texra/utils/system/toolChecks', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('@utils/system/toolUtils')>();
+    await importOriginal<typeof import('@texra/utils/system/toolChecks')>();
   return {
     ...actual,
     hasPackageManager: (name: string) => name === mocks.packageManager,
