@@ -2,8 +2,8 @@
  * The run's tools, as the package sees them and as the run history records them:
  * the uniform tool definitions of a `TurnRequest`, and the per-call dispatch
  * facts stamped on a `response` row so the fold and the resume rule need no
- * tool registry. Parallel-safe calls share a partition; every barrier is its
- * own; a call whose name and arguments repeat an earlier one in the same
+ * tool registry. Contiguous parallel-safe calls run together; every barrier
+ * runs alone; a call whose name and arguments repeat an earlier one in the same
  * window is a duplicate that never executes.
  */
 import { Effect, Result } from 'effect';
@@ -101,20 +101,14 @@ export function dispatchFactsFor(
       `Deduplicated ${duplicates.size} parallel tool call(s) with identical name and arguments`,
     );
   }
-  let partition = -1;
-  let previousSafe = false;
   return parsed.map((call, index) => {
-    const parallelSafe = isParallelSafe(call);
-    if (!(parallelSafe && previousSafe)) partition += 1;
-    previousSafe = parallelSafe;
     const primaryIndex = duplicates?.get(call.callId);
     return {
       callId: call.callId,
       toolName: call.name,
       ordinal: index,
-      parallelSafe,
+      parallelSafe: isParallelSafe(call),
       replay: registry?.get(call.name)?.replay ?? 'unsafe',
-      partition,
       duplicateOf:
         primaryIndex === undefined ? null : parsed[primaryIndex].callId,
       logId: mintLogId(),

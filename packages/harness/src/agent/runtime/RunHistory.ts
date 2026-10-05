@@ -148,11 +148,11 @@ function contractViolation(
       if (result === undefined || result.callOrdinal !== ordinal) {
         return `the tool group carries no result at ordinal ${ordinal}`;
       }
-      const settlement = pending.settled[call.callId];
+      const settled = pending.records[call.callId]?.status;
       const expected =
-        settlement === undefined
-          ? settledInBatch.get(`${pending.responseId}/${call.callId}`)
-          : settlementStatus(settlement.result.status);
+        settled?.kind === 'settled'
+          ? settlementStatus(settled.result.status)
+          : settledInBatch.get(`${pending.responseId}/${call.callId}`);
       if (expected === undefined) {
         return `call ${call.callId} has no committed settlement`;
       }

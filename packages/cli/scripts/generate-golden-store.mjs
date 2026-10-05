@@ -944,11 +944,12 @@ function normalize(file, root) {
         (other) =>
           intents.includes(other) &&
           other.value.payload.origin.kind === 'response' &&
-          other.value.payload.callIds.includes(scriptCallId),
+          other.value.payload.callId === scriptCallId,
       )?.value.payload.origin.responseId;
     for (const intent of intents) {
-      const { origin, callIds, attempt } = intent.value.payload;
-      if (origin.kind !== 'script' || !callIds.includes(callId)) continue;
+      const { origin, attempt } = intent.value.payload;
+      if (origin.kind !== 'script' || intent.value.payload.callId !== callId)
+        continue;
       const parentRunId = logicalOf.get(row.aggregate);
       const fields = { parentRunId, responseId, callId, attempt };
       children.set(derive(fields), fields);

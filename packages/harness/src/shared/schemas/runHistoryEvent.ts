@@ -108,8 +108,6 @@ const DispatchFactsSchema = z.strictObject({
    *  re-runs an unfinished call unasked only when this and the tool's
    *  current declaration both say `safe`. */
   replay: z.enum(['safe', 'unsafe']),
-  /** Contiguous dispatch partition; each barrier is its own. */
-  partition: z.int().nonnegative(),
   /** The primary this call duplicates. A duplicate never executes and never
    *  reapplies its primary's effects. */
   duplicateOf: CallIdSchema.nullable(),
@@ -349,17 +347,19 @@ export type ScriptCallPayload = z.infer<typeof ScriptCallPayloadSchema>;
 
 /* ------------------------------------------------------------ tool.intent */
 
-/** What issued the calls an intent admits: a response's dispatch facts, or
- *  the guest of one of its `script` calls (`script.call`). */
+/** What issued the call whose body an intent starts: a response's dispatch
+ *  facts, or the guest of one of its `script` calls (`script.call`). */
 const ToolIntentOriginSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('response'), responseId: ResponseIdSchema }),
   z.strictObject({ kind: z.literal('script'), scriptCallId: CallIdSchema }),
 ]);
-export type ToolIntentOrigin = z.infer<typeof ToolIntentOriginSchema>;
 
+/** One call's body starts: committed after its PreToolUse hooks, its guard
+ *  and its approval, so before it nothing of the attempt has run and after
+ *  it the body may have. */
 export const ToolIntentPayloadSchema = z.strictObject({
   origin: ToolIntentOriginSchema,
-  callIds: z.array(CallIdSchema).min(1).readonly(),
+  callId: CallIdSchema,
   /** Increases only after a re-run decision: a person's, or the replay rule
    *  for a call whose saved and current declarations both say `safe`. An
    *  earlier approval never authorizes another attempt implicitly. */

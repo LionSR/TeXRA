@@ -30,7 +30,7 @@ import type { SessionHandle } from './SessionHandle';
 
 /**
  * Whether the run stands at a settled position (HQ4): at a turn boundary,
- * with no open attempt, response, tool intent, undecided request or retry
+ * with no open attempt, response (nor its calls), undecided request or retry
  * permit. A cut anywhere else would carry a result nobody produced.
  */
 const isSettled = (state: RunState): boolean =>
@@ -39,7 +39,6 @@ const isSettled = (state: RunState): boolean =>
   state.at !== 'turn.ready' &&
   state.openAttempt === null &&
   state.pendingResponse === null &&
-  Object.keys(state.pendingIntents).length === 0 &&
   state.pendingRetry === null &&
   Object.values(state.requests).every((request) => request.decision !== null);
 

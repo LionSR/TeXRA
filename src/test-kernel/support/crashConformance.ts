@@ -39,6 +39,8 @@
  *   interrupted, which an automatic resume carries on);
  * - a person is asked whether to run again an awaited child that had
  *   ended cleanly before the crash;
+ * - a person is asked whether a command ran that the crash stopped before
+ *   its body started (before its approval);
  * - a bypass turned off is acknowledged before its row is durable (a
  *   resume would restore it on).
  */
@@ -541,6 +543,22 @@ function violations(
       ? [{ callId: boundTo.get(decided.requestId), commit: row.commit }]
       : [];
   });
+  // A command's body runs only once approved, so a command the prefix never
+  // approved cannot have started: asking whether it ran is a false question.
+  const isCommand = (callId: unknown) =>
+    /validation-(bash-\d+|script-\d+\/1)$/.test(String(callId));
+  const askedAboutUnstarted = final.some((row) => {
+    if (row.commit <= n || row.type !== 'request.opened') return false;
+    const { requestId } = json(row) as { readonly requestId: string };
+    const callId = boundTo.get(requestId);
+    return (
+      questions.has(requestId) &&
+      isCommand(callId) &&
+      !approvals.some(
+        (approval) => approval.callId === callId && approval.commit <= n,
+      )
+    );
+  });
   const unapproved = resumed.filter(
     (row) =>
       payload(row).disposition === 'executed' &&
@@ -647,6 +665,9 @@ function violations(
       ? null
       : 'an unfinished command ran again with no one asked',
     unapproved.length === 0 ? null : 'a command ran before its approval',
+    askedAboutUnstarted
+      ? 'a person was asked whether a command that never started ran'
+      : null,
     unaskedRelaunches.length === 0
       ? null
       : 'a child launched again with no one asked',

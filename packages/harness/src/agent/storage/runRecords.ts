@@ -21,7 +21,8 @@ import type {
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { foldAttempts, type AttemptKey } from '@shared/session/attemptFold';
-import { foldRunState } from '@shared/session/runStateFold';
+import { attemptOf } from '@shared/session/inFlight';
+import { foldRunState, type RunState } from '@shared/session/runStateFold';
 import {
   ResultMetaSchema,
   storedResultMeta,
@@ -157,21 +158,30 @@ export const callChildRunId = (call: {
   readonly attempt: number;
 }): RunId => deriveRunId(call);
 
-/** The runs the attempts so far of one open call of `parentRunId` launched
- *  under their derived ids (they may not exist). */
-const callChildren = (
-  parentRunId: RunId,
-  callId: string,
-  intent: { readonly responseId: string; readonly attempt: number },
-): readonly RunId[] =>
-  Array.from({ length: intent.attempt }, (_, index) =>
-    callChildRunId({
-      parentRunId,
-      responseId: intent.responseId,
-      callId,
-      attempt: index + 1,
-    }),
-  );
+/** The runs the attempts so far of `runId`'s open calls launched under
+ *  their derived ids (they may not exist), by call: a call no attempt of
+ *  which asked or started owns none. */
+const openCallChildren = (
+  runId: RunId,
+  state: RunState | null,
+): ReadonlyMap<string, readonly RunId[]> => {
+  const pending = state?.pendingResponse ?? null;
+  const open = new Map<string, readonly RunId[]>();
+  for (const [callId, { status }] of Object.entries(pending?.records ?? {}))
+    if (pending !== null && status.kind !== 'settled')
+      open.set(
+        callId,
+        Array.from({ length: attemptOf(status) }, (_, index) =>
+          callChildRunId({
+            parentRunId: runId,
+            responseId: pending.responseId,
+            callId,
+            attempt: index + 1,
+          }),
+        ),
+      );
+  return open;
+};
 
 /**
  * The open call that owns `runId` (HQ6): the parent call that launched it,
@@ -186,11 +196,12 @@ export const owningCall = Effect.fn('owningCall')(function* (
   const edge = yield* parentEdge(session, runId);
   if (edge?.callId == null) return null;
   const { id, callId } = edge;
-  const intent = (yield* session.runHistory.load(id))?.pendingIntents[callId];
+  const children = openCallChildren(id, yield* session.runHistory.load(id)).get(
+    callId,
+  );
   // A later response may reuse the call id: the pending call owns the run
   // only when the run is named by it.
-  return intent !== undefined &&
-    callChildren(id, callId, intent).includes(runId)
+  return children?.includes(runId) === true
     ? { parentRunId: id, callId }
     : null;
 });
@@ -203,10 +214,10 @@ export const openOwnedChildren = Effect.fn('openOwnedChildren')(function* (
   session: SessionHandle,
   runId: RunId,
 ) {
-  const intents = (yield* session.runHistory.load(runId))?.pendingIntents ?? {};
+  const calls = openCallChildren(runId, yield* session.runHistory.load(runId));
   const open: { readonly runId: RunId; readonly callId: string }[] = [];
-  for (const [callId, intent] of Object.entries(intents))
-    for (const child of callChildren(runId, callId, intent)) {
+  for (const [callId, children] of calls)
+    for (const child of children) {
       // One read of the child's records: a child that never started has no
       // edge, and its edge and its end come from the same rows.
       const rows = yield* session.readRunRecords(child);

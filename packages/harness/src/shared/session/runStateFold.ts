@@ -30,12 +30,10 @@ import {
   type SessionEventDraft,
   type SnapshotRuntime,
   type StateOperation,
-  type ToolBindingPayload,
 } from '@shared/schemas';
 import { isObject } from '@utils/core';
 import {
   applyRunRow,
-  byId,
   copyById,
   freshRunPosition,
   isFollowUpRow,
@@ -48,9 +46,13 @@ import {
   writable,
 } from './runRows';
 import {
+  attemptOf,
+  boundRequestOf,
   openAttemptAfter,
   pendingResponseOf,
+  settlementOf,
   type OpenAttempt,
+  type PendingCall,
   type PendingResponse,
 } from './inFlight';
 import { mutate } from './stateOperation';
@@ -111,14 +113,6 @@ export class RunHistoryInconsistent extends Data.TaggedError(
 const LoopStateSchema = RunSnapshotPayloadSchema.shape.state;
 type LoopState = z.output<typeof LoopStateSchema>;
 
-type PendingIntent = {
-  readonly attempt: number;
-  readonly responseId: string;
-  /** The request that guards this attempt, when one was raised: the
-   *  `tool.binding` row in the request's batch is its only carrier. */
-  readonly binding: Pick<ToolBindingPayload, 'requestId' | 'role'> | null;
-};
-
 /**
  * What the loop continues from. A plain type with no schema of its own,
  * because giving it one invites persisting it (C10). Every field is derived
@@ -160,8 +154,6 @@ export type RunState = RunPosition & {
    *  (a model switch) leaves it. */
   readonly countStale: boolean;
   readonly pendingResponse: PendingResponse | null;
-  /** By call id. */
-  readonly pendingIntents: Readonly<Record<string, PendingIntent>>;
   /** The requests decided since the run's latest `run.activate`: answers
    *  this owner landed before its loop reached the call waiting on them, so
    *  no waiter has read them. A decision from before the activation was
@@ -262,7 +254,6 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   lastTurn: null,
   countStale: false,
   pendingResponse: null,
-  pendingIntents: byId([]),
   decidedSinceActivation: new Set(),
   usage: EMPTY_RUN_USAGE_TOTALS,
   loop: null,
@@ -293,9 +284,11 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
  */
 export function unboundRequests(state: RunState): readonly string[] {
   // The recovery bindings the rows carry (R5): the `model.retry` permit's
-  // request and every pending intent's `tool.binding`.
+  // request and every pending call's `tool.binding`.
   const bindings = new Set<string | undefined>(
-    Object.values(state.pendingIntents).map((i) => i.binding?.requestId),
+    Object.values(state.pendingResponse?.records ?? {}).map(
+      ({ status }) => boundRequestOf(status)?.requestId,
+    ),
   );
   if (state.pendingRetry !== null) bindings.add(state.pendingRetry.requestId);
   return Object.entries(state.requests).flatMap(([requestId, request]) =>
@@ -353,6 +346,21 @@ function applyMutations(
   return Result.succeed({ ...state, loop: loop.data });
 }
 
+/** Why a row of `attempt` cannot move a call standing at `status`, or null:
+ *  a settled call is closed, and a call's attempt never goes back. */
+const openFor = (
+  callId: string,
+  status: PendingCall['status'],
+  attempt: number,
+): string | null => {
+  if (status.kind === 'settled')
+    return `${callId} is already settled at attempt ${status.attempt}`;
+  const reached = attemptOf(status);
+  return attempt < reached
+    ? `${callId} attempt ${attempt} is below ${reached}`
+    : null;
+};
+
 const opened = (state: RunState | null): state is RunState =>
   state !== null && state.phase !== null;
 
@@ -383,6 +391,18 @@ function foldRow(
     commit,
     runHistoryRows: state.runHistoryRows + 1,
   });
+  /** `state` with this row counted and `call` as `pending`'s record of
+   *  `callId`. */
+  const withCall = (
+    state: RunState,
+    pending: PendingResponse,
+    callId: string,
+    call: PendingCall,
+  ): RunState => {
+    const records = writable(pass, pending.records, copyById);
+    records[callId] = call;
+    return { ...advance(state), pendingResponse: { ...pending, records } };
+  };
   // Pending input is the publisher's: a queued row only opens an empty run.
   if (isFollowUpRow(row))
     return current === null && row.type === 'followup.queued'
@@ -542,7 +562,7 @@ function foldRow(
             );
           }
           const unsettled = pending.calls.filter(
-            (call) => !Object.hasOwn(pending.settled, call.callId),
+            (call) => settlementOf(pending, call.callId) === null,
           );
           if (unsettled.length > 0) {
             return refuse(
@@ -551,17 +571,10 @@ function foldRow(
               commit,
             );
           }
-          const pendingIntents = byId(
-            Object.entries(state.pendingIntents).filter(
-              ([, intent]) => intent.responseId !== pending.responseId,
-            ),
-          );
-          pass.add(pendingIntents);
           return Result.succeed({
             ...state,
             messages: appended(state, pending.assistant, ...p.messages),
             pendingResponse: null,
-            pendingIntents,
           });
         }
       }
@@ -637,86 +650,89 @@ function foldRow(
           `${p.callId} names no pending call ${p.scriptCallId}`,
         );
       }
-      if (Object.hasOwn(pending.scriptCalls, p.callId)) {
+      if (Object.hasOwn(pending.records, p.callId)) {
         return outOfOrder(`${p.callId} is already recorded`);
       }
-      const scriptCalls = writable(pass, pending.scriptCalls, copyById);
-      scriptCalls[p.callId] = { ...p, settledAt: null };
-      return Result.succeed({
-        ...advance(current),
-        pendingResponse: { ...pending, scriptCalls },
-      });
+      return Result.succeed(
+        withCall(current, pending, p.callId, {
+          script: p,
+          status: { kind: 'issued' },
+        }),
+      );
     }
     case 'tool.intent': {
+      // The call's body begins: from here it may have run. Once per
+      // attempt, an attempt never goes back, and a call asking for this
+      // attempt keeps its own request as the attempt's binding.
       if (!opened(current)) return beforeOpening(row.type);
       const p = row.payload;
       const pending = current.pendingResponse;
-      const origin =
-        p.origin.kind === 'response'
-          ? `response ${p.origin.responseId}`
-          : `script ${p.origin.scriptCallId}`;
+      const call = pending?.records[p.callId];
+      const issuer = p.origin.kind === 'script' ? p.origin.scriptCallId : null;
       if (
         pending === null ||
+        call === undefined ||
         (p.origin.kind === 'response' &&
-          pending.responseId !== p.origin.responseId)
+          pending.responseId !== p.origin.responseId) ||
+        (call.script?.scriptCallId ?? null) !== issuer
       ) {
-        return outOfOrder(
-          `intent names ${origin}, pending is ${pending?.responseId ?? 'none'}`,
-        );
+        return outOfOrder(`intent names ${p.callId}, no call of its origin`);
       }
-      // A script's call is its `script.call`, which names a call of the
-      // pending response.
-      const issued = (callId: string): boolean =>
-        p.origin.kind === 'response'
-          ? pending.calls.some((fact) => fact.callId === callId)
-          : pending.scriptCalls[callId]?.scriptCallId === p.origin.scriptCallId;
-      const pendingIntents = writable(pass, current.pendingIntents, copyById);
-      for (const callId of p.callIds) {
-        if (!issued(callId)) {
-          return outOfOrder(
-            `intent names ${callId}, which is not a call of ${origin}`,
-          );
-        }
-        const known = pendingIntents[callId];
-        if (known !== undefined && p.attempt < known.attempt) {
-          return outOfOrder(
-            `intent attempt ${p.attempt} is below ${known.attempt} for ${callId}`,
-          );
-        }
-        pendingIntents[callId] = {
-          attempt: p.attempt,
-          responseId: pending.responseId,
-          binding:
-            known !== undefined && known.attempt === p.attempt
-              ? known.binding
-              : null,
-        };
-      }
-      return Result.succeed({
-        ...advance(current),
-        pendingIntents,
-      });
+      const { status } = call;
+      const refusal =
+        status.kind === 'started' && status.attempt === p.attempt
+          ? `${p.callId} attempt ${p.attempt} already started`
+          : openFor(p.callId, status, p.attempt);
+      if (refusal !== null) return outOfOrder(refusal);
+      return Result.succeed(
+        withCall(current, pending, p.callId, {
+          ...call,
+          status: {
+            kind: 'started',
+            attempt: p.attempt,
+            binding:
+              status.kind === 'asking' && status.attempt === p.attempt
+                ? { requestId: status.requestId, role: 'call' }
+                : null,
+          },
+        }),
+      );
     }
     case 'tool.binding': {
-      if (!opened(current)) return beforeOpening(row.type);
       // The request that guards one call attempt, committed with the
-      // `request.opened` it names: the intent it binds is the one the rows
-      // already hold, at the attempt the request guards. A later binding of
-      // the same attempt replaces it (a request retired as cancelled, asked
-      // again under a new id).
+      // `request.opened` it names. The call's own request may come before
+      // the attempt's body starts (its guard's approval) or after (the
+      // first its body raised); the outcome question only after. A later
+      // binding of the same attempt replaces it (a request retired as
+      // cancelled, asked again under a new id).
+      if (!opened(current)) return beforeOpening(row.type);
       const p = row.payload;
-      const intent = current.pendingIntents[p.callId];
-      if (intent === undefined || intent.attempt !== p.attempt) {
+      const pending = current.pendingResponse;
+      const call = pending?.records[p.callId];
+      if (pending === null || call === undefined) {
+        return outOfOrder(`binding ${p.requestId} names no pending call`);
+      }
+      const { status } = call;
+      const refusal = openFor(p.callId, status, p.attempt);
+      if (refusal !== null) return outOfOrder(refusal);
+      const running = status.kind === 'started' && status.attempt === p.attempt;
+      if (p.role === 'outcome' && !running) {
         return outOfOrder(
-          `binding ${p.requestId} names no pending intent for ${p.callId} at attempt ${p.attempt}`,
+          `outcome question ${p.requestId} for ${p.callId}, whose attempt ${p.attempt} never started`,
         );
       }
-      const pendingIntents = writable(pass, current.pendingIntents, copyById);
-      pendingIntents[p.callId] = {
-        ...intent,
-        binding: { requestId: p.requestId, role: p.role },
-      };
-      return Result.succeed({ ...advance(current), pendingIntents });
+      return Result.succeed(
+        withCall(current, pending, p.callId, {
+          ...call,
+          status: running
+            ? {
+                kind: 'started',
+                attempt: p.attempt,
+                binding: { requestId: p.requestId, role: p.role },
+              }
+            : { kind: 'asking', attempt: p.attempt, requestId: p.requestId },
+        }),
+      );
     }
     case 'tools.offered': // a fresh run's comes in its opening batch
       return Result.succeed({
@@ -761,69 +777,38 @@ function foldRow(
       if (!opened(current)) return beforeOpening(row.type);
       const p = row.payload;
       const pending = current.pendingResponse;
-      const scriptCall = pending?.scriptCalls[p.callId];
-      if (
-        pending === null ||
-        pending.responseId !== p.responseId ||
-        (scriptCall === undefined &&
-          !pending.calls.some((call) => call.callId === p.callId))
-      ) {
+      const call =
+        pending?.responseId === p.responseId
+          ? pending.records[p.callId]
+          : undefined;
+      if (pending === null || call === undefined) {
         return refuse(
           'orphan-settlement',
           `${p.callId} settles no pending call of ${p.responseId}`,
           commit,
         );
       }
-      const previous = pending.settled[p.callId];
-      if (previous !== undefined && previous.attempt === p.attempt) {
-        return refuse(
-          'orphan-settlement',
-          `${p.callId} is already settled at attempt ${p.attempt}`,
-          commit,
-        );
-      }
-      if (previous !== undefined && previous.attempt > p.attempt) {
-        return outOfOrder(
-          `${p.callId} attempt ${p.attempt} is below ${previous.attempt}`,
-        );
-      }
-      // A pending intent is this call's outcome-unknown barrier, and only the
-      // attempt it admitted can close it. Accepting another attempt's
-      // settlement leaves the intent standing until the delivering append
-      // drops every intent of the response, which retires the uncertainty
-      // with no re-run decision anywhere in the rows.
-      const intent = current.pendingIntents[p.callId];
-      if (intent !== undefined && intent.attempt !== p.attempt) {
-        return outOfOrder(
-          `${p.callId} settles attempt ${p.attempt} while its intent admitted attempt ${intent.attempt}`,
-        );
-      }
-      let pendingIntents = current.pendingIntents;
-      if (intent !== undefined) {
-        const remaining = writable(pass, pendingIntents, copyById);
-        delete remaining[p.callId];
-        pendingIntents = remaining;
-      }
-      const settled = writable(pass, pending.settled, copyById);
-      settled[p.callId] = {
-        attempt: p.attempt,
-        disposition: p.disposition,
-        duplicateOf: p.duplicateOf,
-        result: p.result,
-        attachments: p.attachments,
-      };
-      let scriptCalls = pending.scriptCalls;
-      if (scriptCall !== undefined) {
-        const written = writable(pass, scriptCalls, copyById);
-        written[p.callId] = { ...scriptCall, settledAt: commit };
-        scriptCalls = written;
+      // Only the attempt the rows reached, or a later one that settled
+      // before its body started, closes the call; and only once.
+      const refusal = openFor(p.callId, call.status, p.attempt);
+      if (refusal !== null) {
+        return call.status.kind === 'settled'
+          ? refuse('orphan-settlement', refusal, commit)
+          : outOfOrder(refusal);
       }
       return applyMutations(
-        {
-          ...advance(current),
-          pendingResponse: { ...pending, scriptCalls, settled },
-          pendingIntents,
-        },
+        withCall(current, pending, p.callId, {
+          ...call,
+          status: {
+            kind: 'settled',
+            at: commit,
+            attempt: p.attempt,
+            disposition: p.disposition,
+            duplicateOf: p.duplicateOf,
+            result: p.result,
+            attachments: p.attachments,
+          },
+        }),
         p.stateMutation,
         commit,
       );
