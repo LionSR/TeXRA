@@ -1,7 +1,8 @@
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import type { RunCall } from '@agent/runtime/RunCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - tools
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
@@ -32,13 +33,13 @@ const extractFigures = Effect.fn('ExtractLatexFiguresTool.execute')(function* ({
 }: ExtractFiguresInput): Effect.fn.Return<
   ToolResult,
   Error,
-  ToolCall | FileSystem.FileSystem
+  ToolContext | RunCall | FileSystem.FileSystem
 > {
-  const call = yield* ToolCall;
+  const call = yield* ToolContext;
   const { path, display } = yield* resolveLatexFile(texPath);
 
   const figurePaths = yield* extractFigurePathsFromLatex(
-    pathToLocationIn(call.roots.workspace, path.absolute),
+    pathToLocationIn(call.env.roots.workspace, path.absolute),
   );
   const uniqueFigures = unique(figurePaths);
 
@@ -55,7 +56,7 @@ const extractFigures = Effect.fn('ExtractLatexFiguresTool.execute')(function* ({
   const formattedList = yield* Effect.forEach(limitedPaths, (figurePath) =>
     Effect.gen(function* () {
       const { display: figureDisplay } = yield* resolveToolPath(
-        call,
+        call.env,
         figurePath,
       );
       return `- ${figureDisplay}`;

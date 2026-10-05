@@ -3,7 +3,8 @@
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { callerRun } from '@agent/runtime/RunCall';
 
 // Local imports
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
@@ -110,15 +111,16 @@ export const OpenPdfTool = defineTool({
     'Open a PDF file in the host PDF viewer. The tool accepts workspace-relative paths, working-directory-relative paths, and absolute run-storage paths.',
   schema: OpenPdfInputSchema,
   execute: Effect.fn('OpenPdfTool.call')(function* (input: OpenPdfInput) {
-    const call = yield* ToolCall;
-    const runId = call.run?.runId;
+    const { env } = yield* ToolContext;
+    const run = yield* callerRun;
+    const runId = run?.runId;
     const trimmedPath = input.path.trim();
     const ports: OpenPdfPorts = {
-      call,
-      openPdf: call.run?.session.interactions.openPdf,
+      call: env,
+      openPdf: run?.session.interactions.openPdf,
       runStorageLocation:
         runId && trimmedPath
-          ? runStorageLocationInRunUnder(call.roots.storage, trimmedPath, runId)
+          ? runStorageLocationInRunUnder(env.roots.storage, trimmedPath, runId)
           : undefined,
     };
     return yield* openPdfProgram(ports, input);

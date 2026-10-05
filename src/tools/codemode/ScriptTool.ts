@@ -2,7 +2,7 @@
  * The `script` tool: one JavaScript program that calls the run's tools as
  * `await tools.<name>(args)`. The program runs in the code sandbox
  * (`@agent/codeSandbox/codeSandbox`); every call it issues goes through the
- * run loop's per-call program (`ToolCall.scriptCalls`), which commits its
+ * run loop's per-call program (`ScriptCalls`), which commits its
  * rows and, on a resume, hands back what they already settled. This tool
  * names no other tool and writes no row.
  */
@@ -16,7 +16,13 @@ import {
   type ScriptSettlement,
 } from '@agent/codeSandbox/codeSandbox';
 import { RUN_LOG_MAX_LINES } from '@agent/codeSandbox/limits';
-import { ToolCall, type ScriptCalls } from '@agent/runtime/ToolCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
+import {
+  callerRun,
+  requireToolRun,
+  ScriptCalls,
+  type ScriptDoor,
+} from '@agent/runtime/RunCall';
 import {
   JsonValueSchema,
   ToolError,
@@ -79,7 +85,7 @@ const DescribeArgsSchema = z.tuple([
 /** What one host-function op answers, as a settled call. */
 const answerOf = (
   op: ScriptOp,
-  catalog: ScriptCalls['catalog'],
+  catalog: ScriptDoor['catalog'],
 ): ToolResultPayload['result'] => {
   const failed = (error: string) => ({ status: 'error' as const, error });
   if (op.name === `${SEARCH_TOOLS}()`) {
@@ -147,23 +153,24 @@ const shown = (value: unknown): string =>
   value === undefined ? 'undefined' : JSON.stringify(value, null, 2);
 
 const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
-  const toolCall = yield* ToolCall;
-  const { scriptCalls: issued, hooks } = toolCall;
+  const { emit } = yield* ToolContext;
+  const run = yield* callerRun;
   // A one-shot run has no later turn for a follow-up to reach.
   if (
     input.run_in_background === true &&
-    toolCall.run !== undefined &&
-    toolCall.run.toolPolicy.stopAfterCycle !== true
+    run !== undefined &&
+    run.toolPolicy.stopAfterCycle !== true
   )
     return yield* launchBackgroundScript(
-      toolCall,
+      yield* requireToolRun('script run_in_background'),
       {
         code: input.code,
         ...(input.timeoutMs != null && { timeoutMs: input.timeoutMs }),
       },
       input.title ?? 'Script',
     );
-  if (issued === undefined)
+  const issued = yield* ScriptCalls;
+  if (issued === null)
     return yield* Effect.fail(
       new ToolError('A script runs only as a call of an agent run.'),
     );
@@ -247,7 +254,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
           const overflow = Math.max(0, tail.length - RUN_LOG_MAX_LINES);
           tail.splice(0, overflow);
           tailOmitted += dropped + overflow;
-          if (lines.length > 0) hooks?.onToolOutput?.(`${lines.join('\n')}\n`);
+          if (lines.length > 0) emit(`${lines.join('\n')}\n`);
         }),
       onDelivered: scriptCalls.delivered,
     })

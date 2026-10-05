@@ -15,7 +15,15 @@ import type {
   ChildRunPorts,
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
-import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
+import {
+  ToolContext,
+  type ToolContextShape,
+} from '@agent/core/tools/ToolTypes';
+import {
+  requireToolRun,
+  type ToolRun,
+  type RunCall,
+} from '@agent/runtime/RunCall';
 import {
   describeFollowUpFailure,
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
@@ -32,7 +40,6 @@ import {
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import { executed } from '@tools/core/result';
-import { requireToolRun, type ToolRun } from '@tools/core/toolRun';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { previewLabel } from '@utils/text/stringUtils';
 
@@ -143,7 +150,7 @@ const resumeOrLaunchAgentCliSession = Effect.fn(
       releaseClaim?: () => void,
     ) => Effect.Effect<ToolResult, ToolError, R>;
   },
-): Effect.fn.Return<ToolResult, ToolError, R | ToolCall> {
+): Effect.fn.Return<ToolResult, ToolError, R | ToolContext | RunCall> {
   const { id } = params;
   if (!id) return yield* params.launch();
 
@@ -294,10 +301,9 @@ const withAgentCliRun = Effect.fn('agentCliShared.withAgentCliRun')(function* <
   R,
 >(
   toolName: string,
-  toolCall: ToolCallShape,
   run: (run: ToolRun) => Effect.Effect<ToolResult, ToolError, R>,
-): Effect.fn.Return<ToolResult, ToolError, R | ToolCall> {
-  const { run: activeRun } = yield* requireToolRun(toolName, toolCall);
+): Effect.fn.Return<ToolResult, ToolError, R | ToolContext | RunCall> {
+  const { run: activeRun } = yield* requireToolRun(toolName);
   if (activeRun.toolPolicy.stopAfterCycle) {
     return yield* Effect.fail(
       new ToolError(
@@ -320,9 +326,9 @@ export const agentCliApprovalCommand = (
   agentName: string,
   prompt: string,
   mode: (stores: SettingsStores) => Effect.Effect<string, Error>,
-): Effect.Effect<string, Error, ToolCall> =>
+): Effect.Effect<string, Error, ToolContext | RunCall> =>
   Effect.gen(function* () {
-    const { roots } = yield* ToolCall;
+    const { roots } = (yield* ToolContext).env;
     const resolved = yield* mode(roots);
     return `[${agentName} ${resolved}] ${prompt}`;
   });
@@ -356,7 +362,7 @@ export interface AgentCliLaunchContext {
  * runs it as is.
  */
 export function dispatchAgentCliTool<R = never, S = never>(params: {
-  toolCall: ToolCallShape;
+  toolCall: ToolContextShape;
   agentName: string;
   /** The plugin's session registry, served by the step that pinned it. */
   store: Context.Key<S, AgentCliSessionRegistry>;
@@ -368,10 +374,10 @@ export function dispatchAgentCliTool<R = never, S = never>(params: {
   launch: (
     context: AgentCliLaunchContext,
   ) => Effect.Effect<ToolResult, ToolError, R>;
-}): Effect.Effect<ToolResult, ToolError, R | S | ToolCall> {
+}): Effect.Effect<ToolResult, ToolError, R | S | ToolContext | RunCall> {
   const { agentName, store, resumeId, sourceId, prompt, labels, launch } =
     params;
-  return withAgentCliRun(agentName, params.toolCall, (run) =>
+  return withAgentCliRun(agentName, (run) =>
     Effect.gen(function* () {
       const registry = yield* store;
       const callerRunId = run.runId;
@@ -393,7 +399,7 @@ export function dispatchAgentCliTool<R = never, S = never>(params: {
           launch({
             session: run.session,
             parentRunId: run.runId,
-            parentWorkingDirectory: params.toolCall.workingDirectory,
+            parentWorkingDirectory: params.toolCall.env.workingDirectory,
             releaseFallbackClaim,
             registry,
           }),

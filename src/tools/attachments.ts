@@ -1,7 +1,8 @@
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 import { imageSize } from 'image-size';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import type { RunCall } from '@agent/runtime/RunCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports
 import { ToolError, type ToolFileAttachment } from '@shared/schemas';
@@ -119,9 +120,9 @@ export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
 }: BuildFileAttachmentOptions): Effect.fn.Return<
   ToolFileAttachment,
   ToolError,
-  ToolCall | FileSystem.FileSystem
+  ToolContext | RunCall | FileSystem.FileSystem
 > {
-  const call = yield* ToolCall;
+  const call = yield* ToolContext;
   if (!isNonEmptyString(filePath)) {
     return yield* Effect.fail(
       new ToolError('Attachment path must be provided.'),
@@ -132,7 +133,7 @@ export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
   // the model, so it stays a failure rather than becoming a defect.
   const path =
     resolved ??
-    (yield* resolveToolPath(call, filePath).pipe(
+    (yield* resolveToolPath(call.env, filePath).pipe(
       Effect.mapError(
         attachmentFailure(`Failed to resolve attachment ${filePath}`),
       ),

@@ -52,14 +52,13 @@
   "src/shared/session/sessionView.ts": 473,
   "src/shared/session/surface.ts": 494,
   "src/shared/session/transcriptState.ts": 429,
-  "src/tools/approval/toolEditApproval.ts": 410,
-  "src/tools/bash.ts": 570,
+  "src/tools/approval/toolEditApproval.ts": 406,
+  "src/tools/bash.ts": 568,
   "src/tools/delegation/AgentTool.ts": 759,
   "src/tools/delegation/inBandSubagentRun.ts": 483,
-  "src/tools/ExecutionsTool.ts": 870,
+  "src/tools/ExecutionsTool.ts": 869,
   "src/tools/liveTools.ts": 410,
   "src/tools/memory/memoryFileSystem.ts": 443,
-  "src/tools/memory/MemoryTool.ts": 633,
-  "src/tools/plan/PlanTool.ts": 403,
+  "src/tools/memory/MemoryTool.ts": 632,
   "src/tools/toolAvailability.ts": 437
 }

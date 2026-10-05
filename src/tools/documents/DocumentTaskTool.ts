@@ -14,11 +14,10 @@ import {
   resolveDelegationScopeAgents,
 } from '@agent/index/agentRegistry';
 import { documentTaskConfig } from '@agent/output/documentRecipe';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { requireToolRun } from '@agent/runtime/RunCall';
 import { agentKey, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { errorResult } from '@tools/core/result';
-import { requireToolRun } from '@tools/core/toolRun';
 import {
   CALL_FIELDS,
   fileList,
@@ -70,9 +69,9 @@ type DocumentTaskInput = z.infer<typeof DocumentTaskInputSchema>;
 const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
   input: DocumentTaskInput,
 ) {
-  const call = yield* requireToolRun('document_task', yield* ToolCall);
+  const call = yield* requireToolRun('document_task');
   const agents = yield* resolveDelegationScopeAgents(
-    call.roots,
+    call.env.roots,
     call.run.delegationAgentScope ?? undefined,
   );
   const agent = findAgentByIdentifier(agents, input.agentName);

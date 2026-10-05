@@ -40,6 +40,7 @@ export type {
 export {
   AgentNotFound,
   PlatformConflict,
+  PluginsRefused,
   RunFailure,
   ToolsRefused,
 } from './effect/errors.js';
@@ -63,12 +64,15 @@ export type { AgentEvent } from '@agent/trace';
 // (`@anthropic-ai/sdk`).
 export type { RunEndResult } from '@agent/runtime/RunEndResult';
 export type {
+  CallRequests,
   ITool,
   IToolRegistry,
+  ToolContextShape,
+  ToolEnv,
   ToolGuard,
 } from '@agent/core/tools/ToolTypes';
 export type { SettingHost } from '@shared/state/stateSettings';
-export { MapToolRegistry } from '@agent/core/tools/ToolTypes';
+export { MapToolRegistry, ToolContext } from '@agent/core/tools/ToolTypes';
 export { defineTool } from '@tools/core/definition';
 export type { DefinedTool } from '@tools/core/definition';
 export type {

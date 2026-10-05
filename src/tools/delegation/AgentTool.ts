@@ -37,7 +37,8 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import { offeredBy } from '@agent/runtime/loop/step';
 import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
-import { ToolCall, type ScriptScope } from '@agent/runtime/ToolCall';
+import { IssuingScript, requireToolRun } from '@agent/runtime/RunCall';
+import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import {
   isDocumentTaskConfig,
   aggregateId,
@@ -55,7 +56,6 @@ import { configureDelegatedChildApprovals } from '@tools/approval';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { errorResult, executed } from '@tools/core/result';
-import { requireToolRun, type RunToolCall } from '@tools/core/toolRun';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { truncatedHexId } from '@utils/core/idHash';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -198,7 +198,7 @@ const scriptRequest = (
 ) =>
   Effect.gen(function* () {
     const { session, runId } = call.run;
-    const prefix = `proposal-script-${truncatedHexId(`${call.responseId ?? ''}\0${script.callId}`, 16)}`;
+    const prefix = `proposal-script-${truncatedHexId(`${call.responseId}\0${script.callId}`, 16)}`;
     const from = session.now();
     const rows = yield* session.readAggregate(aggregateId('run', runId), [
       'request.opened',
@@ -303,7 +303,7 @@ const reusable = Effect.fn('agent.reusable')(function* (
     'agent:keys',
     Effect.sync(() => new Map<string, string>()),
   );
-  const callId = call.toolCallId ?? '';
+  const callId = call.callId ?? '';
   // Claimed before the read below yields, so two calls of the script
   // issued together cannot both pass.
   const claimed = siblings.get(key);
@@ -403,14 +403,15 @@ function childResult(
 export const launchChildAgent = Effect.fn('AgentTool.call')(function* (
   launch: ChildLaunch,
 ) {
-  const call = yield* requireToolRun(launch.tool, yield* ToolCall);
-  const { script } = call;
-  if (script === undefined || launch.background === true)
+  const call = yield* requireToolRun(launch.tool);
+  const script = yield* IssuingScript;
+  if (script === null || launch.background === true)
     return yield* agentCall(call, launch);
   const budget = yield* script.shared(
     'agent:budget',
-    Effect.flatMap(resolveChildRunConcurrencyBudget(call.roots), (permits) =>
-      Semaphore.make(permits),
+    Effect.flatMap(
+      resolveChildRunConcurrencyBudget(call.env.roots),
+      (permits) => Semaphore.make(permits),
     ),
   );
   return yield* budget.withPermits(1)(agentCall(call, launch));
@@ -434,12 +435,13 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   call: RunToolCall,
   launch: ChildLaunch,
 ) {
-  const { run, script } = call;
+  const { run } = call;
+  const script = (yield* IssuingScript) ?? undefined;
   const { session, runId: parentRunId } = run;
-  const agent = yield* requireAgent(call.roots, launch.agentName, run);
+  const agent = yield* requireAgent(call.env.roots, launch.agentName, run);
   const { task, files } = launch;
   const unusable = yield* rejectUnusableWorkingDirectory(
-    call.roots,
+    call.env.roots,
     launch.workingDirectory ?? undefined,
   );
   if (unusable) return unusable;
@@ -479,7 +481,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const contextFiles = contexts.map(({ file }) => file);
   if (task !== null) {
     const oversized = yield* rejectOversizedBibAttachments(
-      call.roots.workspace,
+      call.env.roots.workspace,
       contextFiles,
     ).pipe(Effect.mapError(ensureError));
     if (oversized) return oversized;
@@ -531,7 +533,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   // (and, in a script, its stage row) is where its progress is kept.
   const notify = (update: SubagentProgressUpdate): void => {
     const line = describeSubagentProgress(agent.name, update);
-    if (line) call.hooks?.onToolOutput?.(`${line}\n`);
+    if (line) call.emit(`${line}\n`);
   };
   const timeoutMs = launch.timeoutMs ?? undefined;
   const running = <A, R>(
@@ -584,14 +586,14 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     selectAvailableDelegationModel({
       requestedModel: launch.model,
       parentModel: (yield* SynchronizedRef.get(run.model)).modelId,
-      settings: call.roots,
+      settings: call.env.roots,
     }),
   );
   if (Exit.isFailure(selected))
     return errorResult(toErrorMessage(Cause.squash(selected.cause)), {
       name: 'ModelUnavailable',
     });
-  const workingDirectory = launch.workingDirectory ?? call.workingDirectory;
+  const workingDirectory = launch.workingDirectory ?? call.env.workingDirectory;
   const proposal: AgentProposal = AgentProposalSchema.parse({
     agent: agent.name,
     agentSource: agent.source,
@@ -607,7 +609,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
         ? launch.prompt
         : withToolUseSubagentHandoffInstruction(
             launch.prompt,
-            call.userInstruction,
+            call.instruction,
           ),
     inputFiles: inputs.map(({ file }) => file),
     contextFiles,
@@ -615,7 +617,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     outputFiles: files.outputFiles,
     // A task's file options reach the child as its tool configuration.
     ...(task !== null && { toolConfig: task.toolConfig }),
-    ...(task === null && { rootUserInstruction: call.userInstruction }),
+    ...(task === null && { rootUserInstruction: call.instruction }),
   });
 
   const decided = yield* decideDelegation(
@@ -694,10 +696,8 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
         parentRunId,
         configPayload,
         parentOffered,
-        ...(call.logId !== undefined && { parentCard: call.logId }),
-        ...(call.toolCallId !== undefined && {
-          parentCallId: call.toolCallId,
-        }),
+        parentCard: call.logId,
+        parentCallId: call.callId,
         onRunResolved: inherit,
         notify,
       }),

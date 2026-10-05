@@ -1,10 +1,11 @@
 /**
- * The failures the Effect surface names (`@texra-ai/agent`). Four are defined
- * here — the process the package refuses to compose, the two launch refusals
+ * The failures the Effect surface names (`@texra-ai/agent`). Five are defined
+ * here — the process the package refuses to compose, the plugin list it
+ * refuses, the two launch refusals
  * an embedder branches on, and the run's own failure — and two more reach the
  * surface re-exported from the session store (`DatabaseOpenFailed`,
  * `DatabaseReadFailed`, the `SessionOpenError` union in
- * `@shared/session/database`), for six tagged errors on the surface in all.
+ * `@shared/session/database`), for seven tagged errors on the surface in all.
  *
  * Request failures are not here. A `session.request` answers with the
  * runtime's own `RequestError` union (`@shared/session/requestErrors`), the
@@ -21,6 +22,15 @@ import { Data } from 'effect';
  * rather than a condition to retry.
  */
 export class PlatformConflict extends Data.TaggedError('PlatformConflict')<{
+  readonly message: string;
+}> {}
+
+/**
+ * The plugin list cannot be composed: an id that is not lowercase letters,
+ * digits and dashes, an id or tool name listed twice, two plugins that
+ * continue parked runs, or a switch on a plugin with no availability probe.
+ */
+export class PluginsRefused extends Data.TaggedError('PluginsRefused')<{
   readonly message: string;
 }> {}
 

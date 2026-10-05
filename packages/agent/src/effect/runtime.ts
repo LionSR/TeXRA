@@ -38,8 +38,10 @@ import { UsageLog } from '@shared/usageLog';
 import type { StateSettingEntry } from '@shared/state/stateSettings';
 import type { Plugin } from '@tools/plugins';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
+import { toolTable } from '@tools/toolTable';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { PlatformConflict } from './errors.js';
+import { PlatformConflict, PluginsRefused } from './errors.js';
 import { makeSessions } from './sessionPrograms.js';
 import type { Sessions } from './sessions.js';
 
@@ -128,35 +130,48 @@ export const acquireProcess = ({
   settings = [],
 }: Composition): Effect.Effect<
   Context.Service.Shape<typeof Sessions>,
-  PlatformConflict,
+  PlatformConflict | PluginsRefused,
   Scope.Scope
 > =>
-  Effect.acquireRelease(
-    processChanges.withPermit(
-      Effect.try({
-        try: () => composeProcess({ platform, plugins, settings }),
-        catch: (thrown) => thrown,
-      }).pipe(
-        Effect.catch((thrown) =>
-          thrown instanceof PlatformConflict
-            ? Effect.fail(thrown)
-            : Effect.die(thrown),
-        ),
-        // The first-install tool switches every host's bootstrap seeds, once
-        // the hold is taken: an acquisition refused as a conflict writes
-        // nothing to another embedder's store, and the opt-in plugins stay
-        // off until the embedder switches them on. A store that cannot be
-        // read or written is a platform defect; the hold it took is ended.
-        Effect.tap((hold) =>
-          seedDisabledToolDefaults(platform.roots.globalState, plugins).pipe(
-            Effect.orDie,
-            Effect.onError(() => hold.release),
+  // The list is checked before anything is composed, so a refusal names the
+  // plugin rather than failing the first session open.
+  Effect.try({
+    try: () => toolTable(plugins),
+    catch: (thrown) => new PluginsRefused({ message: toErrorMessage(thrown) }),
+  }).pipe(
+    Effect.andThen(
+      Effect.acquireRelease(
+        processChanges.withPermit(
+          Effect.try({
+            try: () => composeProcess({ platform, plugins, settings }),
+            catch: (thrown) => thrown,
+          }).pipe(
+            Effect.catch((thrown) =>
+              thrown instanceof PlatformConflict
+                ? Effect.fail(thrown)
+                : Effect.die(thrown),
+            ),
+            // The first-install tool switches every host's bootstrap seeds, once
+            // the hold is taken: an acquisition refused as a conflict writes
+            // nothing to another embedder's store, and the opt-in plugins stay
+            // off until the embedder switches them on. A store that cannot be
+            // read or written is a platform defect; the hold it took is ended.
+            Effect.tap((hold) =>
+              seedDisabledToolDefaults(
+                platform.roots.globalState,
+                plugins,
+              ).pipe(
+                Effect.orDie,
+                Effect.onError(() => hold.release),
+              ),
+            ),
           ),
         ),
+        (hold) => processChanges.withPermit(hold.release),
       ),
     ),
-    (hold) => processChanges.withPermit(hold.release),
-  ).pipe(Effect.map((hold) => hold.sessions));
+    Effect.map((hold) => hold.sessions),
+  );
 
 /**
  * Compose the process, or take a hold on the one this package already

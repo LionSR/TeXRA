@@ -5,7 +5,7 @@ import * as nodePath from 'node:path';
 import { Effect, FileSystem, Option } from 'effect';
 import { Glob } from 'glob';
 import { z } from 'zod';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports
 import { ToolError, ToolResult } from '@shared/schemas';
@@ -181,9 +181,8 @@ export const GlobTool = defineTool({
     'Find files matching glob patterns (e.g., "**/*.tex", "src/**/*.ts"). Returns paths sorted by modification time.',
   schema: GlobInputSchema,
   execute: Effect.fn('GlobTool.call')(function* (input: GlobInput) {
-    const call = yield* ToolCall;
     const ports: GlobPorts = {
-      call,
+      call: (yield* ToolContext).env,
       signal: yield* Effect.abortSignal,
     };
     return yield* runGlob(ports, input);

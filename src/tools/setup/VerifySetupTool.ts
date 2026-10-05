@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 import { withLogChannel } from '@logger/effectLog';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { Secrets } from '@platform/secrets';
@@ -33,7 +33,7 @@ const verify = Effect.fn('VerifySetupTool.execute')(function* (
 ) {
   const platform = yield* SetupPlatform;
   const secrets = yield* Secrets;
-  const { roots } = yield* ToolCall;
+  const { roots } = (yield* ToolContext).env;
   // Verification follows an install, so a tool looked up and missed a moment
   // ago is searched for again rather than answered from the miss cache.
   yield* Effect.sync(forgetToolMisses);

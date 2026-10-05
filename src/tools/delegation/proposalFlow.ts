@@ -15,6 +15,7 @@ import {
   resolveDelegationScopeAgents,
   type WorkspaceAgentsStores,
 } from '@agent/index/agentRegistry';
+import type { RunToolCall } from '@agent/runtime/RunCall';
 import { isDocumentTaskConfig } from '@shared/schemas';
 import type {
   AgentProposal,
@@ -34,7 +35,6 @@ import {
 import { refusalOf } from '@shared/session/approvalDecision';
 import type { DelegatedChildApproval } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
-import type { RunToolCall } from '@tools/core/toolRun';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { selectAvailableDelegationModel } from './delegationAvailability';
@@ -264,7 +264,7 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
       selectAvailableDelegationModel({
         requestedModel: result.model,
         parentModel: proposal.model,
-        settings: parent.roots,
+        settings: parent.env.roots,
       }),
     );
     if (Exit.isFailure(modelExit)) {
@@ -285,7 +285,7 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
   const resolvedAgentOverride = agentOverride
     ? findAgentByIdentifier(
         yield* resolveDelegationScopeAgents(
-          parent.roots,
+          parent.env.roots,
           parent.run.delegationAgentScope ?? undefined,
         ),
         agentOverride,

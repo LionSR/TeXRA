@@ -12,6 +12,7 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 import type { ToolResult } from '@shared/schemas';
 import {
   buildBashApprovalRejectedResult,
@@ -20,7 +21,6 @@ import {
 import { assertWritable, resolveToolPath } from '@tools/pathResolution';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import { ToolCall } from '../ToolCall';
 import type { RuntimeTool, ToolServices } from '../ToolServices';
 
 const JSON_OBJECT_ARGUMENTS = z.record(z.string(), z.unknown());
@@ -60,7 +60,7 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
   const parsed = schema.safeParse(rawInput);
   if (!parsed.success) return undefined;
   const input = parsed.data as never;
-  const call = yield* ToolCall;
+  const call = yield* ToolContext;
 
   // Resolution and the read-only-root check both reject with a `ToolError`
   // the dispatcher reports to the model, so they stay a failure rather than
@@ -70,7 +70,7 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
     catch: ensureError,
   });
   for (const target of targets) {
-    const path = yield* resolveToolPath(call, target);
+    const path = yield* resolveToolPath(call.env, target);
     yield* Effect.try({
       try: () => assertWritable(path, path.display),
       catch: ensureError,
@@ -92,7 +92,7 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
   // in.
   const cwd =
     guard?.bash && guard.cwd !== 'unknown'
-      ? (call.workingDirectory ?? call.roots.workspace)
+      ? (call.env.workingDirectory ?? call.env.roots.workspace)
       : undefined;
 
   // Only the shell's own commands take the run's command grant; every other

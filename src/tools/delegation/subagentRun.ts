@@ -17,6 +17,7 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import { createNativeSubagentStrategy } from '@agent/runtime/nativeSubagentStrategy';
+import type { RunToolCall } from '@agent/runtime/RunCall';
 import { withLogChannel } from '@logger/effectLog';
 import {
   USER_FOLLOW_UP_SUPPORT,
@@ -26,7 +27,6 @@ import {
 } from '@shared/schemas';
 import { type DelegatedChildApproval } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
-import type { RunToolCall } from '@tools/core/toolRun';
 
 // Local file imports
 import { startDetachedChildRunLoop } from './detachedChildRun';
@@ -118,10 +118,8 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
           identity: { kind: 'agent', agent: config.agent },
           userFollowUpSupport,
           parentRunId,
-          ...(parent.logId !== undefined && { parentCard: parent.logId }),
-          ...(parent.toolCallId !== undefined && {
-            parentCallId: parent.toolCallId,
-          }),
+          parentCard: parent.logId,
+          parentCallId: parent.callId,
         });
 
         const strategyParams = {

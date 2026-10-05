@@ -1,7 +1,8 @@
 // Third-party imports
 import { Effect, type FileSystem } from 'effect';
 import { z } from 'zod';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import type { RunCall } from '@agent/runtime/RunCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - tools
 import { TikzPictureManager } from '@latex/TikzPictureManager';
@@ -38,11 +39,15 @@ const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
   }: ExtractTikzInput): Effect.fn.Return<
     ToolResult,
     Error,
-    ToolCall | FileSystem.FileSystem | WorkspaceFs | ChildProcessSpawner
+    | ToolContext
+    | RunCall
+    | FileSystem.FileSystem
+    | WorkspaceFs
+    | ChildProcessSpawner
   > {
-    const call = yield* ToolCall;
+    const call = yield* ToolContext;
     const { path, display } = yield* resolveLatexFile(texPath);
-    const location = pathToLocationIn(call.roots.workspace, path.absolute);
+    const location = pathToLocationIn(call.env.roots.workspace, path.absolute);
 
     const tikzFigures = yield* TikzPictureManager.extract(location);
     if (tikzFigures.length === 0) {
@@ -68,7 +73,7 @@ const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
     if (compile) {
       const compiledPaths = yield* TikzPictureManager.compile(
         location,
-        call.roots,
+        call.env.roots,
       );
       if (compiledPaths.length > 0) {
         // Convert FileLocation[] to string[] for legacy attachment API

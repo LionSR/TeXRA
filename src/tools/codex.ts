@@ -20,6 +20,7 @@
 // Third-party imports
 import { Effect, Stream, type FileSystem } from 'effect';
 import { z } from 'zod';
+import type { RunCall } from '@agent/runtime/RunCall';
 
 // Local imports
 import {
@@ -33,7 +34,7 @@ import {
 } from '@agent/trace';
 import type { Runs } from '@agent/runtime/runRegistry';
 import type { ChildRunPort } from '@agent/runtime/childRunLoop';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -444,10 +445,15 @@ const runCodex = Effect.fn('CodexTool.run')(function* (
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
-  ToolCall | Runs | CodexThreads | ChildProcessSpawner | FileSystem.FileSystem
+  | ToolContext
+  | RunCall
+  | Runs
+  | CodexThreads
+  | ChildProcessSpawner
+  | FileSystem.FileSystem
 > {
-  const toolCall = yield* ToolCall;
-  const sandboxMode = yield* codexSandboxMode(input, toolCall.roots);
+  const toolCall = yield* ToolContext;
+  const sandboxMode = yield* codexSandboxMode(input, toolCall.env.roots);
 
   return yield* dispatchAgentCliTool({
     toolCall,
@@ -497,9 +503,9 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
-  ToolCall | Runs | ChildProcessSpawner | FileSystem.FileSystem
+  ToolContext | RunCall | Runs | ChildProcessSpawner | FileSystem.FileSystem
 > {
-  const { roots } = yield* ToolCall;
+  const { roots } = (yield* ToolContext).env;
   const { thread, run } = yield* createCodexThread(
     input,
     sandboxMode,

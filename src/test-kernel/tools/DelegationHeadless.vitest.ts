@@ -150,7 +150,7 @@ function parentRunContext(
   const stopAfterCycle = overrides.stopAfterCycle ?? false;
   return {
     ...(overrides.userInstruction !== undefined && {
-      userInstruction: overrides.userInstruction,
+      origin: { instruction: overrides.userInstruction },
     }),
     run: {
       runId: overrides.runId ?? PARENT_RUN_ID,
@@ -184,7 +184,7 @@ function callDelegateReview(call = parentRunContext()) {
       Effect.provide(
         nativeToolTestLayer({
           ...call,
-          toolCallId: `call-${generateShortId()}`,
+          callId: `call-${generateShortId()}`,
         }),
       ),
     );

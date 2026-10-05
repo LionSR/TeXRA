@@ -1,7 +1,8 @@
 import { Cause, Effect } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { requireToolRun, type RunCall } from '@agent/runtime/RunCall';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -221,17 +222,12 @@ function firstChangedLineIn(
 export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
   function* (
     request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,
-  ): Effect.fn.Return<ToolEditApprovalResult, Error, ToolCall> {
-    const call = yield* ToolCall;
+  ): Effect.fn.Return<ToolEditApprovalResult, Error, ToolContext | RunCall> {
+    const call = yield* requireToolRun('A tool-edit approval');
     const approvalsEnabled = yield* readSettingFrom<boolean>(
-      call.roots,
+      call.env.roots,
       TOOL_EDIT_APPROVAL_CONFIG_KEY,
     );
-    if (call.run === undefined) {
-      return yield* Effect.fail(
-        new Error('A tool-edit approval needs an active run.'),
-      );
-    }
     const { run, requests } = call;
     const { session } = run;
     const contextRunId = run.runId;
@@ -279,7 +275,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       // is relative to the session that raised the request, not to whichever
       // roots the answering fiber happens to carry.
       relativePath: workspaceRelativePath(
-        call.roots.workspace,
+        call.env.roots.workspace,
         preparedRequest.path,
       ),
     });

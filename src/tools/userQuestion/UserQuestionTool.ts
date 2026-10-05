@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { requireToolRun } from '@agent/runtime/RunCall';
 import { withLogChannel } from '@logger/effectLog';
 import {
   UserQuestionAnswersSchema,
@@ -11,7 +11,6 @@ import type { UserQuestionPermission } from '@shared/schemas';
 import { refusalOf } from '@shared/session/approvalDecision';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
-import { requireToolRun } from '@tools/core/toolRun';
 
 const CHANNEL = 'UserQuestionTool';
 
@@ -42,7 +41,7 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
   const {
     run: { runId },
     requests,
-  } = yield* requireToolRun('ask_user_question', yield* ToolCall);
+  } = yield* requireToolRun('ask_user_question');
   const requestId = requests.nextId('user-question');
 
   yield* Effect.logInfo('User question requested').pipe(

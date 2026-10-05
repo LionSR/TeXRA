@@ -7,7 +7,7 @@ import { z } from 'zod';
 
 // Local imports
 import { Runs } from '@agent/runtime/runRegistry';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { callerRun } from '@agent/runtime/RunCall';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
@@ -174,9 +174,8 @@ function executeMemoryTool(
   input: MemoryToolInput,
 ): Effect.Effect<ToolResult, Error, ToolServices> {
   return Effect.gen(function* () {
-    const call = yield* ToolCall;
     const runs = yield* Runs;
-    const runId = call.run?.runId;
+    const runId = (yield* callerRun)?.runId;
     const invocation = {
       runId,
       agentName:

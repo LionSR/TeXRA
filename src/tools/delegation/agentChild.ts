@@ -21,6 +21,7 @@ import { retireRun } from '@agent/storage/runLifecycle';
 import { callChildRunId, readChildTurnState } from '@agent/storage/runRecords';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
+import type { RunToolCall } from '@agent/runtime/RunCall';
 import {
   RUN_OUTCOME,
   type RunEnd,
@@ -29,7 +30,6 @@ import {
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import { configureDelegatedChildApprovals } from '@tools/approval';
-import type { RunToolCall } from '@tools/core/toolRun';
 
 // Local file imports
 import { resumeSubagentInBand } from './inBandSubagentRun';
@@ -38,12 +38,12 @@ import { resumeSubagentInBand } from './inBandSubagentRun';
  *  default ({@link callChildRunId}). */
 export const agentChildRunId = (
   call: RunToolCall,
-  attempt = call.attempt ?? 1,
+  attempt = call.attempt,
 ): RunId =>
   callChildRunId({
     parentRunId: call.run.runId,
-    responseId: call.responseId ?? '',
-    callId: call.toolCallId ?? call.run.runId,
+    responseId: call.responseId,
+    callId: call.callId,
     attempt,
   });
 
@@ -51,7 +51,7 @@ export const agentChildRunId = (
 export const earlierChild = Effect.fn('agent.earlierChild')(function* (
   call: RunToolCall,
 ): Effect.fn.Return<RunId | null, DatabaseReadFailed> {
-  for (let earlier = (call.attempt ?? 1) - 1; earlier >= 1; earlier -= 1) {
+  for (let earlier = call.attempt - 1; earlier >= 1; earlier -= 1) {
     const runId = agentChildRunId(call, earlier);
     if (yield* getRunRecords(call.run.session, runId).exists()) return runId;
   }

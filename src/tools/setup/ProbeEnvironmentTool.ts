@@ -7,7 +7,7 @@ import { z } from 'zod';
 
 // Local imports
 import { API_KEY_PROVIDER_IDS, lookupApiKeyOrigin } from '@texra-ai/llm';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 import { withLogChannel } from '@logger/effectLog';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { Secrets } from '@platform/secrets';
@@ -40,7 +40,7 @@ const OPTIONAL_TOOLS = ['git', 'node', 'python3'] as const;
 const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
   const platform = yield* SetupPlatform;
   const secrets = yield* Secrets;
-  const { roots } = yield* ToolCall;
+  const { roots } = (yield* ToolContext).env;
 
   // `os.homedir()` can throw UV_ENOENT in container/remote environments
   // where the home directory is not resolvable; fall back to a string

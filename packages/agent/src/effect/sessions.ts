@@ -20,7 +20,12 @@ import type {
 } from '@shared/session/sessionView';
 
 import { acquireProcess, type Composition } from './runtime.js';
-import type { PlatformConflict, LaunchError, RunFailure } from './errors.js';
+import type {
+  LaunchError,
+  PlatformConflict,
+  PluginsRefused,
+  RunFailure,
+} from './errors.js';
 
 /**
  * A runtime value as the embedder may hold it: read-only all the way down,
@@ -144,13 +149,15 @@ export class Sessions extends Context.Service<
    * the hold it takes on that composition. A second, different platform or
    * plugin list while this package holds a composition, or a process
    * runtime a host installed rather than this package, fails with
-   * {@link PlatformConflict}; a plugin list that repeats an id or a tool
-   * name, and anything else composition throws, is a defect. Acquisition
-   * waits for a retiring runtime.
+   * {@link PlatformConflict}; a plugin list the harness cannot compose
+   * (an id that is not lowercase letters, digits and dashes, an id or tool
+   * name listed twice) fails with {@link PluginsRefused}, and anything else
+   * composition throws is a defect. Acquisition waits for a retiring
+   * runtime.
    */
   static layer(
     composition: Composition,
-  ): Layer.Layer<Sessions, PlatformConflict> {
+  ): Layer.Layer<Sessions, PlatformConflict | PluginsRefused> {
     return Layer.effect(Sessions, acquireProcess(composition));
   }
 }

@@ -6,7 +6,7 @@
  * tokenizer does not split `inputFiles` or `read_file` the way a tool name
  * needs.
  */
-import type { ScriptCalls } from '@agent/runtime/ToolCall';
+import type { ScriptDoor } from '@agent/runtime/RunCall';
 import { isObject } from '@utils/core';
 
 import { declarationOf, firstSentence, inputSchema } from './declarations';
@@ -54,7 +54,7 @@ const schemaText = (schema: unknown): string[] => {
 /** The tools of `catalog` that match `query`, best first; ties keep catalog
  *  order. BM25 with k1 = 1.2, b = 0.75. */
 export function searchTools(
-  catalog: ScriptCalls['catalog'],
+  catalog: ScriptDoor['catalog'],
   query: string,
   limit: number,
 ): { readonly name: string; readonly line: string }[] {
@@ -107,7 +107,7 @@ export function searchTools(
 /** The full declaration of the tool named `name`, or null when the step
  *  offers none by that name. */
 export const describeTool = (
-  catalog: ScriptCalls['catalog'],
+  catalog: ScriptDoor['catalog'],
   name: string,
 ): string | null => {
   const tool = catalog.find(({ definition }) => definition.name === name);

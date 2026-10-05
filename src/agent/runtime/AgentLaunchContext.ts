@@ -343,7 +343,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
   > {
     const { config, persona, task, agentEntry, modelConfig } = input.definition;
     // The run's working directory is decided here, once: absolute or absent.
-    // Every tool call of the run carries it as `ToolCall.workingDirectory`
+    // Every tool call of the run carries it as `ToolContext.env.workingDirectory`
     // and trusts it rather than re-validating.
     const workingDirectory = yield* Effect.try({
       try: () => parseWorkingDirectory(config.workingDirectory),

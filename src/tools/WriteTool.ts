@@ -1,7 +1,8 @@
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import type { RunCall } from '@agent/runtime/RunCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - tools
 import type { ConfigProvider } from '@platform/interfaces';
@@ -43,9 +44,13 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
 ): Effect.fn.Return<
   ToolResult,
   Error,
-  ToolCall | FileSystem.FileSystem | WorkspaceFs | AgentCatalogServices
+  | ToolContext
+  | RunCall
+  | FileSystem.FileSystem
+  | WorkspaceFs
+  | AgentCatalogServices
 > {
-  const call = yield* ToolCall;
+  const call = yield* ToolContext;
   const prepared = yield* resolveWritableTarget(input.path, {
     missing: 'allow',
   });
@@ -56,7 +61,7 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
   const proposedContent =
     writeFilter === undefined
       ? input.content
-      : yield* writeFilter(path, input.content, call.roots.config);
+      : yield* writeFilter(path, input.content, call.env.roots.config);
 
   return yield* applyApprovedFileEdit({
     path,

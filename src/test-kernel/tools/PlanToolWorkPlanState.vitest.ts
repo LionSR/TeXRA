@@ -6,7 +6,7 @@ import { Effect, Fiber } from 'effect';
 import { afterEach, beforeEach, describe, expect } from 'vitest';
 
 // Local imports
-import { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { planSummaryLine } from '@shared/schemas';
 import type { Goal } from '@shared/plugins/goal';
@@ -94,7 +94,8 @@ function startPlanUpdate(
   return Effect.gen(function* () {
     const { session, awaitPlanRequest } = yield* planSession(runId);
     if (seed) yield* seed(session);
-    const workPlanState = new WorkPlanState();
+    const workspace = AgentWorkspaceState.create();
+    const workPlanState = workspace.workPlan;
     const tool = PlanTool;
 
     const resultFiber = yield* Effect.forkScoped(
@@ -102,7 +103,7 @@ function startPlanUpdate(
         Effect.provide(
           nativeToolTestLayer({
             run: { runId, session, toolPolicy: {} },
-            workPlanState,
+            workspace,
           }),
         ),
       ),
@@ -155,7 +156,8 @@ describe('PlanTool — update (plan approval)', () => {
           yield* Effect.tryPromise(() => installFakePlatform());
           const runId = generateRunId();
           const { session, awaitPlanRequest } = yield* planSession(runId);
-          const workPlanState = new WorkPlanState();
+          const workspace = AgentWorkspaceState.create();
+          const workPlanState = workspace.workPlan;
 
           yield* Effect.addFinalizer(() =>
             Effect.sync(() => releaseRunResources(runId, session)),
@@ -169,7 +171,7 @@ describe('PlanTool — update (plan approval)', () => {
               Effect.provide(
                 nativeToolTestLayer({
                   run: { runId, session, toolPolicy: {} },
-                  workPlanState,
+                  workspace,
                 }),
               ),
             ),

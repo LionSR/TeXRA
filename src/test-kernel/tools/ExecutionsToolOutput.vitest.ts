@@ -11,7 +11,6 @@ import { beforeEach, afterEach, describe, vi } from 'vitest';
 // Local imports
 import { registerRun } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 
 import {
@@ -80,7 +79,6 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
     }).pipe(
       Effect.provide(
         nativeToolTestLayer({
-          tracker: new FileInteractionState(),
           run: {
             session: testDefaultSession(),
             runId: PARENT_RUN_ID,

@@ -4,7 +4,8 @@ import * as nodePath from 'node:path';
 import { Cause, Effect, FileSystem } from 'effect';
 
 // Local imports - common
-import { ToolCall } from '@agent/runtime/ToolCall';
+import type { RunCall } from '@agent/runtime/RunCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - shared schemas
 import type { AgentCatalogServices } from '@platform/processRuntime';
@@ -121,13 +122,13 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
   ): Effect.fn.Return<
     WritableTargetPreparation,
     Error,
-    ToolCall | FileSystem.FileSystem
+    ToolContext | RunCall | FileSystem.FileSystem
   > {
     // Resolution and the caller's own validation both reject with a ToolError
     // the tool runner reports to the model, so they stay a failure rather than
     // becoming a defect.
-    const call = yield* ToolCall;
-    const resolved = yield* resolveToolPath(call, inputPath);
+    const call = yield* ToolContext;
+    const resolved = yield* resolveToolPath(call.env, inputPath);
     const { display } = resolved;
     const { path, absolutePath, displayPath } = yield* Effect.try({
       try: () => {
@@ -271,7 +272,11 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
   }: ApprovedFileEditRequest): Effect.fn.Return<
     ToolResult,
     Error,
-    ToolCall | FileSystem.FileSystem | WorkspaceFs | AgentCatalogServices
+    | ToolContext
+    | RunCall
+    | FileSystem.FileSystem
+    | WorkspaceFs
+    | AgentCatalogServices
   > {
     const approval = yield* requestToolEditApproval({
       path,

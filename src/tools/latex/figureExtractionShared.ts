@@ -1,6 +1,7 @@
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import type { RunCall } from '@agent/runtime/RunCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
   ToolError,
   type ToolFileAttachment,
@@ -57,11 +58,11 @@ export const resolveLatexFile = Effect.fn('tools.resolveLatexFile')(function* (
 ): Effect.fn.Return<
   LatexFileResolution,
   ToolError | Error,
-  ToolCall | FileSystem.FileSystem
+  ToolContext | RunCall | FileSystem.FileSystem
 > {
-  const call = yield* ToolCall;
+  const call = yield* ToolContext;
   const fs = yield* FileSystem.FileSystem;
-  const path = yield* resolveToolPath(call, texPath).pipe(
+  const path = yield* resolveToolPath(call.env, texPath).pipe(
     Effect.mapError(ensureError),
   );
   const { display } = path;
@@ -83,7 +84,7 @@ export const buildLimitedAttachments = Effect.fn(
 ): Effect.fn.Return<
   AttachmentLimitResult,
   ToolError,
-  ToolCall | FileSystem.FileSystem
+  ToolContext | RunCall | FileSystem.FileSystem
 > {
   if (paths.length === 0 || limit <= 0) {
     return { attachments: [], limitedPaths: [], limitReached: false };

@@ -42,7 +42,7 @@ import {
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { requireToolRun } from '@agent/runtime/RunCall';
 import type {
   RuntimeTool as ITool,
   RuntimeToolRegistry,
@@ -115,9 +115,7 @@ function probeTool(
   return {
     definition: { name, description: name, parameters: {} },
     parallelSafe: options.parallelSafe,
-    call: Effect.fn(function* (
-      input: unknown,
-    ): Effect.fn.Return<ToolResult, never, ToolCall> {
+    call: Effect.fn(function* (input: unknown): Effect.fn.Return<ToolResult> {
       const tag = `${name}:${JSON.stringify(input)}`;
       probe.events.push(`start ${tag}`);
       probe.inFlight += 1;
@@ -511,17 +509,13 @@ describe('tool-use dispatch', () => {
           description: 'inspect_context',
           parameters: {},
         },
-        call: Effect.fn(function* (): Effect.fn.Return<
-          ToolResult,
-          never,
-          ToolCall
-        > {
-          const context = yield* ToolCall;
-          observedInstruction = context?.userInstruction;
-          observedTrace = context?.run?.logger;
-          return { status: 'executed', output: 'ok' };
-        }),
-      } as ITool;
+        call: () =>
+          Effect.map(requireToolRun('inspect_context'), (call) => {
+            observedInstruction = call.instruction;
+            observedTrace = call.run.logger;
+            return { status: 'executed', output: 'ok' } satisfies ToolResult;
+          }),
+      };
       const kit = yield* openDispatch({
         tools: { inspect_context: inspectContext },
         calls: [makeCall('c1', 'inspect_context', {})],

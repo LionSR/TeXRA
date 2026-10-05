@@ -5,7 +5,7 @@ import { Effect, FileSystem, Path } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 import { ArxivProcessor, type ArxivSourceError } from '@latex/arxivProcessor';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { WorkspaceFs } from '@platform/rootedFs';
@@ -69,7 +69,7 @@ type ArxivDownloadInput = z.infer<typeof ArxivDownloadInputSchema>;
 const download = Effect.fn('ArxivDownloadTool.execute')(function* (
   input: ArxivDownloadInput,
 ) {
-  const call = yield* ToolCall;
+  const call = yield* ToolContext;
   const workspaceRoot = (yield* WorkspaceFs).root ?? '';
   const arxivId = input.id.trim();
   const validationError = ArxivProcessor.validateId(arxivId);
@@ -80,7 +80,7 @@ const download = Effect.fn('ArxivDownloadTool.execute')(function* (
   const downloadResult = yield* ArxivProcessor.downloadSource(arxivId, {
     workspaceRoot,
     formatter: input.autoIndent
-      ? yield* resolveLatexFormatter(call.roots)
+      ? yield* resolveLatexFormatter(call.env.roots)
       : null,
     autoIndent: input.autoIndent,
     destination: input.destination,

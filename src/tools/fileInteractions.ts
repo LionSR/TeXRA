@@ -2,14 +2,13 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { RunCall } from '@agent/runtime/RunCall';
 import { type ToolResult } from '@shared/schemas';
 import { errorResult } from '@tools/core/result';
 
 export const recordToolFileRead = Effect.fn('fileInteractions.recordRead')(
-  function* (path: string): Effect.fn.Return<void, never, ToolCall> {
-    const call = yield* ToolCall;
-    call.tracker?.recordRead(path);
+  function* (path: string): Effect.fn.Return<void, never, RunCall> {
+    (yield* RunCall)?.workspace.interactions.recordRead(path);
   },
 );
 
@@ -21,9 +20,9 @@ export const requireFileReadForEdit = Effect.fn(
   errorMessage?: string,
   /** How the card names the file; the tracker keys on `path`. */
   displayPath: string = path,
-): Effect.fn.Return<ToolResult | null, never, ToolCall> {
-  const call = yield* ToolCall;
-  if (!exists || call.tracker?.hasRead(path)) {
+): Effect.fn.Return<ToolResult | null, never, RunCall> {
+  const call = yield* RunCall;
+  if (!exists || call?.workspace.interactions.hasRead(path)) {
     return null;
   }
   return errorResult(

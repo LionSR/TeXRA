@@ -4,11 +4,11 @@
 `vscode`, no `packages/*` imports). Three modules remain, named after the
 concern they carry:
 
-| Module        | Concern                          | Contents                                                                                                                                                                                       |
-| ------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `definition/` | What an agent **is** (configure) | `AgentDataclass` (settings, prompts, `AgentDefinition`, `Persona`, `DocumentTask`), `AgentConfig` (launch/run configuration + payload), `agentDefinitionInheritance`, `RunRecord`              |
-| `state/`      | Run-state snapshots              | `AgentWorkspaceState` (file, media and work-plan state) and `runRequests` (request validation)                                                                                                 |
-| `tools/`      | Tool contracts and tool calls    | `ToolTypes` (`ITool`, `IToolRegistry`, `MapToolRegistry`), `toolAttachmentExtraction`, `toolCallParsing` (duplicate-call partitioning and tool-call error normalization, used by the run loop) |
+| Module        | Concern                          | Contents                                                                                                                                                                                                      |
+| ------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `definition/` | What an agent **is** (configure) | `AgentDataclass` (settings, prompts, `AgentDefinition`, `Persona`, `DocumentTask`), `AgentConfig` (launch/run configuration + payload), `agentDefinitionInheritance`, `RunRecord`                             |
+| `state/`      | Run-state snapshots              | `AgentWorkspaceState` (file, media and work-plan state) and `runRequests` (request validation)                                                                                                                |
+| `tools/`      | Tool contracts and tool calls    | `ToolTypes` (`ITool`, `IToolRegistry`, `MapToolRegistry`, `ToolContext`), `toolAttachmentExtraction`, `toolCallParsing` (duplicate-call partitioning and tool-call error normalization, used by the run loop) |
 
 What is **not** here, and where it lives instead:
 
@@ -22,7 +22,7 @@ What is **not** here, and where it lives instead:
 - The process's global state store is the `AppState` service from
   `@platform/interfaces` (`yield* AppState` in Effect code, or thread the store
   in from the host's composition root). Workspace-scoped state comes from the
-  `roots.workspaceState` the caller holds — a tool call's `call.roots`, a
+  `roots.workspaceState` the caller holds — a tool call's `call.env.roots`, a
   run's `session.roots`, a host command's `session.roots`.
 
 ## Dependency direction

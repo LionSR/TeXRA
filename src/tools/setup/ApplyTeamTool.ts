@@ -13,7 +13,7 @@
 
 import { Effect } from 'effect';
 import { z } from 'zod';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 import { createWorkspaceAgentsController } from '@agent/index/agentRegistry';
 import { teamPresets } from '@common/teams/TeamPresets';
@@ -51,8 +51,8 @@ type ApplyTeamInput = z.infer<typeof ApplyTeamInputSchema>;
 const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   input: ApplyTeamInput,
 ) {
-  const call = yield* ToolCall;
-  const workspaceAgents = createWorkspaceAgentsController(call.roots);
+  const call = yield* ToolContext;
+  const workspaceAgents = createWorkspaceAgentsController(call.env.roots);
 
   const result = yield* workspaceAgents.applyTeam(input.teamId);
 

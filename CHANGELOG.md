@@ -358,7 +358,20 @@ All notable changes to this project will be documented in this file.
   rows with its own. `toggleable` and `onByDefault` become one
   `toggle: 'on' | 'off'` (the switch's position on a fresh install), and
   `skills`/`agents` are gone: a plugin's bundled skills and agents are
-  whatever its `resources/plugins/<id>/` directory holds.
+  whatever its `resources/plugins/<id>/` directory holds. So a plugin id
+  must be lowercase letters, digits and dashes (`acme-search`, not
+  `acme_search`); `Sessions.layer` refuses any other list with a typed
+  `PluginsRefused`. An embedder passes its plugins' setting rows as
+  `Composition.settings`.
+
+- **Agent SDK: a tool reads its own call through `ToolContext`.** The
+  public `ToolContext` service (exported from `@texra-ai/agent`) has four
+  fields: `callId`, `env` (the workspace roots, working directory and the
+  step's read-only roots), `requests` (ask a person; absent outside a run)
+  and `emit` (transient card output). The run, its workspace state, and
+  which response and attempt the call belongs to are no longer copied onto
+  every call; the harness's built-in tools read them from its internal
+  `RunCall` service.
 
 ### Features
 

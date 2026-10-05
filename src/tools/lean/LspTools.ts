@@ -1,7 +1,11 @@
 import { Cause, Effect, Scope } from 'effect';
 import { z } from 'zod';
 
-import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
+import {
+  ToolContext,
+  type ToolContextShape,
+} from '@agent/core/tools/ToolTypes';
+import { callerRun, type ToolRun, type RunCall } from '@agent/runtime/RunCall';
 import { withLogChannel } from '@logger/effectLog';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
@@ -143,7 +147,11 @@ const catchLeanFailure = (
 
 function executeLeanDiagnosticsTool(
   input: LeanDiagnosticsInput,
-): Effect.Effect<ToolResult, Error, ToolCall | LeanLanguageServices> {
+): Effect.Effect<
+  ToolResult,
+  Error,
+  ToolContext | RunCall | LeanLanguageServices
+> {
   const { command, file } = input;
   return diagnose(file, command).pipe(
     catchLeanFailure(
@@ -157,12 +165,12 @@ const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
   file: string,
   command: 'list' | 'count',
 ) {
-  const call = yield* ToolCall;
+  const call = yield* ToolContext;
   const services = yield* LeanLanguageServices;
   const absoluteFile = yield* leanFilePath(file, call);
   const result = yield* services.fetchDiagnosticsForFile(
     absoluteFile,
-    yield* leanRunId(call, services),
+    yield* leanRunId(services),
   );
   if (!result.ok) {
     // The adapter distinguishes a genuinely missing file from a broken or
@@ -247,16 +255,20 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
   schema: LeanFileInputSchema,
   execute: (
     input: LeanFileInput,
-  ): Effect.Effect<ToolResult, Error, ToolCall | LeanLanguageServices> => {
+  ): Effect.Effect<
+    ToolResult,
+    Error,
+    ToolContext | RunCall | LeanLanguageServices
+  > => {
     const { command, file } = input;
     const { description } = LEAN_FILE_COMMANDS[command];
     return Effect.gen(function* () {
-      const call = yield* ToolCall;
+      const call = yield* ToolContext;
       const services = yield* LeanLanguageServices;
       const success = yield* services.executeFileCommand(
         command,
         yield* leanFilePath(file, call),
-        yield* leanRunId(call, services),
+        yield* leanRunId(services),
       );
       if (!success) {
         return errorResult(
@@ -284,15 +296,18 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
   schema: LeanProjectInputSchema,
   execute: (
     input: LeanProjectInput,
-  ): Effect.Effect<ToolResult, Error, ToolCall | LeanLanguageServices> => {
+  ): Effect.Effect<
+    ToolResult,
+    Error,
+    ToolContext | RunCall | LeanLanguageServices
+  > => {
     const { command } = input;
     const { description } = LEAN_PROJECT_COMMANDS[command];
     return Effect.gen(function* () {
-      const call = yield* ToolCall;
       const services = yield* LeanLanguageServices;
       yield* services.executeProjectCommand(
         command,
-        yield* leanRunId(call, services),
+        yield* leanRunId(services),
       );
 
       if (command === 'build') {
@@ -314,7 +329,11 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
 
 function executeLeanInspectTool(
   input: LeanInspectInput,
-): Effect.Effect<ToolResult, Error, ToolCall | LeanLanguageServices> {
+): Effect.Effect<
+  ToolResult,
+  Error,
+  ToolContext | RunCall | LeanLanguageServices
+> {
   const { type, file, line, column } = input;
   // Convert to 0-indexed for LSP
   const line0 = line - 1;
@@ -333,14 +352,18 @@ function executeLeanInspectTool(
     ) => Effect.Effect<LspResult<T>>,
     empty: { readonly message: string; readonly summary: string },
     render: (data: T) => ToolResult,
-  ): Effect.Effect<ToolResult, Error, ToolCall | LeanLanguageServices> =>
+  ): Effect.Effect<
+    ToolResult,
+    Error,
+    ToolContext | RunCall | LeanLanguageServices
+  > =>
     Effect.gen(function* () {
-      const call = yield* ToolCall;
+      const call = yield* ToolContext;
       const services = yield* LeanLanguageServices;
       const { data, error } = yield* request(
         services,
         yield* leanFilePath(file, call),
-        yield* leanRunId(call, services),
+        yield* leanRunId(services),
       );
       if (!data)
         return noPositionData(empty.message, location, empty.summary, error);
@@ -353,7 +376,7 @@ function executeLeanInspectTool(
   let program: Effect.Effect<
     ToolResult,
     Error,
-    ToolCall | LeanLanguageServices
+    ToolContext | RunCall | LeanLanguageServices
   >;
   switch (type) {
     case 'goal':
@@ -445,14 +468,14 @@ function noPositionData(
 }
 
 /** Resolve a Lean file once in the invoking project before the host program runs. */
-function leanFilePath(file: string, call: ToolCallShape) {
+function leanFilePath(file: string, call: ToolContextShape) {
   return Effect.gen(function* () {
-    return (yield* resolveToolPath(call, file)).absolute;
+    return (yield* resolveToolPath(call.env, file)).absolute;
   });
 }
 
 /** The runs whose end already stops the Lean servers they started. */
-const stopRegistered = new WeakSet<NonNullable<ToolCallShape['run']>>();
+const stopRegistered = new WeakSet<ToolRun>();
 
 /**
  * The run a Lean request is attributed to. The first request of a run also
@@ -461,11 +484,9 @@ const stopRegistered = new WeakSet<NonNullable<ToolCallShape['run']>>();
  * Lean integration owns server lifetime (the VS Code bridge) has no stop.
  */
 function leanRunId(
-  call: ToolCallShape,
   services: LeanLanguageServicesShape,
-): Effect.Effect<RunId | undefined> {
-  return Effect.suspend(() => {
-    const { run } = call;
+): Effect.Effect<RunId | undefined, never, RunCall> {
+  return Effect.flatMap(callerRun, (run) => {
     if (!run) return Effect.succeed(undefined);
     const { runId } = run;
     if (!services.stopSessionsForRun || stopRegistered.has(run)) {

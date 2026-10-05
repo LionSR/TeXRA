@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import { harnessBuiltins } from '@tools/builtinPlugins';
 import { PLUGIN_ARMS } from '@tools/pluginArms';
+import { TEXRA_PLUGIN_CARDS } from '@tools/pluginCards';
 import type { Plugin } from '@tools/plugins';
 import { texraPlugins } from '@tools/registry';
 import {
@@ -192,6 +193,19 @@ describe('plugin rosters', () => {
         ],
       ],
     ]);
+  });
+
+  it('gives every switchable plugin a dashboard card, and every card a plugin', () => {
+    // A switch with no card would be off with nothing to turn it on.
+    const plugins = texraPlugins();
+    const carded = new Set(TEXRA_PLUGIN_CARDS.map(({ id }) => id));
+    const listed = new Set(plugins.map(({ id }) => id));
+    expect({
+      switchedWithoutCard: plugins
+        .filter(({ id, toggle }) => toggle !== undefined && !carded.has(id))
+        .map(({ id }) => id),
+      cardWithoutPlugin: [...carded].filter((id) => !listed.has(id)),
+    }).toEqual({ switchedWithoutCard: [], cardWithoutPlugin: [] });
   });
 
   it('pins the row kinds plugins write, each of a listed plugin', () => {
