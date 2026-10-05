@@ -63,14 +63,6 @@ interface BoundSubscription {
 export class RunSubscriptionRegistry<K extends string, Input> {
   private readonly perRun = new Map<RunId, Map<K, BoundSubscription>>();
   private readonly releaseHooks = new Map<SessionHandle, () => void>();
-  /**
-   * Live binding count per session, kept in lockstep with every place a
-   * `BoundSubscription.owner` is set or cleared (new binding, rebind-reassign,
-   * unbind, unbindAll, source-key prune, session release). Lets
-   * {@link detachReleaseHookIfUnused} answer "does this session still own
-   * anything" in O(1) instead of scanning every run's every binding.
-   */
-  private readonly bindingCountBySession = new Map<SessionHandle, number>();
   private readonly keysListener: Disposable;
   /** The polling source this registry binds runs to. */
   readonly source: PollingSourceLike<K, Input>;
@@ -94,7 +86,6 @@ export class RunSubscriptionRegistry<K extends string, Input> {
     this.keysListener.dispose();
     for (const detach of this.releaseHooks.values()) detach();
     this.releaseHooks.clear();
-    this.bindingCountBySession.clear();
     const bindings = [...this.perRun.values()].flatMap((bound) => [
       ...bound.values(),
     ]);
@@ -123,8 +114,6 @@ export class RunSubscriptionRegistry<K extends string, Input> {
         const previousOwner = existing.owner;
         existing.owner = session;
         if (previousOwner !== session) {
-          this.decrementSessionRefCount(previousOwner);
-          this.incrementSessionRefCount(session);
           this.detachReleaseHookIfUnused(previousOwner);
         }
         this.opts.source.updateSubscription?.(input, existing.onEvent);
@@ -173,7 +162,6 @@ export class RunSubscriptionRegistry<K extends string, Input> {
           };
           bound.set(key, subscription);
           this.perRun.set(runId, bound);
-          this.incrementSessionRefCount(session);
           this.ensureReleaseHook(session);
           return Effect.logInfo(
             `Bound subscription ${key} → run ${runId}`,
@@ -267,7 +255,11 @@ export class RunSubscriptionRegistry<K extends string, Input> {
   }
 
   private detachReleaseHookIfUnused(session: SessionHandle): void {
-    if ((this.bindingCountBySession.get(session) ?? 0) > 0) return;
+    for (const bound of this.perRun.values()) {
+      for (const binding of bound.values()) {
+        if (binding.owner === session) return;
+      }
+    }
     this.releaseHooks.get(session)?.();
     this.releaseHooks.delete(session);
   }
@@ -288,10 +280,10 @@ export class RunSubscriptionRegistry<K extends string, Input> {
   }
 
   /**
-   * Remove one binding, decrementing its owner's ref count and pruning the
-   * run's map (and, once empty, `perRun` itself) in the same step. The
-   * single place every unbind path shrinks the (runId, key) → binding maps —
-   * callers still own disposing the returned binding's `disposable`.
+   * Remove one binding, pruning the run's map (and, once empty, `perRun`
+   * itself) in the same step. The single place every unbind path shrinks the
+   * (runId, key) → binding maps — callers still own disposing the returned
+   * binding's `disposable`.
    */
   private deleteBoundKey(
     runId: RunId,
@@ -302,21 +294,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
     if (!binding) return undefined;
     bound.delete(key);
     if (bound.size === 0) this.perRun.delete(runId);
-    this.decrementSessionRefCount(binding.owner);
     return binding;
-  }
-
-  private incrementSessionRefCount(session: SessionHandle): void {
-    this.bindingCountBySession.set(
-      session,
-      (this.bindingCountBySession.get(session) ?? 0) + 1,
-    );
-  }
-
-  private decrementSessionRefCount(session: SessionHandle): void {
-    const count = this.bindingCountBySession.get(session) ?? 0;
-    if (count <= 1) this.bindingCountBySession.delete(session);
-    else this.bindingCountBySession.set(session, count - 1);
   }
 
   private emitBindingsChanged(): void {

@@ -145,6 +145,7 @@ function launchRun(
       ? { memoryMisses: ctx.attachedMemoryMisses }
       : {}),
   });
+  const { turns } = shared;
   /** A document task's result, with its revisions' spend, published by the
    *  host before the terminal commit; the verdict stays this function's. */
   const withDocuments = (ended: RunEndResult) =>
@@ -169,12 +170,11 @@ function launchRun(
     variant.kind === 'resume' && variant.isCancellationRequested?.()
       ? Effect.interrupt
       : runToolUse({
-          ...(shared.turns
+          ...(turns
             ? {
                 turns: {
-                  turnPermit: shared.turns.turnPermit,
-                  settleBoundary: (result) =>
-                    shared.turns!.settleBoundary(toResult(result)),
+                  turnPermit: turns.turnPermit,
+                  settleBoundary: (r) => turns.settleBoundary(toResult(r)),
                 },
               }
             : {}),

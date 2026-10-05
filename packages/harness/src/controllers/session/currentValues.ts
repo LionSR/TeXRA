@@ -32,8 +32,7 @@ import {
 } from '@shared/session/database';
 import type { ValueFamily } from '@shared/session/valueFamily';
 import type { SqlError } from 'effect/sql/SqlError';
-
-type Rows = readonly Readonly<Record<string, unknown>>[];
+import type { SqlRow } from './rowCodec';
 
 /** Replace one current value in place. */
 const UPSERT_VALUE = `
@@ -56,7 +55,7 @@ const READ_RETRY = Schedule.exponential('250 millis').pipe(
 );
 
 /** A row a newer build wrote: never decoded as this build's shape. */
-const newerValue = (family: string, row: Readonly<Record<string, unknown>>) => {
+const newerValue = (family: string, row: SqlRow) => {
   const version = z.int().parse(row.version);
   return version > VALUE_VERSION
     ? new CurrentValueNewer({ family, key: String(row.key), version })
@@ -65,10 +64,7 @@ const newerValue = (family: string, row: Readonly<Record<string, unknown>>) => {
 
 /** One current value, decoded by its family's schema: a row that no longer
  *  decodes fails the read naming itself. */
-function decodeValue<T>(
-  family: ValueFamily<T, boolean>,
-  row: Readonly<Record<string, unknown>>,
-): T {
+function decodeValue<T>(family: ValueFamily<T, boolean>, row: SqlRow): T {
   const parsed = parseJsonWith(z.string().parse(row.value), family.schema);
   if (Result.isSuccess(parsed)) return parsed.success;
   throw new Error(
@@ -80,11 +76,11 @@ export function currentValues(store: {
   readonly exec: (
     statement: string,
     params?: readonly unknown[],
-  ) => Effect.Effect<Rows, SqlError>;
+  ) => Effect.Effect<readonly SqlRow[], SqlError>;
   readonly execOne: (
     statement: string,
     params?: readonly unknown[],
-  ) => Effect.Effect<Readonly<Record<string, unknown>> | undefined, SqlError>;
+  ) => Effect.Effect<SqlRow | undefined, SqlError>;
   readonly transact: <A, E>(
     body: Effect.Effect<A, E>,
   ) => Effect.Effect<A, DatabaseWriteFailed>;
