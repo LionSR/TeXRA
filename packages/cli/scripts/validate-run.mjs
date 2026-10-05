@@ -294,8 +294,8 @@ function validateBinarySmoke() {
 }
 
 function validateTeamListAvailability() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-list-cwd-'));
-  const home = mkdtempSync(path.join(tmpdir(), 'texra-cli-list-home-'));
+  const cwd = makeScratch('texra-cli-list-cwd-');
+  const home = makeScratch('texra-cli-list-home-');
   try {
     const listEnv = isolatedCliHomeEnv(home);
     const runList = (args = []) =>
@@ -365,8 +365,8 @@ function findToolRecord(records, id) {
 }
 
 function validateToolsCommand() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-tools-cwd-'));
-  const home = mkdtempSync(path.join(tmpdir(), 'texra-cli-tools-home-'));
+  const cwd = makeScratch('texra-cli-tools-cwd-');
+  const home = makeScratch('texra-cli-tools-home-');
   try {
     const env = isolatedCliHomeEnv(home);
     const runTools = (args) =>
@@ -549,6 +549,7 @@ async function runTexraPty(args, options = {}) {
       cwd: options.cwd ?? cliRoot,
       env,
     });
+    liveChildren.add(child);
 
     const rejectWithKill = (err) => {
       if (settled) return;
@@ -595,6 +596,7 @@ async function runTexraPty(args, options = {}) {
 
     child.onExit((exit) => {
       exited = true;
+      liveChildren.delete(child);
       settle(() => resolve({ output, exit }));
     });
 
@@ -607,7 +609,7 @@ async function runTexraPty(args, options = {}) {
 }
 
 async function validateChatOnboardingPicker(options) {
-  const root = mkdtempSync(path.join(tmpdir(), 'texra-cli-onboarding-'));
+  const root = makeScratch('texra-cli-onboarding-');
   try {
     const home = path.join(root, 'home');
     let exitScheduled = false;
@@ -704,7 +706,7 @@ async function validateChatOnboardingPickers() {
 }
 
 function validateRunCommand() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-run-'));
+  const cwd = makeScratch('texra-cli-run-');
   try {
     const inputPath = path.join(cwd, 'paper.tex');
     const validationFlagPath = path.join(cwd, validationFlagName);
@@ -816,7 +818,7 @@ function validateRunCommand() {
 }
 
 function validateToolUseAgentRunCommand() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-agent-run-'));
+  const cwd = makeScratch('texra-cli-agent-run-');
   try {
     const promptPath = path.join(cwd, 'review-prompt.md');
     const contextPath = path.join(cwd, 'pr.diff');
@@ -878,7 +880,7 @@ function validateToolUseAgentRunCommand() {
  * binary. The NDJSON the run printed is kept as the artifact.
  */
 function validateHistoryQueryRunCommand() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-history-query-'));
+  const cwd = makeScratch('texra-cli-history-query-');
   try {
     const home = path.join(cwd, 'home');
     const customAgents = path.join(
@@ -1118,19 +1120,56 @@ const VIEW_ROWS = `SELECT s.logical_id AS run, e.seq, e.type,
  * started: its record names its pid, and a conversation parked there would
  * otherwise keep it running after its home is gone.
  */
-function removeScratch(dir) {
-  const records = spawnSync(
-    'find',
-    [dir, '-name', 'serve.json', '-path', '*/.texra/run/*'],
-    {
-      encoding: 'utf8',
-    },
-  );
-  for (const file of records.stdout.split('\n').filter(Boolean)) {
+/** The scratch directories made and not yet removed: what an exit or a
+ *  signal before a scenario's own cleanup still has to remove. */
+const liveScratch = new Set();
+
+/** A scratch directory under the system temp folder, removed (with any
+ *  service started in it) by its scenario or, failing that, at exit. */
+function makeScratch(prefix) {
+  const dir = mkdtempSync(path.join(tmpdir(), prefix));
+  liveScratch.add(dir);
+  return dir;
+}
+
+/** The PTY clients running now: killed before an exit removes the
+ *  scratch they write to. */
+const liveChildren = new Set();
+
+process.on('exit', () => {
+  for (const child of liveChildren) {
     try {
-      process.kill(JSON.parse(readFileSync(file, 'utf8')).pid, 'SIGTERM');
+      child.kill('SIGKILL');
     } catch {
-      // Gone already, or the record is unreadable: nothing left to stop.
+      // Exited already.
+    }
+  }
+  for (const dir of liveScratch) removeScratch(dir);
+});
+for (const [signal, code] of [
+  ['SIGINT', 130],
+  ['SIGTERM', 143],
+]) {
+  process.on(signal, () => process.exit(code));
+}
+
+function removeScratch(dir) {
+  liveScratch.delete(dir);
+  // Every service home under `dir`; one still starting has its run
+  // directory before its record, so its record is waited for briefly.
+  const runDirs = spawnSync(
+    'find',
+    [dir, '-type', 'd', '-path', '*/.texra/run'],
+    { encoding: 'utf8' },
+  );
+  for (const runDir of runDirs.stdout.split('\n').filter(Boolean)) {
+    const record = path.join(runDir, 'serve.json');
+    for (let waited = 0; !existsSync(record) && waited < 3_000; waited += 100)
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    try {
+      process.kill(JSON.parse(readFileSync(record, 'utf8')).pid, 'SIGTERM');
+    } catch {
+      // Gone already, or never started: nothing left to stop.
     }
   }
   rmSync(dir, { recursive: true, force: true });
@@ -1152,7 +1191,7 @@ function writeArtifact(name, value) {
  * are kept as the artifact.
  */
 async function validateForkResetHandoff() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-fork-'));
+  const cwd = makeScratch('texra-cli-fork-');
   try {
     const project = echoProject(cwd);
     const source = project.firstRun('First message');
@@ -1231,7 +1270,7 @@ async function validateForkResetHandoff() {
  * `context.edit` rows and the replies are the artifact.
  */
 async function validateTuiForkHandoffReset() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-tui-fork-'));
+  const cwd = makeScratch('texra-cli-tui-fork-');
   try {
     const project = echoProject(cwd);
     const source = project.firstRun('First message');
@@ -1292,7 +1331,7 @@ async function validateTuiForkHandoffReset() {
  * only). The store's `context.edit` rows are kept as the artifact.
  */
 async function validateBackgroundCompaction() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-compaction-'));
+  const cwd = makeScratch('texra-cli-compaction-');
   try {
     const project = echoProject(cwd, {
       'texra.model.compactionThresholdPercent': 1,
@@ -1336,7 +1375,7 @@ async function validateBackgroundCompaction() {
  * resumes it by itself. The task's `run.activate` counts are the artifact.
  */
 async function validateInterruptedTasks() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-interrupted-'));
+  const cwd = makeScratch('texra-cli-interrupted-');
   try {
     const project = echoProject(cwd);
     // The chat is its task's writer here, so killing it is the crash this
@@ -1437,7 +1476,7 @@ async function validateInterruptedTasks() {
  * to it live. The second chat's attached view is the artifact.
  */
 async function validateServiceChatsSeeEachOther() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-service-chats-'));
+  const cwd = makeScratch('texra-cli-service-chats-');
   const project = echoProject(cwd);
   const env = { ...project.ptyEnv, TEXRA_NO_TELEMETRY: '1' };
   const chatArgs = [
@@ -1545,7 +1584,7 @@ async function validateServiceChatsSeeEachOther() {
  * artifact.
  */
 async function validateServiceHostCalls() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-service-host-'));
+  const cwd = makeScratch('texra-cli-service-host-');
   const project = echoProject(cwd);
   const storageRoot = path.join(cwd, 'home', '.texra');
   writeFileSync(
@@ -1689,7 +1728,7 @@ prompt: |
  * the command wrote and the attached view's last lines are the artifact.
  */
 async function validateServiceTasksInTui() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-service-tui-'));
+  const cwd = makeScratch('texra-cli-service-tui-');
   const project = echoProject(cwd);
   writeFileSync(
     path.join(
@@ -1843,7 +1882,7 @@ prompt: |
  * those two transcripts are the artifact.
  */
 async function validateServiceSharedTask() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-service-'));
+  const cwd = makeScratch('texra-cli-service-');
   const project = echoProject(cwd);
   const env = { ...project.ptyEnv, TEXRA_NO_TELEMETRY: '1' };
   const texra = (args, label, extraEnv = {}) => {
@@ -1968,7 +2007,7 @@ async function validateServiceSharedTask() {
  * activation counts and the task's `run.description` rows are the artifact.
  */
 async function validateOpenTimePrompt() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-open-prompt-'));
+  const cwd = makeScratch('texra-cli-open-prompt-');
   try {
     const project = echoProject(cwd);
     // The chat is its task's writer here, so killing it is the crash this
@@ -2090,7 +2129,7 @@ async function validateOpenTimePrompt() {
 }
 
 function validateScriptFanoutRunCommand() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-script-fanout-run-'));
+  const cwd = makeScratch('texra-cli-script-fanout-run-');
   try {
     const home = path.join(cwd, 'home');
     const globalStorage = path.join(home, '.texra', 'v1', 'global-storage');
@@ -2193,7 +2232,7 @@ prompt: |
 }
 
 function validateTeamRunCommand() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-team-run-'));
+  const cwd = makeScratch('texra-cli-team-run-');
   // A preset whose members are all chat agents keeps this check cheap.
   const validationPreset = 'software-engineer';
   try {
