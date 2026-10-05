@@ -18,7 +18,7 @@
 // (`nodeSpawnerLayer`).
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import * as NodePath from '@effect/platform-node/NodePath';
-import { ConfigProvider, Effect, Layer, RcMap } from 'effect';
+import { ConfigProvider, Effect, RcMap } from 'effect';
 import { afterEach, beforeEach } from 'vitest';
 
 import { AgentEngine } from '@agent/runtime/AgentEngine';
@@ -46,10 +46,7 @@ import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
 } from '@texra/tools/lean/leanLanguageServices';
-import {
-  SetupPlatform,
-  type SetupPlatformShape,
-} from '@texra/tools/setup/platform';
+import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import { goalContinuation } from '@tools/goal/goalContinuation';
 import { toolTableLayer } from '@tools/liveTools';
 import { toolTable } from '@tools/toolTable';
@@ -62,6 +59,7 @@ import {
   type FakeProcessPorts,
   type FakePlatformOptions,
 } from './FakePlatform';
+import type { Layer } from 'effect';
 
 /**
  * A host's process ports and the workspace roots installed beside them, plus the
@@ -191,13 +189,6 @@ export const fakeSetupPlatform: SetupPlatformShape = {
   },
 };
 
-/** `layer` with the setup plugin's service over the installed host's setup
- *  platform, for a setup tool called outside a run's step. */
-export const withSetup = <A, E, R>(
-  layer: Layer.Layer<A, E, R>,
-): Layer.Layer<A | SetupPlatform, E, R> =>
-  Layer.merge(layer, SetupPlatform.layer(fakeSetupPlatform));
-
 /**
  * The `Secrets` and `AppState` services of every test runtime, in the shape
  * `fakeSetupPlatform` already uses: each member reads the installed host when
@@ -289,7 +280,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   const [
     { initTestWorkspaceRoots },
     { initTestProcessRuntime, tryTestProcessRuntime },
-    { ManagedRuntime },
+    { Layer, ManagedRuntime },
     { testHttpClientLayer },
     { Secrets },
     { AgentDirectories, AppState },

@@ -8,11 +8,11 @@ import { describe } from 'vitest';
 
 // Local imports
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { installPlatform, withSetup } from '@test/support/setupPlatform';
+import { installPlatform } from '@test/support/setupPlatform';
 import { InvokeCommandTool } from '@texra/tools/setup/InvokeCommandTool';
 
 // Local file imports
-import { createFakeSetupPlatform } from './fixtures';
+import { createFakeSetupPlatform, withSetup } from './fixtures';
 
 interface InvokeRecord {
   command: string;

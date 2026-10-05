@@ -10,18 +10,14 @@ import { afterEach, beforeEach, describe, vi } from 'vitest';
 import * as apiProviders from '@texra-ai/llm';
 import { apiKeyEnvName, SecretsFailed } from '@texra-ai/llm';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import {
-  installPlatform,
-  setupPlatform,
-  withSetup,
-} from '@test/support/setupPlatform';
+import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import * as setupCredentialAccess from '@texra/model/setupCredentialAccess';
 import { ProbeEnvironmentTool } from '@texra/tools/setup/ProbeEnvironmentTool';
 import { VerifySetupTool } from '@texra/tools/setup/VerifySetupTool';
 import * as setupPlatformModule from '@texra/tools/setup/platform';
 
 // Local file imports
-import { createFakeSetupPlatform } from './fixtures';
+import { createFakeSetupPlatform, withSetup } from './fixtures';
 
 const mocks = vi.hoisted(() => ({
   locateTool:
