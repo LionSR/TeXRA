@@ -140,6 +140,7 @@ describe('desktop composition root and launch environment', () => {
             processScope: yield* Scope.make(),
             globalConfigStore: config,
             stores: { ...host.roots, secrets: host.secrets },
+            service: undefined,
           }).pipe(
             Effect.provideService(DesktopProjectRecords, records),
             Effect.provideService(
@@ -234,6 +235,7 @@ describe('desktop composition root and launch environment', () => {
           processScope: yield* Scope.make(),
           globalConfigStore: config,
           stores: { ...host.roots, secrets: host.secrets },
+          service: undefined,
         }).pipe(
           Effect.provideService(DesktopProjectRecords, records),
           Effect.provideService(

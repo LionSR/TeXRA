@@ -23,6 +23,7 @@ import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import { generateRunId } from '@utils/core';
 
 // Local file imports
@@ -64,6 +65,9 @@ describe('desktop agent run completion hook', () => {
           closeDiff: () => Effect.void,
         },
         session,
+        backend: localSessionBackend(session),
+        service: undefined,
+        root: undefined,
         runtime: testRuntime(),
         showAgentConfigBanner: () => Effect.void,
         onRunCompleted: Effect.sync(onRunCompleted),

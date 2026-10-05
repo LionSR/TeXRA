@@ -100,6 +100,7 @@ import {
 } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import { launchDetachedSubagent } from '@tools/delegation/subagentRun';
@@ -1427,7 +1428,11 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
                 }),
               ),
             },
-            { session, runtime: testRuntime() },
+            {
+              session,
+              backend: localSessionBackend(session),
+              runtime: testRuntime(),
+            },
           ),
         );
 

@@ -45,6 +45,12 @@ import {
   projectDisplayOf,
   type ProjectDisplay,
 } from '@shared/session/hostSnapshot';
+import {
+  localSessionBackend,
+  type SessionBackend,
+} from '@texra/controllers/session/sessionBackend';
+import { serviceSessionBackend } from '@texra/controllers/server/serviceBackend';
+import type { ServiceClient } from '@texra/controllers/server/client';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -65,6 +71,11 @@ export interface DesktopProject {
   readonly display: ProjectDisplay;
   readonly roots: WorkspaceRoots;
   readonly session: SessionHandle;
+  /** Where this project's runs run: the background service, for a folder
+   *  while the app is its client, or this session. */
+  readonly backend: SessionBackend;
+  /** The service the backend reaches, when it is the service's. */
+  readonly service: ServiceClient | undefined;
   /** Release the session from its owner; settles once its entry has unwound. */
   dispose(): Effect.Effect<void>;
 }
@@ -98,6 +109,9 @@ interface DesktopProjectRegistryOptions {
   readonly globalConfigStore: ConfigStore;
   /** The process stores; every project's roots share its global state. */
   readonly stores: ModelOptionStores;
+  /** The background service, when the app is its client: a folder's
+   *  runs run there. */
+  readonly service: ServiceClient | undefined;
 }
 
 export interface DesktopProjectRegistry {
@@ -210,13 +224,18 @@ function openProjectSession(
   roots: WorkspaceRoots,
   // The closeable scope the caller provides; `dispose` closes it.
   scope: Scope.Closeable,
+  service: ServiceClient | undefined,
 ): Effect.Effect<DesktopProject, Error, Scope.Scope> {
   return Effect.gen(function* () {
+    // A folder's runs run in the service, which follows its interrupted
+    // tasks; the no-workspace session's, and every run without a service,
+    // run here.
+    const served = root !== undefined ? service : undefined;
     const session = yield* Effect.acquireRelease(
       openSessionEffect({
         roots,
         responseTextProcessing: createTexraResponseTextProcessing(),
-        interruptedTasks: 'offer',
+        ...(served === undefined && { interruptedTasks: 'offer' }),
       }),
       // The one close every session takes: its runs stopped under the
       // shutdown deadline, the ones still live past it settled, its
@@ -229,12 +248,20 @@ function openProjectSession(
         TEXRA_APPROVAL_POLICY_CONFIG_KEY,
       ),
     );
+    const backend =
+      served === undefined || root === undefined
+        ? localSessionBackend(session)
+        : yield* serviceSessionBackend(served, root, roots.storage);
+    if (served !== undefined)
+      yield* backend.setApprovalPolicy(session.approvalPolicy);
     return {
       key: roots.storage,
       root,
       display: projectDisplayOf(roots.storage, root),
       roots,
       session,
+      backend,
+      service: served,
       dispose: () => Scope.close(scope, Exit.void),
     };
   });
@@ -261,6 +288,7 @@ export function openDesktopProjectRegistry(
         undefined,
         options.processRoots,
         options.processScope,
+        undefined,
       ).pipe(
         Scope.provide(options.processScope),
         Effect.onError(() => Scope.close(options.processScope, Exit.void)),
@@ -333,7 +361,12 @@ export function openDesktopProjectRegistry(
             // Acquire the session and install its registry owner before
             // interruption can leave this operation.
             return yield* Effect.uninterruptible(
-              openProjectSession(root, roots, projectScope).pipe(
+              openProjectSession(
+                root,
+                roots,
+                projectScope,
+                options.service,
+              ).pipe(
                 Effect.tap((project) =>
                   Effect.gen(function* () {
                     const recent = yield* records.readRecent;

@@ -24,6 +24,7 @@ import { createFakeHost, installFakeHost } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import { createHostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { createExternalLocation } from '@utils/files/fileLocation';
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
@@ -151,6 +152,7 @@ describe('desktop preview host', () => {
         const handler = createDesktopHostRequests({
           runtime: testRuntime(),
           session,
+          backend: localSessionBackend(session),
           host: createStubDesktopAgentRunHost({
             ...preview,
             showErrorMessage,

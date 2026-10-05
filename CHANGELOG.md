@@ -375,6 +375,14 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **The desktop app runs its tasks in the background service.** On macOS
+  and Linux the app starts the TeXRA service (or uses the one already
+  running, the one the CLI and VS Code use) and runs each project's tasks
+  there, so a task keeps running when the app quits and a terminal or a
+  VS Code window can follow it. The app still presents the task's notices
+  and its proposed edits, and its approval policy applies there. If the
+  service cannot start, the app runs its tasks itself.
+
 - **VS Code windows run their tasks in the background service.** On macOS
   and Linux the extension starts the TeXRA service (or uses the one already
   running) and launches, resumes and steers its tasks there, so a task

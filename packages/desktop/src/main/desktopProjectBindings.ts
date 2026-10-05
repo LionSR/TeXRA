@@ -12,7 +12,6 @@ import {
   type ProcessRuntime,
   type ProcessServices,
 } from '@platform/processRuntime';
-import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   createHostSnapshotSource,
@@ -195,7 +194,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       // Install the recipient before host requests publish the recorder's
       // state.
       const bridge = yield* SessionBridge.make({
-        backend: localSessionBackend(project.session),
+        backend: project.backend,
         handleHostRequest: (request, portId) =>
           hostRequests.handleHostRequest(request, portId),
         onPortClosed: (portId) => hostRequests.closePort(portId),
@@ -240,6 +239,9 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         host: hosts.run,
         toolEditPreview: hosts.toolEditPreview,
         session: project.session,
+        backend: project.backend,
+        service: project.service,
+        root: project.root,
         showAgentConfigBanner: ({ agentName }) =>
           withProcessServices(
             runtime,
@@ -258,6 +260,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       const hostRequests = createDesktopHostRequests({
         runtime,
         session: project.session,
+        backend: project.backend,
         secrets: options.secrets,
         draftRequests: options.draftRequests,
         workspaceFile: workspace.file,

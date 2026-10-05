@@ -1044,6 +1044,12 @@ async function checkBundledResources(app, failures) {
     'trace-viewer HTML template',
     failures,
   );
+  await checkExists(
+    app,
+    'serve/texra-serve.mjs',
+    'background service bundle',
+    failures,
+  );
 }
 
 async function checkMonacoWorkerAssets(app, failures) {

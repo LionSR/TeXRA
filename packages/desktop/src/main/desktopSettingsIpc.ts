@@ -25,6 +25,7 @@ import {
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
 import type { PlatformSecrets } from '@texra-ai/harness';
@@ -58,6 +59,9 @@ export interface DesktopSettingsIpcOptions {
   /** The session of the paper this settings surface serves. The desktop has
    *  no process-default session, so it must be passed. */
   readonly session: SessionHandle;
+  /** Where the paper's runs run: an approval policy set here applies
+   *  there too. */
+  readonly backend: SessionBackend;
   readonly secrets: PlatformSecrets;
   /** Root of the packaged resources tree, which holds the agent templates. */
   readonly resourcesPath: string;
@@ -171,7 +175,14 @@ export function createDesktopSettingsIpc(
 
   const body = createSettingsViewBody({
     host: 'desktop',
-    session: options.session,
+    session: {
+      roots: options.session.roots,
+      // The policy holds here and in the service that runs the paper's tasks.
+      setApprovalPolicy: (policy) => {
+        options.session.setApprovalPolicy(policy);
+        spawn(options.backend.setApprovalPolicy(policy));
+      },
+    },
     secrets: options.secrets,
     resourcesPath: options.resourcesPath,
     skillDisplay: loadRuntimeSkillDisplay(

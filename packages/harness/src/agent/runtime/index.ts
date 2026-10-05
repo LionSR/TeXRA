@@ -36,7 +36,6 @@ export {
 } from './sessionGraph';
 
 // HostInteractions
-export { SessionHostInteractions } from './HostInteractions';
 export type {
   HostInteractions,
   ManualCriticismEntry,
@@ -51,7 +50,6 @@ export { runAgent } from './runAgent';
 export type { RunAgentOptions, RunAgentRequest } from './runAgent';
 
 // SessionResumeRetrieval
-export { retrieveSessionResumeData } from './SessionResumeRetrieval';
 
 // runClassification
 export { classifyRun } from './runClassification';
@@ -101,7 +99,6 @@ export {
 // core/state run-request validation at the host launch boundary.
 export {
   validateRunRequest,
-  type RunRequest,
   type ValidatedRunRequest,
 } from '../core/state/runRequests';
 

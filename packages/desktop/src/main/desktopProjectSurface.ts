@@ -168,14 +168,14 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
             const binding = bindings.active();
             if (!binding) return 'unavailable' as const;
             const view = SubscriptionRef.getUnsafe(
-              binding.project.session.view,
+              binding.project.backend.view,
             );
             if (!view.runs.has(runId)) return 'missing' as const;
             binding.bridge.surfaceAction({ kind: 'select', runId });
             return 'revealed' as const;
           }),
         runLabel: (runId) =>
-          SubscriptionRef.getUnsafe(projects.active().session.view).runs.get(
+          SubscriptionRef.getUnsafe(projects.active().backend.view).runs.get(
             runId,
           )?.label,
         stateSettingApplied: () => Effect.void,
@@ -223,6 +223,7 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
           ),
         },
         session: project.session,
+        backend: project.backend,
         secrets: options.secrets,
         resourcesPath: options.resourcesPath,
         spawn: desktopSpawner(runtime, owner),
@@ -233,7 +234,7 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
         Effect.tap(() =>
           installDesktopWindowTitle(
             host.window,
-            project.session,
+            project.backend,
             project.root && project.display.name,
             () => surfaceScope === owner,
           ),
