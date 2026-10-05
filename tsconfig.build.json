@@ -3,13 +3,13 @@
   "compilerOptions": {
     "declaration": true,
     "emitDeclarationOnly": true,
-    "outDir": "packages/agent/dist/types",
+    "outDir": "packages/harness/dist/types",
     "rootDir": ".",
     "removeComments": true,
     "types": ["node"]
   },
   "include": [
-    "packages/agent/src/**/*.ts",
+    "packages/harness/src/**/*.ts",
     "packages/llm/src/**/*.ts",
     "src/types/ambient.d.ts"
   ],

@@ -74,7 +74,7 @@ const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
  * The configs `npm run typecheck` composes, in home-config-first order:
  * tsconfig.json owns src/** and packages/extension/src/**,
  * tsconfig.test-kernel.json owns the test surface the root config excludes,
- * tsconfig.build.json owns packages/agent/src (typecheck:agent runs the
+ * tsconfig.build.json owns packages/harness/src (typecheck:harness runs the
  * package build, whose tsc step is this config), and each remaining package
  * config owns its package's sources.
  */

@@ -129,11 +129,11 @@ or the `:safe` variants (`compile:safe`, `package:safe`, `build:safe`), which
 type check first. CI always runs `typecheck`.
 
 `npm run typecheck` composes independently runnable checks:
-`typecheck:workspace`, `typecheck:test-kernel`, `typecheck:agent`,
+`typecheck:workspace`, `typecheck:test-kernel`, `typecheck:harness`,
 `typecheck:llm`, `typecheck:cli`, `typecheck:trace-viewer`, and
 `typecheck:desktop`. Run the affected ones while developing and the full command
-before committing. `typecheck:agent` performs the complete agent-package build
-and regenerates `packages/agent/dist/`. There is no `typecheck:extension`: the
+before committing. `typecheck:harness` performs the complete harness-package build
+and regenerates `packages/harness/dist/`. There is no `typecheck:extension`: the
 root `tsconfig.json` already includes `packages/extension/src/**`. Use
 `build:initial` to validate a full initial build (desktop app and VSIX).
 

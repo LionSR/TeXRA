@@ -1,5 +1,5 @@
 /**
- * `@texra-ai/agent` — the SDK's surface, stated in Effect.
+ * `@texra-ai/harness` — the SDK's surface, stated in Effect.
  *
  * The services below are where every decision this package makes is
  * stated: which level is a run's first, when its transcript interest
@@ -8,7 +8,7 @@
  * embedder runs `Effect.runPromise(program)` at its own entry point.
  *
  * This module is the package's public surface and is documented as one
- * (packages/agent/README.md); it is the one barrel the "no convenience
+ * (packages/harness/README.md); it is the one barrel the "no convenience
  * barrels" rule does not apply to.
  *
  * The root entry used to render these services as Promises and

@@ -209,7 +209,7 @@ function runsEffectCode(block) {
   return found;
 }
 
-// `packages/agent/src` counts as core here although the lint block lets a
+// `packages/harness/src` counts as core here although the lint block lets a
 // host package run effects: the SDK runs nothing itself (its README), so the
 // ratchet holds it to the stricter core rule.
 const RUN_NAMES = new Set([
@@ -831,7 +831,7 @@ function measureDependencies(rootDir, byRule) {
   const { catalog = {} } = parseYaml(
     readFileSync(path.join(rootDir, 'pnpm-workspace.yaml'), 'utf8'),
   );
-  for (const dir of ['packages/agent', 'packages/llm']) {
+  for (const dir of ['packages/harness', 'packages/llm']) {
     const manifest = JSON.parse(
       readFileSync(path.join(rootDir, dir, 'package.json'), 'utf8'),
     );
@@ -858,7 +858,7 @@ function measureDependencies(rootDir, byRule) {
  * (`**I1**`), and a conformance test cites each one (`invariant I1`).
  */
 function measureInvariants(rootDir, byRule) {
-  const readme = 'packages/agent/README.md';
+  const readme = 'packages/harness/README.md';
   const text = readFileSync(path.join(rootDir, readme), 'utf8');
   const listed = [...text.matchAll(/\*\*(I\d+)\*\*/g)].map((match) => match[1]);
   // Two keys: an empty catalog must not hide the first untested invariant.

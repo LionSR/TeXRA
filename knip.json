@@ -15,7 +15,7 @@
       "entry": ["src/**/frontend/index.ts!"],
       "project": ["src/**/*.{ts,tsx,mts}!"]
     },
-    "packages/agent": {
+    "packages/harness": {
       "entry": [
         "src/index.ts!",
         "src/node.ts!",

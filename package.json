@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "lint": "node --max-old-space-size=6144 ./node_modules/eslint/bin/eslint.js src packages/agent/src packages/agent/scripts packages/extension/src packages/desktop/src --ignore-pattern \"src/test-kernel/**\" && node --max-old-space-size=6144 ./node_modules/eslint/bin/eslint.js src/test-kernel && node --max-old-space-size=6144 ./node_modules/eslint/bin/eslint.js packages/cli/src && node --max-old-space-size=6144 ./node_modules/eslint/bin/eslint.js \"packages/cli/scripts/**/*.{ts,tsx}\" && node --max-old-space-size=6144 ./node_modules/eslint/bin/eslint.js packages/llm/src packages/llm/test-live packages/trace-viewer/src && node --max-old-space-size=6144 ./node_modules/eslint/bin/eslint.js \"packages/desktop/design-harness/**/*.ts\" \"packages/desktop/tests/e2e/**/*.ts\"",
+    "lint": "node --max-old-space-size=6144 ./node_modules/eslint/bin/eslint.js src packages/harness/src packages/harness/scripts packages/extension/src packages/desktop/src --ignore-pattern \"src/test-kernel/**\" && node --max-old-space-size=6144 ./node_modules/eslint/bin/eslint.js src/test-kernel && node --max-old-space-size=6144 ./node_modules/eslint/bin/eslint.js packages/cli/src && node --max-old-space-size=6144 ./node_modules/eslint/bin/eslint.js \"packages/cli/scripts/**/*.{ts,tsx}\" && node --max-old-space-size=6144 ./node_modules/eslint/bin/eslint.js packages/llm/src packages/llm/test-live packages/trace-viewer/src && node --max-old-space-size=6144 ./node_modules/eslint/bin/eslint.js \"packages/desktop/design-harness/**/*.ts\" \"packages/desktop/tests/e2e/**/*.ts\"",
     "test": "vitest run --config vitest.config.mjs",
     "test:changed": "vitest run --config vitest.config.mjs --changed",
     "test:pure": "vitest run --config vitest.config.mjs --project pure",
@@ -29,10 +29,10 @@
     "test:vscode": "node scripts/vscode-host-e2e-runner.mjs",
     "smoke:webviews": "corepack pnpm run vite:webviews && corepack pnpm run smoke:webviews:run",
     "smoke:webviews:run": "node scripts/verify-desktop.mjs smoke-webviews",
-    "typecheck": "npm run typecheck:workspace && npm run typecheck:test-kernel && npm run typecheck:agent && npm run typecheck:llm && npm run typecheck:cli && npm run typecheck:trace-viewer && npm run typecheck:desktop",
+    "typecheck": "npm run typecheck:workspace && npm run typecheck:test-kernel && npm run typecheck:harness && npm run typecheck:llm && npm run typecheck:cli && npm run typecheck:trace-viewer && npm run typecheck:desktop",
     "typecheck:workspace": "tsc --noEmit --checkers 8",
     "typecheck:test-kernel": "tsc --noEmit --checkers 8 -p tsconfig.test-kernel.json",
-    "typecheck:agent": "corepack pnpm --filter @texra-ai/agent build",
+    "typecheck:harness": "corepack pnpm --filter @texra-ai/harness build",
     "typecheck:llm": "corepack pnpm --filter @texra-ai/llm typecheck",
     "typecheck:cli": "corepack pnpm --filter @texra-ai/cli typecheck",
     "typecheck:trace-viewer": "corepack pnpm --filter @texra/trace-viewer run typecheck",

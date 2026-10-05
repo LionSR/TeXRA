@@ -45,17 +45,17 @@ centralized tests for shared and host-specific behavior; `packages/extension`, `
 
 Things the tree won't tell you:
 
-- **The SDK surface is `packages/agent` (`@texra-ai/agent`) — built, fenced, not
+- **The SDK surface is `packages/harness` (`@texra-ai/harness`) — built, fenced, not
   published.** There is no `@texra/core` package (deleted by #7099). Hosts still
   reach shared core through the repo-root path aliases, but that surface is
   **frozen, not open**: `eslint.config.mjs` forbids production `src/**` and
-  `packages/agent/src/**` from importing host layers, and the ratchets in
+  `packages/harness/src/**` from importing host layers, and the ratchets in
   `config/ratchets/` freeze the remaining edges — `host-agent-import-baseline`
   (no NEW distinct `@agent/*` deep-import specifier from a host, type-only
   included), `host-agent-mock`,
   `architecture-edges`, plus `refuted-candidates` (the costed-and-refused
   refactors, with their ruling anchors). ESLint's `no-restricted-syntax` fails
-  an `Effect.run*` call outside `packages/{extension,desktop,cli,agent}/src/`
+  an `Effect.run*` call outside `packages/{extension,desktop,cli,harness}/src/`
   (webview frontends excluded) or a named runtime entry carved out in
   `eslint.config.mjs` (whole-file; the receiver is checked in review), as does
   `new AbortController()` outside its two ledger residents, and `no-warning-comments` fails on any `@adapter-until`
@@ -130,7 +130,7 @@ repo and the first thing to check on any diff.
 **VS Code-free zones** — must NOT import `vscode`:
 `src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/controllers/`,
 `src/shared/`, `src/ui/`, `src/replacement/`, `src/eventBus/`, `src/hosts/`,
-`src/common/`, `src/utils/`, `src/logger/`, `packages/agent/src/`, `packages/llm/src/`,
+`src/common/`, `src/utils/`, `src/logger/`, `packages/harness/src/`, `packages/llm/src/`,
 `packages/desktop/src/`, and the webview
 frontends — `packages/extension/src/progressView/frontend/` and
 `packages/extension/src/settingsView/frontend/`. Do not confuse

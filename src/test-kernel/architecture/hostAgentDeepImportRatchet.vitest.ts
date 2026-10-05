@@ -1,8 +1,8 @@
 // R-b host deep-import ratchet (issue #7684). Each host package (CLI,
 // desktop, extension) reaches past the `@agent` barrel into `@agent/*`
 // internals, pinning agent's current internal module layout from outside
-// src/agent. `agent` here is the `@texra-ai/agent` SDK package itself
-// (packages/agent/src): it assembles the public run surface from `@agent/*`
+// src/agent. `harness` here is the `@texra-ai/harness` SDK package itself
+// (packages/harness/src): it assembles the public run surface from `@agent/*`
 // internals, so its own distinct-specifier set is exactly the surface a
 // Tier-1 barrel would have to re-export or seal. Clones the
 // checked-in-baseline + AST-scanning vitest pattern from LAY-1
@@ -30,7 +30,7 @@ import {
   sourceFilesUnder,
 } from '../support/repoScan';
 
-const HOSTS = ['cli', 'desktop', 'extension', 'agent'] as const;
+const HOSTS = ['cli', 'desktop', 'extension', 'harness'] as const;
 
 type Host = (typeof HOSTS)[number];
 
@@ -46,7 +46,7 @@ const HOST_DIRS: Record<Host, string> = {
   cli: resolve(REPO_ROOT, 'packages/cli/src'),
   desktop: resolve(REPO_ROOT, 'packages/desktop/src'),
   extension: resolve(REPO_ROOT, 'packages/extension/src'),
-  agent: resolve(REPO_ROOT, 'packages/agent/src'),
+  harness: resolve(REPO_ROOT, 'packages/harness/src'),
 };
 
 const AGENT_DEEP_IMPORT = /^@agent\//;

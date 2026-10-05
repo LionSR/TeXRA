@@ -1,4 +1,4 @@
-# `@texra-ai/agent`
+# `@texra-ai/harness`
 
 The embeddable [TeXRA](https://texra.ai) agent runtime: run a TeXRA agent from a
 Node program and consume its trace as a stream.
@@ -16,7 +16,7 @@ Requires Node.js 22.19.0 or later in 22.x, or Node.js 24 or later.
 Not on the registry yet. Inside this workspace, depend on it by name:
 
 ```jsonc
-{ "dependencies": { "@texra-ai/agent": "workspace:*" } }
+{ "dependencies": { "@texra-ai/harness": "workspace:*" } }
 ```
 
 `effect` and `zod` (v4) are peer dependencies of the whole package: the bundle
@@ -45,9 +45,9 @@ that rewrite documents) is a recipe script over the tools of TeXRA's
 
 ```ts
 import { Effect, Stream } from 'effect';
-import { Sessions } from '@texra-ai/agent';
-import { nodePlatform } from '@texra-ai/agent/node';
-import { harnessBuiltins } from '@texra-ai/agent/plugins';
+import { Sessions } from '@texra-ai/harness';
+import { nodePlatform } from '@texra-ai/harness/node';
+import { harnessBuiltins } from '@texra-ai/harness/plugins';
 
 const platform = nodePlatform({
   agentsDir: './agents',
@@ -190,12 +190,12 @@ files.
 
 ## Entry points
 
-| Entry                     | Contents                                                                                                                            |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `@texra-ai/agent`         | `Sessions`, `Session`, `Run`, the tagged errors, and the tool-definition helpers (`defineTool`, `MapToolRegistry`) with their types |
-| `@texra-ai/agent/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                                        |
-| `@texra-ai/agent/plugins` | `harnessBuiltins`: the built-in plugins, `.all` and `.minimal`                                                                      |
-| `@texra-ai/agent/node`    | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                                                 |
+| Entry                       | Contents                                                                                                                            |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `@texra-ai/harness`         | `Sessions`, `Session`, `Run`, the tagged errors, and the tool-definition helpers (`defineTool`, `MapToolRegistry`) with their types |
+| `@texra-ai/harness/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                                        |
+| `@texra-ai/harness/plugins` | `harnessBuiltins`: the built-in plugins, `.all` and `.minimal`                                                                      |
+| `@texra-ai/harness/node`    | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                                                 |
 
 Every entry needs the `effect` and `zod` peers installed. See
 [Install](#install).
@@ -271,7 +271,7 @@ interrupts tool work when the run stops. `defineTool` validates the input and
 normalizes ordinary failures into tool feedback; `execute` implements the work.
 
 ```ts
-import { defineTool } from '@texra-ai/agent';
+import { defineTool } from '@texra-ai/harness';
 import { Effect } from 'effect';
 import { z } from 'zod';
 

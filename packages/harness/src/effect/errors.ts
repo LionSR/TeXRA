@@ -1,5 +1,5 @@
 /**
- * The failures the Effect surface names (`@texra-ai/agent`). Five are defined
+ * The failures the Effect surface names (`@texra-ai/harness`). Five are defined
  * here — the process the package refuses to compose, the plugin list it
  * refuses, the two launch refusals
  * an embedder branches on, and the run's own failure — and two more reach the

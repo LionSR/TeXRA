@@ -1,6 +1,6 @@
-# `@texra-ai/agent/schemas` API report
+# `@texra-ai/harness/schemas` API report
 
-Generated from `packages/agent/src/schemas.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. A diff here is a change to the public surface.
+Generated from `packages/harness/src/schemas.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. A diff here is a change to the public surface.
 
 Exports: 19
 

@@ -1,6 +1,6 @@
 packages:
   - packages/*
-# One source for every version `packages/agent` redeclares: the SDK keeps its
+# One source for every version `packages/harness` redeclares: the SDK keeps its
 # own dependency names (pnpm links a workspace package before any build script
 # runs), and both manifests take the version from here through `catalog:`.
 catalog:

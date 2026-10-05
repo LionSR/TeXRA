@@ -1,5 +1,5 @@
 /**
- * A tiny embedder of `@texra-ai/agent`, installed from a packed
+ * A tiny embedder of `@texra-ai/harness`, installed from a packed
  * tarball exactly as a consumer off the registry would get it: the import
  * specifiers below are package names, never this repository's path aliases.
  *
@@ -13,11 +13,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { Effect, Stream } from 'effect';
-import { Sessions } from '@texra-ai/agent';
-import { nodePlatform } from '@texra-ai/agent/node';
-import { harnessBuiltins } from '@texra-ai/agent/plugins';
+import { Sessions } from '@texra-ai/harness';
+import { nodePlatform } from '@texra-ai/harness/node';
+import { harnessBuiltins } from '@texra-ai/harness/plugins';
 
-const workspace = await mkdtemp(join(tmpdir(), 'texra-agent-example-'));
+const workspace = await mkdtemp(join(tmpdir(), 'texra-harness-example-'));
 const agentsDir = join(workspace, 'agents');
 await mkdir(agentsDir, { recursive: true });
 
