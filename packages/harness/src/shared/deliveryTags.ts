@@ -1,0 +1,53 @@
+// Single source of truth for the child-run delivery-envelope XML root tags
+// (`<subagent-result>`, `<codex-error>`, `<github-webhook-activity>`, …) that
+// producers (packages/harness/src/tools/*) mint and render surfaces (progressView
+// UserMessage, the CLI transcript) must recognize. Previously each render
+// surface hand-listed the tag vocabulary separately from the producers, so
+// a new child-run kind (e.g. `claude-agent-result`) could ship without ever
+// being added to a render list and would render as raw XML. Adding a new
+// child-run kind is now one entry here.
+//
+// Intentionally has NO host imports (no vscode, no Ink/React) so both
+// @shared (webview) and the CLI can consume it, matching subagentFollowup.ts.
+
+/** Canonical tag names, referenced by producers instead of string literals. */
+export const DELIVERY_TAG = {
+  subagentProgress: 'subagent-progress',
+  subagentResult: 'subagent-result',
+  subagentError: 'subagent-error',
+  backgroundResult: 'background-result',
+  backgroundError: 'background-error',
+  codexResult: 'codex-result',
+  codexError: 'codex-error',
+  claudeAgentResult: 'claude-agent-result',
+  claudeAgentError: 'claude-agent-error',
+  scriptResult: 'script-result',
+  scriptError: 'script-error',
+  childPaused: 'child-paused',
+  githubWebhookActivity: 'github-webhook-activity',
+} as const;
+
+/** Every canonical tag name — the union `DELIVERY_TAGS` entries must draw from. */
+export type DeliveryTagName = (typeof DELIVERY_TAG)[keyof typeof DELIVERY_TAG];
+
+export interface DeliveryTagEntry {
+  readonly tag: DeliveryTagName;
+  /**
+   * Whether the envelope body is XML-entity-escaped (via `escapeText()` in
+   * the producer) and needs `decodeXmlEntities()` before display.
+   * `github-webhook-activity` neutralizes embedded tag names instead
+   * (see `wrapWebhookEvent()` in `packages/texra/src/tools/github/formatUtils.ts`) rather
+   * than XML-entity-escaping, so it is not in the escaped subset.
+   */
+  readonly escaped: boolean;
+}
+
+/** The tags whose bodies are neutralized rather than XML-entity-escaped. */
+const UNESCAPED_DELIVERY_TAGS = new Set<DeliveryTagName>([
+  DELIVERY_TAG.githubWebhookActivity,
+]);
+
+/** Every recognized child-run delivery-envelope tag, in no particular order. */
+export const DELIVERY_TAGS: readonly DeliveryTagEntry[] = Object.values(
+  DELIVERY_TAG,
+).map((tag) => ({ tag, escaped: !UNESCAPED_DELIVERY_TAGS.has(tag) }));

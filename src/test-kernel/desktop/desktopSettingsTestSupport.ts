@@ -34,7 +34,11 @@ export function createStubSettingsBindings(
     runLabel: () => undefined,
     stateSettingApplied: noOpEffect,
     runInTerminal: noOpEffect,
-    latexRecommendedStatus: () => ({ outDir: true, autoRevealExclude: true }),
+    latexEditorStatus: () => ({
+      outDir: true,
+      autoRevealExclude: true,
+      latexWorkshopInstalled: false,
+    }),
     ...overrides,
   };
 }

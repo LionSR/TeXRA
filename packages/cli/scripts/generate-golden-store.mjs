@@ -11,7 +11,7 @@
  * bundle `validate-run.mjs` builds), against a temporary HOME and project
  * from `mkdtemp`, set only in each child's environment: no live model, no API
  * key, and never the developer's `~/.texra`. The scripted conversation is
- * `goldenTurn` in `src/agent/runtime/run/validationModel.ts`, over the agents
+ * `goldenTurn` in `packages/harness/src/agent/runtime/run/validationModel.ts`, over the agents
  * in `src/test-kernel/fixtures/storage/agents/`; this script orders the runs,
  * each in its own process:
  *
@@ -476,7 +476,9 @@ async function generate(root) {
   tty.write('\r');
   await until(
     'the queued follow-up',
-    () => chatRows(`e.type = 'followup.queued'`) === 3,
+    () =>
+      chatRows(`e.type = 'followup.queued'
+        AND json_extract(e.data, '$.control') IS NULL`) === 3,
     tty,
   );
   tty.write('\x03');
@@ -942,11 +944,12 @@ function normalize(file, root) {
         (other) =>
           intents.includes(other) &&
           other.value.payload.origin.kind === 'response' &&
-          other.value.payload.callIds.includes(scriptCallId),
+          other.value.payload.callId === scriptCallId,
       )?.value.payload.origin.responseId;
     for (const intent of intents) {
-      const { origin, callIds, attempt } = intent.value.payload;
-      if (origin.kind !== 'script' || !callIds.includes(callId)) continue;
+      const { origin, attempt } = intent.value.payload;
+      if (origin.kind !== 'script' || intent.value.payload.callId !== callId)
+        continue;
       const parentRunId = logicalOf.get(row.aggregate);
       const fields = { parentRunId, responseId, callId, attempt };
       children.set(derive(fields), fields);

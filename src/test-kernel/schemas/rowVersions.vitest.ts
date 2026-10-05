@@ -19,12 +19,12 @@ import {
   ROW_KINDS,
   SessionEventDraftSchema,
 } from '@shared/schemas';
-import { UPDATE_CHECKS } from '@shared/session/updateCheckRecords';
 import {
   APP_STATE,
   REPO_STATE,
   WORKSPACE_STORES,
 } from '@shared/session/valueFamily';
+import { UPDATE_CHECKS } from '@texra/utils/system/updateCheck';
 import { PLUGIN_ARMS } from '@tools/pluginArms';
 import {
   productionFilesUnder,

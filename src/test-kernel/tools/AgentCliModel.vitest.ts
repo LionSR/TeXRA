@@ -17,17 +17,17 @@ import {
   isCodexModel,
 } from '@shared/schemas';
 import {
-  ClaudeAgentStateKey,
-  CodexStateKey,
-} from '@shared/settingsView/integrationSettings';
-import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
-import {
   installSettingsCatalog,
   settingByKey,
 } from '@shared/state/stateSettings';
-import { selectAgentCliModel } from '@tools/agentCliModel';
-import { readClaudeCodeRun } from '@tools/claudeAgentShared';
-import { CODEX_MODEL_RULE, codexRun } from '@tools/codexConfig';
+import {
+  ClaudeAgentStateKey,
+  CodexStateKey,
+} from '@texra/shared/settingsView/integrationSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { selectAgentCliModel } from '@texra/tools/agentCliModel';
+import { readClaudeCodeRun } from '@texra/tools/claudeAgentShared';
+import { CODEX_MODEL_RULE, codexRun } from '@texra/tools/codexConfig';
 
 import { scriptedSpawnerLayer } from '../support/childProcessTestLayer';
 import { makeFakeSettingsStores } from '../support/settingsStoresFake';

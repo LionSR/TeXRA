@@ -15,15 +15,14 @@ import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { postMessage } from '@shared/hostBridge';
-import type { AgentSource } from '@shared/schemas';
-import type { AgentSelectionItem } from '@shared/settingsView/settingsViewMessages';
 import {
   AGENT_SOURCE,
   agentKey as agentKeyFromSourceName,
   isPackagedAgentSource,
 } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/iconNames';
+import { postMessage } from '@texra/shared/hostBridge';
+import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import {
   commonViewStyles,
   designTokens,
@@ -41,6 +40,7 @@ import { getBasename } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 import { agentSelectionPanelStyles } from './AgentSelectionPanel.styles';
 import { renderNewerBuiltInNotice } from './newerBuiltInNotice';
+import type { AgentSource } from '@texra-ai/harness/schemas';
 
 /** Shorthand: derive the canonical key from an AgentSelectionItem. */
 function agentKey(agent: AgentSelectionItem): string {

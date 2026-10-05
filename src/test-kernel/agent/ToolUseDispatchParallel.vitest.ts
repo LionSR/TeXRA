@@ -52,6 +52,7 @@ import { makeRunCell } from '@agent/runtime/loop/runProgram';
 import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
 import {
   appendRow,
+  bindingRow,
   rowAggregate,
   snapshotRow,
   type ToolUseLoopState,
@@ -83,6 +84,12 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { recordSessionEvents } from './progressTestUtils';
 
 const GPT54 = 'openai/gpt-5.4-2026-03-05';
+
+/** The calls a folded state holds settled. */
+const settledIds = (state: RunState | null | undefined): string[] =>
+  Object.entries(state?.pendingResponse?.records ?? {}).flatMap(([id, call]) =>
+    call.status.kind === 'settled' ? [id] : [],
+  );
 
 setupPlatform({ workspacePath: '/workspace' });
 
@@ -216,7 +223,6 @@ function agentRun(
   logger: AgentTrace,
   model: SynchronizedRef.SynchronizedRef<BoundModel>,
   rootUserInstruction: string | undefined,
-  pendingSwitch: string | null = null,
 ): AgentRunShape {
   return testAgentRun(
     { runId, session, logger, model, scope: Scope.makeUnsafe() },
@@ -226,7 +232,6 @@ function agentRun(
         model: GPT54,
         ...(rootUserInstruction === undefined ? {} : { rootUserInstruction }),
       }),
-      pendingModelSwitch: { value: pendingSwitch },
     },
   );
 }
@@ -320,19 +325,19 @@ const openDispatch = Effect.fn('openDispatch')(function* (
       },
     },
   ]);
+  // A switch the user queued waits on the run's input for the next boundary.
+  if (options.pendingSwitch !== undefined)
+    yield* session.followUps.send(runId, {
+      text: `/model ${options.pendingSwitch}`,
+      from: { kind: 'user' },
+      control: { kind: 'model', model: options.pendingSwitch },
+    });
   const model = yield* SynchronizedRef.make(options.bound ?? boundModel());
   const layer = Layer.mergeAll(
     nativeToolTestLayer(),
     Layer.succeed(
       AgentRun,
-      agentRun(
-        runId,
-        session,
-        logger,
-        model,
-        options.rootUserInstruction,
-        options.pendingSwitch ?? null,
-      ),
+      agentRun(runId, session, logger, model, options.rootUserInstruction),
     ),
     Layer.succeed(RunHistory, session.runHistory),
   );
@@ -426,7 +431,7 @@ describe('tool-use dispatch', () => {
         );
       }
       const saved = yield* kit.session.runHistory.load(kit.runId);
-      expect(Object.keys(saved?.pendingResponse?.settled ?? {})).toEqual([]);
+      expect(settledIds(saved)).toEqual([]);
       expect(saved?.pendingResponse).not.toBeNull();
       yield* closeSessionOf(kit.session);
     }),
@@ -716,9 +721,7 @@ describe('tool-use dispatch', () => {
         }),
         kit.layer,
       );
-      expect(Object.keys(folded?.pendingResponse?.settled ?? {})).toEqual([
-        'c1',
-      ]);
+      expect(settledIds(folded)).toEqual(['c1']);
       // No delivery ran, so this workspace can only have come from the
       // settlement's own state operation.
       const slices = folded!.loop?.stateSlices;
@@ -784,13 +787,93 @@ describe('tool-use dispatch', () => {
         kit.layer,
       );
       const pending = folded?.pendingResponse ?? null;
-      expect(Object.keys(pending?.settled ?? {})).toEqual([]);
+      expect(settledIds(folded)).toEqual([]);
       // The duplicate is recognised as one and still settles nothing: with
       // the primary interrupted it waits rather than fabricating a result.
       expect(
         pending?.calls.find((fact) => fact.callId === 'c3')?.duplicateOf,
       ).toBe('c1');
       expect(countStarts(probe, 'grep')).toBe(1);
+      yield* closeSessionOf(kit.session);
+    }),
+  );
+
+  // A person's answer is committed by the decide command, another writer,
+  // while a sibling call of the same parallel partition keeps settling
+  // through the cell: the answer's commit is below the sibling's, so it
+  // cannot be folded onto the cell afterwards. The cell re-reads the run.
+  it.live('reads a decision committed before a sibling call settled', () =>
+    Effect.gen(function* () {
+      const probe = newProbe();
+      const kit = yield* openDispatch({
+        tools: {
+          grep: probeTool(probe, 'grep', 0, { parallelSafe: true }),
+          read_file: probeTool(probe, 'read_file', 0, { parallelSafe: true }),
+        },
+        calls: [
+          makeCall('c1', 'grep', { pattern: 'a' }),
+          makeCall('c2', 'read_file', { path: 'b' }),
+        ],
+      });
+      const aggregateId = rowAggregate(kit.runId);
+      const cell = yield* makeRunCell(kit.runId, kit.state).pipe(
+        Effect.provide(kit.layer),
+      );
+      yield* cell.append(
+        ['c1', 'c2'].map((callId) => ({
+          type: 'tool.intent' as const,
+          aggregateId,
+          payload: {
+            origin: { kind: 'response' as const, responseId: RESPONSE_ID },
+            callId,
+            attempt: 1,
+          },
+        })),
+      );
+      yield* cell.append([
+        {
+          type: 'request.opened',
+          aggregateId,
+          requestId: 'q1',
+          thread: null,
+          payload: {
+            kind: 'toolOutcome',
+            data: {
+              requestId: 'q1',
+              runId: kit.runId,
+              toolName: 'grep',
+              title: 'grep',
+              childRunId: null,
+            },
+          },
+        },
+        bindingRow(kit.runId, {
+          callId: 'c1',
+          attempt: 1,
+          requestId: 'q1',
+          role: 'outcome',
+        }),
+      ]);
+      yield* kit.session.decideRequest(kit.runId, 'q1', { action: 'skip' });
+      yield* cell.append([
+        {
+          type: 'tool.result',
+          aggregateId,
+          payload: {
+            responseId: RESPONSE_ID,
+            callId: 'c2',
+            attempt: 1,
+            disposition: 'executed',
+            duplicateOf: null,
+            result: { status: 'executed', output: 'ok' },
+            attachments: [],
+            stateMutation: [],
+          },
+        },
+      ]);
+      const state = yield* cell.refresh;
+      expect(state.requests['q1']?.decision).toMatchObject({ action: 'skip' });
+      expect(settledIds(state)).toEqual(['c2']);
       yield* closeSessionOf(kit.session);
     }),
   );

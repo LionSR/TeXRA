@@ -4,20 +4,20 @@
 import { Data, Effect, Scope } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import type {
-  StateReadFailed,
-  StateStore,
-  StateWriteFailed,
-} from '@platform/interfaces';
 import {
   withProcessServices,
   type ProcessRuntime,
 } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
+import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { kickoffDesktopSetup } from './desktopAgentLaunch.js';
 import { createDesktopOnboardingIpc } from './desktopOnboardingIpc.js';
+import type {
+  PlatformSecrets,
+  StateReadFailed,
+  StateStore,
+  StateWriteFailed,
+} from '@texra-ai/harness';
 import type { DesktopAgentRun } from './desktopAgentRun.js';
 import type { DesktopProjectRegistry } from './desktopProjects.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';

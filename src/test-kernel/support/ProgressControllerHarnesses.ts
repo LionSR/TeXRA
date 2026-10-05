@@ -3,8 +3,8 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { documentTaskConfig } from '@agent/output/documentRecipe';
 import type { OutputFileInfo, RunId } from '@shared/schemas';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 
 function createAgentConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return AgentConfigSchema.parse({

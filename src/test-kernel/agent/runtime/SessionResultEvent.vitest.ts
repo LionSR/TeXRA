@@ -9,10 +9,6 @@ import { runWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
-import {
-  launchApprovalOptions,
-  launchOnRun,
-} from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { aggregateId, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { LaunchSurfaceSchema } from '@shared/session/surface';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -21,6 +17,10 @@ import {
   setupPlatform,
 } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import {
+  launchApprovalOptions,
+  launchOnRun,
+} from '@texra/controllers/mainView/backend/MainViewRunLaunchController';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
 let counter = 0;

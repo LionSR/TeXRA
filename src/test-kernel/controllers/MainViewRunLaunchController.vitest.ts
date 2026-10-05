@@ -48,12 +48,12 @@ vi.mock('@common/teams/TeamPlan', () => ({
   resolveTeamLaunch: mocks.resolveTeamLaunch,
   TEAM_SELECTION_REQUIRED_MESSAGE: 'Select a team',
 }));
-vi.mock('@controllers/mainView/teamCatalogPorts', () => ({
+vi.mock('@texra/controllers/mainView/teamCatalogPorts', () => ({
   createTeamCatalogPorts: mocks.createTeamCatalogPorts,
 }));
 
 const { prepareSurfaceLaunch } =
-  await import('@controllers/mainView/backend/MainViewRunLaunchController');
+  await import('@texra/controllers/mainView/backend/MainViewRunLaunchController');
 
 const workspaceState = new FakeStateStore();
 

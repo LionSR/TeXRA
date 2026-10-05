@@ -12,7 +12,7 @@ import {
   type ErrorRow,
   type StreamingTextRow,
   type ToolRow,
-} from '@ui/transcript';
+} from '@shared/transcript';
 
 // Local imports - test utilities
 import {
@@ -144,8 +144,8 @@ describe('tool-use formatter', () => {
     expect(container.textContent).not.toContain('Failed to render');
   });
 
-  // Entries as `buildClaudeToolUseLog` (src/tools/claudeAgentShared.ts) and
-  // `buildCodexMcpToolLog` (src/tools/codexShared.ts) persist them into a
+  // Entries as `buildClaudeToolUseLog` (packages/texra/src/tools/claudeAgentShared.ts) and
+  // `buildCodexMcpToolLog` (packages/texra/src/tools/codexShared.ts) persist them into a
   // stream log: a namespaced `claude:<tool>` name, and `mcp:<server>/<tool>`.
   it('strips the provider namespace from a delegated sub-agent tool title', () => {
     const row = toolUseRow('claude-edit', {

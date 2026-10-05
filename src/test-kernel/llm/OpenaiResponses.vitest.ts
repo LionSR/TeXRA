@@ -2394,6 +2394,30 @@ describe('native OpenAI Responses protocol', () => {
       }),
   );
 
+  it.effect(
+    'finishes with tool calls when the terminal snapshot omits the streamed calls',
+    () =>
+      Effect.gen(function* () {
+        const fetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockResolvedValue(response(events(CALLS, snapshot([]))));
+        const model = modelWith(fetch);
+        const result = yield* model.prepareTurn(REQUEST).pipe(
+          Effect.flatMap((turn) => {
+            assert(turn.mode === 'foreground');
+            return completedTurn(model.streamTurn(turn));
+          }),
+        );
+        expect(result).toMatchObject({
+          finishReason: 'tool-calls',
+          content: CALLS.map((call) => ({
+            kind: 'local-call',
+            providerCallId: call.call_id,
+          })),
+        });
+      }),
+  );
+
   it.effect.each([
     {
       name: 'changed message phase',

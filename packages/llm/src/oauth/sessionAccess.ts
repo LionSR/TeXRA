@@ -47,16 +47,14 @@ function secretBackedSessionStorage(
  * that reinstalls its host) gets a coordinator of its own instead of the
  * previous store's, which is why no reset seam exists.
  */
-export function createSecretBackedCoordinator<C>(init: {
+export function createSecretBackedCoordinator<C extends object>(init: {
   secretKey: string;
   makeCoordinator: (storage: SubscriptionSessionStorage) => C;
 }): (secrets: CredentialStore) => C {
   const coordinators = new WeakMap<CredentialStore, C>();
   return (secrets) => {
-    if (coordinators.has(secrets)) {
-      // `has` proved the entry, and only this closure writes the map.
-      return coordinators.get(secrets) as C;
-    }
+    const existing = coordinators.get(secrets);
+    if (existing) return existing;
     const coordinator = init.makeCoordinator(
       secretBackedSessionStorage(secrets, init.secretKey),
     );

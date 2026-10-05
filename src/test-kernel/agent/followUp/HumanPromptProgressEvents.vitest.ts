@@ -14,7 +14,7 @@ import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { AskUserQuestionTool } from '@tools/userQuestion/UserQuestionTool';
+import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool';
 import { requestBashApproval } from '@tools/approval/bashApproval';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 import { generateRunId } from '@utils/core';

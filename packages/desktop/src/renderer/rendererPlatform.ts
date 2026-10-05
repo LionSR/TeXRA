@@ -1,4 +1,4 @@
-import type { DesktopPlatform } from '@shared/commands/accelerators';
+import type { DesktopPlatform } from '@texra/shared/commands/accelerators';
 
 /**
  * Returns the Electron renderer platform from browser navigator data. The

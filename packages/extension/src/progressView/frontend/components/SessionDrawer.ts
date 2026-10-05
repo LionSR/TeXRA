@@ -20,7 +20,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
-import { SessionUiEvents } from '@shared/session/uiEvents';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { overlaySurfaceStyles } from '@ui/styles/overlaySurfaceStyles';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';

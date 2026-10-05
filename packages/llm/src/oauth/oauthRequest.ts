@@ -63,11 +63,14 @@ export interface OAuthResponse {
   readonly text: string;
 }
 
+const REQUEST_TIMEOUT_MS = 30_000;
+
 interface OAuthPostOptions {
   readonly url: string;
   readonly headers: Record<string, string>;
   readonly body: BodyInit;
-  readonly timeoutMs: number;
+  /** Defaults to 30 seconds. */
+  readonly timeoutMs?: number;
   /** Prefix of the network-error message (e.g. `Network error contacting …`). */
   readonly networkErrorMessage: string;
 }
@@ -105,7 +108,7 @@ export const postOAuth = Effect.fn('oauthRequest.postOAuth')(function* (
       });
     }),
     Effect.timeoutOrElse({
-      duration: Duration.millis(options.timeoutMs),
+      duration: Duration.millis(options.timeoutMs ?? REQUEST_TIMEOUT_MS),
       orElse: () =>
         Effect.fail(
           new OAuthNetworkError({
@@ -118,6 +121,22 @@ export const postOAuth = Effect.fn('oauthRequest.postOAuth')(function* (
     }),
   );
 });
+
+/** A form-encoded POST that expects a JSON answer. */
+export function postOAuthForm(
+  url: string,
+  body: URLSearchParams,
+): Effect.Effect<OAuthResponse, OAuthNetworkError, HttpClient.HttpClient> {
+  return postOAuth({
+    url,
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'application/json',
+    },
+    body,
+    networkErrorMessage: `Network error contacting ${url}`,
+  });
+}
 
 /** Fail with {@link OAuthHttpError} describing a non-ok response. */
 export const oauthHttpError = Effect.fn('oauthRequest.oauthHttpError')(

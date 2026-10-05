@@ -20,7 +20,7 @@ import {
 } from '@shared/schemas';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import { stripWorkflowRoundDir } from '@shared/constants/workflowOutput';
-import { getSafeDocumentRelativePath } from '@utils/files/outputFileUtils';
+import { getSafeDocumentRelativePath } from '@texra/utils/files/outputFileUtils';
 import { runDirUnder } from '@utils/files/runStorageFs';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe here since these paths come from getSafeDocumentRelativePath /

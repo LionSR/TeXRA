@@ -2,7 +2,6 @@
 import { Effect } from 'effect';
 
 // Local imports
-import type { WorkflowFileOperationRequest } from '@controllers/session/hostRunActions';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
   announce,
@@ -17,6 +16,7 @@ import { fileOpResultMessage, runCleanRunDir } from '@housekeeping/runDirOps';
 import { withLogChannel } from '@logger/effectLog';
 
 import type { FileOpResult } from '@shared/schemas';
+import type { WorkflowFileOperationRequest } from '@texra/controllers/session/hostRunActions';
 
 const CHANNEL = 'cleanCommands';
 

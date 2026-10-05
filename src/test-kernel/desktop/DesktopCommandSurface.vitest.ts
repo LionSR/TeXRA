@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatDesktopAccelerator,
   toElectronAccelerator,
-} from '@shared/commands/accelerators';
+} from '@texra/shared/commands/accelerators';
 
 describe('desktop command surface', () => {
   it('normalizes catalog keybindings to Electron accelerators', () => {

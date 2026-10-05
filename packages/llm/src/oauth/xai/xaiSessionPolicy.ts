@@ -3,7 +3,6 @@
  * the authorize URL, claims, and JWT-exp refresh differ from ChatGPT/Codex,
  * so the shared coordinator runs it as is.
  */
-import { SubscriptionOAuthError } from '../subscriptionOAuthError.js';
 import {
   XAI_AUTHORIZE_URL,
   XAI_CLIENT_ID,
@@ -55,14 +54,7 @@ export const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
       redirectUri,
     };
   },
-  buildSession(tokens, nowMs, previous) {
-    const refreshToken = tokens.refresh_token ?? previous?.refreshToken;
-    if (!refreshToken) {
-      throw new SubscriptionOAuthError({
-        message: 'OAuth response did not include a refresh token.',
-        kind: 'config',
-      });
-    }
+  buildSession(tokens, refreshToken, nowMs, previous) {
     // Refresh keys off the *access* token. Prefer access JWT exp over
     // id_token.exp (which can outlive the access token). Each token is
     // decoded exactly once here and the email claim reuses that decode.

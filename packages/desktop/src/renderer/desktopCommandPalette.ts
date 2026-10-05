@@ -7,12 +7,12 @@ import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 import { html, nothing, render } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
+import type { TeXRAIconName } from '@shared/iconNames';
 import {
   formatDesktopAccelerator,
   type DesktopPlatform,
-} from '@shared/commands/accelerators';
-import type { DesktopShortcutEntry } from '@shared/commands/shortcutPreferences';
-import type { TeXRAIconName } from '@shared/iconNames';
+} from '@texra/shared/commands/accelerators';
+import type { DesktopShortcutEntry } from '@texra/shared/commands/shortcutPreferences';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 import {

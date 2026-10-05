@@ -17,13 +17,16 @@ import { Data, Effect } from 'effect';
 import {
   completeDeviceSession,
   pollDeviceAuthorization,
-  type SubscriptionDeviceCodePrompt,
+  type DeviceLoginOptions,
 } from '../deviceAuthorization.js';
 
 // Local imports - codex
-import { CODEX_DEVICE_VERIFICATION_URL } from './codexConstants.js';
-import { type CodexSessionCoordinator } from './CodexSessionCoordinator.js';
+import {
+  CODEX_DEVICE_REDIRECT_URI,
+  CODEX_DEVICE_VERIFICATION_URL,
+} from './codexConstants.js';
 import { pollDeviceToken, requestDeviceUserCode } from './codexOAuthClient.js';
+import type { CodexSession } from './codexSessionTypes.js';
 
 /**
  * Fallback lifetime for the user code when the endpoint omits `expires_in`.
@@ -36,12 +39,6 @@ class DeviceCodeMissing extends Data.TaggedError('DeviceCodeMissing')<{
   readonly message: string;
 }> {}
 
-export interface CodexDeviceLoginOptions {
-  coordinator: CodexSessionCoordinator;
-  /** Show the user the verification URL + one-time code. */
-  onPrompt: (prompt: SubscriptionDeviceCodePrompt) => Effect.Effect<void>;
-}
-
 /**
  * Run the device-code flow end to end and persist the session. Succeeds with
  * the stored session once the user approves; fails on timeout or a hard
@@ -49,7 +46,7 @@ export interface CodexDeviceLoginOptions {
  */
 export const codexLoginWithDeviceCode = Effect.fn(
   'codexDeviceLogin.loginWithDeviceCode',
-)(function* (options: CodexDeviceLoginOptions) {
+)(function* (options: DeviceLoginOptions<CodexSession>) {
   const userCodeResponse = yield* requestDeviceUserCode();
   const userCode = userCodeResponse.user_code ?? userCodeResponse.usercode;
   if (!userCode) {
@@ -76,9 +73,10 @@ export const codexLoginWithDeviceCode = Effect.fn(
   });
 
   return yield* completeDeviceSession(() =>
-    options.coordinator.completeDeviceLogin({
-      authorizationCode: token.authorization_code,
-      codeVerifier: token.code_verifier,
+    options.coordinator.loginWithCode({
+      code: token.authorization_code,
+      verifier: token.code_verifier,
+      redirectUri: CODEX_DEVICE_REDIRECT_URI,
     }),
   );
 });

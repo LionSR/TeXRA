@@ -31,7 +31,7 @@ import {
   type ToolSection,
   type ToolSectionFile,
   type TranscriptText,
-} from '@ui/transcript';
+} from '@shared/transcript';
 import { buildDiffHunks } from '@utils/text/unifiedDiff';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 

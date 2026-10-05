@@ -6,13 +6,13 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { documentTaskConfig } from '@agent/output/documentRecipe';
+import type { CompileFailure, OutputFileInfo, RunId } from '@shared/schemas';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import {
   ProgressFollowUpController,
   type ProgressFollowUpModelOption,
   type ProgressFollowUpState,
-} from '@controllers/progressView/ProgressFollowUpController';
-import type { CompileFailure, OutputFileInfo, RunId } from '@shared/schemas';
+} from '@texra/controllers/progressView/ProgressFollowUpController';
 import {
   createOutputFile,
   createWorkflowConfig,

@@ -41,7 +41,7 @@
 //      the Exit as its value) forwards its Exit unconditionally and is owned
 //      by whoever awaits that Deferred. `runtime.runFork`
 //      is not this shape: `withForkFailureReporting` observes every root
-//      fiber (src/platform/processRuntime.ts). Production sources only.
+//      fiber (packages/harness/src/platform/processRuntime.ts). Production sources only.
 //
 // An expression is an Effect when its type carries the `~effect/Effect`
 // TypeId property (effect/Effect's `[TypeId]` variance key) AND its apparent

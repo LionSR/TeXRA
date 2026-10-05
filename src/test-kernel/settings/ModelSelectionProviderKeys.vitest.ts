@@ -4,14 +4,14 @@ const mocks = vi.hoisted(() => ({
   postMessage: vi.fn(),
 }));
 
-vi.mock('@shared/hostBridge', () => ({
+vi.mock('@texra/shared/hostBridge', () => ({
   postMessage: mocks.postMessage,
 }));
 
 import type {
   ModelSelectionItem,
   ProviderKeyStatus,
-} from '@shared/settingsView/settingsViewMessages';
+} from '@texra/shared/settingsView/settingsViewMessages';
 import {
   mountComponent,
   useLitComponentTestDom,

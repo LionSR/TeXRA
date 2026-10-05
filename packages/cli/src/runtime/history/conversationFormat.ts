@@ -1,5 +1,5 @@
-import type { ExportNode } from '@agent/export';
 import { formatConversationMessage } from '@agent/storage';
+import type { ExportNode } from '@texra/agent/export';
 
 import type {
   CliHistoryConversationPreview,

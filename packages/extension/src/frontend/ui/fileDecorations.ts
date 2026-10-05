@@ -1,9 +1,9 @@
 import { Cause, Effect, Stream, type Scope } from 'effect';
 import * as vscode from 'vscode';
 
-import type { SessionBackend } from '@controllers/session/sessionBackend';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { outputFilesProduced } from '@frontend/events/runFactSubscriptions';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 
 // Session-scoped: the touched set is not persisted across window reloads so
 // the badges clear on restart and track only the current session's activity.

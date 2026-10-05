@@ -7,10 +7,9 @@
  */
 // Third-party imports
 import { Data, Effect } from 'effect';
+import { z } from 'zod';
 
 // Local imports
-import { ensureError, isObject } from '../support.js';
-
 import {
   DeviceAuthorizationPending,
   DeviceAuthorizationTransient,
@@ -20,7 +19,7 @@ import {
   oauthHttpError,
   oauthTokenErrorKind,
   parseOAuthJson,
-  postOAuth,
+  postOAuthForm,
 } from '../oauthRequest.js';
 import {
   XAI_CLIENT_ID,
@@ -33,13 +32,6 @@ import {
   XaiDeviceCodeSchema,
   XaiTokenResponseSchema,
 } from './xaiSessionTypes.js';
-
-const REQUEST_TIMEOUT_MS = 30_000;
-
-const FORM_HEADERS = {
-  'Content-Type': 'application/x-www-form-urlencoded',
-  Accept: 'application/json',
-} as const;
 
 /** The user refused the device authorization (terminal, re-auth required). */
 export class DeviceAuthorizationDenied extends Data.TaggedError(
@@ -55,20 +47,10 @@ export class DeviceCodeExpired extends Data.TaggedError('DeviceCodeExpired')<{
   readonly status: number;
 }> {}
 
-function postForm(url: string, body: URLSearchParams) {
-  return postOAuth({
-    url,
-    headers: FORM_HEADERS,
-    body,
-    timeoutMs: REQUEST_TIMEOUT_MS,
-    networkErrorMessage: `Network error contacting ${url}`,
-  });
-}
-
 /** Begin the RFC 8628 device-code flow. */
 export const requestDeviceCode = Effect.fn('xaiOAuthClient.requestDeviceCode')(
   function* () {
-    const response = yield* postForm(
+    const response = yield* postOAuthForm(
       XAI_DEVICE_AUTHORIZATION_URL,
       new URLSearchParams({
         client_id: XAI_CLIENT_ID,
@@ -86,16 +68,10 @@ export const requestDeviceCode = Effect.fn('xaiOAuthClient.requestDeviceCode')(
   },
 );
 
-/** Best-effort parse of an RFC 6749 error body; anything else is `{}`. */
-const readErrorBody = Effect.fn('xaiOAuthClient.readErrorBody')(function* (
-  text: string,
-) {
-  const raw = yield* Effect.try({
-    try: (): unknown => JSON.parse(text),
-    catch: ensureError,
-  }).pipe(Effect.orElseSucceed((): unknown => ({})));
-  const body: Record<string, unknown> = isObject(raw) ? raw : {};
-  return body;
+/** An RFC 6749 error body; a field of another shape reads as absent. */
+const DeviceErrorBodySchema = z.object({
+  error: z.string().optional().catch(undefined),
+  error_description: z.string().optional().catch(undefined),
 });
 
 /**
@@ -108,7 +84,7 @@ const readErrorBody = Effect.fn('xaiOAuthClient.readErrorBody')(function* (
  */
 export const pollDeviceToken = Effect.fn('xaiOAuthClient.pollDeviceToken')(
   function* (deviceCode: string) {
-    const response = yield* postForm(
+    const response = yield* postOAuthForm(
       XAI_TOKEN_URL,
       new URLSearchParams({
         grant_type: XAI_DEVICE_CODE_GRANT_TYPE,
@@ -129,12 +105,14 @@ export const pollDeviceToken = Effect.fn('xaiOAuthClient.pollDeviceToken')(
       );
     }
 
-    const body = yield* readErrorBody(response.text);
-    const oauthError = typeof body.error === 'string' ? body.error : undefined;
-    const errorDescription =
-      typeof body.error_description === 'string'
-        ? body.error_description
-        : undefined;
+    // Best effort: a body that is not an error object carries no code.
+    const { error: oauthError, error_description: errorDescription } =
+      yield* parseOAuthJson(response, DeviceErrorBodySchema, '').pipe(
+        Effect.orElseSucceed(() => ({
+          error: undefined,
+          error_description: undefined,
+        })),
+      );
     if (oauthError === 'authorization_pending' || oauthError === 'slow_down') {
       return yield* new DeviceAuthorizationPending({
         slowDown: oauthError === 'slow_down',

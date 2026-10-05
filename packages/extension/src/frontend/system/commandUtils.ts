@@ -6,8 +6,8 @@ import * as vscode from 'vscode';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { withLogChannel } from '@logger/effectLog';
-import type { ToolMissingHandler } from '@platform/interfaces';
 import { ensureError } from '@utils/errors/errorMessage';
+import type { ToolMissingHandler } from '@texra-ai/harness';
 
 const DEFAULT_CHANNEL = 'commandUtils';
 

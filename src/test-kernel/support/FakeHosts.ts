@@ -9,7 +9,7 @@ import type {
   PromptHost,
   PromptInputOptions,
   PromptMessageOptions,
-} from '@hosts/uiHosts';
+} from '@texra/hosts/uiHosts';
 
 type PromptEventKind = 'info' | 'warning';
 

@@ -5,13 +5,13 @@
  * `SET_TAB.tab` (`page` or `page/section`).
  */
 
+import type { TeXRAIconName } from '@shared/iconNames';
 import {
   SETTINGS_PAGE_SECTIONS,
   SETTINGS_TAB_ORDER,
   type SettingsSectionName,
   type SettingsTabPanelName,
-} from '@shared/settingsView/settingsViewMessages';
-import type { TeXRAIconName } from '@shared/iconNames';
+} from '@texra/shared/settingsView/settingsViewMessages';
 import { PLUGINS_PAGE } from '@ui/copy/plugins';
 
 interface SettingsSectionEntry {

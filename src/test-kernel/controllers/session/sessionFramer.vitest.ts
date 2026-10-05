@@ -22,10 +22,6 @@ import { describe, expect, vi } from 'vitest';
 
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import {
-  frameSubscription,
-  type FramerSource,
-} from '@controllers/session/SessionFramer';
-import {
   LocalRuntimeSource,
   TextChunkSource,
   TranscriptSubscriptions,
@@ -34,10 +30,7 @@ import {
 import { databaseLayer } from '@controllers/session/Database';
 import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
-import { WebviewSessions } from '@controllers/session/webviewSessionLayer';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-import { SessionBridge } from '@controllers/session/SessionBridge';
-import { localSessionBackend } from '@controllers/session/sessionBackend';
 import {
   aggregateId as qualifyAggregateId,
   DEBUG_MODE_KEY,
@@ -68,6 +61,13 @@ import {
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import {
+  frameSubscription,
+  type FramerSource,
+} from '@texra/controllers/session/SessionFramer';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
+import { SessionBridge } from '@texra/controllers/session/SessionBridge';
+import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer';
 
 function textTail(
   text: string,

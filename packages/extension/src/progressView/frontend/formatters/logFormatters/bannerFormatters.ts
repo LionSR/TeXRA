@@ -18,7 +18,7 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Local imports - shared transcript model
 import type { TeXRAIconName } from '@shared/iconNames';
-import type { StreamingTextRow } from '@ui/transcript';
+import type { StreamingTextRow } from '@shared/transcript';
 
 // Local imports - formatter helpers
 import { formatDisplayTimestamp } from '../timestampUtils';

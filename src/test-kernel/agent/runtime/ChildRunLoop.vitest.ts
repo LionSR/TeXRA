@@ -933,7 +933,6 @@ describe('childRunLoop E2E fixtures', () => {
           Effect.succeed({
             ok: false,
             error: new Error('disk full'),
-            outcomePersisted: false,
           }),
         );
         yield* resolveTurn(2, { kind: 'terminal', value: 'final' });
@@ -1035,7 +1034,6 @@ describe('childRunLoop E2E fixtures', () => {
           Effect.succeed({
             ok: false,
             error: new Error('metadata disk full'),
-            outcomePersisted: false,
           }),
         );
 

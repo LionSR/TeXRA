@@ -17,10 +17,10 @@ import {
   launchableTeamPresets,
   type TeamPreset,
 } from '@common/teams/TeamPresets';
-import type { StateStore } from '@platform/interfaces';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { formatResultCount } from '@utils/text/stringUtils';
+import type { StateStore } from '@texra-ai/harness';
 
 export type CliTeamRunPlan = TeamRunPlan<AgentEntry>;
 

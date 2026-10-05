@@ -4,8 +4,8 @@ import {
   passesFileFilters,
   prepareFileFilters,
   shouldVisitDirectory,
-} from '@common/files/fileListingRules';
-import { matchesEditedFile } from '@shared/launcher/editedFileMatch';
+} from '@texra/common/files/fileListingRules';
+import { matchesEditedFile } from '@texra/shared/launcher/editedFileMatch';
 
 describe('shared file-listing rules', () => {
   it('normalizes filters once and applies file and directory rules', () => {

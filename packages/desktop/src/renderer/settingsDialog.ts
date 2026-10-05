@@ -1,7 +1,7 @@
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@settingsView/frontend';
-import type { SettingsTarget } from '@shared/settingsView/settingsViewMessages';
-import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin';
+import { resolvePostMessageTargetOrigin } from '@texra/shared/postMessageOrigin';
+import type { SettingsTarget } from '@texra/shared/settingsView/settingsViewMessages';
 
 import { buildDesktopSettingsTabMessage } from '../shared/desktopCommandSurface';
 import { createOverlayDialog } from './overlayDialog';

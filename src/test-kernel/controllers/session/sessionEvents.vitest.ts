@@ -68,7 +68,6 @@ import {
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionGraph';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 import {
   databaseLayer,
   globalDatabaseLayer,
@@ -78,7 +77,6 @@ import { openProjectStateStore } from '@controllers/session/appStateStore';
 import { collectPendingDeletions } from '@controllers/session/deletionCleanup';
 import { openStore } from '@controllers/session/storeSchema';
 import { sessionRequests } from '@controllers/session/SessionRequests';
-import { runActionGuard } from '@controllers/session/runActionGuard';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -90,10 +88,7 @@ import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withProcessServices } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
-import {
-  InquiryRecords,
-  inquiryThreadRow,
-} from '@shared/plugins/externalInquiry';
+import { inquiryThreadRow } from '@shared/plugins/externalInquiry';
 import {
   aggregateId as qualifyAggregateId,
   AgentConfigFieldsSchema,
@@ -105,7 +100,7 @@ import {
   type SessionEventDraft,
   type InquiryThreadSummary,
 } from '@shared/schemas';
-import { Database } from '@shared/session/database';
+import { Database, GlobalDatabase } from '@shared/session/database';
 import { runActions } from '@shared/session/runActions';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { RunHistory, RunHistoryRefused } from '@shared/session/runHistory';
@@ -125,7 +120,9 @@ import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import '@test/support/sessionGraphTestSetup';
 import { identityReads } from '@test/support/sessionGraphInstall';
 import { REPO_ROOT } from '@test/support/repoScan';
-import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
+import { runActionGuard } from '@texra/controllers/session/runActionGuard';
+import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
+import { toolTable } from '@tools/toolTable';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** A second OS process's writer: this build's `Database` over the store at
@@ -203,11 +200,11 @@ const leanBuilds = vi.hoisted(() => ({
   count: 0,
   state: undefined as StateStore | undefined,
 }));
-vi.mock('@tools/lean/direct/directLspAdapter', async () => {
+vi.mock('@texra/tools/lean/direct/directLspAdapter', async () => {
   const { Effect, Layer } = await import('effect');
   const { AppState } = await import('@platform/interfaces');
   const { LeanLanguageServices } =
-    await import('@tools/lean/leanLanguageServices');
+    await import('@texra/tools/lean/leanLanguageServices');
   return {
     directLeanLanguageServices: () =>
       Layer.effect(
@@ -782,7 +779,8 @@ describe('Sessions owner', () => {
           createSessionApprovals(),
           { ...db, removeRun: (yield* SessionEvents).removeRun },
           local,
-          yield* InquiryRecords,
+          toolTable([]),
+          yield* GlobalDatabase,
         );
         // The displayed fold was built as SELF and considers this run writable.
         // This requesting process is OTHER; it must respect the current claim.
@@ -817,16 +815,10 @@ describe('Sessions owner', () => {
       }).pipe(
         Effect.provide(graph([runStart])),
         Effect.provide(
-          inquiryRecordsLayer.pipe(
-            Layer.provide(
-              globalDatabaseLayer(
-                createFakeWorkspaceRoots().globalStorage,
-              ).pipe(
-                Layer.provide(ProcessIdentity.layer(SELF)),
-                Layer.provide(nodePlatformLayer),
-                Layer.orDie,
-              ),
-            ),
+          globalDatabaseLayer(createFakeWorkspaceRoots().globalStorage).pipe(
+            Layer.provide(ProcessIdentity.layer(SELF)),
+            Layer.provide(nodePlatformLayer),
+            Layer.orDie,
           ),
         ),
       ),
@@ -851,7 +843,8 @@ describe('Sessions owner', () => {
               resumeBlocked: [],
             }),
           ),
-          yield* InquiryRecords,
+          toolTable([]),
+          yield* GlobalDatabase,
         );
         yield* settle(view.ref, (v) => v.runs.has(RUN));
         // The host rendered Delete session from this view; by the time the
@@ -899,16 +892,10 @@ describe('Sessions owner', () => {
       }).pipe(
         Effect.provide(graph([runStart])),
         Effect.provide(
-          inquiryRecordsLayer.pipe(
-            Layer.provide(
-              globalDatabaseLayer(
-                createFakeWorkspaceRoots().globalStorage,
-              ).pipe(
-                Layer.provide(ProcessIdentity.layer(SELF)),
-                Layer.provide(nodePlatformLayer),
-                Layer.orDie,
-              ),
-            ),
+          globalDatabaseLayer(createFakeWorkspaceRoots().globalStorage).pipe(
+            Layer.provide(ProcessIdentity.layer(SELF)),
+            Layer.provide(nodePlatformLayer),
+            Layer.orDie,
           ),
         ),
       ),
@@ -1692,9 +1679,16 @@ describe('the C1 event table and the C6 publisher', () => {
     },
   );
 
-  it.effect(
-    'lists a run whose own run.start a newer build wrote as blocked',
-    () => {
+  // A newer build's version, and an earlier shape of this version.
+  for (const [reason, edit] of [
+    [
+      'newer',
+      `UPDATE event SET version = 2 WHERE type = 'run.start';
+      UPDATE stored_kind SET version = 2 WHERE type = 'run.start';`,
+    ],
+    ['older', `UPDATE event SET data = '{}' WHERE type = 'run.start';`],
+  ] as const)
+    it.effect(`lists a run whose own run.start is ${reason} as blocked`, () => {
       // The unreadable row is the one that creates the run: without it the
       // run would vanish from every listing instead of reading as blocked.
       const storage = workspace();
@@ -1706,8 +1700,7 @@ describe('the C1 event table and the C6 publisher', () => {
         yield* Effect.sync(() => {
           const raw = reader(storage);
           try {
-            raw.exec(`UPDATE event SET version = 2 WHERE type = 'run.start';
-            UPDATE stored_kind SET version = 2 WHERE type = 'run.start';`);
+            raw.exec(edit);
           } finally {
             raw.close();
           }
@@ -1716,21 +1709,24 @@ describe('the C1 event table and the C6 publisher', () => {
           const view = yield* SessionViewService;
           yield* settle(view.ref, (v) => v.runs.has(RUN));
           const run = (yield* SubscriptionRef.get(view.ref)).runs.get(RUN);
-          expect(run).toMatchObject({ blocked: 'newer', readOnly: true });
+          expect(run).toMatchObject({ blocked: reason, readOnly: true });
           const refused = yield* Effect.flip(
             (yield* Database).acquireClaims([runStart.aggregateId]),
           );
           expect(refused).toMatchObject({
             _tag: 'DatabaseWriteFailed',
-            cause: { _tag: 'DatabaseAggregateBlocked', type: 'run.start' },
+            cause: {
+              _tag: 'DatabaseAggregateBlocked',
+              reason,
+              type: 'run.start',
+            },
           });
         }).pipe(
           Effect.provide(graph([], substrate(storage).pipe(Layer.orDie))),
           Effect.scoped,
         );
       });
-    },
-  );
+    });
 
   it.effect('refuses a store of a newer schema and changes nothing', () => {
     const storage = workspace();
@@ -3005,7 +3001,6 @@ describe('RunHistory', () => {
       ordinal: 0,
       parallelSafe: false,
       replay: 'unsafe',
-      partition: 0,
       duplicateOf: null,
       logId: 'card-a',
       stageId: null,
@@ -3016,7 +3011,6 @@ describe('RunHistory', () => {
       ordinal: 1,
       parallelSafe: false,
       replay: 'unsafe',
-      partition: 0,
       duplicateOf: 'call-a',
       logId: 'card-b',
       stageId: null,
@@ -3171,7 +3165,7 @@ describe('RunHistory', () => {
           aggregateId: AGGREGATE,
           payload: {
             origin: { kind: 'response', responseId: RESPONSE_ID },
-            callIds: ['call-a'],
+            callId: 'call-a',
             attempt: 1,
           },
         },
@@ -3265,15 +3259,17 @@ describe('RunHistory', () => {
         expect(refusalOf(orphanGroup)?.reason).toBe('unprepared-history');
         expect((yield* log.readAggregate(AGGREGATE, 1)).length).toBe(written);
         // The approval and the row that binds it commit in one batch; the
-        // binding names the intent the rows already hold.
+        // binding names the attempt the rows already hold.
         state = yield* run.appendBatch(RUN, state, [
           approvalRequested,
           approvalBinding,
         ]);
         expect(state.requests['req-1']?.resolved).toBe(false);
-        expect(state.pendingIntents['call-a']?.binding?.requestId).toBe(
-          'req-1',
-        );
+        expect(state.pendingResponse?.records['call-a']?.status).toEqual({
+          kind: 'started',
+          attempt: 1,
+          binding: { requestId: 'req-1', role: 'call' },
+        });
         // A real attachment carries loose keys and binary fields: accepted, and
         // the binary fields never reach the row.
         state = yield* run.appendBatch(RUN, state, [
@@ -3294,8 +3290,9 @@ describe('RunHistory', () => {
           }),
           toolEnd('call-a'),
         ]);
+        const settledA = state.pendingResponse?.records['call-a']?.status;
         const file =
-          state.pendingResponse?.settled['call-a']?.result.files?.[0];
+          settledA?.kind === 'settled' ? settledA.result.files?.[0] : undefined;
         expect(file).toEqual({
           path: 'out/plot.png',
           mimeType: 'image/png',

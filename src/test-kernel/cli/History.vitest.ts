@@ -25,7 +25,7 @@ import {
 } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { documentTaskConfig } from '@agent/output/documentRecipe';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import {
   aggregateId,
   emptyRunEndOutput,

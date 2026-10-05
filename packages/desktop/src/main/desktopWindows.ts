@@ -2,7 +2,7 @@ import { Cause, Effect, Exit, Scope } from 'effect';
 import { Menu, type BrowserWindow } from 'electron';
 
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import type { RunId } from '@shared/schemas';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /**
  * Run a program on the process runtime as a fiber of the window's scope: it

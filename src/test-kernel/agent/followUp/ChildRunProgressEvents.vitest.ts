@@ -28,7 +28,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { seedReport } from '@test/support/runRecordSeeds';
-import { launchAgentCliSession } from '@tools/agentCliShared';
+import { launchAgentCliSession } from '@texra/tools/agentCliShared';
 import { createChildRun } from '@tools/delegation/childRun';
 
 // Local file imports
