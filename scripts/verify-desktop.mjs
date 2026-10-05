@@ -1535,6 +1535,7 @@ const hostSnapshot = {
     agentConfig: { visible: false },
     dependency: { visible: false },
     gettingStarted: false,
+    serviceOffline: false,
     login: false,
   },
   onboarding: 'done',
