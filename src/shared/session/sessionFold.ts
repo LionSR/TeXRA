@@ -1032,10 +1032,10 @@ function projectRequests(view: SessionView, runId: RunId, rows: RunRows) {
   ];
 }
 
-/** The run's untaken input, as the view shows it. A map that never held
- *  this run is left alone: a delete that removes nothing must not copy. */
+/** The run's untaken messages (not its own requests), as the view shows them. */
 function projectFollowUps(view: SessionView, runId: RunId, rows: RunRows) {
-  if (rows.followUps.length === 0) {
+  const messages = rows.followUps.filter((f) => f.control === undefined);
+  if (messages.length === 0) {
     if (view.queuedFollowUps.has(runId)) {
       writableMap(view, 'queuedFollowUps').delete(runId);
     }
@@ -1043,7 +1043,7 @@ function projectFollowUps(view: SessionView, runId: RunId, rows: RunRows) {
   }
   writableMap(view, 'queuedFollowUps').set(
     runId,
-    rows.followUps.map((f) => ({
+    messages.map((f) => ({
       followUpId: f.followUpId,
       text: f.content.displayText ?? f.content.text,
     })),

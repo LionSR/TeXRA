@@ -54,6 +54,21 @@ describe('run metadata updates', () => {
         });
       }),
   );
+  // A model switch that cannot apply fails the run: its end consumes the
+  // request, so no resume meets it again.
+  it.effect('settles a request the run never applied with its end', () =>
+    Effect.gen(function* () {
+      yield* session.followUps.send(id, {
+        text: '/model gone',
+        from: { kind: 'user' },
+        control: { kind: 'model', model: 'gone' },
+      });
+      const run = aggregateId('run', id);
+      expect(session.events.pendingFollowUps(run)).toHaveLength(1);
+      yield* finalizeRun(session, { runId: id, outcome: 'failed' });
+      expect(session.events.pendingFollowUps(run)).toEqual([]);
+    }),
+  );
   it.effect('keeps a driver outcome when host-exit finalization follows', () =>
     Effect.gen(function* () {
       yield* finalizeRun(session, {

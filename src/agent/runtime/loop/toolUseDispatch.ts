@@ -1416,19 +1416,18 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   });
   // Offer each delivered document to the binding's upload cache, so the
   // requests that replay this history can send a file id instead of the
-  // bytes. Concurrent under the same in-flight bound as parallel tool
-  // calls, the batch under one aggregate deadline: a stalled files
-  // endpoint delays delivery by at most one deadline however many
-  // documents there are, warns with the paths that never finished, and
-  // changes nothing the model reads now. The binding deletes what it
-  // uploaded when it closes. A batch that ends the turn completes the run
-  // straight after this delivery (the same `endTurn` this dispatch
-  // returns), and a batch delivered while a model switch waits for the
-  // next boundary is replayed by the replacement binding, whose cache
-  // never saw these ids: both keep their documents local. The optional
-  // upload is looked for only when there is a document to give it.
+  // bytes: concurrent under the parallel-call bound, the batch under one
+  // aggregate deadline that warns with the paths that never finished. A
+  // batch that ends the turn, or one delivered while a queued model switch
+  // waits for the next boundary (whose binding never saw these ids), keeps
+  // its documents local.
   const documents = (
-    endTurn || run.pendingModelSwitch.value !== null ? [] : settledPending.calls
+    endTurn ||
+    run.session.events
+      .pendingFollowUps(rowAggregate(run.runId))
+      .some((f) => f.control?.kind === 'model')
+      ? []
+      : settledPending.calls
   ).flatMap((fact) =>
     (settledPending.settled[fact.callId]?.attachments ?? []).flatMap(
       (attachment) => {

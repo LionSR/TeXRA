@@ -11,7 +11,7 @@ import stableStringify from 'safe-stable-stringify';
 
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { haltedPositionRow } from '@agent/runtime/loop/rows';
+import { consumedRows, haltedPositionRow } from '@agent/runtime/loop/rows';
 
 import {
   RUN_OUTCOME,
@@ -351,11 +351,9 @@ const endOwnedChildren = Effect.fn('endOwnedChildren')(function* (
 
 /**
  * The one terminal-persistence tail, and the one writer of the `run.end` row
- * (one run model, section 3.3): persist the run's terminal fact. The run's
- * rows live until explicit deletion (C9); nothing is removed beside the row.
- * Read and write share one locked cycle, so
- * a run whose *current* lifecycle already ended with this outcome writes
- * nothing; a resumed run ends again. Never throws — every persistence
+ * (one run model, section 3.3). Rows live until explicit deletion (C9).
+ * Read and write share one locked cycle, so a run whose current lifecycle
+ * already ended this way writes nothing; a resumed run ends again. Never throws — every persistence
  * failure comes back as an `ok: false` result (and through
  * `report`, when given).
  */
@@ -393,6 +391,8 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
         return {
           events: [
             ...settlement,
+            // A request the run never applied ends with it.
+            ...consumedRows(runId, session.events.pendingFollowUps(target)),
             // The loop's halt, never apart from its end.
             ...rows.flatMap((row) =>
               row.type === 'run.position'

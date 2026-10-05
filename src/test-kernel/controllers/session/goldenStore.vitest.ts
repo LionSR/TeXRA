@@ -135,13 +135,13 @@ const APPROVAL = RunIdSchema.parse('a00000000007');
 const SCRIPTED = RunIdSchema.parse('a00000000008');
 const FANOUT = RunIdSchema.parse('a00000000009');
 /** The fan-out's children: the first completed, the second ran at the kill. */
-const FANNED = RunIdSchema.parse('d96e5a2c188ad7ac95c94015');
-const RUNNING = RunIdSchema.parse('75ba3de4124b968bfa08881c');
+const FANNED = RunIdSchema.parse('674df3406d49cb87ac052f8d');
+const RUNNING = RunIdSchema.parse('62b892712262356a13ec07d6');
 /** The chat that sent a script to the background, the script's run, and
  *  the script's one `agent()` child, which ran at the kill. */
 const BACKGROUND = RunIdSchema.parse('a0000000000c');
-const SCRIPT_RUN = RunIdSchema.parse('c99c8753fe5970c015825e1c');
-const SCRIPT_CHILD = RunIdSchema.parse('30537f25e7398017e18c7493');
+const SCRIPT_RUN = RunIdSchema.parse('b6ad534870fc2cbaaf68c6d4');
+const SCRIPT_CHILD = RunIdSchema.parse('f78651c27293f7c98b9fc84c');
 /** A headless run, the fork `texra resume --fork` made of it, and the
  *  handoff that continued the fork. */
 const FORK_SOURCE = RunIdSchema.parse('a0000000000f');
@@ -281,6 +281,30 @@ describe('the golden 1.0 store', () => {
         ),
       ),
     ]).toEqual(['openai/gpt-5.6-sol@medium', 'gemini38f']);
+    // Each request is a queued control, consumed in the batch of the edit
+    // that applies it, right before that edit: the switch's, then the
+    // compaction's.
+    const applied = raw(storage, (db) =>
+      db
+        .prepare(
+          `SELECT json_extract(q.data, '$.control.kind') AS kind,
+             (SELECT json_extract(x.data, '$.payload.trigger') FROM event c
+              JOIN event x ON x.aggregate = c.aggregate AND x.seq = c.seq + 1
+                AND x.type = 'context.edit'
+              WHERE c.type = 'followup.consumed' AND c.aggregate = q.aggregate
+                AND json_extract(c.data, '$.followUpId')
+                  = json_extract(q.data, '$.followUpId')) AS trigger
+           FROM event q JOIN event_sequence s ON s.id = q.aggregate
+           WHERE s.logical_id = ? AND q.type = 'followup.queued'
+             AND json_extract(q.data, '$.control') IS NOT NULL
+           ORDER BY q."commit"`,
+        )
+        .all(CHAT),
+    );
+    expect(applied).toEqual([
+      { kind: 'model', trigger: 'model-switch' },
+      { kind: 'compact', trigger: 'user' },
+    ]);
     // The durable harness's row shapes (H2): a fork's start names its
     // source, and its first history row seeds the source's view; a handoff
     // cuts the fork's view to its note; an awaited child names the call
@@ -1286,7 +1310,7 @@ describe('the interrupted golden runs', () => {
       );
       expect(delivered).toHaveLength(1);
       const text = String(delivered[0]?.content.text);
-      expect(text).toMatch(/^<script-result id="c99c8753fe5970c015825e1c"/);
+      expect(text).toMatch(/^<script-result id="b6ad534870fc2cbaaf68c6d4"/);
       expect(text).toContain('Background child answer.');
       expect(parseScriptDeliverySummary(text)).toMatchObject({
         name: 'Background',

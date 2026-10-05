@@ -31,7 +31,7 @@ import {
 } from '@shared/schemas';
 import type { DatabaseWriteFailed } from '@shared/session/database';
 import type { RunHistory, RunHistoryRefused } from '@shared/session/runHistory';
-import type { RunState } from '@shared/session/runStateFold';
+import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -115,6 +115,8 @@ interface CompactionInput {
    * decision to the threshold.
    */
   readonly force: 'request' | 'overflow' | null;
+  /** The `/compact` requests it answers, consumed with its edit. */
+  readonly answers?: readonly RunHistoryDraft[];
 }
 
 /** Why a compaction runs, as its `context.edit` records it. */
@@ -262,12 +264,13 @@ const summarize = Effect.fn('compaction.summarize')(function* (
  */
 const land = Effect.fn('compaction.land')(function* (
   state: RunState,
-  input: Pick<CompactionInput, 'runId' | 'runHistory' | 'logger'>,
+  input: Pick<CompactionInput, 'runId' | 'runHistory' | 'logger' | 'answers'>,
   summary: Summary,
   base: number | null,
   reason: Reason,
 ) {
   const compacted = yield* input.runHistory.appendBatch(input.runId, state, [
+    ...(input.answers ?? []),
     {
       type: 'context.edit',
       aggregateId: rowAggregate(input.runId),
@@ -318,25 +321,21 @@ const compactIfNeeded = Effect.fn('compaction.check')(function* (
 
 /**
  * The tool-use loop's compaction (durable harness, gap 4). Crossing the
- * threshold starts the summary on a fiber in the run's scope, so a stop
- * interrupts it, and the loop goes on with the full history; a later
- * request boundary of the turn, or the turn's end at the latest, lands it,
- * as the edit of messages `[0, to)` at the `base` it was computed from,
- * keeping what was appended since. A binding that carries one turn at a
- * time waits for its summary instead. Every other
- * edit of the view is the loop's own (a `/compact`, a model switch, a reset
- * or a handoff), and each settles this first ({@link settle}): a finished
- * summary lands, and one still running is cut short. So no summary meets a
- * view another edit moved, and the fold's base check refuses one that
- * would. A history past the window waits for the summary; a `/compact`
- * settles, then summarizes the whole history.
+ * threshold starts the summary on a fiber in the run's scope, and a later
+ * request boundary of the turn, or its end at the latest, lands it as the
+ * edit of messages `[0, to)` at the `base` it was computed from. A binding
+ * that carries one turn at a time waits for it instead. Every other edit of
+ * the view (a `/compact`, a model switch, a reset, a handoff) settles this
+ * first ({@link settle}), so no summary meets a view another edit moved. A
+ * history past the window waits for the summary; a `/compact` settles, then
+ * summarizes the whole history.
  */
 export interface BackgroundCompaction {
-  /** At a request boundary, with no attempt open. */
+  /** At a request boundary, no attempt open; `requests` consume `/compact`s. */
   readonly atBoundary: (
     state: RunState,
     bound: BoundModel,
-    requested: boolean,
+    requests: readonly RunHistoryDraft[],
   ) => Effect.Effect<
     RunState,
     RunHistoryRefused | DatabaseWriteFailed | StateReadFailed
@@ -409,14 +408,15 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
     const atBoundary = Effect.fn('compaction.atBoundary')(function* (
       state: RunState,
       bound: BoundModel,
-      requested: boolean,
+      requests: readonly RunHistoryDraft[],
     ) {
-      if (requested) {
+      if (requests.length > 0) {
         const settled = yield* settle(state, 'a /compact replaces it');
         return yield* compactIfNeeded(settled, {
           ...input,
           bound,
           force: 'request',
+          answers: requests,
         });
       }
       // A history past the window cannot go out: it waits for the summary.

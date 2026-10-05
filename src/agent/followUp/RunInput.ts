@@ -19,11 +19,16 @@ export interface ViewEdit {
   readonly done: Deferred.Deferred<void, Error>;
 }
 
+/** The message a `/compact` on a parked run wakes it with: the compaction
+ *  runs at that turn's model boundary, which consumes the request. */
+const COMPACTION_REQUEST =
+  'The user requested immediate context compaction. Do not start a new task; continue only far enough for the runtime to process any available context compaction, and do not claim that compaction has completed.';
+
 /**
- * What a run takes from its input: queued follow-ups in commit order, the
- * loop's own maintenance wake (an immediate compaction's turn), which is no
- * row and never shares a batch with follow-ups, or a view edit, taken before
- * either.
+ * What a run takes from its input: queued follow-ups in commit order, a
+ * maintenance turn (a `/compact` with nothing else queued, or the loop's
+ * continuation), which never shares a batch with follow-ups, or a view
+ * edit, taken before either.
  */
 export type FollowUpBatch =
   | {
@@ -46,7 +51,6 @@ export type FollowUpBatch =
  */
 export class RunInput {
   private readonly signal = Latch.makeUnsafe(false);
-  private readonly synthetic: string[] = [];
   private edit: ViewEdit | null = null;
   /** The follow-ups queued when the edit was: delivered before it. */
   private beforeEdit: ReadonlySet<string> = new Set();
@@ -58,10 +62,15 @@ export class RunInput {
     this.queued = queued;
   }
 
-  /** What a take may read, folded from the rows' holds: an
+  /** The run's own pending requests (`/compact`, a model switch). */
+  controls(): readonly QueuedFollowUp[] {
+    return this.queued().filter((f) => f.control !== undefined);
+  }
+
+  /** The messages a take may read, folded from the rows' holds: an
    *  `instruction`-held row only beside an instruction. */
   private pending(): readonly QueuedFollowUp[] {
-    const rows = this.queued();
+    const rows = this.queued().filter((f) => f.control === undefined);
     const asked = rows.some(
       (f) => f.holdUntil !== 'instruction' && isInstruction(f.content),
     );
@@ -70,16 +79,6 @@ export class RunInput {
 
   /** Wake the consumer: a follow-up row landed for it. */
   notify(): void {
-    Latch.openUnsafe(this.signal);
-  }
-
-  /**
-   * Queue one maintenance turn. It is queued only while nothing is pending,
-   * so every follow-up a later take finds arrived after it, and it is taken
-   * first.
-   */
-  wake(text: string): void {
-    this.synthetic.push(text);
     Latch.openUnsafe(this.signal);
   }
 
@@ -96,19 +95,28 @@ export class RunInput {
     return true;
   }
 
+  /** A `/compact` is pending: it wakes a parked run. */
+  private compacting(): boolean {
+    return this.controls().some((f) => f.control?.kind === 'compact');
+  }
+
   hasQueued(): boolean {
-    return (
-      this.edit !== null ||
-      this.synthetic.length > 0 ||
-      this.pending().length > 0
-    );
+    return this.edit !== null || this.compacting() || this.pending().length > 0;
+  }
+
+  /** The queued messages, when they are all a take would read now: no view
+   *  edit is queued. Nothing is taken; it only reads. */
+  takeQueued(): Extract<FollowUpBatch, { kind: 'followUps' }> | null {
+    const followUps = this.pending();
+    return this.edit === null && followUps.length > 0
+      ? { kind: 'followUps', followUps }
+      : null;
   }
 
   /** End the generation: what is pending stays queued on the run's rows; a
    *  view edit nobody took fails. */
   end(): void {
     this.ended = true;
-    this.synthetic.length = 0;
     if (this.edit !== null) {
       Deferred.doneUnsafe(
         this.edit.done,
@@ -136,12 +144,12 @@ export class RunInput {
           this.edit = null;
           return { kind: 'edit', edit } as const;
         }
-        const text = this.synthetic.shift();
-        if (text !== undefined) return { kind: 'synthetic', text } as const;
         const followUps = this.pending();
         if (followUps.length > 0) {
           return { kind: 'followUps', followUps } as const;
         }
+        if (this.compacting())
+          return { kind: 'synthetic', text: COMPACTION_REQUEST } as const;
         yield* this.signal.await;
       }
     }),

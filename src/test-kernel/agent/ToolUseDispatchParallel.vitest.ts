@@ -216,7 +216,6 @@ function agentRun(
   logger: AgentTrace,
   model: SynchronizedRef.SynchronizedRef<BoundModel>,
   rootUserInstruction: string | undefined,
-  pendingSwitch: string | null = null,
 ): AgentRunShape {
   return testAgentRun(
     { runId, session, logger, model, scope: Scope.makeUnsafe() },
@@ -226,7 +225,6 @@ function agentRun(
         model: GPT54,
         ...(rootUserInstruction === undefined ? {} : { rootUserInstruction }),
       }),
-      pendingModelSwitch: { value: pendingSwitch },
     },
   );
 }
@@ -320,19 +318,19 @@ const openDispatch = Effect.fn('openDispatch')(function* (
       },
     },
   ]);
+  // A switch the user queued waits on the run's input for the next boundary.
+  if (options.pendingSwitch !== undefined)
+    yield* session.followUps.send(runId, {
+      text: `/model ${options.pendingSwitch}`,
+      from: { kind: 'user' },
+      control: { kind: 'model', model: options.pendingSwitch },
+    });
   const model = yield* SynchronizedRef.make(options.bound ?? boundModel());
   const layer = Layer.mergeAll(
     nativeToolTestLayer(),
     Layer.succeed(
       AgentRun,
-      agentRun(
-        runId,
-        session,
-        logger,
-        model,
-        options.rootUserInstruction,
-        options.pendingSwitch ?? null,
-      ),
+      agentRun(runId, session, logger, model, options.rootUserInstruction),
     ),
     Layer.succeed(RunHistory, session.runHistory),
   );

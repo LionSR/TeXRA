@@ -281,7 +281,6 @@ export function testAgentRun(
         Effect.scoped(next(current)),
       ),
     declinedRoutes: [],
-    pendingModelSwitch: { value: null },
     callbacks: {},
     ...base,
     ...over,

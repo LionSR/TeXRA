@@ -295,7 +295,9 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   const queuedInput = queuedFollowUps(session, runId);
   const resumed = yield* Effect.result(
     Effect.gen(function* () {
-      for (const input of yield* queuedInput) admitted.add(input.followUpId);
+      // A model switch waits for a turn: the resume does not wait on it.
+      for (const input of yield* queuedInput)
+        if (input.control?.kind !== 'model') admitted.add(input.followUpId);
       const idle = yield* Deferred.make<void>();
       const launchOptions = runLaunchOptions(options);
       const onIdle = (): void => {

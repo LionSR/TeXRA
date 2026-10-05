@@ -800,6 +800,15 @@ show` print the same notice, and the new `texra agents customize`,
   the task header's controls (the "More" button and its menu, renaming, the
   parent-task links) ignored the mouse: they sit in or over the window's
   drag areas, which macOS treated as a place to move the window.
+- **A `/compact` or a `/model` switch asked for mid-turn now survives TeXRA
+  being killed.** Both are saved the moment you ask, and the resumed task
+  compacts, or switches models, at its next step. A switch that cannot be
+  applied fails that task once, not every resume after it. A message you type
+  while a turn runs is picked up in the same step that ends the turn. Two
+  breaks: an older TeXRA reading a session saved by this version sends
+  `/compact` or `/model …` to the model as plain text, and a session an
+  earlier version paused in the middle of a `/compact` resumes without
+  compacting.
 - **The desktop installers build again, and the macOS app is signed and
   notarized,** so macOS opens it without a Gatekeeper warning.
 - **An agent's or a background job's result is no longer lost when TeXRA is

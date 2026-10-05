@@ -61,6 +61,8 @@ export interface InboxItem {
   /** Identity of a delivery its producer may repeat (a child's result,
    *  #9531): the row's `followUpId`, so a replay writes nothing. */
   readonly deliveryId?: string;
+  /** A request of the run's own (`/compact`, a model switch), not a message. */
+  readonly control?: QueuedFollowUp['control'];
 }
 
 /** How a send landed. `queued.read`: a reader here takes it; `queued.wake`:
@@ -166,8 +168,7 @@ export class Inbox {
     if (!terminal) return;
     this.port.detach(() =>
       Effect.sync(() => {
-        if (this.readers.has(runId) || this.port.pending(runId).length > 0)
-          return;
+        if (this.readers.has(runId) || this.queued(runId)) return;
         this.notify({ kind: 'run', runId });
       }),
     );
@@ -186,8 +187,17 @@ export class Inbox {
       Effect.scoped(
         Effect.gen({ self: this }, function* () {
           yield* this.holdClaim(runId);
-          if (this.port.pending(runId).length > 0) return;
-          yield* append([{ type: 'followup.closed', aggregateId: run }]);
+          if (this.queued(runId)) return;
+          // A request the run never applied closes with its input.
+          const settled = this.port.pending(runId).map(({ followUpId }) => ({
+            type: 'followup.consumed' as const,
+            aggregateId: run,
+            followUpId,
+          }));
+          yield* append([
+            ...settled,
+            { type: 'followup.closed', aggregateId: run },
+          ]);
           this.endReader(runId);
           this.notify({ kind: 'run', runId });
         }),
@@ -336,6 +346,11 @@ export class Inbox {
         return { kind: 'queued', read: reader !== undefined, wake };
       }),
     );
+  }
+
+  /** Whether a message is queued: a request (`control`) resumes no run. */
+  private queued(runId: RunId): boolean {
+    return this.port.pending(runId).some((f) => f.control === undefined);
   }
 
   /** The run's claim for the enclosing scope; a failed release is logged. */
