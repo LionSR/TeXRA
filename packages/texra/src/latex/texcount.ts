@@ -94,7 +94,6 @@ const rejectionReason = Effect.fn('texcount.rejectionReason')(function* (
  * Invoke `texcount`. The subprocess is cancelled by the fiber's own
  * interruption, which `runToolWithCheck` carries into the spawn, so no caller
  * threads a signal in.
-
  */
 const runTexcount = Effect.fn('texcount.runTexcount')(function* (
   workspaceRoot: string | undefined,
