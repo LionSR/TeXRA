@@ -83,6 +83,42 @@ jobs:
             actions: read
           system-prompt-file: .trusted-actions/.github/prompts/claude-code-system-prompt.md
 
+      # The action hides the agent's transcript, so a denied tool call is only
+      # a count in the log. Name each one (tool and a truncated input) so the
+      # allowlist can be fixed instead of guessed at. Annotations go through
+      # GitHub's secret masking; the step summary does not, so it gets no input.
+      - name: Report denied tool calls
+        continue-on-error: true
+        if: always() && steps.claude.outcome != 'skipped'
+        env:
+          EXECUTION_FILE: ${{ runner.temp }}/claude-execution-output.json
+        run: |
+          set -euo pipefail
+          if [ ! -f "$EXECUTION_FILE" ]; then
+            echo "::warning title=No execution log::$EXECUTION_FILE is missing; denied tool calls cannot be reported."
+            exit 0
+          fi
+          # A result without the field is not "no denials": say so.
+          if ! jq -e '[.[]? | select(.type == "result")] | last | has("permission_denials")' "$EXECUTION_FILE" >/dev/null; then
+            echo "::warning title=No denial list::the execution log's result carries no permission_denials; denied tool calls cannot be reported."
+            exit 0
+          fi
+          denials=$(jq -c '[.[]? | select(.type == "result")] | last | .permission_denials[]' "$EXECUTION_FILE")
+          if [ -z "$denials" ]; then
+            echo "No denied tool calls."
+            exit 0
+          fi
+          {
+            echo "### Denied tool calls"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS= read -r denial; do
+            tool=$(jq -r '.tool_name' <<<"$denial")
+            input=$(jq -r '.tool_input.command // .tool_input.file_path // (.tool_input | tostring)' <<<"$denial" | tr '\n' ' ' | cut -c1-200)
+            echo "::warning title=Denied tool call::$tool: $input"
+            echo "- \`$tool\`" >> "$GITHUB_STEP_SUMMARY"
+          done <<<"$denials"
+
       - name: Check for Claude quota errors and post comment
         if: |
           steps.claude.outcome != 'success' &&
