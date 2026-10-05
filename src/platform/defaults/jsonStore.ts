@@ -29,29 +29,12 @@ function storageError(error: PlatformError.PlatformError): Error {
 
 interface JsonStoreOptions {
   /**
-   * POSIX mode for the store file (e.g. `0o600` to restrict a secrets file
-   * to its owner). The containing directory is created/chmod'd with the
-   * same owner permissions plus execute — `0o600` -> `0o700` — so it stays
-   * traversable. Directory creation and hardening happen only on the write
-   * path (`flush`), never in `open()`: reads must keep working against
-   * read-only or unowned storage (e.g. env-var-only CLI credential checks
-   * on a container-mounted state dir — #8220). Left unset,
-   * `mkdir`/`writeFileAtomic` use their platform defaults, matching prior
-   * `JsonStore` behavior.
-   */
-  mode?: number;
-  /**
    * When set, a file that exists but cannot be read as a JSON object opens as
    * an empty view and reports the cause here instead of failing the open.
    * Writes still re-read the file in {@link flush}, so they fail rather than
    * overwrite what the reader could not parse.
    */
   onUnreadable?: (error: Error) => void;
-}
-
-/** `0o600` -> `0o700`: adds owner-execute wherever owner-read is set. */
-function dirModeFor(fileMode: number): number {
-  return fileMode | ((fileMode & 0o444) >> 2);
 }
 
 /**
@@ -86,26 +69,6 @@ const readJsonRecord = Effect.fn('JsonStore.readJsonRecord')(function* (
 });
 
 /**
- * Creates `dir` if missing. When `fileMode` is set, also chmods the
- * directory to {@link dirModeFor} — `mkdir`'s own `mode` only applies at
- * creation time, so a pre-existing directory with looser permissions needs
- * the explicit follow-up chmod too.
- */
-const ensureDir = Effect.fn('JsonStore.ensureDir')(function* (
-  dir: string,
-  fileMode: number | undefined,
-) {
-  const dirMode = fileMode === undefined ? undefined : dirModeFor(fileMode);
-  const fs = yield* FileSystem.FileSystem;
-  yield* fs
-    .makeDirectory(dir, { recursive: true, mode: dirMode })
-    .pipe(Effect.mapError(storageError));
-  if (dirMode !== undefined) {
-    yield* fs.chmod(dir, dirMode).pipe(Effect.mapError(storageError));
-  }
-});
-
-/**
  * One-at-a-time flush lane per resolved store path. Module-wide (not per
  * instance) so writers holding separate `JsonStore` instances on the same
  * file preserve call order.
@@ -119,13 +82,15 @@ const writeLanes = new Map<string, PerKeyLane>();
  */
 const flush = Effect.fn('JsonStore.flush')(function* (
   filePath: string,
-  mode: number | undefined,
   key: string,
   value: unknown,
   missingFallback: JsonRecord,
 ) {
+  const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  yield* ensureDir(path.dirname(filePath), mode);
+  yield* fs
+    .makeDirectory(path.dirname(filePath), { recursive: true })
+    .pipe(Effect.mapError(storageError));
   const record = yield* readJsonRecord(filePath, missingFallback);
   if (value === undefined) {
     delete record[key];
@@ -134,11 +99,7 @@ const flush = Effect.fn('JsonStore.flush')(function* (
   }
   yield* Effect.tryPromise({
     try: () =>
-      writeFileAtomic(
-        filePath,
-        `${JSON.stringify(record, null, 2)}\n`,
-        mode === undefined ? undefined : { mode },
-      ),
+      writeFileAtomic(filePath, `${JSON.stringify(record, null, 2)}\n`),
     catch: (cause) => cause as NodeJS.ErrnoException,
   });
 });
@@ -160,30 +121,29 @@ const flush = Effect.fn('JsonStore.flush')(function* (
  * {@link writeLanes}, which orders this process's writers; across processes
  * the atomic rename is the only guarantee, so two hosts flushing the same file
  * in the same instant can still lose one of the two mutations. Reads (`get`,
- * `has`, `snapshot`, `keys`) still serve this instance's view: open-time
+ * `snapshot`, `keys`) still serve this instance's view: open-time
  * contents plus its own committed mutations — a `set` still queued behind
  * another one has changed nothing yet; they don't observe other writers'
  * changes.
  *
  * `set` is the store's own write and is an `Effect`, requirement-free: it
  * provides the Node filesystem services its flush reads and writes through, so
- * a port that composes it (the config store; the secret stores) needs no
- * filesystem in its own type. Application state is owned by SQLite; this
- * store serves deliberate configuration and secret files.
+ * a port that composes it (the config store) needs no filesystem in its own
+ * type. Application state is owned by SQLite and secrets by `FileSecrets`;
+ * this store serves deliberate configuration files.
  */
 export class JsonStore {
   private constructor(
     /** The file this store reads and writes; warnings name it. */
     readonly filePath: string,
     private data: JsonRecord,
-    private readonly options: JsonStoreOptions,
   ) {}
 
   /**
    * Opening is read-only: a missing file reads as an empty store, and the
-   * containing directory is neither created nor chmod'd here — that happens
-   * in {@link flush}, so pure reads work on storage the process can't write
-   * (see {@link JsonStoreOptions.mode}).
+   * containing directory is not created here — that happens in
+   * {@link flush}, so pure reads work on read-only or unowned storage
+   * (#8220).
    */
   static readonly open = Effect.fn('JsonStore.open')(function* (
     filePath: string,
@@ -202,12 +162,11 @@ export class JsonStore {
           ),
         )
       : readJsonRecord(storePath);
-    return new JsonStore(storePath, data, options);
+    return new JsonStore(storePath, data);
   });
 
-  get<T>(key: string, defaultValue?: T): T {
-    const value = this.data[key];
-    return value === undefined ? (defaultValue as T) : (value as T);
+  get<T>(key: string): T | undefined {
+    return this.data[key] as T | undefined;
   }
 
   /**
@@ -229,14 +188,10 @@ export class JsonStore {
    * them; one that has entered the lane runs its read-modify-write to
    * completion rather than leaving the file holding a record it read before
    * another writer's mutation, or leaving this instance serving a value that
-   * never reached disk — the store outlives the fiber that wrote through it
-   * (`ElectronSecrets` answers `get`/`listStoredKeys` from here), so a
-   * mutation applied ahead of the wait would survive a cancellation that
+   * never reached disk — the store outlives the fiber that wrote through it,
+   * so a mutation applied ahead of the wait would survive a cancellation that
    * wrote nothing and read as committed until the process restarts. There is
    * one mutator: removal uses `set(key, undefined)` in this same region.
-   * That is also where the credential stores' Q2 guarantee
-   * lives — this store owns the lane, so it owns the mask too, and a caller
-   * must not wrap `set` in one of its own.
    */
   set(key: string, value: unknown): Effect.Effect<void, Error> {
     return withPerKeyLane(
@@ -246,13 +201,7 @@ export class JsonStore {
       Effect.uninterruptible(
         Effect.suspend(() =>
           Effect.provide(
-            flush(
-              this.filePath,
-              this.options.mode,
-              key,
-              value,
-              this.snapshot(),
-            ),
+            flush(this.filePath, key, value, this.snapshot()),
             nodeFileServices,
           ),
         ).pipe(

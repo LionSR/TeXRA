@@ -21,11 +21,7 @@ import {
 } from '@shared/schemas';
 import { getExtensionLowercase } from '@utils/core/pathCore';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
-import {
-  countPdfPages,
-  getBase64EncodedMedia,
-  processPdf2Png,
-} from '@utils/media/img';
+import { getBase64EncodedMedia, processPdf2Png } from '@utils/media/img';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { MessageSchema } from '@texra-ai/llm';
 import type { z } from 'zod';
@@ -84,18 +80,15 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
         kinds: ['document'],
       };
     }
-    const pageCount = yield* countPdfPages(path);
-    if (pageCount === 0) {
-      return yield* Effect.fail(
-        new Error(`Failed to process PDF file as image: ${display}`),
-      );
-    }
-    const pages = yield* processPdf2Png(path);
-    if (pages === null) {
-      return yield* Effect.fail(
-        new Error(`Failed to process PDF file as image: ${display}`),
-      );
-    }
+    const { pages, pageCount } = yield* processPdf2Png(path).pipe(
+      Effect.mapError(
+        (cause) =>
+          new Error(
+            `Failed to process PDF file as image: ${display}: ${cause.message}`,
+            { cause },
+          ),
+      ),
+    );
     if (pages.length < pageCount) {
       logger.warn(
         `Attached only pages 1-${pages.length} of ${pageCount} from ${display}`,

@@ -7,8 +7,8 @@ import { isNotADirectoryError } from '@common/errors';
 /**
  * The failures an existence probe reads as absent: the path is not there
  * (`ENOENT`), or a parent component is a file rather than a directory
- * (`ENOTDIR`), which `FileSystem.exists` reports as `BadResource`. Every other
- * failure propagates.
+ * (`ENOTDIR`), which the Node filesystem reports as `BadResource`. Every
+ * other failure propagates.
  */
 export const absentReason = (error: PlatformError.PlatformError): boolean =>
   error.reason._tag === 'NotFound' ||
@@ -16,43 +16,14 @@ export const absentReason = (error: PlatformError.PlatformError): boolean =>
     isNotADirectoryError(error.reason.cause));
 
 /**
- * Whether `target` names a filesystem entry, with lstat semantics: a path
- * names an entry whenever lstat resolves it, whether or not the link can be
- * followed.
- *
- * `FileSystem.exists` asks the stricter `access(2)` question — does the path
- * *resolve* — so a dangling symlink reads as absent there, and a caller that
- * branches on that answer (a read it skips, a "not seen before" write) would
- * then act on a path that does name an entry.
- *
- * `readLink` answers lstat's half directly — a path `readLink` names is a
- * link, dangling or circular alike — and the access probe answers everything
- * else: `ENOTDIR` reads as absent, and any other failure propagates.
- */
-export const entryExists = (
-  fs: FileSystem.FileSystem,
-  target: string,
-): Effect.Effect<boolean, PlatformError.PlatformError> =>
-  Effect.gen(function* () {
-    const isLink = yield* fs.readLink(target).pipe(
-      Effect.as(true),
-      // Not a link, or not there at all: the access probe below decides.
-      Effect.catch(() => Effect.succeed(false)),
-    );
-    if (isLink) return true;
-    return yield* fs
-      .exists(target)
-      .pipe(Effect.catchIf(absentReason, () => Effect.succeed(false)));
-  });
-
-/**
  * The entry's own type at `target`, or `undefined` when nothing is there, with
  * lstat semantics: a link reports as itself rather than as what it points at,
- * and a dangling one still names an entry.
+ * and a dangling or circular one still names an entry.
  *
- * `readLink` answers lstat's half, exactly as {@link entryExists} uses it, and
- * `stat` answers the rest. Only absence is recovered; every other failure
- * propagates, so an unreadable entry is never read as a missing one.
+ * `readLink` answers lstat's half directly — a path `readLink` names is a
+ * link — and `stat` answers the rest. Only absence ({@link absentReason}) is
+ * recovered; every other failure propagates, so an unreadable entry is never
+ * read as a missing one.
  *
  * The caller passes the filesystem it probes with, so a rooted view answers
  * for the paths inside its root and the process filesystem answers for the
@@ -74,9 +45,19 @@ export const entryTypeIn = (
     if (isLink) return 'SymbolicLink';
     return yield* fs.stat(target).pipe(
       Effect.map((info) => info.type),
-      Effect.catchIf(
-        (error) => error.reason._tag === 'NotFound',
-        () => Effect.succeed(undefined),
-      ),
+      Effect.catchIf(absentReason, () => Effect.succeed(undefined)),
     );
   });
+
+/**
+ * Whether `target` names a filesystem entry, with {@link entryTypeIn}'s lstat
+ * semantics. `FileSystem.exists` asks the stricter `access(2)` question —
+ * does the path *resolve* — so a dangling symlink reads as absent there, and
+ * a caller that branches on that answer (a read it skips, a "not seen before"
+ * write) would then act on a path that does name an entry.
+ */
+export const entryExists = (
+  fs: FileSystem.FileSystem,
+  target: string,
+): Effect.Effect<boolean, PlatformError.PlatformError> =>
+  Effect.map(entryTypeIn(fs, target), (type) => type !== undefined);

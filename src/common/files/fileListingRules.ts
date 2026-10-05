@@ -11,8 +11,7 @@ export type ListableFileType = Exclude<ExtensionCategory, 'edited'>;
 /**
  * One include/exclude file-filter shape, shared verbatim from category
  * selection through to normalization — `prepareFileFilters` fills these same
- * fields in place rather than renaming them, so `PreparedFileFilters` only
- * adds `sanitizedDirs` on top.
+ * fields in place rather than renaming them.
  */
 export interface FileFilterConfig {
   include: string[];
@@ -22,23 +21,10 @@ export interface FileFilterConfig {
   excludeFiles: string[];
 }
 
-interface PreparedFileFilters extends FileFilterConfig {
-  /**
-   * `excludeDirs` before case-folding. Matching (`containsExcludedDirectory`)
-   * lowercases both sides, but the VS Code glob exclude pattern built in
-   * `listing.ts` runs against on-disk paths and needs the original case.
-   */
-  sanitizedDirs: string[];
-}
-
-function trimNonEmpty(values: readonly string[]): string[] {
-  return values
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
-}
-
 function normalizeList(values: readonly string[]): string[] {
-  return trimNonEmpty(values).map((value) => value.toLowerCase());
+  return values
+    .map((value) => value.trim().toLowerCase())
+    .filter((value) => value.length > 0);
 }
 
 const { ignored } = FILE_HANDLING_RULES;
@@ -77,23 +63,15 @@ export function getEditedFileListConfig(): FileFilterConfig {
   return buildInputLikeConfig('edited');
 }
 
-function sanitizeDirectories(directories: readonly string[]): string[] {
-  return trimNonEmpty(directories).map((dir) =>
-    normalizeFilePath(dir).replace(/^\//, '').replace(/\/$/, ''),
-  );
-}
-
-export function prepareFileFilters(
-  config: FileFilterConfig,
-): PreparedFileFilters {
-  const sanitizedDirs = sanitizeDirectories(config.excludeDirs);
+export function prepareFileFilters(config: FileFilterConfig): FileFilterConfig {
   return {
     include: normalizeList(config.include),
     excludeExtensions: normalizeList(config.excludeExtensions),
     excludeKeywords: normalizeList(config.excludeKeywords),
-    excludeDirs: sanitizedDirs.map((dir) => dir.toLowerCase()),
+    excludeDirs: normalizeList(config.excludeDirs).map((dir) =>
+      normalizeFilePath(dir).replace(/^\//, '').replace(/\/$/, ''),
+    ),
     excludeFiles: normalizeList(config.excludeFiles),
-    sanitizedDirs,
   };
 }
 
@@ -120,7 +98,7 @@ function containsExcludedDirectory(
 
 export function passesFileFilters(
   relativePath: string,
-  filters: PreparedFileFilters,
+  filters: FileFilterConfig,
 ): boolean {
   if (!relativePath || containsHiddenSegment(relativePath)) return false;
   if (containsExcludedDirectory(relativePath, filters.excludeDirs))
@@ -145,7 +123,7 @@ export function passesFileFilters(
 
 export function shouldVisitDirectory(
   relativePath: string,
-  filters: PreparedFileFilters,
+  filters: FileFilterConfig,
 ): boolean {
   if (!relativePath) return true;
   if (containsHiddenSegment(relativePath)) return false;

@@ -31,7 +31,7 @@
   "src/controllers/session/storeAside.ts": 3,
   "src/controllers/session/storeSchema.ts": 1,
   "src/platform/defaults/jsonConfigProvider.ts": 2,
-  "src/platform/defaults/jsonStore.ts": 6,
+  "src/platform/defaults/jsonStore.ts": 5,
   "src/platform/defaults/longRunningModelTransport.ts": 4,
   "src/platform/defaults/memoryConfigProvider.ts": 1,
   "src/platform/defaults/nodeHostEnvironment.ts": 1,

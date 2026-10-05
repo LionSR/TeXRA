@@ -290,14 +290,14 @@ describe('shared JsonStore', () => {
           makeTempDir('texra-json-store-', tempDirs),
         );
         const dir = join(tempDir, 'nested');
-        const filePath = join(dir, 'secrets.json');
-        // Unwritable parent: any open-time mkdir/chmod would throw (#8220).
+        const filePath = join(dir, 'config.json');
+        // Unwritable parent: any open-time mkdir would throw (#8220).
         yield* Effect.promise(() => chmod(tempDir!, 0o500));
 
         try {
-          const store = yield* JsonStore.open(filePath, { mode: 0o600 });
+          const store = yield* JsonStore.open(filePath);
 
-          expect(store.get('key', 'fallback')).toBe('fallback');
+          expect(store.get('key')).toBeUndefined();
           yield* Effect.promise(() =>
             expect(stat(dir)).rejects.toMatchObject({ code: 'ENOENT' }),
           );
@@ -305,10 +305,9 @@ describe('shared JsonStore', () => {
           yield* Effect.promise(() => chmod(tempDir!, 0o700));
           yield* store.set('key', 'value');
 
-          const fileStat = yield* Effect.promise(() => stat(filePath));
-          const dirStat = yield* Effect.promise(() => stat(dir));
-          expect(fileStat.mode & 0o777).toBe(0o600);
-          expect(dirStat.mode & 0o777).toBe(0o700);
+          expect(yield* Effect.promise(() => readStoredJson(filePath))).toEqual(
+            { key: 'value' },
+          );
         } finally {
           yield* Effect.promise(() => chmod(tempDir!, 0o700));
         }
