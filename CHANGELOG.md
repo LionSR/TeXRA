@@ -375,6 +375,16 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **VS Code windows run their tasks in the background service.** On macOS
+  and Linux the extension starts the TeXRA service (or uses the one already
+  running) and launches, resumes and steers its tasks there, so a task
+  keeps running when its window closes and other windows and terminals see
+  it live. The window still serves those tasks with its editor
+  (diagnostics, inline criticism, opening a PDF, the editable diff of a
+  proposed edit) and its notifications, and the approval policy set in the
+  window applies there. A newer extension retires an older service. If the
+  service cannot start, the window runs its tasks itself and says so once.
+
 - **Document tasks can reflect with a critic.** Opt in with
   `texra run <agent> --reflect` or `reflect: true` on `document_task`: after
   each revision but the last, the bundled `critic` agent reads the diff and

@@ -3,7 +3,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import * as vscode from 'vscode';
-import { Cause, Data, Effect, Exit, Layer, Scope } from 'effect';
+import { Cause, Data, Effect, Exit, Layer, Result, Scope } from 'effect';
 
 // Local imports
 import {
@@ -22,6 +22,8 @@ import {
   disposeProcessRuntime,
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
+import { serviceSessionBackend } from '@controllers/server/serviceBackend';
+import { localSessionBackend } from '@controllers/session/sessionBackend';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import {
   appStateStoreFromDatabase,
@@ -105,6 +107,7 @@ import { usageCostLabel } from '@ui/copy/modelAccess';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { reachExtensionService } from './common/extensionService';
 
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -465,11 +468,39 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
       emitAppSignal('languageModelsChanged', undefined),
     ),
   );
+  // Every window is a client of the one background service, so its tasks
+  // keep running when it closes and other windows and terminals see them.
+  // A window that cannot reach it runs them here, and says so once.
+  const extensionVersion = context.extension.packageJSON?.version;
+  const service = yield* reachExtensionService(
+    context.extensionPath,
+    typeof extensionVersion === 'string' ? extensionVersion : 'unknown',
+  ).pipe(Effect.result);
   const runtimeSession = yield* initializeDefaultSession({
     roots,
     responseTextProcessing: createTexraResponseTextProcessing(),
-    interruptedTasks: 'offer',
+    // The service follows the interrupted tasks of a window that is its
+    // client.
+    ...(Result.isFailure(service) && { interruptedTasks: 'offer' }),
   });
+  const backend = Result.isSuccess(service)
+    ? yield* serviceSessionBackend(
+        service.success.client,
+        roots.workspace ?? '',
+        runtimeSession.roots.storage,
+      )
+    : localSessionBackend(runtimeSession);
+  if (Result.isFailure(service)) {
+    const reason = `TeXRA runs this window's tasks here only, so other windows and terminals will not see them: ${service.failure.message}`;
+    yield* Effect.logWarning(reason).pipe(withLogChannel(EXTENSION_CHANNEL));
+    yield* Effect.forkDetach(
+      announce(
+        EXTENSION_CHANNEL,
+        vscodeUi.showWarningMessage(reason),
+        undefined,
+      ),
+    );
+  }
   if (runtimeSession.storeMovedAside) {
     yield* Effect.forkDetach(
       announce(
@@ -487,6 +518,19 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
       TEXRA_APPROVAL_POLICY_CONFIG_KEY,
     ),
   );
+  // The service's session of this project takes the window's policy, and
+  // every change of it the settings view makes.
+  if (Result.isSuccess(service)) {
+    yield* backend.setApprovalPolicy(runtimeSession.approvalPolicy);
+    yield* Effect.forkScoped(
+      onAppSignal('approvalPolicyChanged', () =>
+        runtime.runFork(
+          backend.setApprovalPolicy(runtimeSession.approvalPolicy),
+        ),
+      ),
+      { startImmediately: true },
+    );
+  }
   // The run-storage directory of the session just initialized, through that
   // session's own storage view rather than a static that re-reads the root.
   yield* withSessionFs(
@@ -519,6 +563,8 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     secrets,
     runtime,
     runtimeSession,
+    backend,
+    Result.isSuccess(service) ? service.success.client : undefined,
     (usable) => (usable ? setupPill.hide() : setupPill.show()),
   );
   yield* Effect.andThen(
@@ -537,13 +583,14 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     secrets,
     runtime,
     runtimeSession,
+    backend,
   );
   registerWalkthroughWorkspaceAction(context, true, runtime);
   // Keys another window or the service writes reach this one's surfaces.
   yield* Effect.forkScoped(
     secrets.watch().pipe(Effect.provide(nodeFileServices)),
   );
-  yield* registerFileDecorations(context, runtimeSession);
+  yield* registerFileDecorations(context, backend);
 
   // VS Code's event emitters don't await async listeners, so we funnel
   // fire-and-forget async work through this program, which logs a failed
@@ -587,7 +634,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     }),
     { startImmediately: true },
   );
-  yield* registerInlineCriticism(context, runtime, runtimeSession, roots);
+  yield* registerInlineCriticism(context, runtime, backend, roots);
   registerInlineComments(context);
 
   statusBarItem = vscode.window.createStatusBarItem(
@@ -598,7 +645,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   statusBarItem.command = 'texra.showProgressView';
   // Shown only while a run is active (`updateStatusBarText`).
 
-  const statusBarUsageTracker = new StatusBarUsageTracker(runtimeSession);
+  const statusBarUsageTracker = new StatusBarUsageTracker(backend);
   const updateStatusBarTooltip = () => {
     if (!statusBarItem) return;
     const policy = runtimeSession.approvalPolicy;
@@ -653,7 +700,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
 
   yield* Effect.forkScoped(
     refreshStatusBarOnViewChanges({
-      session: runtimeSession,
+      session: backend,
       tracker: statusBarUsageTracker,
       onStatusChanged: () => {
         updateStatusBarTooltip();

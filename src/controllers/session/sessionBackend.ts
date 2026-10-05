@@ -12,7 +12,11 @@
 import { Effect, Option, Stream, SubscriptionRef } from 'effect';
 
 import { resumeOnSession } from '@agent/followUp/ToolUseFollowUp';
-import type { RunEndResult } from '@agent/runtime/RunEndResult';
+import {
+  buildTerminalRunEndResult,
+  type RunEndResult,
+} from '@agent/runtime/RunEndResult';
+import { getRunRecords } from '@agent/storage/runRecords';
 import type { RunControls } from '@agent/runtime/RunHandle';
 import { runAgent, type RunAgentRequest } from '@agent/runtime/runAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -23,7 +27,6 @@ import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   RUN_OUTCOME,
   type RunId,
-  type RunOutcome,
   type TranscriptSubscription,
 } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
@@ -50,6 +53,8 @@ export interface SessionBackend {
   readonly key: string;
   /** The session's state as this window reads run state from it. */
   readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
+  /** Each level of {@link view}, from the current one. */
+  readonly viewChanges: Stream.Stream<SessionView>;
   /** The frames that answer one port's `Subscribe`, `host` merged in. */
   readonly frames: (
     port: string,
@@ -66,14 +71,11 @@ export interface SessionBackend {
   readonly request: (
     request: RuntimeRequest,
   ) => Effect.Effect<Outcome, RequestError>;
-  /**
-   * Start a fresh run. Answers the run's result when it ran where the caller
-   * can open its output, null once the service admitted it.
-   */
+  /** Start a fresh run, and settle with its result once it ends. */
   readonly launch: (
     request: RunAgentRequest,
     options: SessionLaunchOptions,
-  ) => Effect.Effect<RunEndResult | null, Error, ProcessServices>;
+  ) => Effect.Effect<RunEndResult, Error, ProcessServices>;
   /**
    * Continue a settled run. Answers the run that resumed (the one asked
    * for, or the parent that owns it) and its result when it ended where the
@@ -90,9 +92,9 @@ export interface SessionBackend {
   readonly preview: (
     requestId: string,
   ) => Effect.Effect<ToolEditPreview | null, Error>;
-  /** The outcome `runId`'s current activation ends with, once it has
-   *  ended: what a launch or a resume waits on. */
-  readonly ended: (runId: RunId) => Effect.Effect<RunOutcome>;
+  /** What `runId`'s current activation ends with, once it has ended: what
+   *  a resume waits on. */
+  readonly ended: (runId: RunId) => Effect.Effect<RunEndResult>;
   /** A live run's model switch, while its loop runs; undefined otherwise. */
   readonly controls: (runId: RunId) => RunModelControls | undefined;
   /** The session's approval policy, from this window's settings. */
@@ -120,32 +122,39 @@ interface SessionLaunchOptions {
 }
 
 /**
- * The outcome `runId` ends with in `session`, the process running it: once
- * every owner of the run has left, as its view holds that end. A run the
- * view no longer lists was deleted, which ends it as cancelled.
+ * What `runId` ends with in `session`, the process running it: once every
+ * owner of the run has left, its `run.end` as the run's records hold it. A
+ * run that ended with no `run.end` it could read (deleted, or its store
+ * unreadable) ends with the outcome its view shows, without output.
  */
 export function runEnded(
   session: SessionHandle,
   runId: RunId,
-): Effect.Effect<RunOutcome> {
-  return session.runs.awaitDrained(runId).pipe(
-    Effect.andThen(
-      SubscriptionRef.changes(session.view).pipe(
-        Stream.map((view) => view.runs.get(runId)),
-        Stream.filter((run) => run === undefined || !isLiveRun(run)),
-        Stream.runHead,
-      ),
-    ),
-    Effect.map((head) =>
-      Option.match(head, {
-        onNone: () => RUN_OUTCOME.CANCELLED,
-        onSome: (run) =>
-          run === undefined
-            ? RUN_OUTCOME.CANCELLED
-            : (run.durableOutcome ?? RUN_OUTCOME.COMPLETED),
-      }),
-    ),
-  );
+): Effect.Effect<RunEndResult> {
+  return Effect.gen(function* () {
+    yield* session.runs.awaitDrained(runId);
+    const head = yield* SubscriptionRef.changes(session.view).pipe(
+      Stream.map((view) => view.runs.get(runId)),
+      Stream.filter((run) => run === undefined || !isLiveRun(run)),
+      Stream.runHead,
+    );
+    const run = Option.getOrUndefined(head);
+    const end = yield* getRunRecords(session, runId)
+      .readRunEnd()
+      .pipe(
+        Effect.catch((error) =>
+          Effect.logWarning(
+            `Task ${runId} ended; its result was not read: ${error.message}`,
+          ).pipe(Effect.as(null)),
+        ),
+      );
+    if (end !== null)
+      return { outcome: end.outcome, output: end.output, runId };
+    return buildTerminalRunEndResult(
+      run?.durableOutcome ?? RUN_OUTCOME.CANCELLED,
+      runId,
+    );
+  });
 }
 
 /** The backend of a session this process holds. */
@@ -154,6 +163,7 @@ export function localSessionBackend(session: SessionHandle): SessionBackend {
   return {
     key,
     view: session.view,
+    viewChanges: session.viewChanges,
     frames: (port, host, subscribe) =>
       frameSubscription(
         {

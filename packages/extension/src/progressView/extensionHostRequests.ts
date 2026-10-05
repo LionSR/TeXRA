@@ -14,7 +14,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Effect, FileSystem } from 'effect';
 
-import { runAgent, type SessionHandle } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import { handleMerge } from '@commands/agent/mergeCommands';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import {
@@ -35,8 +35,7 @@ import {
   handleRunLatexdiff,
 } from '@commands/latex/latexdiffCommands';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
-import { launchOnRun } from '@controllers/mainView/backend/MainViewRunLaunchController';
-import { localSessionBackend } from '@controllers/session/sessionBackend';
+import type { SessionBackend } from '@controllers/session/sessionBackend';
 import type { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { normalizeMainViewFileExtension } from '@controllers/mainView/MainViewDroppedFilesController';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
@@ -123,6 +122,8 @@ const CHANNEL = 'ExtensionHostRequests';
 
 interface ExtensionHostRequestsOptions {
   readonly session: SessionHandle;
+  /** Where this window's runs run: the session here, or the service's. */
+  readonly backend: SessionBackend;
   readonly extensionPath: string;
   readonly globalState: StateStore;
   /** The process secret store the extension root holds (model availability). */
@@ -209,6 +210,7 @@ export function createExtensionHostRequests(
 ): ExtensionHostRequests {
   const {
     session,
+    backend,
     snapshot,
     toolEditApprovals,
     secrets,
@@ -224,29 +226,32 @@ export function createExtensionHostRequests(
   const multipleFilePickers = createFileSelectionPickers(session);
 
   /**
-   * Launch a validated fresh request directly, as the desktop's
-   * `runValidated` does: the surface's launch and the shared run actions
-   * both reach `runAgent` here. The launch program takes its process services from this
-   * runtime's context on the fiber that runs it.
+   * Launch a validated fresh request through the window's backend, here or
+   * in the service, and open its final output once it ends: the surface's
+   * launch and the shared run actions both reach it. The launch program
+   * takes its process services from this runtime's context on the fiber
+   * that runs it.
    */
   const runValidated: HostRunActionPorts['runValidated'] = (
     request,
     runOptions = {},
   ) => {
-    const launch = runAgent(request, {
-      session,
-      preferHelperModel: runOptions.preferHelperModel ?? false,
-      ownApiKeyFallback: runOptions.ownApiKeyFallback,
-      onRun: launchOnRun(session.approvals, runOptions),
-      onRunResolved: options.presentLaunchedRun,
-    }).pipe(Effect.flatMap(openFinalOutputIfAvailable(session.roots)));
+    const launch = backend
+      .launch(request, {
+        preferHelperModel: runOptions.preferHelperModel ?? false,
+        ownApiKeyFallback: runOptions.ownApiKeyFallback,
+        approveDelegatedWork: runOptions.approveDelegatedWork,
+        onRun: runOptions.onRun,
+        onRunResolved: options.presentLaunchedRun,
+      })
+      .pipe(Effect.flatMap(openFinalOutputIfAvailable(session.roots)));
     return withProcessServices(runtime, launch);
   };
 
   const runActions = runtime.runSync(
     createHostRunActions({
       session,
-      backend: localSessionBackend(session),
+      backend,
       runValidated,
       openWorkflowOutput: (result) =>
         withProcessServices(

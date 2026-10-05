@@ -122,14 +122,19 @@ const vscode = await import('vscode');
 
 const runId = 'f0a1b2c3d4e5' as RunId;
 
+/** Each emission's output differs, as a new round's does: a documents fact
+ *  equal to the one before names no new output. */
+let emissions = 0;
+
 async function emitOutputFiles(
   session: SessionHandle,
   absolutePath: string,
 ): Promise<void> {
+  emissions += 1;
   session.publish([
     documentsOutputRow(runId, [
       {
-        round: 1,
+        round: emissions,
         rawOutput: null,
         compileFailures: [],
         missingOutputs: [],
@@ -143,7 +148,7 @@ async function emitOutputFiles(
             },
             lineage: null,
             diff: null,
-            round: 1,
+            round: emissions,
           },
         ],
       },
