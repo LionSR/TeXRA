@@ -3,8 +3,10 @@
  * pre-built JSON Schema, normalized to the object shape every function-calling
  * API accepts (top-level discriminated unions flattened, the dialect URI
  * stripped). The run's `Tools` service builds the package's uniform tool
- * definitions from it; the structured-output tool builder shares it.
+ * definitions from it (`toolDefinitionsFor`); the structured-output tool
+ * builder shares the schema normalization.
  */
+import { JsonObjectSchema, type TurnRequest } from '@texra-ai/llm';
 import { toJSONSchema } from 'zod';
 
 import type { ToolDefinition } from '@shared/schemas';
@@ -155,4 +157,19 @@ export function convertToolSchema(
   }
   if (!schema) return null;
   return stripDollarSchema(flattenTopLevelUnion(schema));
+}
+
+type ToolDefinitions = NonNullable<TurnRequest['tools']>;
+
+/** The package's uniform tool definitions for the run's resolved tool list. */
+export function toolDefinitionsFor(
+  definitions: readonly ToolDefinition[],
+): ToolDefinitions {
+  return definitions.map((definition) => ({
+    name: definition.name,
+    description: definition.description ?? '',
+    parameters: JsonObjectSchema.parse(
+      convertToolSchema(definition) ?? { type: 'object', properties: {} },
+    ),
+  }));
 }

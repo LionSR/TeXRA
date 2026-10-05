@@ -11,7 +11,7 @@ import stableStringify from 'safe-stable-stringify';
 
 // Local imports - agent runtime
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
-import { toolDefinitionsFor } from '@agent/core/tools/toolDefinitions';
+import { toolDefinitionsFor } from '@agent/core/tools/toolSchema';
 import type { Generation } from '@tools/liveRegistry';
 import { withoutSchemaDescriptions } from '@tools/schemaIdentity';
 

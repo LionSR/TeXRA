@@ -41,7 +41,7 @@ import { z } from 'zod';
 import { stepInstructions } from '@agent/prompt/PromptBuilder';
 import type { RuntimeToolRegistry } from '@agent/runtime/ToolServices';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
-import { toolDefinitionsFor } from '@agent/core/tools/toolDefinitions';
+import { toolDefinitionsFor } from '@agent/core/tools/toolSchema';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import type { PluginContext } from '@platform/processRuntime';
