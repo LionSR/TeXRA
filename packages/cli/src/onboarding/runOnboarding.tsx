@@ -10,9 +10,9 @@
 // runs, and both entry points already reject those before calling it, so
 // `texra run` / `--print` / piped output stay byte-identical (headless parity).
 
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, Fiber } from 'effect';
 import { Box, Text, useApp } from 'ink';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import {
   API_KEY_PROVIDER_IDS,
@@ -23,7 +23,6 @@ import {
 } from '@texra-ai/llm';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
-import { useCancellableEffect } from '@cli/tui/useCancellableEffect';
 import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
 import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
@@ -423,35 +422,33 @@ function ChatGptProgressStep(props: {
   );
   const [instructions, setInstructions] = useState<string>();
 
-  useCancellableEffect(
-    (isCancelled) =>
-      runtime.runPromise(
-        Effect.gen(function* () {
-          const account = yield* signInCliSubscription(
-            'chatgpt',
-            { device, noBrowser: false },
-            {
-              writeProgress: (next, options) => {
-                if (!isCancelled())
-                  (options?.copyable ? setInstructions : setMessage)(next);
-              },
-            },
-          );
-          yield* subscriptionProvider('chatgpt')
-            .setPreferSubscription(stores, true)
-            .pipe(Effect.mapError(ensureError));
-          if (!isCancelled()) props.onSuccess(account);
-        }).pipe(
-          Effect.catchCause((cause) =>
-            Effect.sync(() => {
-              if (!isCancelled())
-                props.onError(toErrorMessage(Cause.squash(cause)));
-            }),
-          ),
+  // The sign-in is a fiber of this step: unmounting interrupts it, so no
+  // callback lands on a gone screen and no sign-in outlives it.
+  useEffect(() => {
+    const fiber = runtime.runFork(
+      Effect.gen(function* () {
+        const account = yield* signInCliSubscription(
+          'chatgpt',
+          { device, noBrowser: false },
+          {
+            writeProgress: (next, options) =>
+              (options?.copyable ? setInstructions : setMessage)(next),
+          },
+        );
+        yield* subscriptionProvider('chatgpt')
+          .setPreferSubscription(stores, true)
+          .pipe(Effect.mapError(ensureError));
+        props.onSuccess(account);
+      }).pipe(
+        Effect.catchCause((cause) =>
+          Effect.sync(() => props.onError(toErrorMessage(Cause.squash(cause)))),
         ),
       ),
-    [],
-  );
+    );
+    return () => {
+      runtime.runFork(Fiber.interrupt(fiber));
+    };
+  }, []);
 
   return (
     <BorderedPanel
