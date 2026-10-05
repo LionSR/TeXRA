@@ -59,7 +59,7 @@ export function importClaudeAgentSdk(): Effect.Effect<QueryFn, Error> {
     load: (): Promise<Record<string, unknown>> =>
       import('@anthropic-ai/claude-agent-sdk'),
     notFoundMessage:
-      '@anthropic-ai/claude-agent-sdk package not found. Reinstall TeXRA or run corepack pnpm install in the TeXRA workspace.',
+      '@anthropic-ai/claude-agent-sdk package not found. Reinstall TeXRA.',
     exportName: 'query',
     specifier: '@anthropic-ai/claude-agent-sdk',
     errorLabel: 'query()',
