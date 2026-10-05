@@ -6,12 +6,15 @@ import {
   ToolError,
   type InquiryThreadId,
   type InquiryThreadSummary,
-  type InquiryThreadRecord,
   type OpenInquiryTurn,
   type AnsweredInquiryTurn,
 } from '@shared/schemas';
 import { GlobalDatabase } from '@shared/session/database';
-import { InquiryRecords } from '@shared/plugins/externalInquiry';
+import {
+  INQUIRY_THREADS,
+  InquiryRecords,
+  type InquiryThreadRecord,
+} from '@shared/plugins/externalInquiry';
 import { toNewestFirstByTimestamp, unique, hexId12 } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -30,7 +33,7 @@ function inquiryOperations({
   ) =>
     Effect.gen(function* () {
       const timestamp = DateTime.formatIso(yield* DateTime.now);
-      return yield* values.modify('inquiry', id, (current) =>
+      return yield* values.modify(INQUIRY_THREADS, id, (current) =>
         Result.try({
           try: () => {
             const next = change(current ?? null, timestamp);
@@ -223,7 +226,7 @@ function inquiryOperations({
     const parsed = InquiryThreadIdSchema.safeParse(threadId);
     if (!parsed.success) return Effect.succeed(null);
     return Effect.map(
-      values.get('inquiry', parsed.data),
+      values.get(INQUIRY_THREADS, parsed.data),
       (record) => record ?? null,
     );
   }
@@ -257,7 +260,9 @@ function inquiryOperations({
     >[0],
   ) {
     return Effect.gen(function* () {
-      const all = (yield* values.list('inquiry')).map(({ value }) => value);
+      const all = (yield* values.list(INQUIRY_THREADS)).map(
+        ({ value }) => value,
+      );
 
       const filtered = all.filter((m) => {
         if (params.status !== 'any' && m.status !== params.status) return false;

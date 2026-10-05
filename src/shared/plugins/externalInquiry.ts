@@ -7,15 +7,18 @@
  * global database (`InquiryRecords`); this row only displays it. Core folds
  * the row without reading it (`SessionView.pluginFacts`); this module is its
  * schema, its writer and its one reader, beside the service over the
- * thread records. Browser-safe: it imports only schemas and `effect`.
+ * thread records. Browser-safe: it imports only schemas, `zod` and `effect`.
  */
 import { Context, type Effect } from 'effect';
+import { z } from 'zod';
 
 import {
   aggregateId,
+  ExternalInquiryTurnRecordSchema,
+  InquiryThreadIdSchema,
   InquiryThreadSummarySchema,
+  RunIdSchema,
   type InquiryThreadId,
-  type InquiryThreadRecord,
   type InquiryThreadStatus,
   type InquiryThreadSummary,
   type JsonValue,
@@ -23,6 +26,30 @@ import {
   type SessionEventDraft,
 } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
+import type { ValueFamily } from '@shared/session/valueFamily';
+
+/** A thread's full record: its turns, explicit `status` and the asking run. */
+const InquiryThreadRecordSchema = z.object({
+  threadId: InquiryThreadIdSchema,
+  /** The run the last question was asked under; a continuation is addressed
+   *  to it. Kept beside the row's `parent` edge because the global record
+   *  spans projects, and listing a run's threads reads it here. */
+  parentRunId: RunIdSchema.nullable(),
+  status: InquiryThreadSummarySchema.shape.status,
+  createdAt: z.string().min(1),
+  updatedAt: z.string().min(1),
+  turns: z.array(ExternalInquiryTurnRecordSchema),
+});
+/** A thread's full record, as the global database stores it. */
+export type InquiryThreadRecord = z.infer<typeof InquiryThreadRecordSchema>;
+
+/** The thread records, in the global database's current values and keyed by
+ *  thread id, so a follow-up from another project still reaches its thread. */
+export const INQUIRY_THREADS: ValueFamily<InquiryThreadRecord> = {
+  name: 'inquiry',
+  schema: InquiryThreadRecordSchema,
+  deletable: false,
+};
 
 /** The row's value: the summary less its asking run, which is the row's
  *  `parent` edge and has no second copy. */

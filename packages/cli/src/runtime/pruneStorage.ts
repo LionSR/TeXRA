@@ -23,6 +23,7 @@ import {
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import { GlobalDatabase } from '@shared/session/database';
+import { WORKSPACE_STORES } from '@shared/session/valueFamily';
 import { formatBytes, formatResultCount } from '@utils/text/stringUtils';
 
 import { CliExitCode } from './exitCodes';
@@ -40,7 +41,7 @@ export const pruneStorage = Effect.fn('pruneStorage')(function* (
   const none = resolveWorkspaceStoragePath(context.storageRoot, undefined);
   const parent = dirname(none);
   const records = new Map(
-    (yield* values.list('workspace-store')).map((row) => [row.key, row.value]),
+    (yield* values.list(WORKSPACE_STORES)).map((row) => [row.key, row.value]),
   );
   const now = yield* Clock.currentTimeMillis;
   /** Why a store directory is an orphan, with its size, or null while its

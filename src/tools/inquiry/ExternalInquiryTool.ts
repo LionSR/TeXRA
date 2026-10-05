@@ -24,9 +24,9 @@ import { withLogChannel } from '@logger/effectLog';
 import {
   InquiryRecords,
   inquiryThreadRow,
+  type InquiryThreadRecord,
 } from '@shared/plugins/externalInquiry';
 import {
-  type InquiryThreadRecord,
   aggregateId as qualifyAggregateId,
   InquiryThreadIdSchema,
   ToolError,

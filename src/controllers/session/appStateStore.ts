@@ -16,6 +16,11 @@ import {
   ProjectDatabases,
   type CurrentValues,
 } from '@shared/session/database';
+import {
+  APP_STATE,
+  REPO_STATE,
+  WORKSPACE_STORES,
+} from '@shared/session/valueFamily';
 import { normalizeFilePath } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
@@ -30,9 +35,9 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 export function appStateStoreFromDatabase(
   storage: string,
   values: CurrentValues,
-  scope?: { readonly family: 'repo-state'; readonly repoRoot: string },
+  scope?: { readonly repoRoot: string },
 ): AppStateStore {
-  const family = scope?.family ?? 'app-state';
+  const family = scope === undefined ? APP_STATE : REPO_STATE;
   const rowKey = (key: string) =>
     scope === undefined ? key : JSON.stringify([scope.repoRoot, key]);
   const refused = (key: string, cause: unknown) =>
@@ -107,7 +112,7 @@ export const openProjectStateStore = Effect.fn(
   const database = yield* RcMap.get(yield* ProjectDatabases, storage);
   if (workspaceRoot !== undefined) {
     yield* (yield* GlobalDatabase).values
-      .modify('workspace-store', path.basename(storage), () =>
+      .modify(WORKSPACE_STORES, path.basename(storage), () =>
         Result.succeed([undefined, { root: workspaceRoot }] as const),
       )
       .pipe(
@@ -152,7 +157,6 @@ export const openRepoStateStore = Effect.fn('appStateStore.openRepoStateStore')(
     const { values } = yield* GlobalDatabase;
     const store = (repoRoot: string) =>
       appStateStoreFromDatabase(storage, values, {
-        family: 'repo-state',
         repoRoot: normalizeFilePath(repoRoot),
       });
     if (workspaceRoot === undefined) return store(storage);

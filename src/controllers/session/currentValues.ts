@@ -20,12 +20,7 @@ import {
 import { z } from 'zod';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  CURRENT_VALUE_SCHEMAS,
-  CURRENT_VALUE_VERSION as VALUE_VERSION,
-  type CurrentValue,
-  type CurrentValueFamily,
-} from '@shared/schemas';
+import { CURRENT_VALUE_VERSION as VALUE_VERSION } from '@shared/schemas';
 import {
   CurrentValueNewer,
   InputHistoryRecordSchema,
@@ -35,6 +30,7 @@ import {
   type DatabaseReadFailed,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
+import type { ValueFamily } from '@shared/session/valueFamily';
 import type { SqlError } from 'effect/sql/SqlError';
 
 type Rows = readonly Readonly<Record<string, unknown>>[];
@@ -60,10 +56,7 @@ const READ_RETRY = Schedule.exponential('250 millis').pipe(
 );
 
 /** A row a newer build wrote: never decoded as this build's shape. */
-const newerValue = (
-  family: CurrentValueFamily,
-  row: Readonly<Record<string, unknown>>,
-) => {
+const newerValue = (family: string, row: Readonly<Record<string, unknown>>) => {
   const version = z.int().parse(row.version);
   return version > VALUE_VERSION
     ? new CurrentValueNewer({ family, key: String(row.key), version })
@@ -72,17 +65,14 @@ const newerValue = (
 
 /** One current value, decoded by its family's schema: a row that no longer
  *  decodes fails the read naming itself. */
-function decodeValue<F extends CurrentValueFamily>(
-  family: F,
+function decodeValue<T>(
+  family: ValueFamily<T, boolean>,
   row: Readonly<Record<string, unknown>>,
-): CurrentValue<F> {
-  const parsed = parseJsonWith(
-    z.string().parse(row.value),
-    CURRENT_VALUE_SCHEMAS[family],
-  );
-  if (Result.isSuccess(parsed)) return parsed.success as CurrentValue<F>;
+): T {
+  const parsed = parseJsonWith(z.string().parse(row.value), family.schema);
+  if (Result.isSuccess(parsed)) return parsed.success;
   throw new Error(
-    `Stored ${family} value ${String(row.key)} does not match its schema: ${parsed.failure.message}`,
+    `Stored ${family.name} value ${String(row.key)} does not match its schema: ${parsed.failure.message}`,
   );
 }
 
@@ -108,7 +98,7 @@ export function currentValues(store: {
 > {
   const { exec, execOne, transact, query, level } = store;
   /** One value's row; a newer one refuses the read or change. */
-  const valueRow = (family: CurrentValueFamily, key: string) =>
+  const valueRow = (family: string, key: string) =>
     execOne(
       'SELECT key, version, value FROM current_value WHERE family = ? AND key = ?',
       [family, key],
@@ -118,69 +108,59 @@ export function currentValues(store: {
         return newer === null ? Effect.succeed(row) : Effect.fail(newer);
       }),
     );
-  const modifyValue = <F extends CurrentValueFamily, A, E>(
-    family: F,
-    key: string,
-    change: (
-      current: CurrentValue<F> | undefined,
-    ) => Result.Result<
-      readonly [A] | readonly [A, CurrentValue<F> | undefined],
-      E
-    >,
-  ) =>
-    transact(
-      Effect.gen(function* () {
-        const row = yield* valueRow(family, key);
-        const result = change(
-          row === undefined ? undefined : decodeValue(family, row),
-        );
-        if (Result.isFailure(result) || result.success.length === 1)
-          return result;
-        const next = result.success[1];
-        if (next === undefined) {
-          yield* exec(
-            'DELETE FROM current_value WHERE family = ? AND key = ?',
-            [family, key],
-          );
-          return result;
-        }
-        const value = JSON.stringify(CURRENT_VALUE_SCHEMAS[family].parse(next));
-        if (row?.value !== value) {
-          yield* exec(UPSERT_VALUE, [
-            family,
-            key,
-            value,
-            yield* Clock.currentTimeMillis,
-          ]);
-        }
-        return result;
-      }),
-    ).pipe(
-      Effect.flatMap((result) =>
-        Result.isSuccess(result)
-          ? Effect.succeed(result.success[0])
-          : Effect.fail(result.failure),
-      ),
-    );
   const values: CurrentValues = {
     get: (family, key) =>
       query(
-        valueRow(family, key).pipe(
+        valueRow(family.name, key).pipe(
           Effect.map((row) =>
             row === undefined ? undefined : decodeValue(family, row),
           ),
         ),
       ),
-    modify: modifyValue as CurrentValues['modify'],
+    modify: (family, key, change) =>
+      transact(
+        Effect.gen(function* () {
+          const row = yield* valueRow(family.name, key);
+          const result = change(
+            row === undefined ? undefined : decodeValue(family, row),
+          );
+          if (Result.isFailure(result) || result.success.length === 1)
+            return result;
+          const next = result.success[1];
+          if (next === undefined) {
+            yield* exec(
+              'DELETE FROM current_value WHERE family = ? AND key = ?',
+              [family.name, key],
+            );
+            return result;
+          }
+          const value = JSON.stringify(family.schema.parse(next));
+          if (row?.value !== value) {
+            yield* exec(UPSERT_VALUE, [
+              family.name,
+              key,
+              value,
+              yield* Clock.currentTimeMillis,
+            ]);
+          }
+          return result;
+        }),
+      ).pipe(
+        Effect.flatMap((result) =>
+          Result.isSuccess(result)
+            ? Effect.succeed(result.success[0])
+            : Effect.fail(result.failure),
+        ),
+      ),
     list: (family) =>
       query(
         exec(
           'SELECT key, version, value FROM current_value WHERE family = ? ORDER BY at DESC',
-          [family],
+          [family.name],
         ).pipe(
           Effect.flatMap((rows) =>
             Effect.forEach(rows, (row) => {
-              const newer = newerValue(family, row);
+              const newer = newerValue(family.name, row);
               return newer === null
                 ? Effect.succeed([
                     {
@@ -203,7 +183,7 @@ export function currentValues(store: {
     changes: (family, keys) =>
       SubscriptionRef.changes(level).pipe(
         Stream.mapEffect(() =>
-          exec(SNAPSHOT, [family, JSON.stringify(keys)]).pipe(
+          exec(SNAPSHOT, [family.name, JSON.stringify(keys)]).pipe(
             Effect.map((rows) =>
               JSON.stringify(
                 rows.map((row) => [

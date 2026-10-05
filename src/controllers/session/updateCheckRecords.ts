@@ -2,7 +2,10 @@
 import { Context, Effect, Layer, Result } from 'effect';
 import type { UpdateCheckRecord } from '@shared/schemas';
 import { GlobalDatabase } from '@shared/session/database';
-import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
+import {
+  UPDATE_CHECKS,
+  UpdateCheckRecords,
+} from '@shared/session/updateCheckRecords';
 
 export const updateCheckRecordsLayer = Layer.effect(
   UpdateCheckRecords,
@@ -13,7 +16,7 @@ export const updateCheckRecordsLayer = Layer.effect(
         host: string,
         change: (current: UpdateCheckRecord) => UpdateCheckRecord,
       ) =>
-        values.modify('update-check', host, (current) =>
+        values.modify(UPDATE_CHECKS, host, (current) =>
           Result.succeed([
             undefined,
             change(
@@ -24,7 +27,7 @@ export const updateCheckRecordsLayer = Layer.effect(
       return {
         read: (host) =>
           Effect.map(
-            values.get('update-check', host),
+            values.get(UPDATE_CHECKS, host),
             (current) => current ?? null,
           ),
         recordChecked: (host, at) =>

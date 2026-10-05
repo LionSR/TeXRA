@@ -19,11 +19,11 @@ import { withLogChannel } from '@logger/effectLog';
 import {
   InquiryRecords,
   inquiryThreadRow,
+  type InquiryThreadRecord,
 } from '@shared/plugins/externalInquiry';
 import {
   type ExternalInquiryPermission,
   type InquiryThreadId,
-  type InquiryThreadRecord,
   type InquiryThreadSummary,
   type RequestDecision,
   type RunId,

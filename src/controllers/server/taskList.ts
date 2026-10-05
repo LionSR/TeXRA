@@ -43,6 +43,7 @@ import {
   GlobalDatabase,
   ProjectDatabases,
 } from '@shared/session/database';
+import { WORKSPACE_STORES } from '@shared/session/valueFamily';
 import { fold } from '@shared/session/sessionFold';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import {
@@ -144,7 +145,7 @@ export const listTasks = Effect.fn('taskList.listTasks')(function* (
 > {
   const fs = yield* FileSystem.FileSystem;
   const databases = yield* ProjectDatabases;
-  const records = yield* (yield* GlobalDatabase).values.list('workspace-store');
+  const records = yield* (yield* GlobalDatabase).values.list(WORKSPACE_STORES);
   // A record is keyed by its storage directory's name, beside the store of
   // no workspace.
   const stores = path.dirname(

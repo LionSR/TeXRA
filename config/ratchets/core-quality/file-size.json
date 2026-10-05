@@ -45,7 +45,7 @@
   "src/controllers/session/storeSchema.ts": 469,
   "src/shared/schemas/runHistoryEvent.ts": 524,
   "src/shared/schemas/sessionEvent.ts": 679,
-  "src/shared/session/database.ts": 469,
+  "src/shared/session/database.ts": 455,
   "src/shared/session/runRows.ts": 426,
   "src/shared/session/runStateFold.ts": 860,
   "src/shared/session/sessionFold.ts": 1316,

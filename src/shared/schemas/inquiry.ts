@@ -83,17 +83,3 @@ export const ExternalInquiryTurnRecordSchema = z.discriminatedUnion('kind', [
   OpenInquiryTurnSchema,
   AnsweredInquiryTurnSchema,
 ]);
-
-const InquiryThreadRecordShape = {
-  threadId: InquiryThreadIdSchema,
-  /** The run the last question was asked under; a continuation is addressed to it. */
-  parentRunId: RunIdSchema.nullable(),
-  status: InquiryThreadStatusSchema,
-  createdAt: z.string().min(1),
-  updatedAt: z.string().min(1),
-  turns: z.array(ExternalInquiryTurnRecordSchema),
-};
-
-/** Canonical thread record: explicit `status` + the asking run. */
-export const InquiryThreadRecordSchema = z.object(InquiryThreadRecordShape);
-export type InquiryThreadRecord = z.infer<typeof InquiryThreadRecordSchema>;

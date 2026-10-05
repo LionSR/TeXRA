@@ -15,9 +15,6 @@ import type {
   AggregateId,
   BlockedAggregate,
   CommitOrdinal,
-  CurrentValue,
-  CurrentValueFamily,
-  DeletableFamily,
   DisplaySessionEvent,
   RunId,
   OwnerId,
@@ -26,6 +23,7 @@ import type {
   SessionEventDraft,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { ValueFamily } from './valueFamily';
 
 /** Current CLI history rows, ordered oldest first. */
 export const InputHistoryRecordSchema = z.object({
@@ -183,7 +181,7 @@ export interface SessionStoreMovedAside {
  * the older shape or overwritten.
  */
 export class CurrentValueNewer extends Data.TaggedError('CurrentValueNewer')<{
-  readonly family: CurrentValueFamily;
+  readonly family: string;
   readonly key: string;
   readonly version: number;
 }> {
@@ -211,8 +209,6 @@ export class DatabaseAggregateBlocked extends Data.TaggedError(
       : `The run ${this.aggregateId} holds a ${this.type} row (version ${this.version}) written by a newer TeXRA; update TeXRA to open it.`;
 }
 
-type RetainedFamily = Exclude<CurrentValueFamily, DeletableFamily>;
-
 /**
  * A root's current values (`current_value`): one row per family and key,
  * replaced in place, outside the event history, so an event-format bump
@@ -221,41 +217,31 @@ type RetainedFamily = Exclude<CurrentValueFamily, DeletableFamily>;
  * no longer decodes fails that read.
  */
 export interface CurrentValues {
-  readonly get: <F extends CurrentValueFamily>(
-    family: F,
+  readonly get: <T, D extends boolean>(
+    family: ValueFamily<T, D>,
     key: string,
-  ) => Effect.Effect<CurrentValue<F> | undefined, DatabaseReadFailed>;
+  ) => Effect.Effect<T | undefined, DatabaseReadFailed>;
   /**
    * Change one value from the one read under the write lock: `change`
    * answers with its result and the next value, with its result alone to
    * write nothing, or refuses and nothing is written. Only a deletable
-   * family's change may answer `undefined`, which deletes the row; a caller
-   * holding a bare family matches neither overload and narrows first.
+   * family's change may answer `undefined`, which deletes the row.
    */
-  readonly modify: {
-    <F extends DeletableFamily, A, E = never>(
-      family: F,
-      key: string,
-      change: (
-        current: CurrentValue<F> | undefined,
-      ) => Result.Result<
-        readonly [A] | readonly [A, CurrentValue<F> | undefined],
-        E
-      >,
-    ): Effect.Effect<A, E | DatabaseWriteFailed>;
-    <F extends RetainedFamily, A, E = never>(
-      family: F,
-      key: string,
-      change: (
-        current: CurrentValue<F> | undefined,
-      ) => Result.Result<readonly [A] | readonly [A, CurrentValue<F>], E>,
-    ): Effect.Effect<A, E | DatabaseWriteFailed>;
-  };
+  readonly modify: <T, D extends boolean, A, E = never>(
+    family: ValueFamily<T, D>,
+    key: string,
+    change: (
+      current: T | undefined,
+    ) => Result.Result<
+      readonly [A] | readonly [A, D extends true ? T | undefined : T],
+      E
+    >,
+  ) => Effect.Effect<A, E | DatabaseWriteFailed>;
   /** Every row of a family, latest write first. */
-  readonly list: <F extends CurrentValueFamily>(
-    family: F,
+  readonly list: <T, D extends boolean>(
+    family: ValueFamily<T, D>,
   ) => Effect.Effect<
-    readonly { readonly key: string; readonly value: CurrentValue<F> }[],
+    readonly { readonly key: string; readonly value: T }[],
     DatabaseReadFailed
   >;
   /**
@@ -265,7 +251,7 @@ export interface CurrentValues {
    * retried, so no change is missed.
    */
   readonly changes: (
-    family: CurrentValueFamily,
+    family: Pick<ValueFamily<unknown, boolean>, 'name'>,
     keys: readonly string[],
   ) => Stream.Stream<void>;
 }
