@@ -15,9 +15,9 @@ import {
 // Local file imports
 import { defineTool } from './core/define';
 
-type StructuredOutputSchema<TSchema extends z.ZodType = z.ZodType> = {
+type StructuredOutputSchema = {
   readonly jsonSchema: Record<string, unknown>;
-  readonly zodSchema: TSchema;
+  readonly zodSchema: z.ZodType;
 };
 
 /** Name of the synthetic tool the model calls to submit its final result. */
@@ -145,12 +145,6 @@ function assertSafeSandboxSchema(schema: unknown): void {
  * and sandbox JSON Schema land on the same Zod validation path and the same
  * provider-facing object schema conversion.
  */
-export function normalizeStructuredOutputSchema<TSchema extends z.ZodType>(
-  input: TSchema,
-): StructuredOutputSchema<TSchema>;
-export function normalizeStructuredOutputSchema(
-  input: z.ZodType | Record<string, unknown>,
-): StructuredOutputSchema;
 export function normalizeStructuredOutputSchema(
   input: z.ZodType | Record<string, unknown>,
 ): StructuredOutputSchema {

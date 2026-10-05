@@ -17,25 +17,13 @@ import type { HttpClient } from 'effect/http';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
- * Why an availability probe in this module could not answer.
- *
- * Read off what the probed surfaces raise: a dynamic `import()` of a CLI's
- * SDK (the package is absent, or it failed for another reason), the native
- * binary lookup that follows it. The localhost request the Zotero probe makes
- * folds its own failures to `false`. A tool that is simply not installed is
+ * The one failure of this module's probes: the native binary lookup a CLI's
+ * probe runs could not answer. An SDK that will not import is a dashboard
+ * message, not a failure; the localhost request the Zotero probe makes folds
+ * its own failures to `false`; and a tool that is simply not installed is
  * `check` answering `false`.
  */
-type ToolProbeFailureReason =
-  'module-not-found' | 'sdk-import-failed' | 'binary-lookup-failed';
-
-/**
- * The one failure of this module's probes. `reason` is what a caller reads:
- * the dashboard's "install this package" line is owed to `module-not-found`
- * specifically, which is why that used to be reconstructed from the error's
- * text and is now the probe's own classification.
- */
 export class ToolProbeFailed extends Data.TaggedError('ToolProbeFailed')<{
-  readonly reason: ToolProbeFailureReason;
   readonly message: string;
   readonly cause?: unknown;
 }> {}

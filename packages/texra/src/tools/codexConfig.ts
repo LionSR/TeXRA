@@ -148,30 +148,30 @@ const isReasoningEffort = (value: unknown): value is ReasoningEffort =>
  * The levels the catalog lists for `slug`: `undefined` when the catalog is
  * unreadable, the unprobed ceiling when the slug is absent or lists none.
  */
-const catalogEfforts = (
+function catalogEfforts(
   stdout: string,
   slug: string,
-): Effect.Effect<readonly ReasoningEffort[] | undefined> =>
-  Effect.try({
-    try: (): unknown => JSON.parse(stdout),
-    catch: () => undefined,
-  }).pipe(
-    Effect.map((parsed) => {
-      const catalog = BundledCodexCatalogSchema.safeParse(parsed);
-      if (!catalog.success) return undefined;
-      const entry = catalog.data.models.find(
-        (item): item is BundledCodexModel =>
-          typeof item === 'object' &&
-          item != null &&
-          (item as BundledCodexModel).slug === slug,
-      );
-      const efforts = (entry?.supported_reasoning_levels ?? [])
-        .map((level) => level.effort)
-        .filter(isReasoningEffort);
-      return efforts.length > 0 ? efforts : UNPROBED_ROUTE_EFFORTS;
-    }),
-    Effect.catch(() => Effect.succeed(undefined)),
+): readonly ReasoningEffort[] | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    // The caller warns on `undefined`.
+    return undefined;
+  }
+  const catalog = BundledCodexCatalogSchema.safeParse(parsed);
+  if (!catalog.success) return undefined;
+  const entry = catalog.data.models.find(
+    (item): item is BundledCodexModel =>
+      typeof item === 'object' &&
+      item != null &&
+      (item as BundledCodexModel).slug === slug,
   );
+  const efforts = (entry?.supported_reasoning_levels ?? [])
+    .map((level) => level.effort)
+    .filter(isReasoningEffort);
+  return efforts.length > 0 ? efforts : UNPROBED_ROUTE_EFFORTS;
+}
 
 const probeRouteEfforts = Effect.fn('codexConfig.probeRouteEfforts')(function* (
   binaryPath: string,
@@ -208,7 +208,7 @@ const probeRouteEfforts = Effect.fn('codexConfig.probeRouteEfforts')(function* (
     codexRouteEffortsByKey.set(key, UNPROBED_ROUTE_EFFORTS);
     return UNPROBED_ROUTE_EFFORTS;
   }
-  const efforts = yield* catalogEfforts(result.stdout, slug);
+  const efforts = catalogEfforts(result.stdout, slug);
   if (efforts == null) {
     yield* Effect.logWarning(
       'Codex reasoning-level probe returned unreadable catalog',
