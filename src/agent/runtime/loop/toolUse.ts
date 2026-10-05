@@ -76,7 +76,7 @@ import { openingHooks, stopHooks } from './hooks';
 import { stepFor, type RunSystem } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
 import type { RunControls } from '../RunHandle';
-import type { ChildRunTurns } from '../childRunLoop';
+import type { ChildRunBoundary } from '../childRunLoop';
 
 const IMMEDIATE_COMPACTION_FOLLOW_UP =
   'The user requested immediate context compaction. Do not start a new task; continue only far enough for the runtime to process any available context compaction, and do not claim that compaction has completed.';
@@ -114,8 +114,8 @@ const owesCompaction = (
 export interface ToolUseStart {
   /** The caller launched this as a resume; the run history decides what it is. */
   readonly resume: boolean;
-  /** A native child's turn permit, and the boundary its loop delivers at. */
-  readonly turns?: ChildRunTurns<ToolUseResult>;
+  /** A native child's turn permit, and the settlement its boundary commits. */
+  readonly turns?: ChildRunBoundary<ToolUseResult>;
   /** Host wiring that is live while the loop can accept an interrupt. */
   readonly attachment?: {
     attach(controls: RunControls): void;
@@ -699,8 +699,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             // The host port stays attached: `/model`, `/compact` land here.
             batch = yield* followUps.wait;
             if (batch === null) {
-              // The queue was cancelled or disposed under the parked loop:
-              // a cancellation, never a completed turn.
+              // The input ended under the parked loop: a cancellation.
               return finish(
                 state,
                 afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.CANCELLED,
@@ -729,23 +728,25 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         // A summary the turn started lands before the turn ends.
         state = yield* cell.adopt(yield* compaction.finish(state));
-        // The turn's trace rows publish fire-and-forget, so `waiting` would
-        // commit ahead of them and the fold would drop its stream rows,
-        // parking a run with no answer. Settling this run's publications (by
-        // run id: a session-wide settle misses its rollback) orders the two. A
-        // failure ends the run, the `artifact-drain` marker on its last row.
+        // The turn's trace rows publish fire-and-forget: settling this run's
+        // publications (by run id) orders them before `waiting`. A failure
+        // ends the run, the `artifact-drain` marker on its last row.
         yield* session.settlePublications(runId, { consume: false });
-        // The turn boundary, in one batch: a completed turn's Stop hooks, then
-        // the snapshot before the steps, so a viewer cut at either step sees
-        // the fields and a stop between turn and wait cannot leave it unended.
-        // `waiting` parks the run (one run model, 3.3), so open streaming rows
-        // close here. The invoker owns `lastError`; the snapshot omits it.
+        // The turn boundary, in one batch: a completed turn's Stop hooks, the
+        // snapshot, then the steps; `waiting` parks the run, so open streaming
+        // rows close here. A child's turn the run goes on from settles here.
+        const goesOn = script === null && !run.toolPolicy.stopAfterCycle;
+        const settlement =
+          start.turns && goesOn && turn.outcome === 'completed'
+            ? yield* start.turns.settleBoundary(result(turn.outcome, state))
+            : null;
         state = yield* cell.append([
           ...(yield* stopHooks(run, turn, response)),
           ...snapshot(state, {}),
           positionRow(runId, state, 'turn.end'),
           ...session.streamClosureFacts(runId),
           positionRow(runId, state, 'waiting'),
+          ...(settlement?.rows ?? []),
         ]);
         if (turn.outcome === 'completed') {
           const interactions = workspace.interactions;
@@ -760,9 +761,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (run.toolPolicy.stopAfterCycle && turn.outcome === 'completed')
           return finish(state, turn.outcome);
         if (script !== null) return finish(state, turn.outcome);
-        if (turn.outcome === 'failed') continue;
-        if (start.turns)
-          yield* start.turns.onTurnBoundary(result(turn.outcome, state));
+        if (settlement !== null)
+          yield* Effect.uninterruptible(settlement.settled);
       }
     });
 

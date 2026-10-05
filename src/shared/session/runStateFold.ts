@@ -60,16 +60,14 @@ import type { z } from 'zod';
 /**
  * The rows `RunHistory.appendBatch` commits: the six run history arms plus the
  * display arms a batch has to commit atomically with them. A tool call's card
- * settles with its `tool.result` (`tool.end` for a card the dispatcher already
- * opened, both card rows for a fast tool whose card opens and closes in that
- * batch); an approval's recovery binding is the `tool.binding` committed in
- * the same batch; a streaming row open when the loop parks closes with the
- * `waiting` step; a model switch's `run.config` restates the snapshot's
- * model id. Publishing those companions separately is the crash
- * window where a settled tool keeps an active card, or a terminal card claims
- * a result no row holds, or an approval survives with nothing to recover it
- * by, or a listing names a model the run history does not. An explicit list
- * narrowed from `SessionEventDraft`, never `SessionEventDraft` itself.
+ * settles with its `tool.result`; an approval's recovery binding is the
+ * `tool.binding` in the same batch; a streaming row open when the loop parks
+ * closes with the `waiting` step; a model switch's `run.config` restates the
+ * snapshot's model id; a child turn's settlement commits with its boundary.
+ * Publishing those companions separately is the crash window where a settled
+ * tool keeps an active card, a card claims a result no row holds, an approval
+ * has nothing to recover it by, or a listing names a model the history does
+ * not. An explicit list narrowed from `SessionEventDraft`.
  */
 export type RunHistoryDraft = Live<
   Extract<SessionEventDraft, { type: RunHistoryDraftType }>
@@ -92,7 +90,8 @@ type RunHistoryDraftType =
   | 'stream.end'
   | 'request.opened'
   | 'request.decided'
-  | 'followup.consumed';
+  | 'followup.consumed'
+  | SettlementType;
 
 export class RunHistoryInconsistent extends Data.TaggedError(
   'RunHistoryInconsistent',
@@ -195,7 +194,8 @@ export type RunState = RunPosition & {
 };
 
 /** Companions committed beside the run history fact; the loop ignores them. */
-type CardRowType = 'tool.start' | 'tool.end' | 'stream.end';
+type CardRowType = 'tool.start' | 'tool.end' | 'stream.end' | SettlementType;
+type SettlementType = 'run.report' | 'run.result' | 'child.turn';
 
 /** The rows `foldRow` applies: the shared rows and the run history's own arms. */
 type FoldedRowType =

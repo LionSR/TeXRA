@@ -81,7 +81,7 @@ import {
   type SessionView,
 } from '@shared/session/sessionView';
 import type { RunHistoryDraft } from '@shared/session/runStateFold';
-import { endsRun, foldRunRows } from '@shared/session/runRows';
+import { foldRunRows } from '@shared/session/runRows';
 import type {
   Append,
   OpenWork,
@@ -348,9 +348,6 @@ export class SessionHandle {
       exclusive: (job) => graph.exclusive(job),
       detach: (job) => graph.detach(job),
       pending: (runId) => graph.events.pendingFollowUps(run(runId)),
-      ended: (runId) =>
-        graph.events.runEnded(run(runId)) ||
-        viewOf(runId)?.durableOutcome != null,
       inputClosed: (runId) => graph.events.inputClosed(run(runId)),
       parentOf: (runId) => viewOf(runId)?.parentId,
       named: (runId, followUpId) =>
@@ -1124,7 +1121,6 @@ export class SessionHandle {
       // The sweep and host notifications belong to the authoring process.
       const target = aggregateTarget(event.aggregateId);
       this.graph.events.foldLifecycle(event);
-      if (endsRun(event)) this.followUps.wakeReaders();
       const { self } = yield* SubscriptionRef.get(this.graph.local);
       if (event.origin == null || !self.includes(event.origin)) return;
       if (target.kind !== 'run' || event.type !== 'run.end') return;

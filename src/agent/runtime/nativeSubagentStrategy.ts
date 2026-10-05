@@ -152,12 +152,19 @@ export function createNativeSubagentStrategy(
             onProgress: (update) => ports.notify(update),
             turns: {
               turnPermit: turns.turnPermit,
-              onTurnBoundary: (turn: RunEndResult) =>
+              settleBoundary: (turn: RunEndResult) =>
                 Effect.suspend(() => {
                   lastResult = turn;
                   cachedBuilt = undefined;
                   cachedDelivery = undefined;
-                  return turns.onTurnBoundary(turn);
+                  return turns.settleBoundary(turn);
+                }),
+              settleEnd: (turn: RunEndResult) =>
+                Effect.suspend(() => {
+                  lastResult = turn;
+                  cachedBuilt = undefined;
+                  cachedDelivery = undefined;
+                  return turns.settleEnd(turn);
                 }),
             },
           };

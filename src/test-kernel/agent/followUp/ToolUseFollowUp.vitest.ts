@@ -70,8 +70,6 @@ function recordedFollowUps(
 ) {
   const rows: SessionEvent[] = [];
   const claims: RunId[] = [];
-  /** Runs whose terminal row has folded: a `senderEnd` hold's release. */
-  const ended = new Set<RunId>();
   const live = new Set<RunId>();
   let failWrites = options.failWrites ?? 0;
   const publisher = Semaphore.makeUnsafe(1);
@@ -108,7 +106,6 @@ function recordedFollowUps(
     },
     pending: (runId) => foldRunRows(runRows(runId)).followUps,
     inputClosed: (runId) => lifecycleOf(runRows(runId)).closed,
-    ended: (runId) => ended.has(runId),
     parentOf: () => undefined,
     named: (runId, followUpId) =>
       foldRunRows(runRows(runId)).followUpIds.has(followUpId),
@@ -140,7 +137,6 @@ function recordedFollowUps(
     followUps,
     claims,
     live,
-    endRun: (runId: RunId) => ended.add(runId),
     queuedRows,
     queued: (runId: RunId) => queuedRows(runId).map((row) => row.content.text),
   };
@@ -601,10 +597,7 @@ describe('Inbox readers', () => {
   it.effect('never lets a maintenance wake share a batch with follow-ups', () =>
     Effect.gen(function* () {
       const pending: QueuedFollowUp[] = [];
-      const input = new RunInput(
-        () => pending,
-        () => true,
-      );
+      const input = new RunInput(() => pending);
       input.wake('compact');
       const followUp = (text: string) => ({
         followUpId: text,
@@ -726,35 +719,6 @@ describe('Inbox delivery identity (#9531)', () => {
 });
 
 describe('Inbox visibility held on the row', () => {
-  it.effect(
-    "holds a child's final result until the child has ended (#8093)",
-    () =>
-      Effect.gen(function* () {
-        const { followUps, queued, endRun } = recordedFollowUps();
-        const id = generateRunId();
-        const input = yield* followUps.open(id);
-        const delivery = childResult('d1');
-
-        yield* followUps.send(id, delivery, { hold: 'senderEnd', wake: true });
-        expect(queued(id)).toEqual(['child result']);
-        expect(input.hasQueued()).toBe(false);
-        // Other input does not carry the held row with it: the parent must
-        // not take the result before the child's run.end.
-        yield* followUps.send(id, user('user input'));
-        expect(yield* taken(input)).toEqual(['user input']);
-
-        // The child's terminal row folds, then it re-sends: a replay.
-        endRun(delivery.from.runId);
-        followUps.wakeReaders();
-        expect(yield* followUps.send(id, delivery)).toEqual({
-          kind: 'duplicate',
-        });
-        // Nothing consumed the first batch here, so the take reads both
-        // rows, in commit order.
-        expect(yield* taken(input)).toEqual(['child result', 'user input']);
-      }),
-  );
-
   it.effect(
     'reads a pause notice only beside an instruction, and wakes nobody for it',
     () =>

@@ -886,6 +886,99 @@ export function crashConformanceSuite(plugins: string): void {
       600_000,
     );
     /**
+     * A child's result is never lost or read twice across a crash: a
+     * detached child's turn, a background script's and a background
+     * command's last turn each settle in the batch that ends them, and a
+     * resumed parent relays every settled result it has not read. Every
+     * crash point after the first settlement resumes the parent until it
+     * has read each result its children settled, once.
+     */
+    it.live(
+      'reads every child result settled before the crash, exactly once',
+      () =>
+        Effect.gen(function* () {
+          const roots = testWorkspaceRoots();
+          const root = generateRunId();
+          /** The deliveries the children settled, by follow-up id. */
+          const settled = (rows: readonly Row[]) =>
+            rows.flatMap((row) => {
+              if (row.type !== 'child.turn') return [];
+              const delivery = json(row).delivery as
+                | { readonly to: string; readonly followUpId: string }
+                | undefined;
+              return delivery?.to === root ? [delivery.followUpId] : [];
+            });
+          const ids = (rows: readonly Row[], type: string) =>
+            rows
+              .filter((row) => row.run === root && row.type === type)
+              .map((row) => String(json(row).followUpId));
+          const allRead = (rows: readonly Row[]) => {
+            const consumed = new Set(ids(rows, 'followup.consumed'));
+            return settled(rows).every((id) => consumed.has(id));
+          };
+          const { points, clean } = yield* cleanPass(
+            roots,
+            (session) =>
+              withProcessServices(
+                testRuntime(),
+                runAgent(
+                  {
+                    config: AgentConfigSchema.parse({
+                      agent: 'golden_delivery',
+                      model: 'gpt56',
+                      instruction: 'Send the children off.',
+                    }),
+                    runId: root,
+                  },
+                  { session },
+                ),
+              ),
+            () =>
+              until(
+                roots.storage,
+                (rows) => settled(rows).length === 3 && allRead(rows),
+              ),
+          );
+          const cleanRows = rowsOf(roots.storage);
+          // The child's turn, the script and the command each reported.
+          expect(settled(cleanRows)).toHaveLength(3);
+
+          const first = Math.min(
+            ...cleanRows
+              .filter((row) => settled([row]).length > 0)
+              .map((row) => row.commit),
+          );
+          const broken: string[] = [];
+          for (const n of points.filter((point) => point >= first)) {
+            const { final, refused } = yield* resumeFrom(
+              roots,
+              clean,
+              n,
+              root,
+              (_, storage) => until(storage, allRead),
+            );
+            const twice = (type: string) =>
+              ids(final, type).filter(
+                (id, index, all) => all.indexOf(id) !== index,
+              );
+            const found = [
+              ...(refused === null ? [] : [refused]),
+              allRead(final) ? null : 'a settled child result was never read',
+              twice('followup.queued').length === 0
+                ? null
+                : 'a child result was queued twice',
+              twice('followup.consumed').length === 0
+                ? null
+                : 'a child result was read twice',
+            ].filter((violation) => violation !== null);
+            if (found.length > 0)
+              broken.push(`after commit ${n}: ${found.join('; ')}`);
+          }
+          expect(broken).toEqual([]);
+        }),
+      600_000,
+    );
+    /**
      * A document task's documents are its recipe script's settled value: a
      * resume from any commit point ends `completed` with the clean run's
      * documents, and a revision whose persona child ended before the crash

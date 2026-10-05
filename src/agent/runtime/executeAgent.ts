@@ -40,6 +40,7 @@ import { agentRunLayer } from './run/AgentRun';
 import { runToolUse } from './loop/toolUse';
 import { runWithLaunchGuard, type RunTerminalOwner } from './runLaunchGuard';
 import { Runs } from './runRegistry';
+import type { ChildRunTurns } from './childRunLoop';
 import type { RunEndResult } from './RunEndResult';
 import type { AgentRunServices } from './runRegistry';
 import type { SessionHandle } from './SessionHandle';
@@ -173,8 +174,8 @@ function launchRun(
             ? {
                 turns: {
                   turnPermit: shared.turns.turnPermit,
-                  onTurnBoundary: (result) =>
-                    shared.turns!.onTurnBoundary(toResult(result)),
+                  settleBoundary: (result) =>
+                    shared.turns!.settleBoundary(toResult(result)),
                 },
               }
             : {}),
@@ -222,15 +223,11 @@ function buildFallbackNotification(config: AgentConfig): FallbackNotification {
   };
 }
 
-/**
- * Callback and host-context fields shared by every entry point that drives one
- * subagent run (`executeAgent` and `resumeToolUseFromResumeData`). Extracted
- * so the option bags describing the same run can't silently drift out of sync
- * or re-declare the same field under a different name.
- */
+/** Callback and host-context fields shared by every entry point that drives
+ *  one subagent run (`executeAgent`, `resumeToolUseFromResumeData`). */
 interface SubagentRunOptions {
-  /** The child-run policy: each turn's permit, each completed turn's boundary. */
-  readonly turns?: import('./childRunLoop').ChildRunTurns<RunEndResult>;
+  /** The child-run policy: each turn's permit, each turn's settlement. */
+  readonly turns?: ChildRunTurns<RunEndResult>;
   /** Run-scoped tools added to the agent without mutating the default registry. */
   readonly tools?: readonly ITool[];
   /**
@@ -263,14 +260,9 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    * interrupting an already-terminal run.
    *
    * The host reports a fact, `failed` when requested output could not be
-   * delivered, and the run decides its verdict from it; the host never
-   * names an outcome. Presentation (opening the final output) is not
-   * publication: a host does it after the launch returns, from the result.
-   *
-   * The run yields this program on the run's own fiber, so a stop reaches
-   * it. A handler that needs a session-rooted fact (workspace config,
-   * storage) reads it from the session it was given, not from the calling
-   * fiber: nothing carries one.
+   * delivered, and the run decides its verdict from it. It runs on the run's
+   * own fiber, so a stop reaches it, and reads session-rooted facts from the
+   * session it was given.
    */
   publishWorkflowOutput?: (
     result: RunEndResult,
@@ -287,8 +279,7 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    * own surface state.
    */
   onRunResolved?: (runId: RunId) => void;
-  /** A sink of every event the run's trace emits, beside the session's
-   *  (`AgentLaunchContext.onTraceEvent`). */
+  /** A sink of every event the run's trace emits, beside the session's. */
   onTraceEvent?: (event: AgentEvent) => void;
   /** Stop a tool-use run after one model/tool cycle instead of waiting for follow-up input. */
   stopAfterCycle?: boolean;
@@ -392,7 +383,11 @@ export function executeAgent(
         }).pipe(settleDescriptionOnExit(sessionDescription)),
       // The edge the lifecycle's handle is born with: the caller's own
       // parent for a fresh child.
-      { parentRunId: options.parentRunId, onRun: options.onRun },
+      {
+        parentRunId: options.parentRunId,
+        onRun: options.onRun,
+        settleEnd: options.turns?.settleEnd,
+      },
     ).pipe(Effect.ensuring(Fiber.await(sessionDescription)));
   }).pipe(
     // The run's scope: the launch acquires the run trace into it and the
@@ -479,7 +474,11 @@ export function resumeToolUseFromResumeData(
           isCancellationRequested: options.isCancellationRequested,
         }),
       // Resume reads the parent edge from the persisted `run.start`.
-      { parentRunId, onRun: options.onRun },
+      {
+        parentRunId,
+        onRun: options.onRun,
+        settleEnd: options.turns?.settleEnd,
+      },
     );
   }).pipe(Effect.scoped);
   return (

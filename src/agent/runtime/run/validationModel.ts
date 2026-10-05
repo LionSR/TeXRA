@@ -1,26 +1,16 @@
 /**
  * The deterministic model the package-validation gate runs against, and the
- * gate that selects it.
+ * gate that selects it. Package validation (`TEXRA_CLI_INCLUDE_INTERNAL_
+ * VALIDATION_MODEL=1`) swaps the provider models for this canned llm `Model`
+ * at the provider boundary, so a `texra run` smoke test exercises the real
+ * CLI and `executeAgent` path without a live model API.
  *
- * Package validation (`pnpm --filter @texra-ai/cli run build` with
- * `TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL=1`) swaps the real provider
- * models for this canned llm `Model` at the provider boundary, so a
- * `texra run` smoke test exercises the full CLI + executeAgent path without
- * reaching a live model API. The provider boundary is the only deterministic
- * piece; the CLI and `executeAgent` path stays real.
- *
- * The four `TEXRA_CLI_*` reads are build constants: direct `process.env.<NAME>`
- * property access (never computed keys) so esbuild's `define`
- * (`packages/cli/scripts/build-bundle.mjs`) inlines them at bundle time; only
- * the CLI's package-validation build defines them non-empty. Every shipped
- * bundle (the default CLI, the desktop main process, the extension host and
- * the agent SDK)
- * loads a stub in place of this module
- * (`scripts/stub-internal-validation-model.mjs`), so no canned output and no
- * environment-opened gate ships. The
- * runtime keys (the per-run switch, the flag-file path, and the per-turn
- * script fan-out switch) go through the ambient Effect `ConfigProvider`
- * (`envVar`), read when the program runs, never at module load.
+ * The four `TEXRA_CLI_*` reads are build constants: direct `process.env`
+ * property access, so esbuild's `define` inlines them; only the CLI's
+ * validation build defines them. Every shipped bundle loads a stub in place
+ * of this module (`scripts/stub-internal-validation-model.mjs`). The runtime
+ * keys go through the ambient `ConfigProvider` (`envVar`), read when the
+ * program runs.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
@@ -64,13 +54,9 @@ const results = await Promise.allSettled([
 ])
 return { solutions: results.map((result) => result.status === 'fulfilled' ? result.value.structured : null) }`;
 
-/**
- * The golden store's script: it finds the reading tool with `searchTools`
- * and `describeTool`, then makes two reads with it and runs a command in one
- * `Promise.all`. The command waits for `golden-script.release`, so the
- * generator kills the process while it runs, after the first read settled;
- * the second read waits behind it, since the command is a barrier.
- */
+/** The golden store's script: finds the reading tool, then two reads and a
+ *  command (a barrier, held until `golden-script.release`) in one
+ *  `Promise.all`; the generator kills the process while the command runs. */
 const GOLDEN_SCRIPT_SOURCE = `phase('Gather')
 const [found] = await searchTools('read a file', { limit: 1 })
 const declaration = await describeTool(found.name)
@@ -85,12 +71,8 @@ const [notes, shell, gate] = await Promise.all([
 console.log('gathered')
 return { found: found.name, documented: declaration.includes('path: string'), notes: notes.output, shell: shell.output, gate: gate.summary }`;
 
-/**
- * The golden store's fan-out: two `agent()` calls under one `Promise.all`.
- * The project's child-run budget is 1, so the first child answers before
- * the second starts; the second waits for `golden-fanout.release`, so the
- * generator kills the process while it runs.
- */
+/** The golden store's fan-out: two `agent()` calls under a child-run budget
+ *  of 1; the second is held until `golden-fanout.release` and killed. */
 const GOLDEN_FANOUT_SOURCE = `phase('Fan out')
 const [a, b] = await Promise.all([
   agent('Fan-out child A: answer at once.', { agentName: 'golden_child', label: 'A' }),
@@ -98,11 +80,8 @@ const [a, b] = await Promise.all([
 ])
 return { a: a.response, b: b.response }`;
 
-/**
- * The golden store's background script: one `agent()` call, whose child
- * waits for `golden-background.release`, so the generator kills the process
- * while it runs, after the parent's turn has ended.
- */
+/** The golden store's background script: one `agent()` call, held until
+ *  `golden-background.release` and killed after the parent's turn ended. */
 const GOLDEN_BACKGROUND_SOURCE = `phase('Background')
 const answer = await agent('Background child: answer once released.', { agentName: 'golden_child', label: 'Child' })
 return { answer: answer.response }`;
@@ -120,12 +99,9 @@ return { notes: notes.output, shell: shell.output, child: child.response }`;
 
 /**
  * The scripted conversation of the golden 1.0 store
- * (`packages/cli/scripts/generate-golden-store.mjs`): each agent's system
- * prompt names its part, and a part's step is the count of tool results its
- * history holds. The parked part's call is held until `golden-park.release`
- * exists beside the flag file: the generator kills the process holding it
- * instead, and the conformance suite creates the file before it resumes
- * the run.
+ * (`generate-golden-store.mjs`): each agent's system prompt names its part,
+ * and a part's step is the count of tool results its history holds. A held
+ * call waits for its `*.release` file beside the flag file.
  */
 function goldenTurn(
   turn: ResolvedTurn,
@@ -296,6 +272,29 @@ function goldenTurn(
     );
     return Effect.succeed(text(`Saw: ${users.join(' | ')}`));
   }
+  // The crash suite's delivery run: three children, each reporting back.
+  if (system.includes('GOLDEN-DELIVERY'))
+    return Effect.succeed(
+      results.length === 0
+        ? [
+            call('agent', {
+              agentName: 'golden_child',
+              prompt: 'Delivery child: answer.',
+              background: true,
+            }),
+            call('script', {
+              title: 'Deliver',
+              code: "phase('Deliver')\nreturn { delivered: true }",
+              run_in_background: true,
+            }),
+            call('bash', {
+              command: 'echo delivered',
+              description: 'Deliver',
+              run_in_background: true,
+            }),
+          ]
+        : text('Noted.'),
+    );
   // The crash-point conformance run: a response with two calls, then a
   // script, then the echo's text. A step a crash cut off before it started
   // (its calls settled as not started) is asked for again, as a model

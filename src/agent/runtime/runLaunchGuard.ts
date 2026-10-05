@@ -10,7 +10,12 @@ import { Cause, Effect, Exit } from 'effect';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import { classifyAgentError } from '@common/errors';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
-import { RUN_OUTCOME, type RunId, type RunOutcome } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  type RunId,
+  type RunOutcome,
+  type SessionEventDraft,
+} from '@shared/schemas';
 import { aggregateError } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -21,18 +26,20 @@ import type { SessionHandle } from './SessionHandle';
  * beside the lifecycle's own terminal. An outcome the lifecycle already wrote
  * stands (`keepExistingOutcome`), so a row lands only for a run that failed
  * or stopped before its lifecycle, or outside it; a failure carries its
- * classified error.
+ * classified error, and a child's last-turn `settlement` rides the row.
  */
 export const endRunOutsideLifecycle = (
   session: SessionHandle,
   runId: RunId,
   outcome: RunOutcome,
   error: unknown,
+  settlement: readonly SessionEventDraft[] = [],
 ): Effect.Effect<void, Error> =>
   finalizeRun(session, {
     runId,
     outcome,
     keepExistingOutcome: true,
+    ...(settlement.length > 0 ? { settlement } : {}),
     ...(outcome === RUN_OUTCOME.FAILED && error != null
       ? {
           error: {

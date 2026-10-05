@@ -179,17 +179,15 @@ export const sessionEventsLayer = Layer.effect(
     // no other process commits to the run, so what it tracks stays whole.
     const followUps = new Map<AggregateId, RunRows>();
     const hydrated = new Set<AggregateId>();
-    // Each run's lifecycle standing (ended: what releases a `senderEnd`
-    // hold; closed: its input), one fold of its lifecycle rows by commit:
+    // Each run's input standing, one fold of its lifecycle rows by commit:
     // this publisher's commits, reads where a claim moves here, and the
     // fold-gated tail's rows from every process. A row at or below the
     // commit already applied changes nothing, so a lagging source never
-    // rolls a newer standing back. A collected aggregate has no rows left.
+    // rolls a newer standing back.
     const lifecycles = new Map<
       AggregateId,
       ReturnType<typeof lifecycleOf> & { readonly commit: CommitOrdinal }
     >();
-    const collected = new Set<AggregateId>();
     const foldLifecycle = (rows: readonly SessionEvent[]) => {
       for (const row of rows) {
         if (!(RUN_LIFECYCLE_TYPES as readonly string[]).includes(row.type))
@@ -385,9 +383,6 @@ export const sessionEventsLayer = Layer.effect(
         followUps.get(aggregateId)?.followUps ?? [],
       followUpNamed: (aggregateId, followUpId) =>
         followUps.get(aggregateId)?.followUpIds.has(followUpId) ?? false,
-      runEnded: (aggregateId) =>
-        collected.has(aggregateId) ||
-        lifecycles.get(aggregateId)?.ended === true,
       inputClosed: (aggregateId) =>
         lifecycles.get(aggregateId)?.closed === true,
       foldLifecycle: (row) => foldLifecycle([row]),
@@ -423,28 +418,6 @@ export const sessionEventsLayer = Layer.effect(
           foldLifecycle(
             yield* log.readAggregate(aggregateId, 1, [...RUN_LIFECYCLE_TYPES]),
           );
-          // A held row's sender may have ended in an earlier process: its
-          // latest lifecycle decides. A sender whose deleted aggregate was
-          // collected has no rows left at all: it ended with its deletion.
-          const senders = new Set(
-            (followUps.get(aggregateId)?.followUps ?? []).flatMap(
-              ({ holdUntil, content: { from } }) =>
-                holdUntil === 'senderEnd' && from.kind === 'run'
-                  ? [qualifyAggregateId('run', from.runId)]
-                  : [],
-            ),
-          );
-          for (const sender of senders) {
-            const rows = yield* log.readAggregate(sender, 1, [
-              ...RUN_LIFECYCLE_TYPES,
-            ]);
-            foldLifecycle(rows);
-            if (
-              rows.length === 0 &&
-              (yield* log.aggregateState([sender])).length === 0
-            )
-              collected.add(sender);
-          }
           hydrated.add(aggregateId);
         }),
       listing: () =>

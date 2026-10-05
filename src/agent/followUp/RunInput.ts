@@ -5,7 +5,6 @@
  */
 import { Deferred, Effect, Latch } from 'effect';
 
-import type { RunId } from '@shared/schemas';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import { isInstruction } from './followUpMessages';
 
@@ -54,26 +53,15 @@ export class RunInput {
   private ended = false;
 
   private readonly queued: () => readonly QueuedFollowUp[];
-  /** Whether a sender's latest lifecycle has a committed terminal row. */
-  private readonly senderEnded: (sender: RunId) => boolean;
 
-  constructor(
-    queued: () => readonly QueuedFollowUp[],
-    senderEnded: (sender: RunId) => boolean,
-  ) {
+  constructor(queued: () => readonly QueuedFollowUp[]) {
     this.queued = queued;
-    this.senderEnded = senderEnded;
   }
 
-  /** What a take may read, folded from the rows' holds: no row whose sender
-   *  has not ended, and an `instruction`-held row only beside an instruction. */
+  /** What a take may read, folded from the rows' holds: an
+   *  `instruction`-held row only beside an instruction. */
   private pending(): readonly QueuedFollowUp[] {
-    const rows = this.queued().filter(
-      ({ holdUntil, content: { from } }) =>
-        holdUntil !== 'senderEnd' ||
-        from.kind !== 'run' ||
-        this.senderEnded(from.runId),
-    );
+    const rows = this.queued();
     const asked = rows.some(
       (f) => f.holdUntil !== 'instruction' && isInstruction(f.content),
     );

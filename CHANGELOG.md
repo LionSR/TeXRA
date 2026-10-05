@@ -776,6 +776,12 @@ show` print the same notice, and the new `texra agents customize`,
 
 - **The desktop installers build again, and the macOS app is signed and
   notarized,** so macOS opens it without a Gatekeeper warning.
+- **An agent's or a background job's result is no longer lost when TeXRA is
+  killed at the wrong moment.** A result from an agent left running in the
+  background, a background script or a background command is saved together
+  with the step that finishes it, and the task that started it picks it up
+  when it resumes. Before, a crash just after the agent finished could drop
+  the result, or leave a background command's result waiting forever.
 - **Document tasks run on a VS Code editor model (Copilot) again.** Since
   document tasks became a recipe, a task launched with an editor model
   failed at its first step; its revisions now run on that model as before.

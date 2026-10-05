@@ -37,18 +37,18 @@ import type {
 import { SessionEvents } from '@shared/session/sessionEvents';
 import { runHistoryRows, storedDraft } from './storedTurn';
 
-/**
- * Rows that may follow a `run.snapshot` in its batch: none moves what it
- * records (loop state, model, failure, declined routes). A `run.position`
- * (position is not in the snapshot), a `tool.end`, a `request.decided`, or
- * the `stream.end` of a row the `waiting` position parks beside. Each folded
- * field then has one writer, whose last row is what a resume reads.
- */
+/** Rows that may follow a `run.snapshot` in its batch, none moving what it
+ *  records, so each folded field has one writer whose last row a resume
+ *  reads: positions, card ends, decisions, a parked row's `stream.end`, a
+ *  child turn's settlement. */
 const AFTER_SNAPSHOT = new Set<RunHistoryDraft['type']>([
   'run.position',
   'tool.end',
   'request.decided',
   'stream.end',
+  'run.report',
+  'run.result',
+  'child.turn',
 ]);
 
 const isResponse = (row: RunHistoryDraft): boolean =>
