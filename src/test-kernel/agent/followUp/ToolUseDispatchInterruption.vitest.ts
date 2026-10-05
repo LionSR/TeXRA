@@ -16,6 +16,7 @@ import {
   type ToolOutcomePermission,
 } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
+import type { RunState } from '@shared/session/runStateFold';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   agentRunTestLayer,
@@ -45,6 +46,12 @@ interface HarnessInit extends ScriptedRunInit {
   readonly tools: Record<string, ITool>;
   readonly turns: readonly TurnResult[];
 }
+
+/** The calls a folded state holds settled. */
+const settledIds = (state: RunState | null | undefined): string[] =>
+  Object.entries(state?.pendingResponse?.records ?? {}).flatMap(([id, call]) =>
+    call.status.kind === 'settled' ? [id] : [],
+  );
 
 function loopLayer(init: HarnessInit) {
   return Layer.mergeAll(
@@ -168,9 +175,7 @@ describe('tool dispatch interrupted mid-turn', () => {
         expect(interrupted?.messages.map((message) => message.role)).toEqual([
           'user',
         ]);
-        expect(
-          Object.keys(interrupted?.pendingResponse?.settled ?? {}),
-        ).toEqual(['call-a']);
+        expect(settledIds(interrupted)).toEqual(['call-a']);
 
         const resumed = yield* runToolUse({ resume: true }).pipe(
           Effect.provide(
@@ -456,9 +461,7 @@ describe('tool dispatch interrupted mid-turn', () => {
         // The close is on the request, and it decides nothing about the call:
         // no rerun was admitted and no skip was reported.
         expect(request?.decision).toMatchObject({ action: 'cancel' });
-        expect(Object.keys(open?.pendingResponse?.settled ?? {})).toEqual([
-          'call-a',
-        ]);
+        expect(settledIds(open)).toEqual(['call-a']);
         expect(toolB.call).toHaveBeenCalledTimes(1);
         expect(toolC.call).not.toHaveBeenCalled();
 

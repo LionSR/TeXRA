@@ -1,8 +1,8 @@
 /**
  * The new-task composer's attachments: the one home for attaching files to
- * an interactive task. It wraps the composer, so a file dropped on the
+ * a chat. It wraps the composer, so a file dropped on the
  * composer attaches, and it lists what is attached under it as removable
- * chips. The composer's paperclip fills the same list. A document pass keeps
+ * chips. The composer's paperclip fills the same list. A document task keeps
  * its Input/Context groups in the launcher's file section instead.
  */
 
@@ -11,7 +11,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import { SessionUiEvents } from '@shared/session/uiEvents';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { designTokens } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -60,7 +60,7 @@ export class LaunchAttachments extends LitElement {
     `,
   ];
 
-  /** The launcher's media list; empty for a document pass. */
+  /** The launcher's media list; empty for a document task. */
   @property({ attribute: false }) files: readonly string[] = [];
 
   private readonly fileDrop = new FileDropController(this, (paths) =>

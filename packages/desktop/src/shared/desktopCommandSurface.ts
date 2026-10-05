@@ -1,21 +1,21 @@
-import type { AgentCategory, GettingStartedAction } from '@shared/schemas';
-import type { SettingsTarget } from '@shared/settingsView/settingsViewMessages';
+import type { GettingStartedAction } from '@shared/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import type { TeXRAIconName } from '@shared/iconNames';
+import type { SettingsTarget } from '@texra/shared/settingsView/settingsViewMessages';
 import {
   toElectronAccelerator,
   type DesktopPlatform,
-} from '@shared/commands/accelerators';
+} from '@texra/shared/commands/accelerators';
 import {
   commandCatalogById,
   settingsTabByCommand,
   type CommandId,
   type SettingsTabCommandId,
-} from '@shared/commands/catalog';
+} from '@texra/shared/commands/catalog';
 import {
   dispatchCommandFromRegistry,
   type CommandHandler,
-} from '@shared/commands/registry';
-import type { TeXRAIconName } from '@shared/iconNames';
+} from '@texra/shared/commands/registry';
 import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopWorkbenchKind,
@@ -148,7 +148,7 @@ export interface DesktopCommandMenuEntry {
 export interface DesktopCommandActions {
   showLauncher(): void;
   openWorkbench(kind: DesktopWorkbenchKind): void;
-  showSettings(tab?: SettingsTarget, agentSubTab?: AgentCategory): void;
+  showSettings(tab?: SettingsTarget): void;
   openDesktopDocs(): void;
   openLogFolder(): void;
   openWorkspaceFolder(): void;
@@ -160,7 +160,6 @@ export interface DesktopCommandActions {
 interface DesktopSettingsTabMessage {
   command: typeof SETTINGS_VIEW_COMMANDS.SET_TAB;
   tab: SettingsTarget;
-  agentSubTab?: AgentCategory;
 }
 
 export function getDesktopCommandMenuEntries(
@@ -251,13 +250,8 @@ export function dispatchDesktopCommand(
 
 export function buildDesktopSettingsTabMessage(
   tab: SettingsTarget,
-  agentSubTab?: AgentCategory,
 ): DesktopSettingsTabMessage {
-  return {
-    command: SETTINGS_VIEW_COMMANDS.SET_TAB,
-    tab,
-    ...(agentSubTab && { agentSubTab }),
-  };
+  return { command: SETTINGS_VIEW_COMMANDS.SET_TAB, tab };
 }
 
 /**
@@ -268,11 +262,10 @@ export function buildDesktopSettingsTabMessage(
 export function postDesktopSettingsView(
   postToRenderer: (message: unknown) => void,
   tab?: SettingsTarget,
-  agentSubTab?: AgentCategory,
 ): void {
   postToRenderer({
     command: DESKTOP_SHELL_COMMANDS.OPEN_SETTINGS,
   });
   if (tab == null) return;
-  postToRenderer(buildDesktopSettingsTabMessage(tab, agentSubTab));
+  postToRenderer(buildDesktopSettingsTabMessage(tab));
 }

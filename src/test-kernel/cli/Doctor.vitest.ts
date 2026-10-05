@@ -243,7 +243,7 @@ describe('CLI doctor', () => {
     const repoRoot = fileURLToPath(new URL('../../..', import.meta.url));
     const publishedRanges = [
       TEXRA_CLI_SUPPORTED_NODE_RANGE,
-      ...['packages/cli', 'packages/agent'].map(
+      ...['packages/cli', 'packages/harness'].map(
         (packageDir) =>
           (
             JSON.parse(

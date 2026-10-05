@@ -1,0 +1,103 @@
+{
+  "name": "@texra-ai/harness",
+  "version": "0.41.0",
+  "description": "Embeddable TeXRA agent runtime",
+  "license": "Apache-2.0",
+  "author": "TeXRA.ai",
+  "homepage": "https://texra.ai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LionSR/TeXRA.git"
+  },
+  "bugs": {
+    "url": "https://github.com/LionSR/TeXRA/issues"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "LICENSE.txt",
+    "NOTICE.txt"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/types/packages/harness/src/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schemas": {
+      "types": "./dist/types/packages/harness/src/schemas.d.ts",
+      "import": "./dist/schemas.js"
+    },
+    "./plugins": {
+      "types": "./dist/types/packages/harness/src/plugins.d.ts",
+      "import": "./dist/plugins.js"
+    },
+    "./node": {
+      "types": "./dist/types/packages/harness/src/node.d.ts",
+      "import": "./dist/node.js"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "example:packed": "npm run build && rm -f example/*.tgz && corepack pnpm pack --pack-destination example && mv example/texra-ai-harness-*.tgz example/harness.tgz && cd example && npm install ./harness.tgz && npm start",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "catalog:",
+    "@cantoo/pdf-lib": "catalog:",
+    "@date-fns/tz": "catalog:",
+    "@effect/platform-node": "catalog:",
+    "@effect/sql-sqlite-node": "catalog:",
+    "@google/genai": "catalog:",
+    "@jitl/quickjs-wasmfile-release-sync": "catalog:",
+    "@openrouter/sdk": "catalog:",
+    "acorn": "catalog:",
+    "acorn-walk": "catalog:",
+    "date-fns": "catalog:",
+    "diff": "catalog:",
+    "diff-match-patch": "catalog:",
+    "escape-string-regexp": "catalog:",
+    "glob": "catalog:",
+    "http-status-codes": "catalog:",
+    "ignore": "catalog:",
+    "image-size": "catalog:",
+    "ipaddr.js": "catalog:",
+    "is-wsl": "catalog:",
+    "llm-zoo": "catalog:",
+    "lru-cache": "catalog:",
+    "mime-types": "catalog:",
+    "nanoid": "catalog:",
+    "nunjucks": "catalog:",
+    "openai": "catalog:",
+    "pathe": "catalog:",
+    "postal-mime": "catalog:",
+    "pretty-bytes": "catalog:",
+    "pretty-ms": "catalog:",
+    "quickjs-emscripten-core": "catalog:",
+    "safe-stable-stringify": "catalog:",
+    "shell-quote": "catalog:",
+    "strip-ansi": "^7.2.0",
+    "turndown": "catalog:",
+    "turndown-plugin-gfm": "catalog:",
+    "undici": "catalog:",
+    "which": "catalog:",
+    "write-file-atomic": "catalog:",
+    "ws": "^8.22.0",
+    "yaml": "catalog:"
+  },
+  "peerDependencies": {
+    "effect": "4.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@typescript/native": "catalog:",
+    "effect": "catalog:",
+    "esbuild": "catalog:",
+    "typescript": "catalog:",
+    "zod": "catalog:"
+  }
+}

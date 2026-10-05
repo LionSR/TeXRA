@@ -18,7 +18,7 @@ const DEFAULT_AGENT_PRIORITY: readonly string[] = [
 ];
 
 /**
- * Pick the implicit default tool-use agent from the visible agents, so the
+ * Pick the implicit default chat agent from the visible agents, so the
  * default follows whatever single agent or team the user applied:
  *
  *  1. the built-in default ({@link BUILTIN_DEFAULT_CHAT_AGENT}) when visible —
@@ -30,7 +30,7 @@ const DEFAULT_AGENT_PRIORITY: readonly string[] = [
  *  3. otherwise the first visible candidate.
  *
  * The trailing {@link BUILTIN_DEFAULT_CHAT_AGENT} only applies when no candidate
- * is visible at all (an empty/undefined agent list — e.g. every tool-use agent
+ * is visible at all (an empty/undefined agent list — e.g. every chat agent
  * disabled). That is a deliberate last resort: it keeps `texra chat` usable by
  * falling back to the universal assistant rather than refusing to start. The
  * returned name may then sit outside a scoped agent list — `resolveChatToolUseAgent`

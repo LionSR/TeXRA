@@ -17,7 +17,6 @@ import {
   type SessionView,
   type RunView,
 } from '@shared/session/sessionView';
-import type { Shell } from '@shared/session/shell';
 import { emptySurface, type Surface } from '@shared/session/surface';
 import {
   BOARD_NOW,
@@ -29,6 +28,7 @@ import {
   OWNER,
   tail,
 } from '@test/shared/session/fanOutScenario';
+import type { Shell } from '@texra/shared/session/shell';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // ── fixtures: three projects, three folded views ────────────────────────────
@@ -314,10 +314,7 @@ function sceneDesktopEmptyProject(): TemplateResult {
       projects,
       co,
       undefined,
-      html`<new-task-hero
-        .projectName=${co.display.name}
-        .instruction=${''}
-      ></new-task-hero>`,
+      html`<new-task-hero .projectName=${co.display.name}></new-task-hero>`,
     ),
   );
 }

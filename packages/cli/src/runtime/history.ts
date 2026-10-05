@@ -12,20 +12,20 @@ import {
   type RunResult,
 } from '@agent/storage';
 import type { AgentConfig, SessionHandle } from '@agent/runtime';
-import { loadChatExportInput, type ChatExportInput } from '@agent/export';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
   RunIdSchema,
   aggregateTarget,
   HISTORY_RUN_STATUS,
   HISTORY_RUN_STATUS_LABEL,
+  isDocumentTaskConfig,
   RUN_SUBSTATE,
   type RunId,
   type HistoryRunStatus,
 } from '@shared/schemas';
-import type { SessionOpenError } from '@shared/session/database';
 import type { RunView } from '@shared/session/sessionView';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
+import { loadChatExportInput, type ChatExportInput } from '@texra/agent/export';
 import {
   listRunGeneratedFiles,
   type RunGeneratedFile,
@@ -50,6 +50,7 @@ import {
   formatConversationPreview,
   formatConversationTranscript,
 } from './history/conversationFormat';
+import type { SessionOpenError } from '@texra-ai/harness';
 
 /** A run's generated files and its edited workspace files render alike.
  *  First group wins on a path collision; generated output precedes workspace. */
@@ -76,7 +77,8 @@ export interface CliHistoryEntry {
    *  Independent of the frozen `status`: a failed run can be resumable. */
   readonly resumable: boolean;
   readonly inputBasename: string;
-  readonly category?: string;
+  /** A document task's run, or a chat. */
+  readonly kind?: 'task' | 'chat';
   readonly description?: string;
   readonly teamId?: string;
   readonly parentRunId?: RunId;
@@ -496,7 +498,7 @@ export function formatCliHistoryDetailsText(
   ) {
     lines.push(`Startup model: ${config.model}`);
   }
-  if (config?.agentCategory) lines.push(`Category: ${config.agentCategory}`);
+  if (config) lines.push(`Kind: ${runKindOf(config)}`);
   if (cliOutputFile) lines.push(`CLI output: ${cliOutputFile}`);
   if (run?.parentId) lines.push(`Parent: ${run.parentId}`);
   if (run?.description) lines.push(`Description: ${run.description}`);
@@ -512,7 +514,10 @@ export function formatCliHistoryDetailsText(
     lines.push('', formatConversationPreview(details.conversationPreview));
   }
   const shown = config
-    ? serializeFilteredConfig(config, config.agentCategory)
+    ? serializeFilteredConfig(
+        config,
+        runKindOf(config) === 'task' ? 'task' : 'agent',
+      )
     : '{}';
   const files = details.files.map(
     (file) => `${file.isDirectory ? '<dir>' : file.size}\t${file.path}`,
@@ -543,11 +548,16 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
     status,
     resumable,
     inputBasename,
-    category: config.agentCategory,
+    kind: runKindOf(config),
     description: entry.description,
     teamId: teamIdOf(config),
     parentRunId: entry.parentRunId,
   };
+}
+
+/** A document task's run, or a chat: what its launch config ran. */
+function runKindOf(config: AgentConfig): 'task' | 'chat' {
+  return isDocumentTaskConfig(config) ? 'task' : 'chat';
 }
 
 function teamIdOf(config: AgentConfig | null): string | undefined {

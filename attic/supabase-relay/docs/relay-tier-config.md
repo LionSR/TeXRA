@@ -156,7 +156,7 @@ interface TierModelConfig {
 
 ## Model Names
 
-Model names must match the short names defined by the [`llm-zoo`](https://www.npmjs.com/package/llm-zoo) package's `MODEL_CONFIGS` — the same source of truth `src/model/modelOptionsBasic.ts` and the relay function (`supabase/functions/relay/models.ts`) both import.
+Model names must match the short names defined by the [`llm-zoo`](https://www.npmjs.com/package/llm-zoo) package's `MODEL_CONFIGS` — the same source of truth `packages/harness/src/model/modelOptionsBasic.ts` and the relay function (`supabase/functions/relay/models.ts`) both import.
 
 ::: warning Auto-derived snapshot
 The model rows and prices below are a **snapshot of `llm-zoo` `MODEL_CONFIGS`**. The relay builds its model list and tier assignments automatically from that package (see [Single Source of Truth](#single-source-of-truth)), so individual IDs and prices here drift whenever `llm-zoo` is bumped. Treat the tables as illustrative and re-derive from `MODEL_CONFIGS` before relying on a specific value.
@@ -278,5 +278,5 @@ No extension update required.
 - `supabase/functions/relay/index.ts` - Single source of truth for tier models
 - `src/auth/tier/TierService.ts` - Tier configuration fetching and caching
 - `src/auth/serverKeys/ServerSideKeyService.ts` - Server-side key access logic
-- `src/model/computeModelOptions.ts` - Model availability computation
+- `packages/harness/src/model/computeModelOptions.ts` - Model availability computation
 - `src/profileView/` - UI for displaying tier access info

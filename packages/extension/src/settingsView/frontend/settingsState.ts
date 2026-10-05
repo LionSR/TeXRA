@@ -22,7 +22,6 @@
  */
 
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
-import { createTrackedSignalRegistry, Signal } from '@shared/signals';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
@@ -30,7 +29,6 @@ import {
 import {
   AGENT_SKILLS_CONFIG_KEY,
   BASH_APPROVAL_CONFIG_KEY,
-  byCategory,
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   GOAL_MAX_COST_SETTING,
@@ -39,13 +37,19 @@ import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   TELEMETRY_ENABLED_KEY,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
-  type AgentCategory,
   type AgentModePreset,
-  type ByCategory,
   type SkillDisplayIssue,
   type SkillDisplayItem,
   type SubscriptionUsageSnapshots,
 } from '@shared/schemas';
+import type { AgentScanIssue } from '@shared/schemas';
+import type { MemoryViewItem } from '@shared/tools/memoryView';
+import type { SubscriptionAuthStatuses } from '@shared/model/subscriptionAuth';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import {
+  TEXRA_SETTINGS,
+  TexraStateKey,
+} from '@texra/shared/settingsView/texraSettings';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   type AgentSelectionItem,
@@ -56,15 +60,9 @@ import {
   type SettingsSectionName,
   type SettingsTabPanelName,
   type SettingsViewOutboundMessage,
-} from '@shared/settingsView/settingsViewMessages';
-import type { AgentScanIssue } from '@shared/schemas';
-import type { MemoryViewItem } from '@shared/tools/memoryView';
-import type { SubscriptionAuthStatuses } from '@shared/model/subscriptionAuth';
-import {
-  TEXRA_SETTINGS,
-  TexraStateKey,
-} from '@shared/settingsView/texraSettings';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+} from '@texra/shared/settingsView/settingsViewMessages';
+import { createTrackedSignalRegistry, Signal } from '@texra/shared/signals';
+import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 
 // ---------------------------------------------------------------------------
 // Reset registry — populated by `trackedSignal` as each signal below is
@@ -166,15 +164,12 @@ export const copilotRouteInfos = trackedSignal<CopilotRouteInfo[]>(() => []);
 // ---------------------------------------------------------------------------
 // Agent selection state
 // ---------------------------------------------------------------------------
-export const agentSelectionItems = trackedSignal<
-  ByCategory<AgentSelectionItem[]>
->(() => byCategory(() => []));
+export const agentSelectionItems = trackedSignal<AgentSelectionItem[]>(
+  () => [],
+);
 export const customAgentDir = trackedSignal(() => '');
 export const customAgentDirIsDefault = trackedSignal(() => true);
 export const customAgentScanIssues = trackedSignal<AgentScanIssue[]>(() => []);
-export const agentSubTab = trackedSignal<AgentCategory | undefined>(
-  () => undefined,
-);
 
 // ---------------------------------------------------------------------------
 // Agent teams state
@@ -298,22 +293,22 @@ export const latexSettingsStatus = trackedSignal(() => ({
 }));
 export const latexSettingsLoaded = trackedSignal(() => false);
 export const workflowAutoCompile = settingSignal<boolean>(
-  TexraStateKey.WORKFLOW_AUTO_COMPILE,
+  DocumentsStateKey.WORKFLOW_AUTO_COMPILE,
 );
 export const workflowAutoOpenPdf = settingSignal<boolean>(
-  TexraStateKey.WORKFLOW_AUTO_OPEN_PDF,
+  DocumentsStateKey.WORKFLOW_AUTO_OPEN_PDF,
 );
 export const workflowRejectOnCompileFailure = settingSignal<boolean>(
-  TexraStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+  DocumentsStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
 );
 export const latexdiffBetweenRounds = settingSignal<boolean>(
-  TexraStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+  DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS,
 );
 export const latexdiffChangesOnly = settingSignal<boolean>(
-  TexraStateKey.LATEXDIFF_CHANGES_ONLY,
+  DocumentsStateKey.LATEXDIFF_CHANGES_ONLY,
 );
 export const latexdiffMathMarkup = settingSignal<string>(
-  TexraStateKey.LATEXDIFF_MATH_MARKUP,
+  DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
 );
 export const latexFormatter = settingSignal<string>(
   TexraStateKey.LATEX_FORMATTER,

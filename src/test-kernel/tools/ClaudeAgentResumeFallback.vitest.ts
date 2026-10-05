@@ -19,8 +19,8 @@ import type { RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { noPluginHold } from '@test/support/testPluginServices';
-import { ClaudeAgentSessions as ClaudeAgentSessionsService } from '@tools/agentCliSessionStores';
-import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
+import { ClaudeAgentSessions as ClaudeAgentSessionsService } from '@texra/tools/agentCliSessionStores';
+import { AgentCliSessionRegistry } from '@texra/tools/agentCliSessionRegistry';
 
 const mocks = vi.hoisted(() => ({
   registerRun: vi.fn(),
@@ -86,17 +86,17 @@ vi.mock('@agent/runtime/childRunLoop', () => ({
   startChildRunLoop: mocks.startChildRunLoop,
 }));
 
-vi.mock('@tools/claudeAgentConfig', () => ({
+vi.mock('@texra/tools/claudeAgentConfig', () => ({
   buildClaudeAgentEnv: mocks.buildClaudeAgentEnv,
 }));
 
-vi.mock('@tools/claudeAgentImport', async (importActual) => ({
-  ...(await importActual<typeof import('@tools/claudeAgentImport')>()),
+vi.mock('@texra/tools/claudeAgentImport', async (importActual) => ({
+  ...(await importActual<typeof import('@texra/tools/claudeAgentImport')>()),
   importClaudeAgentSdk: () => Effect.succeed(mocks.query),
   findClaudeBinaryPath: mocks.findClaudeBinaryPath,
 }));
 
-import { ClaudeAgentTool, runStreamedTurn } from '@tools/claudeAgent';
+import { ClaudeAgentTool, runStreamedTurn } from '@texra/tools/claudeAgent';
 import { createFakeAgentCliChildRun } from '../support/agentCliResumeTestUtils';
 
 const parentRunId = 'parent-run' as RunId;
@@ -308,7 +308,12 @@ describe('claude_agent tool launch and resume fallback', () => {
         yield* loopParams.strategy.launch(
           fakePorts(),
           new AbortController().signal,
-          { turnPermit: (turn) => turn, onTurnBoundary: () => Effect.void },
+          {
+            turnPermit: (turn) => turn,
+            settleBoundary: () =>
+              Effect.succeed({ rows: [], settled: Effect.void }),
+            settleEnd: () => Effect.succeed([]),
+          },
         );
 
         expect(mocks.query).toHaveBeenCalledTimes(1);
@@ -354,7 +359,12 @@ describe('claude_agent tool launch and resume fallback', () => {
         yield* loopParams.strategy.launch(
           fakePorts(),
           new AbortController().signal,
-          { turnPermit: (turn) => turn, onTurnBoundary: () => Effect.void },
+          {
+            turnPermit: (turn) => turn,
+            settleBoundary: () =>
+              Effect.succeed({ rows: [], settled: Effect.void }),
+            settleEnd: () => Effect.succeed([]),
+          },
         );
         const [callArgs] = mocks.query.mock.calls[0] as [
           { options: { model?: string; effort?: string; thinking?: unknown } },
@@ -422,7 +432,12 @@ describe('claude_agent tool launch and resume fallback', () => {
       const turn = yield* captured.strategy.launch(
         fakePorts(),
         new AbortController().signal,
-        { turnPermit: (turn) => turn, onTurnBoundary: () => Effect.void },
+        {
+          turnPermit: (turn) => turn,
+          settleBoundary: () =>
+            Effect.succeed({ rows: [], settled: Effect.void }),
+          settleEnd: () => Effect.succeed([]),
+        },
       );
       if (!turn) throw new Error('Expected a Claude turn result');
       captured.strategy?.publishUsage?.(turn);
@@ -686,7 +701,12 @@ describe('claude_agent tool launch and resume fallback', () => {
         const firstTurn = yield* captured.strategy.launch(
           ports,
           new AbortController().signal,
-          { turnPermit: (turn) => turn, onTurnBoundary: () => Effect.void },
+          {
+            turnPermit: (turn) => turn,
+            settleBoundary: () =>
+              Effect.succeed({ rows: [], settled: Effect.void }),
+            settleEnd: () => Effect.succeed([]),
+          },
         );
         if (!firstTurn) throw new Error('Expected a Claude fork turn');
         captured.strategy?.onTurnSuccess?.(firstTurn, {
@@ -771,7 +791,12 @@ describe('claude_agent tool launch and resume fallback', () => {
       const firstTurn = yield* captured.strategy.launch(
         ports,
         new AbortController().signal,
-        { turnPermit: (turn) => turn, onTurnBoundary: () => Effect.void },
+        {
+          turnPermit: (turn) => turn,
+          settleBoundary: () =>
+            Effect.succeed({ rows: [], settled: Effect.void }),
+          settleEnd: () => Effect.succeed([]),
+        },
       );
       expect(firstTurn).toMatchObject({
         isError: true,

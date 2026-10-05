@@ -7,7 +7,6 @@ import { beforeEach, describe, expect } from 'vitest';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import {
   resolveGlobalStoragePath,
@@ -17,7 +16,6 @@ import {
   aggregateId,
   LOG_LEVELS,
   MESSAGE_TYPES,
-  AgentCategory,
   DEFAULT_TOOL_CONFIG,
 } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
@@ -30,6 +28,7 @@ import { installPlatform } from '@test/support/setupPlatform';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { seedRunRecord } from '@test/support/runRecordSeeds';
+import { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
 
 const TEMPLATE =
   '<!doctype html><html><head><title>t</title>' +
@@ -73,7 +72,6 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
     agent: 'orchestrator',
     model: 'deepseek/deepseek-v4-flash',
     instruction: 'Solve the problem.',
-    agentCategory: AgentCategory.ToolUse,
     editedFiles: [],
     toolConfig: DEFAULT_TOOL_CONFIG,
     memories: [],

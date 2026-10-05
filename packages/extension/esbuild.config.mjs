@@ -1,6 +1,7 @@
 // @ts-check
 import * as esbuild from 'esbuild';
 
+import { buildIdentityDefine } from '../../scripts/build-identity.mjs';
 import { codeSandboxWorker } from '../../scripts/code-sandbox-worker.mjs';
 import { stubInternalValidationModel } from '../../scripts/stub-internal-validation-model.mjs';
 
@@ -41,6 +42,7 @@ const extensionConfig = {
       `var importMetaUrl = require("url").pathToFileURL(__filename).href;`,
   },
   define: {
+    ...buildIdentityDefine(),
     'process.env.NODE_ENV': production ? '"production"' : '"development"',
     'import.meta.url': 'importMetaUrl',
   },

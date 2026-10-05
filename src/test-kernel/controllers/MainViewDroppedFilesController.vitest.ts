@@ -6,9 +6,9 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { attachDroppedFiles } from '@controllers/mainView/MainViewDroppedFilesController';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { attachDroppedFiles } from '@texra/controllers/mainView/MainViewDroppedFilesController';
 
 const CONTEXT_EXTENSIONS = ['.bib', '.bbl', '.cls', '.sty', '.txt'];
 

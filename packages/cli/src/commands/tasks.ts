@@ -9,11 +9,9 @@ import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 
 import { AgentConfigSchema, type AgentConfigPayload } from '@agent/runtime';
-import type { ServiceClient } from '@controllers/server/client';
-import type { TaskSummary } from '@controllers/server/protocol';
-import { AgentCategory, type RunId } from '@shared/schemas';
-import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { RequestErrorWire } from '@shared/session/sessionFrames';
+import type { TaskSummary } from '@texra/controllers/server/protocol';
+import type { ServiceClient } from '@texra/controllers/server/client';
 import { generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -31,6 +29,8 @@ import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
+import type { Outcome, RuntimeRequest } from '@texra-ai/harness';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The text width an attach lays rows out at when stdout is not a terminal,
  *  so a saved transcript does not depend on who saved it. */
@@ -69,10 +69,7 @@ function requestTask(
   request: (runId: RunId) => RuntimeRequest,
 ) {
   return Effect.gen(function* () {
-    const { client } = yield* connectCliService(
-      context.storageRoot,
-      context.version,
-    );
+    const { client } = yield* connectCliService(context.storageRoot);
     const task = yield* findTask(client, id);
     const outcome: Outcome = yield* client['task.request']({
       workspace: task.workspace,
@@ -102,10 +99,7 @@ const listCommand = defineCliCommand({
   catchExitCode: CliExitCode.AgentError,
   run: (context) =>
     Effect.gen(function* () {
-      const { client } = yield* connectCliService(
-        context.storageRoot,
-        context.version,
-      );
+      const { client } = yield* connectCliService(context.storageRoot);
       const tasks = yield* client['tasks.list']({ all: false });
       emitCliResult(context, {
         json: tasks,
@@ -133,10 +127,7 @@ const attachCommand = defineCliCommand({
         '`texra tasks attach` prints text or NDJSON (`--output-format ndjson`), not JSON.',
       );
     return Effect.gen(function* () {
-      const { client } = yield* connectCliService(
-        context.storageRoot,
-        context.version,
-      );
+      const { client } = yield* connectCliService(context.storageRoot);
       const task = yield* findTask(client, ctx.args.id);
       const outcome = yield* attachTask(client, task, {
         format: context.outputFormat === 'ndjson' ? 'ndjson' : 'text',
@@ -156,14 +147,14 @@ const startCommand = defineCliCommand({
   meta: {
     name: 'start',
     description:
-      'Start a tool-use agent as a task in the TeXRA service and print its id',
+      'Start an agent as a task in the TeXRA service and print its id',
   },
   args: {
     ...GLOBAL_ARGS,
     agent: {
       type: 'positional',
       required: true,
-      description: 'Tool-use agent name from `texra agents list`',
+      description: 'Agent name from `texra agents list`',
     },
     instruction: {
       type: 'string',
@@ -182,12 +173,6 @@ const startCommand = defineCliCommand({
         );
       const services = yield* initCliPlatform(context);
       const agent = yield* resolveCliRunAgent(services, ctx.args.agent);
-      if (agent.category !== AgentCategory.ToolUse)
-        return yield* Effect.fail(
-          new CliUsageError(
-            `"${ctx.args.agent}" is a ${agent.category} agent; \`texra tasks start\` runs tool-use agents.`,
-          ),
-        );
       const model = yield* selectCliRunModel(
         context,
         optString(ctx.args.model),
@@ -207,7 +192,6 @@ const startCommand = defineCliCommand({
         }),
         displayInstruction: instruction,
         workingDirectory: context.cwd,
-        agentCategory: AgentCategory.ToolUse,
       };
       const config = yield* Effect.try({
         try: () => AgentConfigSchema.parse(payload),
@@ -215,10 +199,7 @@ const startCommand = defineCliCommand({
       });
       const runId = yield* Effect.scoped(
         Effect.gen(function* () {
-          const { client } = yield* connectCliService(
-            context.storageRoot,
-            context.version,
-          );
+          const { client } = yield* connectCliService(context.storageRoot);
           // This command's approval policy (its flag, `--no-input`, or the
           // config) becomes the project's in the service before the task
           // starts, so the task runs under what this command was asked.

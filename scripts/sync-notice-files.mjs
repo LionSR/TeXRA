@@ -19,7 +19,7 @@ const rootDir = path.resolve(
 
 /** Every package whose published artifact carries its own attribution copy. */
 const PACKAGE_NOTICES = [
-  'packages/agent/NOTICE.txt',
+  'packages/harness/NOTICE.txt',
   'packages/cli/NOTICE.txt',
   'packages/desktop/NOTICE.txt',
   'packages/extension/NOTICE.txt',

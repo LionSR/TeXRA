@@ -1,0 +1,77 @@
+import type { z } from 'zod';
+
+import type { RunId } from './identifiers';
+import type { FileLocation } from './output';
+import type { RoundKeyedOutputSidecarValueSchemas } from './runState';
+
+/**
+ * Shared output-file and host-presentation payloads. Session state is
+ * defined by SessionEvent.
+ */
+
+export interface AddOutputFilesPayload {
+  runId: RunId;
+  filesByRound: z.infer<typeof RoundKeyedOutputSidecarValueSchemas.outputFiles>;
+}
+
+/**
+ * Host-agnostic action tokens for {@link RequestShowInstructionPayload}.
+ * The agent core emits a token; each host maps it to its own UI affordance
+ * (the VS Code extension to a command + button title, other hosts as they see
+ * fit). This keeps host-specific command IDs and labels out of the VS Code-free
+ * agent core.
+ */
+export const INSTRUCTION_ACTION = {
+  SET_API_KEY: 'set-api-key',
+  OPEN_CONFIGURATION_GUIDE: 'open-configuration-guide',
+  OPEN_MODELS_DOC: 'open-models-doc',
+} as const;
+
+export type InstructionAction =
+  (typeof INSTRUCTION_ACTION)[keyof typeof INSTRUCTION_ACTION];
+
+/** Request the frontend to open a file (and build+display if LaTeX). */
+export interface RequestOpenFilePayload {
+  location: FileLocation;
+  preserveFocus: boolean;
+}
+
+/** Request the frontend to show a suppressible instruction message. */
+export interface RequestShowInstructionPayload {
+  key: string;
+  message: string;
+  /**
+   * Host-agnostic action tokens rendered as buttons. The host maps each
+   * token to its own UI affordance (see {@link INSTRUCTION_ACTION}).
+   */
+  actions?: InstructionAction[];
+  showSuppress?: boolean;
+}
+
+/** Request the frontend to show the agent-config banner in the main webview,
+ *  for the agent that could not launch. */
+export interface ShowAgentConfigBannerPayload {
+  agentName: string;
+}
+
+/** Request the frontend to show an error message via a host notification. */
+export interface RequestShowErrorPayload {
+  message: string;
+  /** Docs page of the refusing request (e.g. 'file-management'); the host
+   *  offers it as a guide link or action beside the message. */
+  docsCommand?: string;
+}
+
+/**
+ * Request the frontend to ensure the progress view is visible.
+ * If the view cannot be opened and a fallback notification is provided,
+ * show a toast notification as a last resort.
+ */
+export interface RequestEnsureProgressViewPayload {
+  fallbackNotification?: {
+    agentName: string;
+    modelName: string;
+    inputName: string;
+    outputInfo: string;
+  };
+}

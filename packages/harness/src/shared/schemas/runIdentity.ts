@@ -1,0 +1,57 @@
+import { z } from 'zod';
+
+// Local imports
+import { agentName } from './agent';
+
+/**
+ * What kind of thing a run is, declared once at the launch site and carried
+ * on `run.start`. The struct itself travels: on `run.start`, on `RunView`,
+ * on child rows, and hosts add display fields beside it, never
+ * re-encodings of it.
+ */
+export const RunIdentitySchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('agent'),
+    /** The run config's agent identifier, possibly source-qualified
+     * ("custom:name") — the same value `AgentConfig.agent` carries. */
+    agent: z.string().min(1),
+    /** External CLI driving this agent ("codex", "claude_code"); absent for native. */
+    tool: z.string().min(1).optional(),
+  }),
+  z.strictObject({ kind: z.literal('process'), tool: z.string().min(1) }),
+  /** A `script` call sent to the background: one run that runs it. */
+  z.strictObject({ kind: z.literal('script'), title: z.string().min(1) }),
+]);
+
+export type RunIdentity = z.infer<typeof RunIdentitySchema>;
+
+/** Whether an identity denotes a native agent rather than an external CLI. */
+export function isPlainAgentIdentity(
+  identity: RunIdentity | null | undefined,
+): boolean {
+  return identity?.kind === 'agent' && identity.tool === undefined;
+}
+
+/** Whether TeXRA's own loop drives the run, so a resume can continue it: a
+ *  native agent's or a background script's. A process or an external CLI
+ *  drives its own run. */
+export function isLoopDriven(identity: RunIdentity): boolean {
+  return isPlainAgentIdentity(identity) || identity.kind === 'script';
+}
+
+/** The identity's display name — what a listing row or tab label leads with. */
+export function runIdentityName(id: RunIdentity): string {
+  switch (id.kind) {
+    case 'agent':
+      return id.agent;
+    case 'process':
+      return id.tool;
+    case 'script':
+      return id.title;
+  }
+}
+
+/** UI label for a run identity — strips a known source prefix from agent ids. */
+export function runIdentityDisplayName(id: RunIdentity): string {
+  return agentName(runIdentityName(id));
+}

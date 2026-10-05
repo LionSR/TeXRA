@@ -52,7 +52,7 @@ async function endRun(outcome: RunOutcome): Promise<void> {
       type: 'run.end',
       aggregateId: aggregateId('run', RUN_ID),
       outcome,
-      output: emptyRunEndOutput('toolUse'),
+      output: emptyRunEndOutput(),
     },
   ]);
   await vi.waitFor(() => {

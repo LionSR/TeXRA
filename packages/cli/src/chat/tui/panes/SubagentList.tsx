@@ -1,12 +1,12 @@
 import { Box, Text, useInput, useWindowSize } from 'ink';
 import { useMemo } from 'react';
 
+import { type RunId } from '@texra-ai/harness/schemas';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { TICK } from '@cli/tui/ui/glyphs';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
-import { type RunId } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
 import { formatLoopPositionLabel } from '@shared/runs/runStatusDisplay';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -104,7 +104,7 @@ function SessionRow({
     nowMs,
   );
   const approval = pendingApprovalRowDisplay(pendingKinds);
-  const positionLabel = formatLoopPositionLabel(run.position);
+  const positionLabel = formatLoopPositionLabel(run.turn);
   const modelLabel = run.parentId === null ? undefined : run.modelLabel;
   const metadataText = metadataColumn
     ? childRowMetadataText({

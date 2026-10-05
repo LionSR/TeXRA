@@ -16,6 +16,15 @@ tasks are shared across surfaces. Browse them with `texra history list` in the t
 button of the TeXRA view in VS Code.
 :::
 
+::: info Background service
+On macOS and Linux, a VS Code window runs its tasks in the background TeXRA
+service, the same one `texra chat` uses. A task keeps running when its window
+closes, and another window, or `/tasks` in a terminal, can follow it. The
+window's editor still serves those tasks: diagnostics, inline criticism,
+opening a PDF and the editable diff of a proposed edit. If the service cannot
+start, the window runs its tasks itself and says so once.
+:::
+
 <CliHistoryHero />
 
 <p class="hero-caption">The board's tasks, from a terminal: one tab-separated row each. <code>texra resume</code> picks a stored task back up.</p>
@@ -65,7 +74,7 @@ The header provides a summary and actions for the selected stream:
 
 <p class="hero-caption">The status dot: green while running, blue while waiting for input, gray once finished, red on error.</p>
 
-- **Token and cost summary**: Displays the combined input and output token counts from all completed rounds (e.g., `r0`, `r1`, `r2`, …) along with the estimated cost.
+- **Token and cost summary**: Displays the combined input and output token counts from all completed revisions (e.g., `r0`, `r1`, `r2`, …) along with the estimated cost.
 - **One header row**: the Tasks button, the task's title, its status and
   time, **Stop** while it runs, **New task**, and one **More** menu (⋯).
   A workflow task also shows which pass it is on, as **Pass 2 of 3**.
@@ -128,9 +137,9 @@ A small percentage next to the token count shows how full the model's context wi
 
 ### After a workflow run
 
-To follow up on a finished workflow in chat, use **Copy diagnostics** in the
+To follow up on a finished document task in chat, use **Copy diagnostics** in the
 header menu to put the task's output paths and compile failures on the
-clipboard, then start a tool-use chat from the **New** view and paste that text
+clipboard, then start a chat from the **New** view and paste that text
 into the instruction box.
 
 When a run recorded a compile failure, **Fix compile errors** still appears under
@@ -138,13 +147,13 @@ When a run recorded a compile failure, **Fix compile errors** still appears unde
 
 ### Memory
 
-Tool-use agents can remember things between sessions. When memory is enabled (toggle in the Settings **Memory** tab), agents save useful notes about your project. You can browse, pin, and delete these notes from the **Memory** tab in Settings, reached with **TeXRA: Open Settings**. Read the [memory guide](./memory.md) for a full walkthrough.
+Agents can remember things between sessions. When memory is enabled (toggle in the Settings **Memory** tab), agents save useful notes about your project. You can browse, pin, and delete these notes from the **Memory** tab in Settings, reached with **TeXRA: Open Settings**. Read the [memory guide](./memory.md) for a full walkthrough.
 
 ### Log content
 
 This scrollable area displays the detailed, timestamped logs for the selected agent run.
 
-- **Structure**: Logs are organized into expandable groups (e.g., `Initialization`, `Round 0`, `Model Operation`). Response cycles are logged within the corresponding round group. Select the arrow next to a group name to expand or collapse it.
+- **Structure**: Logs are organized into expandable groups (e.g., `Initialization`, `Revision 1`, `Model Operation`). Response cycles are logged within the corresponding revision group. Select the arrow next to a group name to expand or collapse it.
 - **Log levels**: Messages are prefixed with levels like `INFO`, `DEBUG`, `WARN`, `ERROR` to indicate severity. Verbose debug messages (`DEBUG`) are only shown when `texra.logger.debugMode` is set to `true` in `<project>/.texra/config.json` or `~/.texra/v1/global-storage/config.json`; TeXRA does not read VS Code settings.
 - **Agent thinking**: The log highlights model reasoning in purple **Thinking** blocks. These sections are flagged internally with a `thinking` type so you can spot when the model is exploring ideas.
 - **Errors**: Errors are highlighted and often show what went wrong.

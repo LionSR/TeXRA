@@ -3,18 +3,16 @@ import '@test/support/defaultSessionTestSetup';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { planToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
-import { texraPlugins } from '@tools/registry';
-import { toolTable } from '@tools/toolTable';
+import { planToolTerminalAction } from '@texra/controllers/settingsView/ToolDashboardData';
 
 const mocks = vi.hoisted(() => ({
   packageManager: null as 'brew' | 'apt' | 'scoop' | null,
   isWindows: false,
 }));
 
-vi.mock('@utils/system/toolUtils', async (importOriginal) => {
+vi.mock('@texra/utils/system/toolChecks', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('@utils/system/toolUtils')>();
+    await importOriginal<typeof import('@texra/utils/system/toolChecks')>();
   return {
     ...actual,
     hasPackageManager: (name: string) => name === mocks.packageManager,
@@ -31,8 +29,6 @@ vi.mock('@utils/system/platformPaths', async (importOriginal) => {
     },
   };
 });
-
-const PLUGINS = toolTable(texraPlugins()).entries;
 
 const CASES: Array<{
   name: string;
@@ -119,6 +115,6 @@ describe('planToolTerminalAction', () => {
     mocks.packageManager = packageManager ?? null;
     mocks.isWindows = isWindows ?? false;
 
-    expect(planToolTerminalAction(input, PLUGINS)).toEqual(expected);
+    expect(planToolTerminalAction(input)).toEqual(expected);
   });
 });

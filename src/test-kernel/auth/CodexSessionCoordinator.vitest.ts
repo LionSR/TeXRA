@@ -9,10 +9,11 @@ import { describe, expect, vi } from 'vitest';
 // Local imports
 import { SubscriptionOAuthError } from '@texra-ai/llm/node';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import { CodexSessionCoordinator } from '../../../packages/llm/src/oauth/codex/CodexSessionCoordinator.js';
-import type {
-  SubscriptionOAuthClient,
-  SubscriptionSessionStorage,
+import { CODEX_POLICY } from '../../../packages/llm/src/oauth/codex/codexSessionPolicy.js';
+import {
+  SubscriptionOAuthCoordinator,
+  type SubscriptionOAuthClient,
+  type SubscriptionSessionStorage,
 } from '../../../packages/llm/src/oauth/SubscriptionOAuthCoordinator.js';
 import type {
   CodexSession,
@@ -132,7 +133,7 @@ const withHttp = <A>(
 ): Effect.Effect<A, unknown> => Effect.provide(program, testHttpClientLayer);
 
 function loginWithCode(
-  coordinator: CodexSessionCoordinator,
+  coordinator: SubscriptionOAuthCoordinator<CodexSession>,
 ): Effect.Effect<CodexSession, unknown> {
   return withHttp(
     coordinator.loginWithCode({
@@ -181,9 +182,10 @@ const joinFailure = <A>(fiber: Fiber.Fiber<A, unknown>) =>
 function makeCoordinator(
   storage: SubscriptionSessionStorage,
   client: Partial<SubscriptionOAuthClient> = {},
-): CodexSessionCoordinator {
-  return new CodexSessionCoordinator({
+): SubscriptionOAuthCoordinator<CodexSession> {
+  return new SubscriptionOAuthCoordinator({
     storage,
+    policy: CODEX_POLICY,
     client: {
       exchangeAuthorizationCode: vi.fn(),
       refreshTokens: vi.fn(),

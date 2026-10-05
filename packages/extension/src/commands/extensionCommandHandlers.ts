@@ -6,17 +6,19 @@ import { API_KEY_PROVIDER_IDS, type ApiKeyProviderId } from '@texra-ai/llm';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
-import { AgentCategorySchema, type AgentCategory } from '@shared/schemas';
 import {
   SettingsTargetSchema,
   type SettingsTarget,
-} from '@shared/settingsView/settingsViewMessages';
+} from '@texra/shared/settingsView/settingsViewMessages';
 import {
   commandCatalog,
   settingsTabByCommand,
   type SettingsTabCommandId,
-} from '@shared/commands/catalog';
-import { definedHandler, type CommandHandler } from '@shared/commands/registry';
+} from '@texra/shared/commands/catalog';
+import {
+  definedHandler,
+  type CommandHandler,
+} from '@texra/shared/commands/registry';
 import type { Effect } from 'effect';
 
 /**
@@ -32,7 +34,7 @@ import type { Effect } from 'effect';
  * Catalog ids whose extension registration is driven by the shared
  * `dispatchCommandFromRegistry` handler map below, derived from the
  * `extensionRegistry: true` tag on `commandCatalog` entries
- * (`src/shared/commands/catalog.ts`) rather than a hand-mirrored id list.
+ * (`packages/texra/src/shared/commands/catalog.ts`) rather than a hand-mirrored id list.
  * Adding a new registry-driven command only requires tagging its catalog
  * entry — `EXTENSION_COMMAND_HANDLERS` failing to `satisfy` its `Record<>`
  * constraint below is the compile-time signal that a handler still needs
@@ -70,10 +72,7 @@ type CommandProgram<A = void> = Effect.Effect<
  * over the same `CommandId` union with their host-specific actions.
  */
 export interface ExtensionCommandActions {
-  showSettings(
-    tab?: SettingsTarget,
-    agentSubTab?: AgentCategory,
-  ): CommandProgram;
+  showSettings(tab?: SettingsTarget): CommandProgram;
   newTask(): CommandProgram;
   cleanBuild(): CommandProgram;
   signInChatGpt(): CommandProgram;
@@ -98,8 +97,6 @@ export interface ExtensionCommandActions {
 /**
  * `texra.show*` rows derived from the catalog's `settingsTab` field so the
  * command → tab mapping lives in one place (`settingsTabByCommand`).
- * `texra.showAgents` is re-declared below: it additionally accepts an
- * agent-category sub-tab argument.
  */
 const SETTINGS_TAB_COMMAND_HANDLERS = Object.fromEntries(
   (
@@ -162,11 +159,6 @@ export const EXTENSION_COMMAND_HANDLERS = {
     z.tuple([z.unknown().optional()]),
     (actions: ExtensionCommandActions, input?: unknown) =>
       actions.execute(input),
-  ),
-  'texra.showAgents': definedHandler(
-    z.tuple([AgentCategorySchema.optional()]),
-    (actions: ExtensionCommandActions, subTab?: AgentCategory) =>
-      actions.showSettings(settingsTabByCommand['texra.showAgents'], subTab),
   ),
 } as const satisfies Record<
   ExtensionRegistryCommandId,

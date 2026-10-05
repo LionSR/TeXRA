@@ -14,23 +14,15 @@ import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
 import { settingEnumOptions, settingByKey } from '@shared/state/stateSettings';
-import { dispatchSettingsViewOutbound } from '@shared/settingsView/settingsViewMessages';
 import type {
   SettingHost,
   StateSettingEntry,
 } from '@shared/state/stateSettings';
-import type { DerivedSettingsSnapshot } from '@shared/settingsView/settingsViewMessages';
-import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import {
   readSetting,
   resetSetting,
   writeSetting,
 } from '@shared/config/settingsAccess';
-import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
-import {
-  TEXRA_SETTINGS,
-  TexraStateKey,
-} from '@shared/settingsView/texraSettings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   FakeScopedConfigProvider,
@@ -42,6 +34,15 @@ import {
   isStored,
   makeFakeSettingsStores,
 } from '@test/support/settingsStoresFake';
+import {
+  TEXRA_SETTINGS,
+  TexraStateKey,
+} from '@texra/shared/settingsView/texraSettings';
+import { LATEX_CONFIG_DEFAULTS } from '@texra/shared/constants/latexConfig';
+import { buildSettingsSnapshotMessage } from '@texra/shared/settingsView/handlers/settingsSnapshot';
+import type { DerivedSettingsSnapshot } from '@texra/shared/settingsView/settingsViewMessages';
+import { dispatchSettingsViewOutbound } from '@texra/shared/settingsView/settingsViewMessages';
+import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { orchestratorKillDenial } from '@tools/executions/killPolicy';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
@@ -154,11 +155,11 @@ describe('catalog-derived settings snapshots', () => {
         const logs = captureLogEntries();
         const { stores, workspaceState } = makeFakeSettingsStores();
         yield* workspaceState.update(
-          TexraStateKey.WORKFLOW_AUTO_COMPILE,
+          DocumentsStateKey.WORKFLOW_AUTO_COMPILE,
           false,
         );
         yield* workspaceState.update(
-          TexraStateKey.LATEXDIFF_MATH_MARKUP,
+          DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
           'stale-bogus-value',
         );
         yield* workspaceState.update(TexraStateKey.LATEX_FORMATTER, 'tex-fmt');
@@ -171,11 +172,11 @@ describe('catalog-derived settings snapshots', () => {
 
           assert.equal(message.snapshot, 'latex');
           assert.equal(
-            message.values[TexraStateKey.WORKFLOW_AUTO_COMPILE],
+            message.values[DocumentsStateKey.WORKFLOW_AUTO_COMPILE],
             false,
           );
           assert.equal(
-            message.values[TexraStateKey.LATEXDIFF_MATH_MARKUP],
+            message.values[DocumentsStateKey.LATEXDIFF_MATH_MARKUP],
             LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup,
           );
           assert.equal(
@@ -205,7 +206,7 @@ describe('knownKeys derivation', () => {
     // so it must NOT be whitelisted there (a config.json entry is a no-op the
     // unknown-key warning should catch).
     assert.equal(
-      KNOWN_TEXRA_KEYS.has(TexraStateKey.WORKFLOW_AUTO_COMPILE),
+      KNOWN_TEXRA_KEYS.has(DocumentsStateKey.WORKFLOW_AUTO_COMPILE),
       false,
     );
   });
@@ -293,7 +294,7 @@ describe('settingsAccess', () => {
   it.effect('reset deletes the key so the default reappears', () =>
     Effect.gen(function* () {
       yield* assertResetRestoresDefault({
-        key: TexraStateKey.LATEXDIFF_CHANGES_ONLY,
+        key: DocumentsStateKey.LATEXDIFF_CHANGES_ONLY,
         host: 'vscode',
         storeName: 'workspaceState',
         expectedDefault: LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
@@ -371,7 +372,7 @@ describe('settingsAccess', () => {
   // #12710: the five Models-tab provider toggles declare `configTarget:
   // 'global'`, so `readSetting` resolves them on the global scope alone. The
   // run now reads them through the same catalog reader (`readSettingFrom` in
-  // `src/agent/runtime/run/modelBinding.ts`), where it used to read the
+  // `packages/harness/src/agent/runtime/run/modelBinding.ts`), where it used to read the
   // merged config and could therefore honor a workspace override the tab had
   // no way to show. One scope, one answer, both sides.
   it.effect(

@@ -3,13 +3,13 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel } from '@logger/effectLog';
 import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type LanguageModelAccessState,
   type LanguageModelInfo,
   type LanguageModelPort,
-} from '@platform/languageModel';
+} from '@texra-ai/harness';
+import { withLogChannel } from '@logger/effectLog';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { acquireVscodeLanguageModel } from './acquireVscodeLanguageModel';
 

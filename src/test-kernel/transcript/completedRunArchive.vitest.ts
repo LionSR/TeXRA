@@ -16,7 +16,6 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { loadChatExportInput as loadChatExportInputEffect } from '@agent/export/loadChatExportInput';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { resumeRun } from '@agent/runtime/resumeRun';
@@ -25,7 +24,6 @@ import { withProcessServices } from '@platform/processRuntime';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
-  AgentCategory,
   aggregateId,
   RunSnapshotPayloadSchema,
 } from '@shared/schemas';
@@ -45,6 +43,7 @@ import {
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { settleSessionEvents } from '@test/agent/progressTestUtils';
 import { seedRunRecord, seedReport } from '@test/support/runRecordSeeds';
+import { loadChatExportInput as loadChatExportInputEffect } from '@texra/agent/export/loadChatExportInput';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { readCompletedRunConversation as readCompletedRunConversationEffect } from '@transcript';
 
@@ -57,7 +56,6 @@ function runConfig(
   return AgentConfigSchema.parse({
     agent,
     model,
-    agentCategory: AgentCategory.ToolUse,
   });
 }
 
@@ -330,7 +328,6 @@ describe('completedRunArchive facade', () => {
         launchMocks.resolveAgent.mockReturnValue(
           Effect.succeed({
             path: '/agents/orchestrator.yaml',
-            category: AgentCategory.ToolUse,
             persona: { prompt: '', tools: [], temperature: 1 },
             task: null,
           }),

@@ -14,7 +14,7 @@ import {
 } from '../support/repoScan';
 
 /** Only the shared module may define the three-value TeXRA policy vocabulary. */
-const VOCABULARY_OWNER = 'src/shared/approvalPolicy.ts';
+const VOCABULARY_OWNER = 'packages/harness/src/shared/approvalPolicy.ts';
 
 /**
  * Sites allowed to call `decideTexraApproval` / `decideRetryApproval` /
@@ -24,11 +24,11 @@ const VOCABULARY_OWNER = 'src/shared/approvalPolicy.ts';
  * this allowlist in the same PR if a new core surface is intentional.
  */
 const EVALUATOR_CALL_ALLOWLIST = new Set([
-  'src/shared/approvalPolicy.ts',
-  'src/agent/runtime/requestPolicy.ts',
-  'src/tools/approval/bashApproval.ts',
-  'src/tools/approval/toolEditApproval.ts',
-  'src/tools/delegation/proposalFlow.ts',
+  'packages/harness/src/shared/approvalPolicy.ts',
+  'packages/harness/src/agent/runtime/requestPolicy.ts',
+  'packages/harness/src/tools/approval/bashApproval.ts',
+  'packages/harness/src/tools/approval/toolEditApproval.ts',
+  'packages/harness/src/tools/delegation/proposalFlow.ts',
 ]);
 
 /**
@@ -36,9 +36,9 @@ const EVALUATOR_CALL_ALLOWLIST = new Set([
  * same PR when a new composition root is intentional.
  */
 const SEED_CALL_ALLOWLIST = new Set([
-  'src/agent/runtime/SessionHandle.ts',
+  'packages/harness/src/agent/runtime/SessionHandle.ts',
   'packages/cli/src/runtime/executeCli.ts',
-  'src/controllers/settingsView/sharedSettingsCommands.ts',
+  'packages/texra/src/controllers/settingsView/sharedSettingsCommands.ts',
   'packages/cli/src/runtime/approvalAdapter.ts',
   'packages/cli/src/chat/tui/runChatTui.tsx',
   'packages/cli/src/chat/tui/commands/handlers/approvalCommand.ts',
@@ -48,10 +48,10 @@ const SEED_CALL_ALLOWLIST = new Set([
   // The service seeds each project it opens from that project's settings,
   // and `project.policy` is a window's settings change reaching it.
   'packages/cli/src/runtime/cliService.ts',
-  'src/controllers/server/handlers.ts',
+  'packages/texra/src/controllers/server/handlers.ts',
   // A window's settings change reaches its session through its backend:
   // the window's own session, or `project.policy` to the service.
-  'src/controllers/session/sessionBackend.ts',
+  'packages/texra/src/controllers/session/sessionBackend.ts',
 ]);
 
 /**
@@ -61,13 +61,13 @@ const SEED_CALL_ALLOWLIST = new Set([
  * core path is intentional; a host site never joins.
  */
 const BYPASS_WRITE_ALLOWLIST = new Set([
-  'src/agent/runtime/runApprovalQueue.ts',
-  'src/agent/runtime/loop/step.ts',
-  'src/controllers/mainView/backend/MainViewRunLaunchController.ts',
+  'packages/harness/src/agent/runtime/runApprovalQueue.ts',
+  'packages/harness/src/agent/runtime/loop/step.ts',
+  'packages/texra/src/controllers/mainView/backend/MainViewRunLaunchController.ts',
   // `policy.set`, the one host door, applied with its durable row.
-  'src/controllers/session/pendingUnderBypass.ts',
-  'src/tools/approval/index.ts',
-  'src/tools/goal/goalAutoApproval.ts',
+  'packages/harness/src/controllers/session/pendingUnderBypass.ts',
+  'packages/harness/src/tools/approval/index.ts',
+  'packages/harness/src/tools/goal/goalAutoApproval.ts',
 ]);
 
 const EVALUATOR_CALL =

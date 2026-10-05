@@ -9,15 +9,15 @@ import { afterEach, beforeEach, describe, vi } from 'vitest';
 // Local imports
 import * as apiProviders from '@texra-ai/llm';
 import { apiKeyEnvName, SecretsFailed } from '@texra-ai/llm';
-import * as setupCredentialAccess from '@model/setupCredentialAccess';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
-import { ProbeEnvironmentTool } from '@tools/setup/ProbeEnvironmentTool';
-import { VerifySetupTool } from '@tools/setup/VerifySetupTool';
-import * as setupPlatformModule from '@tools/setup/platform';
+import * as setupCredentialAccess from '@texra/model/setupCredentialAccess';
+import { ProbeEnvironmentTool } from '@texra/tools/setup/ProbeEnvironmentTool';
+import { VerifySetupTool } from '@texra/tools/setup/VerifySetupTool';
+import * as setupPlatformModule from '@texra/tools/setup/platform';
 
 // Local file imports
-import { createFakeSetupPlatform } from './fixtures';
+import { createFakeSetupPlatform, withSetup } from './fixtures';
 
 const mocks = vi.hoisted(() => ({
   locateTool:
@@ -31,8 +31,8 @@ const mocks = vi.hoisted(() => ({
     >(),
 }));
 
-vi.mock('@tools/setup/toolProbing', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tools/setup/toolProbing')>()),
+vi.mock('@texra/tools/setup/toolProbing', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@texra/tools/setup/toolProbing')>()),
   locateTool: mocks.locateTool,
 }));
 
@@ -86,7 +86,7 @@ describe('setup credential reporting', () => {
           ),
         );
         const result = yield* ProbeEnvironmentTool.call({}).pipe(
-          Effect.provide(nativeToolTestLayer()),
+          Effect.provide(withSetup(nativeToolTestLayer())),
         );
 
         assert.match(outputOf(result), /"host": "cli"/);
@@ -110,7 +110,7 @@ describe('setup credential reporting', () => {
       );
 
       const result = yield* ProbeEnvironmentTool.call({}).pipe(
-        Effect.provide(nativeToolTestLayer()),
+        Effect.provide(withSetup(nativeToolTestLayer())),
       );
 
       assert.equal(result.status, 'executed');
@@ -128,7 +128,7 @@ describe('setup credential reporting', () => {
         installChatGptOnlySetupPlatform();
 
         const result = yield* VerifySetupTool.call({}).pipe(
-          Effect.provide(nativeToolTestLayer()),
+          Effect.provide(withSetup(nativeToolTestLayer())),
         );
 
         assert.equal(result.status, 'executed');

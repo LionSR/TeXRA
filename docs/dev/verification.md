@@ -1,6 +1,6 @@
 # Manual Verification Matrix
 
-Use this checklist after touching shared frontend code (`src/shared/`,
+Use this checklist after touching shared frontend code (`packages/harness/src/shared/`,
 `packages/extension/src/common/webview/`,
 `packages/extension/src/{progressView,settingsView}/frontend/`,
 `packages/desktop/src/renderer/`) to confirm each major surface still mounts
@@ -86,12 +86,12 @@ the changed automation or prompt files directly.
 
 These have been consolidated and must stay shared. If you find yourself
 re-implementing one of these per host, push the new code into
-`src/ui/wa/` instead.
+`packages/texra/src/ui/wa/` instead.
 
-- Theme body classes + WA color scheme: `src/ui/wa/hostTheme.ts`
-- WA color scheme observer: `src/ui/wa/waColorScheme.ts`
-- Action button helper: `src/ui/wa/actionButtons.ts`
-- Empty state helper: `src/ui/wa/emptyState.ts`
-- Persisted state: `src/shared/state/PersistedState.ts`
-- Host bridge: `src/shared/hostBridge.ts`
-- Settings tabs: `src/shared/settingsView/settingsViewMessages.ts` (`SETTINGS_TAB_ORDER`)
+- Theme body classes + WA color scheme: `packages/texra/src/ui/wa/hostTheme.ts`
+- WA color scheme observer: `packages/texra/src/ui/wa/waColorScheme.ts`
+- Action button helper: `packages/texra/src/ui/wa/actionButtons.ts`
+- Empty state helper: `packages/texra/src/ui/wa/emptyState.ts`
+- Persisted state: `packages/texra/src/shared/state/PersistedState.ts`
+- Host bridge: `packages/texra/src/shared/hostBridge.ts`
+- Settings tabs: `packages/texra/src/shared/settingsView/settingsViewMessages.ts` (`SETTINGS_TAB_ORDER`)

@@ -18,11 +18,11 @@ import {
 } from '@test/support/setupPlatform';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { resolveTestStep } from '@test/support/stepToolsTestUtils';
+import { texraPlugins } from '@texra/tools/registry';
 import { toolTableLayer } from '@tools/liveTools';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
-import { texraPlugins } from '@tools/registry';
 import { toolTable } from '@tools/toolTable';
 import { setToolEnabled } from '@tools/toolAvailability';
 
@@ -199,16 +199,13 @@ describe('tool-use tool resolution', () => {
       const table = toolTable([
         {
           id: 'zotero',
-          name: 'Zotero',
-          category: 'ai-agents',
-          description: '',
           tools: {
             zotero_search: {
               definition: { name: 'zotero_search' },
               call: () => Effect.die('not called'),
             },
           },
-          toggleable: true,
+          toggle: 'off',
           availability: ALWAYS_AVAILABLE,
           processLayer: {
             layer: Layer.effectDiscard(

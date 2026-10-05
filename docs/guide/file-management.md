@@ -132,7 +132,7 @@ This works well for:
 
 ### Output files
 
-For workflow agents that edit documents, output filenames are the selected input
+For document tasks that edit documents, output filenames are the selected input
 filenames in the same order. Agents that create fixed new files declare those
 names in their YAML with `task.outputs`.
 
@@ -144,7 +144,7 @@ TeXRA handles file paths as follows:
 
 - **Display**: Files are displayed with paths relative to the workspace root
 - **Processing**: TeXRA resolves paths to their absolute form when needed
-- **Output**: Workflow outputs are saved in run storage. Use **Accept** or
+- **Output**: Document task outputs are saved in run storage. Use **Accept** or
   **Pack** when you want to copy reviewed outputs back into the workspace.
 
 ### File discovery rules
@@ -154,8 +154,9 @@ context, edited files, and media. Read the [file discovery section of the config
 
 ## Output file naming
 
-TeXRA stores workflow outputs in the run folder under run storage. Within that
-folder, the revised document keeps your input filename in every round:
+TeXRA stores document task outputs in the run folder under run storage. Within
+that folder, the revised document keeps your input filename in every revision
+(the first revision in `r0/`, the second in `r1/`, and so on):
 
 ```
 r{round}/<input-filename>
@@ -172,9 +173,9 @@ For example:
 - Model: `anthropic/claude-sonnet-5-5`
 - Output: `r0/paper.tex`
 
-When the agent definition includes reflection rounds, you may also see:
+When the agent's task has a second (reflection) revision, you may also see:
 
-- Round 1: `r1/paper.tex`
+- Revision 2: `r1/paper.tex`
 
 ## File management commands
 
@@ -202,7 +203,7 @@ Use this to remove generated artifacts from run storage after reviewing the resu
 
 ### Opening generated files
 
-Workflow outputs are listed in the ProgressBoard under **Generated Files**.
+Document task outputs are listed in the ProgressBoard under **Generated Files**.
 Select a file name to preview it in VS Code. Files open using VS Code's default
 viewer, so PDFs and images display correctly while `.tex` documents open in the
 editor.
@@ -216,14 +217,14 @@ card below.)
 
 ### Run storage
 
-Every workflow run gets an isolated run folder under TeXRA's
+Every run gets an isolated run folder under TeXRA's
 workspace storage directory:
 
 ```text
 executions/<executionId>/
 ```
 
-Workflow outputs are written there first, not directly over your workspace
+Document task outputs are written there first, not directly over your workspace
 files. Three commands then move that run's artifacts to three different places:
 
 <StorageLifecycleFlow />

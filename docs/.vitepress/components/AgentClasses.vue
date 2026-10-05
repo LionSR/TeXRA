@@ -1,7 +1,7 @@
 <script setup>
-// Frameless figure for the two-class agent taxonomy that the guide explains in
-// two run-on prose paragraphs: workflow agents (a structured pipeline that
-// writes versioned, diffable output files) vs tool-use agents (conversational,
+// Frameless figure for the two ways an agent runs that the guide explains in
+// two run-on prose paragraphs: a document task (a structured pipeline that
+// writes versioned, diffable output files) vs a chat (conversational,
 // read/edit + search/compile with tools). Side-by-side cards make the
 // dichotomy scannable; each agent becomes a labelled pill.
 //
@@ -27,7 +27,7 @@ const toolUse = [
   'latexFixer',
   'latexDiff',
   'creator',
-  'chat',
+  'assistant',
   'setup',
 ];
 const tools = ['arXiv', 'Lean', 'Wolfram', 'compile', 'files', 'shell'];
@@ -35,11 +35,11 @@ const tools = ['arXiv', 'Lean', 'Wolfram', 'compile', 'files', 'shell'];
 
 <template>
   <div class="mockup ac" role="group" aria-label="Agent classes">
-    <!-- Workflow agents -->
+    <!-- Document tasks -->
     <section class="ac-col">
       <header class="ac-head ac-head--workflow">
         <wa-icon class="ac-ic" library="texra" name="diagram-project"></wa-icon>
-        <span class="ac-title">Workflow agents</span>
+        <span class="ac-title">Document tasks</span>
       </header>
       <p class="ac-sub">
         Run a structured pipeline → save versioned output files with a diff.
@@ -56,7 +56,7 @@ const tools = ['arXiv', 'Lean', 'Wolfram', 'compile', 'files', 'shell'];
       </footer>
     </section>
 
-    <!-- Tool-use agents -->
+    <!-- Chat agents -->
     <section class="ac-col">
       <header class="ac-head ac-head--tooluse">
         <wa-icon
@@ -64,7 +64,7 @@ const tools = ['arXiv', 'Lean', 'Wolfram', 'compile', 'files', 'shell'];
           library="texra"
           name="screwdriver-wrench"
         ></wa-icon>
-        <span class="ac-title">Tool-use agents</span>
+        <span class="ac-title">Chat agents</span>
       </header>
       <p class="ac-sub">
         Work conversationally → read &amp; edit files, search, compile, iterate.

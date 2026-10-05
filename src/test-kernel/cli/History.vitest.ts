@@ -25,9 +25,9 @@ import {
 } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import {
   aggregateId,
-  AgentCategory,
   emptyRunEndOutput,
   MESSAGE_TYPES,
   RUN_OUTCOME,
@@ -124,14 +124,15 @@ import {
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
-const config = AgentConfigSchema.parse({
-  agent: 'correct',
-  model: 'deepseek/deepseek-v4-flash',
-  instruction: 'Polish the introduction.',
-  agentCategory: 'workflow',
-  inputFiles: ['chapters/intro.tex'],
-  outputFiles: ['chapters/intro.tex'],
-});
+const config = AgentConfigSchema.parse(
+  documentTaskConfig({
+    agent: 'correct',
+    model: 'deepseek/deepseek-v4-flash',
+    instruction: 'Polish the introduction.',
+    inputFiles: ['chapters/intro.tex'],
+    outputFiles: ['chapters/intro.tex'],
+  }),
+);
 
 const tempDirs = useTempDirs();
 
@@ -160,7 +161,7 @@ function toolUseAgentConfig(
 ): typeof config {
   return AgentConfigSchema.parse({
     ...config,
-    agentCategory: 'toolUse',
+    script: null,
     inputFiles: [],
     outputFiles: [],
     ...overrides,
@@ -170,7 +171,7 @@ function toolUseAgentConfig(
 function mockToolUseWorkspace(workspace: string): void {
   mocks.readConfig.mockResolvedValue({
     ...config,
-    agentCategory: 'toolUse',
+    script: null,
     workingDirectory: workspace,
   });
 }
@@ -234,7 +235,7 @@ async function publishRunFacts(
         type: 'run.end',
         aggregateId: aggregateId('run', runId),
         outcome: facts.outcome,
-        output: emptyRunEndOutput(AgentCategory.ToolUse),
+        output: emptyRunEndOutput(),
       },
     ]);
   }

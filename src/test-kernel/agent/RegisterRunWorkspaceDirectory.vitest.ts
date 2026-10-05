@@ -20,7 +20,6 @@ const baseConfig = AgentConfigSchema.parse({
   agent: 'chat',
   model: 'deepseek/deepseek-v4-flash',
   instruction: 'Check the proof.',
-  agentCategory: 'toolUse',
 });
 const runId = 'abc123' as RunId;
 const options = {
@@ -165,7 +164,7 @@ describe('run registration and finalization', () => {
           runId,
           outcome: 'failed',
         });
-        expect(result).toMatchObject({ ok: false, outcomePersisted: false });
+        expect(result).toMatchObject({ ok: false });
         if (!result.ok) expect(result.error).toBe(failure);
       }),
   );

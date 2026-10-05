@@ -5,13 +5,14 @@ import { describe, expect } from 'vitest';
 
 // Local imports
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
-import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { applyStateSettingUpdate } from '@shared/settingsView/handlers/stateSettingWrite';
 import {
   isStored,
   makeFakeSettingsStores,
 } from '@test/support/settingsStoresFake';
+import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
+import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
+import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
 
 describe('applyStateSettingUpdate', () => {
   it.effect(
@@ -103,7 +104,7 @@ describe('applyStateSettingUpdate', () => {
     () =>
       Effect.gen(function* () {
         const fake = makeFakeSettingsStores();
-        const key = TexraStateKey.LATEXDIFF_TIMEOUT_MS;
+        const key = DocumentsStateKey.LATEXDIFF_TIMEOUT_MS;
 
         expect(
           yield* applyStateSettingUpdate(key, 20000, {
@@ -145,14 +146,14 @@ describe('applyStateSettingUpdate', () => {
 
         expect(
           yield* applyStateSettingUpdate(
-            TexraStateKey.LATEXDIFF_MATH_MARKUP,
+            DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
             'bogus',
             ports,
           ),
         ).toMatchObject({
           kind: 'rejected',
           entry: {
-            key: TexraStateKey.LATEXDIFF_MATH_MARKUP,
+            key: DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
             surfaces: { settingsView: 'latex' },
           },
           error: expect.any(Error),

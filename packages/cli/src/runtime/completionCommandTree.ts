@@ -1,6 +1,3 @@
-// Local imports - shared schemas
-import { AgentCategory } from '@shared/schemas';
-
 // Third-party type imports
 import type { ArgDef, ArgsDef, CommandDef, CommandMeta } from 'citty';
 
@@ -221,19 +218,13 @@ const COMPLETION_SOURCES = {
     column: 2,
   },
   /**
-   * Every launchable agent: `texra run` takes both categories. The name column
-   * prints the source-qualified key for a name two listed agents share, so a
-   * cross-category collision completes to the spellings `texra run` accepts
-   * rather than the bare name it refuses.
+   * Every launchable agent, hidden ones included. The name column prints the
+   * source-qualified key for a name two listed agents share, so a collision
+   * completes to a spelling that names exactly one agent.
    */
   launchableAgents: {
     shellFunction: '_texra_launchable_agents',
     command: 'agents list --quiet --all',
-    column: 2,
-  },
-  toolUseAgents: {
-    shellFunction: '_texra_tool_use_agents',
-    command: `agents list --quiet --all --category ${AgentCategory.ToolUse}`,
     column: 2,
   },
   models: {
@@ -270,7 +261,7 @@ export const DYNAMIC_VALUE_FLAG_SOURCES: Readonly<
   Record<string, CompletionSource>
 > = {
   model: COMPLETION_SOURCES.models,
-  agent: COMPLETION_SOURCES.toolUseAgents,
+  agent: COMPLETION_SOURCES.launchableAgents,
 };
 
 /** Every dynamic listing source, for the generators that emit each function. */

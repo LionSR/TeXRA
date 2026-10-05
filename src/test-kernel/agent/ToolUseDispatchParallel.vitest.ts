@@ -42,7 +42,7 @@ import {
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { requireToolRun } from '@agent/runtime/RunCall';
 import type {
   RuntimeTool as ITool,
   RuntimeToolRegistry,
@@ -52,20 +52,20 @@ import { makeRunCell } from '@agent/runtime/loop/runProgram';
 import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
 import {
   appendRow,
+  bindingRow,
   rowAggregate,
   snapshotRow,
   type ToolUseLoopState,
 } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
-import { dispatchFactsFor } from '@agent/runtime/run/tools';
+import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentTrace } from '@agent/trace';
 import type { PluginContext } from '@platform/processRuntime';
 import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
-  AgentCategory,
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
   type RunId,
@@ -84,6 +84,12 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { recordSessionEvents } from './progressTestUtils';
 
 const GPT54 = 'openai/gpt-5.4-2026-03-05';
+
+/** The calls a folded state holds settled. */
+const settledIds = (state: RunState | null | undefined): string[] =>
+  Object.entries(state?.pendingResponse?.records ?? {}).flatMap(([id, call]) =>
+    call.status.kind === 'settled' ? [id] : [],
+  );
 
 setupPlatform({ workspacePath: '/workspace' });
 
@@ -116,9 +122,7 @@ function probeTool(
   return {
     definition: { name, description: name, parameters: {} },
     parallelSafe: options.parallelSafe,
-    call: Effect.fn(function* (
-      input: unknown,
-    ): Effect.fn.Return<ToolResult, never, ToolCall> {
+    call: Effect.fn(function* (input: unknown): Effect.fn.Return<ToolResult> {
       const tag = `${name}:${JSON.stringify(input)}`;
       probe.events.push(`start ${tag}`);
       probe.inFlight += 1;
@@ -191,6 +195,7 @@ function boundModel(): BoundModel {
     backgroundCapable: false,
     persistentConnection: false,
     automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
+    textOnly: false,
   };
 }
 
@@ -218,7 +223,6 @@ function agentRun(
   logger: AgentTrace,
   model: SynchronizedRef.SynchronizedRef<BoundModel>,
   rootUserInstruction: string | undefined,
-  pendingSwitch: string | null = null,
 ): AgentRunShape {
   return testAgentRun(
     { runId, session, logger, model, scope: Scope.makeUnsafe() },
@@ -226,10 +230,8 @@ function agentRun(
       config: AgentConfigSchema.parse({
         agent: 'assistant',
         model: GPT54,
-        agentCategory: AgentCategory.ToolUse,
         ...(rootUserInstruction === undefined ? {} : { rootUserInstruction }),
       }),
-      pendingModelSwitch: { value: pendingSwitch },
     },
   );
 }
@@ -313,24 +315,29 @@ const openDispatch = Effect.fn('openDispatch')(function* (
         responseId: RESPONSE_ID,
         invocation: INVOCATION,
         turn,
-        calls: dispatchFactsFor(turn, tools, logger, () => 'log-id'),
+        calls: dispatchFactsFor(
+          localCallsOf(turn.content),
+          tools,
+          logger,
+          () => 'log-id',
+        ),
         usage: null,
       },
     },
   ]);
+  // A switch the user queued waits on the run's input for the next boundary.
+  if (options.pendingSwitch !== undefined)
+    yield* session.followUps.send(runId, {
+      text: `/model ${options.pendingSwitch}`,
+      from: { kind: 'user' },
+      control: { kind: 'model', model: options.pendingSwitch },
+    });
   const model = yield* SynchronizedRef.make(options.bound ?? boundModel());
   const layer = Layer.mergeAll(
     nativeToolTestLayer(),
     Layer.succeed(
       AgentRun,
-      agentRun(
-        runId,
-        session,
-        logger,
-        model,
-        options.rootUserInstruction,
-        options.pendingSwitch ?? null,
-      ),
+      agentRun(runId, session, logger, model, options.rootUserInstruction),
     ),
     Layer.succeed(RunHistory, session.runHistory),
   );
@@ -424,7 +431,7 @@ describe('tool-use dispatch', () => {
         );
       }
       const saved = yield* kit.session.runHistory.load(kit.runId);
-      expect(Object.keys(saved?.pendingResponse?.settled ?? {})).toEqual([]);
+      expect(settledIds(saved)).toEqual([]);
       expect(saved?.pendingResponse).not.toBeNull();
       yield* closeSessionOf(kit.session);
     }),
@@ -507,17 +514,13 @@ describe('tool-use dispatch', () => {
           description: 'inspect_context',
           parameters: {},
         },
-        call: Effect.fn(function* (): Effect.fn.Return<
-          ToolResult,
-          never,
-          ToolCall
-        > {
-          const context = yield* ToolCall;
-          observedInstruction = context?.userInstruction;
-          observedTrace = context?.run?.logger;
-          return { status: 'executed', output: 'ok' };
-        }),
-      } as ITool;
+        call: () =>
+          Effect.map(requireToolRun('inspect_context'), (call) => {
+            observedInstruction = call.instruction;
+            observedTrace = call.run.logger;
+            return { status: 'executed', output: 'ok' } satisfies ToolResult;
+          }),
+      };
       const kit = yield* openDispatch({
         tools: { inspect_context: inspectContext },
         calls: [makeCall('c1', 'inspect_context', {})],
@@ -718,9 +721,7 @@ describe('tool-use dispatch', () => {
         }),
         kit.layer,
       );
-      expect(Object.keys(folded?.pendingResponse?.settled ?? {})).toEqual([
-        'c1',
-      ]);
+      expect(settledIds(folded)).toEqual(['c1']);
       // No delivery ran, so this workspace can only have come from the
       // settlement's own state operation.
       const slices = folded!.loop?.stateSlices;
@@ -786,13 +787,93 @@ describe('tool-use dispatch', () => {
         kit.layer,
       );
       const pending = folded?.pendingResponse ?? null;
-      expect(Object.keys(pending?.settled ?? {})).toEqual([]);
+      expect(settledIds(folded)).toEqual([]);
       // The duplicate is recognised as one and still settles nothing: with
       // the primary interrupted it waits rather than fabricating a result.
       expect(
         pending?.calls.find((fact) => fact.callId === 'c3')?.duplicateOf,
       ).toBe('c1');
       expect(countStarts(probe, 'grep')).toBe(1);
+      yield* closeSessionOf(kit.session);
+    }),
+  );
+
+  // A person's answer is committed by the decide command, another writer,
+  // while a sibling call of the same parallel partition keeps settling
+  // through the cell: the answer's commit is below the sibling's, so it
+  // cannot be folded onto the cell afterwards. The cell re-reads the run.
+  it.live('reads a decision committed before a sibling call settled', () =>
+    Effect.gen(function* () {
+      const probe = newProbe();
+      const kit = yield* openDispatch({
+        tools: {
+          grep: probeTool(probe, 'grep', 0, { parallelSafe: true }),
+          read_file: probeTool(probe, 'read_file', 0, { parallelSafe: true }),
+        },
+        calls: [
+          makeCall('c1', 'grep', { pattern: 'a' }),
+          makeCall('c2', 'read_file', { path: 'b' }),
+        ],
+      });
+      const aggregateId = rowAggregate(kit.runId);
+      const cell = yield* makeRunCell(kit.runId, kit.state).pipe(
+        Effect.provide(kit.layer),
+      );
+      yield* cell.append(
+        ['c1', 'c2'].map((callId) => ({
+          type: 'tool.intent' as const,
+          aggregateId,
+          payload: {
+            origin: { kind: 'response' as const, responseId: RESPONSE_ID },
+            callId,
+            attempt: 1,
+          },
+        })),
+      );
+      yield* cell.append([
+        {
+          type: 'request.opened',
+          aggregateId,
+          requestId: 'q1',
+          thread: null,
+          payload: {
+            kind: 'toolOutcome',
+            data: {
+              requestId: 'q1',
+              runId: kit.runId,
+              toolName: 'grep',
+              title: 'grep',
+              childRunId: null,
+            },
+          },
+        },
+        bindingRow(kit.runId, {
+          callId: 'c1',
+          attempt: 1,
+          requestId: 'q1',
+          role: 'outcome',
+        }),
+      ]);
+      yield* kit.session.decideRequest(kit.runId, 'q1', { action: 'skip' });
+      yield* cell.append([
+        {
+          type: 'tool.result',
+          aggregateId,
+          payload: {
+            responseId: RESPONSE_ID,
+            callId: 'c2',
+            attempt: 1,
+            disposition: 'executed',
+            duplicateOf: null,
+            result: { status: 'executed', output: 'ok' },
+            attachments: [],
+            stateMutation: [],
+          },
+        },
+      ]);
+      const state = yield* cell.refresh;
+      expect(state.requests['q1']?.decision).toMatchObject({ action: 'skip' });
+      expect(settledIds(state)).toEqual(['c2']);
       yield* closeSessionOf(kit.session);
     }),
   );

@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AGENT_TEMPLATE_FILES,
   renderAgentTemplateString,
-} from '@agent/templates/agentTemplateRenderer';
+} from '@texra/agent/templates/agentTemplateRenderer';
 
 describe('renderAgentTemplateString', () => {
   it('keeps {{ ALL_CONTEXTS }} literal when the settings-view creation path renders the bundled workflow template (issue #7678)', () => {

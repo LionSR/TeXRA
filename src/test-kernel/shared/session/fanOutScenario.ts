@@ -7,7 +7,6 @@
 
 import {
   aggregateId as qualifyAggregateId,
-  AgentCategory,
   AgentConfigFieldsSchema,
   emptyRunEndOutput,
   MESSAGE_TYPES,
@@ -21,6 +20,7 @@ import {
   type RunId,
   type RunParent,
 } from '@shared/schemas';
+import { DOCUMENTS_OUTPUT_ARM } from '@shared/plugins/documents';
 import { fold } from '@shared/session/sessionFold';
 import {
   emptySessionView,
@@ -100,12 +100,7 @@ export class Log {
     body: DisplaySessionEventBody,
     origin: string | null = OWNER,
   ): DisplaySessionEvent {
-    const key =
-      body.type === 'inquiryThreadUpdated'
-        ? // An inquiry aggregate is keyed by its thread id, a plain logical
-          // id; this scenario threads one per run.
-          qualifyAggregateId('inquiry', runId as string)
-        : qualifyAggregateId('run', runId);
+    const key = qualifyAggregateId('run', runId);
     const seq = (this.seq.get(key) ?? 0) + 1;
     this.seq.set(key, seq);
     this.commit += 1;
@@ -199,7 +194,6 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(ROOT, T.root, {
     type: 'run.start',
     identity: ROOT_IDENTITY,
-    category: AgentCategory.ToolUse,
     worktree: { workingDirectory: '/paper', branch: 'main' },
     parent: null,
     provenance: null,
@@ -208,12 +202,10 @@ export function buildScenario({ proposal = false } = {}) {
   });
   log.emit(ROOT, T.root, {
     type: 'run.activate',
-    category: AgentCategory.ToolUse,
   });
   log.emit(ROOT, T.root, {
     type: 'run.config',
     config: AgentConfigFieldsSchema.parse({
-      agentCategory: AgentCategory.ToolUse,
       model: 'claude-sonnet-4-5',
       instruction: 'review the draft',
       agent: 'review',
@@ -240,7 +232,6 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(CHILD, T.child, {
     type: 'run.start',
     identity: CHILD_IDENTITY,
-    category: AgentCategory.ToolUse,
     parent: log.parent(ROOT),
     provenance: null,
     parentCard: 'call-1',
@@ -249,14 +240,12 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(CHILD, T.child, {
     type: 'run.config',
     config: AgentConfigFieldsSchema.parse({
-      agentCategory: AgentCategory.ToolUse,
       model: 'claude-sonnet-4-5',
       instruction: 'search',
     }),
   });
   log.emit(CHILD, T.child, {
     type: 'run.activate',
-    category: AgentCategory.ToolUse,
   });
   // The loop's position: an agent run reads as initializing until its first
   // step, so a mid-flight fixture carries one (one run model, 3.3).
@@ -298,35 +287,39 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(GRANDCHILD, T.grandchild, {
     type: 'run.start',
     identity: GRANDCHILD_IDENTITY,
-    category: AgentCategory.ToolUse,
     userFollowUpSupport: 'unsupported',
     parent: log.parent(CHILD),
     provenance: null,
   });
   log.emit(GRANDCHILD, T.grandchild, {
     type: 'run.activate',
-    category: AgentCategory.ToolUse,
   });
   log.emit(GRANDCHILD, T.grandchild, {
     type: 'run.position',
     payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
   });
   log.emit(GRANDCHILD, T.grandchildFiles, {
-    type: 'output.produced',
-    rounds: [
-      {
-        round: 1,
-        rawOutput: null,
-        outputs: [],
-        compileFailures: [],
-        missingOutputs: [],
-      },
-    ],
+    type: 'plugin.fact',
+    plugin: DOCUMENTS_OUTPUT_ARM.plugin,
+    kind: DOCUMENTS_OUTPUT_ARM.kind,
+    version: DOCUMENTS_OUTPUT_ARM.version,
+    parent: null,
+    value: {
+      rounds: [
+        {
+          round: 1,
+          rawOutput: null,
+          outputs: [],
+          compileFailures: [],
+          missingOutputs: [],
+        },
+      ],
+    },
   });
   log.emit(GRANDCHILD, T.grandchildDone, {
     type: 'run.end',
     outcome: 'completed',
-    output: emptyRunEndOutput(AgentCategory.ToolUse),
+    output: emptyRunEndOutput(),
   });
   // The tool's result lands the way the recorder settles it: the outcome
   // merged over the stored row, so the row keeps its id, seqNo, and
@@ -342,7 +335,6 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(PROCESS, T.process, {
     type: 'run.start',
     identity: { kind: 'process', tool: 'bash' },
-    category: AgentCategory.ToolUse,
     parent: null,
     provenance: null,
     userFollowUpSupport: 'unsupported',
@@ -350,7 +342,6 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(PROCESS, T.process, {
     type: 'run.config',
     config: AgentConfigFieldsSchema.parse({
-      agentCategory: AgentCategory.ToolUse,
       model: 'unused',
       instruction: 'npm test',
     }),
@@ -380,7 +371,7 @@ export function buildScenario({ proposal = false } = {}) {
         data: {
           requestId: 'req-plan',
           runId: ROOT,
-          agentCategory: AgentCategory.Workflow,
+          task: true,
           agent: 'review',
           model: 'claude-sonnet-4-5',
           instruction: 'Review the draft.',
@@ -418,7 +409,7 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(CHILD, T.childDone, {
     type: 'run.end',
     outcome: 'completed',
-    output: emptyRunEndOutput(AgentCategory.ToolUse),
+    output: emptyRunEndOutput(),
   });
   log.emit(ROOT, T.childDone + 1, {
     type: 'tool.end',
@@ -434,7 +425,7 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(ROOT, T.rootDone, {
     type: 'run.end',
     outcome: 'completed',
-    output: emptyRunEndOutput(AgentCategory.ToolUse),
+    output: emptyRunEndOutput(),
   });
 
   const events = log.events.map(tail);

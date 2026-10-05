@@ -2,20 +2,21 @@ import { Effect } from 'effect';
 
 import {
   getAgent,
-  getAgentsByCategory,
+  getCatalogAgents,
   getVisibleAgents,
   resolveAgentForLaunch,
   type AgentEntry,
   type WorkspaceAgentsStores,
 } from '@agent/index';
-import { AGENT_CATEGORIES, agentKeyOf, AgentCategory } from '@shared/schemas';
+import { agentKeyOf } from '@shared/schemas';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { CliUsageError } from './cliContext';
 
 export interface CliAgentListOptions {
   readonly includeHidden?: boolean;
-  readonly category?: AgentCategory;
+  /** Only the agents that are also document tasks. */
+  readonly tasks?: boolean;
 }
 
 interface CliAgentListResult {
@@ -23,65 +24,19 @@ interface CliAgentListResult {
   readonly hiddenCount: number;
 }
 
-type CliAgentLaunchMode = 'chat' | 'workflowResume';
-
 const AGENT_LOOKUP_HINT =
   'Use `texra agents list` for visible starter agents, `texra agents list --all` for every agent, or pass a known launchable agent name from a team.';
 const TEAM_LOOKUP_HINT =
   'Use `texra team list` for available teams, then run `texra team show <team>` to check a team before launch.';
 
-const CLI_AGENT_LAUNCH_TARGETS = {
-  chat: {
-    requiredCategory: AgentCategory.ToolUse,
-    missing: missingToolUseAgentMessage,
-    mismatch: (name: string, actual: AgentEntry['category']) =>
-      `Agent "${name}" is a ${actual} agent; \`texra chat\` only handles tool-use agents. Use \`texra run ${name}\` for workflow agents, or \`texra team run <team>\` for teams.`,
-  },
-  workflowResume: {
-    requiredCategory: AgentCategory.Workflow,
-    missing: missingAgentMessage,
-    mismatch: (name: string, actual: AgentEntry['category']) =>
-      `Agent "${name}" is a ${actual} agent; this run was recorded as a workflow run and cannot resume against it.`,
-  },
-} as const;
-
 export const AGENT_NAME_DESCRIPTION =
   'Agent name from `texra agents list` or `texra agents list --all`';
 
 export const LAUNCHABLE_AGENT_NAME_DESCRIPTION =
-  'Workflow or tool-use agent name from `texra agents list --all`';
-
-const AGENT_CATEGORY_FILTER_ALIASES = [
-  [AgentCategory.Workflow, AgentCategory.Workflow],
-  [AgentCategory.ToolUse, AgentCategory.ToolUse],
-  ['tool-use', AgentCategory.ToolUse],
-  ['tool_use', AgentCategory.ToolUse],
-] as const satisfies readonly (readonly [string, AgentCategory])[];
-
-export const CLI_AGENT_CATEGORY_FILTER_VALUES =
-  AGENT_CATEGORY_FILTER_ALIASES.map(([value]) => value);
-
-const AGENT_CATEGORY_FILTERS = new Map<string, AgentCategory>(
-  AGENT_CATEGORY_FILTER_ALIASES.map(([value, category]) => [
-    value.toLowerCase(),
-    category,
-  ]),
-);
-
-export function parseCliAgentCategoryFilter(
-  input: string | undefined,
-): AgentCategory | undefined {
-  const normalized = input?.trim();
-  if (!normalized) return undefined;
-  return AGENT_CATEGORY_FILTERS.get(normalized.toLowerCase());
-}
+  'Agent name from `texra agents list --all`';
 
 export function missingAgentMessage(name: string): string {
   return `Agent not found: ${name}. ${AGENT_LOOKUP_HINT}`;
-}
-
-export function missingToolUseAgentMessage(name: string): string {
-  return `Tool-use agent not found: ${name}. ${AGENT_LOOKUP_HINT}`;
 }
 
 export function missingTeamMessage(name: string): string {
@@ -89,125 +44,24 @@ export function missingTeamMessage(name: string): string {
 }
 
 /**
- * Validate a resolved entry for a category-pinned launch. Reports the refusal
- * as the `CliUsageError` value it is rather than throwing one: the launch
- * resolver below fails its Effect with it, and the chat slash command reads
- * its message, so neither has to catch a throw to tell a usage refusal from a
- * real fault.
- */
-export function checkCliAgentLaunch(
-  stores: WorkspaceAgentsStores,
-  name: string,
-  agent: AgentEntry | undefined,
-  mode: CliAgentLaunchMode,
-) {
-  return Effect.gen(function* () {
-    const target = CLI_AGENT_LAUNCH_TARGETS[mode];
-    if (agent?.category === target.requiredCategory) return agent;
-
-    // Category-scoped resolution yields nothing for a wrong-category name, so
-    // probe the other category to keep telling "wrong kind of agent" apart from
-    // "no such agent".
-    const otherCategory =
-      target.requiredCategory === AgentCategory.ToolUse
-        ? AgentCategory.Workflow
-        : AgentCategory.ToolUse;
-    const found =
-      agent ?? (yield* resolveAgentForLaunch(stores, otherCategory, name));
-    return new CliUsageError(
-      found ? target.mismatch(name, found.category) : target.missing(name),
-    );
-  });
-}
-
-/**
- * Resolve a CLI-visible agent from the registry.
- *
- * A launch category resolves through the launch resolver, so validation lands
- * on the exact entry the launch will load; without one this is a display
- * lookup and stays category-blind.
- */
-export function resolveCliAgent(
-  stores: WorkspaceAgentsStores,
-  identifier: string,
-  category?: AgentCategory,
-) {
-  return category
-    ? resolveAgentForLaunch(stores, category, identifier)
-    : Effect.succeed(getAgent(identifier));
-}
-
-/**
- * Resolve the agent `texra run <agent>` launches. One headless command serves
- * both categories, so a bare name can land in either — and a name carried by
- * both is refused, never silently resolved: the two categories run different
- * shapes, and preferring one would change what an existing invocation does
- * without saying so.
- *
- * The refusal is always escapable. The registry is a flat cache keyed by
- * `source:name`, so two entries sharing a name necessarily differ in source,
- * and a source-qualified identifier hits exactly one cache key — a same-source
- * collision is unrepresentable, not merely unhandled.
+ * Resolve the agent a launch names, through the launch resolver, so the
+ * check lands on the exact entry the launch loads. A name nothing resolves is
+ * a usage error.
  */
 export function resolveCliRunAgent(
   stores: WorkspaceAgentsStores,
   name: string,
 ) {
-  return Effect.gen(function* () {
-    const workflow = yield* resolveCliAgent(
-      stores,
-      name,
-      AgentCategory.Workflow,
-    );
-    const toolUse = yield* resolveAgentForLaunch(
-      stores,
-      AgentCategory.ToolUse,
-      name,
-    );
-    if (workflow && toolUse) {
-      return yield* Effect.fail(
-        new CliUsageError(ambiguousRunAgentMessage(name, workflow, toolUse)),
-      );
-    }
-    const agent = workflow ?? toolUse;
-    if (!agent) {
-      return yield* Effect.fail(new CliUsageError(missingAgentMessage(name)));
-    }
-    return agent;
-  });
+  return Effect.flatMap(resolveAgentForLaunch(stores, name), (agent) =>
+    agent === undefined
+      ? Effect.fail(new CliUsageError(missingAgentMessage(name)))
+      : Effect.succeed(agent),
+  );
 }
 
-function ambiguousRunAgentMessage(
-  name: string,
-  workflow: AgentEntry,
-  toolUse: AgentEntry,
-): string {
-  const workflowKey = agentKeyOf(workflow);
-  const toolUseKey = agentKeyOf(toolUse);
-  return `Agent name "${name}" is ambiguous: it matches the ${AgentCategory.Workflow} agent ${workflowKey} and the ${AgentCategory.ToolUse} agent ${toolUseKey}. Re-run with the source-qualified name to pick one: \`texra run ${workflowKey}\` or \`texra run ${toolUseKey}\`.`;
-}
-
-/**
- * Resolve and validate the workflow agent a `texra resume` continues.
- */
-export function resolveCliResumeAgent(
-  stores: WorkspaceAgentsStores,
-  name: string,
-) {
-  return Effect.gen(function* () {
-    const resolved = yield* resolveCliAgent(
-      stores,
-      name,
-      CLI_AGENT_LAUNCH_TARGETS.workflowResume.requiredCategory,
-    );
-    const agent = yield* checkCliAgentLaunch(
-      stores,
-      name,
-      resolved,
-      'workflowResume',
-    );
-    return agent instanceof CliUsageError ? yield* Effect.fail(agent) : agent;
-  });
+/** Resolve the agent a display command names, by the catalog's rule. */
+export function resolveCliAgent(identifier: string): AgentEntry | undefined {
+  return getAgent(identifier);
 }
 
 export function loadCliAgentList(
@@ -219,12 +73,12 @@ export function loadCliAgentList(
     const agents = yield* collectCliAgents(
       stores,
       includeHidden ? 'all' : 'visible',
-      options.category,
+      options.tasks === true,
     );
     const hiddenCount = includeHidden
       ? 0
-      : (yield* collectCliAgents(stores, 'all', options.category)).length -
-        agents.length;
+      : (yield* collectCliAgents(stores, 'all', options.tasks === true))
+          .length - agents.length;
 
     return { agents, hiddenCount } satisfies CliAgentListResult;
   });
@@ -233,16 +87,16 @@ export function loadCliAgentList(
 export function formatCliAgentList(
   agents: readonly AgentEntry[],
   options: {
-    readonly category?: AgentCategory;
+    readonly tasks?: boolean;
     readonly showEmptyState?: boolean;
   } = {},
 ): string {
   if (agents.length === 0) {
     if (options.showEmptyState !== true) return '';
-    const { categoryArg, catalog, qualifier } = cliAgentCatalogHint(
-      options.category,
+    const { filterArg, catalog, qualifier } = cliAgentCatalogHint(
+      options.tasks === true,
     );
-    return `No visible ${qualifier}agents are enabled for this workspace. Use \`texra agents list${categoryArg} --all\` to show ${catalog}.`;
+    return `No visible ${qualifier} are enabled for this workspace. Use \`texra agents list${filterArg} --all\` to show ${catalog}.`;
   }
 
   // Shell completion reads the name column straight back into `texra run`,
@@ -260,7 +114,7 @@ export function formatCliAgentList(
   return agents
     .map(
       (agent) =>
-        `${agent.category}\t${collidingNames.has(agent.name) ? agentKeyOf(agent) : agent.name}\t${agent.description ?? ''}`,
+        `${agent.task === null ? 'chat' : 'task'}\t${collidingNames.has(agent.name) ? agentKeyOf(agent) : agent.name}\t${agent.description ?? ''}`,
     )
     .join('\n');
 }
@@ -268,7 +122,7 @@ export function formatCliAgentList(
 export function formatCliAgentDetails(entry: AgentEntry): string {
   const lines: string[] = [
     `name: ${entry.name}`,
-    `category: ${entry.category}`,
+    `kind: ${entry.task === null ? 'chat' : 'document task'}`,
     `source: ${entry.source}`,
   ];
   if (entry.path) lines.push(`path: ${entry.path}`);
@@ -289,7 +143,7 @@ export function formatCliAgentDetails(entry: AgentEntry): string {
   }
   if (entry.rounds) {
     if (metadataLines.length === 0) lines.push('');
-    lines.push(`rounds: ${entry.rounds}`);
+    lines.push(`revisions: ${entry.rounds}`);
   }
   return lines.join('\n');
 }
@@ -300,39 +154,37 @@ export function formatCliNewerBuiltInNotice(name: string): string {
 
 export function formatCliHiddenAgentsNotice(
   hiddenCount: number,
-  category?: AgentCategory,
+  tasks = false,
 ): string | undefined {
   if (hiddenCount <= 0) return undefined;
-  const { categoryArg, catalog } = cliAgentCatalogHint(category);
-  return `Showing visible agents only; ${formatResultCount(hiddenCount, 'hidden agent')} omitted. Use \`texra agents list${categoryArg} --all\` to show ${catalog}.`;
+  const { filterArg, catalog } = cliAgentCatalogHint(tasks);
+  return `Showing visible agents only; ${formatResultCount(hiddenCount, 'hidden agent')} omitted. Use \`texra agents list${filterArg} --all\` to show ${catalog}.`;
 }
 
-function cliAgentCatalogHint(category?: AgentCategory): {
-  readonly categoryArg: string;
+function cliAgentCatalogHint(tasks: boolean): {
+  readonly filterArg: string;
   readonly catalog: string;
   readonly qualifier: string;
 } {
-  const categoryLabel =
-    category === AgentCategory.ToolUse ? 'tool-use' : category;
-  return {
-    categoryArg: category ? ` --category ${category}` : '',
-    catalog: categoryLabel ? `all ${categoryLabel} agents` : 'all agents',
-    qualifier: categoryLabel ? `${categoryLabel} ` : '',
-  };
+  return tasks
+    ? {
+        filterArg: ' --tasks',
+        catalog: 'all document tasks',
+        qualifier: 'document tasks',
+      }
+    : { filterArg: '', catalog: 'all agents', qualifier: 'agents' };
 }
 
 function collectCliAgents(
   stores: WorkspaceAgentsStores,
   source: 'all' | 'visible',
-  categoryFilter?: AgentCategory,
+  tasks: boolean,
 ) {
-  const categories = categoryFilter ? [categoryFilter] : AGENT_CATEGORIES;
   return Effect.map(
-    Effect.forEach(categories, (category) =>
-      source === 'visible'
-        ? getVisibleAgents(stores, category)
-        : Effect.succeed(getAgentsByCategory(category)),
-    ),
-    (groups) => groups.flat(),
+    source === 'visible'
+      ? getVisibleAgents(stores)
+      : Effect.succeed(getCatalogAgents()),
+    (agents) =>
+      tasks ? agents.filter((agent) => agent.task !== null) : agents,
   );
 }

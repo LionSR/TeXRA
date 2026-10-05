@@ -96,20 +96,20 @@ texra run polish \
 <CliRunHero
   command='texra run polish --input draft.tex --instruction "Tighten the prose. Preserve all math and citations."'
   :rounds="[
-    { label: 'Round 0: draft  ·  r0/draft.tex written', state: 'done' },
-    { label: 'Round 1: critique, rereading its own output', state: 'active' },
+    { label: 'Revision 1: draft  ·  r0/draft.tex written', state: 'done' },
+    { label: 'Revision 2: critique, rereading its own output', state: 'active' },
   ]"
 />
 
-<p class="hero-caption">Mid-run: Round 0 has written the first revision and Round 1 is critiquing and revising it. The live status line on stderr tracks the current round. When the run completes, the path to the final document prints on stdout.</p>
+<p class="hero-caption">Mid-run: the first revision is written and the second is critiquing and revising it. The live status line on stderr tracks the current revision. When the run completes, the path to the final document prints on stdout.</p>
 
 The run streams reasoning, tool calls, and the assembled output.
-When it completes, polish has written one folder per round in the run's
+When it completes, polish has written one folder per revision in the run's
 storage folder (`executions/<run-id>/` under TeXRA's workspace storage):
 
 <PolishRunTree />
 
-<p class="hero-caption">Each round lands in its own folder and keeps the input filename: <code>r0/draft.tex</code> is the first revision, <code>r1/draft.tex</code> the critique pass and final. Add <code>--output draft.polished.tex</code> to write the result next to your input instead.</p>
+<p class="hero-caption">Each revision lands in its own folder and keeps the input filename: <code>r0/draft.tex</code> is the first revision, <code>r1/draft.tex</code> the critique pass and final. Add <code>--output draft.polished.tex</code> to write the result next to your input instead.</p>
 
 To diff against your original, use the final-document path printed on
 stdout:
@@ -124,21 +124,21 @@ Polish ran two passes: a first revision, then a critique pass that
 rereads its own output and revises again.
 
 <FlowSteps :steps="[
-  { n: 1, icon: 'wand', title: 'Round 0: draft', desc: 'Reads draft.tex, applies your instruction, writes the first revision.', chips: [{ text: 'r0/draft.tex', variant: 'info', icon: 'file-code' }] },
-  { n: 2, icon: 'search', title: 'Round 1: critique', desc: 'Rereads its own Round 0 output, then revises again.', chips: [{ text: 'missing math', variant: 'warning' }, { text: 'weakened sentences', variant: 'warning' }, { text: 'generic filler', variant: 'warning' }, { text: 'out-of-scope edits', variant: 'warning' }, { text: 'r1/draft.tex', variant: 'info', icon: 'file-code' }] }
+  { n: 1, icon: 'wand', title: 'Revision 1: draft', desc: 'Reads draft.tex, applies your instruction, writes the first revision.', chips: [{ text: 'r0/draft.tex', variant: 'info', icon: 'file-code' }] },
+  { n: 2, icon: 'search', title: 'Revision 2: critique', desc: 'Rereads its own first revision, then revises again.', chips: [{ text: 'missing math', variant: 'warning' }, { text: 'weakened sentences', variant: 'warning' }, { text: 'generic filler', variant: 'warning' }, { text: 'out-of-scope edits', variant: 'warning' }, { text: 'r1/draft.tex', variant: 'info', icon: 'file-code' }] }
 ]" />
 
-<p class="hero-caption">Polish is a two-pass workflow: Round 0 drafts from your instruction, Round 1 critiques its own output against a fixed checklist and revises into <code>r1/draft.tex</code>.</p>
+<p class="hero-caption">Polish is a two-revision document task: the first revision drafts from your instruction, the second critiques its own output against a fixed checklist and revises into <code>r1/draft.tex</code>.</p>
 
-Workflow agents like `polish` do not call tools. They read input, run
-their pipeline, and write a diff. The next step up, tool-use agents,
+A document task like `polish` does not call tools. It reads input, runs
+its revisions, and writes a diff. The next step up, agents with tools,
 can read across your project, search literature, verify algebra in
 Wolfram, prove theorems in Lean 4, and compile LaTeX. Read the
 [built-in agents catalog](./built-in-agents.md).
 
 ## Next steps
 
-- [**Polish a draft**](./workflows/polish-a-draft.md): the workflow in depth: rounds, limits, multi-file projects
+- [**Polish a draft**](./workflows/polish-a-draft.md): the document task in depth: revisions, limits, multi-file projects
 - [**Built-in agents**](./built-in-agents.md): the full catalog, including `correct`, `research`, `review`, and `lean`
 - [**Models**](./models.md): choosing a model that matches the work
 - [**TeXRA CLI**](./texra-cli.md): sign-in, workspace defaults, headless output formats

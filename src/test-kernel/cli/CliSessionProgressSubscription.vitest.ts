@@ -9,9 +9,9 @@ import {
   type CliNdjsonProgressRecordWriter,
 } from '@cli/runtime/sessionProgressSubscription';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
+import { inquiryThreadRow } from '@shared/plugins/externalInquiry';
 import {
   aggregateId as qualifyAggregateId,
-  AgentCategory,
   type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
@@ -54,13 +54,11 @@ const PASS_THROUGH_CASES: ReadonlyArray<{
       draft: {
         type: 'run.activate',
         aggregateId: runAggregate,
-        category: AgentCategory.Workflow,
       },
     },
     event: 'run.activate',
     payload: {
       aggregateId: runAggregate,
-      category: AgentCategory.Workflow,
     },
   },
   {
@@ -105,18 +103,19 @@ const PASS_THROUGH_CASES: ReadonlyArray<{
   },
   {
     source: {
-      draft: {
-        type: 'inquiryThreadUpdated',
-        aggregateId: qualifyAggregateId('inquiry', inquiryThread.threadId),
-        ...inquiryThread,
-        parentRunId: runId,
-      },
+      draft: inquiryThreadRow({ ...inquiryThread, parentRunId: runId }),
     },
-    event: 'inquiryThreadUpdated',
+    event: 'plugin.fact',
     payload: {
-      aggregateId: qualifyAggregateId('inquiry', inquiryThread.threadId),
-      ...inquiryThread,
-      parentRunId: runId,
+      aggregateId: qualifyAggregateId(
+        'plugin',
+        `external-inquiry:${inquiryThread.threadId}`,
+      ),
+      plugin: 'external-inquiry',
+      kind: 'thread',
+      version: 1,
+      parent: runId,
+      value: inquiryThread,
     },
   },
   {
@@ -228,7 +227,6 @@ describe('attachCliSessionProgressProjection', () => {
               type: 'run.start',
               aggregateId: childAggregate,
               identity: { kind: 'process', tool: 'bash' },
-              category: AgentCategory.ToolUse,
               userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
               parent: { id: runId, callId: null },
               provenance: null,
@@ -241,7 +239,7 @@ describe('attachCliSessionProgressProjection', () => {
               type: 'run.end',
               aggregateId: childAggregate,
               outcome: 'completed',
-              output: { category: 'toolUse', response: '', files: [] },
+              output: { response: '', files: [] },
             },
           }),
         );
@@ -277,7 +275,6 @@ describe('attachCliSessionProgressProjection', () => {
             type: 'run.start',
             aggregateId: runAggregate,
             identity: { kind: 'agent', agent: 'polish' },
-            category: AgentCategory.ToolUse,
             userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
             parent: null,
             provenance: null,
@@ -285,7 +282,6 @@ describe('attachCliSessionProgressProjection', () => {
           {
             type: 'run.activate',
             aggregateId: runAggregate,
-            category: AgentCategory.ToolUse,
           },
           {
             type: 'run.description',
@@ -299,7 +295,6 @@ describe('attachCliSessionProgressProjection', () => {
             type: 'run.start',
             aggregateId: childAggregate,
             identity: { kind: 'agent', agent: 'review' },
-            category: AgentCategory.ToolUse,
             userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
             parent: { id: runId, callId: null },
             provenance: null,
@@ -308,7 +303,7 @@ describe('attachCliSessionProgressProjection', () => {
             type: 'run.end',
             aggregateId: childAggregate,
             outcome: 'completed',
-            output: { category: 'toolUse', response: '', files: [] },
+            output: { response: '', files: [] },
           },
         ]);
         yield* session.settlePublications();
@@ -321,7 +316,6 @@ describe('attachCliSessionProgressProjection', () => {
             draft: {
               type: 'run.activate',
               aggregateId: runAggregate,
-              category: AgentCategory.ToolUse,
             },
           }),
         );
@@ -332,7 +326,6 @@ describe('attachCliSessionProgressProjection', () => {
             event: 'run.activate',
             fields: {
               aggregateId: runAggregate,
-              category: AgentCategory.ToolUse,
             },
           },
         ]);
@@ -356,7 +349,6 @@ describe('attachCliSessionProgressProjection', () => {
               type: 'run.start',
               aggregateId: childAggregate,
               identity: { kind: 'agent', agent: 'review' },
-              category: AgentCategory.ToolUse,
               userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
               parent: { id: runId, callId: null },
               provenance: null,
@@ -390,7 +382,6 @@ describe('attachCliSessionProgressProjection', () => {
             draft: {
               type: 'run.activate',
               aggregateId: childAggregate,
-              category: AgentCategory.ToolUse,
             },
           }),
         );
@@ -421,7 +412,7 @@ describe('attachCliSessionProgressProjection', () => {
               type: 'run.end',
               aggregateId: childAggregate,
               outcome: 'completed',
-              output: { category: 'toolUse', response: '', files: [] },
+              output: { response: '', files: [] },
             },
           }),
         );

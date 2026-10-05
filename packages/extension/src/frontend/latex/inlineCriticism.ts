@@ -5,10 +5,10 @@
  * Problems panel, like a linter.
  *
  * Two ingest paths:
- *   1. Session `output.produced` rows parse each output
- *      `.tex` file. Universal — any agent that writes the macro participates.
+ *   1. A document task's documents rows parse each output `.tex` file.
+ *      Universal — any agent that writes the macro participates.
  *   2. The `diagnostics` tool's `add` command routes through
- *      `pushManualCriticism` here for tool-use agents that want to flag issues
+ *      `pushManualCriticism` here for agents that want to flag issues
  *      without inserting the macro.
  *
  * Gated on the `texra.inlineCriticism.enabled` catalog row (global state,
@@ -22,20 +22,21 @@ import { Cause, Effect, Fiber, FileSystem, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { type ManualCriticismEntry, type SessionHandle } from '@agent/runtime';
+import type { ManualCriticismEntry } from '@agent/runtime';
 import { outputFilesProduced } from '@frontend/events/runFactSubscriptions';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
 import { withLogChannel } from '@logger/effectLog';
-import type { StateReadFailed } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { AddOutputFilesPayload, OutputFileInfo } from '@shared/schemas';
-import { TexraStateKey } from '@shared/settingsView/texraSettings';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
+import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { hasExtension } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
+import type { StateReadFailed } from '@texra-ai/harness';
 
 const CHANNEL = 'InlineCriticism';
 const COLLECTION_NAME = 'texra-criticism';
@@ -46,7 +47,7 @@ const CODE_TOOL = 'criticize:tool';
 /** What {@link registerInlineCriticism} attached the feature to. */
 interface CriticismRegistration {
   readonly context: vscode.ExtensionContext;
-  readonly session: Pick<SessionHandle, 'events' | 'now'>;
+  readonly session: Pick<SessionBackend, 'viewChanges'>;
   readonly runtime: ProcessRuntime;
   readonly stores: SettingsStores;
 }
@@ -196,7 +197,7 @@ const reconcile = Effect.fnUntraced(function* (current: CriticismRegistration) {
 });
 
 /**
- * Append a criticism entry from a tool-use agent. Returns false when the
+ * Append a criticism entry from an agent. Returns false when the
  * feature is disabled so the tool can report the no-op back to the agent.
  */
 export function pushManualCriticism(entry: ManualCriticismEntry): boolean {
@@ -232,7 +233,7 @@ export function pushManualCriticism(entry: ManualCriticismEntry): boolean {
 export function registerInlineCriticism(
   context: vscode.ExtensionContext,
   runtime: ProcessRuntime,
-  session: Pick<SessionHandle, 'events' | 'now'>,
+  session: Pick<SessionBackend, 'viewChanges'>,
   stores: SettingsStores,
 ): Effect.Effect<void, StateReadFailed> {
   return Effect.suspend(() => {

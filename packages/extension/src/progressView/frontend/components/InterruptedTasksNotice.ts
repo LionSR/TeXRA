@@ -15,7 +15,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import type { SessionView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
-import { SessionUiEvents } from '@shared/session/uiEvents';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import {
   INTERRUPTED_NOTICE,
   interruptedTasks,

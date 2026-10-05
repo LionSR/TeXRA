@@ -1,0 +1,155 @@
+/**
+ * The one display model for the /executions surface: the listing lines, the
+ * /executions/{id} summary line sets, and the sub-paths a run serves.
+ *
+ * Every fact comes off the session fold's `RunView`. The fold already decides
+ * what a run is, what it is called, what may be said about its status and who
+ * its parent is (PRD one-fold-three-renderers, 5.2), so nothing here reads a
+ * durable row or re-derives liveness from a missing in-process handle.
+ */
+
+import { type RunId, type RunIdentity } from '@shared/schemas';
+import type { RunView, SessionView } from '@shared/session/sessionView';
+import { formatTimestamp } from '@utils/text/stringUtils';
+
+/**
+ * The display category of a run: an agent run is a conversation (`agent`)
+ * or a document task (`task`); every other run
+ * shows what it IS (`process` / `script`).
+ */
+type RunDisplayCategory = 'task' | RunIdentity['kind'];
+
+export function runDisplayCategory(run: RunView): RunDisplayCategory {
+  return run.identity.kind === 'agent' && run.documentTask
+    ? 'task'
+    : run.identity.kind;
+}
+
+/**
+ * The runs the fold lists under `runId`, in its own child ordering. A
+ * detached or deleted child has already left `childIds`, so there is no
+ * second parentage rule here.
+ */
+export function childRunViews(view: SessionView, runId: RunId): RunView[] {
+  return (view.runs.get(runId)?.childIds ?? []).flatMap((id) => {
+    const child = view.runs.get(id);
+    return child === undefined ? [] : [child];
+  });
+}
+
+/** Return paths available for a given display category. */
+function getAvailablePaths(
+  category: RunDisplayCategory,
+  hasChildren: boolean,
+): string[] {
+  const common = [
+    'config',
+    'report',
+    'result',
+    ...(hasChildren ? ['children'] : []),
+  ];
+  switch (category) {
+    case 'agent':
+      return [...common, 'conversation', 'workspace-files'];
+    case 'task':
+      return [...common, 'files', 'conversation'];
+    case 'process':
+      return [...common, 'output'];
+    case 'script':
+      return [...common, 'conversation'];
+    default:
+      category satisfies never;
+      return common;
+  }
+}
+
+/**
+ * What may be said about a run's status, in the fold's own words: the durable
+ * phase, plus the clause naming the fact that forbids a terminal reading —
+ * interrupted (nobody owns it and nothing recorded how it ended), held by
+ * another TeXRA process, or unreadable. "No handle in this process" is never
+ * on its own a reason to call a run finished, and the fold is what knows the
+ * difference.
+ */
+export function formatRunStatus(run: RunView): string {
+  return run.statusDetail === null
+    ? run.status
+    : `${run.status}: ${run.statusDetail}`;
+}
+
+/** One /executions line. `marks` is what the line says about the run
+ *  relative to the caller: its relation and unread input. */
+export function formatListingLine(run: RunView, marks: string): string {
+  const ts = formatTimestamp(new Date(run.launchedAt).toISOString());
+  const modelTag = run.model === null ? '' : `  ${run.model}`;
+  const parentSuffix = run.parentId === null ? '' : `  parent=${run.parentId}`;
+  const markSuffix = marks ? `  ${marks}` : '';
+  const descSuffix = run.description ? `: ${run.description}` : '';
+  return `${run.id}  ${ts}  ${run.label}  ${runDisplayCategory(run)}${modelTag}  [${formatRunStatus(run)}]${parentSuffix}${markSuffix}${descSuffix}`;
+}
+
+/** Format a single child run as a summary line. */
+export function formatChildLine(child: RunView): string {
+  const ts = formatTimestamp(new Date(child.launchedAt).toISOString());
+  const desc = child.description ? `: ${child.description}` : '';
+  return `${child.id}  ${ts}  ${child.label}  [${formatRunStatus(child)}]${desc}`;
+}
+
+// ============================================================================
+// /executions/{id} summary
+// ============================================================================
+
+/** The head of the /executions/{id} summary: one line set for every run,
+ *  running or finished, because one fold answers for both. */
+export function buildSummaryLines(run: RunView): string[] {
+  const lines = [
+    `Run: ${run.id}`,
+    `Agent: ${run.label}`,
+    `Category: ${runDisplayCategory(run)}`,
+    ...(run.model === null ? [] : [`Model: ${run.model}`]),
+    `Timestamp: ${new Date(run.launchedAt).toISOString()}`,
+    `Status: ${formatRunStatus(run)}`,
+  ];
+
+  if (run.description) {
+    lines.push(`Description: ${run.description}`);
+  }
+
+  if (run.parentId !== null) {
+    lines.push(`Parent: ${run.parentId}`);
+  }
+
+  return lines;
+}
+
+/**
+ * Build the report/available-paths lines that close the summary.
+ * Appended after the children lines, so this only needs whether there were
+ * any children, not the rows themselves.
+ */
+export function buildSummaryTailLines(
+  runId: RunId,
+  category: RunDisplayCategory,
+  hasChildren: boolean,
+  report: string | null,
+  options: { readonly suppressReport?: boolean } = {},
+): string[] {
+  const lines: string[] = [];
+
+  if (report && options.suppressReport) {
+    lines.push(
+      '',
+      `Result: delivered automatically to this parent run as a follow-up message. Use /executions/${runId}/report to read the persisted report explicitly.`,
+    );
+  } else if (report) {
+    lines.push('', 'Result:', report);
+  }
+
+  const paths = getAvailablePaths(category, hasChildren);
+  lines.push(
+    '',
+    `Available paths: ${paths.map((p) => `/executions/${runId}/${p}`).join(', ')}`,
+  );
+
+  return lines;
+}

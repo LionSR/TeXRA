@@ -3,8 +3,8 @@ import * as vscode from 'vscode';
 import { nanoid } from 'nanoid';
 
 import { withLogChannel } from '@logger/effectLog';
-import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
 import { escapeAttr } from '@shared/utils/xmlEscape';
+import { HOST_BRIDGE_API_KEY } from '@texra/shared/hostBridgeTypes';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 

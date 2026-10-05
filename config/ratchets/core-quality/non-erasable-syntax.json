@@ -1,14 +1,13 @@
 {
-  "src/agent/core/state/AgentWorkspaceState.ts": 3,
-  "src/agent/index/AgentDirectoryService.ts": 1,
-  "src/agent/runtime/childRunLoop.ts": 3,
-  "src/agent/runtime/historyQuery/HistoryQuery.ts": 3,
-  "src/agent/runtime/ModelRetryGate.ts": 1,
-  "src/agent/runtime/RunHandle.ts": 2,
-  "src/agent/runtime/runRegistry.ts": 1,
-  "src/agent/trace/TraceEmitter.ts": 5,
-  "src/agent/workspaceAgents/WorkspaceAgentsController.ts": 1,
-  "src/controllers/session/SessionBridge.ts": 3,
-  "src/controllers/session/sessionLayer.ts": 1,
-  "src/platform/defaults/jsonStore.ts": 3
+  "packages/harness/src/agent/core/state/AgentWorkspaceState.ts": 3,
+  "packages/harness/src/agent/index/AgentDirectoryService.ts": 1,
+  "packages/harness/src/agent/runtime/childRunLoop.ts": 3,
+  "packages/harness/src/agent/runtime/historyQuery/HistoryQuery.ts": 3,
+  "packages/harness/src/agent/runtime/ModelRetryGate.ts": 1,
+  "packages/harness/src/agent/runtime/RunHandle.ts": 2,
+  "packages/harness/src/agent/runtime/runRegistry.ts": 1,
+  "packages/harness/src/agent/trace/TraceEmitter.ts": 5,
+  "packages/harness/src/agent/workspaceAgents/WorkspaceAgentsController.ts": 1,
+  "packages/harness/src/controllers/session/sessionLayer.ts": 1,
+  "packages/harness/src/platform/defaults/jsonStore.ts": 2
 }

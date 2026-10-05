@@ -96,7 +96,7 @@ function assertBundledResourcesIncluded(entries) {
     hasPluginSkillManifest,
     'npm package should include tool plugin skill manifests (dist/resources/plugins/*/skills/).',
   );
-  // ...and their bundled tool-use agents under resources/plugins/<id>/agents.
+  // ...and their bundled agents under resources/plugins/<id>/agents.
   assert(
     relativeEntries.some((relative) =>
       /^dist\/resources\/plugins\/[^/]+\/agents\/.+\.yaml$/.test(relative),

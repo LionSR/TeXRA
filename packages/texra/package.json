@@ -1,0 +1,7 @@
+{
+  "name": "@texra-ai/texra",
+  "version": "0.41.0",
+  "private": true,
+  "description": "TeXRA, the app: its plugins, LaTeX, the UI kit and the host-side controllers over @texra-ai/harness",
+  "license": "Apache-2.0"
+}

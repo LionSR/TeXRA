@@ -35,16 +35,16 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared webview
 import '@ui/wa/spinner';
-import {
-  FILE_SELECT_CONFIGS,
-  LAUNCH_FILE_LISTS,
-} from '@shared/launcher/fileSelectConfigs';
-import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
 import { agentName } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
-import { SessionUiEvents } from '@shared/session/uiEvents';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import {
+  FILE_SELECT_CONFIGS,
+  LAUNCH_FILE_LISTS,
+} from '@texra/shared/launcher/fileSelectConfigs';
+import { installToolbarTooltips } from '@texra/shared/litControllers/TooltipController';
 import { designTokens } from '@ui/styles';
 import {
   renderIconActionButton,
@@ -55,16 +55,16 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { ONBOARDING_SETUP_HANDOFF } from '@ui/copy/onboarding';
 import { getBasename } from '@utils/core';
 
-/** A workflow task's planned pass count: its agent's catalog entry, by the
+/** A document task's planned pass count: its agent's catalog entry, by the
  *  key the launch recorded or, for a plain name only, the agent name. A
  *  source-qualified key names one agent exactly, so a same-named agent from
  *  another source never lends it its count. */
 function plannedPassesOf(run: RunView, host: HostSnapshot): number | undefined {
-  if (run.category !== 'workflow' || run.identity.kind !== 'agent') {
+  if (!run.documentTask || run.identity.kind !== 'agent') {
     return undefined;
   }
   const id = run.identity.agent;
-  return host.agentOptions.workflow?.find(
+  return host.agentOptions.find(
     (option) =>
       option.value === id || (agentName(id) === id && option.label === id),
   )?.rounds;
@@ -392,7 +392,7 @@ export class ProgressApp extends LitElement {
    *  pending, else the project starter while the folder has no LaTeX
    *  files, else the prompt. Without a credential the welcome card
    *  replaces the whole state (see below). */
-  private renderHero(host: HostSnapshot, surface: Surface): TemplateResult {
+  private renderHero(host: HostSnapshot): TemplateResult {
     if (host.onboarding === 'setup') {
       return html`<section class="hero" aria-labelledby="shell-hero-title">
         <div class="hero-mark" aria-hidden="true">${waIcon('rocket')}</div>
@@ -422,7 +422,6 @@ export class ProgressApp extends LitElement {
     }
     return html`<new-task-hero
       .projectName=${host.project.name}
-      .instruction=${surface.launch.instruction}
     ></new-task-hero>`;
   }
 
@@ -441,9 +440,9 @@ export class ProgressApp extends LitElement {
       `;
     }
     const { launch } = surface;
-    // Only a document pass reads Input and Context, so only it gets the file
-    // section; an interactive task attaches through the composer alone.
-    const documentPass = launch.sessionType === 'workflow';
+    // Only a document task reads Input and Context, so only it gets the file
+    // section; a chat attaches through the composer alone.
+    const documentPass = launch.sessionType === 'task';
     const selectedFiles = FILE_SELECT_CONFIGS.flatMap(
       (config) => launch[LAUNCH_FILE_LISTS[config.type]],
     );
@@ -452,7 +451,7 @@ export class ProgressApp extends LitElement {
     return html`
       <div class="empty">
         <div class="hero-wrap">
-          ${this.renderHero(host, surface)}
+          ${this.renderHero(host)}
           ${
             documentPass
               ? html`<wa-details class="context" open>
@@ -502,10 +501,7 @@ export class ProgressApp extends LitElement {
             .view=${view}
             .surface=${surface}
           ></interrupted-tasks-notice>
-          <session-banners
-            .banners=${host.banners}
-            .sessionType=${launch.sessionType}
-          ></session-banners>
+          <session-banners .banners=${host.banners}></session-banners>
         </div>
         <launch-attachments .files=${documentPass ? [] : launch.mediaFiles}
           ><session-composer

@@ -12,14 +12,25 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
+import { DESKTOP_PROJECTS } from '@desktop/main/desktopProjectRecords';
+import { INQUIRY_THREADS } from '@shared/plugins/externalInquiry';
 import {
-  CURRENT_VALUE_SCHEMAS,
   CURRENT_VALUE_VERSION,
   ROW_KINDS,
   SessionEventDraftSchema,
 } from '@shared/schemas';
+import {
+  APP_STATE,
+  REPO_STATE,
+  WORKSPACE_STORES,
+} from '@shared/session/valueFamily';
+import { UPDATE_CHECKS } from '@texra/utils/system/updateCheck';
 import { PLUGIN_ARMS } from '@tools/pluginArms';
-import { REPO_ROOT } from '../support/repoScan';
+import {
+  productionFilesUnder,
+  productionRoots,
+  REPO_ROOT,
+} from '../support/repoScan';
 
 /**
  * The release watermark of the session store
@@ -44,6 +55,17 @@ interface Versioned {
   readonly schema: z.ZodType;
 }
 
+/** Every current-value family, each declared by its owner; the first case
+ *  checks this list against the declarations in the production tree. */
+const VALUE_FAMILIES = [
+  APP_STATE,
+  REPO_STATE,
+  WORKSPACE_STORES,
+  DESKTOP_PROJECTS,
+  INQUIRY_THREADS,
+  UPDATE_CHECKS,
+];
+
 const VERSIONED: readonly Versioned[] = [
   ...SessionEventDraftSchema.options.map((arm) => {
     const kind = ROW_KINDS[arm.shape.type.value];
@@ -60,8 +82,8 @@ const VERSIONED: readonly Versioned[] = [
     upcasts: arm.upcasters.length,
     schema: arm.schema,
   })),
-  ...Object.entries(CURRENT_VALUE_SCHEMAS).map(([family, schema]) => ({
-    name: `current-value.${family}`,
+  ...VALUE_FAMILIES.map(({ name, schema }) => ({
+    name: `current-value.${name}`,
     version: CURRENT_VALUE_VERSION,
     upcasts: 0,
     schema,
@@ -91,6 +113,17 @@ describe('row versions', () => {
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain('model.message');
     expect(names).toContain('current-value.app-state');
+    const declared = productionRoots()
+      .flatMap(productionFilesUnder)
+      .flatMap((file) => [
+        ...readFileSync(resolve(REPO_ROOT, file), 'utf8').matchAll(
+          /:\s*ValueFamily<[^=]*=\s*\{\s*name:\s*'([^']+)'/g,
+        ),
+      ])
+      .map((match) => match[1]);
+    expect(declared.toSorted()).toEqual(
+      VALUE_FAMILIES.map(({ name }) => name).toSorted(),
+    );
   });
 
   it.each(VERSIONED)(

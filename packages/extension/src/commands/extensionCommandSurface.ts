@@ -28,16 +28,17 @@ import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
-import { dispatchCommandFromRegistry } from '@shared/commands/registry';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
+import { dispatchCommandFromRegistry } from '@texra/shared/commands/registry';
 
 // Local file imports
 import {
   EXTENSION_COMMAND_HANDLERS,
   type ExtensionCommandActions,
 } from './extensionCommandHandlers';
+import type { PlatformSecrets } from '@texra-ai/harness';
 
 const externalOpener = new VscodeExternalOpener();
 
@@ -47,10 +48,11 @@ export function createExtensionCommandActions(
   progressViewProvider: ProgressViewProvider,
   secrets: PlatformSecrets,
   session: SessionHandle,
+  /** Where this window's runs run. */
+  backend: SessionBackend,
 ): ExtensionCommandActions {
   return {
-    showSettings: (tab, agentSubTab) =>
-      settingsViewProvider.showSettingsView(tab, agentSubTab),
+    showSettings: (tab) => settingsViewProvider.showSettingsView(tab),
     // New Task is the header's "+" (PRD 12.4): the New-task state into
     // view with the launcher's selections as they are.
     newTask: () => progressViewProvider.showLauncher(),
@@ -61,6 +63,7 @@ export function createExtensionCommandActions(
         launchSetupAssistant(
           secrets,
           session,
+          backend,
           (runId) => progressViewProvider.presentLaunchedRun(runId),
           progressViewProvider.showConnectModel(),
         ),
@@ -89,7 +92,7 @@ export function createExtensionCommandActions(
     execute: (input) =>
       input === undefined
         ? progressViewProvider.submit()
-        : agentRunExecuteCommand(input, session, (runId) =>
+        : agentRunExecuteCommand(input, session, backend, (runId) =>
             progressViewProvider.presentLaunchedRun(runId),
           ),
   };

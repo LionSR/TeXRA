@@ -10,12 +10,13 @@ import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  RUN_OUTCOME,
-  AgentCategory,
-  agentMatchesIdentifier,
+import { RUN_OUTCOME, agentMatchesIdentifier } from '@shared/schemas';
+import type {
+  ModelOptionData,
+  RequestDecision,
+  RunId,
+  SessionEventDraft,
 } from '@shared/schemas';
-import type { ModelOptionData, RequestDecision, RunId } from '@shared/schemas';
 import { untrackRun, closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
@@ -26,6 +27,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { agentTool } from '@tools/delegation/AgentTool';
 import {
   executeSubagentInBand as executeSubagentInBandEffect,
@@ -68,11 +70,8 @@ vi.mock('@agent/runtime/executeAgent', async (importOriginal) => ({
 // agentRegistry's own rule — mirrored here rather than re-implemented.
 vi.mock('@agent/index/agentRegistry', () => ({
   getVisibleAgents: mocks.getVisibleAgents,
-  resolveDelegationScopeAgents: (
-    _stores: unknown,
-    scope: unknown,
-    category: AgentCategory,
-  ) => (scope ? [] : mocks.getVisibleAgents(category)),
+  resolveDelegationScopeAgents: (_stores: unknown, scope: unknown) =>
+    scope ? [] : mocks.getVisibleAgents(),
   findAgentByIdentifier: (
     entries: readonly { source: string; name: string }[],
     identifier: string,
@@ -101,31 +100,46 @@ vi.mock('@agent/storage', () => ({
 }));
 
 // The launch sites register through `registerRun`; route the spy through it.
+// A child's last-turn settlement rides the row that ends it: the suite's
+// record store takes its report and manifest, as the run's own rows would.
 vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@agent/storage/runLifecycle')>();
   return {
     ...actual,
     registerRun: mocks.registerRun,
+    finalizeRun: (
+      session: SessionHandle,
+      input: Parameters<typeof actual.finalizeRun>[1],
+    ) =>
+      Effect.tryPromise({
+        try: () => persistSettlement(input.runId, input.settlement ?? []),
+        catch: ensureError,
+      }).pipe(
+        Effect.matchEffect({
+          onFailure: (error) =>
+            Effect.succeed({
+              ok: false as const,
+              error,
+            }),
+          onSuccess: () => actual.finalizeRun(session, input),
+        }),
+      ),
   };
 });
 
-vi.mock('@agent/storage/childRunDeliveryPersistence', () => ({
-  persistChildRunDelivery: (
-    _session: unknown,
-    runId: RunId,
-    message: string,
-    resultMeta: unknown,
-  ) =>
-    Effect.tryPromise({
-      try: async () => {
-        await mocks.childRecords(runId).writeReport(message);
-        if (resultMeta !== undefined)
-          await mocks.childRecords(runId).writeResultMeta(resultMeta);
-      },
-      catch: ensureError,
-    }),
-}));
+/** Write a settlement's report and manifest to the suite's record store. */
+async function persistSettlement(
+  runId: RunId,
+  rows: readonly SessionEventDraft[],
+): Promise<void> {
+  for (const row of rows) {
+    if (row.type === 'run.report' && row.report !== null)
+      await mocks.childRecords(runId).writeReport(row.report);
+    if (row.type === 'run.result')
+      await mocks.childRecords(runId).writeResultMeta(row.result);
+  }
+}
 
 vi.mock('@model/computeModelOptions', () => ({
   readModelAvailabilityInputs: mocks.readModelAvailabilityInputs,
@@ -156,7 +170,7 @@ function parentRunContext(
   const stopAfterCycle = overrides.stopAfterCycle ?? false;
   return {
     ...(overrides.userInstruction !== undefined && {
-      userInstruction: overrides.userInstruction,
+      origin: { instruction: overrides.userInstruction },
     }),
     run: {
       runId: overrides.runId ?? PARENT_RUN_ID,
@@ -178,7 +192,7 @@ function parentRunContext(
 let testEngine: AgentEngine['Service'];
 
 function callDelegateReview(call = parentRunContext()) {
-  return agentTool({ fields: {}, toolConfig: () => ({}) })
+  return agentTool()
     .call({
       agentName: 'review',
       prompt: 'Check the proof.',
@@ -190,7 +204,7 @@ function callDelegateReview(call = parentRunContext()) {
       Effect.provide(
         nativeToolTestLayer({
           ...call,
-          toolCallId: `call-${generateShortId()}`,
+          callId: `call-${generateShortId()}`,
         }),
       ),
     );
@@ -280,7 +294,6 @@ function delegationOptions(
   return {
     configPayload: {
       agent: 'review',
-      agentCategory: AgentCategory.ToolUse,
       model: 'deepseek/deepseek-v4-flash',
     },
     parentRunId: IN_BAND_PARENT_RUN_ID,
@@ -314,7 +327,7 @@ function mockExecuteAgentErrorOnce(
     outcome: 'failed',
     runId: CHILD_RUN_ID,
     usage: { totalCost: totalCostUsd },
-    output: { category: 'toolUse', response: '', files: [] },
+    output: { response: '', files: [] },
     error: { message: 'review model failed', userRetryable: true },
     ...extra,
   });
@@ -343,7 +356,6 @@ function mockTrackedChildOnce(
       return {
         outcome: RUN_OUTCOME.COMPLETED,
         output: {
-          category: 'toolUse',
           response: 'The proof is correct.',
           files: [],
         },
@@ -462,6 +474,13 @@ describe('headless delegation', () => {
               ...options,
               turnSignal: signal,
             });
+            // Production's lifecycle settles the child's last turn with its
+            // `run.end`; a refused write leaves the run without them.
+            if (options.turns)
+              await persistSettlement(
+                runId,
+                await Effect.runPromise(options.turns.settleEnd(turn)),
+              ).catch(() => undefined);
             // Production's lifecycle drains the facts this run queued before
             // it writes the terminal row, and the row is the post-drain fact
             // (`finalizeRunTerminal`); the drain runs here too, so a
@@ -490,7 +509,7 @@ describe('headless delegation', () => {
       Effect.succeed([
         {
           name: 'review',
-          source: 'builtInToolUse',
+          source: 'builtIn',
           description: 'Review work.',
           tools: [],
         },
@@ -524,7 +543,6 @@ describe('headless delegation', () => {
       outcome: 'completed',
       runId: CHILD_RUN_ID,
       output: {
-        category: 'toolUse',
         response: 'The proof is correct.',
         files: [],
       },
@@ -535,21 +553,21 @@ describe('headless delegation', () => {
     'validates workflow inputs against its once-loaded definition before registration',
     () =>
       Effect.gen(function* () {
-        const task = { outputs: [] as string[] };
+        const task = { outputs: ['generated.tex'] };
         mocks.prepareAgentDefinition.mockImplementation(
           ({ config }: { config: unknown }) =>
             Effect.succeed({ config, persona: { tools: [] }, task }),
         );
-        const options = delegationOptions({
-          configPayload: {
-            agent: 'review',
-            agentSource: 'plugin',
-            agentCategory: AgentCategory.Workflow,
-            model: 'deepseek/deepseek-v4-flash',
-          },
-        });
-        const run = () =>
-          Effect.provide(
+        const run = (inputFiles: string[]) => {
+          const options = delegationOptions({
+            configPayload: documentTaskConfig({
+              agent: 'review',
+              agentSource: 'plugin',
+              model: 'deepseek/deepseek-v4-flash',
+              inputFiles,
+            }),
+          });
+          return Effect.provide(
             executeSubagentInBandEffect({
               ...options,
               runId: IN_BAND_RUN_ID,
@@ -559,22 +577,22 @@ describe('headless delegation', () => {
             ),
             fakeProcessServices(),
           );
-        expect(yield* Effect.flip(run())).toMatchObject({
-          message: expect.stringContaining('pass options.inputFiles'),
+        };
+        // Declared outputs do not stand in for the files it revises.
+        expect(yield* Effect.flip(run([]))).toMatchObject({
+          message: expect.stringContaining('pass inputFiles'),
         });
         expect(mocks.registerRun).not.toHaveBeenCalled();
-        task.outputs = ['generated.tex'];
         mocks.prepareAgentDefinition.mockClear();
         mocks.executeAgent.mockResolvedValue({
           outcome: 'completed',
           output: {
-            category: 'workflow',
-            outputs: [],
-            compileFailures: [],
-            diffs: [],
+            response: '',
+            files: [],
+            documents: { outputs: [], compileFailures: [], diffs: [] },
           },
         });
-        yield* run();
+        yield* run(['main.tex']);
         expect(mocks.prepareAgentDefinition).toHaveBeenCalledOnce();
         expect(mocks.executeAgent).toHaveBeenCalledWith(
           expect.objectContaining({ task }),
@@ -610,7 +628,6 @@ describe('headless delegation', () => {
         expect.objectContaining({
           config: expect.objectContaining({
             agent: 'review',
-            agentCategory: AgentCategory.ToolUse,
             instruction: expect.stringContaining('Check the proof.'),
             model: 'deepseek/deepseek-v4-flash',
           }),
@@ -645,7 +662,6 @@ describe('headless delegation', () => {
         expect(result.result).toEqual({
           outcome: 'completed',
           output: {
-            category: 'toolUse',
             response: 'The proof is correct.',
             files: [],
           },
@@ -739,7 +755,6 @@ describe('headless delegation', () => {
       mockExecuteAgentErrorOnce(0.61, {
         runId: IN_BAND_RUN_ID,
         output: {
-          category: 'toolUse',
           response: 'Partial review.',
           files: [],
         },
@@ -806,7 +821,7 @@ describe('headless delegation', () => {
             return {
               outcome: 'cancelled',
               runId: CHILD_RUN_ID,
-              output: { category: 'toolUse', response: '', files: [] },
+              output: { response: '', files: [] },
             };
           },
         );
@@ -887,7 +902,7 @@ describe('headless delegation', () => {
           expect.objectContaining({
             config: expect.objectContaining({
               agent: 'review',
-              agentSource: 'builtInToolUse',
+              agentSource: 'builtIn',
             }),
           }),
           expect.any(String),

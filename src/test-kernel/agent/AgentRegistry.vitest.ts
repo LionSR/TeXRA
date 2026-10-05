@@ -25,8 +25,8 @@ import {
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
+import { texraPlugins } from '@texra/tools/registry';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
-import { texraPlugins } from '@tools/registry';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 
 /**
@@ -162,27 +162,25 @@ describe('agent registry', () => {
       ),
   );
 
-  it.effect(
-    'pools tool plugin agent directories into the builtInToolUse source',
-    () =>
-      Effect.gen(function* () {
-        installPluginAgentDirectories(resourcesPath, ['lean4']);
-        yield* onGlobalStorage(refresh());
-        const lean = getAgent('lean');
-        expect(lean?.source).toBe('builtInToolUse');
-        expect(lean?.path).toBe(
-          resolve(resourcesPath, 'plugins/lean4/agents/lean.yaml'),
-        );
-        installPluginAgentDirectories(resourcesPath, []);
-        yield* onGlobalStorage(refresh());
-        expect(getAgent('lean')).toBeUndefined();
-      }).pipe(
-        // The install is module state: a failed assertion must not leave the
-        // plugin directory installed for the rest of the file.
-        Effect.ensuring(
-          Effect.sync(() => installPluginAgentDirectories(resourcesPath, [])),
-        ),
+  it.effect('pools tool plugin agent directories into the builtIn source', () =>
+    Effect.gen(function* () {
+      installPluginAgentDirectories(resourcesPath, ['lean4']);
+      yield* onGlobalStorage(refresh());
+      const lean = getAgent('lean');
+      expect(lean?.source).toBe('builtIn');
+      expect(lean?.path).toBe(
+        resolve(resourcesPath, 'plugins/lean4/agents/lean.yaml'),
+      );
+      installPluginAgentDirectories(resourcesPath, []);
+      yield* onGlobalStorage(refresh());
+      expect(getAgent('lean')).toBeUndefined();
+    }).pipe(
+      // The install is module state: a failed assertion must not leave the
+      // plugin directory installed for the rest of the file.
+      Effect.ensuring(
+        Effect.sync(() => installPluginAgentDirectories(resourcesPath, [])),
       ),
+    ),
   );
 
   it.effect(
@@ -229,7 +227,7 @@ describe('agent registry', () => {
         builtInToolUse: () =>
           Effect.fail(
             new AgentDirectoriesFailed({
-              source: 'builtInToolUse',
+              source: 'builtIn',
               message: 'refresh failed',
               cause: undefined,
             }),

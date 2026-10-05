@@ -80,19 +80,16 @@ function replyBody(source: unknown): unknown {
     : undefined;
 }
 
-const finiteNumber = (value: unknown): number | undefined =>
-  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-
 /** The HTTP status an SDK error names, on itself or its response. */
 function sdkStatus(source: unknown): number | undefined {
   if (!isFields(source)) return undefined;
   return (
-    finiteNumber(source.status) ??
-    finiteNumber(source.statusCode) ??
-    finiteNumber(source.code) ??
+    numberField(source, 'status') ??
+    numberField(source, 'statusCode') ??
+    numberField(source, 'code') ??
     [source.response, source.error]
       .filter(isFields)
-      .map((nested) => finiteNumber(nested.status))
+      .map((nested) => numberField(nested, 'status'))
       .find((value) => value !== undefined)
   );
 }

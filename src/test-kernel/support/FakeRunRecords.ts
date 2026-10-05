@@ -7,8 +7,6 @@ export function createFakeRunRecords(
 ): ReturnType<typeof getRunRecords> {
   return {
     exists: () => Effect.succeed(false),
-    isRemoved: () => Effect.succeed(false),
-    countActivations: () => Effect.succeed(1),
     readRunRecord: () => Effect.succeed(null),
     readConfig: () => Effect.succeed(null),
     readReport: () => Effect.succeed(null),
@@ -16,7 +14,6 @@ export function createFakeRunRecords(
     readResultMeta: () => Effect.succeed(null),
     readRunEnd: () => Effect.succeed(null),
     readResult: () => Effect.succeed(null),
-    clearReport: () => Effect.void,
     writeResultMeta: () => Effect.void,
     ...overrides,
   };

@@ -153,4 +153,4 @@ The setup commands drive the Lean 4 extension's installers, so they only work in
 
 - [Built-in agents](./built-in-agents.md): full reference for the `lean` agent and others
 - [Research tools](./research-tools.md): literature search, citations, and Wolfram verification
-- [Workflow agents](./agent-architecture.md): how the orchestrator coordinates multi-agent runs
+- [Agent architecture](./agent-architecture.md): how the orchestrator coordinates multi-agent runs

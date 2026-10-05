@@ -15,7 +15,7 @@ import {
 import type { CliPlatformServices } from '@cli/runtime/initPlatform';
 import { SETUP_AGENT_HANDOFF_NOTICE } from '@cli/onboarding/setupContinuation';
 import { withLogChannel } from '@logger/effectLog';
-import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
+import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { applyInitialCliAgentSelection } from './commands/handlers/agentModelCommands';

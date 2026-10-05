@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractDocuments } from '@utils/text/xmlExtraction';
+import { extractDocuments } from '@texra/utils/text/xmlExtraction';
 
-describe('extractDocuments legacy fallback (src/utils/text/xmlExtraction.ts)', () => {
+describe('extractDocuments legacy fallback (packages/texra/src/utils/text/xmlExtraction.ts)', () => {
   it('uses simple path when <documents><document name> is present', () => {
     const xml =
       '<documents><document name="a.tex">Body A</document>' +

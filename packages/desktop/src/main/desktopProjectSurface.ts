@@ -9,7 +9,6 @@ import { join } from 'node:path';
 import { app, shell } from 'electron';
 import { Effect, Exit, FileSystem, Scope, SubscriptionRef } from 'effect';
 
-import type { PlatformSecrets } from '@platform/secrets';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages.js';
 import {
@@ -20,6 +19,7 @@ import {
 import { desktopSignInPresenters } from './desktopSignInPresenters.js';
 import { installDesktopWindowTitle } from './desktopWindowTitle.js';
 import { desktopSpawner } from './desktopWindows.js';
+import type { PlatformSecrets } from '@texra-ai/harness';
 import type { ProjectBindings } from './desktopProjectBindings.js';
 import type { DesktopPromptController } from './desktopPromptController.js';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
@@ -141,17 +141,17 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
         // an agent mode separately sends the chosen root to that project's
         // launcher. Each project's catalogs answer for that project: its
         // snapshot source was built over its own roots.
-        refreshCatalogs: (selectedToolUseAgent) =>
+        refreshCatalogs: (selectedAgent) =>
           Effect.gen(function* () {
             yield* bindings.eachSnapshot(
               (snapshot) => snapshot.refreshCatalogs,
             );
-            if (!selectedToolUseAgent) return;
+            if (!selectedAgent) return;
             const binding = bindings.get(project.key);
             if (!binding || binding !== documentBinding) return;
             binding.bridge.surfaceAction({
               kind: 'launch',
-              patch: { sessionType: 'toolUse', agent: selectedToolUseAgent },
+              patch: { sessionType: 'chat', agent: selectedAgent },
             });
           }),
         refreshCredentialStatus: Effect.suspend(() =>
@@ -188,10 +188,12 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
               initialCommand: command,
             });
           }),
-        // There is no editor whose settings the LaTeX page could recommend.
-        latexRecommendedStatus: () => ({
+        // There is no editor whose settings the LaTeX page could recommend,
+        // nor one to install LaTeX Workshop into.
+        latexEditorStatus: () => ({
           outDir: true,
           autoRevealExclude: true,
+          latexWorkshopInstalled: false,
         }),
       };
     };

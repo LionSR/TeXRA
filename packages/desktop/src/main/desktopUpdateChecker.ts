@@ -1,12 +1,13 @@
 import { Effect } from 'effect';
 
-import { ensureError } from '@utils/errors/errorMessage';
-import { UPDATE_CHECK_SKIP_ENV } from '@utils/system/semverUpdateCheck';
-import { envFlag } from '@utils/system/envFlags';
+import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
+import { UPDATE_CHECK_SKIP_ENV } from '@texra/utils/system/semverUpdateCheck';
 import {
   fetchJsonStringField,
   runDailyUpdateCheck,
-} from '@utils/system/updateCheck';
+} from '@texra/utils/system/updateCheck';
+import { envFlag } from '@utils/system/envFlags';
+import { ensureError } from '@utils/errors/errorMessage';
 import type { HttpClient } from 'effect/http';
 
 /**
@@ -91,5 +92,5 @@ export const checkForDesktopUpdate = ({
           },
           catch: ensureError,
         }),
-    });
+    }).pipe(Effect.provide(updateCheckRecordsLayer));
   });

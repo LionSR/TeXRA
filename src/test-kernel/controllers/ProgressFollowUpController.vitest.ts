@@ -6,13 +6,13 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
+import type { CompileFailure, OutputFileInfo, RunId } from '@shared/schemas';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import {
   ProgressFollowUpController,
   type ProgressFollowUpModelOption,
   type ProgressFollowUpState,
-} from '@controllers/progressView/ProgressFollowUpController';
-import type { CompileFailure, OutputFileInfo, RunId } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
+} from '@texra/controllers/progressView/ProgressFollowUpController';
 import {
   createOutputFile,
   createWorkflowConfig,
@@ -43,7 +43,7 @@ type RunStorageOutputOverrides = Omit<OutputFileHarnessOptions, 'location'> & {
 
 /** Workflow config built from the shared harness. */
 function createFollowUpWorkflowConfig(
-  overrides: Omit<Partial<AgentConfig>, 'agentCategory'> = {},
+  overrides: Partial<AgentConfig> = {},
 ): AgentConfig {
   return createWorkflowConfig({
     ...followUpWorkflowDefaults,
@@ -53,15 +53,16 @@ function createFollowUpWorkflowConfig(
 
 /** Workflow config whose `inputFiles` are exactly the ones passed in. */
 function createExactInputsConfig(
-  overrides: Omit<Partial<AgentConfig>, 'agentCategory'> = {},
+  overrides: Partial<AgentConfig> = {},
 ): AgentConfig {
-  return AgentConfigSchema.parse({
-    agent: 'writer',
-    model: 'google/gemini-3.1-pro-preview',
-    ...followUpWorkflowDefaults,
-    agentCategory: AgentCategory.Workflow,
-    ...overrides,
-  });
+  return documentTaskConfig(
+    AgentConfigSchema.parse({
+      agent: 'writer',
+      model: 'google/gemini-3.1-pro-preview',
+      ...followUpWorkflowDefaults,
+      ...overrides,
+    }),
+  );
 }
 
 function createRunStorageOutputFile(

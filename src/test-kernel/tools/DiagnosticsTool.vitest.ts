@@ -10,7 +10,7 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { createFakeHost } from '@test/support/setupPlatform';
-import { DiagnosticsTool } from '@tools/DiagnosticsTool';
+import { DiagnosticsTool } from '@texra/tools/DiagnosticsTool';
 
 /** The test scope owns its session and exposes its tool capabilities directly. */
 function withSession<A, E, R>(
@@ -42,10 +42,7 @@ describe('DiagnosticsTool', () => {
 
       yield* withSession((session) =>
         Effect.gen(function* () {
-          const addCriticism = vi.fn((entry) => ({
-            accepted: true,
-            resolvedPath: entry.absolutePath,
-          }));
+          const addCriticism = vi.fn(() => Effect.succeed(true));
           yield* session.interactions.use({ addCriticism });
 
           const result = yield* DiagnosticsTool.call(addCriticismCall()).pipe(

@@ -3,16 +3,13 @@ import { Effect } from 'effect';
 import { z, ZodError } from 'zod';
 
 // Local imports
-import {
-  AgentConfigSchema,
-  runAgent,
-  type SessionHandle,
-} from '@agent/runtime';
+import { AgentConfigSchema, type SessionHandle } from '@agent/runtime';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
-import type { RunId } from '@shared/schemas';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { ensureError } from '@utils/errors/errorMessage';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'ExecuteCommand';
 
@@ -39,6 +36,8 @@ const WrappedExecuteInputSchema = z.object({
 export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
   input: unknown,
   session: SessionHandle,
+  /** Where the run runs: this window's session, or the service's. */
+  backend: SessionBackend,
   /** Select the run this launch resolved: the launching surface's own. */
   onRunResolved: (runId: RunId) => void,
 ): Effect.fn.Return<void, Error, ProcessServices> {
@@ -67,10 +66,9 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
 
   // Post-start failures are already logged and surfaced by the run lifecycle,
   // so they travel the failure channel without a second (mislabeled) log entry.
-  const result = yield* runAgent(
+  const result = yield* backend.launch(
     { config },
     {
-      session,
       // Set only by the "fix LaTeX" actions (see handleFixCompilation and the
       // progress-view compile fixer); a direct main-view launch omits it and
       // keeps the user's selected model.

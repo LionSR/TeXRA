@@ -12,7 +12,6 @@ import { ModelOriginSchema } from '@texra-ai/llm';
 import { runHistoryRows, storedDraft } from '@agent/runtime/storedTurn';
 import {
   aggregateId as qualifyAggregateId,
-  AgentCategory,
   emptyRunEndOutput,
   DISPLAY_EVENT_TYPES,
   listingTypeOf,
@@ -42,6 +41,7 @@ import {
   type RunView,
 } from '@shared/session/sessionView';
 import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
+import { DOCUMENTS_OUTPUT_ARM, documentsOf } from '@shared/plugins/documents';
 
 import { createExternalLocation } from '@utils/files/fileLocation';
 
@@ -70,14 +70,9 @@ function runView(view: SessionView, id: RunId): RunView {
   return found;
 }
 
-/** The three round-keyed maps of a tool-use run, which holds its output
- *  files in `outputs` (a workflow run holds them in `files`). */
+/** The three round-keyed maps of a run's documents. */
 function roundMapsOf(view: SessionView, id: RunId) {
-  const run = runView(view, id);
-  if (run.category !== AgentCategory.ToolUse)
-    throw new Error(`run ${id} is not a tool-use run`);
-  const { outputs, missingOutputs, compileFailures } = run;
-  return { outputs, missingOutputs, compileFailures };
+  return documentsOf(runView(view, id));
 }
 
 const alive = local({ self: [OWNER] });
@@ -92,7 +87,6 @@ describe('sessionFold', () => {
       type: 'run.start',
       identity: CHILD_IDENTITY,
       userFollowUpSupport: 'unsupported',
-      category: AgentCategory.ToolUse,
       parent: null,
       provenance: null,
     });
@@ -217,7 +211,6 @@ describe('sessionFold', () => {
     expect(view.order).toStrictEqual([PROCESS, ROOT]);
 
     expect(root.label).toBe(runIdentityDisplayName(ROOT_IDENTITY));
-    expect(root.category).toBe(AgentCategory.ToolUse);
     expect(root.worktree).toStrictEqual({
       workingDirectory: '/paper',
       branch: 'main',
@@ -236,7 +229,6 @@ describe('sessionFold', () => {
       { id: ROOT, label: 'review' },
       { id: CHILD, label: child.label },
     ]);
-    expect(runView(view, GRANDCHILD)).toMatchObject({ outputs: {} });
     expect(child.label).toBe(runIdentityDisplayName(CHILD_IDENTITY));
     expect(child.model).toBe('claude-sonnet-4-5');
     expect(child.followUpSupport).toBe('nativeInteractive');
@@ -244,7 +236,6 @@ describe('sessionFold', () => {
     // Process runs carry the command, never a model.
     expect(runView(view, PROCESS).command).toBe('npm test');
     expect(runView(view, PROCESS).model).toBeNull();
-    expect(runView(view, PROCESS).category).toBe(AgentCategory.ToolUse);
     // The tail advanced the cursor to the last commit.
     expect(view.cursor).toBe(scenario.log.events.length);
   });
@@ -356,7 +347,7 @@ describe('sessionFold', () => {
         scenario.log.emit(CHILD, 1851, {
           type: 'run.end',
           outcome: 'cancelled',
-          output: emptyRunEndOutput(AgentCategory.ToolUse),
+          output: emptyRunEndOutput(),
         }),
       ),
     );
@@ -428,7 +419,6 @@ describe('sessionFold', () => {
     log.emit(CHILD, 1650, {
       type: 'run.start',
       identity: CHILD_IDENTITY,
-      category: AgentCategory.ToolUse,
       userFollowUpSupport: 'unsupported',
       parent: null,
       provenance: null,
@@ -436,7 +426,6 @@ describe('sessionFold', () => {
     log.emit(PROCESS, 1650, {
       type: 'run.start',
       identity: { kind: 'process', tool: 'bash' },
-      category: AgentCategory.ToolUse,
       parent: null,
       provenance: null,
       userFollowUpSupport: 'unsupported',
@@ -508,7 +497,6 @@ describe('sessionFold', () => {
     log.emit(CHILD, 1600, {
       type: 'run.start',
       identity: CHILD_IDENTITY,
-      category: AgentCategory.ToolUse,
       userFollowUpSupport: 'unsupported',
       parent: null,
       provenance: null,
@@ -567,7 +555,6 @@ describe('sessionFold', () => {
     log.emit(CHILD, 1500, {
       type: 'run.start',
       identity: CHILD_IDENTITY,
-      category: AgentCategory.ToolUse,
       userFollowUpSupport: 'unsupported',
       parent: null,
       provenance: null,
@@ -647,7 +634,7 @@ describe('sessionFold', () => {
         log.emit(CHILD, 1502, {
           type: 'run.end',
           outcome: 'completed',
-          output: emptyRunEndOutput(AgentCategory.ToolUse),
+          output: emptyRunEndOutput(),
         }),
       ),
     );
@@ -702,7 +689,6 @@ describe('sessionFold', () => {
       type: 'run.start',
       identity: CHILD_IDENTITY,
       userFollowUpSupport: 'unsupported',
-      category: AgentCategory.ToolUse,
       parent: null,
       provenance: null,
     });
@@ -763,7 +749,6 @@ describe('sessionFold', () => {
         type: 'run.start',
         identity: id === ROOT ? ROOT_IDENTITY : CHILD_IDENTITY,
         userFollowUpSupport: 'unsupported',
-        category: AgentCategory.ToolUse,
         parent: parent === null ? null : log.parent(parent),
         provenance: null,
       });
@@ -808,7 +793,7 @@ describe('sessionFold', () => {
   });
 
   it('takes each round map from the newest row, on a cold read and on replay', () => {
-    // `output.produced` is a latest-only listing key, so a cold read hands
+    // The documents row is a latest-only listing key, so a cold read hands
     // the fold one row per run. It carries the whole round collection, and
     // the fold replaces rather than merges the derived maps.
     const log = new Log();
@@ -816,7 +801,6 @@ describe('sessionFold', () => {
       type: 'run.start',
       identity: CHILD_IDENTITY,
       userFollowUpSupport: 'unsupported',
-      category: AgentCategory.ToolUse,
       parent: null,
       provenance: null,
     });
@@ -841,24 +825,23 @@ describe('sessionFold', () => {
       compileFailures: round === 0 ? [failureOf(0)] : [],
       missingOutputs: round === 0 ? ['intro.tex'] : [],
     });
-    const firstRound = [
-      log.emit(CHILD, 3010, {
-        type: 'output.produced',
-        rounds: [roundOutput(0)],
-      }),
-    ];
+    const documentsRow = (rounds: ReturnType<typeof roundOutput>[]) => ({
+      type: 'plugin.fact' as const,
+      plugin: DOCUMENTS_OUTPUT_ARM.plugin,
+      kind: DOCUMENTS_OUTPUT_ARM.kind,
+      version: DOCUMENTS_OUTPUT_ARM.version,
+      value: { rounds },
+      parent: null,
+    });
+    const firstRound = [log.emit(CHILD, 3010, documentsRow([roundOutput(0)]))];
     const secondRound = [
-      log.emit(CHILD, 3020, {
-        type: 'output.produced',
-        rounds: [roundOutput(0), roundOutput(1)],
-      }),
+      log.emit(CHILD, 3020, documentsRow([roundOutput(0), roundOutput(1)])),
     ];
     const bothRounds = {
-      // An empty round is not a round the outputs tab shows, so a compile
-      // failure map drops it; a missing-output map keeps it, where it means
-      // "checked, nothing missing".
-      outputs: { 0: [outputOf(0)], 1: [outputOf(1)] },
-      missingOutputs: { 0: ['intro.tex'], 1: [] },
+      // An empty round is not a round the outputs tab shows, so each map
+      // drops it.
+      files: { 0: [outputOf(0)], 1: [outputOf(1)] },
+      missingOutputs: { 0: ['intro.tex'] },
       compileFailures: { 0: [failureOf(0)] },
     };
 
@@ -898,19 +881,14 @@ describe('sessionFold', () => {
     // A row is the map, so a round it does not name is not in the run's
     // state: the newest row replaces what the view holds, never merges.
     const dropped = foldAll(
-      [
-        log.emit(CHILD, 3030, {
-          type: 'output.produced',
-          rounds: [roundOutput(1)],
-        }),
-      ].map((event) => ({
+      [log.emit(CHILD, 3030, documentsRow([roundOutput(1)]))].map((event) => ({
         _tag: 'event' as const,
         read: 'all' as const,
         event,
       })),
       fromScratch,
     );
-    expect(roundMapsOf(dropped, CHILD).outputs).toStrictEqual({
+    expect(roundMapsOf(dropped, CHILD).files).toStrictEqual({
       1: [outputOf(1)],
     });
   });
@@ -948,7 +926,6 @@ describe('sessionFold', () => {
       type: 'run.start',
       identity: { kind: 'process', tool: 'bash' },
       userFollowUpSupport: 'unsupported',
-      category: AgentCategory.ToolUse,
       parent: null,
       provenance: null,
     });
@@ -1168,7 +1145,6 @@ describe('sessionFold', () => {
         origin: OWNER,
         at: 3900,
         type: 'run.activate',
-        category: AgentCategory.ToolUse,
       }),
       tail({
         aggregateId: qualifyAggregateId('run', CHILD),
@@ -1308,7 +1284,6 @@ const CALLS = [
     ordinal: 0,
     parallelSafe: false,
     replay: 'unsafe',
-    partition: 0,
     duplicateOf: null,
     logId: 'card-0',
     stageId: null,
@@ -1319,7 +1294,6 @@ const CALLS = [
     ordinal: 1,
     parallelSafe: false,
     replay: 'unsafe',
-    partition: 0,
     duplicateOf: 'call-a',
     logId: 'card-1',
     stageId: null,
@@ -1350,6 +1324,15 @@ const toolUseSnapshot = (runtime: Record<string, unknown> = {}) => ({
   },
 });
 
+/** The row a call's body starts with. */
+const intent = (callId: string, attempt = 1) => ({
+  type: 'tool.intent',
+  payload: {
+    origin: { kind: 'response', responseId: RESPONSE_ID },
+    callId,
+    attempt,
+  },
+});
 /** The binding row an approval commits beside its `request.opened`. */
 const toolBinding = (callId: string, requestId: string, attempt = 1) => ({
   type: 'tool.binding',
@@ -1452,14 +1435,7 @@ const TURN_ROWS: readonly RunHistoryRow[] = [
     calls: CALLS,
     usage: TURN_USAGE,
   }),
-  {
-    type: 'tool.intent',
-    payload: {
-      origin: { kind: 'response', responseId: RESPONSE_ID },
-      callIds: ['call-a'],
-      attempt: 1,
-    },
-  },
+  intent('call-a'),
   settlement('call-a'),
   settlement('call-b', { disposition: 'duplicate', duplicateOf: 'call-a' }),
   message({
@@ -1490,15 +1466,17 @@ const reasonOf = <A>(result: Result.Result<A, { reason: string }>): string =>
 describe('foldRunState', () => {
   it.each([
     [
-      'between tool.intent and the adapter call: outcome unknown, never fabricated',
+      'after the body started, before its result: outcome unknown, never fabricated',
       () => {
         const state = stateOf(through(6));
-        expect(state?.pendingIntents['call-a']).toEqual({
+        expect(state?.pendingResponse?.records['call-a']?.status).toEqual({
+          kind: 'started',
           attempt: 1,
-          responseId: RESPONSE_ID,
           binding: null,
         });
-        expect(state?.pendingResponse?.settled).toEqual({});
+        expect(state?.pendingResponse?.records['call-b']?.status).toEqual({
+          kind: 'issued',
+        });
       },
     ],
     [
@@ -1520,31 +1498,38 @@ describe('foldRunState', () => {
       },
     ],
     [
-      'approval requested, never resolved: the binding rides its own row',
+      'approval requested before the body, never resolved: the binding rides its own row',
       () => {
-        const state = stateOf(
-          through(
-            6,
-            {
-              type: 'request.opened',
-              requestId: 'req-1',
-              payload: {
-                kind: 'bash',
-                data: {
-                  requestId: 'req-1',
-                  command: 'ls',
-                  allowBypass: true,
-                  runId: RUN_HISTORY_RUN,
-                },
+        const approval = [
+          {
+            type: 'request.opened',
+            requestId: 'req-1',
+            payload: {
+              kind: 'bash',
+              data: {
+                requestId: 'req-1',
+                command: 'ls',
+                allowBypass: true,
+                runId: RUN_HISTORY_RUN,
               },
             },
-            toolBinding('call-a', 'req-1'),
-          ),
-        );
-        expect(state?.requests['req-1']?.resolved).toBe(false);
-        expect(state?.pendingIntents['call-a']?.binding).toEqual({
+          },
+          toolBinding('call-a', 'req-1'),
+        ];
+        // Asked before its body started: nothing ran, whatever the answer.
+        const asking = stateOf(through(5, ...approval));
+        expect(asking?.requests['req-1']?.resolved).toBe(false);
+        expect(asking?.pendingResponse?.records['call-a']?.status).toEqual({
+          kind: 'asking',
+          attempt: 1,
           requestId: 'req-1',
-          role: 'call',
+        });
+        // The body starts under it: the request is the attempt's binding.
+        const started = stateOf(through(5, ...approval, intent('call-a')));
+        expect(started?.pendingResponse?.records['call-a']?.status).toEqual({
+          kind: 'started',
+          attempt: 1,
+          binding: { requestId: 'req-1', role: 'call' },
         });
       },
     ],
@@ -1801,7 +1786,7 @@ describe('foldRunState', () => {
               type: 'tool.intent',
               payload: {
                 origin: { kind: 'response', responseId: RESPONSE_ID },
-                callIds: ['__proto__'],
+                callId: '__proto__',
                 attempt: 1,
               },
             },
@@ -1809,8 +1794,14 @@ describe('foldRunState', () => {
         );
         // On a plain object the assignment would call the inherited setter and
         // the barrier would vanish from the state the resume rule reads.
-        expect(Object.keys(state?.pendingIntents ?? {})).toEqual(['__proto__']);
-        expect(state?.pendingIntents['__proto__']?.attempt).toBe(1);
+        expect(Object.keys(state?.pendingResponse?.records ?? {})).toEqual([
+          '__proto__',
+        ]);
+        expect(state?.pendingResponse?.records['__proto__']?.status).toEqual({
+          kind: 'started',
+          attempt: 1,
+          binding: null,
+        });
       },
     ],
     [
@@ -1823,13 +1814,11 @@ describe('foldRunState', () => {
                 type: 'run.start',
                 identity: { kind: 'agent', agent: 'chat' },
                 userFollowUpSupport: 'unsupported',
-                category: AgentCategory.ToolUse,
                 parent: null,
                 provenance: null,
               }),
               runHistoryRow(2, {
                 type: 'run.activate',
-                category: AgentCategory.ToolUse,
               }),
             ]),
           ),
@@ -1878,7 +1867,6 @@ describe('foldRunState', () => {
       'tool',
     ]);
     expect(state?.pendingResponse).toBeNull();
-    expect(state?.pendingIntents).toEqual({});
     expect(state?.usage.totalInputTokens).toBe(10);
     expect(state?.usage.totalCacheReadInputTokens).toBe(4);
     // The turn's stamped price: a settlement adds nothing to it.
@@ -1894,16 +1882,30 @@ describe('foldRunState', () => {
     ['out-of-order', () => foldRunState(null, [TURN_ROWS[1], TURN_ROWS[0]])],
     ['orphan-settlement', () => through(2, settlement('call-a'))],
     [
-      // The intent admitted attempt 1; attempt 2 is another dispatch, and
-      // accepting it here would retire attempt 1's uncertainty silently.
+      // A call's attempt never goes back: attempt 2's body started, so
+      // attempt 1 settling now would retire attempt 2's uncertainty silently.
       'out-of-order',
-      () => through(6, settlement('call-a', { attempt: 2 })),
+      () => through(6, intent('call-a', 2), settlement('call-a')),
     ],
     [
-      // A binding names the intent the rows hold, at the attempt the
-      // approval admits; anything else is a row out of order.
+      // The outcome question asks whether a body ran: one that never
+      // started is a row out of order.
       'out-of-order',
-      () => through(6, toolBinding('call-a', 'req-9', 2)),
+      () =>
+        through(5, {
+          type: 'tool.binding',
+          payload: {
+            callId: 'call-a',
+            attempt: 1,
+            requestId: 'req-9',
+            role: 'outcome',
+          },
+        }),
+    ],
+    [
+      // A call settles once.
+      'orphan-settlement',
+      () => through(7, settlement('call-a', { attempt: 2 })),
     ],
     [
       'mismatched-delivery',

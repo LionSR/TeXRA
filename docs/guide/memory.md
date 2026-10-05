@@ -5,7 +5,7 @@ import CliMemoryHero from '../.vitepress/components/CliMemoryHero.vue';
 
 # Memory
 
-Tool-use agents in TeXRA can save notes that persist across conversations. The next time you start a chat, even days later, the agent loads those notes and picks up where it left off, without you having to re-explain the project.
+Agents in TeXRA can save notes that persist across conversations. The next time you start a chat, even days later, the agent loads those notes and picks up where it left off, without you having to re-explain the project.
 
 <MemoryHero />
 
@@ -26,7 +26,7 @@ Memory is **not** a chat transcript. The agent doesn't replay old conversations;
 
 Memory is **on by default**. To turn it off, open **Settings** (Command Palette → `TeXRA: Open Settings`), switch to the **Memory** tab, and flip the **Enable memory for chat agents** switch. The same switch turns it back on.
 
-When memory is on, every tool-use agent run has access to the `memory` tool: it can create, view, update, rename, delete, pin, and unpin notes under `/memories`.
+When memory is on, every chat has access to the `memory` tool: it can create, view, update, rename, delete, pin, and unpin notes under `/memories`.
 
 ## How an agent uses memory
 
@@ -100,4 +100,4 @@ If you end up with a long list of stale, never-pinned notes, delete them. The ag
 
 - [ProgressBoard](./progress-board.md): see what an agent is doing in real time, including which memories it has read or written
 - [Configuration](./configuration.md): the full list of Settings tabs
-- [Custom agents](./custom-agents.md): give your own tool-use agents access to the `memory` tool
+- [Custom agents](./custom-agents.md): give your own agents access to the `memory` tool

@@ -2,15 +2,15 @@
 import * as path from 'node:path';
 
 // Local imports
-import type { runCompileCheck } from '@agent/output/compileCheck';
-import type { OutputState } from '@agent/output/outputState';
 import type { RunId, FileLocation, OutputFileInfo } from '@shared/schemas';
-import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
+import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
+import type { OutputState } from '@texra/agent/output/outputState';
+import type { runCompileCheck } from '@texra/agent/output/compileCheck';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
 
@@ -77,8 +77,8 @@ export function initLatexPlatform(
     storagePath,
     workspacePath,
     workspaceState: {
-      [TexraStateKey.WORKFLOW_AUTO_COMPILE]: true,
-      [TexraStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: 30_000,
+      [DocumentsStateKey.WORKFLOW_AUTO_COMPILE]: true,
+      [DocumentsStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: 30_000,
     },
   });
 }

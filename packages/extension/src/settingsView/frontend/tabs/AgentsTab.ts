@@ -5,37 +5,26 @@
  */
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
-import {
-  LitElement,
-  html,
-  css,
-  nothing,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 
 // Local imports - shared schemas
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { postMessage } from '@shared/hostBridge';
 import {
-  type AgentCategory,
-  type ByCategory,
-  byCategory,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
+import type { AgentScanIssue } from '@shared/schemas';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { postMessage } from '@texra/shared/hostBridge';
 import {
   type AgentSelectionItem,
   type SettingsSectionName,
-} from '@shared/settingsView/settingsViewMessages';
-import type { AgentScanIssue } from '@shared/schemas';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import type { TeXRAIconName } from '@shared/iconNames';
+} from '@texra/shared/settingsView/settingsViewMessages';
 import {
   commonViewStyles,
   designTokens,
@@ -96,12 +85,11 @@ export class AgentsTab extends LitElement {
         margin-top: var(--wa-space-2xs);
       }
 
-      .agent-category + .agent-category,
-      .agent-category + .settings-section-heading {
+      .agent-list {
         margin-top: var(--wa-space-l);
       }
 
-      .agent-category agent-selection-panel {
+      .agent-list agent-selection-panel {
         display: block;
         min-height: 22rem;
       }
@@ -113,14 +101,12 @@ export class AgentsTab extends LitElement {
     `,
   ];
 
-  @property({ attribute: false }) agents: ByCategory<AgentSelectionItem[]> =
-    byCategory(() => []);
+  @property({ attribute: false }) agents: AgentSelectionItem[] = [];
   @property({ attribute: false }) customAgentDir = '';
   @property({ attribute: false }) customAgentDirIsDefault = true;
   @property({ attribute: false }) customAgentScanIssues: AgentScanIssue[] = [];
   @property({ attribute: false }) section: SettingsSectionName<'agents'> =
     'library';
-  @property({ attribute: false }) initialSubTab?: AgentCategory;
   @property({ attribute: false }) compactionThresholdPercent =
     MODEL_COMPACTION_THRESHOLD_SETTING.defaultValue;
   /** Parent-owned acknowledgement generation; changes force a re-render even when all field values are unchanged. */
@@ -133,23 +119,14 @@ export class AgentsTab extends LitElement {
   @property({ attribute: false }) childRunConcurrencyBudget =
     CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue;
 
-  protected override updated(changed: PropertyValues): void {
-    super.updated(changed);
-    if (changed.has('initialSubTab') && this.initialSubTab) {
-      this.shadowRoot
-        ?.querySelector(`#${this.initialSubTab}-agents-section`)
-        ?.scrollIntoView({ block: 'start' });
-    }
-  }
-
   private handleOpenFolder(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER, {
       folderType: 'custom',
     });
   }
 
-  private handleCreateAgent(category: AgentCategory): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.CREATE_AGENT, { category });
+  private handleCreateAgent(task: boolean): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.CREATE_AGENT, { task });
   }
 
   private handleChangeCustomDir(): void {
@@ -185,37 +162,32 @@ export class AgentsTab extends LitElement {
     });
   }
 
-  private renderAgentCategory(
-    category: AgentCategory,
-    agents: AgentSelectionItem[],
-    title: string,
-    description: string,
-    icon: TeXRAIconName,
-  ): TemplateResult {
-    const actions = renderLabeledActionButton({
+  private renderAgentList(): TemplateResult {
+    const actions = html`${renderLabeledActionButton({
       icon: 'file-circle-plus',
-      text: 'Create from template',
+      text: 'New chat agent',
       kind: 'primary',
       appearance: 'filled',
-      onClick: () => this.handleCreateAgent(category),
-    });
+      onClick: () => this.handleCreateAgent(false),
+    })}
+    ${renderLabeledActionButton({
+      icon: 'file-circle-plus',
+      text: 'New document task',
+      kind: 'secondary',
+      appearance: 'outlined',
+      onClick: () => this.handleCreateAgent(true),
+    })}`;
     return html`
-      <section
-        id="${category}-agents-section"
-        class="agent-category"
-        aria-labelledby="${category}-agents-heading"
-      >
+      <section class="agent-list" aria-labelledby="agents-heading">
         ${renderSettingsSectionHeading({
-          title: `${title} (${agents.length})`,
-          description,
-          icon,
+          title: `Agents (${this.agents.length})`,
+          description:
+            'Every agent can chat. An agent marked "document task" can also revise the files you select, in passes.',
+          icon: 'wand-magic-sparkles',
           actions,
-          id: `${category}-agents-heading`,
+          id: 'agents-heading',
         })}
-        <agent-selection-panel
-          .agents=${agents}
-          .category=${category}
-        ></agent-selection-panel>
+        <agent-selection-panel .agents=${this.agents}></agent-selection-panel>
       </section>
     `;
   }
@@ -246,7 +218,7 @@ export class AgentsTab extends LitElement {
 
   private renderLibrary(): TemplateResult {
     // Point to the creator agent only where the selector offers it.
-    const creatorShown = this.agents.toolUse.some(
+    const creatorShown = this.agents.some(
       (agent) => agent.name === 'creator' && agent.enabled,
     );
     return html`
@@ -306,20 +278,7 @@ export class AgentsTab extends LitElement {
         </div>
         ${this.renderCustomAgentIssues()}
       </div>
-      ${this.renderAgentCategory(
-        'toolUse',
-        this.agents.toolUse,
-        'Tool-use agents',
-        'Interactive agents that can inspect files, run tools, and edit the workspace.',
-        'screwdriver-wrench',
-      )}
-      ${this.renderAgentCategory(
-        'workflow',
-        this.agents.workflow,
-        'Workflow agents',
-        'Focused specialists for writing, review, research, and structured paper workflows.',
-        'wand-magic-sparkles',
-      )}
+      ${this.renderAgentList()}
     `;
   }
 

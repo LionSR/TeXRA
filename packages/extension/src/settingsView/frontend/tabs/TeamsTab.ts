@@ -10,8 +10,8 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { postMessage } from '@shared/hostBridge';
 import { AGENT_MODE_PRESETS, type AgentModePreset } from '@shared/schemas';
+import { postMessage } from '@texra/shared/hostBridge';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import {
   renderIconActionButton,
@@ -200,11 +200,10 @@ export class TeamsTab extends LitElement {
     preset: AgentModePreset,
     deletable: boolean,
   ): TemplateResult {
-    const allAgents = [...preset.agents.toolUse, ...preset.agents.workflow];
-    const orchestratorAgents = allAgents.filter((name) =>
+    const orchestratorAgents = preset.agents.filter((name) =>
       this.isOrchestratorAgent(name),
     );
-    const teammateAgents = allAgents.filter(
+    const teammateAgents = preset.agents.filter(
       (name) => !this.isOrchestratorAgent(name),
     );
     const isActive = this.activePresetId === preset.id;

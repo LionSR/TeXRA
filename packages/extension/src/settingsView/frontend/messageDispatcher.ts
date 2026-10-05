@@ -13,12 +13,11 @@ import {
   type SettingsSectionName,
   type SettingsTabPanelName,
   type SettingsViewOutboundHandlerRegistry,
-} from '@shared/settingsView/settingsViewMessages';
+} from '@texra/shared/settingsView/settingsViewMessages';
 
 import {
   activePresetId,
   agentSelectionItems,
-  agentSubTab,
   applySettingsSnapshot,
   copilotRouteInfos,
   customAgentDir,
@@ -57,7 +56,6 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
     selectedPanel.set(page);
     if (section)
       selectedSections.set({ ...selectedSections.get(), [page]: section });
-    agentSubTab.set(data.agentSubTab);
   },
 
   // Memory.

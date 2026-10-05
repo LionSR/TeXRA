@@ -15,10 +15,10 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { diffWordsWithSpace } from 'diff';
 
 import type { FileListEntry } from '@shared/schemas';
-import { highlightSpans } from '@shared/highlighting/highlightCode';
-import { copyWithFeedback } from '@shared/utils/clipboard';
 import type { TeXRAIconName } from '@shared/iconNames';
 import type { FileListRow } from '@shared/transcript';
+import { copyWithFeedback } from '@texra/shared/utils/clipboard';
+import { highlightSpans } from '@texra/shared/highlighting/highlightCode';
 
 // Local imports - shared utilities
 import { stopSpinnerMotion } from '@ui/wa/spinner';

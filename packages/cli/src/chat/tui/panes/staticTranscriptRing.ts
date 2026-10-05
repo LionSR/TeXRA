@@ -92,8 +92,6 @@ export interface ChildHeader {
   readonly label: string;
   readonly modelLabel: string | null;
   readonly childKind: 'script' | 'subagent';
-  /** The ancestor's open phase or loop position, when it has one. */
-  readonly positionText: string | undefined;
   readonly parentLabel: string;
 }
 
@@ -121,9 +119,7 @@ function sessionHeaderIdentityLine(
 ): string {
   if (child) {
     const model = child.modelLabel ?? getModelLabel(meta.model || '-');
-    return child.positionText
-      ? `${child.childKind}: ${child.label} · ${child.positionText} · parent: ${child.parentLabel} · model: ${model}`
-      : `${child.childKind}: ${child.label} · parent: ${child.parentLabel} · model: ${model}`;
+    return `${child.childKind}: ${child.label} · parent: ${child.parentLabel} · model: ${model}`;
   }
   const model = getModelLabel(meta.model || '-');
   const agent = meta.agent || 'chat';

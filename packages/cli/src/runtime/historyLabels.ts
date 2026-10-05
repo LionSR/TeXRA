@@ -2,7 +2,7 @@ import type { BlockedRunListingEntry } from '@agent/storage';
 import { HISTORY_RUN_STATUS, runIdentityName } from '@shared/schemas';
 import type { CliHistoryEntry } from './history';
 
-/** The row of a run whose record a newer TeXRA wrote: listed, never
+/** The row of a run whose record another TeXRA wrote: listed, never
  *  resumed here, with what the listing still knows of it. */
 export function blockedHistoryEntry(
   entry: BlockedRunListingEntry,

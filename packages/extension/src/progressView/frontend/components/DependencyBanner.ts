@@ -3,7 +3,7 @@ import { html, css, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
-import { SessionUiEvents } from '@shared/session/uiEvents';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { designTokens, commonViewStyles, bannerStyles } from '@ui/styles';
 import { focusRingStyles } from '@ui/styles/controlStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';

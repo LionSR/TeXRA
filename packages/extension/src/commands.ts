@@ -9,11 +9,11 @@ import {
 } from '@commands/extensionCommandSurface';
 
 // Local imports - components
-import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
 import { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
+import type { PlatformSecrets, StateStore } from '@texra-ai/harness';
 
 export function registerCommands(
   context: vscode.ExtensionContext,
@@ -22,6 +22,7 @@ export function registerCommands(
   secrets: PlatformSecrets,
   runtime: ProcessRuntime,
   session: SessionHandle,
+  backend: SessionBackend,
 ): void {
   const settingsViewProvider = new SettingsViewProvider(
     context,
@@ -41,6 +42,7 @@ export function registerCommands(
       progressViewProvider,
       secrets,
       session,
+      backend,
     ),
     runtime,
     session,

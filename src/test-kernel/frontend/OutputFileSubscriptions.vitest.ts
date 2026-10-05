@@ -6,11 +6,12 @@ import { Effect, Exit, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
-import { TexraStateKey } from '@shared/settingsView/texraSettings';
+import type { RunId } from '@shared/schemas';
+import { documentsOutputRow } from '@shared/plugins/documents';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
+import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import type * as VSCode from 'vscode';
 
 const mocks = vi.hoisted(() => ({
@@ -121,36 +122,37 @@ const vscode = await import('vscode');
 
 const runId = 'f0a1b2c3d4e5' as RunId;
 
+/** Each emission's output differs, as a new round's does: a documents fact
+ *  equal to the one before names no new output. */
+let emissions = 0;
+
 async function emitOutputFiles(
   session: SessionHandle,
   absolutePath: string,
 ): Promise<void> {
+  emissions += 1;
   session.publish([
-    {
-      type: 'output.produced',
-      aggregateId: qualifyAggregateId('run', runId),
-      rounds: [
-        {
-          round: 1,
-          rawOutput: null,
-          compileFailures: [],
-          missingOutputs: [],
-          outputs: [
-            {
-              source: absolutePath,
-              location: {
-                kind: 'workspace',
-                absolutePath,
-                relativePath: absolutePath.split('/').at(-1) ?? absolutePath,
-              },
-              lineage: null,
-              diff: null,
-              round: 1,
+    documentsOutputRow(runId, [
+      {
+        round: emissions,
+        rawOutput: null,
+        compileFailures: [],
+        missingOutputs: [],
+        outputs: [
+          {
+            source: absolutePath,
+            location: {
+              kind: 'workspace',
+              absolutePath,
+              relativePath: absolutePath.split('/').at(-1) ?? absolutePath,
             },
-          ],
-        },
-      ],
-    },
+            lineage: null,
+            diff: null,
+            round: emissions,
+          },
+        ],
+      },
+    ]),
   ]);
   await Effect.runPromise(session.settlePublications());
 }

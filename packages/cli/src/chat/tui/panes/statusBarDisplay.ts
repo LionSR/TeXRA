@@ -12,7 +12,6 @@ import {
   texraApprovalPolicyLabel,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { contextGaugeBand, roundedContextPercent } from '@shared/contextGauge';
 import {
   type ContextStateData,
   type SubscriptionUsageSnapshot,
@@ -23,8 +22,11 @@ import {
   type UsageRoute,
 } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
-import { formatLoopPositionLabel } from '@shared/runs/runStatusDisplay';
 import type { RunView, SessionView } from '@shared/session/sessionView';
+import {
+  contextGaugeBand,
+  roundedContextPercent,
+} from '@texra/shared/contextGauge';
 import { AGENT_LIST, NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { APPROVAL_BYPASS_BADGE } from '@ui/copy/approvalBypass';
 import { assertNever, filterNotNullish, unique } from '@utils/core';
@@ -137,9 +139,9 @@ export interface StatusBarChrome {
   /** Terminal width in columns. */
   readonly width?: number;
   readonly ctrlCAction?: CtrlCAction;
-  /** Nested-session location (`Survey (1/1) › Agent runtime`). Omitted on
-   *  the root session, where the header already names the conversation. */
-  readonly location?: { readonly context?: string; readonly label: string };
+  /** Nested-session location (the focused child's label). Omitted on the
+   *  root session, where the header already names the conversation. */
+  readonly location?: { readonly label: string };
   /** Which surface currently owns input and global chat shortcuts: a
    *  foreground surface (approval, detail, form, slash palette, reverse
    *  search) or the persistent child list. Neither active means the normal
@@ -292,7 +294,6 @@ const STATUS_BAR_COMPACT_PRIORITY = {
   // bar it gives way first.
   taskCost: 15,
   activeSubagent: 20,
-  flow: 30,
   usage: 40,
   queuedFollowUp: 50,
   approvalPolicy: 55,
@@ -853,13 +854,8 @@ export function buildStatusBarDisplay(
     }
   }
 
-  // One slot carries a workflow run's round (mirrors the SubagentList row's
-  // `positionLabel`). A chat's turn count is not something anyone acts on.
-  const position = run?.position;
   // Every direct and nested subagent the displayed run owns.
   const subagents = run?.rollup.total ?? 0;
-  const flowText =
-    position?.kind === 'turn' ? undefined : formatLoopPositionLabel(position);
   left.push(
     ...(
       [
@@ -882,21 +878,11 @@ export function buildStatusBarDisplay(
         approvalPolicySegment(input.approvalPolicy),
         input.location
           ? {
-              text: input.location.context
-                ? `${input.location.context} › ${input.location.label}`
-                : input.location.label,
-              compactText: input.location.context ?? input.location.label,
+              text: input.location.label,
               color: 'dim',
               compactPriority: STATUS_BAR_COMPACT_PRIORITY.location,
             }
           : undefined,
-        flowText === undefined
-          ? undefined
-          : {
-              text: flowText,
-              color: 'dim',
-              compactPriority: STATUS_BAR_COMPACT_PRIORITY.flow,
-            },
         formatUsage(run?.context ?? undefined, run?.usage),
         taskCostSegment(run, view),
         queuedCount > 0

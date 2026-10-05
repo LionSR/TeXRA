@@ -19,19 +19,19 @@ import {
   storedRunOutput,
 } from '@shared/schemas';
 import type { RunSnapshotPayload, RunId } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { seedRunRecord as commitRunRecord } from '@test/support/runRecordSeeds';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 
 const mocks = vi.hoisted(() => ({
   assertOutputDirAvailable: vi.fn(),
   assertOutputFileAvailable: vi.fn(),
   executeCliWorkflowConfig: vi.fn(),
   initCliPlatform: vi.fn(),
-  resolveCliResumeAgent: vi.fn(),
+  resolveCliRunAgent: vi.fn(),
   writeTextStderr: vi.fn(),
 }));
 
@@ -48,7 +48,7 @@ vi.mock('@cli/runtime/logSinks', async (importOriginal) => ({
 }));
 
 vi.mock('@cli/runtime/agents', () => ({
-  resolveCliResumeAgent: mocks.resolveCliResumeAgent,
+  resolveCliRunAgent: mocks.resolveCliRunAgent,
 }));
 
 vi.mock('@cli/commands/workflow', () => ({
@@ -70,14 +70,14 @@ const RUN_ID = 'eec001' as RunId;
 const TOOL_USE_CONFIG = AgentConfigSchema.parse({
   agent: 'planner',
   model: 'gpt-5',
-  agentCategory: AgentCategory.ToolUse,
 });
 
-const WORKFLOW_CONFIG = AgentConfigSchema.parse({
-  agent: 'correct',
-  model: 'google/gemini-3.1-pro-preview',
-  agentCategory: AgentCategory.Workflow,
-});
+const WORKFLOW_CONFIG = AgentConfigSchema.parse(
+  documentTaskConfig({
+    agent: 'correct',
+    model: 'google/gemini-3.1-pro-preview',
+  }),
+);
 
 /** The opening snapshot of a tool-use run, as the loop's first batch writes it. */
 const OPENING_SNAPSHOT: RunSnapshotPayload = {
@@ -134,7 +134,6 @@ async function seedRunRecord(seed: {
         type: 'run.start',
         aggregateId: aggregateId('run', RUN_ID),
         identity: { kind: 'agent', agent: seed.config?.agent ?? 'planner' },
-        category: seed.config?.agentCategory ?? AgentCategory.ToolUse,
         userFollowUpSupport: 'unsupported',
         parent: null,
         provenance: null,
@@ -144,10 +143,9 @@ async function seedRunRecord(seed: {
   if (seed.config)
     await Effect.runPromise(commitRunRecord(session, RUN_ID, seed.config));
   if (seed.checkpoint !== false) {
-    // The snapshot's family matches the seeded category: the real retrieval
-    // refuses a contradiction, so the seed must be one a run could write.
+    // A document task's snapshot pins the model its config names.
     const snapshot =
-      seed.config?.agentCategory === AgentCategory.Workflow
+      seed.config?.script?.kind === 'recipe'
         ? workflowSnapshot(seed.config.model, seed.backend)
         : OPENING_SNAPSHOT;
     await Effect.runPromise(session.runHistory.acquire(RUN_ID));
@@ -194,10 +192,9 @@ describe('runResumeCommand', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     await seedRunRecord({ config: TOOL_USE_CONFIG });
-    mocks.resolveCliResumeAgent.mockReturnValue(
+    mocks.resolveCliRunAgent.mockReturnValue(
       Effect.succeed({
         name: 'correct',
-        category: AgentCategory.Workflow,
       }),
     );
     mocks.executeCliWorkflowConfig.mockResolvedValue(0);
@@ -239,7 +236,7 @@ describe('runResumeCommand', () => {
       expect.any(Object),
       expect.objectContaining({ runId: RUN_ID }),
     );
-    expect(mocks.resolveCliResumeAgent).toHaveBeenCalledWith(
+    expect(mocks.resolveCliRunAgent).toHaveBeenCalledWith(
       expect.anything(),
       'correct',
     );
@@ -342,9 +339,7 @@ describe('runResumeCommand', () => {
                 type: 'run.end',
                 aggregateId: aggregateId('run', RUN_ID),
                 outcome: 'failed',
-                output: storedRunOutput(
-                  emptyRunEndOutput(AgentCategory.ToolUse),
-                ),
+                output: storedRunOutput(emptyRunEndOutput()),
               },
             ]),
           ),

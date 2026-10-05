@@ -71,7 +71,7 @@ Read the [LaTeX Diff guide](./latex-diff.md) for the full workflow.
 
 `texcount` reports word counts, heading counts, and math element counts so the model can reason about document scale and structure.
 
-To attach these statistics to the prompt, toggle <wa-icon library="texra" name="symbol-numeric"></wa-icon> **Attach TeX Count** in the Tool Configuration dropdown. Read the [agent execution settings](./configuration.md#agent-execution-settings-webview-interface). Tool-use agents can also run `texcount` themselves through the shell, for example `texcount -inc main.tex`.
+To attach these statistics to the prompt, toggle <wa-icon library="texra" name="symbol-numeric"></wa-icon> **Attach TeX Count** in the Tool Configuration dropdown. Read the [agent execution settings](./configuration.md#agent-execution-settings-webview-interface). Agents with `bash` can also run `texcount` themselves through the shell, for example `texcount -inc main.tex`.
 
 **Modes:**
 

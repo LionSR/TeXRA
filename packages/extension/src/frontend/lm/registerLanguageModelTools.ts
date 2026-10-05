@@ -29,7 +29,14 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { Runs, ToolCall, type SessionHandle } from '@agent/runtime';
+import {
+  IssuingScript,
+  RunCall,
+  Runs,
+  ScriptCalls,
+  ToolContext,
+  type SessionHandle,
+} from '@agent/runtime';
 import type { PluginContext, ProcessRuntime } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 
@@ -37,6 +44,7 @@ import type { ToolResult } from '@shared/schemas';
 import type { ToolEntry } from '@tools/catalogEntries';
 import { LiveTools } from '@tools/liveTools';
 import type { ProcessPluginLayer } from '@tools/toolTable';
+import { generateShortId } from '@utils/core';
 
 // Local imports - language model tools
 import {
@@ -139,14 +147,20 @@ const copilotTools = Effect.fnUntraced(function* (
                     () => Context.empty() as PluginContext,
                   ),
                 ),
-                Effect.provideService(ToolCall, {
-                  roots: session.roots,
-                  run: undefined,
+                Effect.provideService(ToolContext, {
+                  // Copilot's invocation names no call id of its own.
+                  callId: `${lmName}-${generateShortId()}`,
+                  env: { roots: session.roots },
+                  emit: () => undefined,
                 }),
+                // A host invocation is made under no run and by no script.
+                Effect.provideService(RunCall, null),
+                Effect.provideService(ScriptCalls, null),
+                Effect.provideService(IssuingScript, null),
                 Effect.provideService(Runs, session.runs),
                 // Every `WorkspaceFs`/`StorageFs` service read in this call
                 // resolves against this session's folders, and path resolution
-                // takes `ToolCall.roots` as data.
+                // takes `ToolContext.env` as data.
                 Effect.provide(sessionFsLayer(session.roots)),
               );
             }),

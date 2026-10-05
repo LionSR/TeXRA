@@ -8,9 +8,7 @@ import {
   type SessionHandle,
   type ValidatedRunRequest,
 } from '@agent/runtime';
-import { runOutputReader } from '@agent/storage';
 import { emitAppSignal } from '@eventBus/AppSignals';
-import type { NotificationFailed, PromptFailed } from '@hosts/uiHosts';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { LaTeXdiffService } from '@latex/latexdiff';
@@ -20,22 +18,24 @@ import {
 } from '@latex/latexdiff/latexdiffCopy';
 import { runLatexdiffForRun } from '@latex/latexdiff/diffOperations';
 import type { DiffRunOutcome } from '@latex/latexdiff/types';
-import type { StateReadFailed } from '@platform/interfaces';
 import {
   type ProcessRuntime,
   type ProcessServices,
   withProcessServices,
 } from '@platform/processRuntime';
-import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
-import type { RunId } from '@shared/schemas';
-import type { Rejected } from '@shared/session/requestErrors';
-import { TexraStateKey } from '@shared/settingsView/texraSettings';
+import type { NotificationFailed, PromptFailed } from '@texra/hosts/uiHosts';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
+import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
+import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
+import { runOutputReader } from '@texra/tools/documents/runOutputs';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   createExternalLocation,
   pathToLocationIn,
 } from '@utils/files/fileLocation';
+import type { Rejected, StateReadFailed } from '@texra-ai/harness';
+import type { RunId } from '@texra-ai/harness/schemas';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 const DESKTOP_LATEXDIFF_CHANNEL = 'DesktopProgressFileActions';
@@ -118,12 +118,12 @@ export class DesktopProgressFileActions {
   ): Effect.Effect<void, Rejected | StateReadFailed> {
     return Effect.gen({ self: this }, function* () {
       const validation = validateRunRequest({
-        config: {
+        config: documentTaskConfig({
           agent: 'merge',
           model: yield* getHelperModelName(this.host.session.roots),
           inputFiles: [baseFile],
           editedFile,
-        },
+        }),
       });
       if (!validation.valid) {
         yield* this.ui.showErrorMessage(`Merge: ${validation.message}`);
@@ -188,7 +188,7 @@ export class DesktopProgressFileActions {
         latexdiffAllFailedMessage(
           yield* readSettingFrom<LatexdiffMathMarkupValue>(
             this.host.session.roots,
-            TexraStateKey.LATEXDIFF_MATH_MARKUP,
+            DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
           ),
         ),
       );

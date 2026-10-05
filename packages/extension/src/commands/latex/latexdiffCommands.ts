@@ -4,8 +4,6 @@ import * as vscode from 'vscode';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime';
-import { runOutputReader } from '@agent/storage';
-import type { WorkflowDiffRequest } from '@controllers/session/hostRunActions';
 import {
   prepareBuildDisplay,
   scheduleViewerDisplay,
@@ -33,17 +31,17 @@ import {
 import { withLogChannel } from '@logger/effectLog';
 import { withSessionFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
-import {
-  TEXRA_SETTINGS,
-  TexraStateKey,
-} from '@shared/settingsView/texraSettings';
 import { settingEnumChoices } from '@shared/state/stateSettings';
-import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
+import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import type { WorkflowDiffRequest } from '@texra/controllers/session/hostRunActions';
+import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
+import { runOutputReader } from '@texra/tools/documents/runOutputs';
+import { checkToolInstalled } from '@texra/utils/system/toolChecks';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { entryExists } from '@utils/files/fsEntryExists';
-import { checkToolInstalled } from '@utils/system/toolUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';
@@ -88,11 +86,11 @@ const promptForLatexdiffMathMarkup = Effect.fnUntraced(function* (
 ) {
   const configuredMode = yield* readSettingFrom<LatexdiffMathMarkupValue>(
     session.roots,
-    TexraStateKey.LATEXDIFF_MATH_MARKUP,
+    DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
   );
   // The row is a catalog enum row: a missing one is a defect, not an option.
   const items: MarkupItem[] = settingEnumChoices<LatexdiffMathMarkupValue>(
-    TEXRA_SETTINGS.byKey(TexraStateKey.LATEXDIFF_MATH_MARKUP)!,
+    TEXRA_SETTINGS.byKey(DocumentsStateKey.LATEXDIFF_MATH_MARKUP)!,
   )!.map(({ value, label, description }) => ({
     label,
     description,

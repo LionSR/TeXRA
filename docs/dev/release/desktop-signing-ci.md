@@ -8,7 +8,8 @@ secrets and produce unsigned artifacts for development.
 
 The macOS installer job signs and notarizes with
 `packages/desktop/electron-builder.signed.config.mjs` when it finds both a
-Developer ID certificate and one complete Apple notarization credential set.
+Developer ID certificate and an App Store Connect API key. Both the app and the
+DMG are notarized and stapled; the zip carries the stapled app.
 
 Required certificate secrets:
 
@@ -16,20 +17,11 @@ Required certificate secrets:
   exported Developer ID Application certificate.
 - `DESKTOP_MACOS_CSC_KEY_PASSWORD` - password for `DESKTOP_MACOS_CSC_LINK`.
 
-Recommended notarization secrets:
+Required notarization secrets (an App Store Connect API key):
 
 - `DESKTOP_MACOS_APPLE_API_KEY` - contents of the downloaded `.p8` API key.
 - `DESKTOP_MACOS_APPLE_API_KEY_ID`
 - `DESKTOP_MACOS_APPLE_API_ISSUER`
-
-The workflow also supports Electron Builder's Apple ID and keychain
-notarization environment variables if the repository chooses that path later:
-
-- `DESKTOP_MACOS_APPLE_ID`
-- `DESKTOP_MACOS_APPLE_APP_SPECIFIC_PASSWORD`
-- `DESKTOP_MACOS_APPLE_TEAM_ID`
-- `DESKTOP_MACOS_APPLE_KEYCHAIN`
-- `DESKTOP_MACOS_APPLE_KEYCHAIN_PROFILE`
 
 ## Windows
 

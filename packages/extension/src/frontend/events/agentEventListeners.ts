@@ -25,7 +25,6 @@ import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { withLogChannel } from '@logger/effectLog';
-import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import {
@@ -36,6 +35,7 @@ import {
   type RequestShowInstructionPayload,
 } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import type { StateStore } from '@texra-ai/harness';
 
 const CHANNEL = 'agentEventListeners';
 
@@ -219,10 +219,7 @@ export function createAgentPresentationHost(
     requestShowInstruction: (payload) =>
       handleRequestShowInstruction(globalState, payload),
     showAgentConfigBanner: (payload) =>
-      progressViewProvider.showAgentConfigBanner(
-        payload.agentName,
-        payload.category,
-      ),
+      progressViewProvider.showAgentConfigBanner(payload.agentName),
     requestShowError: handleRequestShowError,
     requestEnsureProgressView: (payload) =>
       handleRequestEnsureProgressView(payload, progressViewProvider),

@@ -2,13 +2,10 @@
 import { Cause, Effect } from 'effect';
 
 // Local imports
-import {
-  AgentConfigSchema,
-  runAgent,
-  type SessionHandle,
-} from '@agent/runtime';
+import { SubscriptionRef } from 'effect';
+
+import { AgentConfigSchema, type SessionHandle } from '@agent/runtime';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
-import { SETUP_INSTRUCTION } from '@controllers/onboarding/setupLaunch';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
@@ -16,19 +13,25 @@ import {
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  hasUsableSetupCredential,
-  resolveSetupLaunchModel,
-} from '@model/setupCredentialAccess';
-import type { StateReadFailed, StateWriteFailed } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
+import { isLiveRun } from '@shared/session/sessionView';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { agentName, type RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { SETUP_INSTRUCTION } from '@texra/controllers/onboarding/setupLaunch';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
+import {
+  hasUsableSetupCredential,
+  resolveSetupLaunchModel,
+} from '@texra/model/setupCredentialAccess';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type {
+  PlatformSecrets,
+  StateReadFailed,
+  StateWriteFailed,
+} from '@texra-ai/harness';
 
 const CHANNEL = 'SetupAssistant';
 /**
@@ -125,6 +128,8 @@ const ensureRoutingConfigured = Effect.fn('ensureRoutingConfigured')(function* (
 export function launchSetupAssistant(
   secrets: PlatformSecrets,
   session: SessionHandle,
+  /** Where the setup conversation runs: here, or in the service. */
+  backend: SessionBackend,
   onRunResolved: (runId: RunId) => void,
   /** Bring the panel's "Connect a model" card into view: the one credential
    *  prompt, which the setup card follows once a credential lands. */
@@ -136,14 +141,14 @@ export function launchSetupAssistant(
     // a second concurrent setup conversation would race the first one's
     // installs and config writes. The launcher's manual Execute path is
     // deliberately not gated — an explicit user action wins.
+    const running = SubscriptionRef.getUnsafe(backend.view).runs.values();
     if (
-      session.runs
-        .activeIds()
-        .some(
-          (runId) =>
-            agentName(session.runs.getHandle(runId)?.agentName ?? '') ===
-            SETUP_AGENT_NAME,
-        )
+      [...running].some(
+        (run) =>
+          isLiveRun(run) &&
+          run.identity.kind === 'agent' &&
+          agentName(run.identity.agent) === SETUP_AGENT_NAME,
+      )
     ) {
       yield* Effect.forkDetach(
         showLoggedInfoMessage(
@@ -207,18 +212,11 @@ export function launchSetupAssistant(
 
     const config = AgentConfigSchema.parse({
       agent: 'setup',
-      agentCategory: 'toolUse',
       model: resolution.model,
       instruction: SETUP_INSTRUCTION,
     });
 
-    const launch = runAgent(
-      { config },
-      {
-        session,
-        onRunResolved,
-      },
-    );
+    const launch = backend.launch({ config }, { onRunResolved });
 
     yield* resolution.requiresOpenRouter
       ? withOpenRouterFlagOn(session.roots, launch)

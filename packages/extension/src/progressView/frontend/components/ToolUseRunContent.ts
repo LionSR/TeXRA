@@ -14,7 +14,7 @@ export class ToolUseRunContent extends BaseRunContent {
 
   override render(): TemplateResult | typeof nothing {
     const run = this.run;
-    if (!run || run.category !== 'toolUse') return nothing;
+    if (!run || run.documentTask) return nothing;
     // The follow-up line shows while the run can still take one, which is
     // the same rule Send and the run accelerator take (`acceptsFollowUp`).
     const showComposer = acceptsFollowUp(run, { terminalBacked: true });

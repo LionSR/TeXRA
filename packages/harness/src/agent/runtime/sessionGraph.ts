@@ -1,0 +1,367 @@
+/**
+ * The session owner port: how `src/agent` opens and closes sessions through
+ * the process's one session owner (PRD one-fold-three-renderers, 7.2, 7.3,
+ * 7.7) without importing it. The owner is the `Sessions` map in
+ * `packages/harness/src/controllers/session/sessionLayer.ts`, keyed by workspace storage
+ * root: it builds each root's Effect graph and the `SessionHandle` over it
+ * on the one `ManagedRuntime` the process makes at its entry
+ * (`installProcessRuntime`), which installs the owner here. `src/agent`
+ * never imports `src/controllers`, so the owner arrives through this port
+ * rather than by import; a `SessionHandle` holds no runtime at all, its
+ * Effects run on the fibers of whoever calls them.
+ */
+
+import {
+  Effect,
+  type Context,
+  type Stream,
+  type SubscriptionRef,
+} from 'effect';
+import type { ProcessRuntime } from '@platform/processRuntime';
+import type {
+  AggregateId,
+  CommitOrdinal,
+  RunId,
+  LocalRuntimeState,
+  SessionCloseReport,
+  DisplaySessionEvent,
+  SessionEvent,
+  SessionEventDraft,
+  TranscriptSubscription,
+} from '@shared/schemas';
+import type {
+  AggregateClaim,
+  DatabaseNotOwner,
+  DatabaseReadFailed,
+  DatabaseWriteFailed,
+  SessionOpenError,
+  SessionStoreMovedAside,
+} from '@shared/session/database';
+import type { SessionView } from '@shared/session/sessionView';
+import type { RunHistory } from '@shared/session/runHistory';
+import type {
+  SessionEventReads,
+  SessionEventsShape,
+} from '@shared/session/sessionEvents';
+import type { SessionInputs } from '@shared/session/sessionInputs';
+import type { SessionRequests } from './runApprovalQueue';
+import type { Runs } from './runRegistry';
+import type { SessionHandle, SessionHandleInit } from './SessionHandle';
+
+/** What a session holds of its graph, resolved once at construction. */
+export interface SessionGraph {
+  /** The plane's reads. Publishing is the session's alone (the four doors
+   *  below), so nothing holding a session can append past its bookkeeping. */
+  readonly events: SessionEventReads;
+  /** Append one batch in publication order and return once the view has
+   *  folded it: what a caller that reads the view next awaits. */
+  readonly publish: SessionEventsShape['publish'];
+  /** `publish`, owning the claims of the runs it registers: a birth's as it
+   *  commits, a re-registration's taken over before it. */
+  readonly publishRegistration: (
+    events: readonly SessionEventDraft[],
+  ) => Effect.Effect<
+    readonly SessionEvent[],
+    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
+  >;
+  /** A read of committed rows and the append that depends on it, as one
+   *  job of the publisher, settled like `publish`. */
+  readonly exclusive: SessionEventsShape['exclusive'];
+  /** Enqueue a job in publication order and return: the door for a
+   *  producer with no fiber of its own to wait on. */
+  readonly detach: SessionEventsShape['detach'];
+  /** Every detached job enqueued before this call has run and the view has
+   *  folded what they committed. A barrier, never a reporter: a refused job
+   *  belongs to whoever enqueued it. */
+  readonly settle: Effect.Effect<void>;
+  /** The run history over this root's event plane: the run loop's one
+   *  writer of run rows, provided to each run's program from here. */
+  readonly runHistory: Context.Service.Shape<typeof RunHistory>;
+  /** A hold on one aggregate's claim, answered with its release. Holds are
+   *  counted: the last one to go returns the claim to how the first found
+   *  it, or releases it when any hold `ends` it — a run's driver, a
+   *  workflow checkpoint's invocation. */
+  readonly acquireClaims: (
+    id: AggregateId,
+    ends: boolean,
+  ) => Effect.Effect<
+    Effect.Effect<void>,
+    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
+  >;
+  readonly runRecords: (
+    id: RunId,
+  ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+  /** Whether this process holds an existing, open run in the database. */
+  readonly ownsRun: (id: RunId) => Effect.Effect<boolean, DatabaseReadFailed>;
+  /** Who holds one run right now, with its owner's liveness proved in the
+   *  call: the ownership read a resume gate and the run listing ask, so a
+   *  run outside the live view is never reported held by a dead owner. */
+  readonly claimOwner: (
+    id: RunId,
+  ) => Effect.Effect<AggregateClaim, DatabaseReadFailed>;
+  /** Every committed row of one aggregate, run-history-private rows included:
+   *  the read behind the keyed private records, which fold over the
+   *  whole aggregate rather than the latest of a type.
+   *  With `types`, only those rows, through the type index. */
+  readonly aggregateRows: (
+    id: AggregateId,
+    types?: readonly SessionEvent['type'][],
+  ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+  /** One aggregate's display rows, with the `usage` rows its priced
+   *  responses project: what a renderer or an export replays. */
+  readonly displayRows: (
+    id: AggregateId,
+  ) => Effect.Effect<readonly DisplaySessionEvent[], DatabaseReadFailed>;
+  /** Transient text shares the existing session-input source, never the event table. */
+  readonly publishText: (
+    runId: RunId,
+    id: string,
+    text: string,
+  ) => Effect.Effect<void>;
+  readonly readText: (runId: RunId, id: string) => string | undefined;
+  /** The one session state every renderer reads: the fold fiber's level. */
+  readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
+  /** `view` as a level stream (PRD 7.2): ends as the fold does, with its
+   *  defect when the fold died, so a reader waiting on a view never hangs. */
+  readonly viewChanges: Stream.Stream<SessionView>;
+  /** The store this graph opened held an older build's rows and moved them
+   *  aside (`Database.movedAside`): the one fact a host tells the user. */
+  readonly storeMovedAside: SessionStoreMovedAside | null;
+  /** The plane's tail as `view` has folded it (PRD 7.2): every row above
+   *  `fromCommit`, released once the view holds the state that folded it,
+   *  and local reconciliation has completed, for a reader that queries the
+   *  resulting state beside each row. */
+  readonly folded: (
+    fromCommit: CommitOrdinal,
+  ) => Stream.Stream<SessionEvent, DatabaseReadFailed>;
+  /** This process's local truth; the status machine writes `unreadable`. */
+  readonly local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>;
+  /** Ordered fold inputs: complete replay, then events before live text. */
+  readonly inputs: Context.Service.Shape<typeof SessionInputs>['read'];
+  /** The transcript subscription set, one set per port (PRD 7.2). */
+  readonly subscriptions: {
+    readonly set: (
+      port: string,
+      set: readonly TranscriptSubscription[],
+    ) => Effect.Effect<void>;
+  };
+  /** The session's runs (`Runs`): built by the session layer over the
+   *  session's doors, disposed when the session's scope closes. */
+  readonly runs: Context.Service.Shape<typeof Runs>;
+  /** The session's requests: its approval state and the one handler of
+   *  every request a surface issues to it (PRD 7.6, 8.2), built by the
+   *  session layer over this graph. */
+  readonly requests: SessionRequests;
+  /** The session's current commit ordinal: where a reader attaching now
+   *  starts its `all` read (PRD 10.3). */
+  readonly now: () => CommitOrdinal;
+}
+
+/** The process's session owner, as `installProcessRuntime` installs it. */
+export interface SessionOwner {
+  /** The `ManagedRuntime` the owner's programs run on, as the composition
+   *  root that installed both handed it over. It is here rather than in a
+   *  slot of its own because it is the same fact this record already is: a
+   *  process holds an owner and the runtime under it, or neither. */
+  readonly runtime: ProcessRuntime;
+  /** The session of `open.roots`' storage root: the one already open there,
+   *  or built now over what `open` supplies. The root's entry is registered
+   *  with the owner before this Effect's first yield, so a close issued
+   *  after it finds the session and waits for its build. */
+  open(open: SessionHandleInit): Effect.Effect<SessionHandle, SessionOpenError>;
+  /** The session open on a storage root, if one is; never builds one, and
+   *  does not see an entry still building or already releasing. */
+  current(root: string): SessionHandle | undefined;
+  /** Every session the owner holds, in no particular order. */
+  list(): Effect.Effect<readonly SessionHandle[]>;
+  /** Close the session of a storage root, settling what it owns inside the
+   *  runtime's shutdown-phase budget. */
+  close(root: string): Effect.Effect<SessionCloseReport>;
+  /** A process shutdown's close: stop the process's pollers and drain the
+   *  deliveries they admitted, then close every held session at once. */
+  closeAll(): Effect.Effect<readonly SessionCloseReport[]>;
+}
+
+let owner: SessionOwner | undefined;
+
+/** Install the process's session owner, or uninstall it with `undefined`.
+ *  Called by `installProcessRuntime` exactly once at startup, and by `disposeProcessRuntime` in the shutdown step
+ *  that disposes the runtime the owner runs on: from then on a close
+ *  answers as a process with no owner does, instead of reaching a disposed
+ *  runtime. */
+export function initSessionOwner(sessions: SessionOwner | undefined): void {
+  owner = sessions;
+}
+
+/**
+ * The runtime this process's session owner runs on, or `undefined` before
+ * the first `installProcessRuntime` and again once `disposeProcessRuntime`
+ * has uninstalled it. The owner is what says a process is composed: it and
+ * the runtime under it end with the composition that installed them, so a
+ * composition root asks here whether it must install its own and, when it
+ * need not, joins the runtime the answer carries.
+ */
+export function installedProcessRuntime(): ProcessRuntime | undefined {
+  return owner?.runtime;
+}
+
+function sessions(): SessionOwner {
+  if (!owner) {
+    throw new Error(
+      'Sessions not initialized: call installProcessRuntime() before opening a session.',
+    );
+  }
+  return owner;
+}
+
+/**
+ * Open the session of `init`'s workspace root, or return the one already
+ * open there: one session per storage root in a process, built on the
+ * caller's own fiber. Process roots unless the opener names a folder: the
+ * extension, the CLI, and the SDK open exactly one session over the process
+ * roots; the desktop opens one session per project and passes that project's
+ * roots. What `init` supplies beyond the roots (the transcript store, the
+ * sidecar store, the response text policy) is read only when the root's
+ * session is built: a later opener of the same root gets the session the
+ * first opener built.
+ *
+ * The returned handle is borrowed access to an owner-held session
+ * (PR #11893, agent SDK architecture proposal, section 3): holding it
+ * carries no disposal obligation, and {@link closeSession} is how the
+ * session ends.
+ */
+export function openSessionEffect(
+  init: SessionHandleInit,
+): Effect.Effect<SessionHandle, SessionOpenError> {
+  return Effect.suspend(() => sessions().open(snapshotRoots(init)));
+}
+
+/**
+ * Every session the process's owner holds. A process with no owner
+ * installed has opened none and holds none, which is what this reports.
+ */
+export function listSessions(): Effect.Effect<readonly SessionHandle[]> {
+  return Effect.suspend(() => owner?.list() ?? Effect.succeed([]));
+}
+
+function snapshotRoots(init: SessionHandleInit): SessionHandleInit {
+  // The owner keys and releases a session by this root, so a caller's mutable
+  // or inherited root record may not change it later. Read the structural
+  // fields so inherited or non-enumerable getters work too.
+  const roots = init.roots;
+  return {
+    ...init,
+    roots: {
+      host: roots.host,
+      workspace: roots.workspace,
+      storage: roots.storage,
+      globalStorage: roots.globalStorage,
+      config: roots.config,
+      workspaceState: roots.workspaceState,
+      repoState: roots.repoState,
+      globalState: roots.globalState,
+    },
+  };
+}
+
+/**
+ * The storage root {@link initializeDefaultSession} opened this process's
+ * default session over, so {@link tryDefaultSession} names it without a
+ * process-wide roots record. A composition fact of the same kind as
+ * {@link owner}, which is why it sits beside it.
+ */
+let defaultSessionRoot: string | undefined;
+
+/**
+ * Inspect whether the host has installed its process-default session: the
+ * session open on the root {@link initializeDefaultSession} named, if one
+ * still is, read through its owner on every call rather than from a cached
+ * reference, so a root closed through the owner has no default session until
+ * one is opened again. No owner, or no default opened yet, no session.
+ */
+export function tryDefaultSession(): SessionHandle | undefined {
+  return defaultSessionRoot === undefined
+    ? undefined
+    : owner?.current(defaultSessionRoot);
+}
+
+/**
+ * Open the process-default session, over the roots the host's composition
+ * root built. Its owner holds it, as it holds every session:
+ * {@link tryDefaultSession} reads it from there on each call, so no second
+ * reference to it exists to go stale when the root is closed. A second
+ * initialization while one is open is a lifecycle error and dies.
+ */
+export function initializeDefaultSession(
+  init: SessionHandleInit,
+): Effect.Effect<SessionHandle, SessionOpenError> {
+  return Effect.suspend(() => {
+    // Keyed by the root, as the owner keys every session: a default still open
+    // over the root being initialized is the lifecycle error. A host that has
+    // moved on to another root (a suite reinstalling its fake host) is opening
+    // the default of a different project, not a second default of this one.
+    const open = tryDefaultSession();
+    if (open && open.roots.storage === init.roots.storage) {
+      throw new Error('The default session has already been initialized.');
+    }
+    return openSessionEffect(init).pipe(
+      Effect.tap((session) =>
+        Effect.sync(() => {
+          defaultSessionRoot = session.roots.storage;
+        }),
+      ),
+    );
+  });
+}
+
+/** Close the process-default session during host teardown, through the one
+ *  close every session takes ({@link closeSession}); nothing to do when none
+ *  is open. */
+export function teardownDefaultSession(): Effect.Effect<void> {
+  return Effect.suspend(() => {
+    const root = defaultSessionRoot;
+    defaultSessionRoot = undefined;
+    return root === undefined ? Effect.void : Effect.asVoid(closeSession(root));
+  });
+}
+
+/**
+ * The budget one session close spends waiting for its runs to settle before
+ * it settles the ones still live itself ({@link closeSession}). A hung run
+ * must not wedge desktop quit, eat the extension's ~5s deactivate budget, or
+ * stall a CLI SIGTERM indefinitely. The closes of a process's sessions start
+ * together, so they settle under one deadline for the process, not one each.
+ */
+export const SESSION_CLOSE_DEADLINE_MS = 5_000;
+
+/**
+ * Close the session of a storage root (PR #11893, agent SDK architecture
+ * proposal, section 9): refuse new executions on it, interrupt the ones it
+ * owns and wait for them to settle within the process's shutdown-phase
+ * budget, flush its artifacts, and release it from its owner. A root with no open
+ * session has nothing to close and reports `settled`; so does a process
+ * with no owner installed, where no session was ever opened or the owner
+ * has gone with its runtime. A session whose executions
+ * outlive the budget is reported `abandoned` and stays open, refusing new
+ * work, until they end; it is released then, never before. This never
+ * touches the process lifecycle or another root's session.
+ */
+export function closeSession(root: string): Effect.Effect<SessionCloseReport> {
+  return Effect.suspend(() =>
+    owner
+      ? owner.close(root)
+      : Effect.succeed({ settled: true, abandoned: [] }),
+  );
+}
+
+/**
+ * Close every session the process's owner holds, all at once: each close
+ * spends the shutdown deadline from the moment it starts, so starting them
+ * together settles the process under one deadline rather than one per
+ * session. What a host's shutdown and the agent package's last release run.
+ */
+export function closeAllSessions(): Effect.Effect<
+  readonly SessionCloseReport[]
+> {
+  return Effect.suspend(() => owner?.closeAll() ?? Effect.succeed([]));
+}

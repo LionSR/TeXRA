@@ -19,14 +19,12 @@ import type { ConfigProvider } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import type { Plugin } from '@tools/plugins';
 import type { ToolProbeInputs } from '@tools/toolProbes';
 import { LiveTools } from '@tools/liveTools';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
-import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
-import { SetupPlatform } from '@tools/setup/platform';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
-import { createFakeSetupPlatform } from './setup/fixtures';
 
 /** The mocked tool defs read no secrets, so any call here is a test error. */
 const unreadSecret = (): never => {
@@ -60,7 +58,6 @@ const secretsLayer = Secrets.layer({
 /** The services a plugin's availability callbacks may read. */
 const probeServices = Layer.mergeAll(
   secretsLayer,
-  SetupPlatform.layer(createFakeSetupPlatform()),
   // The mocked plugins declare no Lean plugin, so nothing here reads the port.
   Layer.mock(LeanLanguageServices, { listServers: () => [] }),
   testHttpClientLayer,
@@ -117,9 +114,6 @@ describe('tool availability service', () => {
           {
             id: 'token-tool',
             tools: named('token'),
-            name: 'Token tool',
-            category: 'ai-agents',
-            description: '',
             availability: {
               reprobeOnSecrets: ['token.key'],
               probe: vi.fn(({ workspace }: ToolProbeInputs) =>
@@ -171,9 +165,6 @@ describe('tool availability service', () => {
           {
             id: 'probed-tool',
             tools: named('probed'),
-            name: 'Probed tool',
-            category: 'ai-agents',
-            description: '',
             availability: { check },
           },
         ];
@@ -202,9 +193,6 @@ describe('tool availability service', () => {
           {
             id: 'present-tool',
             tools: named('present'),
-            name: 'Present tool',
-            category: 'ai-agents',
-            description: '',
             availability: {
               check: vi.fn(() => Effect.succeed(true)),
             },
@@ -212,10 +200,7 @@ describe('tool availability service', () => {
           {
             id: 'missing-tool',
             tools: named('missing'),
-            name: 'Missing tool',
-            category: 'ai-agents',
-            description: '',
-            toggleable: true,
+            toggle: 'off',
             availability: {
               check: vi.fn(() => Effect.succeed(false)),
             },
@@ -257,9 +242,6 @@ describe('tool availability service', () => {
           {
             id: 'broken-probe',
             tools: named('broken'),
-            name: 'Broken probe',
-            category: 'ai-agents',
-            description: '',
             availability: {
               probe: vi.fn(() =>
                 Effect.fail(new Error('invalid local configuration') as never),
@@ -271,9 +253,6 @@ describe('tool availability service', () => {
           {
             id: 'broken-detail',
             tools: named('present'),
-            name: 'Broken detail',
-            category: 'ai-agents',
-            description: '',
             availability: {
               check: vi.fn(() => Effect.succeed(true)),
               detailCheck: vi.fn(() =>
@@ -285,9 +264,6 @@ describe('tool availability service', () => {
             // A callback that throws, as an eager configuration read can.
             id: 'throwing-probe',
             tools: named('throwing'),
-            name: 'Throwing probe',
-            category: 'ai-agents',
-            description: '',
             availability: {
               probe: vi.fn(() => {
                 throw new Error('config read threw');

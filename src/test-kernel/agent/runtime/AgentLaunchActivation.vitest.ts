@@ -50,7 +50,6 @@ import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
   type AggregateId,
-  AgentCategory,
   type SessionEvent,
 } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
@@ -81,7 +80,6 @@ const FRESH_RUN_ID = 'f1e501' as RunId;
 const config = AgentConfigSchema.parse({
   agent: 'chat',
   model: 'openai/gpt-5.5-2026-04-23',
-  agentCategory: AgentCategory.ToolUse,
 });
 
 interface StartedLaunch {
@@ -128,7 +126,6 @@ const captureStartedLaunch = Effect.fn(function* (
         mocks.resolve.mockReturnValueOnce(
           Effect.succeed({
             path: '/agents/chat.yaml',
-            category: AgentCategory.ToolUse,
             persona: { prompt: '', tools: [], temperature: 1 },
             task: null,
           }),
@@ -193,7 +190,6 @@ function expectStartedThenFailed(
   if (!start) throw new Error('a fresh launch emits run.start');
   expect(start).toMatchObject({
     identity: { kind: 'agent', agent: 'chat' },
-    category: AgentCategory.ToolUse,
     // The parent edge is the whole of "is a child": the birth fact carries
     // it, and nothing else spells it.
     parent:
@@ -211,9 +207,7 @@ function expectStartedThenFailed(
 /** Every activation, fresh or resumed, carries the activation metadata the
  *  frozen wire projects and ends on the same failure path. */
 function expectActivatedThenFailed(launch: StartedLaunch): void {
-  expect(launch.activate).toMatchObject({
-    category: AgentCategory.ToolUse,
-  });
+  expect(launch.activate).toMatchObject({});
   expect(launch.end).toMatchObject({
     outcome: RUN_OUTCOME.FAILED,
     aggregateId: launch.activate.aggregateId,
@@ -319,7 +313,6 @@ describe('native agent launch activation', () => {
         mocks.resolve.mockReturnValueOnce(
           Effect.succeed({
             path: '/agents/chat.yaml',
-            category: AgentCategory.ToolUse,
             persona: { prompt: '', tools: [], temperature: 1 },
             task: null,
           }),
@@ -338,7 +331,6 @@ describe('native agent launch activation', () => {
         const described = AgentConfigSchema.parse({
           agent: 'chat',
           model: 'openai/gpt-5.5-2026-04-23',
-          agentCategory: AgentCategory.ToolUse,
           instruction: 'Fix grammar.',
         });
         yield* registerRun(session, DESCRIPTION_RUN_ID, described, {

@@ -6,6 +6,8 @@ import { chmod } from 'node:fs/promises';
 
 import { fileURLToPath, URL } from 'node:url';
 
+import { buildIdentityDefine } from '../../../scripts/build-identity.mjs';
+
 const reactDevtoolsStub = fileURLToPath(
   new URL('./react-devtools-core-stub.mjs', import.meta.url),
 );
@@ -17,16 +19,23 @@ const harness = process.argv.includes('--harness');
 // `--serve` bundles the headless background service (`texra serve` with no
 // chat TUI), the file the VS Code extension and the desktop app ship.
 const serve = process.argv.includes('--serve');
+// `--host-harness` bundles the validator's editor-less window
+// (scripts/service-host-harness.ts), which attaches to the service.
+const hostHarness = process.argv.includes('--host-harness');
 const configuredOutfile = process.env.TEXRA_CLI_BUNDLE_OUTFILE?.trim();
 const entryPoint = harness
   ? 'scripts/tui-harness.tsx'
-  : serve
-    ? 'src/bin/texraServe.ts'
-    : 'src/bin/texra.ts';
+  : hostHarness
+    ? 'scripts/service-host-harness.ts'
+    : serve
+      ? 'src/bin/texraServe.ts'
+      : 'src/bin/texra.ts';
 const outfile = harness
   ? 'dist/bin/tui-harness.js'
-  : configuredOutfile ||
-    (serve ? 'dist/bin/texra-serve.js' : 'dist/bin/texra.js');
+  : hostHarness
+    ? configuredOutfile || 'dist/bin/service-host-harness.js'
+    : configuredOutfile ||
+      (serve ? 'dist/bin/texra-serve.js' : 'dist/bin/texra.js');
 const includeInternalValidationModel =
   process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL === '1';
 
@@ -54,6 +63,7 @@ try {
     external: ['fsevents'],
     loader: { '.wasm': 'binary' },
     define: {
+      ...buildIdentityDefine(),
       'process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL': JSON.stringify(
         includeInternalValidationModel ? '1' : '',
       ),
@@ -81,7 +91,7 @@ try {
     },
     outfile,
     minify: !harness,
-    // SDK error classification (src/common/errors/sdkError/) reads
+    // SDK error classification (packages/harness/src/common/errors/sdkError/) reads
     // `constructor.name` off the prototype chain, so minified class names
     // would silently misclassify provider errors in the published binary.
     keepNames: true,

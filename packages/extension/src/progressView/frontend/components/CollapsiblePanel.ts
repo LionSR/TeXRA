@@ -4,9 +4,9 @@
 import { LitElement, html, type TemplateResult } from 'lit';
 import { property } from 'lit/decorators.js';
 
-import type { RunId } from '@shared/schemas';
 import type { Surface } from '@shared/session/surface';
 import { dispatchGroupToggle } from '../utils';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';

@@ -11,13 +11,14 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { postMessage } from '@shared/hostBridge';
-import { TexraStateKey } from '@shared/settingsView/texraSettings';
+import { postMessage } from '@texra/shared/hostBridge';
+import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
+import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import {
   type LatexSettingsStatus,
   type SettingsSectionName,
   DEFAULT_LATEX_SETTINGS_STATUS,
-} from '@shared/settingsView/settingsViewMessages';
+} from '@texra/shared/settingsView/settingsViewMessages';
 
 // Local imports - LaTeX toolchain (install guides + commands)
 import {
@@ -32,7 +33,7 @@ import {
   SCOOP_INSTALL_COMMAND,
   type InstallCommand,
   type OSPlatform,
-} from '@shared/constants/latexToolchain';
+} from '@texra/shared/constants/latexToolchain';
 
 // Local imports - shared webview toolkit
 import {
@@ -497,29 +498,29 @@ export class LaTeXTab extends LitElement {
           icon: 'bolt',
         })}
         ${renderStateSettingToggleRow({
-          key: TexraStateKey.WORKFLOW_AUTO_COMPILE,
+          key: DocumentsStateKey.WORKFLOW_AUTO_COMPILE,
           checked: this.autoCompile,
         })}
         ${renderStateSettingToggleRow({
-          key: TexraStateKey.WORKFLOW_AUTO_OPEN_PDF,
+          key: DocumentsStateKey.WORKFLOW_AUTO_OPEN_PDF,
           checked: this.autoOpenPdf,
           disabled: !this.autoCompile,
         })}
         ${renderStateSettingToggleRow({
-          key: TexraStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+          key: DocumentsStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
           checked: this.rejectOnCompileFailure,
           disabled: !this.autoCompile,
         })}
         ${renderStateSettingToggleRow({
-          key: TexraStateKey.LATEXDIFF_CHANGES_ONLY,
+          key: DocumentsStateKey.LATEXDIFF_CHANGES_ONLY,
           checked: this.diffChangesOnly,
         })}
         ${renderStateSettingSelectRow({
-          key: TexraStateKey.LATEXDIFF_MATH_MARKUP,
+          key: DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
           value: this.diffMathMarkup,
         })}
         ${renderStateSettingToggleRow({
-          key: TexraStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+          key: DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS,
           checked: this.diffBetweenRounds,
         })}
       </div>

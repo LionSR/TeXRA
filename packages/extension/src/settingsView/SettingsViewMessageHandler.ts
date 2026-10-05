@@ -11,9 +11,6 @@ import { Cause, Effect, Exit, Fiber } from 'effect';
 import { ModelError, completedTurn } from '@texra-ai/llm';
 
 import type { SessionHandle } from '@agent/runtime';
-import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
-import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
-import { createSettingsViewBody } from '@controllers/settingsView/sharedSettingsCommands';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
@@ -32,27 +29,29 @@ import {
   discoverCopilotRoutes,
   setCopilotRoutePreference,
 } from '@model/copilotRouting';
-import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { StorageFs } from '@platform/rootedFs';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
-import { TexraStateKey } from '@shared/settingsView/texraSettings';
+import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
+import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
+import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import {
   SettingsViewInboundMessageSchema,
   type SettingsViewOutboundMessage,
-} from '@shared/settingsView/settingsViewMessages';
-import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
-import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
-import { allSettledVoid } from '@utils/core/allSettledVoid';
+} from '@texra/shared/settingsView/settingsViewMessages';
+import { createSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
+import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
+import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
+import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { hasExtension } from '@utils/core/pathCore';
 import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 import {
-  latexRecommendedStatus,
+  latexEditorStatus,
   vscodeLatexSettingsHandlers,
 } from './handlers/latexSettingsHandlers';
+import type { PlatformSecrets, StateStore } from '@texra-ai/harness';
 
 /** The webview shapes SettingsView dispatches for. */
 type SettingsWebview = vscode.WebviewView | vscode.WebviewPanel;
@@ -163,11 +162,11 @@ export class SettingsViewMessageHandler {
             selectFolder({ title, openLabel: 'Select Folder' }),
             (selected) => selected ?? undefined,
           ),
-        refreshCatalogs: (selectedToolUseAgent) =>
+        refreshCatalogs: (selectedAgent) =>
           progressView
             .refreshCatalogs({
               agentCatalogAlreadyFresh: true,
-              selectedToolUseAgent,
+              selectedAgent,
             })
             .pipe(Effect.asVoid),
         // The launcher's API-key banner reads the same credential probe from
@@ -196,7 +195,7 @@ export class SettingsViewMessageHandler {
             terminal.show();
             terminal.sendText(command);
           }),
-        latexRecommendedStatus,
+        latexEditorStatus,
         requiresOpenWorkspace: () => !session.roots.workspace,
       },
     });

@@ -5,9 +5,10 @@ import { it } from '@effect/vitest';
 import { Effect, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { Runs } from '@agent/runtime/runRegistry';
+import type { RunToolCall } from '@agent/runtime/RunCall';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import type { RunId } from '@shared/schemas';
@@ -17,7 +18,6 @@ import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
 import { fakeProcessServices } from '@test/support/setupPlatform';
-import type { RunToolCall } from '@tools/core/toolRun';
 
 const mocks = vi.hoisted(() => ({
   startChildRunLoop: vi.fn(),
@@ -60,19 +60,24 @@ vi.mock('@tools/approval', () => ({
 }));
 
 import { launchDetachedSubagent } from '@tools/delegation/subagentRun';
+import { RunFileService } from '@utils/files/runStorage';
 
 describe('launchDetachedSubagent child run launch', () => {
-  const orchestratorRunId = 'orchestrator-stream' as RunId;
-
   const defaultPayload = {
     agent: 'proof-checker',
     model: 'openai/gpt-5-2025-08-07',
-    agentCategory: 'toolUse',
   } as never;
 
+  const roots = createFakeWorkspaceRoots();
   const parent: RunToolCall = {
-    roots: createFakeWorkspaceRoots(),
-    tracker: new FileInteractionState(),
+    callId: 'parent-call',
+    env: { roots },
+    emit: () => undefined,
+    workspace: AgentWorkspaceState.create(),
+    responseId: 'parent-response',
+    instruction: undefined,
+    attempt: 1,
+    logId: 'parent-card',
     requests: {
       nextId: (prefix: string) => prefix,
       open: () => Effect.die(new Error('This fixture opens no request.')),
@@ -80,6 +85,9 @@ describe('launchDetachedSubagent child run launch', () => {
     run: {
       runId: 'parent-exec' as RunId,
       session: { tag: 'parent-session' } as never,
+      task: null,
+      opening: null,
+      fileService: new RunFileService('parent-exec' as RunId, roots),
       steps: noStep(),
       scope: Scope.makeUnsafe(),
       config: AgentConfigSchema.parse({
@@ -97,7 +105,6 @@ describe('launchDetachedSubagent child run launch', () => {
   function runDefaultSubagent() {
     return Effect.provide(
       launchDetachedSubagent(parent, defaultPayload, {
-        parentRunId: orchestratorRunId,
         runId: 'child-run' as RunId,
         parentOffered: [],
         inheritChildRunApprovals: () => undefined,

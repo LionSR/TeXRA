@@ -6,7 +6,7 @@ import { workflowOutputCopyStem } from '@shared/constants/workflowOutput';
 
 describe('Save-as-copy stem', () => {
   it.each([
-    ['builtInWorkflow:write-polish', 'polish'],
+    ['builtIn:write-polish', 'polish'],
     ['custom:alpha_beta', 'alpha'],
     ['plugin:alpha-beta', 'alpha'],
     // No `:` reaches a file name: an unknown prefix is kept as `vendor__`.

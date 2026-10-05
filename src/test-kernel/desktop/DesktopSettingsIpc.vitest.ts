@@ -24,13 +24,6 @@ import {
   AGENT_SKILLS_CONFIG_KEY,
 } from '@shared/schemas';
 import type { ModelOptionData } from '@shared/schemas';
-import {
-  DEFAULT_LATEX_SETTINGS_STATUS,
-  SettingsViewInboundMessageSchema,
-  type DerivedSettingsSnapshot,
-} from '@shared/settingsView/settingsViewMessages';
-import { CodexStateKey } from '@shared/settingsView/integrationSettings';
-import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -41,6 +34,14 @@ import {
   FakeStateStore,
 } from '@test/support/FakePlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
+import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
+import {
+  DEFAULT_LATEX_SETTINGS_STATUS,
+  SettingsViewInboundMessageSchema,
+  type DerivedSettingsSnapshot,
+} from '@texra/shared/settingsView/settingsViewMessages';
+import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 
 import {
   commandOf,
@@ -57,10 +58,10 @@ const readModelAvailabilityInputs = vi.hoisted(() =>
 // the machine's tools, as the harness's unprobed tool availability does for
 // the Tools page.
 vi.mock(
-  '@controllers/settingsView/LatexToolingController',
+  '@texra/controllers/settingsView/LatexToolingController',
   async (importOriginal) => ({
     ...(await importOriginal<
-      typeof import('@controllers/settingsView/LatexToolingController')
+      typeof import('@texra/controllers/settingsView/LatexToolingController')
     >()),
     detectLatexSettingsStatus: () =>
       Effect.succeed(DEFAULT_LATEX_SETTINGS_STATUS),
@@ -688,7 +689,7 @@ describe('desktop settings IPC', () => {
     expect(
       settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-        key: TexraStateKey.LATEXDIFF_MATH_MARKUP,
+        key: DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
         value: 'bogus',
       }),
     ).toBe(true);
@@ -750,7 +751,7 @@ describe('desktop settings IPC', () => {
 
     expect(config.lastTargetFor(AGENT_SKILLS_CONFIG_KEY)).toBeUndefined();
     expect(showInfoMessage).toHaveBeenCalledWith(
-      'Open a workspace folder before changing the “Enable skills for tool-use agents” setting.',
+      'Open a workspace folder before changing the “Enable skills for agents” setting.',
     );
     // The switch is restored from the authoritative snapshot.
     expect(findSnapshot(posted, 'skills')).toBeDefined();

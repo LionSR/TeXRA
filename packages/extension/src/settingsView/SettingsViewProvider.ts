@@ -8,21 +8,19 @@ import {
   BundledViewContentProvider,
   getSharedLocalResourceRoots,
 } from '@common/webview';
-import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
-import { DisposableStore } from '@platform/disposable';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import type { StateStore } from '@platform/interfaces';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { AgentCategory } from '@shared/schemas';
-import type { SettingsTarget } from '@shared/settingsView/settingsViewMessages';
+import { DisposableStore } from '@texra/platform/disposable';
+import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
+import type { SettingsTarget } from '@texra/shared/settingsView/settingsViewMessages';
 
 // Local file imports
 import {
   postToWebview,
   SettingsViewMessageHandler,
 } from './SettingsViewMessageHandler';
+import type { PlatformSecrets, StateStore } from '@texra-ai/harness';
 
 function isReadyMessage(message: unknown): boolean {
   return (
@@ -42,10 +40,7 @@ export class SettingsViewProvider {
    *  loaded or mounted a listener yet (#12495). */
   private viewReady = false;
   /** The latest tab asked for before the panel was ready, posted on ready. */
-  private pendingTab?: {
-    tab: SettingsTarget;
-    agentSubTab?: AgentCategory;
-  };
+  private pendingTab?: SettingsTarget;
   private readonly contentProvider: BundledViewContentProvider;
   private readonly messageHandler: SettingsViewMessageHandler;
 
@@ -80,11 +75,9 @@ export class SettingsViewProvider {
   /**
    * Create and show the webview panel (for command palette activation)
    * @param tab Optional page, or `page/section`, to switch to after showing
-   * @param agentSubTab Optional sub-tab for the agents tab ('workflow' | 'toolUse')
    */
   public showSettingsView(
     tab?: SettingsTarget,
-    agentSubTab?: AgentCategory,
   ): Effect.Effect<void, Error, ProcessServices> {
     return Effect.gen({ self: this }, function* () {
       if (this._view) {
@@ -119,9 +112,9 @@ export class SettingsViewProvider {
       // disposing the dashboard panel meanwhile runs cleanupView.
       if (tab == null || !this._view) return;
       if (this.viewReady) {
-        yield* this.postTab(this._view.webview, { tab, agentSubTab });
+        yield* this.postTab(this._view.webview, tab);
       } else {
-        this.pendingTab = { tab, agentSubTab };
+        this.pendingTab = tab;
       }
     });
   }
@@ -160,14 +153,10 @@ export class SettingsViewProvider {
     });
   }
 
-  private postTab(
-    webview: vscode.Webview,
-    { tab, agentSubTab }: NonNullable<SettingsViewProvider['pendingTab']>,
-  ) {
+  private postTab(webview: vscode.Webview, tab: SettingsTarget) {
     return postToWebview(webview, {
       command: SETTINGS_VIEW_COMMANDS.SET_TAB,
       tab,
-      ...(agentSubTab && { agentSubTab }),
     });
   }
 

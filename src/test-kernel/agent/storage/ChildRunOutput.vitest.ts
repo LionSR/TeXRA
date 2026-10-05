@@ -14,6 +14,7 @@ import {
   type RoundOutput,
   type RunId,
 } from '@shared/schemas';
+import { documentsSummary } from '@shared/plugins/documents';
 import {
   createProcessSession,
   publishTestRunStart,
@@ -36,7 +37,7 @@ beforeEach(async () => {
   session = await Effect.runPromise(createProcessSession());
 });
 
-/** The child's declared files, as its `output.produced` row reports them. */
+/** The child's declared files, as its documents report them. */
 function workflowRounds(absolutePath: string): RoundOutput[] {
   return [
     RoundOutputSchema.parse({
@@ -64,7 +65,11 @@ const completedWorkflowResult: DeliveredResult = {
   producer: 'subagent',
   agentName: 'draft',
   wallTimeMs: 10,
-  output: { category: 'workflow', outputs: [], compileFailures: [], diffs: [] },
+  output: {
+    response: '',
+    files: [],
+    documents: { outputs: [], compileFailures: [], diffs: [] },
+  },
 };
 
 const persistCompletedChild = (parentId: RunId = parentRunId) =>
@@ -81,7 +86,6 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
         type: 'run.start',
         aggregateId: aggregateId('run', childRunId),
         identity: { kind: 'agent', agent: 'draft' },
-        category: 'workflow',
         userFollowUpSupport: 'unsupported',
         parent: { id: parentId, callId: null },
         provenance: null,
@@ -90,19 +94,17 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
     yield* getRunRecords(session, childRunId).writeResultMeta(
       completedWorkflowResult,
     );
-    // How the child ended is the `run.end` row's fact, and what it declared
-    // is its `output.produced` row's, not the manifest's.
+    // How the child ended, and what it declared, is its `run.end` row's.
     yield* session.commit([
-      {
-        type: 'output.produced',
-        aggregateId: aggregateId('run', childRunId),
-        rounds: workflowRounds(absolutePath),
-      },
       {
         type: 'run.end',
         aggregateId: aggregateId('run', childRunId),
         outcome: 'completed',
-        output: { category: 'workflow' },
+        output: {
+          response: '',
+          files: [],
+          documents: documentsSummary(workflowRounds(absolutePath)),
+        },
       },
     ]);
     yield* Effect.promise(() =>

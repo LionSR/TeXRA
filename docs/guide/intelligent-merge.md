@@ -7,7 +7,7 @@ import MergePanelHero from '../.vitepress/components/MergePanelHero.vue';
 
 ## The problem: partial agent outputs
 
-When running targeted agents like `correct` or `polish`, the model may focus its modifications on specific sections, emitting an output round (such as `r0/draft.tex` or `r1/draft.tex`) containing only the modified fragments rather than the entire document. While this conserves processing time and token budget, attempting to compare this excerpt directly against your complete original source using `latexdiff` yields syntactically broken or unreadable diffs.
+When running targeted agents like `correct` or `polish`, the model may focus its modifications on specific sections, emitting a revision (such as `r0/draft.tex` or `r1/draft.tex`) containing only the modified fragments rather than the entire document. While this conserves processing time and token budget, attempting to compare this excerpt directly against your complete original source using `latexdiff` yields syntactically broken or unreadable diffs.
 
 ## The solution: Intelligent Merge button
 

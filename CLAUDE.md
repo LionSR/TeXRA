@@ -38,24 +38,40 @@ type check first. This is the single most common way a change lands broken.
 
 ## Layout
 
-A pnpm workspace. Repo-root `src/` contains host-agnostic production code plus
-centralized tests for shared and host-specific behavior; `packages/extension`, `packages/desktop`, `packages/cli`, and
-`packages/trace-viewer` are hosts and apps over it. Path aliases (`@agent/*`, `@platform/*`, …) are declared in
-`tsconfig.json` — use them instead of long relative chains.
+A pnpm workspace in three layers (split design
+`.agents/docs/proposed/architecture/2026-10-02-harness-package-split.md`):
+`packages/harness/src` (`@texra-ai/harness`) is the Effect-only harness;
+`packages/texra/src` (`@texra-ai/texra`) is the app: TeXRA's plugins, LaTeX,
+the UI kit and the host-side controllers; `packages/llm` is model access.
+`packages/extension`, `packages/desktop`, `packages/cli`, and
+`packages/trace-viewer` are hosts and apps over them. Repo-root `src/` holds
+only the centralized test suite (`src/test-kernel/`); `src/README.md` maps
+the tree. Path aliases (`@agent/*`, `@platform/*`, …) are declared in
+`tsconfig.json` — use them instead of long relative chains. Harness aliases
+point into `packages/harness/src`; app files that left a mixed directory
+take `@texra/*` (`@texra/tools/arxiv/…`), and `@latex/*`, `@replacement/*`,
+`@telemetry/*`, `@housekeeping/*` and `@ui/*` point into the app. The harness
+imports nothing from the app (`HARNESS_NO_APP_IMPORT_PATTERNS` in
+`eslint.config.mjs`, with a shrink-only list of residents). Inside
+`packages/harness/src` (an ESM package) a relative import names its `.js`
+file.
 
 Things the tree won't tell you:
 
-- **The SDK surface is `packages/agent` (`@texra-ai/agent`) — built, fenced, not
+- **The SDK surface is `packages/harness` (`@texra-ai/harness`) — built, fenced, not
   published.** There is no `@texra/core` package (deleted by #7099). Hosts still
-  reach shared core through the repo-root path aliases, but that surface is
-  **frozen, not open**: `eslint.config.mjs` forbids production `src/**` and
-  `packages/agent/src/**` from importing host layers, and the ratchets in
-  `config/ratchets/` freeze the remaining edges — `host-agent-import-baseline`
-  (no NEW distinct `@agent/*` deep-import specifier from a host, type-only
-  included), `host-agent-mock`,
+  reach the harness through the path aliases, but that surface is
+  **frozen, not open**: `eslint.config.mjs` forbids `packages/harness/src/**`,
+  `packages/texra/src/**` and `packages/llm/src/**` from importing host layers, and the ratchets in
+  `config/ratchets/` freeze the remaining edges — `harness-deep-import-baseline`
+  (no NEW distinct harness-internal specifier, `@agent/*`, `@shared/*`,
+  `@platform/*` …, from the app or a host, type-only included; reach the
+  harness through `@texra-ai/harness` instead), `host-agent-mock`,
   `architecture-edges`, plus `refuted-candidates` (the costed-and-refused
   refactors, with their ruling anchors). ESLint's `no-restricted-syntax` fails
-  an `Effect.run*` call outside `packages/{extension,desktop,cli,agent}/src/`
+  an `Effect.run*` call outside `packages/{extension,desktop,cli}/src/` and the
+  SDK entry files (`packages/harness/src/{index,node,plugins,schemas}.ts`,
+  `packages/harness/src/effect/`)
   (webview frontends excluded) or a named runtime entry carved out in
   `eslint.config.mjs` (whole-file; the receiver is checked in review), as does
   `new AbortController()` outside its two ledger residents, and `no-warning-comments` fails on any `@adapter-until`
@@ -75,48 +91,49 @@ Things the tree won't tell you:
   with the tagged error the path raises, `Error` at a host port, and
   `ensureError` at a foreign boundary) also pin single-authority invariants
   with hardcoded rules rather than baseline JSON.
-- **`src/utils/` is host-agnostic, not universally browser-safe.** Only the
+- **`packages/harness/src/utils/` is host-agnostic, not universally browser-safe.** Only the
   `BROWSER_SAFE_UTILS` allowlist in `eslint.config.mjs` (`@utils/core`,
   `@utils/errors/errorMessage`,
   `@utils/files/pastedImageName`, `@utils/text/stringUtils`) is
   browser-reachable: ESLint lets the webview frontends import only those at
   runtime, and holds those to no Node built-ins and runtime imports of each
-  other only. The rest of `src/utils/` must not be assumed browser-safe.
+  other only. The rest of `packages/harness/src/utils/` must not be assumed browser-safe.
   Side-specific helpers still belong in `frontend/` or `common/`.
-- **`src/eventBus/` is `AppSignals` only** — cross-cutting app-lifecycle signals
+- **`packages/harness/src/eventBus/` is `AppSignals` only** — cross-cutting app-lifecycle signals
   (auth, subscriptions, credentials, workspace-file writes). It is _not_
   run or session progress; those live in `@agent/trace` and `SessionEvents`
-  (`src/agent/runtime/`).
-- **`src/common/webview/` does not exist.** Webview base classes are in
+  (`packages/harness/src/agent/runtime/`).
+- **`packages/harness/src/common/webview/` does not exist.** Webview base classes are in
   `packages/extension/src/common/webview/`. <!-- guidance-refs-ignore -->
 - **No convenience barrels.** A barrel exists only for a documented public
   surface. Import the file that defines the symbol.
-- **`src/ui/` is the host-neutral UI toolkit** (`@ui/*`): the Web Awesome and
+- **`packages/texra/src/ui/` is the host-neutral UI toolkit** (`@ui/*`): the Web Awesome and
   Lit building blocks (`wa/`), the shared `css` tag blocks (`styles/`), the
-  markdown/KaTeX pipeline (`markdown/`) and the user-facing copy tables (`copy/`). All three hosts
-  render from it. It moved out of `src/shared/` because that directory is wire
-  contracts and UI-shared message types, which ~9k lines of rendering code is
-  not. It is a VS Code-free zone and, like `src/shared/`, takes no
-  `@agent/*` imports. The transcript row model lives in `src/shared/transcript/` (it is a fold target of `shared/session`, so `shared` owns it). Do not confuse it with `src/transcript/` (`@transcript`),
-  the run-transcript persistence layer. **`src/shared/{litControllers,monaco,highlighting}/`
-  never made that move** — Lit reactive controllers, a Monaco bootstrap, and a
+  markdown/KaTeX pipeline (`markdown/`) and the user-facing copy tables
+  (`copy/`). All three hosts render from it. It is app code, a VS Code-free
+  zone, and takes no `@agent/*` imports. The transcript row model is part of
+  the harness's session view and lives in `packages/harness/src/shared/transcript/`
+  (`@shared/transcript`); do not confuse it with `packages/harness/src/transcript/`
+  (`@transcript`), the run-transcript persistence layer.
+  **`packages/texra/src/shared/{litControllers,monaco,highlighting}/`
+  never moved into the kit** — Lit reactive controllers, a Monaco bootstrap, and a
   highlight.js wrapper. Consumers are webview/renderer UI code, plus one
   main-process diff-labeling caller (`packages/desktop/src/main/desktopDiffHost.ts`)
-  and the UI toolkit's own markdown pipeline (`src/ui/markdown/katexHtmlProcessor.ts`);
+  and the UI toolkit's own markdown pipeline (`packages/texra/src/ui/markdown/katexHtmlProcessor.ts`);
   none is a wire-contract reader. The three were shelved along with a broader,
-  separately proposed regroup of six `src/shared/` subtrees under `src/shared/ui/`
+  separately proposed regroup of six `packages/harness/src/shared/` subtrees under `packages/harness/src/shared/ui/`
   that was rejected on cost (235 import statements plus 9 hardcoded literal test
   paths for that six-directory regroup, not for these three alone) — not because
   the code belongs with wire contracts. Treat them as the UI toolkit's territory:
-  don't duplicate a controller or a highlighter in `src/ui/` without checking
+  don't duplicate a controller or a highlighter in `@ui` without checking
   here first, and don't read their location as license to add more rendering
-  code under `src/shared/`.
+  code under a `shared/` directory.
 
 Two wiring points fail silently if you forget them: a new VS Code command must
 be registered through `packages/extension/src/commands.ts`, and a new setting
 must be declared in the Zod catalog by its owner (the harness's rows in
-`src/shared/state/stateSettings.ts`, schemas in `src/shared/schemas/coreSettings.ts`;
-TeXRA's rows in `src/shared/settingsView/texraSettings.ts`, a plugin's rows on
+`packages/harness/src/shared/state/stateSettings.ts`, schemas in `packages/harness/src/shared/schemas/coreSettings.ts`;
+TeXRA's rows in `packages/texra/src/shared/settingsView/texraSettings.ts`, a plugin's rows on
 its `Plugin` value's `settings`) and the native TeXRA settings view —
 `packages/extension/package.json` must NOT contribute `configuration`;
 `scripts/sync-package-contributes.mjs` throws if it does.
@@ -127,13 +144,12 @@ Core logic must not import `vscode`. This is the highest-signal rule in the
 repo and the first thing to check on any diff.
 
 **VS Code-free zones** — must NOT import `vscode`:
-`src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/controllers/`,
-`src/shared/`, `src/ui/`, `src/replacement/`, `src/eventBus/`, `src/hosts/`,
-`src/common/`, `src/utils/`, `src/logger/`, `packages/agent/src/`, `packages/llm/src/`,
+the whole harness (`packages/harness/src/`), the whole app
+(`packages/texra/src/`), `packages/llm/src/`,
 `packages/desktop/src/`, and the webview
 frontends — `packages/extension/src/progressView/frontend/` and
 `packages/extension/src/settingsView/frontend/`. Do not confuse
-`src/common/` and `src/utils/` (repo-root, host-neutral, enforced VS
+the harness's `common/` and `utils/` (host-neutral, enforced VS
 Code-free) with `packages/extension/src/common/` below (extension-only,
 VS Code-allowed), or `packages/extension/src/frontend/` (no view-name
 segment, the top-level extension-host frontend, VS Code-allowed) with the
@@ -145,8 +161,8 @@ sync with this list and with each other.
 **VS Code-allowed zones** — platform wiring belongs here:
 `packages/extension/src/extension.ts` (calls `installProcessRuntime()` exactly once),
 `packages/extension/src/commands/`, `packages/extension/src/frontend/`,
-`packages/extension/src/common/`, and `src/platform/` interface definitions.
-Within `src/utils/`, a browser-reachable module additionally
+`packages/extension/src/common/`, and `packages/harness/src/platform/` interface definitions.
+Within `packages/harness/src/utils/`, a browser-reachable module additionally
 stays free of Node built-ins — see the browser-safe note above; that is a
 stricter constraint layered on top of the VS Code-free rule, not a
 substitute for it.
@@ -160,18 +176,17 @@ rather than an import.
 Substitutions and the push-UI-to-the-caller rule: AGENTS.md "Platform
 decoupling rules".
 
-Also: `src/shared/` is for wire contracts and UI-shared message types (plus the
-stranded `litControllers/`, `monaco/`, `highlighting/` trio noted above), and
-`src/ui/` for the rendering toolkit over them — don't add new `@agent/*`
-imports to either; host-neutral orchestration goes in `src/controllers/`.
+Also: `packages/harness/src/shared/` is for wire contracts and UI-shared message types, and
+`@ui` (`packages/texra/src/ui/`) for the rendering toolkit over them — don't add new `@agent/*`
+imports to either; host-neutral orchestration goes in `packages/harness/src/controllers/`.
 
 **Event channels.** New facts a run's trace emits extend `AgentEvent`
 (trace) and reach the plane through `runEventDraft`; facts the session itself
 authors (lifecycle, status, approvals) extend the `SessionEvent` schema
-(`src/shared/schemas/sessionEvent.ts`) and are published as drafts through
+(`packages/harness/src/shared/schemas/sessionEvent.ts`) and are published as drafts through
 `SessionHandle.publish`. Don't add a new `bus.emit` from a
 VS Code-free zone and don't add a new subscribe surface. (Ruled in
-`.agents/docs/implemented/architecture/2026-06-10-error-pipeline-and-ownership.md`. The `src/tools`
+`.agents/docs/implemented/architecture/2026-06-10-error-pipeline-and-ownership.md`. The tool
 emit sites this once grandfathered have since migrated to session-owned
 emission via `SessionHandle.publish` / `SessionEvents`, so a new direct
 `bus.emit` is a violation, not a grandfathered pattern.) This does not restrict
@@ -213,33 +228,34 @@ Full patterns: AGENTS.md "Zod v4 Schema Patterns".
 
 ## Agent system
 
-Core lives in `src/agent/`: `core/` is the host-agnostic domain model (see
-`src/agent/core/README.md`); `runtime/loop/` holds the one run program
-(`toolUse.ts`), a plain Effect loop over the run history that workflow agents
-run in round mode (`rounds.ts`), with `runtime/run/` the per-run services it
+Core lives in `packages/harness/src/agent/`: `core/` is the host-agnostic domain model (see
+`packages/harness/src/agent/core/README.md`); `runtime/loop/` holds the one run program
+(`toolUse.ts`), a plain Effect loop over the run history, with
+`runtime/run/` the per-run services it
 takes from context (`AgentRun`, model binding, pricing, media, tools) and
 `runtime/ModelInvoker.ts` the one service that calls the `packages/llm`
 `Model`. `core/tools/` holds `toolCallParsing`, which parses a response's
-tool calls. `output/` is the documents plugin a workflow round runs
-(`documentRounds.ts`) and its output pipeline. Provider APIs are reached
+tool calls. `output/` holds the document recipe (`documentRecipe.ts`), the
+script a document task's run executes over the documents plugin's tools
+(`packages/texra/src/tools/documents/`), and its output pipeline. Provider APIs are reached
 only through the `packages/llm` `Model` that `runtime/run/modelBinding.ts`
 binds; the `helperModel` path binds through that same route. New agents come
-from the built-in `creator` tool-use agent or the settings view's "Create from
-template". Agents are configured by YAML in
-`packages/extension/resources/agents/`, one unified YAML per agent covering
-single and multi-document output.
+from the built-in `creator` agent or the settings view's "Create from
+template". Agents are flat persona YAML (`name`, `description`, `prompt`,
+`tools`, `temperature`) in `packages/extension/resources/`; a `task:` block
+makes one also launchable as a document task.
 
-**Launch executions via `runAgent`** (`src/agent/runtime/runAgent.ts`) — it
+**Launch executions via `runAgent`** (`packages/harness/src/agent/runtime/runAgent.ts`) — it
 assigns a `runId`, registers the run, and opens workflow output. Use the
 lower-level `executeAgent` only when you already own the `runId` (subagent
-dispatch). `runAgent` launches fresh runs only: a persisted run of either
-category resumes through `resumeRun`, which continues it with
+dispatch). `runAgent` launches fresh runs only: a persisted run resumes
+through `resumeRun`, which continues it with
 `resumeToolUseFromResumeData`. Loop conventions and the
 write points: AGENTS.md "Patterns across the codebase" (Run loop
 architecture).
 
 **There is no flow engine.** A run is one Effect program that appends rows to
-the run history (`src/shared/session/runHistory.ts`) and continues from the
+the run history (`packages/harness/src/shared/session/runHistory.ts`) and continues from the
 folded `RunState` each `appendBatch` returns; resume is the same function
 reading the same rows. Every wait writes a `run.position`; a response row is
 committed before its tools dispatch and a `tool.result` before the loop
@@ -285,7 +301,7 @@ node, a cursor, a services bag, or a second writer of the run history.
   existing suites instead of adding files, and don't demand tests in review
   beyond this bar. Full rules: AGENTS.md "Testing discipline".
 - **Serialize async work through Effect** (concurrency primitives, or
-  `withPerKeyLane` in `src/utils/core/perKeyQueue.ts` when operations must run
+  `withPerKeyLane` in `packages/harness/src/utils/core/perKeyQueue.ts` when operations must run
   one at a time per key), never a hand-rolled promise chain; see AGENTS.md
   "Code quality rules".
 

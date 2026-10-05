@@ -4,8 +4,9 @@
 // -Drawer, -Wide, -Tools, -Proposal, -Inline).
 import { html, type TemplateResult } from 'lit';
 
+import { DOCUMENTS_OUTPUT_ARM } from '@shared/plugins/documents';
 import {
-  AgentCategory,
+  AgentConfigFieldsSchema,
   emptyRunEndOutput,
   MESSAGE_TYPES,
   RunIdSchema,
@@ -58,17 +59,13 @@ const PROJECT = {
 function host(): HostSnapshot {
   return {
     ...emptyHostSnapshot(PROJECT),
-    agentOptions: {
-      toolUse: [
-        { value: 'orchestrator', label: 'orchestrator', isOrchestrator: true },
-        { value: 'polish', label: 'polish' },
-        { value: 'search', label: 'search' },
-      ],
-      workflow: [
-        { value: 'correct', label: 'correct' },
-        { value: 'review', label: 'review', rounds: 3 },
-      ],
-    },
+    agentOptions: [
+      { value: 'orchestrator', label: 'orchestrator', isOrchestrator: true },
+      { value: 'polish', label: 'polish' },
+      { value: 'search', label: 'search' },
+      { value: 'correct', label: 'correct', rounds: 1 },
+      { value: 'review', label: 'review', rounds: 3 },
+    ],
     modelOptions: [
       { value: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
       { value: 'gpt-5.6', label: 'GPT 5.6' },
@@ -232,7 +229,6 @@ function interruptedTasksView(): SessionView {
       {
         type: 'run.start',
         identity: { kind: 'agent', agent: 'assistant' },
-        category: AgentCategory.ToolUse,
         worktree: { workingDirectory: '/paper', branch: 'main' },
         parent: null,
         provenance: null,
@@ -240,12 +236,7 @@ function interruptedTasksView(): SessionView {
       },
       OTHER_OWNER,
     );
-    log.emit(
-      id,
-      at,
-      { type: 'run.activate', category: AgentCategory.ToolUse },
-      OTHER_OWNER,
-    );
+    log.emit(id, at, { type: 'run.activate' }, OTHER_OWNER);
     log.emit(
       id,
       at + 1,
@@ -264,19 +255,13 @@ function interruptedTasksView(): SessionView {
       {
         type: 'run.start',
         identity: { kind: 'agent', agent: `referee-${index + 1}` },
-        category: AgentCategory.ToolUse,
         parent: log.parent(REVIEW_TASK),
         provenance: null,
         userFollowUpSupport: 'nativeInteractive',
       },
       OTHER_OWNER,
     );
-    log.emit(
-      id,
-      T.childProgress,
-      { type: 'run.activate', category: AgentCategory.ToolUse },
-      OTHER_OWNER,
-    );
+    log.emit(id, T.childProgress, { type: 'run.activate' }, OTHER_OWNER);
   }
   log.emit(
     referees[0],
@@ -284,7 +269,7 @@ function interruptedTasksView(): SessionView {
     {
       type: 'run.end',
       outcome: 'completed',
-      output: emptyRunEndOutput(AgentCategory.ToolUse),
+      output: emptyRunEndOutput(),
     },
     OTHER_OWNER,
   );
@@ -323,13 +308,12 @@ function forkView(): SessionView {
     log.emit(id, at, {
       type: 'run.start',
       identity: { kind: 'agent', agent: 'assistant' },
-      category: AgentCategory.ToolUse,
       worktree: { workingDirectory: '/paper', branch: 'main' },
       parent: null,
       provenance,
       userFollowUpSupport: 'nativeInteractive',
     });
-    log.emit(id, at, { type: 'run.activate', category: AgentCategory.ToolUse });
+    log.emit(id, at, { type: 'run.activate' });
   };
   const say = (id: typeof FORK, at: number, text: string) =>
     log.emit(id, at, {
@@ -365,7 +349,7 @@ function forkView(): SessionView {
   log.emit(FORK_SOURCE, T.child + 22_000, {
     type: 'run.end',
     outcome: 'completed',
-    output: emptyRunEndOutput(AgentCategory.ToolUse),
+    output: emptyRunEndOutput(),
   });
   start(FORK, T.childDone, {
     kind: 'fork',
@@ -597,23 +581,47 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     const view = foldAll([...events, ...priced, local({ self: [OWNER] })]);
     return sidebar(view, surface(view, { kind: 'select', runId: ROOT }));
   },
-  // A workflow task in its second pass: the header's "Pass 2 of 3" chip.
+  // A document task past its second pass: the header's "Pass 2 of 3" chip.
   'ext-workflow-pass': () => {
     const log = new Log();
     log.emit(ROOT, T.root, {
       type: 'run.start',
       identity: { kind: 'agent', agent: 'review' },
-      category: AgentCategory.Workflow,
       worktree: { workingDirectory: '/paper', branch: 'main' },
       parent: null,
       provenance: null,
       userFollowUpSupport: 'unsupported',
     });
     log.emit(ROOT, T.root, {
-      type: 'run.activate',
-      category: AgentCategory.Workflow,
+      type: 'run.config',
+      config: AgentConfigFieldsSchema.parse({
+        agent: 'review',
+        script: {
+          code: 'return await tools.document_propose({});',
+          title: 'review',
+          tools: ['agent'],
+          kind: 'recipe',
+        },
+      }),
     });
+    log.emit(ROOT, T.root, { type: 'run.activate' });
     log.emit(ROOT, T.root + 1, {
+      type: 'plugin.fact',
+      plugin: DOCUMENTS_OUTPUT_ARM.plugin,
+      kind: DOCUMENTS_OUTPUT_ARM.kind,
+      version: DOCUMENTS_OUTPUT_ARM.version,
+      parent: null,
+      value: {
+        rounds: [0, 1].map((round) => ({
+          round,
+          rawOutput: null,
+          outputs: [],
+          compileFailures: [],
+          missingOutputs: [],
+        })),
+      },
+    });
+    log.emit(ROOT, T.root + 2, {
       type: 'run.position',
       payload: { family: 'toolUse', at: 'turn.begin', turn: 2 },
     });

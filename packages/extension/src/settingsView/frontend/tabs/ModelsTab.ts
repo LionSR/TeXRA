@@ -13,7 +13,7 @@ import type {
   ModelSelectionItem,
   ProviderKeyStatus,
   SettingsSectionName,
-} from '@shared/settingsView/settingsViewMessages';
+} from '@texra/shared/settingsView/settingsViewMessages';
 import { commonViewStyles, designTokens } from '@ui/styles';
 
 // Local imports - settings view components (side-effect: register)

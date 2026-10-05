@@ -11,18 +11,21 @@ import { FakeSecrets } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
 // Local imports - tools
-import { DEFAULT_CHECK_ANNOTATION_LEVEL } from '@tools/github/checkAnnotationLevels';
-import { GitHubRateLimitError } from '@tools/github/githubClient';
+import { DEFAULT_CHECK_ANNOTATION_LEVEL } from '@texra/tools/github/checkAnnotationLevels';
+import { GitHubRateLimitError } from '@texra/tools/github/githubClient';
 import {
   makePollingLifetime,
   type PollHookRejected,
-} from '@tools/github/PollingSourceBase';
+} from '@texra/tools/github/PollingSourceBase';
 import {
   PRPollingSource,
   prKeyToString,
   type PRSubscriptionState,
-} from '@tools/github/PRPollingSource';
-import type { GhCheckAnnotation, GhCheckRun } from '@tools/github/prTypes';
+} from '@texra/tools/github/PRPollingSource';
+import type {
+  GhCheckAnnotation,
+  GhCheckRun,
+} from '@texra/tools/github/prTypes';
 
 // Local imports - test fixtures
 import {
@@ -36,8 +39,10 @@ const mocks = vi.hoisted(() => ({
 
 // Stub the annotation-fetch infrastructure at the module boundary rather than
 // replacing the source's private delegator method.
-vi.mock('@tools/github/checkRunsClient', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tools/github/checkRunsClient')>()),
+vi.mock('@texra/tools/github/checkRunsClient', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@texra/tools/github/checkRunsClient')
+  >()),
   fetchAnnotations: mocks.fetchAnnotations,
 }));
 

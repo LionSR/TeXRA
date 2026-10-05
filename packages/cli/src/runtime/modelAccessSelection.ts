@@ -1,18 +1,18 @@
 import { Data, Effect } from 'effect';
 
 import { hasUsableApiKey } from '@texra-ai/llm';
+import { Secrets, type PlatformSecrets } from '@texra-ai/harness';
+import type { SettingsStores } from '@shared/config/settingsAccess';
+import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
+import {
+  codingPlanSubscriptionRuntimes,
+  type CodingPlanSubscriptionRuntime,
+} from '@texra/model/codingPlanSubscriptions';
 import {
   subscriptionAuthStatus,
   subscriptionProvider,
   type SubscriptionProviderId,
-} from '@controllers/modelAccess/subscriptionProviders';
-import {
-  codingPlanSubscriptionRuntimes,
-  type CodingPlanSubscriptionRuntime,
-} from '@model/codingPlanSubscriptions';
-import { Secrets, type PlatformSecrets } from '@platform/secrets';
-import type { SettingsStores } from '@shared/config/settingsAccess';
-import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
+} from '@texra/controllers/modelAccess/subscriptionProviders';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {

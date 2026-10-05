@@ -2,11 +2,11 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { deriveResumability, finalizeRun } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   aggregateId,
-  AgentCategory,
   emptyRunEndOutput,
   type RunSnapshotPayload,
   RUN_OUTCOME,
@@ -19,6 +19,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 
 /** The opening snapshot of a tool-use run, as the loop's first batch writes it. */
 const OPENING_SNAPSHOT: RunSnapshotPayload = {
@@ -68,7 +69,7 @@ describe('deriveResumability', () => {
             type: 'run.end',
             aggregateId: aggregateId('run', runId),
             outcome,
-            output: emptyRunEndOutput(AgentCategory.ToolUse),
+            output: emptyRunEndOutput(),
           },
         ]),
       );
@@ -90,6 +91,35 @@ describe('deriveResumability', () => {
     }),
   );
 
+  it.effect('does not resume a document task that ended: it runs again', () =>
+    Effect.gen(function* () {
+      const runId = 'ac0001' as RunId;
+      yield* Effect.promise(() => writeMeta(runId, {}));
+      yield* session.commit([
+        {
+          type: 'run.config',
+          aggregateId: aggregateId('run', runId),
+          config: AgentConfigSchema.parse(
+            documentTaskConfig({ agent: 'polish', model: 'test-model' }),
+          ),
+        },
+      ]);
+      yield* Effect.promise(() => writeSnapshot(runId));
+      yield* session.commit([
+        {
+          type: 'run.end',
+          aggregateId: aggregateId('run', runId),
+          outcome: RUN_OUTCOME.FAILED,
+          output: emptyRunEndOutput(),
+        },
+      ]);
+
+      expect(yield* deriveResumability(runId, session)).toEqual({
+        kind: 'none',
+      });
+    }),
+  );
+
   it.effect(
     'keeps the snapshot when terminal metadata fails for a failed run',
     () =>
@@ -103,10 +133,7 @@ describe('deriveResumability', () => {
 
         expect(
           yield* finalizeRun(session, { runId, outcome: RUN_OUTCOME.FAILED }),
-        ).toMatchObject({
-          ok: false,
-          outcomePersisted: false,
-        });
+        ).toMatchObject({ ok: false });
 
         expect(yield* deriveResumability(runId, session)).toMatchObject({
           kind: 'checkpoint',

@@ -30,6 +30,7 @@ import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
+import { inquiryThreadsUnder } from '@shared/plugins/externalInquiry';
 import type { InquiryThreadSummary, RunId } from '@shared/schemas';
 import {
   rollupOf,
@@ -37,10 +38,10 @@ import {
   type RunView,
 } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
-import { SessionUiEvents } from '@shared/session/uiEvents';
-import { TickerController } from '@shared/litControllers/TickerController';
 import type { TeXRAIconName } from '@shared/iconNames';
 import { dispatchedChildren } from '@shared/transcript';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { TickerController } from '@texra/shared/litControllers/TickerController';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { NESTED_AGENT } from '@ui/copy/nestedRuns';
@@ -273,9 +274,7 @@ export class BackgroundTasksPanel extends LitElement {
   }
 
   private inquiriesOf(run: RunView): InquiryThreadSummary[] {
-    return (this.view?.inquiries ?? []).filter(
-      (thread) => thread.parentRunId === run.id,
-    );
+    return this.view ? inquiryThreadsUnder(this.view, run.id) : [];
   }
 
   override render(): TemplateResult | typeof nothing {

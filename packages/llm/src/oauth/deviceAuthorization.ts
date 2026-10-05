@@ -16,6 +16,10 @@
 import { Clock, Data, Duration, Effect, Ref, Schedule } from 'effect';
 
 import { toErrorMessage } from './support.js';
+import type {
+  SubscriptionOAuthCoordinator,
+  SubscriptionSession,
+} from './SubscriptionOAuthCoordinator.js';
 
 /** The device-code prompt a host renders while polling for approval. */
 export interface SubscriptionDeviceCodePrompt {
@@ -25,6 +29,15 @@ export interface SubscriptionDeviceCodePrompt {
   readonly verificationUrl: string;
   /** Prefilled verification URL when the provider supplies one (xAI). */
   readonly verificationUrlComplete?: string;
+}
+
+/** What a provider's device-code sign-in takes from its host. */
+export interface DeviceLoginOptions<S extends SubscriptionSession> {
+  readonly coordinator: SubscriptionOAuthCoordinator<S>;
+  /** Show the user the verification URL + one-time code. */
+  readonly onPrompt: (
+    prompt: SubscriptionDeviceCodePrompt,
+  ) => Effect.Effect<void>;
 }
 
 /** The user has not approved yet; `slowDown` asks for a longer interval. */

@@ -5,11 +5,7 @@ import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
-import {
-  AGENT_SOURCE,
-  AgentCategory,
-  TELEMETRY_ENABLED_KEY,
-} from '@shared/schemas';
+import { AGENT_SOURCE, TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import { UsageLog, usageAgentName } from '@shared/usageLog';
 import {
   usageLogLayer,
@@ -26,7 +22,6 @@ function usageEntry(model: string) {
     model,
     provider: 'openai-responses' as const,
     agentName: 'agent',
-    agentCategory: AgentCategory.ToolUse,
     inputTokens: 1,
     outputTokens: 1,
     cost: 0.001,
@@ -550,11 +545,8 @@ describe('UsageLogService', () => {
   });
 
   it('sends only a bundled agent id; any other agent name is "custom"', () => {
-    expect(usageAgentName('orchestrator', AGENT_SOURCE.BUILT_IN_TOOL_USE)).toBe(
+    expect(usageAgentName('orchestrator', AGENT_SOURCE.BUILT_IN)).toBe(
       'orchestrator',
-    );
-    expect(usageAgentName('polish', AGENT_SOURCE.BUILT_IN_WORKFLOW)).toBe(
-      'polish',
     );
     expect(usageAgentName('my-thesis-notes', AGENT_SOURCE.CUSTOM)).toBe(
       'custom',

@@ -11,7 +11,6 @@ import { beforeEach, afterEach, describe, vi } from 'vitest';
 // Local imports
 import { registerRun } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 
 import {
@@ -21,7 +20,6 @@ import {
   type ExecResult,
   RunIdSchema,
   type RunId,
-  AgentCategory,
 } from '@shared/schemas';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -81,7 +79,6 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
     }).pipe(
       Effect.provide(
         nativeToolTestLayer({
-          tracker: new FileInteractionState(),
           run: {
             session: testDefaultSession(),
             runId: PARENT_RUN_ID,
@@ -139,7 +136,6 @@ function registerProcessRun(instruction: string) {
       AgentConfigSchema.parse({
         agent: 'bash',
         instruction,
-        agentCategory: AgentCategory.ToolUse,
       }),
       { identity: { kind: 'process', tool: 'bash' } },
     );
@@ -172,7 +168,6 @@ function registerScriptRun(name: string, model?: string) {
         runId,
         config: AgentConfigSchema.parse({
           agent: name,
-          agentCategory: AgentCategory.ToolUse,
           model,
           instruction: `Script '${name}'`,
         }),

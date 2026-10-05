@@ -1,0 +1,301 @@
+/** Canonical global inquiry content; project events carry display notifications only. */
+import { Context, DateTime, Effect, Layer, Result } from 'effect';
+
+import {
+  InquiryThreadIdSchema,
+  ToolError,
+  type InquiryThreadId,
+  type InquiryThreadSummary,
+  type OpenInquiryTurn,
+  type AnsweredInquiryTurn,
+} from '@shared/schemas';
+import { GlobalDatabase } from '@shared/session/database';
+import {
+  INQUIRY_THREADS,
+  InquiryRecords,
+  type InquiryThreadRecord,
+} from '@shared/plugins/externalInquiry';
+import { toNewestFirstByTimestamp, unique, hexId12 } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
+
+const QUESTION_PREVIEW_CHARS = 200;
+
+/** Every operation runs on the process's one handle on the global root. */
+function inquiryOperations({
+  values,
+}: Context.Service.Shape<typeof GlobalDatabase>): Context.Service.Shape<
+  typeof InquiryRecords
+> {
+  /** One thread's transition under the write lock; `null` writes nothing. */
+  const changeThread = <A extends InquiryThreadRecord | null>(
+    id: InquiryThreadId,
+    change: (current: InquiryThreadRecord | null, timestamp: string) => A,
+  ) =>
+    Effect.gen(function* () {
+      const timestamp = DateTime.formatIso(yield* DateTime.now);
+      return yield* values.modify(INQUIRY_THREADS, id, (current) =>
+        Result.try({
+          try: () => {
+            const next = change(current ?? null, timestamp);
+            if (next === null) return [next] as const;
+            if (next.threadId !== id)
+              throw new Error(
+                'An inquiry transition cannot change its thread identity.',
+              );
+            return [next, next] as const;
+          },
+          catch: ensureError,
+        }),
+      );
+    });
+
+  function normalizeSessionLinks(
+    links?: string[] | null,
+  ): string[] | undefined {
+    if (!links?.length) return undefined;
+
+    const normalized = unique(
+      links.map((link) => link.trim()).filter((link) => link.length > 0),
+    );
+
+    return normalized.length ? normalized : undefined;
+  }
+
+  // ============================================================================
+  // Open / answer / drop helpers
+  // ============================================================================
+
+  /**
+   * Append a new open question to a thread. Creates the thread when no
+   * thread_id is passed (or the existing thread is unknown). Updates the
+   * thread's `parentRunId` to the caller; continuations always flow back
+   * to the most-recent asker.
+   *
+   * Behavior depends on the current status of the addressed thread:
+   *   - new thread        → create with status='open'
+   *   - 'answered'        → append a new open turn (follow-up); status flips back to 'open'
+   *   - 'open'            → reject (already has an unanswered question)
+   *   - 'dropped'         → reject (terminal)
+   */
+  function recordOpenQuestion(
+    params: Parameters<
+      Context.Service.Shape<typeof InquiryRecords>['recordOpenQuestion']
+    >[0],
+  ) {
+    const threadId = params.threadId ?? (`ei_${hexId12()}` as InquiryThreadId);
+
+    return changeThread(threadId, (existing, timestamp) => {
+      if (params.threadId && !existing) {
+        throw new ToolError(`External inquiry thread not found: ${threadId}`);
+      }
+
+      if (existing) {
+        if (existing.status === 'open') {
+          throw new ToolError(
+            'Thread already has an open question; wait for the continuation. ' +
+              'Use inquiry { command: "read", thread_id } to inspect or list to recover thread IDs. ' +
+              'Do not re-dispatch.',
+          );
+        }
+        if (existing.status === 'dropped') {
+          throw new ToolError(
+            'Thread was dropped by user; start a new thread instead.',
+          );
+        }
+      }
+      const baseManifest: InquiryThreadRecord = existing ?? {
+        threadId,
+        parentRunId: params.parentRunId,
+        status: 'open',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        turns: [],
+      };
+
+      const turnIndex = baseManifest.turns.length + 1;
+      const trimmedContext = params.context?.trim() || undefined;
+
+      const turn: OpenInquiryTurn = {
+        turnIndex,
+        timestamp,
+        question: params.question,
+        context: trimmedContext,
+        kind: 'open',
+        suggestSearch: params.suggestSearch ?? undefined,
+        attachFiles: params.attachFiles?.length
+          ? params.attachFiles
+          : undefined,
+      };
+
+      const nextManifest: InquiryThreadRecord = {
+        ...baseManifest,
+        parentRunId: params.parentRunId,
+        status: 'open',
+        updatedAt: timestamp,
+        turns: [...baseManifest.turns, turn],
+      };
+
+      return nextManifest;
+    });
+  }
+
+  /**
+   * Persist the user-supplied answer onto the thread's current open turn.
+   * Flips status `open → answered`.
+   *
+   * Returns `null` if the thread has no open turn (e.g. already answered,
+   * or dropped).
+   */
+  function recordAnswerForOpenTurn(
+    params: Parameters<
+      Context.Service.Shape<typeof InquiryRecords>['recordAnswerForOpenTurn']
+    >[0],
+  ) {
+    return changeThread(params.threadId, (existing, timestamp) => {
+      if (
+        !existing ||
+        existing.status !== 'open' ||
+        existing.turns.length === 0
+      )
+        return null;
+
+      // Safe: the length check above guarantees at least one turn.
+      const lastTurn = existing.turns.at(-1)!;
+      if (lastTurn.kind !== 'open' || lastTurn.turnIndex !== params.turnIndex)
+        return null;
+      const sessionLinks = normalizeSessionLinks(params.sessionLinks);
+
+      const answeredTurn: AnsweredInquiryTurn = {
+        ...lastTurn,
+        kind: 'answered',
+        answer: params.answer,
+        answeredAt: timestamp,
+        sessionLinks,
+      };
+
+      const nextManifest: InquiryThreadRecord = {
+        ...existing,
+        status: 'answered',
+        updatedAt: timestamp,
+        turns: [...existing.turns.slice(0, -1), answeredTurn],
+      };
+
+      return nextManifest;
+    });
+  }
+
+  /**
+   * Mark the thread as dropped by the user. Only valid from `open`;
+   * stale or duplicate drop actions arriving after a submit must NOT
+   * overwrite an `answered` status (which would emit a contradictory
+   * dropped continuation and corrupt the audit trail).
+   *
+   * Returns the just-written manifest on success so callers can pass it to the
+   * continuation injector without a re-read, matching `recordAnswerForOpenTurn`.
+   * Returns `null` when the drop was a no-op (already answered/dropped
+   * or not found).
+   */
+  function markDropped(
+    params: Parameters<
+      Context.Service.Shape<typeof InquiryRecords>['markDropped']
+    >[0],
+  ) {
+    return changeThread(params.threadId, (existing, timestamp) => {
+      if (
+        !existing ||
+        existing.status !== 'open' ||
+        existing.turns.at(-1)?.turnIndex !== params.turnIndex
+      )
+        return null;
+      const nextManifest: InquiryThreadRecord = {
+        ...existing,
+        status: 'dropped',
+        updatedAt: timestamp,
+      };
+
+      return nextManifest;
+    });
+  }
+
+  // ============================================================================
+  // Public read API
+  // ============================================================================
+
+  /** Read a canonical thread manifest. */
+  function readExternalInquiryThread(threadId: string) {
+    const parsed = InquiryThreadIdSchema.safeParse(threadId);
+    if (!parsed.success) return Effect.succeed(null);
+    return Effect.map(
+      values.get(INQUIRY_THREADS, parsed.data),
+      (record) => record ?? null,
+    );
+  }
+
+  function manifestToSummary(
+    manifest: InquiryThreadRecord,
+  ): InquiryThreadSummary {
+    const lastTurn = manifest.turns.at(-1);
+    return {
+      threadId: manifest.threadId,
+      parentRunId: manifest.parentRunId,
+      status: manifest.status,
+      lastQuestionPreview: (lastTurn?.question ?? '').slice(
+        0,
+        QUESTION_PREVIEW_CHARS,
+      ),
+      lastActivityIso: manifest.updatedAt,
+      turnCount: manifest.turns.length,
+    };
+  }
+
+  function getThreadSummary(threadId: InquiryThreadId) {
+    return readExternalInquiryThread(threadId).pipe(
+      Effect.map((record) => (record ? manifestToSummary(record) : null)),
+    );
+  }
+
+  function listThreadsByStatus(
+    params: Parameters<
+      Context.Service.Shape<typeof InquiryRecords>['listThreadsByStatus']
+    >[0],
+  ) {
+    return Effect.gen(function* () {
+      const all = (yield* values.list(INQUIRY_THREADS)).map(
+        ({ value }) => value,
+      );
+
+      const filtered = all.filter((m) => {
+        if (params.status !== 'any' && m.status !== params.status) return false;
+        if (params.scope === 'run') {
+          if (!params.runId) return false;
+          if (m.parentRunId !== params.runId) return false;
+        }
+        return true;
+      });
+
+      const sorted = toNewestFirstByTimestamp(
+        filtered,
+        (manifest) => manifest.updatedAt,
+      );
+
+      const trimmed =
+        params.limit != null ? sorted.slice(0, params.limit) : sorted;
+      return trimmed.map(manifestToSummary);
+    });
+  }
+
+  return {
+    recordOpenQuestion,
+    recordAnswerForOpenTurn,
+    markDropped,
+    readExternalInquiryThread,
+    getThreadSummary,
+    listThreadsByStatus,
+  };
+}
+
+/** The inquiry records of the global root, over the process's one handle. */
+export const inquiryRecordsLayer = Layer.effect(
+  InquiryRecords,
+  Effect.map(GlobalDatabase, inquiryOperations),
+);

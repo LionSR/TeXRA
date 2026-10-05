@@ -9,10 +9,6 @@ import { runWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
-import {
-  launchApprovalOptions,
-  launchOnRun,
-} from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { aggregateId, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { LaunchSurfaceSchema } from '@shared/session/surface';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -21,6 +17,10 @@ import {
   setupPlatform,
 } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import {
+  launchApprovalOptions,
+  launchOnRun,
+} from '@texra/controllers/mainView/backend/MainViewRunLaunchController';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
 let counter = 0;
@@ -59,7 +59,7 @@ function completedRun(ctx: AgentLaunchContext): RunEndResult {
   return {
     outcome: RUN_OUTCOME.COMPLETED,
     runId: ctx.runId,
-    output: { category: 'toolUse', response: '', files: [] },
+    output: { response: '', files: [] },
   };
 }
 
@@ -107,7 +107,6 @@ describe('terminal result event', () => {
       yield* runLifecycle(ctx, () => Effect.succeed(completedRun(ctx)));
       const result = yield* expectSingleResult(ctx, {
         outcome: 'completed',
-        output: { category: 'toolUse' },
       });
       expect(result.error).toBeUndefined();
     }),
@@ -192,7 +191,7 @@ describe('terminal result event', () => {
           Effect.succeed({
             outcome: RUN_OUTCOME.CANCELLED,
             runId: ctx.runId,
-            output: { category: 'toolUse', response: '', files: [] },
+            output: { response: '', files: [] },
           }),
         );
         yield* expectSingleResult(ctx, { outcome: 'cancelled' });

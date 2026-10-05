@@ -1,8 +1,7 @@
 import { Data, Effect, FileSystem, type Path } from 'effect';
 
 import type { ProjectDatabases } from '@shared/session/database';
-import type { AgentCategory } from '@shared/schemas';
-import type { SettingsTarget } from '@shared/settingsView/settingsViewMessages';
+import type { SettingsTarget } from '@texra/shared/settingsView/settingsViewMessages';
 import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopLayoutPanel,
@@ -95,12 +94,8 @@ export function createDesktopShellActions(
     });
   }
 
-  function showSettings(tab?: SettingsTarget, agentSubTab?: AgentCategory) {
-    postDesktopSettingsView(
-      (message) => renderer.postToRenderer(message),
-      tab,
-      agentSubTab,
-    );
+  function showSettings(tab?: SettingsTarget) {
+    postDesktopSettingsView((message) => renderer.postToRenderer(message), tab);
   }
 
   function toggleLayout(panel: DesktopLayoutPanel) {

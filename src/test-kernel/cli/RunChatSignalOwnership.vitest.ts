@@ -101,7 +101,7 @@ vi.mock('@cli/runtime/cliService', () => ({
   reachCliService: () => Effect.fail(new Error('no TeXRA service in tests')),
 }));
 
-vi.mock('@model/setupCredentialAccess', () => ({
+vi.mock('@texra/model/setupCredentialAccess', () => ({
   hasUsableSetupCredential: mocks.hasUsableSetupCredential,
 }));
 
@@ -297,7 +297,7 @@ describe('runChat signal ownership wiring', () => {
       modelSource: 'default',
     });
     mocks.resolveChatToolUseAgent.mockReturnValue(
-      Effect.succeed({ source: 'builtInToolUse' }),
+      Effect.succeed({ source: 'builtIn' }),
     );
     mocks.selectCliRunnableModel.mockReturnValue(
       Effect.succeed({ model: 'gpt-test' }),

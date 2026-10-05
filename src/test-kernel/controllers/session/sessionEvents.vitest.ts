@@ -68,7 +68,6 @@ import {
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionGraph';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 import {
   databaseLayer,
   globalDatabaseLayer,
@@ -78,7 +77,6 @@ import { openProjectStateStore } from '@controllers/session/appStateStore';
 import { collectPendingDeletions } from '@controllers/session/deletionCleanup';
 import { openStore } from '@controllers/session/storeSchema';
 import { sessionRequests } from '@controllers/session/SessionRequests';
-import { runActionGuard } from '@controllers/session/runActionGuard';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -90,9 +88,9 @@ import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withProcessServices } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
+import { inquiryThreadRow } from '@shared/plugins/externalInquiry';
 import {
   aggregateId as qualifyAggregateId,
-  AgentCategory,
   AgentConfigFieldsSchema,
   emptyRunEndOutput,
   LocalRuntimeStateSchema,
@@ -100,9 +98,9 @@ import {
   RunIdSchema,
   type RunId,
   type SessionEventDraft,
+  type InquiryThreadSummary,
 } from '@shared/schemas';
-import { InquiryRecords } from '@shared/session/inquiryRecords';
-import { Database } from '@shared/session/database';
+import { Database, GlobalDatabase } from '@shared/session/database';
 import { runActions } from '@shared/session/runActions';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { RunHistory, RunHistoryRefused } from '@shared/session/runHistory';
@@ -122,7 +120,9 @@ import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import '@test/support/sessionGraphTestSetup';
 import { identityReads } from '@test/support/sessionGraphInstall';
 import { REPO_ROOT } from '@test/support/repoScan';
-import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
+import { runActionGuard } from '@texra/controllers/session/runActionGuard';
+import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
+import { toolTable } from '@tools/toolTable';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** A second OS process's writer: this build's `Database` over the store at
@@ -138,7 +138,7 @@ import { Effect, Layer } from 'effect';
 import { databaseLayer } from '@controllers/session/Database';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { nodePlatformServices } from '@platform/defaults/nodePlatform';
-import { aggregateId, AgentCategory } from '@shared/schemas';
+import { aggregateId } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 
@@ -148,7 +148,7 @@ const append = Effect.gen(function* () {
   const db = yield* Database;
   yield* db.appendAll([{ type: 'run.start', aggregateId: id,
     identity: { kind: 'agent', agent: 'chat' }, userFollowUpSupport: 'unsupported',
-    category: AgentCategory.ToolUse, parent: null, provenance: null }]);
+    parent: null, provenance: null }]);
   while (!existsSync(join(storage, 'go'))) yield* Effect.sleep('1 millis');
   const slow = new DatabaseSync(join(storage, 'texra.db'));
   slow.exec('BEGIN IMMEDIATE');
@@ -200,11 +200,11 @@ const leanBuilds = vi.hoisted(() => ({
   count: 0,
   state: undefined as StateStore | undefined,
 }));
-vi.mock('@tools/lean/direct/directLspAdapter', async () => {
+vi.mock('@texra/tools/lean/direct/directLspAdapter', async () => {
   const { Effect, Layer } = await import('effect');
   const { AppState } = await import('@platform/interfaces');
   const { LeanLanguageServices } =
-    await import('@tools/lean/leanLanguageServices');
+    await import('@texra/tools/lean/leanLanguageServices');
   return {
     directLeanLanguageServices: () =>
       Layer.effect(
@@ -239,7 +239,6 @@ const runStart: SessionEventDraft = {
   aggregateId: qualifyAggregateId('run', RUN),
   identity: { kind: 'agent', agent: 'chat' },
   userFollowUpSupport: 'unsupported',
-  category: AgentCategory.ToolUse,
   parent: null,
   provenance: null,
 };
@@ -439,19 +438,20 @@ describe('session events and view', () => {
       const log = yield* Database;
       const threadId = 'ei_012345abcdef';
       const run = qualifyAggregateId('run', RUN);
-      const inquiry = qualifyAggregateId('inquiry', threadId);
+      const inquiry = qualifyAggregateId(
+        'plugin',
+        `external-inquiry:${threadId}`,
+      );
       const committed = yield* events.publish([
         runStart,
-        {
-          type: 'inquiryThreadUpdated',
-          aggregateId: inquiry,
+        inquiryThreadRow({
           threadId,
           parentRunId: null,
           status: 'open',
           lastQuestionPreview: 'Which boundary condition applies?',
           lastActivityIso: '2026-09-06T12:00:00.000Z',
           turnCount: 1,
-        },
+        }),
         { type: 'run.removed', aggregateId: run },
       ]);
       expect(yield* log.readAll(0)).toEqual(committed);
@@ -459,7 +459,7 @@ describe('session events and view', () => {
       expect((yield* log.aggregateState([inquiry]))[0]?.closed).toBe(false);
       const rows = yield* Stream.runCollect(events.aggregate(inquiry, 0));
       expect(rows.map(({ type, seq }) => ({ type, seq }))).toEqual([
-        { type: 'inquiryThreadUpdated', seq: 1 },
+        { type: 'plugin.fact', seq: 1 },
       ]);
     }).pipe(Effect.provide(graph([]))),
   );
@@ -473,10 +473,11 @@ describe('session events and view', () => {
         const oldParent = qualifyAggregateId('run', RUN);
         const newParentId = RunIdSchema.parse('aabbccdd1122');
         const newParent = qualifyAggregateId('run', newParentId);
-        const inquiry = qualifyAggregateId('inquiry', 'ei_012345abcdef');
-        const opened = {
-          type: 'inquiryThreadUpdated' as const,
-          aggregateId: inquiry,
+        const inquiry = qualifyAggregateId(
+          'plugin',
+          'external-inquiry:ei_012345abcdef',
+        );
+        const base = {
           threadId: 'ei_012345abcdef',
           parentRunId: RUN,
           status: 'open' as const,
@@ -484,17 +485,19 @@ describe('session events and view', () => {
           lastActivityIso: '2026-09-07T12:00:00.000Z',
           turnCount: 1,
         };
+        const opened = (patch: Partial<InquiryThreadSummary> = {}) =>
+          inquiryThreadRow({ ...base, ...patch });
         yield* db.appendAll([
           runStart,
           { ...runStart, aggregateId: newParent },
-          opened,
+          opened(),
         ]);
         expect((yield* db.aggregateState([inquiry]))[0]).toMatchObject({
           parentId: oldParent,
           ownerId: null,
         });
         const invalid = yield* Effect.exit(
-          db.appendAll([{ ...opened, parentRunId: newParentId }]),
+          db.appendAll([opened({ parentRunId: newParentId })]),
         );
         expect(invalid._tag).toBe('Failure');
         expect((yield* db.aggregateState([inquiry]))[0]).toMatchObject({
@@ -504,13 +507,11 @@ describe('session events and view', () => {
         expect(
           (yield* db.readAggregate(inquiry, 0)).map((row) => row.seq),
         ).toEqual([1]);
-        yield* db.appendAll([{ ...opened, status: 'answered' }]);
+        yield* db.appendAll([opened({ status: 'answered' })]);
         yield* db.releaseClaims([newParent]);
         expect(
           (yield* Effect.exit(
-            db.appendAll([
-              { ...opened, parentRunId: newParentId, turnCount: 2 },
-            ]),
+            db.appendAll([opened({ parentRunId: newParentId, turnCount: 2 })]),
           ))._tag,
         ).toBe('Failure');
         expect((yield* db.aggregateState([inquiry]))[0]).toMatchObject({
@@ -520,7 +521,7 @@ describe('session events and view', () => {
         expect((yield* db.readAggregate(inquiry, 0)).at(-1)?.seq).toBe(2);
         yield* db.acquireClaims([newParent]);
         yield* db.appendAll([
-          { ...opened, parentRunId: newParentId, turnCount: 2 },
+          opened({ parentRunId: newParentId, turnCount: 2 }),
         ]);
         expect((yield* db.aggregateState([inquiry]))[0]).toMatchObject({
           parentId: newParent,
@@ -542,9 +543,8 @@ describe('session events and view', () => {
         );
         expect((yield* db.aggregateState([inquiry]))[0]?.closed).toBe(true);
         expect(
-          (yield* Effect.exit(
-            db.appendAll([{ ...opened, status: 'answered' }]),
-          ))._tag,
+          (yield* Effect.exit(db.appendAll([opened({ status: 'answered' })])))
+            ._tag,
         ).toBe('Failure');
       }).pipe(Effect.provide(graph([]))),
   );
@@ -779,7 +779,8 @@ describe('Sessions owner', () => {
           createSessionApprovals(),
           { ...db, removeRun: (yield* SessionEvents).removeRun },
           local,
-          yield* InquiryRecords,
+          toolTable([]),
+          yield* GlobalDatabase,
         );
         // The displayed fold was built as SELF and considers this run writable.
         // This requesting process is OTHER; it must respect the current claim.
@@ -814,16 +815,10 @@ describe('Sessions owner', () => {
       }).pipe(
         Effect.provide(graph([runStart])),
         Effect.provide(
-          inquiryRecordsLayer.pipe(
-            Layer.provide(
-              globalDatabaseLayer(
-                createFakeWorkspaceRoots().globalStorage,
-              ).pipe(
-                Layer.provide(ProcessIdentity.layer(SELF)),
-                Layer.provide(nodePlatformLayer),
-                Layer.orDie,
-              ),
-            ),
+          globalDatabaseLayer(createFakeWorkspaceRoots().globalStorage).pipe(
+            Layer.provide(ProcessIdentity.layer(SELF)),
+            Layer.provide(nodePlatformLayer),
+            Layer.orDie,
           ),
         ),
       ),
@@ -848,7 +843,8 @@ describe('Sessions owner', () => {
               resumeBlocked: [],
             }),
           ),
-          yield* InquiryRecords,
+          toolTable([]),
+          yield* GlobalDatabase,
         );
         yield* settle(view.ref, (v) => v.runs.has(RUN));
         // The host rendered Delete session from this view; by the time the
@@ -896,16 +892,10 @@ describe('Sessions owner', () => {
       }).pipe(
         Effect.provide(graph([runStart])),
         Effect.provide(
-          inquiryRecordsLayer.pipe(
-            Layer.provide(
-              globalDatabaseLayer(
-                createFakeWorkspaceRoots().globalStorage,
-              ).pipe(
-                Layer.provide(ProcessIdentity.layer(SELF)),
-                Layer.provide(nodePlatformLayer),
-                Layer.orDie,
-              ),
-            ),
+          globalDatabaseLayer(createFakeWorkspaceRoots().globalStorage).pipe(
+            Layer.provide(ProcessIdentity.layer(SELF)),
+            Layer.provide(nodePlatformLayer),
+            Layer.orDie,
           ),
         ),
       ),
@@ -1071,7 +1061,7 @@ describe('Sessions owner', () => {
           const runEnd = {
             type: 'run.end',
             outcome: 'completed',
-            output: emptyRunEndOutput(AgentCategory.ToolUse),
+            output: emptyRunEndOutput(),
           } as const;
           session.publish([
             { ...runEnd, aggregateId: qualifyAggregateId('run', RUN) },
@@ -1572,7 +1562,6 @@ describe('the C1 event table and the C6 publisher', () => {
                 type: 'run.config',
                 aggregateId: runStart.aggregateId,
                 config: AgentConfigFieldsSchema.parse({
-                  agentCategory: AgentCategory.ToolUse,
                   model: 'test-model',
                 }),
               },
@@ -1690,9 +1679,16 @@ describe('the C1 event table and the C6 publisher', () => {
     },
   );
 
-  it.effect(
-    'lists a run whose own run.start a newer build wrote as blocked',
-    () => {
+  // A newer build's version, and an earlier shape of this version.
+  for (const [reason, edit] of [
+    [
+      'newer',
+      `UPDATE event SET version = 2 WHERE type = 'run.start';
+      UPDATE stored_kind SET version = 2 WHERE type = 'run.start';`,
+    ],
+    ['older', `UPDATE event SET data = '{}' WHERE type = 'run.start';`],
+  ] as const)
+    it.effect(`lists a run whose own run.start is ${reason} as blocked`, () => {
       // The unreadable row is the one that creates the run: without it the
       // run would vanish from every listing instead of reading as blocked.
       const storage = workspace();
@@ -1704,8 +1700,7 @@ describe('the C1 event table and the C6 publisher', () => {
         yield* Effect.sync(() => {
           const raw = reader(storage);
           try {
-            raw.exec(`UPDATE event SET version = 2 WHERE type = 'run.start';
-            UPDATE stored_kind SET version = 2 WHERE type = 'run.start';`);
+            raw.exec(edit);
           } finally {
             raw.close();
           }
@@ -1714,21 +1709,24 @@ describe('the C1 event table and the C6 publisher', () => {
           const view = yield* SessionViewService;
           yield* settle(view.ref, (v) => v.runs.has(RUN));
           const run = (yield* SubscriptionRef.get(view.ref)).runs.get(RUN);
-          expect(run).toMatchObject({ blocked: 'newer', readOnly: true });
+          expect(run).toMatchObject({ blocked: reason, readOnly: true });
           const refused = yield* Effect.flip(
             (yield* Database).acquireClaims([runStart.aggregateId]),
           );
           expect(refused).toMatchObject({
             _tag: 'DatabaseWriteFailed',
-            cause: { _tag: 'DatabaseAggregateBlocked', type: 'run.start' },
+            cause: {
+              _tag: 'DatabaseAggregateBlocked',
+              reason,
+              type: 'run.start',
+            },
           });
         }).pipe(
           Effect.provide(graph([], substrate(storage).pipe(Layer.orDie))),
           Effect.scoped,
         );
       });
-    },
-  );
+    });
 
   it.effect('refuses a store of a newer schema and changes nothing', () => {
     const storage = workspace();
@@ -2101,7 +2099,6 @@ describe('the C1 event table and the C6 publisher', () => {
             data: JSON.stringify({
               identity: runStart.identity,
               userFollowUpSupport: 'unsupported',
-              category: AgentCategory.ToolUse,
               provenance: null,
               parent: null,
             }),
@@ -2117,7 +2114,6 @@ describe('the C1 event table and the C6 publisher', () => {
             data: JSON.stringify({
               identity: runStart.identity,
               userFollowUpSupport: 'unsupported',
-              category: AgentCategory.ToolUse,
               provenance: null,
               parent: null,
             }),
@@ -2158,7 +2154,6 @@ describe('the C1 event table and the C6 publisher', () => {
       return Effect.gen(function* () {
         const db = yield* Database;
         const config = AgentConfigFieldsSchema.parse({
-          agentCategory: AgentCategory.ToolUse,
           model: 'test-model',
         });
         const configured: SessionEventDraft = {
@@ -2473,10 +2468,11 @@ describe('the C1 event table and the C6 publisher', () => {
       return Effect.gen(function* () {
         const first = yield* Database;
         const root = runStart.aggregateId;
-        const inquiry = qualifyAggregateId('inquiry', 'ei_012345abcdef');
-        const thread = {
-          type: 'inquiryThreadUpdated',
-          aggregateId: inquiry,
+        const inquiry = qualifyAggregateId(
+          'plugin',
+          'external-inquiry:ei_012345abcdef',
+        );
+        const base = {
           threadId: 'ei_012345abcdef',
           parentRunId: RUN,
           status: 'open',
@@ -2484,18 +2480,15 @@ describe('the C1 event table and the C6 publisher', () => {
           lastActivityIso: '2026-09-06T12:00:00.000Z',
           turnCount: 1,
         } as const;
+        const thread = (patch: Partial<InquiryThreadSummary> = {}) =>
+          inquiryThreadRow({ ...base, ...patch });
         const initial = yield* first.appendAll([
           runStart,
           olderStart,
-          { ...thread, status: 'answered' },
-          { ...thread, parentRunId: OLDER, turnCount: 2 },
-          {
-            ...thread,
-            parentRunId: OLDER,
-            status: 'answered',
-            turnCount: 2,
-          },
-          { ...thread, turnCount: 3 },
+          thread({ status: 'answered' }),
+          thread({ parentRunId: OLDER, turnCount: 2 }),
+          thread({ parentRunId: OLDER, status: 'answered', turnCount: 2 }),
+          thread({ turnCount: 3 }),
         ]);
         expect((yield* first.aggregateState([inquiry]))[0]?.parentId).toBe(
           root,
@@ -2503,7 +2496,7 @@ describe('the C1 event table and the C6 publisher', () => {
         expect(
           (yield* Effect.flip(
             first.appendAll([
-              { ...thread, parentRunId: RunIdSchema.parse('ffff00') },
+              thread({ parentRunId: RunIdSchema.parse('ffff00') }),
             ]),
           ))._tag,
         ).toBe('DatabaseWriteFailed');
@@ -2511,18 +2504,11 @@ describe('the C1 event table and the C6 publisher', () => {
         // answer regress state and then admit the former asker's turn-2 open.
         const staleBatches: SessionEventDraft[][] = [
           [
-            { ...thread, status: 'answered' },
-            { ...thread, parentRunId: OLDER, turnCount: 2 },
+            thread({ status: 'answered' }),
+            thread({ parentRunId: OLDER, turnCount: 2 }),
           ],
-          [
-            {
-              ...thread,
-              parentRunId: OLDER,
-              status: 'answered',
-              turnCount: 2,
-            },
-          ],
-          [{ ...thread, parentRunId: OLDER, turnCount: 2 }],
+          [thread({ parentRunId: OLDER, status: 'answered', turnCount: 2 })],
+          [thread({ parentRunId: OLDER, turnCount: 2 })],
         ];
         for (const stale of staleBatches) {
           expect((yield* Effect.flip(first.appendAll(stale)))._tag).toBe(
@@ -2591,18 +2577,15 @@ describe('the C1 event table and the C6 publisher', () => {
             (row) => row.closed,
           ),
         ).toBe(true);
-        // Neither a late update nor a new inquiry can attach to the tombstoned asker.
-        for (const draft of [
-          thread,
-          { ...thread, parentRunId: OLDER },
-          {
-            ...thread,
-            aggregateId: qualifyAggregateId('inquiry', 'ei_abcdef012345'),
-            threadId: 'ei_abcdef012345',
-          },
-        ]) {
+        // Neither a late update nor a new inquiry can attach to the tombstoned
+        // asker: the closed thread refuses its writer, a closed parent the new one.
+        for (const [draft, refusal] of [
+          [thread(), 'DatabaseNotOwner'],
+          [thread({ parentRunId: OLDER }), 'DatabaseNotOwner'],
+          [thread({ threadId: 'ei_abcdef012345' }), 'DatabaseWriteFailed'],
+        ] as const) {
           expect((yield* Effect.flip(first.appendAll([draft])))._tag).toBe(
-            'DatabaseWriteFailed',
+            refusal,
           );
         }
         expect(yield* first.currentCommit).toBe(8);
@@ -3018,7 +3001,6 @@ describe('RunHistory', () => {
       ordinal: 0,
       parallelSafe: false,
       replay: 'unsafe',
-      partition: 0,
       duplicateOf: null,
       logId: 'card-a',
       stageId: null,
@@ -3029,7 +3011,6 @@ describe('RunHistory', () => {
       ordinal: 1,
       parallelSafe: false,
       replay: 'unsafe',
-      partition: 0,
       duplicateOf: 'call-a',
       logId: 'card-b',
       stageId: null,
@@ -3184,7 +3165,7 @@ describe('RunHistory', () => {
           aggregateId: AGGREGATE,
           payload: {
             origin: { kind: 'response', responseId: RESPONSE_ID },
-            callIds: ['call-a'],
+            callId: 'call-a',
             attempt: 1,
           },
         },
@@ -3278,15 +3259,17 @@ describe('RunHistory', () => {
         expect(refusalOf(orphanGroup)?.reason).toBe('unprepared-history');
         expect((yield* log.readAggregate(AGGREGATE, 1)).length).toBe(written);
         // The approval and the row that binds it commit in one batch; the
-        // binding names the intent the rows already hold.
+        // binding names the attempt the rows already hold.
         state = yield* run.appendBatch(RUN, state, [
           approvalRequested,
           approvalBinding,
         ]);
         expect(state.requests['req-1']?.resolved).toBe(false);
-        expect(state.pendingIntents['call-a']?.binding?.requestId).toBe(
-          'req-1',
-        );
+        expect(state.pendingResponse?.records['call-a']?.status).toEqual({
+          kind: 'started',
+          attempt: 1,
+          binding: { requestId: 'req-1', role: 'call' },
+        });
         // A real attachment carries loose keys and binary fields: accepted, and
         // the binary fields never reach the row.
         state = yield* run.appendBatch(RUN, state, [
@@ -3307,8 +3290,9 @@ describe('RunHistory', () => {
           }),
           toolEnd('call-a'),
         ]);
+        const settledA = state.pendingResponse?.records['call-a']?.status;
         const file =
-          state.pendingResponse?.settled['call-a']?.result.files?.[0];
+          settledA?.kind === 'settled' ? settledA.result.files?.[0] : undefined;
         expect(file).toEqual({
           path: 'out/plot.png',
           mimeType: 'image/png',

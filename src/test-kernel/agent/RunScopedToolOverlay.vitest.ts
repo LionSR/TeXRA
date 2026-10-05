@@ -22,7 +22,6 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
 import { AppState } from '@platform/interfaces';
-import { AgentCategory } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { closeSessionOf } from '@test/support/sessionEnd';
@@ -39,9 +38,9 @@ import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { resolveTestStep } from '@test/support/stepToolsTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { texraPlugins } from '@texra/tools/registry';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
-import { texraPlugins } from '@tools/registry';
 import { toolTableLayer } from '@tools/liveTools';
 import { toolTable } from '@tools/toolTable';
 import { generateRunId } from '@utils/core';
@@ -145,7 +144,6 @@ describe('run-scoped tool resolution', () => {
         const config = AgentConfigSchema.parse({
           agent: 'chat',
           model: 'test-model',
-          agentCategory: AgentCategory.ToolUse,
           workingDirectory: process.cwd(),
           outputSchema: {
             type: 'object',
@@ -167,11 +165,9 @@ describe('run-scoped tool resolution', () => {
           Effect.orDie,
         );
 
-        // The default-on injections, then the overlay tools and the synthetic
-        // terminal tool, in overlay order.
+        // A persona that declares no tools gets no injections: the overlay
+        // tools and the synthetic terminal tool, in overlay order.
         expect(seen[0]?.tools?.map(({ name }) => name)).toEqual([
-          'memory',
-          'plan',
           'bash',
           'second',
           'submit_output',
@@ -198,7 +194,6 @@ describe('run-scoped tool resolution', () => {
         const config = AgentConfigSchema.parse({
           agent: 'chat',
           model: 'test-model',
-          agentCategory: AgentCategory.ToolUse,
           workingDirectory: process.cwd(),
         });
         const ctx = validationLaunch(
@@ -213,17 +208,11 @@ describe('run-scoped tool resolution', () => {
         // `gone` vanished and `added` appeared since the run opened.
         const resumed = yield* Effect.gen(function* () {
           const state = yield* session.runHistory.load(runId);
-          const step = yield* stepFor(
-            yield* AgentRun,
-            state!,
-            false,
-            'request',
-            {
-              base: () => undefined,
-              isChild: () => false,
-              activated: () => [],
-            },
-          );
+          const step = yield* stepFor(yield* AgentRun, state!, 'request', {
+            base: () => undefined,
+            isChild: () => false,
+            activated: () => [],
+          });
           return { state: state!, step };
         }).pipe(
           Effect.provide(runLayer(ctx, [tool('kept'), tool('added')])),
@@ -231,13 +220,11 @@ describe('run-scoped tool resolution', () => {
         );
 
         expect(resumed.state.offeredTools?.map(({ name }) => name)).toEqual([
-          'memory',
-          'plan',
           'gone',
           'kept',
         ]);
         const offered = resumed.step.tools.definitions.map(({ name }) => name);
-        expect(offered).toEqual(['memory', 'plan', 'kept']);
+        expect(offered).toEqual(['kept']);
         expect(resumed.step.tools.registry.has('gone')).toBe(false);
         expect(resumed.step.tools.registry.has('added')).toBe(false);
         // The narrower set is recorded before the resumed request, and the
@@ -280,7 +267,6 @@ describe('run-scoped tool resolution', () => {
         const config = AgentConfigSchema.parse({
           agent: 'chat',
           model: 'test-model',
-          agentCategory: AgentCategory.ToolUse,
           workingDirectory: process.cwd(),
         });
         const launch = validationLaunch({ runId, session }, config);
@@ -296,7 +282,7 @@ describe('run-scoped tool resolution', () => {
 
         yield* ctx.stores.secrets.set(apiKeySecretName('deepseek'), 'sk-test');
         const step = yield* Effect.gen(function* () {
-          return yield* stepFor(yield* AgentRun, before, false, 'request', {
+          return yield* stepFor(yield* AgentRun, before, 'request', {
             base: () => 'base',
             isChild: () => false,
             activated: () => [],
@@ -342,7 +328,6 @@ describe('run-scoped tool resolution', () => {
         const config = AgentConfigSchema.parse({
           agent: 'chat',
           model: 'test-model',
-          agentCategory: AgentCategory.ToolUse,
           workingDirectory: process.cwd(),
         });
         const ctx: AgentLaunchContext = {
@@ -372,9 +357,9 @@ describe('run-scoped tool resolution', () => {
           };
           // The activation's first step is held to the record; the switch
           // reaches the one after it.
-          yield* stepFor(run, before, false, 'request', system);
+          yield* stepFor(run, before, 'request', system);
           yield* switches.update(GlobalStateKey.DISABLED_TOOLS, []);
-          return yield* stepFor(run, before, false, 'request', system);
+          return yield* stepFor(run, before, 'request', system);
         }).pipe(Effect.provide(runLayer(ctx, [])), Effect.orDie);
 
         const offered = step.rows.find((row) => row.type === 'tools.offered');
@@ -430,9 +415,6 @@ describe('run-scoped tool resolution', () => {
             toolTable([
               {
                 id: 'test',
-                name: 'Test',
-                category: 'file',
-                description: '',
                 tools: {
                   bash: approvalGatedTool('bash'),
                   grep: tool('grep'),

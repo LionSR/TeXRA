@@ -7,23 +7,21 @@
 
 import { Effect, Exit, Scope } from 'effect';
 
-import { localSessionBackend } from '@controllers/session/sessionBackend';
-import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
-import {
-  createHostSnapshotSource,
-  HostSnapshotReadFailed,
-} from '@controllers/session/hostSnapshotSource';
-import {
-  SessionBridge,
-  type AttachedPort,
-} from '@controllers/session/SessionBridge';
-import type { AgentDirectoriesPort } from '@platform/interfaces';
 import {
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
 } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
+import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
+import {
+  createHostSnapshotSource,
+  HostSnapshotReadFailed,
+} from '@texra/controllers/session/hostSnapshotSource';
+import {
+  SessionBridge,
+  type AttachedPort,
+} from '@texra/controllers/session/SessionBridge';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import {
   DESKTOP_WORKSPACE_COMMANDS,
@@ -44,6 +42,7 @@ import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 import { desktopSpawner } from './desktopWindows.js';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
+import type { PlatformSecrets, AgentDirectoriesPort } from '@texra-ai/harness';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
 import type {
   DesktopProject,
@@ -241,10 +240,10 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         host: hosts.run,
         toolEditPreview: hosts.toolEditPreview,
         session: project.session,
-        showAgentConfigBanner: ({ agentName, category }) =>
+        showAgentConfigBanner: ({ agentName }) =>
           withProcessServices(
             runtime,
-            snapshot.showAgentConfigBanner(agentName, category),
+            snapshot.showAgentConfigBanner(agentName),
           ),
         // A resolved agent also retires the missing-agent warning.
         onLaunched: (runId) => {

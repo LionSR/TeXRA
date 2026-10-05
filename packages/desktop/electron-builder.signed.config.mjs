@@ -14,13 +14,9 @@ function hasEnv(name) {
 
 function hasAppleNotarizationCredentials() {
   return (
-    (hasEnv('APPLE_API_KEY') &&
-      hasEnv('APPLE_API_KEY_ID') &&
-      hasEnv('APPLE_API_ISSUER')) ||
-    (hasEnv('APPLE_ID') &&
-      hasEnv('APPLE_APP_SPECIFIC_PASSWORD') &&
-      hasEnv('APPLE_TEAM_ID')) ||
-    (hasEnv('APPLE_KEYCHAIN') && hasEnv('APPLE_KEYCHAIN_PROFILE'))
+    hasEnv('APPLE_API_KEY') &&
+    hasEnv('APPLE_API_KEY_ID') &&
+    hasEnv('APPLE_API_ISSUER')
   );
 }
 
@@ -66,6 +62,12 @@ export default {
     gatekeeperAssess: false,
     notarize: macSigningReady,
     forceCodeSigning: macSigningReady,
+  },
+  // electron-builder notarizes only the app; the workflow notarizes and
+  // staples the signed DMG after packaging.
+  dmg: {
+    ...baseConfig.dmg,
+    sign: macSigningReady,
   },
   win: {
     ...baseConfig.win,

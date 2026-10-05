@@ -2,11 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
-let installToolbarTooltips: (typeof import('@shared/litControllers/TooltipController'))['installToolbarTooltips'];
+let installToolbarTooltips: (typeof import('@texra/shared/litControllers/TooltipController'))['installToolbarTooltips'];
 
 useLitComponentTestDom(async () => {
   ({ installToolbarTooltips } =
-    await import('@shared/litControllers/TooltipController'));
+    await import('@texra/shared/litControllers/TooltipController'));
 });
 
 afterEach(() => {

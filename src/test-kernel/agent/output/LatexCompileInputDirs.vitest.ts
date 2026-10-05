@@ -8,19 +8,22 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
-import { LatexDiffManager } from '@agent/output/LatexDiffManager';
-import {
-  resolveWorkspaceSourceDir,
-  runCompileCheck,
-} from '@agent/output/compileCheck';
-import { createOutputState, ensureRoundData } from '@agent/output/outputState';
 import type { WorkspaceFs } from '@platform/rootedFs';
 import type { RunId, FileLocation } from '@shared/schemas';
-import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
+import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
+import {
+  createOutputState,
+  ensureRoundData,
+} from '@texra/agent/output/outputState';
+import {
+  resolveWorkspaceSourceDir,
+  runCompileCheck,
+} from '@texra/agent/output/compileCheck';
+import { LatexDiffManager } from '@texra/agent/output/LatexDiffManager';
 import {
   createExternalLocation,
   createRunStorageLocation,
@@ -59,11 +62,11 @@ vi.mock('@latex/latexToolchain', () => ({
   hasLatexCompiler: mocks.hasLatexCompiler,
 }));
 
-vi.mock('@agent/output/compiledPdfArtifacts', async (importOriginal) => ({
+vi.mock('@texra/agent/output/compiledPdfArtifacts', async (importOriginal) => ({
   // Only the publish is mocked; the best-effort recovery that wraps it in
   // `LatexDiffManager` stays real, so the failure case exercises it.
   ...(await importOriginal<
-    typeof import('@agent/output/compiledPdfArtifacts')
+    typeof import('@texra/agent/output/compiledPdfArtifacts')
   >()),
   publishCompiledPdfArtifact: mocks.publishCompiledPdfArtifact,
 }));
@@ -173,7 +176,7 @@ describe('workflow LaTeX compile input directories', () => {
             storagePath,
             workspacePath: undefined,
             workspaceState: {
-              [TexraStateKey.WORKFLOW_AUTO_COMPILE]: false,
+              [DocumentsStateKey.WORKFLOW_AUTO_COMPILE]: false,
             },
           }),
         );
@@ -181,8 +184,8 @@ describe('workflow LaTeX compile input directories', () => {
           storagePath,
           workspacePath,
           workspaceState: {
-            [TexraStateKey.WORKFLOW_AUTO_COMPILE]: true,
-            [TexraStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: 30_000,
+            [DocumentsStateKey.WORKFLOW_AUTO_COMPILE]: true,
+            [DocumentsStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: 30_000,
           },
         });
 

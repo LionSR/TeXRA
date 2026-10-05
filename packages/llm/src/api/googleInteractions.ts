@@ -42,7 +42,7 @@ import {
   pullStream,
   readerAbortSignal,
 } from './transport.js';
-import type { Part, PartEvent } from './parts.js';
+import type { InputPart, Part, PartEvent } from './parts.js';
 import type { ModelOrigin } from '../protocol.js';
 
 export const GOOGLE_PREFIX_DOMAIN = 'texra-google-interactions-prefix-v1';
@@ -67,8 +67,18 @@ const WireCompletedStepSchema = z.discriminatedUnion('type', [
     id: z.string().min(1),
     name: z.string().min(1),
     arguments: JsonObjectSchema.optional(),
+    // A replay needs only the thought's signature, so a call's is not kept.
+    signature: z.string().min(1).optional(),
   }),
 ]);
+// A GET echoes the input ahead of the output whatever `include_input` says,
+// and output holds no user input or function result, so those end the echo.
+const isInputEcho = ({ type }: { type: string }) =>
+  type === 'user_input' || type === 'function_result';
+const WireSnapshotStepsSchema = z
+  .array(z.looseObject({ type: z.string() }))
+  .transform((steps) => steps.slice(steps.findLastIndex(isInputEcho) + 1))
+  .pipe(z.array(WireCompletedStepSchema));
 // A stream start announces a call; its arguments arrive in subsequent deltas.
 const WireStepSchema = WireCompletedStepSchema.refine(
   (step) =>
@@ -143,10 +153,7 @@ const WireEventSchema = z.discriminatedUnion('event_type', [
 ]);
 
 const lowerInputPart = Effect.fn('llm.google.lowerInputPart')(function* (
-  part: Extract<
-    ResolvedTurn['messages'][number],
-    { role: 'user' }
-  >['content'][number],
+  part: InputPart,
 ) {
   if (part.kind === 'text') {
     return { type: 'text', text: part.text } satisfies Interactions.TextContent;
@@ -213,14 +220,8 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
       else steps.push({ type: 'user_input', content });
     } else if (message.role === 'tool') {
       for (const result of message.results) {
+        // The canonical grammar guarantees adjacent, complete ordinals.
         const call = calls[result.callOrdinal];
-        if (call === undefined) {
-          return yield* new ModelError({
-            kind: 'unsupported',
-            message:
-              'A Google tool result requires its original provider call ID.',
-          });
-        }
         const content: Array<
           Interactions.TextContent | Interactions.ImageContent
         > = [];
@@ -796,10 +797,7 @@ export function googleInteractionsModel(
   });
   const completedSnapshot = Effect.fn('llm.google.completedSnapshot')(
     function* (interaction: z.infer<typeof WireInteractionSchema>) {
-      if (
-        interaction.status !== 'completed' &&
-        interaction.status !== 'requires_action'
-      ) {
+      if (!COMPLETED_STATUSES.includes(interaction.status)) {
         return yield* new ModelError({
           kind: [
             'failed',
@@ -812,16 +810,13 @@ export function googleInteractionsModel(
           message: `Google background interaction ended with status ${interaction.status}.`,
         });
       }
-      const steps = z
-        .array(WireCompletedStepSchema)
-        .safeParse(interaction.steps);
-      if (!steps.success) {
+      const steps = WireSnapshotStepsSchema.safeParse(interaction.steps);
+      if (!steps.success)
         return yield* new ModelError({
           kind: 'malformed-output',
           message: 'Google returned malformed or unsupported completed steps.',
           cause: steps.error,
         });
-      }
       const parts = yield* Effect.forEach(steps.data, (step, index) =>
         Effect.map(stepPart(step), (part): PartEvent[] => [
           { kind: 'open', index, part },
@@ -957,20 +952,20 @@ export function googleInteractionsModel(
             cause: parsedPolicy.error,
             operation,
           });
+        const { deadlineAtMs } = parsedPolicy.data;
         const deadline = new ModelError({
           kind: 'observation-deadline',
           message: 'The original observation deadline has expired.',
           operation,
           responseId: operation.providerResponseId,
         });
-        if (parsedPolicy.data.deadlineAtMs <= (yield* Clock.currentTimeMillis))
+        if (deadlineAtMs <= (yield* Clock.currentTimeMillis))
           return yield* deadline;
         let returnedModel: string | undefined;
         const completion = Effect.gen(function* () {
           while (true) {
             // Consumer delay and prior polls consume the original deadline.
-            const remaining =
-              parsedPolicy.data.deadlineAtMs - (yield* Clock.currentTimeMillis);
+            const remaining = deadlineAtMs - (yield* Clock.currentTimeMillis);
             if (remaining <= 0) return yield* deadline;
             const raw = yield* ownedAbortSafeRequest(
               (signal) =>
@@ -1014,11 +1009,7 @@ export function googleInteractionsModel(
             yield* Effect.sleep(
               Math.min(
                 5_000,
-                Math.max(
-                  0,
-                  parsedPolicy.data.deadlineAtMs -
-                    (yield* Clock.currentTimeMillis),
-                ),
+                Math.max(0, deadlineAtMs - (yield* Clock.currentTimeMillis)),
               ),
             );
           }

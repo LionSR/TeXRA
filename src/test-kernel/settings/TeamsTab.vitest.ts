@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   postMessage: vi.fn(),
 }));
 
-vi.mock('@shared/hostBridge', () => ({
+vi.mock('@texra/shared/hostBridge', () => ({
   postMessage: mocks.postMessage,
 }));
 
@@ -30,10 +30,7 @@ const CUSTOM_PRESET: AgentModePreset = {
   name: 'Custom Team',
   description: 'A user-authored team.',
   icon: 'rocket',
-  agents: {
-    workflow: ['polish'],
-    toolUse: ['assistant'],
-  },
+  agents: ['polish', 'assistant'],
 };
 
 /**

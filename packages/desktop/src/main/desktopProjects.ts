@@ -15,6 +15,12 @@ import {
 } from 'effect';
 
 import {
+  createNodeWorkspaceRoots,
+  canonicalizeWorkspacePath,
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@texra-ai/harness/node';
+import {
   closeSession,
   openSessionEffect,
   type SessionHandle,
@@ -25,15 +31,8 @@ import {
 } from '@controllers/session/appStateStore';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
-import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { openTexraWorkspaceConfigStores } from '@platform/defaults/nodeStores';
-import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
-import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
@@ -52,6 +51,7 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 import { absentReason } from '@utils/files/fsEntryExists';
 import { DesktopProjectRecords } from './desktopProjectRecords.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 export interface DesktopProject {

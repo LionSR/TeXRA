@@ -94,7 +94,7 @@ or a `_multiple` filename convention.
 
 ### Declaring multi-output agents in YAML
 
-Custom workflow agents can declare that they expect multiple outputs by
+Custom document tasks can declare that they expect multiple outputs by
 setting `task.outputs` to the expected filenames, usually with
 `rewrite: false` since they write new documents. This gives
 prompts a fixed `OUTPUT_FILES` list when the filenames are not the input
@@ -114,13 +114,13 @@ task:
 
 ## Example: multiple-output agent prompts
 
-Workflow edit prompts can use `INPUT_FILES` to request and format
+Document task requests can use `INPUT_FILES` to request and format
 multiple outputs within the `<documents>` tag. `INPUT_FILES` is an array
 of selected input filenames, so templates should iterate over it. Use
 `{{ INPUT_FILES | join(", ") }}` when the prompt needs a readable list.
 
 ```
-# Inside a workflow agent's task.requests entry:
+# Inside a task.requests entry:
 # ... instructions ...
 Output one updated document for each input file, using the matching input
 filename as the document name.

@@ -9,12 +9,18 @@ import {
   Exit,
   Fiber,
   FileSystem,
+  Queue,
   Scope,
+  Stream,
   SubscriptionRef,
 } from 'effect';
 
-import { getCategoryAgent, refresh } from '@agent/index';
-import { PdfOpenFailed, type SessionHandle } from '@agent/runtime';
+import { getCatalogAgent, refresh } from '@agent/index';
+import {
+  PdfOpenFailed,
+  type ManualCriticismEntry,
+  type SessionHandle,
+} from '@agent/runtime';
 import {
   BundledViewContentProvider,
   getCombinedLocalResourceRoots,
@@ -24,43 +30,17 @@ import {
   EXTENSION_CATEGORIES,
   getFilterExtensions,
 } from '@common/files/fileTypeUtils';
-import { localSessionBackend } from '@controllers/session/sessionBackend';
-import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
-import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
-import { OnboardingFunnelRefresher } from '@controllers/onboarding/onboardingFunnel';
-import {
-  SessionBridge,
-  type AttachedPort,
-} from '@controllers/session/SessionBridge';
-import {
-  createHostSnapshotSource,
-  HostSnapshotReadFailed,
-  type HostSnapshotSource,
-} from '@controllers/session/hostSnapshotSource';
-import { workspaceFileOptions } from '@controllers/session/workspaceFileOptions';
-import { attachSessionHost } from '@controllers/session/attachSessionHost';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { withLogChannel } from '@logger/effectLog';
-import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import type {
-  StateStore,
-  StateReadFailed,
-  StateWriteFailed,
-} from '@platform/interfaces';
-import type { LanguageModel } from '@platform/languageModel';
 import { withProcessServices } from '@platform/processRuntime';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
-import {
-  agentKeyOf,
-  AgentCategory,
-  type SessionType,
-  type RunId,
-} from '@shared/schemas';
+import { DOCUMENTS_OUTPUT_KEY } from '@shared/plugins/documents';
+import { agentKeyOf, type FileLocation, type RunId } from '@shared/schemas';
+import { isLiveRun } from '@shared/session/sessionView';
 import { projectDisplayOf } from '@shared/session/hostSnapshot';
 import {
   getFirstRunDone,
@@ -70,12 +50,40 @@ import type {
   DownMessage,
   SurfaceActionMessage,
 } from '@shared/session/sessionFrames';
+import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
+import { OnboardingFunnelRefresher } from '@texra/controllers/onboarding/onboardingFunnel';
+import type { ServiceClient } from '@texra/controllers/server/client';
+import {
+  attachWindowHost,
+  type WindowHost,
+} from '@texra/controllers/server/windowHost';
+import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
+import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
+import {
+  createHostSnapshotSource,
+  HostSnapshotReadFailed,
+  type HostSnapshotSource,
+} from '@texra/controllers/session/hostSnapshotSource';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
+import {
+  SessionBridge,
+  type AttachedPort,
+} from '@texra/controllers/session/SessionBridge';
+import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
+import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
+import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies';
 import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { checkCoreDependencies } from '@utils/system/checkCoreDependencies';
 
 import { createExtensionHostRequests } from './extensionHostRequests';
 import { RequestAttention } from './requestAttention';
+import type {
+  PlatformSecrets,
+  LanguageModel,
+  StateStore,
+  StateReadFailed,
+  StateWriteFailed,
+} from '@texra-ai/harness';
 
 const CHANNEL = 'ProgressViewProvider';
 const CATALOG_RESCAN_FAILED =
@@ -172,6 +180,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     private readonly runtime: ProcessRuntime,
     /** Session created by the extension entry. */
     public readonly session: SessionHandle,
+    /** Where this window's runs run: the session here, or the service's. */
+    private readonly backend: SessionBackend,
+    /** The background service, when this window is its client. */
+    private readonly service: ServiceClient | undefined,
     /** The setup pill: painted from the same credential answer the funnel
      *  reads, so the pill and the "Connect a model" card agree. */
     private readonly paintSetupPill: (credentialUsable: boolean) => void,
@@ -192,11 +204,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           yield* this.snapshot.setOnboarding(transition.state);
           if (!transition.selectSetupAgent) return;
           // Resolve the registry key so the dropdown matches by value.
-          const entry = getCategoryAgent(AgentCategory.ToolUse, 'setup');
+          const entry = getCatalogAgent('setup');
           this.surfaceAction({
             kind: 'launch',
             patch: {
-              sessionType: 'toolUse',
+              sessionType: 'chat',
               agent: entry ? agentKeyOf(entry) : 'setup',
             },
           });
@@ -206,7 +218,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // Install the recipient before host requests publish the recorder's state.
     this.bridge = this.runtime.runSync(
       SessionBridge.make({
-        backend: localSessionBackend(session),
+        backend,
         handleHostRequest: (request, port) =>
           hostRequests.handleHostRequest(request, port),
         onPortClosed: (port) => hostRequests.closePort(port),
@@ -293,15 +305,17 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         this.runtime,
         session,
       ),
-      session,
+      // A decision goes where the run runs.
+      session: { requests: backend },
     });
-    const attention = this.runtime.runFork(this.attention.follow(session));
+    const attention = this.runtime.runFork(this.attention.follow(backend));
     this.disposables.push({
       dispose: () => this.runtime.runFork(Fiber.interrupt(attention)),
     });
 
     const hostRequests = createExtensionHostRequests({
       session,
+      backend,
       runtime: this.runtime,
       extensionPath: context.extensionPath,
       globalState,
@@ -321,57 +335,149 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // Attached for the window's life, before the first run of this window
     // asks anything. Requests this host does not present (bash, plan,
     // proposal, retry, question) stay pending in the fold until the view's
-    // request row decides them. A workflow run's `run.end` is the completion
+    // request row decides them. A document task's `run.end` is the completion
     // chime, one per process (PRD 12.4), never a renderer transition hook
     // that every subscriber would replay. A failed run does not chime.
     const hostScope = this.runtime.runSync(Scope.make());
+    // What this window does for a run, whether it runs here or in the
+    // service: notices, the editor's diagnostics and inline criticism, and
+    // opening a PDF.
+    const capabilities = {
+      ...createAgentPresentationHost(this, globalState, this.runtime, session),
+      readDiagnostics: getLinterMessages,
+      addCriticism: (payload: ManualCriticismEntry) =>
+        Effect.sync(() => pushManualCriticism(payload)),
+      openPdf: ({
+        location,
+        preserveFocus,
+      }: {
+        readonly location: FileLocation;
+        readonly preserveFocus: boolean;
+      }) =>
+        Effect.tryPromise({
+          try: () =>
+            vscode.commands.executeCommand<void>(
+              'vscode.open',
+              vscode.Uri.file(location.absolutePath),
+              {
+                viewColumn: vscode.ViewColumn.Beside,
+                preserveFocus,
+              } satisfies vscode.TextDocumentShowOptions,
+            ),
+          catch: (cause) =>
+            new PdfOpenFailed({
+              path: location.absolutePath,
+              message: 'VS Code would not open the PDF in its viewer.',
+              cause,
+            }),
+        }),
+    };
     this.runtime.runSync(
       attachSessionHost(session, this.toolEditApprovals, {
-        ...createAgentPresentationHost(
-          this,
-          globalState,
-          this.runtime,
-          session,
-        ),
-        readDiagnostics: getLinterMessages,
-        addCriticism: (payload) => ({
-          accepted: pushManualCriticism(payload),
-          resolvedPath: payload.absolutePath,
-        }),
-        openPdf: ({ location, preserveFocus }) =>
-          Effect.tryPromise({
-            try: () =>
-              vscode.commands.executeCommand<void>(
-                'vscode.open',
-                vscode.Uri.file(location.absolutePath),
-                {
-                  viewColumn: vscode.ViewColumn.Beside,
-                  preserveFocus,
-                } satisfies vscode.TextDocumentShowOptions,
-              ),
-            catch: (cause) =>
-              new PdfOpenFailed({
-                path: location.absolutePath,
-                message: 'VS Code would not open the PDF in its viewer.',
-                cause,
-              }),
-          }),
+        ...capabilities,
         onEvent: (event) =>
           Effect.sync(() => {
+            // A document task's end carries its documents.
             if (
               event.type === 'run.end' &&
-              event.output.category === 'workflow' &&
+              event.output.documents !== undefined &&
               event.outcome !== 'failed'
             )
               this.chime();
           }),
       }).pipe(Scope.provide(hostScope)),
     );
+    // A window of the service is its project's window too: the service's
+    // runs ask it for the same, and it stages their tool edits.
+    if (service !== undefined)
+      this.runtime.runFork(
+        this.attachToService(service, capabilities).pipe(
+          Scope.provide(hostScope),
+        ),
+      );
     this.disposables.push({
       dispose: () => this.runtime.runFork(Scope.close(hostScope, Exit.void)),
     });
 
     this.watchWorkspace();
+  }
+
+  /**
+   * Offer the service this window's capabilities for its project's runs,
+   * and chime when one of its document tasks ends, as a run here does.
+   */
+  private attachToService(
+    service: ServiceClient,
+    capabilities: Omit<WindowHost, 'toolEdits'>,
+  ): Effect.Effect<void, never, Scope.Scope> {
+    const workspace = this.session.roots.workspace;
+    if (workspace === undefined) return Effect.void;
+    const previews = <A, E>(
+      program: Effect.Effect<
+        A,
+        E,
+        Effect.Services<ReturnType<ToolEditApprovalController['dispose']>>
+      >,
+    ) => withProcessServices(this.runtime, program);
+    const focused = Stream.callback<void>((queue) =>
+      Effect.acquireRelease(
+        Effect.sync(() =>
+          vscode.window.onDidChangeWindowState((state) => {
+            if (state.focused) Queue.offerUnsafe(queue, undefined);
+          }),
+        ),
+        (listener) => Effect.sync(() => listener.dispose()),
+      ),
+    );
+    return Effect.gen({ self: this }, function* () {
+      yield* attachWindowHost(
+        service,
+        workspace,
+        {
+          ...capabilities,
+          toolEdits: {
+            stage: (staging) =>
+              previews(
+                this.toolEditApprovals.present({
+                  ...staging,
+                  roots: this.session.roots,
+                }),
+              ).pipe(Effect.mapError((failure) => new Error(failure.message))),
+            release: (requestId) =>
+              previews(this.toolEditApprovals.release(requestId)),
+            approve: (requestId) =>
+              previews(this.toolEditApprovals.approveStaged(requestId)),
+          },
+        },
+        vscode.window.state.focused
+          ? Stream.concat(Stream.succeed(undefined), focused)
+          : focused,
+      );
+      yield* Effect.forkScoped(this.chimeOnServiceDocuments());
+    });
+  }
+
+  /** Chime when a document task the service runs ends with its documents,
+   *  as the session's own `run.end` does for one run here. */
+  private chimeOnServiceDocuments(): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      let live = new Set<RunId>();
+      return Stream.runForEach(this.backend.viewChanges, (view) =>
+        Effect.sync(() => {
+          const now = new Set<RunId>();
+          for (const run of view.runs.values()) {
+            if (isLiveRun(run)) now.add(run.id);
+            else if (
+              live.has(run.id) &&
+              run.facts[DOCUMENTS_OUTPUT_KEY] !== undefined &&
+              run.durableOutcome !== 'failed'
+            )
+              this.chime();
+          }
+          live = now;
+        }),
+      );
+    });
   }
 
   public initialize() {
@@ -431,7 +537,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public refreshCatalogs(
     options: {
       agentCatalogAlreadyFresh?: boolean;
-      selectedToolUseAgent?: string;
+      selectedAgent?: string;
     } = {},
   ) {
     return Effect.suspend(() =>
@@ -440,11 +546,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       Effect.andThen(this.snapshot.refreshCatalogs),
       Effect.andThen(
         Effect.sync(() => {
-          const agent = options.selectedToolUseAgent;
+          const agent = options.selectedAgent;
           if (agent)
             this.surfaceAction({
               kind: 'launch',
-              patch: { sessionType: 'toolUse', agent },
+              patch: { sessionType: 'chat', agent },
             });
         }),
       ),
@@ -452,13 +558,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   /** A launch could not find its agent. */
-  public showAgentConfigBanner(
-    agentName: string,
-    sessionType: SessionType,
-  ): Effect.Effect<void> {
+  public showAgentConfigBanner(agentName: string): Effect.Effect<void> {
     return withProcessServices(
       this.runtime,
-      this.snapshot.showAgentConfigBanner(agentName, sessionType),
+      this.snapshot.showAgentConfigBanner(agentName),
     );
   }
 
@@ -670,7 +773,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       if (!options?.inPlace) yield* this.showInSidebar();
       // Each surface decides from its own selection: one on the New-task
       // state opens the newest session, one showing a session keeps it.
-      const newest = SubscriptionRef.getUnsafe(this.session.view).order.at(0);
+      const newest = SubscriptionRef.getUnsafe(this.backend.view).order.at(0);
       if (newest !== undefined)
         this.surfaceAction({ kind: 'showSessions', runId: newest });
     });
@@ -688,7 +791,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     runId: RunId,
   ): Effect.Effect<ProgressRunRevealResult, SurfacePlacementFailed> {
     return Effect.gen({ self: this }, function* () {
-      const view = SubscriptionRef.getUnsafe(this.session.view);
+      const view = SubscriptionRef.getUnsafe(this.backend.view);
       if (!view.runs.has(runId)) return 'missing' as const;
       yield* this.showProgressView();
       this.surfaceAction({ kind: 'select', runId });
@@ -697,7 +800,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public runLabel(runId: RunId): string | undefined {
-    return SubscriptionRef.getUnsafe(this.session.view).runs.get(runId)?.label;
+    return SubscriptionRef.getUnsafe(this.backend.view).runs.get(runId)?.label;
   }
 
   public popOutToEditor() {

@@ -101,10 +101,8 @@ import {
   TuiSession,
   type RootRunSettled,
 } from '@cli/chat/tui/state/sessionRunState';
-import { DisposableStore } from '@platform/disposable';
 import {
   aggregateId,
-  AgentCategory,
   emptyRunEndOutput,
   RUN_OUTCOME,
   RUN_PHASE,
@@ -133,6 +131,7 @@ import {
   fakeProcessServices,
   setupPlatform,
 } from '@test/support/setupPlatform';
+import { DisposableStore } from '@texra/platform/disposable';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   bindTestSessionView,
@@ -178,7 +177,8 @@ interface SessionFixture {
 function makeSession(overrides: SessionFixture = {}): TuiSession {
   const session = new TuiSession(() => undefined);
   if (overrides.runSettled) session.markRunPending(overrides.runSettled);
-  if (overrides.runCompleted) session.markRunCompleted();
+  if (overrides.runCompleted && overrides.runSettled)
+    session.markRunCompleted(overrides.runSettled);
   if (overrides.runId) session.runId = overrides.runId;
   session.interruptedRunId = overrides.interruptedRunId;
   session.stopRequested = overrides.stopRequested ?? false;
@@ -245,12 +245,10 @@ function makeRunRequest(instruction: string): AgentConfigPayload {
     model: 'openai/gpt-5.4-2026-03-05',
     instruction,
     workingDirectory: '/tmp/test',
-    agentCategory: 'toolUse',
   };
 }
 
 type ToolUseRunResult<Outcome> = {
-  category: 'toolUse';
   runId: RunId;
   outcome: Outcome;
 };
@@ -318,7 +316,6 @@ function makeResumeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return {
     agent: 'demo-agent',
     model: 'demo-model',
-    agentCategory: 'toolUse',
     ...overrides,
   } as AgentConfig;
 }
@@ -450,7 +447,7 @@ describe('CLI terminal outcome resolution', () => {
           type: 'run.end',
           aggregateId: aggregateId('run', runId),
           outcome: RUN_OUTCOME.CANCELLED,
-          output: emptyRunEndOutput(AgentCategory.ToolUse),
+          output: emptyRunEndOutput(),
         },
       ]);
       yield* session.settlePublications();
@@ -458,7 +455,7 @@ describe('CLI terminal outcome resolution', () => {
       expect(
         yield* readCliRunOutcomeState(session, {
           outcome: RUN_OUTCOME.COMPLETED,
-          output: { category: 'toolUse', response: '', files: [] },
+          output: { response: '', files: [] },
           runId,
         }),
       ).toEqual({
@@ -501,7 +498,7 @@ describe('CLI terminal outcome resolution', () => {
             session,
             {
               outcome: RUN_OUTCOME.COMPLETED,
-              output: { category: 'toolUse', response: '', files: [] },
+              output: { response: '', files: [] },
               runId,
             },
             reportReadFailure,
@@ -527,7 +524,6 @@ describe('createChatSessionController', () => {
     for (const mock of Object.values(mocks)) mock.mockReset();
 
     mocks.executeAgent.mockResolvedValue({
-      category: 'toolUse',
       runId: 'e50001',
       outcome: RUN_OUTCOME.COMPLETED,
     });
@@ -640,7 +636,6 @@ describe('createChatSessionController', () => {
             admitInterruptibleRun(runs, runId, () => {
               untrackRun(runs, runId);
               rootRunResult.resolve({
-                category: 'toolUse',
                 runId,
                 outcome: RUN_OUTCOME.CANCELLED,
               });
@@ -794,10 +789,7 @@ describe('createChatSessionController', () => {
   it('retains the configuration of a manually resumed conversation', async () => {
     const config = makeResumeConfig({
       cli: { teamId: 'physicist' },
-      delegationAgentScope: {
-        workflow: ['builtInWorkflow:physicsReviewer'],
-        toolUse: ['builtInToolUse:orchestrator'],
-      },
+      delegationAgentScope: ['builtIn:physicsReviewer', 'builtIn:orchestrator'],
     });
     installResumeRunStore(config);
     const session = makeSession();
@@ -823,10 +815,7 @@ describe('createChatSessionController', () => {
         modelSource: 'explicit-override',
         teamName: 'Mathematician',
         cliTeamId: 'mathematician',
-        delegationAgentScope: {
-          workflow: ['custom:current'],
-          toolUse: ['custom:current'],
-        },
+        delegationAgentScope: ['custom:current'],
       });
       const previousMetadata = sessionMeta.get();
       installResumeRunStore(makeResumeConfig({ cli: { teamId: 'physicist' } }));
@@ -1181,7 +1170,7 @@ describe('createChatSessionController', () => {
     await runSubmit(ctrl, 'And this one.');
     expect(sent).toEqual([]);
 
-    session.markRunCompleted();
+    session.markRunCompleted(teardown.settled);
     await teardown.settle();
     await vi.waitFor(() =>
       expect(sent).toEqual([

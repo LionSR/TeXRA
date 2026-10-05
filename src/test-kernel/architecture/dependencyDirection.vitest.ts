@@ -29,20 +29,8 @@ import {
 
 // Keep in sync with `VSCODE_FREE_ZONE_DIRS` in eslint.config.mjs.
 const VSCODE_FREE_ZONES = [
-  'src/agent',
-  'src/model',
-  'src/latex',
-  'src/tools',
-  'src/controllers',
-  'src/shared',
-  'src/ui',
-  'src/replacement',
-  'src/eventBus',
-  'src/hosts',
-  'src/common',
-  'src/utils',
-  'src/logger',
-  'packages/agent/src',
+  'packages/harness/src',
+  'packages/texra/src',
   'packages/llm/src',
   'packages/desktop/src',
   'packages/extension/src/progressView/frontend',
@@ -63,7 +51,7 @@ const AGENT_IMPORT_PATTERNS = [
   /\bimport\s*\(\s*['"]@agent\//,
 ];
 
-// The one pre-existing shared-to-agent edge (src/shared/agent/
+// The one pre-existing shared-to-agent edge (packages/harness/src/shared/agent/
 // terminalResultPresentation.ts) was deleted by folding its mapper back into
 // `@agent/runtime/terminalResultToast.ts` — the file it always needed
 // `ResultEvent` from. Keep this allowlist empty; a new entry would recreate
@@ -96,7 +84,6 @@ const HOST_LAYER_IMPORT_PREFIXES = [
  */
 const EFFECT_RUN_ROOTS = [
   ...ALL_HOST_PRODUCTION_ROOTS,
-  'packages/agent/src',
   'packages/trace-viewer/src',
 ] as const;
 const EFFECT_RUN_CALL =
@@ -161,23 +148,23 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // Worker entry: no process runtime exists in the worker. The code sandbox
   // worker runs its one program under `NodeRuntime.runMain`; every host
   // embeds this file as the worker's source (scripts/code-sandbox-worker.mjs).
-  'src/agent/codeSandbox/worker.ts': 1,
+  'packages/harness/src/agent/codeSandbox/worker.ts': 1,
 };
 
 function sourceFilesUnder(
   zone: string,
   opts?: { readonly excludeTestKernel?: boolean },
 ): string[] {
-  // A renamed/removed zone surfaces as the file-count guard below failing,
-  // not as a silently green ratchet.
+  // A renamed or removed zone throws here (ENOENT), never scans as empty.
   return sharedSourceFilesUnder(resolve(REPO_ROOT, zone), {
-    missingDirReturnsEmpty: true,
     excludeTestKernel: opts?.excludeTestKernel,
   });
 }
 
 function productionSrcFiles(): string[] {
-  return sourceFilesUnder('src', { excludeTestKernel: true });
+  return ['packages/harness/src', 'packages/texra/src'].flatMap((root) =>
+    sourceFilesUnder(root),
+  );
 }
 
 function importsMatching(file: string, patterns: readonly RegExp[]): boolean {
@@ -222,11 +209,11 @@ describe('VS Code-free zones never import vscode', () => {
 });
 
 describe('Shared layer dependency direction', () => {
-  // `src/ui` is held to the same rule as `src/shared`: the toolkit renders a
+  // The UI kit is held to the same rule as the harness's `shared/`: the toolkit renders a
   // host-neutral view model handed to it, so an `@agent/*` import there would
   // be the run system leaking into the render layer.
   it('does not grow shared-to-agent imports', () => {
-    const offenders = ['src/shared', 'src/ui']
+    const offenders = ['packages/harness/src/shared', 'packages/texra/src/ui']
       .flatMap((root) => sourceFilesUnder(root))
       .filter((file) => importsMatching(file, AGENT_IMPORT_PATTERNS))
       .map(toRepoPath)
@@ -239,7 +226,7 @@ describe('Shared layer dependency direction', () => {
 
 describe('Latex layer dependency direction', () => {
   it('does not grow latex-to-agent imports', () => {
-    const offenders = sourceFilesUnder('src/latex')
+    const offenders = sourceFilesUnder('packages/texra/src/latex')
       .filter((file) => importsMatching(file, AGENT_IMPORT_PATTERNS))
       .map(toRepoPath)
       .toSorted();

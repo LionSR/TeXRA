@@ -6,17 +6,23 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 
-import { isModelOptionAvailable, type SessionType } from '@shared/schemas';
+import {
+  isModelOptionAvailable,
+  type AgentOptionData,
+  type SessionType,
+} from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { Surface } from '@shared/session/surface';
 import type { TeXRAIconName } from '@shared/iconNames';
 import { TASK_APPROVAL } from '@ui/copy/taskApproval';
 
-/** The agent menu's sections: the category an agent belongs to is the run
- *  type its launch takes. */
-const AGENT_SECTIONS: ReadonlyArray<readonly [SessionType, string]> = [
-  ['toolUse', 'Interactive'],
-  ['workflow', 'Document passes'],
+/** The agent menu's sections, one per launch mode: every agent chats, and
+ *  an agent with a document task (`rounds`) also runs one. */
+const AGENT_SECTIONS: ReadonlyArray<
+  readonly [SessionType, string, (option: AgentOptionData) => boolean]
+> = [
+  ['chat', 'Chat', () => true],
+  ['task', 'Document task', (option) => option.rounds !== undefined],
 ];
 
 export interface ChipMenu {
@@ -35,10 +41,7 @@ export function launcherChipMenus(
   host: HostSnapshot,
   actions: {
     setLaunch(patch: Partial<Launch>): void;
-    openSettings(
-      section: 'agents' | 'teams' | 'models',
-      sessionType?: SessionType,
-    ): void;
+    openSettings(section: 'agents' | 'teams' | 'models'): void;
   },
 ): ChipMenu[] {
   const team = host.teamOptions.find(
@@ -47,9 +50,8 @@ export function launcherChipMenus(
   const agentLabel =
     launch.launchTarget === 'team' && team
       ? team.label
-      : (host.agentOptions[launch.sessionType]?.find(
-          (option) => option.value === launch.agent,
-        )?.label ?? launch.agent);
+      : (host.agentOptions.find((option) => option.value === launch.agent)
+          ?.label ?? launch.agent);
   const model = host.modelOptions.find(
     (option) => option.value === launch.model,
   );
@@ -60,8 +62,8 @@ export function launcherChipMenus(
       label: agentLabel,
       title: 'Agent',
       items: html`
-        ${AGENT_SECTIONS.map(([category, heading]) => {
-          const agents = host.agentOptions[category] ?? [];
+        ${AGENT_SECTIONS.map(([sessionType, heading, offers]) => {
+          const agents = host.agentOptions.filter(offers);
           if (agents.length === 0) return nothing;
           return html`<div class="menu-heading">${heading}</div>
             ${repeat(
@@ -69,11 +71,11 @@ export function launcherChipMenus(
               (option) => option.value,
               (option) =>
                 html`<wa-dropdown-item
-                  value=${`agent:${category}:${option.value}`}
+                  value=${`agent:${sessionType}:${option.value}`}
                   type="checkbox"
                   ?checked=${
                     launch.launchTarget === 'agent' &&
-                    launch.sessionType === category &&
+                    launch.sessionType === sessionType &&
                     option.value === launch.agent
                   }
                   >${option.label}</wa-dropdown-item
@@ -107,23 +109,23 @@ export function launcherChipMenus(
         >
       `,
       onSelect: (value) => {
-        const agent = /^agent:(toolUse|workflow):(.+)$/.exec(value);
+        const agent = /^agent:(chat|task):(.+)$/.exec(value);
         if (agent) {
           actions.setLaunch({
             sessionType: agent[1] as SessionType,
             agent: agent[2],
           });
         } else if (value.startsWith('team:')) {
-          // A team runs its lead as an interactive session.
+          // A team runs its lead as a chat.
           actions.setLaunch({
             launchTarget: 'team',
-            sessionType: 'toolUse',
+            sessionType: 'chat',
             selectedTeamId: value.slice(5),
           });
         } else if (value === 'settings:teams') {
           actions.openSettings('teams');
         } else if (value === 'settings:agents') {
-          actions.openSettings('agents', launch.sessionType);
+          actions.openSettings('agents');
         }
       },
     },

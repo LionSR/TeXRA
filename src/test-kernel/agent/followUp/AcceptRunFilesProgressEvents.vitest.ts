@@ -13,7 +13,7 @@ import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { closeSession } from '@agent/runtime/sessionGraph';
@@ -24,7 +24,7 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
+import { AcceptRunFilesTool } from '@texra/tools/AcceptRunFilesTool';
 import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
 // Local file imports
@@ -206,12 +206,12 @@ function stubWorkspaceFiles(exists: boolean, content: string) {
 function runAccept(
   tool: typeof AcceptRunFilesTool,
   files: { path: string; original: string }[],
-  tracker = new FileInteractionState(),
+  workspace = AgentWorkspaceState.create(),
 ) {
   return withStubbedFiles(tool.call({ execution_id: runId, files })).pipe(
     Effect.provide(
       nativeToolTestLayer({
-        tracker,
+        workspace,
         run: { runId, session: session, toolPolicy: {} },
       }),
     ),
@@ -270,7 +270,7 @@ describe('accept_run_files progress events', () => {
     Effect.gen(function* () {
       const explicit = createRecordingHost();
       const tool = AcceptRunFilesTool;
-      const tracker = new FileInteractionState();
+      const workspace = AgentWorkspaceState.create();
       const { written, delivered } = yield* recordWrittenFiles();
 
       setRunStorageEntries({
@@ -283,7 +283,7 @@ describe('accept_run_files progress events', () => {
       const result = yield* runAccept(
         tool,
         [{ path: 'output.tex', original: 'paper.tex' }],
-        tracker,
+        workspace,
       );
 
       expect(result.status).toBe('executed');
@@ -291,7 +291,7 @@ describe('accept_run_files progress events', () => {
       // Delivery runs on the recorder's own fiber, a turn after the publish.
       yield* delivered;
       expect(written).toEqual([[path.join(workspacePath, 'paper.tex')]]);
-      expect(tracker.hasRead('paper.tex')).toBe(true);
+      expect(workspace.interactions.hasRead('paper.tex')).toBe(true);
     }).pipe(Effect.provide(nativeToolTestLayer())),
   );
 
@@ -429,7 +429,7 @@ describe('accept_run_files progress events', () => {
           storage: '/project-storage',
         };
         const tool = AcceptRunFilesTool;
-        const tracker = new FileInteractionState();
+        const workspace = AgentWorkspaceState.create();
         const snapshotPath = path.join(
           projectRoots.storage,
           'executions',
@@ -475,7 +475,7 @@ describe('accept_run_files progress events', () => {
         ).pipe(
           Effect.provide(
             nativeToolTestLayer({
-              tracker,
+              workspace,
               run: { runId, session: session, toolPolicy: {} },
               roots: projectRoots,
             }),

@@ -23,8 +23,8 @@ import { vi } from 'vitest';
  */
 const agentCatalogMock = vi.hoisted(() => ({
   getAgent: vi.fn(),
-  getAgentsByCategory: vi.fn(),
-  getCategoryAgent: vi.fn(),
+  getCatalogAgents: vi.fn(),
+  getCatalogAgent: vi.fn(),
   getVisibleAgents: vi.fn(),
   getCatalogLoadFailure: vi.fn(() => undefined),
   getCustomAgentScanIssues: vi.fn(() => []),

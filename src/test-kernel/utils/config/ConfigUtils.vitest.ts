@@ -1,13 +1,13 @@
 import { Effect } from 'effect';
 import { it } from '@effect/vitest';
-// Suites for src/utils/config (platformSettings + providerConfig).
+// Suites for packages/harness/src/utils/config (platformSettings + providerConfig).
 
 import { afterEach, describe, expect, vi } from 'vitest';
-import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
-import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
+import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
+import { LATEX_CONFIG_DEFAULTS } from '@texra/shared/constants/latexConfig';
 import { getProviderEndpoint } from '@utils/config/providerConfig';
 import { readSettingFrom } from '@utils/config/platformSettings';
 

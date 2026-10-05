@@ -4,7 +4,7 @@ import {
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
 } from '@texra-ai/llm';
-import type { ProviderKeyStatus } from '@shared/settingsView/settingsViewMessages';
+import type { ProviderKeyStatus } from '@texra/shared/settingsView/settingsViewMessages';
 
 /**
  * Shared placeholder rows. Frozen because every caller receives the same

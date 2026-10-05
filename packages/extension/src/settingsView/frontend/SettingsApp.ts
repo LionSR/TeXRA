@@ -7,9 +7,10 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { postMessage } from '@shared/hostBridge';
-import { SignalWatcher } from '@shared/signals';
-import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
+import { postMessage } from '@texra/shared/hostBridge';
+import { isUnrecognizedCommand } from '@texra/shared/utils/dispatcher';
+import { SignalWatcher } from '@texra/shared/signals';
+import { installToolbarTooltips } from '@texra/shared/litControllers/TooltipController';
 
 // Local imports - shared styles
 
@@ -18,8 +19,7 @@ import {
   dispatchSettingsViewOutbound,
   type SettingsSectionName,
   type SettingsTabPanelName,
-} from '@shared/settingsView/settingsViewMessages';
-import { isUnrecognizedCommand } from '@shared/utils/dispatcher';
+} from '@texra/shared/settingsView/settingsViewMessages';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { nextTablistIndex } from '@ui/wa/tablistKeyboardNav';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
@@ -46,7 +46,6 @@ import './tabs/ShortcutsTab';
 import { settingsViewHandlers } from './messageDispatcher';
 import {
   activePresetId,
-  agentSubTab,
   agentSkillsEnabled,
   allowOrchestratorKill,
   approvalPolicy,
@@ -331,7 +330,6 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             .customAgentDir=${customAgentDir.get()}
             .customAgentDirIsDefault=${customAgentDirIsDefault.get()}
             .customAgentScanIssues=${customAgentScanIssues.get()}
-            .initialSubTab=${agentSubTab.get()}
             .compactionThresholdPercent=${compactionThresholdPercent.get()}
             .modelRetryMaxAttempts=${modelRetryMaxAttempts.get()}
             .allowOrchestratorKill=${allowOrchestratorKill.get()}

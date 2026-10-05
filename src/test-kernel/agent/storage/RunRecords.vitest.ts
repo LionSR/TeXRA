@@ -29,7 +29,6 @@ beforeEach(async () => {
         aggregateId: aggregateId('run', runId),
         identity: { kind: 'agent', agent: 'worker' },
         userFollowUpSupport: 'unsupported',
-        category: 'toolUse',
         parent: null,
         provenance: null,
       },
@@ -42,7 +41,6 @@ describe('canonical run records', () => {
     const records = getRunRecords(session, runId);
     const config = AgentConfigFieldsSchema.parse({
       agent: 'worker',
-      agentCategory: 'toolUse',
       instruction: 'private instruction',
     });
     await run(seedRunRecord(session, runId, config));
@@ -69,7 +67,6 @@ describe('canonical run records', () => {
           runId,
           AgentConfigFieldsSchema.parse({
             agent: 'worker',
-            agentCategory: 'toolUse',
           }),
         );
         yield* seedReport(session, runId, 'retained report bytes');
@@ -77,14 +74,14 @@ describe('canonical run records', () => {
           producer: 'subagent',
           agentName: 'worker',
           wallTimeMs: 1,
-          output: { category: 'toolUse', response: 'done', files: [] },
+          output: { response: 'done', files: [] },
         });
         yield* session.commit([
           {
             type: 'run.end',
             aggregateId: aggregateId('run', runId),
             outcome: 'completed',
-            output: { category: 'toolUse', response: '', files: [] },
+            output: { response: '', files: [] },
           },
         ]);
         expect(yield* records.readReport()).toBe('retained report bytes');
@@ -92,7 +89,7 @@ describe('canonical run records', () => {
         // recorded, and drops the producer's own context.
         expect(yield* records.readResult()).toEqual({
           outcome: 'completed',
-          output: { category: 'toolUse', response: 'done', files: [] },
+          output: { response: 'done', files: [] },
         });
         yield* session.commit([
           {
@@ -115,17 +112,4 @@ describe('canonical run records', () => {
         expect(retained.some((row) => row.type === 'run.removed')).toBe(true);
       }),
   );
-
-  it('resets a prior report explicitly without replacing another metadata value', async () => {
-    const records = getRunRecords(session, runId);
-    await run(seedReport(session, runId, 'old report'));
-    const config = AgentConfigFieldsSchema.parse({
-      agent: 'worker',
-      agentCategory: 'toolUse',
-    });
-    await run(seedRunRecord(session, runId, config));
-    await run(records.clearReport());
-    expect(await run(records.readReport())).toBeNull();
-    expect(await run(records.readConfig())).toEqual(config);
-  });
 });

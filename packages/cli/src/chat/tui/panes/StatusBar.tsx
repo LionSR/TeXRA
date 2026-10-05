@@ -6,13 +6,12 @@ import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { usePollingInterval } from '@cli/tui/usePollingInterval';
-import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { isEmptyUsage } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
+import { SubscriptionUsageService } from '@texra/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -22,12 +21,7 @@ import {
   rootRunIds as rootRunIdsSignal,
   sessionMeta as sessionMetaSignal,
 } from '../state/cliState';
-import {
-  ancestorPositionLabel,
-  sessionView,
-  runPhaseOf,
-  runViewOf,
-} from '../state/sessionView';
+import { sessionView, runPhaseOf, runViewOf } from '../state/sessionView';
 import {
   chatTuiCanStopActiveRun,
   chatTuiCanStopVisibleRun,
@@ -42,6 +36,7 @@ import {
   statusBarRunTarget,
   subscriptionUsageProviderForStatus,
 } from './statusBarDisplay';
+import type { PlatformSecrets } from '@texra-ai/harness';
 
 const CODEX_SUBSCRIPTION_REFRESH_MS = 10_000;
 const SUBSCRIPTION_QUOTA_REFRESH_MS = 30_000;
@@ -228,17 +223,12 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   // same list the modal and the title read.
   const attention = useSignal(attentionRequestsSignal);
 
-  // Nested-session location: the nearest ancestor's open phase or loop
-  // position, then the focused stream's label.
+  // Nested-session location: the focused stream's label.
   const focusedRunId = target.isChildRun ? displayRunId : undefined;
   const focusedLabel =
     focusedRunId === undefined
       ? undefined
       : (runViewOf(view, focusedRunId)?.label ?? focusedRunId);
-  const focusedRoundHeading =
-    focusedRunId === undefined
-      ? undefined
-      : ancestorPositionLabel(view, focusedRunId);
 
   const display = buildStatusBarDisplay(displayRun, view, {
     turn: {
@@ -265,10 +255,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     approvalPolicy: sessionMeta.approvalPolicy,
     width: columns,
     ctrlCAction: target.ctrlCAction,
-    location:
-      focusedLabel === undefined
-        ? undefined
-        : { context: focusedRoundHeading, label: focusedLabel },
+    location: focusedLabel === undefined ? undefined : { label: focusedLabel },
     foreground: {
       inputActive: props.foregroundInputActive,
     },

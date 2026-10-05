@@ -518,7 +518,7 @@ describe('a parked root run', () => {
           type: 'run.end',
           aggregateId: rowAggregate(child),
           outcome: RUN_OUTCOME.CANCELLED,
-          output: emptyRunEndOutput('toolUse'),
+          output: emptyRunEndOutput(),
         },
       ]);
       yield* enqueue(session, runId, [
@@ -638,7 +638,7 @@ describe('the batch a parked run consumes', () => {
             type: 'run.end',
             aggregateId: rowAggregate(child),
             outcome: RUN_OUTCOME.CANCELLED,
-            output: emptyRunEndOutput('toolUse'),
+            output: emptyRunEndOutput(),
           },
         ]);
         yield* enqueue(session, runId, [

@@ -8,8 +8,6 @@ import { useLayoutEffect, type ReactNode } from 'react';
 
 // Local imports - shared constants and schemas
 import { clampModalWidth } from '@cli/tui/ui/theme';
-import type { RunId } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
 import { interruptedTasks } from '@ui/copy/interruptedTasks';
 import { clamp } from '@utils/core';
 
@@ -46,6 +44,7 @@ import {
 import { sessionView, runViewOf } from '../state/sessionView';
 import { staticTranscriptRepaintEpoch } from '../state/staticTranscriptRepaint';
 import { useSignal } from '../state/useSignal';
+import type { RunId } from '@texra-ai/harness/schemas';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
 
 // Cap the bottom subagent/plan panels so they never crowd out the
@@ -107,8 +106,7 @@ export function ConversationRegion({
   const staticTranscriptRepaint = useSignal(staticTranscriptRepaintEpoch);
   const staticTranscriptKey = `${scrollbackTarget.ownerKey}:${staticTranscriptRepaint}`;
 
-  const activePlan =
-    activeRun?.category === AgentCategory.ToolUse ? activeRun.plan : null;
+  const activePlan = activeRun?.plan ?? null;
   const queuedFollowUpMessages = (
     activeRunId === undefined
       ? []

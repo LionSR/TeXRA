@@ -15,7 +15,7 @@ import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
-import { parseGitHubSlug } from '@tools/github/githubSlug';
+import { parseGitHubSlug } from '@texra/tools/github/githubSlug';
 
 const browserMocks = vi.hoisted(() => ({
   tryOpenBrowser: vi.fn(),
