@@ -19,8 +19,10 @@ import type {
   DispatchFacts,
   InvocationRef,
   ScriptCallPayload,
+  ToolBindingPayload,
   ToolResultPayload,
 } from '@shared/schemas';
+import { byId } from './runRows';
 import type { HistoryMessage, ModelMessagePayload } from './historyTurns';
 
 /** The attempt a run has sent and not yet seen answered. */
@@ -71,42 +73,89 @@ type Settlement = Pick<
   'attempt' | 'disposition' | 'duplicateOf' | 'result' | 'attachments'
 >;
 
-/** A call a `script` call's guest issued, as its `script.call` row recorded
- *  it, and the commit of its settlement once one is recorded: a resumed
- *  script is handed its settled calls in that order. */
-type ScriptCall = ScriptCallPayload & {
-  readonly settledAt: CommitOrdinal | null;
+/**
+ * How far one call got, as its rows say. `issued`: nothing of it ran.
+ * `asking`: its own request for `attempt` is open or answered, and its body
+ * has not started, so whatever the answer, nothing happened yet.
+ * `started`: the `tool.intent` of `attempt` committed as its body began, so
+ * the body may have run; `binding` is the request that attempt is bound to:
+ * the call's own (its guard's approval, or the first its body raised) or the
+ * loop's outcome question. `settled`: its `tool.result`, at commit `at`.
+ */
+export type CallStatus =
+  | { readonly kind: 'issued' }
+  | {
+      readonly kind: 'asking';
+      readonly attempt: number;
+      readonly requestId: string;
+    }
+  | {
+      readonly kind: 'started';
+      readonly attempt: number;
+      readonly binding: Pick<ToolBindingPayload, 'requestId' | 'role'> | null;
+    }
+  | ({ readonly kind: 'settled'; readonly at: CommitOrdinal } & Settlement);
+
+/** One call of the pending response, the same record whichever issued it:
+ *  the response (`script` null) or one of its `script` calls' guests, whose
+ *  `script.call` row it carries. */
+export type PendingCall = {
+  readonly script: ScriptCallPayload | null;
+  readonly status: CallStatus;
 };
+
+/** The request a call's current attempt stands bound to, or null: its own
+ *  while it asks, else the attempt's binding. */
+export const boundRequestOf = (
+  status: CallStatus,
+): Pick<ToolBindingPayload, 'requestId' | 'role'> | null => {
+  if (status.kind === 'asking')
+    return { requestId: status.requestId, role: 'call' };
+  return status.kind === 'started' ? status.binding : null;
+};
+
+/** The attempt a call's rows have reached: 0 before any asked or started. */
+export const attemptOf = (status: CallStatus): number =>
+  status.kind === 'issued' ? 0 : status.attempt;
 
 /** A response whose calls are not yet all settled and delivered. */
 export type PendingResponse = {
   readonly responseId: string;
   /** The message it enters history as once its calls are settled. */
   readonly assistant: Extract<HistoryMessage, { readonly role: 'assistant' }>;
+  /** The response's own calls, in order. Only their results enter history:
+   *  the delivering append carries one per call. */
   readonly calls: readonly DispatchFacts[];
-  /** The calls its `script` calls issued, by call id. None enters history:
-   *  the delivering append carries the results of `calls` alone. */
-  readonly scriptCalls: Readonly<Record<string, ScriptCall>>;
-  /** Committed settlements by call id, exactly one per settled call, a
-   *  script's calls included. */
-  readonly settled: Readonly<Record<string, Settlement>>;
+  /** Every call by id, the response's and its scripts' alike. */
+  readonly records: Readonly<Record<string, PendingCall>>;
 };
 
-/** The pending response row `p` opens, with nothing settled yet. */
+/** The settlement of `callId` the rows committed, or null. */
+export const settlementOf = (
+  pending: PendingResponse,
+  callId: string,
+): Extract<CallStatus, { kind: 'settled' }> | null => {
+  const status = pending.records[callId]?.status;
+  return status?.kind === 'settled' ? status : null;
+};
+
+/** The pending response row `p` opens, with every call issued. */
 export function pendingResponseOf(
   p: Extract<ModelMessagePayload, { kind: 'response' | 'handed-down' }>,
 ): PendingResponse {
+  const calls = p.kind === 'response' ? p.calls : [p.call];
   const opened = {
     responseId: p.responseId,
-    scriptCalls: {},
-    settled: {},
+    calls,
+    records: byId(
+      calls.map((call): [string, PendingCall] => [
+        call.callId,
+        { script: null, status: { kind: 'issued' } },
+      ]),
+    ),
   };
   if (p.kind === 'response')
-    return {
-      ...opened,
-      assistant: assistantMessageFromResult(p.turn),
-      calls: p.calls,
-    };
+    return { ...opened, assistant: assistantMessageFromResult(p.turn) };
   const { call, argumentsText } = p;
   return {
     ...opened,
@@ -122,6 +171,5 @@ export function pendingResponseOf(
         },
       ],
     },
-    calls: [call],
   };
 }

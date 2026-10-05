@@ -7,19 +7,16 @@
  * .agents/docs/implemented/architecture/2026-09-21-effect-design-run-loop-programs.md).
  */
 
-import { Cause, Effect, Exit, Result, SynchronizedRef } from 'effect';
+import { Cause, Effect, Exit, SynchronizedRef } from 'effect';
 
 import type { AgentTrace, StageHandle } from '@agent/trace';
-import {
-  RUN_OUTCOME,
-  type RunId,
-  type RunOutcome,
-  type SessionEvent,
-} from '@shared/schemas';
-import type { DatabaseWriteFailed } from '@shared/session/database';
+import { RUN_OUTCOME, type RunId, type RunOutcome } from '@shared/schemas';
+import type {
+  DatabaseReadFailed,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
 import { RunHistory, RunHistoryRefused } from '@shared/session/runHistory';
 import {
-  foldRunState,
   freshRunState,
   type RunHistoryDraft,
   type RunState,
@@ -27,9 +24,12 @@ import {
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from '../run/AgentRun';
-import { runHistoryRows } from '../storedTurn';
 import { Runs } from '../runRegistry';
 import type { FollowUps } from '../FollowUps';
+
+/** What a run cell's commits and re-reads fail with. */
+export type CellError =
+  RunHistoryRefused | DatabaseWriteFailed | DatabaseReadFailed;
 
 /**
  * The run's one state holder and its only run history writer. Seeded with the
@@ -66,12 +66,16 @@ export interface RunCell {
    */
   readonly adopt: (state: RunState) => Effect.Effect<RunState>;
   /**
-   * Fold a row another writer already committed (a `request.decided` the
-   * decide command landed) onto the latest state, under the cell's lock, so
-   * no append between the read and the write is lost. A row that does not
-   * fold onto the run is a defect: `what` names it in the message.
+   * Re-read the run under the cell's lock: the state with every row another
+   * writer committed (a `request.decided` the decide command landed), in
+   * commit order, whatever this cell appended since. Folding one such row
+   * onto the cell instead cannot work once a sibling call's settlement has
+   * committed after it.
    */
-  readonly fold: (row: SessionEvent, what: string) => Effect.Effect<RunState>;
+  readonly refresh: Effect.Effect<
+    RunState,
+    RunHistoryRefused | DatabaseReadFailed
+  >;
 }
 
 /**
@@ -99,23 +103,14 @@ export const makeRunCell = (
           ),
         ).pipe(Effect.uninterruptible),
       adopt: (state) => SynchronizedRef.set(ref, state).pipe(Effect.as(state)),
-      fold: (row, what) =>
-        SynchronizedRef.updateAndGetEffect(ref, (state) => {
-          const folded = Result.flatMap(runHistoryRows([row]), (rows) =>
-            foldRunState(state, rows),
-          );
-          return Result.isFailure(folded) || folded.success === null
-            ? Effect.die(
-                new Error(
-                  `${what} does not fold onto the run: ${
-                    Result.isFailure(folded)
-                      ? folded.failure.detail
-                      : 'no state'
-                  }`,
-                ),
-              )
-            : Effect.succeed(folded.success);
-        }),
+      refresh: SynchronizedRef.updateAndGetEffect(ref, () =>
+        Effect.flatMap(runHistory.load(runId), (state) =>
+          // The cell opened on rows, so the run has some.
+          state === null
+            ? Effect.die(new Error(`Run ${runId} lost its rows.`))
+            : Effect.succeed(state),
+        ),
+      ).pipe(Effect.uninterruptible),
     } satisfies RunCell;
   });
 

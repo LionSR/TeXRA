@@ -149,7 +149,7 @@ export class RunHistory extends Context.Service<
      *   `response` row that used it, when both are present;
      * - a `model.message` `response` row carries the dispatch facts and the
      *   priced `usage` of its turn, both stamped here: the package produces
-     *   neither a dispatch partition nor a price, and `RunState.usage` is
+     *   neither dispatch facts nor a price, and `RunState.usage` is
      *   derived from the rows alone (D12), so a row appended without its
      *   `NormalizedUsage` silently loses that turn's cost on resume;
      * - a `model.message` `append` naming `sourceResponse` requires that

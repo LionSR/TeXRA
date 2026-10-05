@@ -63,11 +63,7 @@ import {
   type RequestDecision,
   type RetryErrorInfo,
 } from '@shared/schemas';
-import type { DatabaseWriteFailed } from '@shared/session/database';
-import {
-  findStorageRefusal,
-  type RunHistoryRefused,
-} from '@shared/session/runHistory';
+import { findStorageRefusal } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runStateFold';
 import { UsageLog, usageAgentName } from '@shared/usageLog';
 import { generateShortId } from '@utils/core';
@@ -107,7 +103,7 @@ import {
   snapshotRow,
   positionRow,
 } from './loop/rows';
-import type { RunCell } from './loop/runProgram';
+import type { CellError, RunCell } from './loop/runProgram';
 import type { HttpClient } from 'effect/http';
 
 /**
@@ -188,8 +184,7 @@ type InvocationOutcome =
  * path in `loop/toolUseDispatch` branches on the same union, so it imports
  * this rather than re-declaring the alias.
  */
-export type InvokeError =
-  RunHistoryRefused | DatabaseWriteFailed | StateReadFailed;
+export type InvokeError = CellError | StateReadFailed;
 
 export class ModelInvoker extends Context.Service<
   ModelInvoker,
@@ -865,7 +860,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           if (row === null) {
             decision = { action: 'cancel', cause: 'The session closed.' };
           } else {
-            yield* cell.fold(row, 'The retry decision');
+            yield* cell.refresh;
             decision = row.decision;
           }
         }

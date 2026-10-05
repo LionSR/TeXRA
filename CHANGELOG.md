@@ -784,6 +784,14 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A resumed task no longer asks whether a command ran that never
+  started.** A task stopped while a command waited for your approval, or
+  just before it asked, used to come back asking "did this run?" about a
+  command that never ran. A command now counts as started only once its
+  approval is given and it begins, so the resume asks for the approval
+  again, or runs the command under the answer you already gave. A task
+  whose tool calls run side by side also no longer stops with an internal
+  error when you answer such a question while another call finishes.
 - **A task saved by an older TeXRA no longer reads as corrupt.** A task
   whose stored shape this version no longer reads now says it was made by
   an older TeXRA and can't be opened here, instead of calling it corrupt,

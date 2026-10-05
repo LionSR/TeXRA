@@ -109,11 +109,12 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
 });
 
 /** One call, guard first: the declared guard's refusal, else the tool's
- *  body, which `bodyStarts` announces once the guard has let it run. */
+ *  body, which `bodyStarts` announces (and records) once the guard has let
+ *  it run. */
 export const guardedToolCall = (
   tool: RuntimeTool,
   rawInput: unknown,
-  bodyStarts: Effect.Effect<void> = Effect.void,
+  bodyStarts: Effect.Effect<void, Error> = Effect.void,
 ): ReturnType<RuntimeTool['call']> =>
   guardRefusal(tool, rawInput).pipe(
     Effect.flatMap((refusal) =>

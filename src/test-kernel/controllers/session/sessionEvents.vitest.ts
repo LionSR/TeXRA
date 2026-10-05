@@ -3001,7 +3001,6 @@ describe('RunHistory', () => {
       ordinal: 0,
       parallelSafe: false,
       replay: 'unsafe',
-      partition: 0,
       duplicateOf: null,
       logId: 'card-a',
       stageId: null,
@@ -3012,7 +3011,6 @@ describe('RunHistory', () => {
       ordinal: 1,
       parallelSafe: false,
       replay: 'unsafe',
-      partition: 0,
       duplicateOf: 'call-a',
       logId: 'card-b',
       stageId: null,
@@ -3167,7 +3165,7 @@ describe('RunHistory', () => {
           aggregateId: AGGREGATE,
           payload: {
             origin: { kind: 'response', responseId: RESPONSE_ID },
-            callIds: ['call-a'],
+            callId: 'call-a',
             attempt: 1,
           },
         },
@@ -3261,15 +3259,17 @@ describe('RunHistory', () => {
         expect(refusalOf(orphanGroup)?.reason).toBe('unprepared-history');
         expect((yield* log.readAggregate(AGGREGATE, 1)).length).toBe(written);
         // The approval and the row that binds it commit in one batch; the
-        // binding names the intent the rows already hold.
+        // binding names the attempt the rows already hold.
         state = yield* run.appendBatch(RUN, state, [
           approvalRequested,
           approvalBinding,
         ]);
         expect(state.requests['req-1']?.resolved).toBe(false);
-        expect(state.pendingIntents['call-a']?.binding?.requestId).toBe(
-          'req-1',
-        );
+        expect(state.pendingResponse?.records['call-a']?.status).toEqual({
+          kind: 'started',
+          attempt: 1,
+          binding: { requestId: 'req-1', role: 'call' },
+        });
         // A real attachment carries loose keys and binary fields: accepted, and
         // the binary fields never reach the row.
         state = yield* run.appendBatch(RUN, state, [
@@ -3290,8 +3290,9 @@ describe('RunHistory', () => {
           }),
           toolEnd('call-a'),
         ]);
+        const settledA = state.pendingResponse?.records['call-a']?.status;
         const file =
-          state.pendingResponse?.settled['call-a']?.result.files?.[0];
+          settledA?.kind === 'settled' ? settledA.result.files?.[0] : undefined;
         expect(file).toEqual({
           path: 'out/plot.png',
           mimeType: 'image/png',
