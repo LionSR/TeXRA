@@ -25,7 +25,7 @@ const BUILD_TIME_PACKAGED_PATHS = new Set(['readme.md', 'changelog.md']);
 
 const REQUIRED_VSCODEIGNORE_LINES = [
   'src/**',
-  '!packages/harness/src/common/styles/*.css',
+  '!src/common/styles/*.css',
   '!src/progressView/*.html',
   '!src/settingsView/*.html',
 ];

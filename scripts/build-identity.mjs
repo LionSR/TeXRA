@@ -3,7 +3,7 @@
 // and which no host renumbers (a preview VSIX is renumbered in its own
 // manifest only). The background service reports it, and a client retires
 // an older service by it (`BUILD_VERSION` in
-// packages/harness/src/controllers/server/protocol.ts). `TEXRA_BUILD_VERSION` in the build's
+// packages/texra/src/controllers/server/protocol.ts). `TEXRA_BUILD_VERSION` in the build's
 // environment overrides it, for a validation that needs two builds.
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';

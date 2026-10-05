@@ -31,7 +31,7 @@ export const REQUIRED_PACKAGED_PATHS = [
   'resources/templates',
   'resources/tool_use_agents',
   'resources/walkthroughs',
-  'packages/harness/src/common/styles/common.css',
+  'src/common/styles/common.css',
   'src/progressView/index.html',
   'src/settingsView/index.html',
 ];
