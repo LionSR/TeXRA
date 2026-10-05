@@ -32,7 +32,7 @@ import {
 import {
   PersistedState,
   type KeyValueStore,
-} from '@shared/state/PersistedState';
+} from '@texra/shared/state/PersistedState';
 import { LAUNCH_FILE_LISTS } from '@texra/shared/launcher/fileSelectConfigs';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 

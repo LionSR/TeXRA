@@ -44,11 +44,6 @@
         "./packages/extension/src/frontend/*.ts",
         "./packages/extension/src/frontend/*/index.ts"
       ],
-      "@hosts/*": [
-        "./packages/harness/src/hosts/*",
-        "./packages/harness/src/hosts/*.ts",
-        "./packages/harness/src/hosts/*/index.ts"
-      ],
       "@utils/*": [
         "./packages/harness/src/utils/*",
         "./packages/harness/src/utils/*.ts",

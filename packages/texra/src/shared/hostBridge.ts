@@ -1,4 +1,7 @@
-import { HOST_BRIDGE_API_KEY, type HostBridgeApi } from './hostBridgeTypes';
+import {
+  HOST_BRIDGE_API_KEY,
+  type HostBridgeApi,
+} from '@shared/hostBridgeTypes';
 
 /**
  * Every host installs its bridge at `globalThis[HOST_BRIDGE_API_KEY]` before

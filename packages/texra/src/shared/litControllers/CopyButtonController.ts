@@ -1,7 +1,7 @@
 import {
   copyTextToClipboard,
   COPY_RESET_DELAY_MS,
-} from '@shared/utils/clipboard';
+} from '@texra/shared/utils/clipboard';
 import { createFlushableDebounce, type FlushableDebounce } from '@utils/core';
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
 

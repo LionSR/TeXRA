@@ -12,8 +12,8 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import { APPROVE_SESSION_ACTION } from '@shared/session/approvalDecision';
-import { SessionUiEvents } from '@shared/session/uiEvents';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { RUN_GRANT_LABEL } from '@ui/copy/delegationApproval';
 
 // Local imports - shared helpers

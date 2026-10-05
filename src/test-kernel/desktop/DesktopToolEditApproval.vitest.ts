@@ -15,7 +15,6 @@ import {
 import { afterEach, describe, expect, onTestFinished, vi } from 'vitest';
 
 import type { DesktopToolEditApprovalUi } from '@desktop/main/desktopToolEditApproval';
-import type { DiffSource } from '@hosts/uiHosts';
 import type { RunId } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -27,6 +26,7 @@ import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
+import type { DiffSource } from '@texra/hosts/uiHosts';
 import type { ToolEditPreview } from '@texra/controllers/approval/ToolEditApprovalController';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';

@@ -20,9 +20,9 @@ import type {
   PermissionPayload,
 } from '@shared/schemas';
 import { getProposalFileGroups } from '@shared/schemas';
-import { SessionUiEvents } from '@shared/session/uiEvents';
 import { getModelLabel } from '@shared/model/modelLabel';
 import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '@shared/session/approvalDecision';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { selectStyles } from '@ui/styles';
 import {
   DELEGATION_APPROVAL_COPY,

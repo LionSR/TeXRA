@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@shared/hostBridge', () => ({
+vi.mock('@texra/shared/hostBridge', () => ({
   postMessage: vi.fn(),
   hostBridge: {
     postMessage: vi.fn(),

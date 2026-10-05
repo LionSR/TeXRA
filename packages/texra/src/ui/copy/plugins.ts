@@ -5,7 +5,7 @@
  * and which agents use it. A renderer lays these out; it spells none of
  * them itself.
  */
-import { toolDependencyStatusLabel } from '@shared/tools/toolDependencyStatusLabels';
+import { toolDependencyStatusLabel } from '@texra/shared/tools/toolDependencyStatusLabels';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 import { formatResultCount } from '@utils/text/stringUtils';
 

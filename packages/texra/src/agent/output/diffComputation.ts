@@ -14,10 +14,10 @@ import {
   type FileLocation,
   type OutputFileInfo,
 } from '@shared/schemas';
+import { diffLineChanges } from '@texra/utils/text/diff';
 import { createWorkspaceLocation } from '@utils/files/fileLocation';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { diffLineChanges } from '@utils/text/diff';
 import { countLines, normalizeLineEndings } from '@utils/text/stringUtils';
 import { absentReason } from '@utils/files/fsEntryExists';
 

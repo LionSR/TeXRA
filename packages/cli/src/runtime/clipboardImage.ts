@@ -23,11 +23,11 @@ import * as ChildProcess from 'effect/process/ChildProcess';
 
 import { withSessionFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { generatePastedImageName } from '@utils/files/pastedImageName';
 import {
   type PastedImageSaveFailed,
   savePastedImageBuffer,
-} from '@utils/files/pastedImageUtils';
+} from '@texra/utils/files/pastedImageUtils';
+import { generatePastedImageName } from '@utils/files/pastedImageName';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';

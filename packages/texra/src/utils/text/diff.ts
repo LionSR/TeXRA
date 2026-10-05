@@ -11,7 +11,7 @@
 import { diff_match_patch, DIFF_DELETE, DIFF_INSERT } from 'diff-match-patch';
 
 // Local imports - utils
-import { countLines } from './stringUtils';
+import { countLines } from '@utils/text/stringUtils';
 
 interface DiffLineChanges {
   added: number;

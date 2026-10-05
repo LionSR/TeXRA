@@ -8,12 +8,12 @@ import {
   BundledViewContentProvider,
   getSharedLocalResourceRoots,
 } from '@common/webview';
-import { DisposableStore } from '@platform/disposable';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { DisposableStore } from '@texra/platform/disposable';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsViewMessages';
 

@@ -57,9 +57,9 @@ import type {
   ToolUseLog,
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
-import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
+import { buildSyntheticToolUseConfig } from '@texra/tools/core/syntheticAgentConfig';
+import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
 import { defineTool } from '@tools/core/define';
-import { buildAgentWorkspaceOptions } from '@tools/agentWorkspaceOptions';
 import type { DetachedChildRunLaunch } from '@tools/delegation/detachedChildRun';
 import { linkAbortSignals } from '@utils/core';
 import {

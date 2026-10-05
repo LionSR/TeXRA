@@ -23,6 +23,7 @@ import {
   zotero,
 } from '@texra/tools/integrationPlugins';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
+import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool';
 import {
   codemode,
   fileOps,
@@ -37,7 +38,6 @@ import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
 import type { ProcessPluginLayer } from '@tools/toolTable';
 
 // Local file imports
-import { AskUserQuestionTool } from '@tools/userQuestion/UserQuestionTool';
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
 import { ArxivDownloadTool } from './arxiv/ArxivDownloadTool';
 import { ArxivSearchTool } from './arxiv/ArxivSearchTool';

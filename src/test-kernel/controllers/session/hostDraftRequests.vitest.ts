@@ -32,7 +32,7 @@ const audio = vi.hoisted(() => ({
   ),
 }));
 
-vi.mock('@tools/media/audio', () => audio);
+vi.mock('@texra/tools/media/audio', () => audio);
 
 /** A recorder double: the take's path once `startup` settles, a sox whose
  *  exit is `exitCode`, and `onStop` run when the take's scope stops it. */
@@ -46,7 +46,7 @@ const recorder = (
     yield* Effect.addFinalizer(() => onStop);
     return { path, handle: { exitCode } };
   });
-vi.mock('@agent/runtime/textEnhancement', () => ({
+vi.mock('@texra/agent/runtime/textEnhancement', () => ({
   polishTextWithAI: vi.fn(),
 }));
 

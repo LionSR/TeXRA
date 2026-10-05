@@ -6,8 +6,8 @@
  * (`loadChatExportInput`), rendering it to Markdown (`formatChatAsMarkdown`),
  * and the `ChatExportInput` type hosts name at that seam — decoupling host
  * code from the export internals' file layout, per the module-level barrel
- * pattern set by `@agent/runtime` (#10011) and `@agent/followUp`. The R-b
- * deep-import width ratchet (`config/ratchets/host-agent-import-baseline.json`)
+ * pattern set by `@agent/runtime` (#10011) and `@agent/followUp`. The harness
+ * deep-import ratchet (`config/ratchets/harness-deep-import-baseline.json`)
  * records each host's single `@agent/export` specifier; the former
  * `@agent/export/{loadChatExportInput,chatExportFormatter,schemas}` deep
  * imports collapsed to this door.

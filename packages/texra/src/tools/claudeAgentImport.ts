@@ -31,7 +31,7 @@ import {
   binaryIfPresent,
   createCachedBinaryResolver,
   importForeignSdk,
-} from '@tools/support/externalBinaryUtils';
+} from '@texra/tools/support/externalBinaryUtils';
 import { readSettingUnlessOverridden } from '@utils/config/platformSettings';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 // Mirror the native `query` signature exactly (no hand-rolled structural copy).

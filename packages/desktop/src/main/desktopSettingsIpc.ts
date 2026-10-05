@@ -6,14 +6,14 @@ import {
 } from '@texra-ai/llm/node';
 import type { SessionHandle } from '@agent/runtime';
 import { onAppSignal } from '@eventBus/AppSignals';
-import type { ExternalOpenFailed } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { StorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
-import { unsupported } from '@shared/utils/dispatcher';
 import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
+import { unsupported } from '@texra/shared/utils/dispatcher';
+import type { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 import { SettingsViewInboundMessageSchema } from '@texra/shared/settingsView/settingsViewMessages';
 import { createSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
 import {

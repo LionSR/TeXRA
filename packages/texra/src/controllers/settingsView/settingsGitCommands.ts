@@ -4,9 +4,9 @@
  */
 import { Effect } from 'effect';
 
-import { storeCredential } from '@common/secrets/storeCredential';
 import type { PlatformSecrets } from '@platform/secrets';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { storeCredential } from '@texra/common/secrets/storeCredential';
 import {
   listGitHubSubscriptionEntries,
   noActiveGitHubSubscriptionMessage,

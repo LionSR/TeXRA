@@ -23,7 +23,6 @@ import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { runAgent } from '@agent/runtime/runAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { frameSubscription } from '@controllers/session/SessionFramer';
 import type { ProcessServices } from '@platform/processRuntime';
 import { RUN_PHASE, type RunId } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
@@ -33,6 +32,7 @@ import {
   type RequestErrorWire,
 } from '@shared/session/sessionFrames';
 import { isLiveRun, type SessionView } from '@shared/session/sessionView';
+import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import { runEnded } from '@texra/controllers/session/sessionBackend';
 import { launchOnRun } from '@texra/controllers/mainView/backend/MainViewRunLaunchController';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';

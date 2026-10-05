@@ -9,7 +9,7 @@
  * No `vscode` import — usable from agent core too.
  */
 
-import { findBraceBalancedMacroCalls } from '@utils/text/braceBalancedMacro';
+import { findBraceBalancedMacroCalls } from '@texra/utils/text/braceBalancedMacro';
 
 interface CriticismAnnotation {
   message: string;

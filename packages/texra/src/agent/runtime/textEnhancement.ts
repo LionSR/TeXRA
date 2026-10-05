@@ -1,5 +1,8 @@
 import { Effect } from 'effect';
 
+import { POLISH_PROMPT_PREFIX } from '@agent/runtime/bundledPrompts';
+import { helperCall } from '@agent/runtime/helperModel';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
@@ -8,9 +11,6 @@ import type { UsageLog } from '@shared/usageLog';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { extractTextFromTag } from '@utils/text/xmlExtraction';
-import { POLISH_PROMPT_PREFIX } from './bundledPrompts';
-import { helperCall } from './helperModel';
-import type { SessionHandle } from './SessionHandle';
 import type { HttpClient } from 'effect/http';
 
 const CHANNEL = 'TextEnhancement';

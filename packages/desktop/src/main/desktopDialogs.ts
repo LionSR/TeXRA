@@ -5,8 +5,8 @@
 import { type BrowserWindow, dialog } from 'electron';
 import { Effect } from 'effect';
 
-import { NotificationFailed, PromptFailed } from '@hosts/uiHosts';
 import { INSTRUCTION_ACTION, type InstructionAction } from '@shared/schemas';
+import { NotificationFailed, PromptFailed } from '@texra/hosts/uiHosts';
 import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

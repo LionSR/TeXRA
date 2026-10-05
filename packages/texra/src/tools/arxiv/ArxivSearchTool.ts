@@ -13,8 +13,8 @@ import { z } from 'zod';
 // Local imports
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
 import { withLogChannel } from '@logger/effectLog';
+import { rateLimitedApiCall } from '@texra/tools/support/rateLimiter';
 import { requireNonEmptyString } from '@tools/utils';
-import { rateLimitedApiCall } from '@tools/support/rateLimiter';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';

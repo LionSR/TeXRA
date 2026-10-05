@@ -6,11 +6,11 @@ import { Effect, FileSystem } from 'effect';
 
 // Local imports - controllers
 import { customCopyPath, writeStampedCopy } from '@agent/index/customAgentCopy';
-import type { MessageHost } from '@hosts/uiHosts';
 import type { ProcessServices } from '@platform/processRuntime';
 // Local imports - shared
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { isPackagedAgentSource, type AgentSource } from '@shared/schemas';
+import type { MessageHost } from '@texra/hosts/uiHosts';
 import { type SettingsMessageFor } from '@texra/shared/settingsView/settingsViewMessages';
 // Local imports - utilities
 import { entryExists } from '@utils/files/fsEntryExists';

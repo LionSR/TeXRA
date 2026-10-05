@@ -39,7 +39,6 @@ import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
-import { ExternalOpenFailed } from '@hosts/uiHosts';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -77,6 +76,7 @@ import {
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
+import { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 
 import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { normalizeMainViewFileExtension } from '@texra/controllers/mainView/MainViewDroppedFilesController';

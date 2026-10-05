@@ -12,7 +12,7 @@ import {
   getFileListConfig,
   type ListableFileType,
 } from '@common/files/fileListingRules';
-import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
+import { listWorkspaceFiles } from '@texra/common/files/workspaceFileListing';
 
 /**
  * List the workspace files of one listable type under the product's

@@ -4,8 +4,8 @@ import {
   formatUnknownTeamMessage,
   missingMemberNames,
 } from '@common/teams/TeamPlan';
-import type { MessageHost } from '@hosts/uiHosts';
 import type { StateReadFailed } from '@platform/interfaces';
+import type { MessageHost } from '@texra/hosts/uiHosts';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';

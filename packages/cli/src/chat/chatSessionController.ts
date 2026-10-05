@@ -43,7 +43,6 @@ import {
 } from '@cli/runtime/terminalStatus';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
-import type { DisposableStore } from '@platform/disposable';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -61,6 +60,7 @@ import type {
   RuntimeRequest,
 } from '@shared/session/runtimeRequest';
 import { escapeText } from '@shared/utils/xmlEscape';
+import type { DisposableStore } from '@texra/platform/disposable';
 import type { WindowHost } from '@texra/controllers/server/windowHost';
 import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';

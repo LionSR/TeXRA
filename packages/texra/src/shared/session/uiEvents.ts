@@ -9,9 +9,9 @@
  * event; nothing translates in between (PRD 8, identity translation), and
  * a harness that assigns fixtures simply ignores them.
  */
-import type { HostRequest } from './hostRequest';
-import type { RuntimeRequest } from './runtimeRequest';
-import type { SurfaceAction } from './surface';
+import type { HostRequest } from '@shared/session/hostRequest';
+import type { RuntimeRequest } from '@shared/session/runtimeRequest';
+import type { SurfaceAction } from '@shared/session/surface';
 
 const SESSION_UI_EVENT = {
   runtime: 'runtime-request',

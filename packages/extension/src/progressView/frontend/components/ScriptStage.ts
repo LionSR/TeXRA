@@ -18,13 +18,13 @@ import { repeat } from 'lit/directives/repeat.js';
 import type { RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import type { Surface, SurfaceRefusal } from '@shared/session/surface';
-import { SessionUiEvents } from '@shared/session/uiEvents';
 import {
   SCRIPT_CALL_STATUS_LABEL,
   TALK_TO_AGENT,
   type ScriptCallView,
   type ScriptStageView,
 } from '@shared/transcript';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { designTokens } from '@ui/styles';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';

@@ -2,7 +2,7 @@
 import { Effect, Layer } from 'effect';
 
 // Local imports
-import type { TerminalRunResult } from '@hosts/uiHosts';
+import type { TerminalRunResult } from '@texra/hosts/uiHosts';
 import { fakeSetupPlatform } from '@test/support/setupPlatform';
 import {
   SetupPlatform,

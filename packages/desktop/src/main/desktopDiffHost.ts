@@ -4,15 +4,15 @@ import { Cause, Effect, FileSystem, type PlatformError } from 'effect';
 import { nanoid } from 'nanoid';
 
 import {
-  ExternalOpenFailed,
-  type DiffSource,
-  type DiffViewHost,
-} from '@hosts/uiHosts';
-import {
   type ProcessRuntime,
   withProcessServices,
 } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import {
+  ExternalOpenFailed,
+  type DiffSource,
+  type DiffViewHost,
+} from '@texra/hosts/uiHosts';
 import { monacoLanguageForPath } from '@texra/shared/monaco/monacoLanguage';
 import { countLineChanges } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';

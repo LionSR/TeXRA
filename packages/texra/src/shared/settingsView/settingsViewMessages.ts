@@ -12,10 +12,6 @@ import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
-  createDispatcher,
-  type HandlerRegistry,
-} from '@shared/utils/dispatcher';
-import {
   AgentMetadataBaseSchema,
   AgentModePresetSchema,
   AgentScanIssueSchema,
@@ -39,6 +35,10 @@ import {
   ToolCategorySchema,
   ToolDependencyStatusSchema,
 } from '@shared/tools/toolPlugin';
+import {
+  createDispatcher,
+  type HandlerRegistry,
+} from '@texra/shared/utils/dispatcher';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { UpdateProfileMessageSchema } from './profileViewMessages';
 import {

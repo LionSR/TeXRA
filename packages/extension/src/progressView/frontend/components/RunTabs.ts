@@ -16,11 +16,11 @@ import type { RunId } from '@shared/schemas';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 import { unseenRuns } from '@shared/session/unseenRuns';
-import { SessionUiEvents } from '@shared/session/uiEvents';
 import {
   RUN_GROUP_LABELS,
   RUN_GROUP_ORDER,
 } from '@shared/runs/runStatusDisplay';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { designTokens, commonViewStyles } from '@ui/styles';
 
 // Side-effect imports - register WA components

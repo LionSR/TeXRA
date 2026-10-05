@@ -1,5 +1,9 @@
-import type { DiffViewHost, MessageHost, PromptFailed } from '@hosts/uiHosts';
 import type { InstructionAction } from '@shared/schemas';
+import type {
+  DiffViewHost,
+  MessageHost,
+  PromptFailed,
+} from '@texra/hosts/uiHosts';
 import type { TranscriptExportFormat } from '@texra/controllers/progressView/exportTranscript';
 import type { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';

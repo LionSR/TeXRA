@@ -20,7 +20,6 @@ import { getRunRecords } from '@agent/storage/runRecords';
 import type { RunControls } from '@agent/runtime/RunHandle';
 import { runAgent, type RunAgentRequest } from '@agent/runtime/runAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { frameSubscription } from '@controllers/session/SessionFramer';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
@@ -37,6 +36,7 @@ import {
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
 import { isLiveRun, type SessionView } from '@shared/session/sessionView';
+import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import { launchOnRun } from '@texra/controllers/mainView/backend/MainViewRunLaunchController';
 import type { ToolEditPreview } from '@texra/controllers/server/protocol';
 

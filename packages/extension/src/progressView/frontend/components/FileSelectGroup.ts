@@ -15,8 +15,8 @@ import {
   type SessionType,
 } from '@shared/schemas';
 import type { SurfaceAction } from '@shared/session/surface';
-import { SessionUiEvents } from '@shared/session/uiEvents';
 import type { TeXRAIconName } from '@shared/iconNames';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { SortableController } from '@texra/shared/litControllers/SortableController';
 import { dropCueStyles } from '@ui/styles/commonViewStyles';
 import { designTokens } from '@ui/styles';

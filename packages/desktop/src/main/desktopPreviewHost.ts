@@ -10,7 +10,6 @@ import {
 } from 'effect';
 
 import { isLatexFile } from '@common/files/fileTypeUtils';
-import { ExternalOpenFailed, type MessageHost } from '@hosts/uiHosts';
 import {
   type ProcessRuntime,
   withProcessServices,
@@ -18,6 +17,7 @@ import {
 import { withSessionFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
+import { ExternalOpenFailed, type MessageHost } from '@texra/hosts/uiHosts';
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 import { createExternalLocation } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';

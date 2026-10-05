@@ -5,8 +5,8 @@
  * deep-reaching each runtime module by path. Following the same pattern as
  * `@agent/trace` and `@agent/storage`, this decouples host code from the
  * runtime's internal file layout: moving or splitting a module below no longer
- * ripples into every host, and the R-b deep-import width ratchet
- * (`config/ratchets/host-agent-import-baseline.json`) collapses each host's
+ * ripples into every host, and the harness deep-import ratchet
+ * (`config/ratchets/harness-deep-import-baseline.json`) collapses each host's
  * many `@agent/runtime/*` specifiers to this single door.
  *
  * The surface is derived from use — exactly the symbols the three hosts reach

@@ -33,14 +33,14 @@ import {
   type Draft,
   type Surface,
 } from '@shared/session/surface';
-import { SessionUiEvents } from '@shared/session/uiEvents';
-import { appendClipboardImageChips } from '@shared/utils/clipboard';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { appendClipboardImageChips } from '@texra/shared/utils/clipboard';
 import {
   clipboardImageFiles,
   getExtensionFromMimeType,
   readFileAsBase64,
   type ExtractedClipboardImage,
-} from '@shared/utils/clipboardImages';
+} from '@texra/shared/utils/clipboardImages';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';

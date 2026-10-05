@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { ExternalOpenFailed, type ExternalOpener } from '@hosts/uiHosts';
+import { ExternalOpenFailed, type ExternalOpener } from '@texra/hosts/uiHosts';
 
 /**
  * VS Code's browser hand-off behind the host-neutral {@link ExternalOpener}.

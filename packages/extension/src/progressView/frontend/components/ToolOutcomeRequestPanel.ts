@@ -6,9 +6,9 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 // Local imports - shared
-import { SessionUiEvents } from '@shared/session/uiEvents';
 import type { TeXRAIconName } from '@shared/iconNames';
 import { TOOL_OUTCOME_COPY } from '@shared/transcript/toolOutcome';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 
 // Local imports - base class
 import { BaseRequestPanel } from './BaseRequestPanel';

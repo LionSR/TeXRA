@@ -2,7 +2,7 @@
  * Utilities for managing text replacements in the codebase.
  */
 
-import { findBraceBalancedMacroCalls } from '@utils/text/braceBalancedMacro';
+import { findBraceBalancedMacroCalls } from '@texra/utils/text/braceBalancedMacro';
 
 /**
  * A fact a replacement pass reports rather than logs: the passes are pure, so

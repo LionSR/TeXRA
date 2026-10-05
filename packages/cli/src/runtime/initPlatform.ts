@@ -22,7 +22,6 @@ import {
   type StateWriteFailed,
 } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
-import { DisposableStore } from '@platform/disposable';
 import {
   withProcessServices,
   type ProcessRuntime,
@@ -36,6 +35,7 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
+import { DisposableStore } from '@texra/platform/disposable';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { ensureError } from '@utils/errors/errorMessage';

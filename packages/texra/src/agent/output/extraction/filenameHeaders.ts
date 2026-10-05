@@ -10,11 +10,11 @@
 import * as path from 'node:path';
 
 import { OUTPUT_DOCUMENTS_TAG } from '@shared/schemas';
-import { getBasename, normalizeFilePath } from '@utils/core';
 import {
   getExtractedDocOutputFileName,
   getSafeDocumentRelativePath,
-} from '@utils/files/outputFileUtils';
+} from '@texra/utils/files/outputFileUtils';
+import { getBasename, normalizeFilePath } from '@utils/core';
 import type { NamedDocument } from '@utils/text/xmlExtraction';
 
 import {

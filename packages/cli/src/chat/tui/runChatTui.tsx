@@ -31,7 +31,6 @@ import {
   clearTerminalScrollback,
 } from '@cli/tui/terminalCleanup';
 import { cliSecrets } from '@cli/runtime/cliSecrets';
-import { DisposableStore } from '@platform/disposable';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { aggregateId } from '@shared/schemas';
 import {
@@ -45,6 +44,7 @@ import {
   isActivePhase,
   isTranscriptSettlementPhase,
 } from '@shared/runs/runStatus';
+import { DisposableStore } from '@texra/platform/disposable';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { attachWindowHost } from '@texra/controllers/server/windowHost';
 import { serviceSessionBackend } from '@texra/controllers/server/serviceBackend';

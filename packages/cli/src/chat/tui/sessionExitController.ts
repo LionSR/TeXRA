@@ -20,7 +20,6 @@ import {
   supportsTerminalJobControl,
   type TuiTerminal,
 } from '@cli/tui/terminalCleanup';
-import { DisposableStore } from '@platform/disposable';
 import {
   withProcessServices,
   type ProcessRuntime,
@@ -29,6 +28,7 @@ import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { RunId } from '@shared/schemas';
 import type { RunStopReason } from '@shared/session/runtimeRequest';
 import type { SessionView } from '@shared/session/sessionView';
+import { DisposableStore } from '@texra/platform/disposable';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {

@@ -29,8 +29,8 @@ import type {
   ToolEditPreviewContext,
 } from '@texra/controllers/approval/ToolEditApprovalController';
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
-import type { ApprovalTempFiles } from '@tools/approval/tempFileManager';
-import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
+import type { ApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
+import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
 import {
   computeLineChangeSummary,
   firstChangedLine,

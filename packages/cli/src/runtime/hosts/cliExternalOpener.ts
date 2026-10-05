@@ -2,8 +2,8 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { ExternalOpenFailed, type ExternalOpener } from '@hosts/uiHosts';
 import { nodePlatformServices } from '@platform/defaults/nodePlatform';
+import { ExternalOpenFailed, type ExternalOpener } from '@texra/hosts/uiHosts';
 
 import { launchBrowser } from '../browser';
 

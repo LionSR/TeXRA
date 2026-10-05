@@ -4,9 +4,9 @@ import { app, BrowserWindow, dialog, session } from 'electron';
 
 import { closeAllSessions } from '@agent/runtime';
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
-import { NotificationFailed } from '@hosts/uiHosts';
 import { withProcessServices } from '@platform/processRuntime';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
+import { NotificationFailed } from '@texra/hosts/uiHosts';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {

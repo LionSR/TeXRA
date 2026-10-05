@@ -3,8 +3,8 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { TERMINAL_OUTPUT_MAX_CHARS } from '@common/terminalOutput';
 import { ToolError } from '@shared/schemas';
+import { TERMINAL_OUTPUT_MAX_CHARS } from '@texra/common/terminalOutput';
 import { executed } from '@tools/core/result';
 
 // Local file imports

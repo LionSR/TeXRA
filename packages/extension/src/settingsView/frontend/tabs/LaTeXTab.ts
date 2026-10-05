@@ -11,7 +11,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { postMessage } from '@shared/hostBridge';
+import { postMessage } from '@texra/shared/hostBridge';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import {

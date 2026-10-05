@@ -28,8 +28,8 @@ import type {
   ProjectDisplay,
 } from '@shared/session/hostSnapshot';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
+import { readRecentCommits } from '@texra/utils/git/repositoryOverview';
 import { readSettingFrom } from '@utils/config/platformSettings';
-import { readRecentCommits } from '@utils/git/repositoryOverview';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 type Banners = HostSnapshot['banners'];

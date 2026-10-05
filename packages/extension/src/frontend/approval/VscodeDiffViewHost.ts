@@ -1,8 +1,8 @@
 import { Effect, FileSystem, Option } from 'effect';
 import * as vscode from 'vscode';
 
-import { type DiffSource, type DiffViewHost } from '@hosts/uiHosts';
 import type { RequestRefusal } from '@shared/session/requestErrors';
+import { type DiffSource, type DiffViewHost } from '@texra/hosts/uiHosts';
 import {
   fromHost,
   hostFailure,

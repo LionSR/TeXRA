@@ -45,7 +45,7 @@ import {
 import { createSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
-import { allSettledVoid } from '@utils/core/allSettledVoid';
+import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { hasExtension } from '@utils/core/pathCore';
 import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';

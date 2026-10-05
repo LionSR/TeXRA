@@ -9,7 +9,6 @@ import {
   type ValidatedRunRequest,
 } from '@agent/runtime';
 import { emitAppSignal } from '@eventBus/AppSignals';
-import type { NotificationFailed, PromptFailed } from '@hosts/uiHosts';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { LaTeXdiffService } from '@latex/latexdiff';
@@ -27,6 +26,7 @@ import {
 } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { Rejected } from '@shared/session/requestErrors';
+import type { NotificationFailed, PromptFailed } from '@texra/hosts/uiHosts';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
