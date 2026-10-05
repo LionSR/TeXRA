@@ -367,7 +367,8 @@ describe('sessionFold', () => {
     expect(runView(withOwner, CHILD).approval).toBe('own');
     expect(runView(withOwner, CHILD).forceExpanded).toBe(true);
     expect(runView(withOwner, CHILD).readOnly).toBe(false);
-    expect(runView(withOwner, CHILD).statusLabel).toBe('Running');
+    expect(runView(withOwner, CHILD).statusLabel).toBe('Waiting on you');
+    expect(runView(withOwner, CHILD).tone).toBe('warning');
     expect(runView(withOwner, CHILD).statusDetail).toBeNull();
     expect(runView(withOwner, ROOT).approval).toBe('descendant');
     expect(runView(withOwner, ROOT).group).toBe('running');

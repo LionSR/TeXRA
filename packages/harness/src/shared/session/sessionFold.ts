@@ -539,7 +539,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     (r) => r.runId === run.id && requestParksItsCaller(r.payload),
   );
   const interrupted = !isTerminalOutcomePhase(run.status) && !held && !paused;
-  const waiting = pendingOwn && held;
+  const waiting = pendingOwn && held && !isTerminalOutcomePhase(run.status);
   const durableOutcome =
     isTerminalOutcomePhase(run.status) &&
     (!own || sessionIndexesOf(view).ended.has(run.id))
@@ -548,10 +548,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   const unreadable = run.blocked
     ? RUN_BLOCKED_COPY[run.blocked]
     : local.unreadable.find((u) => u.runId === run.id)?.detail;
-  const children = run.childIds.flatMap((childId) => {
-    const child = view.runs.get(childId);
-    return child === undefined ? [] : [child];
-  });
+  const children = run.childIds.flatMap((id) => view.runs.get(id) ?? []);
   const rollup = rollupOf(children);
   const treeUsage = sumUsageStats([
     run.usage,
@@ -569,6 +566,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   const copy = runStatusCopy(run.status, {
     substate: run.substate ?? undefined,
     interrupted,
+    waiting,
   });
   const readOnly = heldElsewhere || unreadable !== undefined;
   const actions = runActions({ ...run, readOnly, group });
