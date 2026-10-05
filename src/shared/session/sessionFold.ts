@@ -79,7 +79,7 @@ import {
   runResumeBlockedMessage,
   runStatusCopy,
 } from '@shared/runs/runStatusDisplay';
-import { isSettledRow, rowHeadline, type TranscriptRow } from '@ui/transcript';
+import { isSettledRow, rowHeadline, type TranscriptRow } from '../transcript';
 import {
   applyRunRow,
   freshRunRows,

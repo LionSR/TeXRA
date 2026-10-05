@@ -1,9 +1,9 @@
 import { defineCommand } from 'citty';
 import { Cause, Effect } from 'effect';
 
-import { formatChatAsMarkdown } from '@agent/export';
 import { listRuns } from '@agent/storage';
 import { type RunId } from '@shared/schemas';
+import { formatChatAsMarkdown } from '@texra/agent/export';
 import { assembleTrace, injectStandaloneTrace } from '@transcript';
 import { formatCliHistoryDeletionSummary } from '@ui/copy/runHistory';
 import { assertNever } from '@utils/core';

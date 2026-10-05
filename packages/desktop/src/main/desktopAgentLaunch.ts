@@ -121,7 +121,7 @@ export const kickoffDesktopSetup = (options: {
         );
       }
       const { buildDesktopSetupRunRequest } = yield* Effect.tryPromise({
-        try: () => import('@controllers/onboarding/setupLaunch'),
+        try: () => import('@texra/controllers/onboarding/setupLaunch'),
         catch: ensureError,
       });
       const request = yield* buildDesktopSetupRunRequest(

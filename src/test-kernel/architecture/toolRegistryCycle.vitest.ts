@@ -11,7 +11,7 @@ import { REPO_ROOT, sourceFilesUnder, toRepoPath } from '../support/repoScan';
 /**
  * Architecture guard: `@tools/registry` imports every registered tool, so any
  * module that reaches it drags the LaTeX, Lean, arxiv and Zotero tool set — and
- * their `src/latex/` dependencies — into its own module closure.
+ * their `packages/texra/src/latex/` dependencies — into its own module closure.
  *
  * A tool module reaching the registry is a cycle, not a dependency: the
  * registry already imports the tool. That cycle used to run
@@ -27,7 +27,7 @@ import { REPO_ROOT, sourceFilesUnder, toRepoPath } from '../support/repoScan';
  * them — so a lazy import does not satisfy this guard.
  */
 
-const TOOL_REGISTRY = 'src/tools/registry.ts';
+const TOOL_REGISTRY = 'packages/texra/src/tools/registry.ts';
 
 /**
  * Tools whose closure may still contain the registry. Empty since the
@@ -40,14 +40,17 @@ const AGENT_LAUNCHING_TOOLS: readonly string[] = [];
 
 /** Domain subsystems no generic tool should have to install. */
 const DOMAIN_PREFIXES = [
-  'src/latex/',
-  'src/tools/arxiv/',
-  'src/tools/lean/',
-  'src/tools/zotero/',
+  'packages/texra/src/latex/',
+  'packages/texra/src/tools/arxiv/',
+  'packages/texra/src/tools/lean/',
+  'packages/texra/src/tools/zotero/',
 ] as const;
 
 function defineToolModules(): string[] {
-  return sourceFilesUnder(`${REPO_ROOT}/src/tools`, { repoRelative: true })
+  return ['src/tools', 'packages/texra/src/tools']
+    .flatMap((dir) =>
+      sourceFilesUnder(`${REPO_ROOT}/${dir}`, { repoRelative: true }),
+    )
     .filter((file) =>
       readFileSync(`${REPO_ROOT}/${file}`, 'utf8').includes('defineTool('),
     )

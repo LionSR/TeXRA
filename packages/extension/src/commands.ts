@@ -7,13 +7,13 @@ import {
   createExtensionCommandActions,
   registerExtensionCommandRegistry,
 } from '@commands/extensionCommandSurface';
-import type { SessionBackend } from '@controllers/session/sessionBackend';
 
 // Local imports - components
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 
 export function registerCommands(

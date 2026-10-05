@@ -20,7 +20,7 @@ import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import type {
   InlineCommentProvider,
   InlineCommentThreadView,
-} from '@tools/comment/InlineCommentTool';
+} from '@texra/tools/comment/InlineCommentTool';
 
 const CONTROLLER_ID = 'texra.inlineComments';
 const CONTROLLER_LABEL = 'TeXRA';

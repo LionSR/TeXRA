@@ -164,43 +164,43 @@
       "name": "DeviceCodeExpired"
     },
     {
-      "file": "src/controllers/modelAccess/subscriptionUsage/codexUsageAdapter.ts",
+      "file": "packages/texra/src/controllers/modelAccess/subscriptionUsage/codexUsageAdapter.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "parseChatGptUsage"
     },
     {
-      "file": "src/controllers/modelAccess/subscriptionUsage/glmCodingPlanUsageAdapter.ts",
+      "file": "packages/texra/src/controllers/modelAccess/subscriptionUsage/glmCodingPlanUsageAdapter.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "parseGlmCodingPlanUsage"
     },
     {
-      "file": "src/controllers/modelAccess/subscriptionUsage/kimiCodeUsageAdapter.ts",
+      "file": "packages/texra/src/controllers/modelAccess/subscriptionUsage/kimiCodeUsageAdapter.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "parseKimiCodeUsage"
     },
     {
-      "file": "src/controllers/onboarding/onboardingFunnel.ts",
+      "file": "packages/texra/src/controllers/onboarding/onboardingFunnel.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "planOnboardingFunnelTransition"
     },
     {
-      "file": "src/replacement/engine.ts",
+      "file": "packages/texra/src/replacement/engine.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "applyReplacements"
     },
     {
-      "file": "src/shared/commands/catalog.ts",
+      "file": "packages/texra/src/shared/commands/catalog.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "commandKeybindings"
     },
     {
-      "file": "src/shared/commands/catalog.ts",
+      "file": "packages/texra/src/shared/commands/catalog.ts",
       "category": "unused",
       "kind": "exports",
       "name": "packageCommandContributions"
@@ -212,19 +212,19 @@
       "name": "prepareToolEditApprovalPrompt"
     },
     {
-      "file": "src/tools/claudeAgent.ts",
+      "file": "packages/texra/src/tools/claudeAgent.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "runStreamedTurn"
     },
     {
-      "file": "src/tools/codex.ts",
+      "file": "packages/texra/src/tools/codex.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "runStreamedTurn"
     },
     {
-      "file": "src/tools/lean/direct/leanServerPool.ts",
+      "file": "packages/texra/src/tools/lean/direct/leanServerPool.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "resolveWorkspaceRoot"

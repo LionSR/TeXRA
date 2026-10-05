@@ -30,7 +30,7 @@ import {
   getCoreSettingDefault,
   type SettingHost,
 } from '@shared/state/stateSettings';
-import type { SetupPlatformShape } from '@tools/setup/platform';
+import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import type { SecretsFailed } from '@texra-ai/llm';
 
 /**

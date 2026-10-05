@@ -25,13 +25,16 @@ vi.mock('@model/copilotRouting', async (original) => ({
 
 // The Models-page repaint discovers the Copilot routes itself; these cases
 // count the discovery the access request makes, so the repaint is inert.
-vi.mock('@controllers/settingsView/SettingsModelSelectionController', () => ({
-  SettingsModelSelectionController: class {
-    buildModelSelectionMessage() {
-      return Effect.succeed({ command: 'updateModelSelection' });
-    }
-  },
-}));
+vi.mock(
+  '@texra/controllers/settingsView/SettingsModelSelectionController',
+  () => ({
+    SettingsModelSelectionController: class {
+      buildModelSelectionMessage() {
+        return Effect.succeed({ command: 'updateModelSelection' });
+      }
+    },
+  }),
+);
 
 vi.mock('@frontend/system/commandUtils', async (original) => ({
   ...(await original<typeof import('@frontend/system/commandUtils')>()),

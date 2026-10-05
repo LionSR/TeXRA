@@ -13,14 +13,14 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { MODEL_AVAILABILITY_STATUS } from '@shared/schemas';
 import {
-  type ModelSelectionItem,
-  type ProviderKeyStatus,
-} from '@shared/settingsView/settingsViewMessages';
-import {
   REASONING_LEVEL_LABELS,
   REASONING_LEVEL_OPTIONS,
 } from '@shared/model/reasoningLabels';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import {
+  type ModelSelectionItem,
+  type ProviderKeyStatus,
+} from '@texra/shared/settingsView/settingsViewMessages';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderKeyStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';

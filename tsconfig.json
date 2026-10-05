@@ -18,7 +18,16 @@
         "./src/shared/*.ts",
         "./src/shared/*/index.ts"
       ],
-      "@ui/*": ["./src/ui/*", "./src/ui/*.ts", "./src/ui/*/index.ts"],
+      "@ui/*": [
+        "./packages/texra/src/ui/*",
+        "./packages/texra/src/ui/*.ts",
+        "./packages/texra/src/ui/*/index.ts"
+      ],
+      "@texra/*": [
+        "./packages/texra/src/*",
+        "./packages/texra/src/*.ts",
+        "./packages/texra/src/*/index.ts"
+      ],
       "@common/webview": ["./packages/extension/src/common/webview/index.ts"],
       "@common/*": [
         "./src/common/*",
@@ -51,9 +60,9 @@
         "./src/logger/*/index.ts"
       ],
       "@telemetry/*": [
-        "./src/telemetry/*",
-        "./src/telemetry/*.ts",
-        "./src/telemetry/*/index.ts"
+        "./packages/texra/src/telemetry/*",
+        "./packages/texra/src/telemetry/*.ts",
+        "./packages/texra/src/telemetry/*/index.ts"
       ],
       "@transcript": ["./src/transcript/index.ts"],
       "@transcript/*": [
@@ -62,9 +71,9 @@
         "./src/transcript/*/index.ts"
       ],
       "@latex/*": [
-        "./src/latex/*",
-        "./src/latex/*.ts",
-        "./src/latex/*/index.ts"
+        "./packages/texra/src/latex/*",
+        "./packages/texra/src/latex/*.ts",
+        "./packages/texra/src/latex/*/index.ts"
       ],
       "@commands/*": [
         "./packages/extension/src/commands/*",
@@ -87,9 +96,9 @@
         "./src/skills/*/index.ts"
       ],
       "@housekeeping/*": [
-        "./src/housekeeping/*",
-        "./src/housekeeping/*.ts",
-        "./src/housekeeping/*/index.ts"
+        "./packages/texra/src/housekeeping/*",
+        "./packages/texra/src/housekeeping/*.ts",
+        "./packages/texra/src/housekeeping/*/index.ts"
       ],
       "@progressView/*": [
         "./packages/extension/src/progressView/*",
@@ -102,9 +111,9 @@
         "./packages/extension/src/settingsView/*/index.ts"
       ],
       "@replacement/*": [
-        "./src/replacement/*",
-        "./src/replacement/*.ts",
-        "./src/replacement/*/index.ts"
+        "./packages/texra/src/replacement/*",
+        "./packages/texra/src/replacement/*.ts",
+        "./packages/texra/src/replacement/*/index.ts"
       ],
       "@tools/*": [
         "./src/tools/*",
@@ -151,6 +160,8 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
+    "packages/texra/src/**/*.ts",
+    "packages/texra/src/**/*.tsx",
     "packages/extension/src/**/*.ts",
     "packages/extension/src/**/*.tsx"
   ],

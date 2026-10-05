@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 
 // Local imports
 import type { TerminalRunResult } from '@hosts/uiHosts';
-import type { SetupPlatformShape } from '@tools/setup/platform';
+import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 
 /**
  * Build a fully stubbed host-varying setup platform for tool unit tests.

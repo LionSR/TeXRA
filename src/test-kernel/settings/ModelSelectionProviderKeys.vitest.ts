@@ -11,7 +11,7 @@ vi.mock('@shared/hostBridge', () => ({
 import type {
   ModelSelectionItem,
   ProviderKeyStatus,
-} from '@shared/settingsView/settingsViewMessages';
+} from '@texra/shared/settingsView/settingsViewMessages';
 import {
   mountComponent,
   useLitComponentTestDom,

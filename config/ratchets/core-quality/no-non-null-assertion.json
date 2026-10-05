@@ -7,7 +7,6 @@
   "src/agent/runtime/childRunLoop.ts": 1,
   "src/agent/runtime/executeAgent.ts": 1,
   "src/agent/runtime/ModelRetryGate.ts": 1,
-  "src/controllers/session/inquiryRecords.ts": 1,
   "src/shared/session/sessionFold.ts": 1,
   "src/shared/session/sessionView.ts": 1,
   "src/shared/session/transcriptState.ts": 2,

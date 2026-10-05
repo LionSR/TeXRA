@@ -9,13 +9,16 @@ import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
   SettingsTargetSchema,
   type SettingsTarget,
-} from '@shared/settingsView/settingsViewMessages';
+} from '@texra/shared/settingsView/settingsViewMessages';
 import {
   commandCatalog,
   settingsTabByCommand,
   type SettingsTabCommandId,
-} from '@shared/commands/catalog';
-import { definedHandler, type CommandHandler } from '@shared/commands/registry';
+} from '@texra/shared/commands/catalog';
+import {
+  definedHandler,
+  type CommandHandler,
+} from '@texra/shared/commands/registry';
 import type { Effect } from 'effect';
 
 /**
@@ -31,7 +34,7 @@ import type { Effect } from 'effect';
  * Catalog ids whose extension registration is driven by the shared
  * `dispatchCommandFromRegistry` handler map below, derived from the
  * `extensionRegistry: true` tag on `commandCatalog` entries
- * (`src/shared/commands/catalog.ts`) rather than a hand-mirrored id list.
+ * (`packages/texra/src/shared/commands/catalog.ts`) rather than a hand-mirrored id list.
  * Adding a new registry-driven command only requires tagging its catalog
  * entry — `EXTENSION_COMMAND_HANDLERS` failing to `satisfy` its `Record<>`
  * constraint below is the compile-time signal that a handler still needs

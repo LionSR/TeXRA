@@ -28,12 +28,12 @@ import {
   type LspResult,
   type PlainGoal,
   type PlainTermGoal,
-} from '@tools/lean/leanTypes';
+} from '@texra/tools/lean/leanTypes';
 import {
   createLeanServerRoster,
   type LeanServerRoster,
-} from '@tools/lean/leanServerRegistry';
-import type { LeanLanguageServicesShape } from '@tools/lean/leanLanguageServices';
+} from '@texra/tools/lean/leanServerRegistry';
+import type { LeanLanguageServicesShape } from '@texra/tools/lean/leanLanguageServices';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 

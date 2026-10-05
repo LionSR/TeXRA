@@ -31,7 +31,7 @@ import {
   scriptStages,
   TALK_TO_AGENT,
   type ScriptCallView,
-} from '@ui/transcript';
+} from '@shared/transcript';
 
 // Local imports - TUI state
 import { type ScriptPopupView } from '../state/cliState';

@@ -6,12 +6,12 @@
 import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
-import type { LatexRecommendedStatus } from '@controllers/settingsView/LatexToolingController';
-import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
-import type { createSettingsViewBody } from '@controllers/settingsView/sharedSettingsCommands';
 import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
+import type { LatexRecommendedStatus } from '@texra/controllers/settingsView/LatexToolingController';
+import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
+import type { createSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
+import { LATEX_WORKSHOP_EXT_ID } from '@texra/shared/constants/latexToolchain';
 import { ensureError } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'latexSettingsHandlers';

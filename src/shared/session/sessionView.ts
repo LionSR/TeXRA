@@ -46,7 +46,7 @@ import {
 } from '@shared/schemas';
 import { isActivePhase, isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { RUN_STATUS_TONE } from '@shared/runs/runStatusDisplay';
-import type { TranscriptRow } from '@ui/transcript';
+import type { TranscriptRow } from '@shared/transcript';
 
 /** Which session (paper) a view is of: the session's storage root. */
 const SessionKeySchema = z.string().min(1);

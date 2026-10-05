@@ -19,7 +19,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import { normalizeToolName } from '@shared/tools/toolDisplayName';
 import type { TeXRAIconName } from '@shared/iconNames';
-import type { ToolRow } from '@ui/transcript';
+import type { ToolRow } from '@shared/transcript';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local imports - formatter helpers

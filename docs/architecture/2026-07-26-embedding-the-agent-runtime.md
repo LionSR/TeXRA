@@ -60,7 +60,7 @@ in place. Nothing is copied into global storage, so there is no bundle-copy
 step to run and no version state key to keep.
 
 Beside that install, a Node root calls `bootstrapHost`
-(`src/controllers/hostBootstrap.ts:75-92`) once, on its own process runtime: it
+(`packages/texra/src/controllers/hostBootstrap.ts:75-92`) once, on its own process runtime: it
 installs the model HTTP dispatcher, the process setting host, the account
 probes, the runtime skill sources, and the first-install disabled-tool seed.
 An embedder that skips it gets a runtime without those, not a broken one.
@@ -70,7 +70,7 @@ to the files in `COMPOSITION_ROOT_FILES` (`eslint.config.mjs`).
 
 ### Feature-parity step — the `lean` layer of `installProcessRuntime`
 
-`src/tools/lean/direct/directLspAdapter.ts`. The Node hosts pass exactly one
+`packages/texra/src/tools/lean/direct/directLspAdapter.ts`. The Node hosts pass exactly one
 layer:
 
 ```ts
@@ -271,7 +271,7 @@ category: every agent runs as a chat, and launch resolution
 (`resolveAgentForLaunch` in `src/agent/index/agentRegistry.ts`) finds the
 agent by name across sources. Running an agent's document task instead
 means opening the run on the document recipe
-(`documentTaskConfig` in `src/agent/output/documentRecipe.ts`).
+(`documentTaskConfig` in `packages/texra/src/agent/output/documentRecipe.ts`).
 
 ---
 
@@ -556,14 +556,14 @@ following classification makes that distinction.
   runtime (`packages/cli/src/runtime/cliProcessRuntime.ts:230`), which also
   builds the agent-directories port
   (`:218-229`). The direct Lean language-server layer
-  (`src/tools/lean/direct/directLspAdapter.ts`) is shipped-feature parity, not a raw-loop requirement; an embedder may pass
+  (`packages/texra/src/tools/lean/direct/directLspAdapter.ts`) is shipped-feature parity, not a raw-loop requirement; an embedder may pass
   another layer. The `memory` and `plan` injections are manifest data
   (`src/tools/plugins.ts`).
 - **`:326-333` — `createNodeWorkspaceRoots(...)`:** Required. The workspace
   roots every session is opened over.
 - **`:370-378` — `bootstrapHost({ host: 'cli', roots, secrets, skills })`:**
   The shared once-per-process install every host runs beside its runtime
-  (`src/controllers/hostBootstrap.ts:75-92`): the model HTTP dispatcher, the
+  (`packages/texra/src/controllers/hostBootstrap.ts:75-92`): the model HTTP dispatcher, the
   process setting host, the account probes, the runtime skill sources, and the
   first-install disabled-tool seed. An embedder that skips it gets a runtime
   without those, not a broken one. The CLI runs it before publishing its roots
@@ -610,7 +610,7 @@ host.
    the injections are manifest data; the process runtime is needed only when
    a run later reads the memory setting
    (`src/tools/plugins.ts`;
-   `src/tools/lean/direct/directLspAdapter.ts:47-52`).
+   `packages/texra/src/tools/lean/direct/directLspAdapter.ts:47-52`).
 2. **The process runtime is once-per-process.** The Lean layer is built with
    it and closed with it; a host passes it exactly where it calls
    `installProcessRuntime` (`src/controllers/session/sessionLayer.ts`).

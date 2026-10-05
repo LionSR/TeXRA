@@ -45,7 +45,6 @@ import { readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { documentTaskConfig } from '@agent/output/documentRecipe';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import { offeredBy } from '@agent/runtime/loop/step';
@@ -100,6 +99,7 @@ import {
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import { launchDetachedSubagent } from '@tools/delegation/subagentRun';

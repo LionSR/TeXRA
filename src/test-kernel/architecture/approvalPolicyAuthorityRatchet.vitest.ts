@@ -38,7 +38,7 @@ const EVALUATOR_CALL_ALLOWLIST = new Set([
 const SEED_CALL_ALLOWLIST = new Set([
   'src/agent/runtime/SessionHandle.ts',
   'packages/cli/src/runtime/executeCli.ts',
-  'src/controllers/settingsView/sharedSettingsCommands.ts',
+  'packages/texra/src/controllers/settingsView/sharedSettingsCommands.ts',
   'packages/cli/src/runtime/approvalAdapter.ts',
   'packages/cli/src/chat/tui/runChatTui.tsx',
   'packages/cli/src/chat/tui/commands/handlers/approvalCommand.ts',
@@ -48,10 +48,10 @@ const SEED_CALL_ALLOWLIST = new Set([
   // The service seeds each project it opens from that project's settings,
   // and `project.policy` is a window's settings change reaching it.
   'packages/cli/src/runtime/cliService.ts',
-  'src/controllers/server/handlers.ts',
+  'packages/texra/src/controllers/server/handlers.ts',
   // A window's settings change reaches its session through its backend:
   // the window's own session, or `project.policy` to the service.
-  'src/controllers/session/sessionBackend.ts',
+  'packages/texra/src/controllers/session/sessionBackend.ts',
 ]);
 
 /**
@@ -63,7 +63,7 @@ const SEED_CALL_ALLOWLIST = new Set([
 const BYPASS_WRITE_ALLOWLIST = new Set([
   'src/agent/runtime/runApprovalQueue.ts',
   'src/agent/runtime/loop/step.ts',
-  'src/controllers/mainView/backend/MainViewRunLaunchController.ts',
+  'packages/texra/src/controllers/mainView/backend/MainViewRunLaunchController.ts',
   // `policy.set`, the one host door, applied with its durable row.
   'src/controllers/session/pendingUnderBypass.ts',
   'src/tools/approval/index.ts',

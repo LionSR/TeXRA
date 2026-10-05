@@ -32,17 +32,17 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 // Test support imports
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import { GitHubAuthError } from '@tools/github/githubClient';
+import { GitHubAuthError } from '@texra/tools/github/githubClient';
 import {
   PollingSourceBase,
   type BasePollSubscriptionState,
   type PollEventListener,
   type PollHookRejected,
-} from '@tools/github/PollingSourceBase';
+} from '@texra/tools/github/PollingSourceBase';
 import {
   RunSubscriptionRegistry,
   type RunSubscriptionRegistryOptions,
-} from '@tools/github/RunSubscriptionRegistry';
+} from '@texra/tools/github/RunSubscriptionRegistry';
 
 // Local file imports
 import { createRecordingHost } from '../progressTestUtils';

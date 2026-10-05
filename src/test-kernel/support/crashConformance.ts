@@ -69,7 +69,6 @@ import { afterEach, beforeEach, describe, expect } from 'vitest';
 import { apiKeySecretName } from '@texra-ai/llm';
 import { refresh } from '@agent/index';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { documentTaskConfig } from '@agent/output/documentRecipe';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { runAgent } from '@agent/runtime/runAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -103,6 +102,7 @@ import {
 } from '@test/support/tempDirPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { generateRunId } from '@utils/core';
 
 const AGENTS = resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/agents');

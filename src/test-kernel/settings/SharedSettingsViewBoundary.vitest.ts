@@ -6,9 +6,9 @@ import { sourceFilesUnder, toRepoPath } from '../support/repoScan';
 
 describe('shared settings-view import boundaries', () => {
   it('does not import controller, agent, model, tool, or auth implementations directly', async () => {
-    const files = sourceFilesUnder('src/shared/settingsView').filter((file) =>
-      file.endsWith('.ts'),
-    );
+    const files = sourceFilesUnder(
+      'packages/texra/src/shared/settingsView',
+    ).filter((file) => file.endsWith('.ts'));
     const directImplementationImport =
       /(?:from\s+|import\s+|import\s*\(\s*|require\s*\(\s*)['"](?:@controllers\/|@agent\/|@model\/|@tools\/|@auth\/)/;
     const offenders: string[] = [];

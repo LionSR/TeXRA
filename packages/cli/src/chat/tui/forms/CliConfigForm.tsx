@@ -7,16 +7,16 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type SurfacedSettingEntry } from '@shared/state/stateSettings';
-import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
 import {
   readSetting,
   type SettingsStores,
 } from '@shared/config/settingsAccess';
-import { applyStateSettingUpdate } from '@shared/settingsView/handlers/stateSettingWrite';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
 import {
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
-} from '@tools/github/githubAuth';
+} from '@texra/tools/github/githubAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { bumpCodexPreferenceVersion } from '../state/cliState';

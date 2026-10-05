@@ -60,7 +60,7 @@ import {
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import { runActionRefusal } from '@shared/session/runActions';
-import { recordInquiryDecision } from '@tools/inquiry/inquiryActions';
+import { recordInquiryDecision } from '@texra/tools/inquiry/inquiryActions';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

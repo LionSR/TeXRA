@@ -20,7 +20,7 @@ Treat these as intentional by default; removing an unused method _inside_ one ca
 
 - The checked-in architectural ratchets under `config/ratchets/` (listed in `CLAUDE.md` → "Layout"). Baselines freeze remaining edges or public surface — they shrink, never widen. Proposing to _shrink_ one is a good candidate; proposing to delete the ratchet mechanism is not.
 - The frozen `@agent/*` SDK surface (`packages/harness/`). There is no `@texra/core` workspace package (deleted by #7099); do not propose recreating it.
-- The one run program (`src/agent/runtime/loop/toolUse.ts`; a document task is a run of it on the recipe script in `src/agent/output/documentRecipe.ts`) over the run history. There is deliberately no flow engine, cursor, or services bag — do not propose reintroducing one, and do not propose a second writer of the run history.
+- The one run program (`src/agent/runtime/loop/toolUse.ts`; a document task is a run of it on the recipe script in `packages/texra/src/agent/output/documentRecipe.ts`) over the run history. There is deliberately no flow engine, cursor, or services bag — do not propose reintroducing one, and do not propose a second writer of the run history.
 - The four hosts (extension, desktop, CLI, trace-viewer) and the platform-ports composition root. Desktop has had no public release, which makes desktop state a _simplification_ source (no migration machinery allowed), not a target.
 - The five browser-reachable `@utils/*` modules (the `BROWSER_SAFE_UTILS` allowlist in `eslint.config.mjs`). The constraint is intentional; reducing the reachable set is welcome, adding Node built-ins to it is a regression.
 
@@ -74,7 +74,7 @@ For every symbol or behavior, classify consumers before writing:
 - Non-production corpus: `src/test-kernel/`, docs, snapshots, comments.
 - Ambiguous corpus: `scripts/` and `docs/scripts/` — some are release/CI tooling that counts as production. Inspect usage before classifying.
 
-Use `rg` first: the exact symbol, `.name(` and `name(`, command IDs and config keys as string literals, event names, and any wire strings. VS Code commands are wired through `packages/extension/package.json` contributions and `packages/extension/src/commands.ts`; settings keys are declared by owner (`src/shared/state/stateSettings.ts`, `src/shared/settingsView/texraSettings.ts`, or a plugin's `settings`) and consumed by the native settings view. Grep those boundaries as well as imports. `npm run check:dead-code-ratchet` (knip) can help, but it is not a substitute for reading public interfaces, dynamic event names, tests, and docs. When a ratchet baseline lists the symbol, the find is proving the baseline entry can shrink, not discovering the dead code.
+Use `rg` first: the exact symbol, `.name(` and `name(`, command IDs and config keys as string literals, event names, and any wire strings. VS Code commands are wired through `packages/extension/package.json` contributions and `packages/extension/src/commands.ts`; settings keys are declared by owner (`src/shared/state/stateSettings.ts`, `packages/texra/src/shared/settingsView/texraSettings.ts`, or a plugin's `settings`) and consumed by the native settings view. Grep those boundaries as well as imports. `npm run check:dead-code-ratchet` (knip) can help, but it is not a substitute for reading public interfaces, dynamic event names, tests, and docs. When a ratchet baseline lists the symbol, the find is proving the baseline entry can shrink, not discovering the dead code.
 
 Reject or downgrade a candidate when:
 

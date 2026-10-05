@@ -22,9 +22,6 @@ import {
 import stripAnsi from 'strip-ansi';
 
 import { fullTranscriptEntryLayout } from '@cli/chat/tui/panes/transcriptEntryLayout';
-import { WebviewSessions } from '@controllers/session/webviewSessionLayer';
-import type { ServiceClient } from '@controllers/server/client';
-import type { TaskSummary } from '@controllers/server/protocol';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { aggregateId, type RunOutcome } from '@shared/schemas';
 import type {
@@ -32,6 +29,9 @@ import type {
   RequestErrorWire,
 } from '@shared/session/sessionFrames';
 import type { RunView, SessionView } from '@shared/session/sessionView';
+import type { TaskSummary } from '@texra/controllers/server/protocol';
+import type { ServiceClient } from '@texra/controllers/server/client';
+import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer';
 
 import { writeNdjsonStdout, writeTextStdout } from './logSinks';
 

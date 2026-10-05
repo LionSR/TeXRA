@@ -5,12 +5,12 @@ import { Effect, type FileSystem, type Path } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime';
-import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import type { RunId } from '@shared/schemas';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { toolEditApprovalRequest } from '../agent/progressTestUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

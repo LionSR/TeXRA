@@ -26,7 +26,7 @@ import type {
   LatexdiffRow,
   MissingOutputsRow,
   StatisticsRow,
-} from '@ui/transcript';
+} from '@shared/transcript';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { getBasename } from '@utils/core';
 

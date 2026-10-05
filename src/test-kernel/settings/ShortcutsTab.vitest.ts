@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { keyboardEventToAccelerator } from '@shared/commands/shortcutPreferences';
+import { keyboardEventToAccelerator } from '@texra/shared/commands/shortcutPreferences';
 
 describe('shortcuts-tab', () => {
   it('normalizes customizable desktop key chords', () => {

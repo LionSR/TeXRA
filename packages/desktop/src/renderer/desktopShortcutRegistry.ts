@@ -2,19 +2,19 @@ import type {
   DesktopShortcutEntry,
   DesktopShortcutOverrides,
   DesktopShortcutService,
-} from '@shared/commands/shortcutPreferences';
+} from '@texra/shared/commands/shortcutPreferences';
 import {
   DESKTOP_SHORTCUT_STORAGE_KEY,
   DesktopShortcutOverridesSchema,
   installDesktopShortcutService,
   keyboardEventToAccelerator,
-} from '@shared/commands/shortcutPreferences';
+} from '@texra/shared/commands/shortcutPreferences';
 
 import {
   toElectronAccelerator,
   type DesktopPlatform,
-} from '@shared/commands/accelerators';
-import { commandCatalogById } from '@shared/commands/catalog';
+} from '@texra/shared/commands/accelerators';
+import { commandCatalogById } from '@texra/shared/commands/catalog';
 import {
   dispatchDesktopCommand,
   getDesktopCommandMenuEntries,

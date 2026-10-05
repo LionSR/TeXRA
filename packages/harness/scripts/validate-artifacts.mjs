@@ -38,9 +38,11 @@ for (const forbidden of [
     throw new Error(`Forbidden declaration text remains: ${forbidden}`);
   }
 }
+// Specifier positions only: a service key such as `'@texra/platform/AppState'`
+// is a string, not an import of the `@texra/*` alias.
 for (const alias of internalAliases) {
   const quotedAlias = new RegExp(
-    `['"]${alias.replaceAll('/', '\\/')}(?:/|['"])`,
+    `(?:\\bfrom\\s*|\\bimport\\s*\\(\\s*|\\bimport\\s+)['"]${alias.replaceAll('/', '\\/')}(?:/|['"])`,
   );
   if (quotedAlias.test(declarationText)) {
     throw new Error(`Unresolved internal declaration alias remains: ${alias}`);

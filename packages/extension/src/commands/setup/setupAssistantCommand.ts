@@ -6,8 +6,6 @@ import { SubscriptionRef } from 'effect';
 
 import { AgentConfigSchema, type SessionHandle } from '@agent/runtime';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
-import type { SessionBackend } from '@controllers/session/sessionBackend';
-import { SETUP_INSTRUCTION } from '@controllers/onboarding/setupLaunch';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
@@ -15,10 +13,6 @@ import {
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  hasUsableSetupCredential,
-  resolveSetupLaunchModel,
-} from '@model/setupCredentialAccess';
 import type { StateReadFailed, StateWriteFailed } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -27,6 +21,12 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import { agentName, type RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { SETUP_INSTRUCTION } from '@texra/controllers/onboarding/setupLaunch';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
+import {
+  hasUsableSetupCredential,
+  resolveSetupLaunchModel,
+} from '@texra/model/setupCredentialAccess';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

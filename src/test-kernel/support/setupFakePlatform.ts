@@ -2,8 +2,8 @@ import {
   HOST_BRIDGE_API_KEY,
   type HostBridgeApi,
 } from '@shared/hostBridgeTypes';
-import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
 import { installSettingsCatalog } from '@shared/state/stateSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 import { createFakeHost, installFakeHost } from './setupPlatform';
 

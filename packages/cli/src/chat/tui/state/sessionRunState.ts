@@ -1,9 +1,9 @@
 import { computed, signal } from '@lit-labs/signals';
 
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import type { SessionBackend } from '@controllers/session/sessionBackend';
 import { RUN_PHASE, type RunPhase, type RunId } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 
 import { registerCliStateResetHook } from './cliState';
 import { runPhaseOf, runViewOf, sessionView } from './sessionView';

@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   initCliPlatform: vi.fn(),
 }));
 
-vi.mock('@model/setupCredentialAccess', () => ({
+vi.mock('@texra/model/setupCredentialAccess', () => ({
   hasUsableSetupCredential: mocks.hasUsableSetupCredential,
 }));
 

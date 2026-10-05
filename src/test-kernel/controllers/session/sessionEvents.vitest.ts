@@ -68,7 +68,6 @@ import {
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionGraph';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 import {
   databaseLayer,
   globalDatabaseLayer,
@@ -125,7 +124,8 @@ import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import '@test/support/sessionGraphTestSetup';
 import { identityReads } from '@test/support/sessionGraphInstall';
 import { REPO_ROOT } from '@test/support/repoScan';
-import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
+import { inquiryRecordsLayer } from '@texra/controllers/session/inquiryRecords';
+import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** A second OS process's writer: this build's `Database` over the store at
@@ -203,11 +203,11 @@ const leanBuilds = vi.hoisted(() => ({
   count: 0,
   state: undefined as StateStore | undefined,
 }));
-vi.mock('@tools/lean/direct/directLspAdapter', async () => {
+vi.mock('@texra/tools/lean/direct/directLspAdapter', async () => {
   const { Effect, Layer } = await import('effect');
   const { AppState } = await import('@platform/interfaces');
   const { LeanLanguageServices } =
-    await import('@tools/lean/leanLanguageServices');
+    await import('@texra/tools/lean/leanLanguageServices');
   return {
     directLeanLanguageServices: () =>
       Layer.effect(

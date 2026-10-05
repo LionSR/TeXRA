@@ -21,10 +21,6 @@ import {
 } from '@texra-ai/llm';
 import { cliExternalOpener } from '@cli/runtime/hosts/cliExternalOpener';
 // Local imports - controllers
-import {
-  ProviderKeyActionFailed,
-  SettingsProfileKeyController,
-} from '@controllers/settingsView/SettingsProfileKeyController';
 // Local imports - event bus
 import { onAppSignal } from '@eventBus/AppSignals';
 // Local imports - hosts
@@ -35,6 +31,10 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 // Local imports - shared
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import {
+  ProviderKeyActionFailed,
+  SettingsProfileKeyController,
+} from '@texra/controllers/settingsView/SettingsProfileKeyController';
 // Local imports - utils
 import {
   getProviderDisplayName,

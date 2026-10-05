@@ -21,9 +21,9 @@ import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   type SubscriptionUsageSnapshots,
 } from '@shared/schemas';
-import { type CopilotRouteInfo } from '@shared/settingsView/settingsViewMessages';
 import type { SubscriptionAuthStatuses } from '@shared/model/subscriptionAuth';
-import { TickerController } from '@shared/litControllers/TickerController';
+import { type CopilotRouteInfo } from '@texra/shared/settingsView/settingsViewMessages';
+import { TickerController } from '@texra/shared/litControllers/TickerController';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';

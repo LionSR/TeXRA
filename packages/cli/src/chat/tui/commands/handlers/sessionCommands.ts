@@ -25,11 +25,11 @@ import {
   appendLocalNotice,
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
-import type { SessionBackend } from '@controllers/session/sessionBackend';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import { goalStateOf } from '@shared/plugins/goal';
 import { isLiveRun } from '@shared/session/sessionView';
 import type { RunId } from '@shared/schemas';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { interruptedTasks } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { formatResultCount } from '@utils/text/stringUtils';

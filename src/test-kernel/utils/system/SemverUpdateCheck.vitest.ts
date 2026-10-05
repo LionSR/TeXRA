@@ -5,11 +5,11 @@ import { it as effectIt } from '@effect/vitest';
 import { Effect, Exit, Fiber, FileSystem, Layer } from 'effect';
 import { TestClock } from 'effect/testing';
 import { globalDatabaseLayer } from '@controllers/session/Database';
-import { updateCheckRecordsLayer } from '@controllers/session/updateCheckRecords';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
 import { runDailyUpdateCheck } from '@utils/system/updateCheck';
 
 describe('runDailyUpdateCheck', () => {

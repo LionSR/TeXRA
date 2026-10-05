@@ -16,21 +16,10 @@ import {
 } from 'effect';
 
 import { openSessionEffect, type SessionHandle } from '@agent/runtime';
-import { bootstrapHost } from '@controllers/hostBootstrap';
 import {
   openProjectStateStore,
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
-import {
-  ensureService,
-  probeService,
-  spawnService,
-  type ServiceConnection,
-  type ServiceUnavailable,
-} from '@controllers/server/client';
-import { servicePaths } from '@controllers/server/discovery';
-import type { ServiceProjects } from '@controllers/server/handlers';
-import type { ServiceInfo } from '@controllers/server/protocol';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { setLogSink, silentLogSink, writeLogLine } from '@logger/logSink';
 import { JsonStore } from '@platform/defaults/jsonStore';
@@ -52,6 +41,17 @@ import type {
   ProjectDatabases,
 } from '@shared/session/database';
 import { ownerIdentity, type OwnerId } from '@shared/schemas';
+import type { ServiceInfo } from '@texra/controllers/server/protocol';
+import type { ServiceProjects } from '@texra/controllers/server/handlers';
+import { servicePaths } from '@texra/controllers/server/discovery';
+import {
+  ensureService,
+  probeService,
+  spawnService,
+  type ServiceConnection,
+  type ServiceUnavailable,
+} from '@texra/controllers/server/client';
+import { bootstrapHost } from '@texra/controllers/hostBootstrap';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { envFlag } from '@utils/system/envFlags';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';

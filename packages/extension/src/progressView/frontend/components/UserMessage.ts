@@ -22,7 +22,7 @@ import {
 } from '@shared/subagentFollowup';
 import type { ScriptDeliverySummary } from '@shared/schemas';
 import { DELIVERY_TAGS } from '@shared/deliveryTags';
-import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
+import { CopyButtonController } from '@texra/shared/litControllers/CopyButtonController';
 import { designTokens } from '@ui/styles';
 import { buttonStyles, focusRingStyles } from '@ui/styles/controlStyles';
 import { markdownStyles } from '@ui/styles/markdownStyles';

@@ -6,8 +6,6 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
-import { createHostSnapshotSource } from '@controllers/session/hostSnapshotSource';
-import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import { createDesktopHostRequests } from '@desktop/main/desktopHostRequests';
 import { createDesktopFileSelection } from '@desktop/main/desktopFileSelection';
 import { withProcessServices } from '@platform/processRuntime';
@@ -24,6 +22,8 @@ import {
 } from '@test/support/tempDirPlatform';
 import { createFakeHost, installFakeHost } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
+import { createHostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { createExternalLocation } from '@utils/files/fileLocation';
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';

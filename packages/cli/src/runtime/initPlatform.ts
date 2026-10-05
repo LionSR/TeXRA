@@ -9,7 +9,6 @@ import {
   tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime';
-import { bootstrapHost } from '@controllers/hostBootstrap';
 import {
   openProjectStateStore,
   openRepoStateStore,
@@ -37,6 +36,7 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
+import { bootstrapHost } from '@texra/controllers/hostBootstrap';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { ensureError } from '@utils/errors/errorMessage';
 

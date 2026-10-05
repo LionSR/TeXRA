@@ -5,12 +5,12 @@ import { type CliSignInProgress } from '@cli/runtime/signInUrl';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalNotice } from '@cli/chat/tui/state/transcript';
-import type { SessionBackend } from '@controllers/session/sessionBackend';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type RunId } from '@shared/schemas';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import type { Effect } from 'effect';
 
 /**

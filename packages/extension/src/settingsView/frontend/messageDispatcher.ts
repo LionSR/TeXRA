@@ -13,7 +13,7 @@ import {
   type SettingsSectionName,
   type SettingsTabPanelName,
   type SettingsViewOutboundHandlerRegistry,
-} from '@shared/settingsView/settingsViewMessages';
+} from '@texra/shared/settingsView/settingsViewMessages';
 
 import {
   activePresetId,

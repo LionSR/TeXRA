@@ -3,7 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { planToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
+import { planToolTerminalAction } from '@texra/controllers/settingsView/ToolDashboardData';
 
 const mocks = vi.hoisted(() => ({
   packageManager: null as 'brew' | 'apt' | 'scoop' | null,

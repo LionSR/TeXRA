@@ -31,7 +31,7 @@ vi.mock('@tools/memory/memoryFileSystem', async (importOriginal) => {
 });
 
 // Imported after vi.mock so the mocked dependencies are in place.
-import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
+import { SettingsMemoryController } from '@texra/controllers/settingsView/SettingsMemoryController';
 import { StorageFs } from '@platform/rootedFs';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';

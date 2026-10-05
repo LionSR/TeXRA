@@ -1,0 +1,619 @@
+/**
+ * Unified agent-facing tool for managing GitHub activity subscriptions.
+ *
+ * Surface mirrors the memory tool: a single tool with a `command`
+ * discriminator and a `path` that addresses the subscription target.
+ * Path form mirrors GitHub's REST URL shape.
+ *
+ *   command='subscribe',     path='owner/repo'              → repo-wide
+ *   command='subscribe',     path='owner/repo/pulls/42'     → per-PR
+ *   command='subscribe',     path='owner/repo/issues/42'    → per-issue
+ *   command='unsubscribe',   path=…                         → mirror
+ *   command='list'                                          → active subs
+ *   command='find_current'                                  → branch → path
+ *
+ * The hierarchy is encoded in the path:
+ * - `owner/repo` is coarse (orchestrator-friendly).
+ * - `owner/repo/pulls/N` and `owner/repo/issues/N` are nuanced (worker-friendly).
+ */
+
+import { Effect } from 'effect';
+import { z } from 'zod';
+
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { requireToolRun } from '@agent/runtime/RunCall';
+import { Secrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
+import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
+import { parseWorkingDirectory } from '@tools/pathResolution';
+import { nullishWithDefault } from '@tools/core/inputSchema';
+import { executed } from '@tools/core/result';
+import { defineTool } from '@tools/core/define';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+import { executeCommand } from '@utils/system/execUtils';
+
+import {
+  DEFAULT_CHECK_ANNOTATION_LEVEL,
+  type GitHubCheckAnnotationLevel,
+} from './checkAnnotationLevels';
+import { issueRef, prRef } from './githubPaths';
+import { getGitHubToken } from './githubAuth';
+import { ghGet, type GitHubServices } from './githubClient';
+import {
+  MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS,
+  MAX_CONCURRENT_PR_SUBSCRIPTIONS,
+  MAX_CONCURRENT_REPO_SUBSCRIPTIONS,
+  GITHUB_POLL_INTERVAL_MS,
+} from './prSubscriptionConstants';
+import { GitHubSubscriptions } from './subscriptionBindings';
+import { parseGitHubSlug } from './githubSlug';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+import type { GhIssue } from './prTypes';
+
+/**
+ * What each level brings in, keyed by level. Declared above the schema because
+ * the schema's own `describe` reads it at module load.
+ */
+const ANNOTATION_LEVEL_DESCRIPTIONS: Record<
+  GitHubCheckAnnotationLevel,
+  string
+> = {
+  failure: 'failures only',
+  warning: 'warnings and failures',
+  notice: 'notices, warnings, and failures',
+};
+
+/** The default level's own description, for the two model-facing strings. */
+const DEFAULT_ANNOTATION_LEVEL_DESCRIPTION =
+  ANNOTATION_LEVEL_DESCRIPTIONS[DEFAULT_CHECK_ANNOTATION_LEVEL];
+
+const SUBSCRIPTION_PATH_DESCRIPTION =
+  'Subscription target, mirroring GitHub\'s REST URL shape: "owner/repo" (repo-wide, coarse), "owner/repo/pulls/N" (per-PR, nuanced), or "owner/repo/issues/N" (per-issue).';
+
+// Branches stay `looseObject`: provider schema flattening advertises one
+// object across commands, and OpenAI-compatible providers null-fill the other
+// branches' fields.
+const GitHubSubscriptionInputSchema = z.discriminatedUnion('command', [
+  z.looseObject({
+    command: z.literal('subscribe').describe('Start watching the path.'),
+    path: z.string().describe(SUBSCRIPTION_PATH_DESCRIPTION),
+    /**
+     * Lowest inline check-annotation level to send for PR subscriptions.
+     * Defaults to `DEFAULT_CHECK_ANNOTATION_LEVEL`; use "warning" to include
+     * warnings, or "notice" to include every annotation GitHub reports.
+     */
+    min_annotation_level: nullishWithDefault(
+      z.enum(['failure', 'warning', 'notice']),
+      DEFAULT_CHECK_ANNOTATION_LEVEL,
+    ).describe(
+      `Lowest inline check-annotation level for PR subscriptions. Defaults to ${DEFAULT_ANNOTATION_LEVEL_DESCRIPTION}; "warning" includes warnings, "notice" includes every annotation.`,
+    ),
+  }),
+  z.looseObject({
+    command: z.literal('unsubscribe').describe('Stop watching the path.'),
+    path: z.string().describe(SUBSCRIPTION_PATH_DESCRIPTION),
+  }),
+  z.looseObject({
+    command: z
+      .literal('list')
+      .describe('List active subscriptions on this run.'),
+  }),
+  z.looseObject({
+    command: z
+      .literal('find_current')
+      .describe(
+        'Resolve the current git branch to its PR path ("owner/repo/pulls/N").',
+      ),
+    /**
+     * Working directory for `find_current` to resolve the current branch's PR.
+     * Defaults to the agent's working directory.
+     */
+    working_directory: z
+      .string()
+      .nullish()
+      .describe(
+        "Working directory to resolve the current branch's PR. Defaults to the agent's working directory.",
+      ),
+  }),
+]);
+
+type GitHubSubscriptionInput = z.infer<typeof GitHubSubscriptionInputSchema>;
+type SubscribeInput = Extract<
+  GitHubSubscriptionInput,
+  { command: 'subscribe' }
+>;
+type UnsubscribeInput = Extract<
+  GitHubSubscriptionInput,
+  { command: 'unsubscribe' }
+>;
+type FindCurrentInput = Extract<
+  GitHubSubscriptionInput,
+  { command: 'find_current' }
+>;
+
+interface ParsedRepoPath {
+  kind: 'repo';
+  owner: string;
+  repo: string;
+}
+interface ParsedPRPath {
+  kind: 'pr';
+  owner: string;
+  repo: string;
+  pullNumber: number;
+}
+interface ParsedIssuePath {
+  kind: 'issue';
+  owner: string;
+  repo: string;
+  issueNumber: number;
+}
+type ParsedPath = ParsedRepoPath | ParsedPRPath | ParsedIssuePath;
+
+const PATH_RE = /^([^/\s]+)\/([^/\s]+)(?:\/(pulls|issues)\/(\d+))?$/;
+
+const requireToken = (): Effect.Effect<void, Error, Secrets> =>
+  Effect.gen(function* () {
+    const secrets = yield* Secrets;
+    const token = yield* getGitHubToken(secrets);
+    if (!token) {
+      return yield* Effect.fail(
+        new ToolError(
+          'No GitHub token configured. In the CLI, open /config → GitHub token. In VS Code, use TeXRA Settings → General → "Set token". Or export GITHUB_TOKEN or GH_TOKEN. Needs `repo` scope for private repos, `public_repo` for public.',
+        ),
+      );
+    }
+  });
+
+/** `owner/repo` for any parsed target. */
+function slugOf(target: { owner: string; repo: string }): string {
+  return `${target.owner}/${target.repo}`;
+}
+
+const PATH_FORMS =
+  '"owner/repo", "owner/repo/pulls/N", or "owner/repo/issues/N"';
+
+function requirePath(input: {
+  command: string;
+  path: string;
+}): Effect.Effect<ParsedPath, ToolError> {
+  const raw = input.path;
+  if (!raw) {
+    return Effect.fail(
+      new ToolError(
+        `command="${input.command}" requires a path (${PATH_FORMS}).`,
+      ),
+    );
+  }
+  const match = PATH_RE.exec(raw.trim());
+  if (!match) {
+    return Effect.fail(
+      new ToolError(`Invalid path "${raw}". Expected ${PATH_FORMS}.`),
+    );
+  }
+  const [, owner, repo, kind, numStr] = match;
+  if (kind === undefined) return Effect.succeed({ kind: 'repo', owner, repo });
+  const n = Number(numStr);
+  if (!Number.isFinite(n) || n <= 0) {
+    return Effect.fail(new ToolError(`Invalid number in path "${raw}".`));
+  }
+  return Effect.succeed(
+    kind === 'pulls'
+      ? { kind: 'pr', owner, repo, pullNumber: n }
+      : { kind: 'issue', owner, repo, issueNumber: n },
+  );
+}
+
+/** Shared body sentence describing what a PR subscription delivers. */
+function prSubscriptionActivitySentence(
+  annotationLevelDescription: string,
+): string {
+  return `New comments, reviews, line comments, failed CI checks, inline check annotations (${annotationLevelDescription} pinned to file:line), and mergeable_state transitions (merge conflict appeared / resolved) arrive as <github-webhook-activity> follow-ups.`;
+}
+
+const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
+  input: SubscribeInput,
+  runId: RunId,
+  session: SessionHandle,
+) {
+  yield* requireToken();
+  const subscriptions = yield* GitHubSubscriptions;
+  const target = yield* requirePath(input);
+  const minAnnotationLevel = input.min_annotation_level;
+  const annotationLevelDescription =
+    ANNOTATION_LEVEL_DESCRIPTIONS[minAnnotationLevel];
+  if (target.kind === 'repo') {
+    const created = yield* subscriptions.repo.bind(runId, target, session);
+    const slug = slugOf(target);
+    return executed(
+      created
+        ? `Subscribed to repo ${slug}. PR opens/closes/merges, conversation comments on PRs and issues, inline review comments, and newly-detected merge conflicts on open PRs arrive as <github-webhook-activity> follow-ups. Each event uses GitHub's URL form (${slug}/pulls/N or ${slug}/issues/N): pass that path back to command="subscribe" to delegate a worker.`
+        : `Already subscribed to repo ${slug}. Activity continues until command="unsubscribe".`,
+      created
+        ? `Subscribed to repo ${slug}`
+        : `Already subscribed to repo ${slug}`,
+    );
+  }
+  if (target.kind === 'pr') {
+    const created = yield* subscriptions.pr.bind(
+      runId,
+      {
+        ...target,
+        minAnnotationLevel,
+      },
+      session,
+    );
+    const slug = prRef(slugOf(target), target.pullNumber);
+    return executed(
+      created
+        ? `Subscribed to ${slug}. ${prSubscriptionActivitySentence(annotationLevelDescription)} Auto-unsubscribes on PR close/merge.`
+        : `Already subscribed to ${slug}. Inline check annotation filter is now ${annotationLevelDescription}. Activity continues until command="unsubscribe" or the PR closes.`,
+      created ? `Subscribed to ${slug}` : `Already subscribed to ${slug}`,
+    );
+  }
+  // The path "owner/repo/issues/N" is ambiguous: the /issues/comments
+  // endpoint surfaces both PR conversation comments and plain issue
+  // comments, and the repo poller emits /issues/N for the unified case.
+  // A worker following that literal path would land on IssuePollingSource
+  // even when N is actually a PR — losing reviews, line comments, CI.
+  // If either source already knows the entity's type (because some other
+  // run is already subscribed), skip the disambiguation GET and bind
+  // directly. The bind itself MUST still run — it's per-run and the
+  // binder dedupes the (runId, key) pair correctly. Mirrors GitHub's
+  // own /issues/N → /pull/N redirect behavior on github.com.
+  const issueSlug = issueRef(slugOf(target), target.issueNumber);
+  const prSlug = prRef(slugOf(target), target.issueNumber);
+  const knownPR = subscriptions.pr.source.has(prSlug);
+  const knownIssue = !knownPR && subscriptions.issue.source.has(issueSlug);
+  const isPR =
+    knownPR ||
+    (!knownIssue &&
+      (yield* resolveIssueIsPR(target.owner, target.repo, target.issueNumber)));
+
+  if (isPR) {
+    const created = yield* subscriptions.pr.bind(
+      runId,
+      {
+        owner: target.owner,
+        repo: target.repo,
+        pullNumber: target.issueNumber,
+        minAnnotationLevel,
+      },
+      session,
+    );
+    let summary: string;
+    if (!created) {
+      summary = `Already subscribed to ${prSlug}`;
+    } else if (!knownPR) {
+      summary = `Subscribed to ${prSlug} (was /issues/${target.issueNumber}; resolved to PR)`;
+    } else {
+      summary = `Subscribed to ${prSlug}`;
+    }
+    return executed(
+      created
+        ? `${prSlug} is a PR. ${prSubscriptionActivitySentence(annotationLevelDescription)} Auto-unsubscribes on close/merge.`
+        : `Already subscribed to ${prSlug}. Inline check annotation filter is now ${annotationLevelDescription}.`,
+      summary,
+    );
+  }
+  const created = yield* subscriptions.issue.bind(runId, target, session);
+  return executed(
+    created
+      ? `Subscribed to ${issueSlug}. New comments and state transitions (closed / reopened) arrive as <github-webhook-activity> follow-ups. The subscription stays active across close so reopens are caught: call command="unsubscribe" to release the slot.`
+      : `Already subscribed to ${issueSlug}. Activity continues until command="unsubscribe".`,
+    created
+      ? `Subscribed to ${issueSlug}`
+      : `Already subscribed to ${issueSlug}`,
+  );
+});
+
+/** The 200 body of an unconditional GET, or a ToolError naming the status. */
+const ghGetOk = <T>(
+  path: string,
+  failure = (status: number) => `Unexpected GitHub response status: ${status}`,
+): Effect.Effect<T, Error, GitHubServices> =>
+  Effect.flatMap(ghGet<T>(path), (res) =>
+    res.status === 200
+      ? Effect.succeed(res.data)
+      : Effect.fail(new ToolError(failure(res.status))),
+  );
+
+/**
+ * Returns true iff the given issue/PR number resolves to a PR. One GET to
+ * `/repos/{o}/{r}/issues/{n}`; the response object has a `pull_request`
+ * field iff this is actually a PR. Fails with a ToolError on non-200.
+ */
+const resolveIssueIsPR = (
+  owner: string,
+  repo: string,
+  number: number,
+): Effect.Effect<boolean, Error, GitHubServices> =>
+  Effect.map(
+    ghGetOk<GhIssue>(
+      `/repos/${owner}/${repo}/issues/${number}`,
+      (status) =>
+        `Failed to resolve ${owner}/${repo}/issues/${number}: GitHub returned status ${status}. ` +
+        `Verify the number exists and the repo is accessible.`,
+    ),
+    (issue) => issue.pull_request != null,
+  );
+
+const execUnsubscribe = Effect.fn('GitHubSubscriptionTool.unsubscribe')(
+  function* (input: UnsubscribeInput, runId: RunId) {
+    const subscriptions = yield* GitHubSubscriptions;
+    const target = yield* requirePath(input);
+    const slug = slugOf(target);
+    let removed: boolean;
+    let label: string;
+    if (target.kind === 'repo') {
+      removed = subscriptions.repo.unbind(runId, target);
+      label = `repo ${slug}`;
+    } else if (target.kind === 'pr') {
+      removed = subscriptions.pr.unbind(runId, target);
+      label = prRef(slug, target.pullNumber);
+    } else {
+      // Symmetric to subscribe: a /issues/N path may have been re-routed to
+      // a PR subscription. Try both — whichever owns it wins.
+      const issueRemoved = subscriptions.issue.unbind(runId, target);
+      const prRemoved = subscriptions.pr.unbind(runId, {
+        owner: target.owner,
+        repo: target.repo,
+        pullNumber: target.issueNumber,
+      });
+      removed = issueRemoved || prRemoved;
+      label = issueRef(slug, target.issueNumber);
+    }
+    return {
+      status: 'executed',
+      summary: removed
+        ? `Unsubscribed from ${label}`
+        : `Was not subscribed to ${label}`,
+    } satisfies ToolResult;
+  },
+);
+
+const execList = Effect.fn('GitHubSubscriptionTool.list')(function* (
+  runId: RunId,
+) {
+  const subscriptions = yield* GitHubSubscriptions;
+  const keysBoundToRun = (
+    bindings: ReadonlyArray<{ key: string; runIds: readonly string[] }>,
+  ): string[] =>
+    bindings.filter((b) => b.runIds.includes(runId)).map((b) => b.key);
+  const all = [
+    ...keysBoundToRun(subscriptions.repo.list()),
+    ...keysBoundToRun(subscriptions.pr.list()),
+    ...keysBoundToRun(subscriptions.issue.list()),
+  ];
+  if (all.length === 0) {
+    return executed(
+      'No active subscriptions on this run.',
+      'No active subscriptions on this run.',
+    );
+  }
+  return executed(
+    all.map((k) => `- ${k}`).join('\n'),
+    `${all.length} active subscription(s).`,
+  );
+});
+
+const gitInDir = (
+  args: string[],
+  cwd: string,
+  settings: SettingsStores,
+): Effect.Effect<string, ToolError, ChildProcessSpawner> =>
+  Effect.flatMap(
+    // `executeCommand` never fails — a failed `git` is a result with
+    // `success: false`, which the flatMap below turns into the tool's own
+    // error. Interrupting the fiber tears the spawn down.
+    executeCommand(['git', ...args], {
+      cwd,
+      // The calling session's slots, carried from the tool call.
+      settings,
+      timeout: 10_000,
+      channel: 'github_subscription',
+    }),
+    (result) =>
+      result.success
+        ? Effect.succeed(result.stdout.trim())
+        : Effect.fail(
+            new ToolError(
+              result.stderr || `git ${args.join(' ')} failed with no stderr.`,
+            ),
+          ),
+  );
+
+interface OpenPullSummary {
+  number: number;
+  title?: string;
+  head?: { ref?: string };
+}
+
+const getDefaultBranch = (
+  owner: string,
+  repo: string,
+): Effect.Effect<string, Error, GitHubServices> =>
+  Effect.map(
+    ghGetOk<{ default_branch?: string }>(`/repos/${owner}/${repo}`),
+    (repository) => repository.default_branch ?? 'main',
+  );
+
+function parseOriginHeadDefaultBranch(ref: string): string | undefined {
+  const branch = ref.trim().replace(/^refs\/remotes\//, '');
+  if (!branch.startsWith('origin/')) return undefined;
+  return branch.slice('origin/'.length) || undefined;
+}
+
+/** The local origin/HEAD hint: any lookup failure just means "no hint". */
+const getLocalDefaultBranchHint = (
+  cwd: string,
+  settings: SettingsStores,
+): Effect.Effect<string | undefined, never, ChildProcessSpawner> =>
+  gitInDir(
+    ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
+    cwd,
+    settings,
+  ).pipe(
+    Effect.map(parseOriginHeadDefaultBranch),
+    Effect.catch(() => Effect.succeed(undefined)),
+  );
+
+const listOpenPullSuggestions = (
+  owner: string,
+  repo: string,
+): Effect.Effect<string, Error, GitHubServices> =>
+  Effect.map(
+    ghGet<OpenPullSummary[]>(
+      `/repos/${owner}/${repo}/pulls?state=open&per_page=5`,
+    ),
+    (res) => {
+      if (res.status !== 200 || res.data.length === 0) {
+        return '';
+      }
+      const lines = res.data.map((pr) => {
+        const title = pr.title ? ` - ${pr.title}` : '';
+        const head = pr.head?.ref ? ` (${pr.head.ref})` : '';
+        return `- ${prRef(slugOf({ owner, repo }), pr.number)}${head}${title}`;
+      });
+      return `\n\nOpen PRs you can subscribe to directly:\n${lines.join('\n')}`;
+    },
+  );
+
+/** Neither half is essential: each recovers to its absence, concurrently. */
+const getFindCurrentFallbackInfo = (
+  owner: string,
+  repo: string,
+  cwd: string,
+  settings: SettingsStores,
+): Effect.Effect<
+  { defaultBranch?: string; suggestions: string },
+  never,
+  GitHubServices | ChildProcessSpawner
+> =>
+  Effect.zip(
+    getDefaultBranch(owner, repo).pipe(
+      Effect.catch(() => getLocalDefaultBranchHint(cwd, settings)),
+    ),
+    listOpenPullSuggestions(owner, repo).pipe(
+      Effect.catch(() => Effect.succeed('')),
+    ),
+    { concurrent: true },
+  ).pipe(
+    Effect.map(([defaultBranch, suggestions]) => ({
+      defaultBranch,
+      suggestions,
+    })),
+  );
+
+const execFindCurrent = Effect.fn('GitHubSubscriptionTool.findCurrent')(
+  function* (
+    input: FindCurrentInput,
+    workingDirectory: string | undefined,
+    settings: SettingsStores,
+  ) {
+    yield* requireToken();
+    const cwd =
+      parseWorkingDirectory(input.working_directory) ?? workingDirectory;
+    if (!cwd) {
+      return yield* Effect.fail(
+        new ToolError(
+          'No working_directory available. Provide one explicitly.',
+        ),
+      );
+    }
+    const [remoteUrl, branch] = yield* Effect.zip(
+      gitInDir(['remote', 'get-url', 'origin'], cwd, settings),
+      gitInDir(['rev-parse', '--abbrev-ref', 'HEAD'], cwd, settings),
+    ).pipe(
+      Effect.mapError(
+        (err) =>
+          new ToolError(
+            `git invocation failed in ${cwd}: ${toErrorMessage(err)}`,
+          ),
+      ),
+    );
+    const remote = parseGitHubSlug(remoteUrl);
+    if (!remote) {
+      return yield* Effect.fail(
+        new ToolError(`origin remote is not a github.com URL: ${remoteUrl}`),
+      );
+    }
+    if (branch === 'HEAD') {
+      return yield* Effect.fail(
+        new ToolError('HEAD is detached: cannot infer a PR branch.'),
+      );
+    }
+    const apiPath = `/repos/${remote.owner}/${remote.repo}/pulls?state=open&head=${remote.owner}:${encodeURIComponent(branch)}&per_page=1`;
+    const [pr] =
+      yield* ghGetOk<Array<{ number: number; html_url: string }>>(apiPath);
+    if (!pr) {
+      const { defaultBranch, suggestions } = yield* getFindCurrentFallbackInfo(
+        remote.owner,
+        remote.repo,
+        cwd,
+        settings,
+      );
+      if (branch === defaultBranch) {
+        return yield* Effect.fail(
+          new ToolError(
+            `Current branch is the default branch "${branch}", and no open PR uses it as the head branch. Pass command="subscribe" with an explicit path such as "${remote.owner}/${remote.repo}/pulls/N".${suggestions}`,
+          ),
+        );
+      }
+      if (!defaultBranch && branch === 'main') {
+        return yield* Effect.fail(
+          new ToolError(
+            `Current branch is "main", no open PR uses it as the head branch, and the default branch could not be confirmed. Pass command="subscribe" with an explicit path such as "${remote.owner}/${remote.repo}/pulls/N".${suggestions}`,
+          ),
+        );
+      }
+      return yield* Effect.fail(
+        new ToolError(
+          `No open PR found for ${remote.owner}/${remote.repo} head ${branch}. Push this branch and open a PR, or pass command="subscribe" with an explicit path for an existing PR.${suggestions}`,
+        ),
+      );
+    }
+    const path = prRef(slugOf(remote), pr.number);
+    return executed(
+      `path: ${path}\nurl: ${pr.html_url}\n\nPass this path to command="subscribe" to start watching the PR.`,
+      path,
+    );
+  },
+);
+
+export const GitHubSubscriptionTool = defineTool({
+  name: 'github_subscription',
+  description: [
+    'Manage GitHub activity subscriptions for the current agent run.',
+    'Path mirrors GitHub\'s REST URL shape and encodes the hierarchy: "owner/repo" addresses the whole repo (coarse, orchestrator-friendly); "owner/repo/pulls/N" addresses a specific pull request and "owner/repo/issues/N" addresses a specific issue (detailed, worker-friendly).',
+    'Commands:',
+    '- subscribe: start watching the path. For repos: PR opens/closes/merges, conversation comments on PRs and issues, inline review comments, plus a repo-wide merge-conflict probe that flags open PRs whose mergeable_state newly flipped to "dirty" (one event per PR, or a coalesced summary when many PRs flip at once: typical after a base-branch update). For PRs: comments, reviews, line comments, failed CI checks, inline check annotations (notices / warnings / failures pinned to file:line), plus mergeable_state transitions (dirty / resolved). Auto-unsubscribes on close/merge. For issues: comments, closed (with state_reason), reopened: the subscription stays active across close so reopens are caught; call command="unsubscribe" to release the slot.',
+    `For PR subscriptions, min_annotation_level controls inline check annotations: "${DEFAULT_CHECK_ANNOTATION_LEVEL}" (default) sends ${DEFAULT_ANNOTATION_LEVEL_DESCRIPTION}, "warning" includes warnings, and "notice" includes every annotation.`,
+    '- unsubscribe: stop watching the path.',
+    '- list: list active subscriptions on this run.',
+    '- find_current: resolve the current git branch to its PR path (returns "owner/repo/pulls/N").',
+    'Bot-authored events are dropped end-to-end by policy.',
+    `Caps: ${MAX_CONCURRENT_PR_SUBSCRIPTIONS} concurrent PR subscriptions, ${MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS} concurrent issue subscriptions, ${MAX_CONCURRENT_REPO_SUBSCRIPTIONS} concurrent repo subscriptions per process. Poll interval ≈ ${GITHUB_POLL_INTERVAL_MS / 1000}s. Requires a GitHub token: set it via /config → GitHub token (CLI), Settings → General (VS Code / desktop), or GITHUB_TOKEN / GH_TOKEN.`,
+  ].join(' '),
+  schema: GitHubSubscriptionInputSchema,
+  execute: (input: GitHubSubscriptionInput) =>
+    Effect.gen(function* () {
+      const toolCall = yield* ToolContext;
+      const { run } = yield* requireToolRun('github_subscription');
+      switch (input.command) {
+        case 'subscribe':
+          return yield* execSubscribe(input, run.runId, run.session);
+        case 'unsubscribe':
+          return yield* execUnsubscribe(input, run.runId);
+        case 'list':
+          return yield* execList(run.runId);
+        case 'find_current':
+          return yield* execFindCurrent(
+            input,
+            toolCall.env.workingDirectory,
+            toolCall.env.roots,
+          );
+      }
+    }),
+});

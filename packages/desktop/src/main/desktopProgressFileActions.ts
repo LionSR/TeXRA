@@ -26,11 +26,11 @@ import {
   type ProcessServices,
   withProcessServices,
 } from '@platform/processRuntime';
-import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
 import type { RunId } from '@shared/schemas';
 import type { Rejected } from '@shared/session/requestErrors';
-import { DocumentsStateKey } from '@shared/settingsView/documentsSettings';
-import { runOutputReader } from '@tools/documents/runOutputs';
+import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
+import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
+import { runOutputReader } from '@texra/tools/documents/runOutputs';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {

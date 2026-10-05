@@ -15,6 +15,7 @@ const manifestPaths = [
   'packages/desktop/package.json',
   'packages/extension/package.json',
   'packages/llm/package.json',
+  'packages/texra/package.json',
 ];
 
 async function writeWorkspaceManifests(root: string, version: string) {

@@ -20,7 +20,10 @@ import {
   createRecordingHost,
   sessionWithInteractions,
 } from '@test/agent/progressTestUtils';
-import { ReadConfigTool, UpdateConfigTool } from '@tools/setup/ConfigTools';
+import {
+  ReadConfigTool,
+  UpdateConfigTool,
+} from '@texra/tools/setup/ConfigTools';
 import { generateRunId } from '@utils/core';
 
 const readTool = ReadConfigTool;

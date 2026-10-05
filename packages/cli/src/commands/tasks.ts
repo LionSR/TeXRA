@@ -9,11 +9,11 @@ import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 
 import { AgentConfigSchema, type AgentConfigPayload } from '@agent/runtime';
-import type { ServiceClient } from '@controllers/server/client';
-import type { TaskSummary } from '@controllers/server/protocol';
 import type { RunId } from '@shared/schemas';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { RequestErrorWire } from '@shared/session/sessionFrames';
+import type { TaskSummary } from '@texra/controllers/server/protocol';
+import type { ServiceClient } from '@texra/controllers/server/client';
 import { generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 

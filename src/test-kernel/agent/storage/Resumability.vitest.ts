@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { documentTaskConfig } from '@agent/output/documentRecipe';
 import { deriveResumability, finalizeRun } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -20,6 +19,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 
 /** The opening snapshot of a tool-use run, as the loop's first batch writes it. */
 const OPENING_SNAPSHOT: RunSnapshotPayload = {

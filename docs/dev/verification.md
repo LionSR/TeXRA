@@ -86,12 +86,12 @@ the changed automation or prompt files directly.
 
 These have been consolidated and must stay shared. If you find yourself
 re-implementing one of these per host, push the new code into
-`src/ui/wa/` instead.
+`packages/texra/src/ui/wa/` instead.
 
-- Theme body classes + WA color scheme: `src/ui/wa/hostTheme.ts`
-- WA color scheme observer: `src/ui/wa/waColorScheme.ts`
-- Action button helper: `src/ui/wa/actionButtons.ts`
-- Empty state helper: `src/ui/wa/emptyState.ts`
+- Theme body classes + WA color scheme: `packages/texra/src/ui/wa/hostTheme.ts`
+- WA color scheme observer: `packages/texra/src/ui/wa/waColorScheme.ts`
+- Action button helper: `packages/texra/src/ui/wa/actionButtons.ts`
+- Empty state helper: `packages/texra/src/ui/wa/emptyState.ts`
 - Persisted state: `src/shared/state/PersistedState.ts`
 - Host bridge: `src/shared/hostBridge.ts`
-- Settings tabs: `src/shared/settingsView/settingsViewMessages.ts` (`SETTINGS_TAB_ORDER`)
+- Settings tabs: `packages/texra/src/shared/settingsView/settingsViewMessages.ts` (`SETTINGS_TAB_ORDER`)

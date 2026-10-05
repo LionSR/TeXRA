@@ -21,7 +21,7 @@ import {
   SetupCommandFailed,
   SetupExtensionInstallFailed,
   type SetupPlatformShape,
-} from '@tools/setup/platform';
+} from '@texra/tools/setup/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports

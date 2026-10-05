@@ -8,11 +8,17 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { compileFailuresOf, runCompileCheck } from '@agent/output/compileCheck';
-import { createOutputState, ensureRoundData } from '@agent/output/outputState';
 import type { CompileLatex2PdfResult } from '@latex/texTools';
 import type { RunId, FileLocation } from '@shared/schemas';
 import { fakePath } from '@test/support/FakePlatform';
+import {
+  createOutputState,
+  ensureRoundData,
+} from '@texra/agent/output/outputState';
+import {
+  compileFailuresOf,
+  runCompileCheck,
+} from '@texra/agent/output/compileCheck';
 
 // Local file imports
 import {
@@ -149,7 +155,7 @@ describe('runCompileCheck', () => {
   );
 
   // The 200-line raw-tail extraction itself now lives in compileLatex2Pdf
-  // (src/latex/texTools.ts), covered by TexTools.vitest.ts. This test proves
+  // (packages/texra/src/latex/texTools.ts), covered by TexTools.vitest.ts. This test proves
   // the other half of issue #7079's fix: whatever `logTail` compileCheck
   // receives from the shared { ok, logTail } return shape is threaded
   // through, unmodified, into the persisted failure excerpt -- it is not

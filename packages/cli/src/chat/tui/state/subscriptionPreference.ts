@@ -1,11 +1,11 @@
 import { Effect } from 'effect';
 
+import type { ConfigWriteFailed } from '@platform/interfaces';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   subscriptionProvider,
   type SubscriptionProviderId,
-} from '@controllers/modelAccess/subscriptionProviders';
-import type { ConfigWriteFailed } from '@platform/interfaces';
-import type { SettingsStores } from '@shared/config/settingsAccess';
+} from '@texra/controllers/modelAccess/subscriptionProviders';
 
 import { bumpCodexPreferenceVersion } from './cliState';
 

@@ -38,10 +38,19 @@ type check first. This is the single most common way a change lands broken.
 
 ## Layout
 
-A pnpm workspace. Repo-root `src/` contains host-agnostic production code plus
-centralized tests for shared and host-specific behavior; `packages/extension`, `packages/desktop`, `packages/cli`, and
-`packages/trace-viewer` are hosts and apps over it. Path aliases (`@agent/*`, `@platform/*`, …) are declared in
-`tsconfig.json` — use them instead of long relative chains.
+A pnpm workspace in three layers (split design
+`.agents/docs/proposed/architecture/2026-10-02-harness-package-split.md`, M8
+in progress): repo-root `src/` holds the harness's host-agnostic code (moving
+to `packages/harness/src`) plus the centralized test suite
+(`src/test-kernel/`); `packages/texra/src` (`@texra-ai/texra`) is the app:
+TeXRA's plugins, LaTeX, the UI kit and the host-side controllers;
+`packages/llm` is model access. `packages/extension`, `packages/desktop`,
+`packages/cli`, and `packages/trace-viewer` are hosts and apps over them.
+Path aliases (`@agent/*`, `@platform/*`, …) are declared in `tsconfig.json` —
+use them instead of long relative chains. App files that left a mixed
+directory keep their relative path under `packages/texra/src` and take
+`@texra/*` (`@texra/tools/arxiv/…`); `@latex/*`, `@replacement/*`,
+`@telemetry/*`, `@housekeeping/*` and `@ui/*` point into the app too.
 
 Things the tree won't tell you:
 
@@ -91,33 +100,33 @@ Things the tree won't tell you:
   `packages/extension/src/common/webview/`. <!-- guidance-refs-ignore -->
 - **No convenience barrels.** A barrel exists only for a documented public
   surface. Import the file that defines the symbol.
-- **`src/ui/` is the host-neutral UI toolkit** (`@ui/*`): the Web Awesome and
+- **`packages/texra/src/ui/` is the host-neutral UI toolkit** (`@ui/*`): the Web Awesome and
   Lit building blocks (`wa/`), the shared `css` tag blocks (`styles/`), the
-  transcript row model (`transcript/`), the markdown/KaTeX pipeline
-  (`markdown/`) and the user-facing copy tables (`copy/`). All three hosts
-  render from it. It moved out of `src/shared/` because that directory is wire
-  contracts and UI-shared message types, which ~9k lines of rendering code is
-  not. It is a VS Code-free zone and, like `src/shared/`, takes no
-  `@agent/*` imports. Do not confuse it with `src/transcript/` (`@transcript`),
-  the run-transcript persistence layer. **`src/shared/{litControllers,monaco,highlighting}/`
-  never made that move** — Lit reactive controllers, a Monaco bootstrap, and a
+  markdown/KaTeX pipeline (`markdown/`) and the user-facing copy tables
+  (`copy/`). All three hosts render from it. It is app code, a VS Code-free
+  zone, and takes no `@agent/*` imports. The transcript row model is part of
+  the harness's session view and lives in `src/shared/transcript/`
+  (`@shared/transcript`); do not confuse it with `src/transcript/`
+  (`@transcript`), the run-transcript persistence layer.
+  **`packages/texra/src/shared/{litControllers,monaco,highlighting}/`
+  never moved into the kit** — Lit reactive controllers, a Monaco bootstrap, and a
   highlight.js wrapper. Consumers are webview/renderer UI code, plus one
   main-process diff-labeling caller (`packages/desktop/src/main/desktopDiffHost.ts`)
-  and the UI toolkit's own markdown pipeline (`src/ui/markdown/katexHtmlProcessor.ts`);
+  and the UI toolkit's own markdown pipeline (`packages/texra/src/ui/markdown/katexHtmlProcessor.ts`);
   none is a wire-contract reader. The three were shelved along with a broader,
   separately proposed regroup of six `src/shared/` subtrees under `src/shared/ui/`
   that was rejected on cost (235 import statements plus 9 hardcoded literal test
   paths for that six-directory regroup, not for these three alone) — not because
   the code belongs with wire contracts. Treat them as the UI toolkit's territory:
-  don't duplicate a controller or a highlighter in `src/ui/` without checking
+  don't duplicate a controller or a highlighter in `@ui` without checking
   here first, and don't read their location as license to add more rendering
-  code under `src/shared/`.
+  code under a `shared/` directory.
 
 Two wiring points fail silently if you forget them: a new VS Code command must
 be registered through `packages/extension/src/commands.ts`, and a new setting
 must be declared in the Zod catalog by its owner (the harness's rows in
 `src/shared/state/stateSettings.ts`, schemas in `src/shared/schemas/coreSettings.ts`;
-TeXRA's rows in `src/shared/settingsView/texraSettings.ts`, a plugin's rows on
+TeXRA's rows in `packages/texra/src/shared/settingsView/texraSettings.ts`, a plugin's rows on
 its `Plugin` value's `settings`) and the native TeXRA settings view —
 `packages/extension/package.json` must NOT contribute `configuration`;
 `scripts/sync-package-contributes.mjs` throws if it does.
@@ -128,9 +137,10 @@ Core logic must not import `vscode`. This is the highest-signal rule in the
 repo and the first thing to check on any diff.
 
 **VS Code-free zones** — must NOT import `vscode`:
-`src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/controllers/`,
-`src/shared/`, `src/ui/`, `src/replacement/`, `src/eventBus/`, `src/hosts/`,
-`src/common/`, `src/utils/`, `src/logger/`, `packages/harness/src/`, `packages/llm/src/`,
+`src/agent/`, `src/model/`, `src/tools/`, `src/controllers/`,
+`src/shared/`, `src/eventBus/`, `src/hosts/`,
+`src/common/`, `src/utils/`, `src/logger/`, `packages/harness/src/`,
+`packages/texra/src/` (the whole app), `packages/llm/src/`,
 `packages/desktop/src/`, and the webview
 frontends — `packages/extension/src/progressView/frontend/` and
 `packages/extension/src/settingsView/frontend/`. Do not confuse
@@ -161,9 +171,8 @@ rather than an import.
 Substitutions and the push-UI-to-the-caller rule: AGENTS.md "Platform
 decoupling rules".
 
-Also: `src/shared/` is for wire contracts and UI-shared message types (plus the
-stranded `litControllers/`, `monaco/`, `highlighting/` trio noted above), and
-`src/ui/` for the rendering toolkit over them — don't add new `@agent/*`
+Also: `src/shared/` is for wire contracts and UI-shared message types, and
+`@ui` (`packages/texra/src/ui/`) for the rendering toolkit over them — don't add new `@agent/*`
 imports to either; host-neutral orchestration goes in `src/controllers/`.
 
 **Event channels.** New facts a run's trace emits extend `AgentEvent`
@@ -223,7 +232,7 @@ takes from context (`AgentRun`, model binding, pricing, media, tools) and
 `Model`. `core/tools/` holds `toolCallParsing`, which parses a response's
 tool calls. `output/` holds the document recipe (`documentRecipe.ts`), the
 script a document task's run executes over the documents plugin's tools
-(`src/tools/documents/`), and its output pipeline. Provider APIs are reached
+(`packages/texra/src/tools/documents/`), and its output pipeline. Provider APIs are reached
 only through the `packages/llm` `Model` that `runtime/run/modelBinding.ts`
 binds; the `helperModel` path binds through that same route. New agents come
 from the built-in `creator` agent or the settings view's "Create from

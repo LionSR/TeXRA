@@ -11,8 +11,8 @@ vi.mock('@shared/hostBridge', () => ({
 import type { ApprovalTab } from '@settingsView/frontend/tabs/ApprovalTab';
 import type { PluginsTab } from '@settingsView/frontend/tabs/PluginsTab';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { PluginRow } from '@shared/settingsView/settingsViewMessages';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 
 import {
   mountComponent,

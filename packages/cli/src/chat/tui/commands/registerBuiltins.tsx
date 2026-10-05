@@ -15,16 +15,16 @@ import {
   installPlugins,
   parsePluginOrigin,
 } from '@common/plugins/installedPlugins';
-import type { ServiceConnection } from '@controllers/server/client';
-import {
-  localSessionBackend,
-  type SessionBackend,
-} from '@controllers/session/sessionBackend';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type RunId } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import {
+  localSessionBackend,
+  type SessionBackend,
+} from '@texra/controllers/session/sessionBackend';
+import type { ServiceConnection } from '@texra/controllers/server/client';
 import { RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { PLUGINS_TUI } from '@ui/copy/plugins';
 

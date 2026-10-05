@@ -47,8 +47,8 @@ import { UsageLog } from '@shared/usageLog';
 import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
-} from '@tools/lean/leanLanguageServices';
-import type { SetupPlatformShape } from '@tools/setup/platform';
+} from '@texra/tools/lean/leanLanguageServices';
+import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import { goalContinuation } from '@tools/goal/goalContinuation';
 import { toolTableLayer } from '@tools/liveTools';
 import { toolTable } from '@tools/toolTable';
@@ -297,7 +297,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     import('@platform/secrets'),
     import('@platform/interfaces'),
     import('@platform/languageModel'),
-    import('@tools/setup/platform'),
+    import('@texra/tools/setup/platform'),
     import('./toolAvailabilityTestLayer'),
   ]);
   current = host;

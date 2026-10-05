@@ -4,7 +4,6 @@
 import { Data, Effect, Scope } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import type {
   StateReadFailed,
   StateStore,
@@ -15,6 +14,7 @@ import {
   type ProcessRuntime,
 } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
+import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { kickoffDesktopSetup } from './desktopAgentLaunch.js';
 import { createDesktopOnboardingIpc } from './desktopOnboardingIpc.js';

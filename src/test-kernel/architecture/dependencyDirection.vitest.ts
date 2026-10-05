@@ -31,18 +31,16 @@ import {
 const VSCODE_FREE_ZONES = [
   'src/agent',
   'src/model',
-  'src/latex',
   'src/tools',
   'src/controllers',
   'src/shared',
-  'src/ui',
-  'src/replacement',
   'src/eventBus',
   'src/hosts',
   'src/common',
   'src/utils',
   'src/logger',
   'packages/harness/src',
+  'packages/texra/src',
   'packages/llm/src',
   'packages/desktop/src',
   'packages/extension/src/progressView/frontend',
@@ -168,16 +166,17 @@ function sourceFilesUnder(
   zone: string,
   opts?: { readonly excludeTestKernel?: boolean },
 ): string[] {
-  // A renamed/removed zone surfaces as the file-count guard below failing,
-  // not as a silently green ratchet.
+  // A renamed or removed zone throws here (ENOENT), never scans as empty.
   return sharedSourceFilesUnder(resolve(REPO_ROOT, zone), {
-    missingDirReturnsEmpty: true,
     excludeTestKernel: opts?.excludeTestKernel,
   });
 }
 
 function productionSrcFiles(): string[] {
-  return sourceFilesUnder('src', { excludeTestKernel: true });
+  return [
+    ...sourceFilesUnder('src', { excludeTestKernel: true }),
+    ...sourceFilesUnder('packages/texra/src'),
+  ];
 }
 
 function importsMatching(file: string, patterns: readonly RegExp[]): boolean {
@@ -222,11 +221,11 @@ describe('VS Code-free zones never import vscode', () => {
 });
 
 describe('Shared layer dependency direction', () => {
-  // `src/ui` is held to the same rule as `src/shared`: the toolkit renders a
+  // The UI kit is held to the same rule as `src/shared`: the toolkit renders a
   // host-neutral view model handed to it, so an `@agent/*` import there would
   // be the run system leaking into the render layer.
   it('does not grow shared-to-agent imports', () => {
-    const offenders = ['src/shared', 'src/ui']
+    const offenders = ['src/shared', 'packages/texra/src/ui']
       .flatMap((root) => sourceFilesUnder(root))
       .filter((file) => importsMatching(file, AGENT_IMPORT_PATTERNS))
       .map(toRepoPath)
@@ -239,7 +238,7 @@ describe('Shared layer dependency direction', () => {
 
 describe('Latex layer dependency direction', () => {
   it('does not grow latex-to-agent imports', () => {
-    const offenders = sourceFilesUnder('src/latex')
+    const offenders = sourceFilesUnder('packages/texra/src/latex')
       .filter((file) => importsMatching(file, AGENT_IMPORT_PATTERNS))
       .map(toRepoPath)
       .toSorted();

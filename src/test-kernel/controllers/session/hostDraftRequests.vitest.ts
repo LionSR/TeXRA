@@ -6,7 +6,6 @@ import { expect, vi } from 'vitest';
 // Local imports
 import { apiKeySecretName } from '@texra-ai/llm';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import { AppState } from '@platform/interfaces';
 import {
   LanguageModel,
@@ -19,6 +18,7 @@ import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 // The recorder module answers in Effects, so every double returns one: a

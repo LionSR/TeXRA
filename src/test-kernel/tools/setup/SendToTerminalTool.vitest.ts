@@ -15,7 +15,7 @@ import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { SendToTerminalTool } from '@tools/setup/SendToTerminalTool';
+import { SendToTerminalTool } from '@texra/tools/setup/SendToTerminalTool';
 
 // Local file imports
 import { createFakeSetupPlatform } from './fixtures';

@@ -4,7 +4,6 @@ import { describe, expect } from 'vitest';
 import { MODEL_CONFIGS, lookup } from 'llm-zoo';
 
 import { buildBaseModelOption } from '@texra-ai/llm';
-import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import {
   getEnabledModels,
   type ModelOptionStores,
@@ -18,6 +17,7 @@ import type { ModelOptionData } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
+import { SettingsModelSelectionController } from '@texra/controllers/settingsView/SettingsModelSelectionController';
 
 const GPT55 = 'openai/gpt-5.5-2026-04-23';
 // Live (not deprecated): a stored preference for a deprecated model drops out at read.

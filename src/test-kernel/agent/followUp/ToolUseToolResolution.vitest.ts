@@ -18,11 +18,11 @@ import {
 } from '@test/support/setupPlatform';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { resolveTestStep } from '@test/support/stepToolsTestUtils';
+import { texraPlugins } from '@texra/tools/registry';
 import { toolTableLayer } from '@tools/liveTools';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
-import { texraPlugins } from '@tools/registry';
 import { toolTable } from '@tools/toolTable';
 import { setToolEnabled } from '@tools/toolAvailability';
 
