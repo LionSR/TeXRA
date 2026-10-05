@@ -8,10 +8,6 @@ import { agentName } from './agent';
  * on `run.start`. The struct itself travels: on `run.start`, on `RunView`,
  * on child rows, and hosts add display fields beside it, never
  * re-encodings of it.
- *
- * This is NOT `AgentCategory`: category is the agent's run-mode fact
- * with its `setting → config` authority chain, and only `kind: 'agent'` runs
- * have one at all.
  */
 export const RunIdentitySchema = z.discriminatedUnion('kind', [
   z.strictObject({

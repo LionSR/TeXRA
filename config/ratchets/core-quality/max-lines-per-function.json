@@ -23,7 +23,6 @@
   "src/agent/runtime/runApprovalQueue.ts": 1,
   "src/agent/runtime/RunHistory.ts": 1,
   "src/agent/runtime/SessionEvents.ts": 1,
-  "src/agent/storage/runRecords.ts": 1,
   "src/controllers/session/currentValues.ts": 1,
   "src/controllers/session/Database.ts": 4,
   "src/controllers/session/hostRunActions.ts": 2,

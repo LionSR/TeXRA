@@ -1,6 +1,5 @@
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@settingsView/frontend';
-import type { AgentCategory } from '@shared/schemas';
 import type { SettingsTarget } from '@shared/settingsView/settingsViewMessages';
 import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin';
 
@@ -8,7 +7,7 @@ import { buildDesktopSettingsTabMessage } from '../shared/desktopCommandSurface'
 import { createOverlayDialog } from './overlayDialog';
 
 interface DesktopSettingsDialog {
-  open(tab?: SettingsTarget, agentSubTab?: AgentCategory): void;
+  open(tab?: SettingsTarget): void;
   isOpen(): boolean;
   /** Swap in a fresh view after the active project changed. */
   remount(): void;
@@ -58,12 +57,12 @@ export function createDesktopSettingsDialog(
   });
 
   return {
-    open(tab, agentSubTab) {
+    open(tab) {
       if (!settingsView.isConnected) content.append(settingsView);
       dialog.open = true;
       if (tab == null) return;
       window.postMessage(
-        buildDesktopSettingsTabMessage(tab, agentSubTab),
+        buildDesktopSettingsTabMessage(tab),
         resolvePostMessageTargetOrigin(window.location.origin),
       );
     },

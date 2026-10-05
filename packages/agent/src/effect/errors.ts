@@ -32,8 +32,7 @@ export class AgentNotFound extends Data.TaggedError('AgentNotFound')<{
 
 /**
  * The tools the caller passed cannot run here: a tool that requires
- * approval (the package has no approval channel), or custom tools handed to
- * a workflow agent.
+ * approval (the package has no approval channel).
  */
 export class ToolsRefused extends Data.TaggedError('ToolsRefused')<{
   readonly tools: readonly string[];

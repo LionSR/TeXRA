@@ -8,6 +8,9 @@ export const DEFAULT_TOOL_CONFIG = {
   autoExtractTikzFigure: false,
   attachTeXCount: false,
   autoCompileInputPdf: false,
+  /** A document task reviews each revision but the last with the bundled
+   *  `critic` and feeds its critique into the next revision. */
+  reflect: false,
 } as const;
 
 type ToolConfigField = keyof typeof DEFAULT_TOOL_CONFIG;

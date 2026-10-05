@@ -9,7 +9,7 @@ import { readCustomAgentDir } from '@shared/config/settingsAccess';
  */
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { AgentModePreset, ByCategory } from '@shared/schemas';
+import type { AgentModePreset } from '@shared/schemas';
 import type {
   AgentSelectionItem,
   UpdateCustomAgentDirMessage,
@@ -17,10 +17,7 @@ import type {
 import type { AgentScanIssue } from '@shared/schemas';
 
 export interface AgentSelectionPorts {
-  buildSelectionItems(): Effect.Effect<
-    ByCategory<AgentSelectionItem[]>,
-    StateReadFailed
-  >;
+  buildSelectionItems(): Effect.Effect<AgentSelectionItem[], StateReadFailed>;
   getCustomAgentScanIssues(): readonly AgentScanIssue[];
 }
 

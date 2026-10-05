@@ -1,4 +1,4 @@
-/** Master-detail panel of agents for a single category (workflow or tool-use). */
+/** Master-detail panel of the agent library, grouped by source. */
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
@@ -16,7 +16,7 @@ import { classMap } from 'lit/directives/class-map.js';
 // Local imports - shared styles
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import type { AgentCategory, AgentSource } from '@shared/schemas';
+import type { AgentSource } from '@shared/schemas';
 import type { AgentSelectionItem } from '@shared/settingsView/settingsViewMessages';
 import {
   AGENT_SOURCE,
@@ -51,8 +51,8 @@ function agentKey(agent: AgentSelectionItem): string {
  * Per-source presentation: section heading name and the badge (icon + label)
  * shown for non-built-in origins in both list and detail panes. The badge is
  * read from the shared `AGENT_DECORATORS.properties` table so this pane and
- * the launcher dropdown cannot drift on glyph or label; the two built-in
- * sources have no row there and carry no badge.
+ * the launcher dropdown cannot drift on glyph or label; the built-in
+ * source has no row there and carries no badge.
  */
 function sourceMeta(source: AgentSource): {
   displayName: string;
@@ -76,7 +76,6 @@ export class AgentSelectionPanel extends LitElement {
   ];
 
   @property({ attribute: false }) agents: AgentSelectionItem[] = [];
-  @property({ attribute: false }) category: AgentCategory = 'workflow';
 
   @state() private selectedKey: string | null = null;
 
@@ -92,8 +91,7 @@ export class AgentSelectionPanel extends LitElement {
 
   private static readonly SOURCE_ORDER = [
     AGENT_SOURCE.CUSTOM,
-    AGENT_SOURCE.BUILT_IN_WORKFLOW,
-    AGENT_SOURCE.BUILT_IN_TOOL_USE,
+    AGENT_SOURCE.BUILT_IN,
     AGENT_SOURCE.PLUGIN,
   ];
 
@@ -164,7 +162,6 @@ export class AgentSelectionPanel extends LitElement {
 
   private handleSetAllEnabled(source: AgentSource, enabled: boolean): void {
     postMessage(SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED, {
-      category: this.category,
       source,
       enabled,
     });
@@ -191,7 +188,6 @@ export class AgentSelectionPanel extends LitElement {
             postMessage(SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED, {
               agentName: agent.name,
               agentSource: agent.source,
-              category: this.category,
               enabled: !agent.enabled,
             });
           }}
@@ -209,13 +205,20 @@ export class AgentSelectionPanel extends LitElement {
           class="agent-list-item-select focus-ring-inset"
           type="button"
           aria-current=${isSelected ? 'true' : nothing}
-          aria-controls="${this.category}-agent-detail"
+          aria-controls="agent-detail"
           tabindex=${isSelected ? '0' : '-1'}
           @click=${() => this.selectAgent(agent)}
           title=${agent.description ?? agent.name}
         >
           <bdi class="agent-list-item-name" dir="auto">${agent.name}</bdi>
           <span class="agent-list-item-badges">
+            ${
+              agent.hasTask
+                ? html`<span title="Document task"
+                    >${waIcon('file-lines', { label: 'Document task' })}</span
+                  >`
+                : nothing
+            }
             ${
               agent.newerBuiltIn
                 ? html`<span title="Newer built-in version available"
@@ -275,7 +278,7 @@ export class AgentSelectionPanel extends LitElement {
           const agents = groups.get(source)!;
           const enabledInGroup = agents.filter((a) => a.enabled).length;
           const sourceName = sourceMeta(source).displayName;
-          const headingId = `${this.category}-${source}-agents-heading`;
+          const headingId = `${source}-agents-heading`;
           return html`
             <div class="agent-list-section-header" id=${headingId}>
               <span>${sourceName}</span>
@@ -394,19 +397,29 @@ export class AgentSelectionPanel extends LitElement {
     return html`
       <section
         class="agent-detail-pane"
-        id="${this.category}-agent-detail"
-        aria-labelledby="${this.category}-agent-detail-name"
+        id="agent-detail"
+        aria-labelledby="agent-detail-name"
       >
         <div class="agent-detail-header">
-          <h3 class="agent-detail-name" id="${this.category}-agent-detail-name">
+          <h3 class="agent-detail-name" id="agent-detail-name">
             <bdi dir="auto">${agent.name}</bdi>
           </h3>
           <wa-tag variant="neutral" size="s" title="${displayName} agent"
             >${badge ? html`${waIcon(badge.icon)} ` : nothing}${displayName}</wa-tag
           >
+          ${
+            agent.hasTask
+              ? html`<wa-tag
+                  variant="neutral"
+                  size="s"
+                  title="Can also revise selected files as a document task"
+                  >${waIcon('file-lines')} document task</wa-tag
+                >`
+              : nothing
+          }
         </div>
 
-        ${renderNewerBuiltInNotice(agent, this.category)}
+        ${renderNewerBuiltInNotice(agent)}
         ${
           agent.description
             ? html`<div class="agent-detail-description" dir="auto">

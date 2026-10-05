@@ -8,8 +8,8 @@
       "@agent/runtime",
       "@agent/storage"
     ],
-    "desktop": ["@agent/index", "@agent/runtime", "@agent/storage"],
-    "extension": ["@agent/index", "@agent/runtime", "@agent/storage"],
+    "desktop": ["@agent/index", "@agent/runtime"],
+    "extension": ["@agent/index", "@agent/runtime"],
     "agent": [
       "@agent/core/definition/AgentConfig",
       "@agent/core/definition/AgentDataclass",

@@ -12,7 +12,6 @@
  * (`transcriptLogRows.ts`). The working state lives in `transcriptState.ts`.
  */
 import {
-  AgentCategory,
   MESSAGE_TYPES,
   RUN_PHASE,
   TOOL_CALL_STATUS,
@@ -367,9 +366,6 @@ export function foldRunTranscript(
   const ctx: TranscriptContext = {
     debug,
     lifecycleToTaskGroups: lifecycleToTaskGroups(start),
-    ...(start.category === AgentCategory.Workflow
-      ? { statistics: { model: null } }
-      : {}),
   };
   for (const event of events) {
     transcript = foldTranscriptEvent(transcript, event, ctx);

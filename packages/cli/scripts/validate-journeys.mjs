@@ -89,6 +89,8 @@ function unchanged(dir, journey, file) {
 const JOURNEYS = {
   polish: {
     args: ['polish', '--input', 'paper.tex', '--output', 'paper.polished.tex'],
+    // The document task's result, kept with its diff against the input.
+    keep: { from: 'paper.tex', to: 'paper.polished.tex' },
     instruction:
       'Replace the ASCII ellipsis with \\ldots and the straight double quotes with LaTeX quotes. Change nothing else.',
     approval: 'never',
@@ -248,6 +250,15 @@ function runJourney(name, model, outDir) {
       `run outcome is ${final.result.outcome}`,
     );
 
+    if (journey.keep) {
+      const { from, to } = journey.keep;
+      cpSync(path.join(dir, to), `${stem}.${to}`);
+      const diff = spawnSync('diff', ['-u', from, to], {
+        cwd: dir,
+        encoding: 'utf8',
+      });
+      writeFileSync(`${stem}.diff`, diff.stdout ?? '');
+    }
     journey.check(dir);
     const { totalInputTokens, totalOutputTokens, totalCost } =
       final.result.usage;

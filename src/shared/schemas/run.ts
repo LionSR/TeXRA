@@ -107,9 +107,9 @@ export type WorktreeInfo = z.infer<typeof WorktreeInfoSchema>;
 const RUN_ACTIONS = [
   /** Stop a live run. */
   'stop',
-  /** Grant the run an approval bypass while it works (a live tool-use agent). */
+  /** Grant the run an approval bypass while it works (a live agent's run). */
   'grant',
-  /** Compact a live tool-use run's conversation. */
+  /** Compact a live conversation (not a document task). */
   'compact',
   /** Continue the run where it stopped. */
   'resume',
@@ -120,7 +120,7 @@ const RUN_ACTIONS = [
   /** Clear the model's view of a live conversation, or start it from a
    *  handoff's text (`run.reset`). */
   'reset',
-  /** A finished workflow run's latexdiff, archive, and output removal. */
+  /** A finished document task's latexdiff, archive, and output removal. */
   'diff',
   'pack',
   'clean',

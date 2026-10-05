@@ -13,6 +13,7 @@ import {
   initializeDefaultSession,
   teardownDefaultSession,
 } from '@agent/runtime/sessionGraph';
+import { documentTaskConfig } from '@agent/output/documentRecipe';
 import { cliRunStanding } from '@cli/runtime/toolUseResumeData';
 import {
   formatCliHistoryDetailsText,
@@ -23,7 +24,6 @@ import { withProcessServices } from '@platform/processRuntime';
 import {
   aggregateId,
   CLI_RUN_STATUS,
-  AgentCategory,
   RunSnapshotPayloadSchema,
   HISTORY_RUN_STATUS,
 } from '@shared/schemas';
@@ -41,15 +41,15 @@ const TOOL_USE_CONFIG: AgentConfig = AgentConfigSchema.parse({
   agent: 'orchestrator',
   model: 'deepseek/deepseek-v4-flash',
   instruction: 'Continue the session.',
-  agentCategory: AgentCategory.ToolUse,
   workingDirectory: '/workspace',
 });
-const WORKFLOW_CONFIG: AgentConfig = AgentConfigSchema.parse({
-  ...TOOL_USE_CONFIG,
-  agent: 'correct',
-  agentCategory: AgentCategory.Workflow,
-  instruction: 'Continue the workflow.',
-});
+const WORKFLOW_CONFIG: AgentConfig = AgentConfigSchema.parse(
+  documentTaskConfig({
+    ...TOOL_USE_CONFIG,
+    agent: 'correct',
+    instruction: 'Continue the workflow.',
+  }),
+);
 
 const tempDirs = useTempDirs();
 setupPlatform(() => createTempDirPlatform('texra-history-status-', tempDirs));
@@ -166,7 +166,7 @@ describe('CLI history status formatting', () => {
       }),
   );
 
-  it.effect('marks workflow snapshots as CLI-resumable', () =>
+  it.effect('marks document task snapshots as CLI-resumable', () =>
     Effect.gen(function* () {
       const id = 'c0ffee-f10' as RunId;
       yield* Effect.promise(() => seedSnapshot(id, WORKFLOW_CONFIG, 'correct'));
@@ -184,8 +184,8 @@ describe('CLI history status formatting', () => {
     }),
   );
 
-  // A checkpoint alone is not enough: without a config there is no category
-  // to resume under and nothing for a host to adopt, so the row says so.
+  // A checkpoint alone is not enough: without a config there is nothing to
+  // resume and nothing for a host to adopt, so the row says so.
   it.effect('does not offer a run whose config is missing as resumable', () =>
     Effect.gen(function* () {
       const id = 'baad-c0f' as RunId;
@@ -194,7 +194,6 @@ describe('CLI history status formatting', () => {
           type: 'run.start',
           aggregateId: aggregateId('run', id),
           identity: { kind: 'agent', agent: 'orchestrator' },
-          category: AgentCategory.ToolUse,
           userFollowUpSupport: 'unsupported',
           parent: null,
           provenance: null,

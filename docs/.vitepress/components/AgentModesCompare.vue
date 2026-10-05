@@ -38,7 +38,7 @@ const rows = [
 ];
 
 const workflowAgents = ['polish', 'correct', 'paper2slide'];
-const tooluseAgents = ['chat', 'research', 'review'];
+const tooluseAgents = ['assistant', 'research', 'review'];
 </script>
 
 <template>

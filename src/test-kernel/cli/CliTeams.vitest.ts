@@ -14,29 +14,24 @@ import {
 } from '@cli/runtime/cliTeams';
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
-import {
-  AgentCategory,
-  agentMatchesIdentifier,
-  type ByCategory,
-} from '@shared/schemas';
+import { agentMatchesIdentifier } from '@shared/schemas';
 
-function agent(
-  name: string,
-  category: AgentCategory,
-  tools: string[] = [],
-): AgentEntry {
+function agent(name: string, tools: string[] = []): AgentEntry {
   return {
     name,
-    category,
-    source:
-      category === AgentCategory.ToolUse ? 'builtInToolUse' : 'builtInWorkflow',
+    source: 'builtIn',
     path: `/agents/${name}.yaml`,
     tools,
     persona: PersonaSchema.parse({}),
-    task:
-      category === AgentCategory.Workflow
-        ? DocumentTaskSchema.parse({ requests: ['Revise.'] })
-        : null,
+    task: null,
+  };
+}
+
+/** An agent that is also a document task. */
+function taskAgent(name: string): AgentEntry {
+  return {
+    ...agent(name),
+    task: DocumentTaskSchema.parse({ requests: ['Revise.'] }),
   };
 }
 
@@ -51,47 +46,38 @@ type TeamPreset = Parameters<typeof planTeamRunForAgentEntry>[0];
 
 function planRun(
   preset: TeamPreset,
-  options: Partial<ByCategory<readonly AgentEntry[]>> & {
-    agentOverride?: string;
-  } = {},
+  options: { agents?: readonly AgentEntry[]; agentOverride?: string } = {},
 ) {
-  const { agentOverride, ...agents } = options;
+  const { agentOverride, agents = [] } = options;
   return planTeamRunForAgentEntry(preset, {
-    resolveAgent: (category, identifier) =>
-      agents[category]?.find((entry) =>
-        agentMatchesIdentifier(entry, identifier),
-      ),
+    resolveAgent: (identifier) =>
+      agents.find((entry) => agentMatchesIdentifier(entry, identifier)),
     agentOverride,
   });
 }
 
-// The full tool-use agent list of a preset, with only `root` able to delegate.
-function toolUseTeam(preset: TeamPreset, root: string): AgentEntry[] {
-  return preset.agents.toolUse.map((name) =>
-    agent(name, AgentCategory.ToolUse, name === root ? ['agent'] : []),
+// The full agent list of a preset, with only `root` able to delegate.
+function fullTeam(preset: TeamPreset, root: string): AgentEntry[] {
+  return preset.agents.map((name) =>
+    agent(name, name === root ? ['agent'] : []),
   );
 }
 
 // The lean-project team with two of its seven members and no delegating root.
 function partialLeanProjectPlan(): CliTeamRunPlan {
   return planRun(findPreset('lean-project'), {
-    toolUse: [
-      agent('lean', AgentCategory.ToolUse),
-      agent('latexFixer', AgentCategory.ToolUse),
-    ],
+    agents: [agent('lean'), agent('latexFixer')],
   });
 }
 
-// The physicist team with two workflows and the root-plus-review tool pair.
+// The physicist team with two document tasks and the root-plus-review pair.
 function partialPhysicistPlan(): CliTeamRunPlan {
   return planRun(findPreset('physicist'), {
-    workflow: [
-      agent('correct', AgentCategory.Workflow),
-      agent('polish', AgentCategory.Workflow),
-    ],
-    toolUse: [
-      agent('review', AgentCategory.ToolUse),
-      agent('orchestrator', AgentCategory.ToolUse, ['agent']),
+    agents: [
+      taskAgent('correct'),
+      taskAgent('polish'),
+      agent('review'),
+      agent('orchestrator', ['agent']),
     ],
   });
 }
@@ -100,7 +86,7 @@ describe('CLI teams', () => {
   it('names an explicit non-delegating team root instead of saying it cannot delegate', () => {
     const preset = findPreset('mathematician');
     const plan = planRun(preset, {
-      toolUse: [agent('lean', AgentCategory.ToolUse)],
+      agents: [agent('lean')],
       agentOverride: 'lean',
     });
 
@@ -119,7 +105,7 @@ describe('CLI teams', () => {
   it('rejects launch block message formatting for launchable plans', () => {
     const preset = findPreset('lean-project');
     const plan = planRun(preset, {
-      toolUse: toolUseTeam(preset, 'leanOrchestrator'),
+      agents: fullTeam(preset, 'leanOrchestrator'),
     });
 
     expect(() => formatCliTeamLaunchBlockMessage(plan)).toThrow(
@@ -132,28 +118,20 @@ describe('CLI teams', () => {
     const record = cliTeamListRecord(partialLeanProjectPlan());
 
     expect(record.id).toBe('lean-project');
-    expect(record.agents.toolUse).toEqual(preset.agents.toolUse);
+    expect(record.agents).toEqual(preset.agents);
     expect(record.availability).toMatchObject({
       status: 'unavailable',
       agents: {
-        workflow: {
-          available: 0,
-          total: 0,
-          missing: [],
-          label: '0',
-        },
-        toolUse: {
-          available: 2,
-          total: 7,
-          missing: [
-            'leanSearch',
-            'leanSimplifier',
-            'leanBlueprint',
-            'progressCheck',
-            'leanOrchestrator',
-          ],
-          label: '2/7',
-        },
+        available: 2,
+        total: 7,
+        missing: [
+          'leanSearch',
+          'leanSimplifier',
+          'leanBlueprint',
+          'progressCheck',
+          'leanOrchestrator',
+        ],
+        label: '2/7',
       },
     });
     expect(record.availability.rootAgent).toBeUndefined();
@@ -166,10 +144,7 @@ describe('CLI teams', () => {
         name: 'Paper Team',
         description: 'For this paper',
         icon: 'bookmark',
-        agents: {
-          workflow: ['polish'],
-          toolUse: ['review'],
-        },
+        agents: ['polish', 'review'],
       },
     ];
     const customPresets = (raw: unknown) =>
@@ -187,15 +162,13 @@ describe('CLI teams', () => {
     const plan = partialPhysicistPlan();
 
     expect(plan.rootAgent?.name).toBe('orchestrator');
-    expect(plan.agentKeys.workflow).toEqual([
-      'builtInWorkflow:correct',
-      'builtInWorkflow:polish',
+    expect(plan.agentKeys).toEqual([
+      'builtIn:orchestrator',
+      'builtIn:review',
+      'builtIn:correct',
+      'builtIn:polish',
     ]);
-    expect(plan.agentKeys.toolUse).toEqual([
-      'builtInToolUse:orchestrator',
-      'builtInToolUse:review',
-    ]);
-    expect(plan.missingAgents.toolUse).toContain('research');
+    expect(plan.missingAgents).toContain('research');
   });
 
   it.each([
@@ -228,18 +201,11 @@ describe('CLI teams', () => {
         description: 'User-authored team.',
         icon: 'cube',
         source: 'custom',
-        agents: {
-          workflow: [],
-          toolUse: members,
-        },
+        agents: members,
       },
       {
-        toolUse: members.map((member) =>
-          agent(
-            member,
-            AgentCategory.ToolUse,
-            delegating.includes(member) ? ['agent'] : [],
-          ),
+        agents: members.map((member) =>
+          agent(member, delegating.includes(member) ? ['agent'] : []),
         ),
       },
     );

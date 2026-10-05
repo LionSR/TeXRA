@@ -59,7 +59,7 @@ function completedRun(ctx: AgentLaunchContext): RunEndResult {
   return {
     outcome: RUN_OUTCOME.COMPLETED,
     runId: ctx.runId,
-    output: { category: 'toolUse', response: '', files: [] },
+    output: { response: '', files: [] },
   };
 }
 
@@ -107,7 +107,6 @@ describe('terminal result event', () => {
       yield* runLifecycle(ctx, () => Effect.succeed(completedRun(ctx)));
       const result = yield* expectSingleResult(ctx, {
         outcome: 'completed',
-        output: { category: 'toolUse' },
       });
       expect(result.error).toBeUndefined();
     }),
@@ -192,7 +191,7 @@ describe('terminal result event', () => {
           Effect.succeed({
             outcome: RUN_OUTCOME.CANCELLED,
             runId: ctx.runId,
-            output: { category: 'toolUse', response: '', files: [] },
+            output: { response: '', files: [] },
           }),
         );
         yield* expectSingleResult(ctx, { outcome: 'cancelled' });

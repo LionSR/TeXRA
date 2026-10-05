@@ -4,7 +4,6 @@ import * as vscode from 'vscode';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime';
-import { runOutputReader } from '@agent/storage';
 import type { WorkflowDiffRequest } from '@controllers/session/hostRunActions';
 import {
   prepareBuildDisplay,
@@ -32,13 +31,12 @@ import {
 } from '@latex/latexdiff/latexdiffCopy';
 import { withLogChannel } from '@logger/effectLog';
 import { withSessionFs } from '@platform/rootedFs';
+import { DocumentsStateKey } from '@shared/settingsView/documentsSettings';
 import type { FileLocation } from '@shared/schemas';
-import {
-  TEXRA_SETTINGS,
-  TexraStateKey,
-} from '@shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
 import { settingEnumChoices } from '@shared/state/stateSettings';
 import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
+import { runOutputReader } from '@tools/documents/runOutputs';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
@@ -88,11 +86,11 @@ const promptForLatexdiffMathMarkup = Effect.fnUntraced(function* (
 ) {
   const configuredMode = yield* readSettingFrom<LatexdiffMathMarkupValue>(
     session.roots,
-    TexraStateKey.LATEXDIFF_MATH_MARKUP,
+    DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
   );
   // The row is a catalog enum row: a missing one is a defect, not an option.
   const items: MarkupItem[] = settingEnumChoices<LatexdiffMathMarkupValue>(
-    TEXRA_SETTINGS.byKey(TexraStateKey.LATEXDIFF_MATH_MARKUP)!,
+    TEXRA_SETTINGS.byKey(DocumentsStateKey.LATEXDIFF_MATH_MARKUP)!,
   )!.map(({ value, label, description }) => ({
     label,
     description,

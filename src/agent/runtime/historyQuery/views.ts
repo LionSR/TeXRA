@@ -46,7 +46,6 @@ SELECT
     json_extract(s.data, '$.identity.workflowName'),
     json_extract(s.data, '$.identity.tool')
   ) AS name,
-  json_extract(s.data, '$.category') AS category,
   COALESCE(
     (SELECT json_extract(m.data, '$.model') FROM events m
       WHERE m.run_id = s.run_id AND m.type = 'run.model'
@@ -156,7 +155,7 @@ export const HISTORY_INSERT_SQL =
 export const HISTORY_REMOVE_SQL = 'DELETE FROM events WHERE run_id = ?';
 
 /** What the tool description tells the model it can query. */
-export const HISTORY_VIEW_SUMMARY = `- runs(id, parent_id, kind, name, category, model, description, started_at, lifecycle, ended_at, outcome, error, cost, input_tokens, output_tokens) - one row per run. lifecycle is 'created', 'activated' (launched or resumed; it may still be running or may have died) or 'ended'; ended_at/outcome/error/cost/tokens are set only when ended, and cost/tokens are the sums of the run's usage rows. parent_id is NULL for a top-level or detached run.
+export const HISTORY_VIEW_SUMMARY = `- runs(id, parent_id, kind, name, model, description, started_at, lifecycle, ended_at, outcome, error, cost, input_tokens, output_tokens) - one row per run. lifecycle is 'created', 'activated' (launched or resumed; it may still be running or may have died) or 'ended'; ended_at/outcome/error/cost/tokens are set only when ended, and cost/tokens are the sums of the run's usage rows. parent_id is NULL for a top-level or detached run.
 - run_tree(ancestor_id, id, depth) - every ancestor of every run; depth 1 is the direct parent.
 - messages(position, run_id, at, role, text) - user turns and assistant replies, role 'user' or 'assistant'.
 - tool_calls(position, run_id, call_id, tool, input, status, result, started_at, ended_at) - input and result are JSON text; status/result are NULL while the call is open.

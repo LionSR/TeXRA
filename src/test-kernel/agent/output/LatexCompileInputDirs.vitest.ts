@@ -16,7 +16,7 @@ import {
 import { createOutputState, ensureRoundData } from '@agent/output/outputState';
 import type { WorkspaceFs } from '@platform/rootedFs';
 import type { RunId, FileLocation } from '@shared/schemas';
-import { TexraStateKey } from '@shared/settingsView/texraSettings';
+import { DocumentsStateKey } from '@shared/settingsView/documentsSettings';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
@@ -173,7 +173,7 @@ describe('workflow LaTeX compile input directories', () => {
             storagePath,
             workspacePath: undefined,
             workspaceState: {
-              [TexraStateKey.WORKFLOW_AUTO_COMPILE]: false,
+              [DocumentsStateKey.WORKFLOW_AUTO_COMPILE]: false,
             },
           }),
         );
@@ -181,8 +181,8 @@ describe('workflow LaTeX compile input directories', () => {
           storagePath,
           workspacePath,
           workspaceState: {
-            [TexraStateKey.WORKFLOW_AUTO_COMPILE]: true,
-            [TexraStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: 30_000,
+            [DocumentsStateKey.WORKFLOW_AUTO_COMPILE]: true,
+            [DocumentsStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: 30_000,
           },
         });
 

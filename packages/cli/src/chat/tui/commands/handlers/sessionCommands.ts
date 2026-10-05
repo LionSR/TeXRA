@@ -29,7 +29,7 @@ import type { SessionBackend } from '@controllers/session/sessionBackend';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import { goalStateOf } from '@shared/plugins/goal';
 import { isLiveRun } from '@shared/session/sessionView';
-import { AgentCategory, type RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { interruptedTasks } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -63,7 +63,7 @@ export function showCliWorkPlan(session: SessionHandle): void {
   }
   clearTransientNotice();
   const run = session.runView(runId);
-  if (run?.category === AgentCategory.ToolUse && run.plan !== null) {
+  if (run && run.plan !== null) {
     openWorkPlanReader(runId);
   } else {
     closeForegroundReader();

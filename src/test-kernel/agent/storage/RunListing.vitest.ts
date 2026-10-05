@@ -16,7 +16,6 @@ import {
   type RunIdentity,
   type RunOutcome,
 } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { seedRunRecord } from '@test/support/runRecordSeeds';
@@ -29,7 +28,6 @@ function config(
     agent,
     model: 'deepseek/deepseek-v4-flash',
     instruction: 'Test run listing.',
-    agentCategory: AgentCategory.ToolUse,
     workingDirectory: '/workspace',
     inputFiles,
   });
@@ -57,7 +55,6 @@ async function writeMetadata(id: RunId, meta: SeededRunFacts): Promise<void> {
             type: 'run.start',
             aggregateId: aggregateId('run', id),
             identity: meta.identity,
-            category: 'toolUse',
             userFollowUpSupport: 'unsupported',
             parent:
               meta.parentRunId === undefined
@@ -89,7 +86,7 @@ async function writeMetadata(id: RunId, meta: SeededRunFacts): Promise<void> {
           type: 'run.end',
           aggregateId: aggregateId('run', id),
           outcome: meta.outcome,
-          output: emptyRunEndOutput(AgentCategory.ToolUse),
+          output: emptyRunEndOutput(),
         },
       ]),
     );
@@ -284,9 +281,6 @@ describe('run listing normalization', () => {
           identity: { kind: 'process', tool: 'bash' },
           record: { name: 'bash', instruction: 'ls -la' },
         });
-        expect(entry && 'record' in entry && entry.record).not.toHaveProperty(
-          'agentCategory',
-        );
         expect(entry && 'record' in entry && entry.record).not.toHaveProperty(
           'model',
         );

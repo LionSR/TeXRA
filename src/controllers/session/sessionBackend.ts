@@ -117,8 +117,6 @@ interface SessionLaunchOptions {
   readonly suppressErrorNotification?: boolean;
   /** The chat's previous root: its approval bypasses carry over. */
   readonly continues?: RunId;
-  /** Refuse a config whose category differs from its agent's. */
-  readonly enforceCategory?: boolean;
 }
 
 /**
@@ -175,7 +173,6 @@ export function localSessionBackend(session: SessionHandle): SessionBackend {
         preferHelperModel: options.preferHelperModel ?? false,
         ownApiKeyFallback: options.ownApiKeyFallback,
         onRun: launchOnRun(session.approvals, options),
-        enforceCategory: options.enforceCategory,
         continues: options.continues,
         onRunResolved: options.onRunResolved,
         suppressErrorNotification: options.suppressErrorNotification,

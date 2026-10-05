@@ -35,10 +35,7 @@ const mocks = vi.hoisted(() => ({
     id: 'mathematician',
     name: 'Mathematician',
     description: 'For math papers.',
-    agents: {
-      workflow: [],
-      toolUse: ['orchestrator'],
-    },
+    agents: ['orchestrator'],
     source: 'built-in',
   })),
   formatCliTeamRunWarnings: vi.fn(),
@@ -120,8 +117,8 @@ type TeamRunInit = Parameters<typeof nativeRun>[1];
 
 const ORCHESTRATOR_AGENT = {
   name: 'orchestrator',
-  category: 'toolUse',
-  source: 'builtInToolUse',
+  source: 'builtIn',
+  task: null,
   path: '/agents/orchestrator.yaml',
   tools: ['agent'],
 };
@@ -129,8 +126,8 @@ const ORCHESTRATOR_AGENT = {
 interface TeamPlan {
   readonly preset: { id: string; name: string; source: string };
   readonly rootAgent?: typeof ORCHESTRATOR_AGENT;
-  readonly missingAgents: { workflow: string[]; toolUse: string[] };
-  readonly agentKeys: { workflow: string[]; toolUse: string[] };
+  readonly missingAgents: string[];
+  readonly agentKeys: string[];
 }
 
 function teamPlan(overrides: Partial<TeamPlan> = {}): TeamPlan {
@@ -141,14 +138,8 @@ function teamPlan(overrides: Partial<TeamPlan> = {}): TeamPlan {
       source: 'built-in',
     },
     rootAgent: ORCHESTRATOR_AGENT,
-    missingAgents: {
-      workflow: [],
-      toolUse: [],
-    },
-    agentKeys: {
-      workflow: [],
-      toolUse: ['builtInToolUse:orchestrator'],
-    },
+    missingAgents: [],
+    agentKeys: ['builtIn:orchestrator'],
     ...overrides,
   };
 }
@@ -263,14 +254,11 @@ describe('CLI team run command', () => {
     mocks.planTeamRuns.mockImplementation((presets) =>
       presets.map((preset: unknown) =>
         mocks.planTeamRun(preset, {
-          resolveAgent: agentCatalogMock.getCategoryAgent,
+          resolveAgent: agentCatalogMock.getCatalogAgent,
         }),
       ),
     );
-    agentCatalogMock.getAgentsByCategory.mockImplementation(
-      (category: string) =>
-        category === 'toolUse' ? [ORCHESTRATOR_AGENT] : [],
-    );
+    agentCatalogMock.getCatalogAgents.mockReturnValue([ORCHESTRATOR_AGENT]);
     mocks.planTeamRun.mockReturnValue(teamPlan());
     mocks.executeCliToolUseConfig.mockResolvedValue({
       ok: true,
@@ -278,7 +266,6 @@ describe('CLI team run command', () => {
         runId: 'exec-team',
         outcome: RUN_OUTCOME.COMPLETED,
         output: {
-          category: 'toolUse',
           response: 'The proof is correct.',
           files: [],
         },
@@ -329,7 +316,6 @@ describe('CLI team run command', () => {
       runId: 'exec-team',
       outcome: RUN_OUTCOME.COMPLETED,
       output: {
-        category: 'toolUse',
         response: 'The proof is correct.',
         files: [],
       },
@@ -453,11 +439,15 @@ describe('CLI team run command', () => {
     await expectBlockedLaunch({
       plan: teamPlan({
         rootAgent: undefined,
-        missingAgents: {
-          workflow: ['generic', 'devise', 'apply'],
-          toolUse: ['simplifier', 'progressCheck', 'orchestrator'],
-        },
-        agentKeys: { workflow: [], toolUse: ['builtInToolUse:lean'] },
+        missingAgents: [
+          'generic',
+          'devise',
+          'apply',
+          'simplifier',
+          'progressCheck',
+          'orchestrator',
+        ],
+        agentKeys: ['builtIn:lean'],
       }),
       message:
         'Team "mathematician" cannot start: no runnable team root. Run `texra team show mathematician` to see missing agents. Install or create a runnable team root before launching this team.',
@@ -470,10 +460,7 @@ describe('CLI team run command', () => {
   it('refuses a delegating root with no available team members', async () => {
     await expectBlockedLaunch({
       plan: teamPlan({
-        missingAgents: {
-          workflow: ['generic'],
-          toolUse: ['simplifier'],
-        },
+        missingAgents: ['generic', 'simplifier'],
       }),
       message:
         'Team "mathematician" cannot start: no available team members. Run `texra team show mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent orchestrator` if that is what you want.',

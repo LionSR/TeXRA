@@ -373,7 +373,7 @@ const HARNESS_CONFIG_ROWS: Record<
   'model.useBackgroundResponses': configToggle(
     true,
     'Background responses',
-    'Keep long-running OpenAI requests alive in the background (polling) instead of timing out after 10 minutes. Applies automatically to GPT models running workflow agents; ignored otherwise. Disable to fall back to synchronous streaming requests.',
+    'Keep long-running OpenAI requests alive in the background (polling) instead of timing out after 10 minutes. Applies automatically to GPT models running a text-only agent (one without tools); ignored otherwise. Disable to fall back to synchronous streaming requests.',
   ),
   'model.openaiFastTier': configToggle(
     false,
@@ -453,9 +453,9 @@ const HARNESS_CONFIG_ROWS: Record<
   },
   'skills.enabled': {
     schema: AgentSkillsEnabledSchema.prefault(AGENT_SKILLS_ENABLED_DEFAULT),
-    title: 'Enable skills for tool-use agents',
+    title: 'Enable skills for agents',
     description:
-      'Expose enabled TeXRA and imported skills to tool-use agent prompts. Skills are off by default.',
+      'Expose enabled TeXRA and imported skills to agent prompts. Skills are off by default.',
     category: 'tools',
     surfaces: { settingsView: 'skills', cliConfig: true },
   },

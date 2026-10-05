@@ -40,13 +40,12 @@
 
 import {
   aggregateTarget,
-  nonEmptyRounds,
   aggregateId as qualifyAggregateId,
-  AgentCategory,
   MESSAGE_TYPES,
   RUN_PHASE,
   RUN_LIFECYCLE_READY,
   RUN_SUBSTATE,
+  isDocumentTaskConfig,
   isPlainAgentIdentity,
   listingKeyOf,
   isTranscriptEvent,
@@ -61,7 +60,6 @@ import {
   type ExistenceReconciliation,
   type LocalRuntimeState,
   type DisplaySessionEvent,
-  type RoundOutput,
   type RunId,
   type TextChunk,
   type TranscriptSubscription,
@@ -105,7 +103,7 @@ import {
 } from './transcriptState';
 
 import { runActions } from './runActions';
-import { emptySessionView, loopCoordinate, rollupOf } from './sessionView';
+import { emptySessionView, rollupOf } from './sessionView';
 import type { SessionView, RunView } from './sessionView';
 
 type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
@@ -212,12 +210,9 @@ function reconcileExistence(
     // stream a subscription named before its `run.start` committed.
     const target = aggregateTarget(id);
     if (target.kind === 'run') foldRunRemoved(view, target.id);
-    if (
-      target.kind === 'inquiry' &&
-      view.inquiries.some((inquiry) => inquiry.threadId === target.id)
-    ) {
-      view.inquiries = view.inquiries.filter(
-        (inquiry) => inquiry.threadId !== target.id,
+    if (view.pluginFacts.some((fact) => fact.aggregateId === id)) {
+      view.pluginFacts = view.pluginFacts.filter(
+        (fact) => fact.aggregateId !== id,
       );
     }
   }
@@ -239,7 +234,7 @@ interface SessionIndexes {
   /** Current sequence-row claims for the checked resident scope. */
   readonly claims: Map<AggregateId, string | null>;
   /** What the rows both folds read say about each run (`runRows.ts`);
-   *  `view.requests`, `view.queuedFollowUps`, `RunView.position` and the run's
+   *  `view.requests`, `view.queuedFollowUps`, `RunView.turn` and the run's
    *  output rounds project it. */
   readonly rows: Map<RunId, RunRows>;
   /** One entry per `${aggregate}/${listing type}`: the commit of the latest
@@ -315,9 +310,6 @@ function writableMap<K extends ViewMapKey>(
 // Run construction
 // ---------------------------------------------------------------------------
 
-/** A run with no rounds recorded yet. */
-const NO_ROUNDS = Object.freeze({});
-
 /** The run a run-aggregate event names; null for any other aggregate kind. */
 function runIdOf(aggregateId: AggregateId): RunId | null {
   const target = aggregateTarget(aggregateId);
@@ -355,7 +347,7 @@ function createRun(
     runStartedAt: null,
     lastTimestamp: event.at,
     conversationProgress: { toolCallCount: 0 },
-    position: null,
+    turn: null,
     followUpSupport: event.userFollowUpSupport,
     context: null,
     parentId: event.parent === null ? null : event.parent.id,
@@ -383,25 +375,7 @@ function createRun(
     latestLine: null,
     transcript: emptyTranscript(),
   };
-  switch (event.category) {
-    case AgentCategory.Workflow:
-      return {
-        ...common,
-        category: AgentCategory.Workflow,
-        files: NO_ROUNDS,
-        missingOutputs: NO_ROUNDS,
-        compileFailures: NO_ROUNDS,
-      };
-    case AgentCategory.ToolUse:
-      return {
-        ...common,
-        category: AgentCategory.ToolUse,
-        plan: null,
-        outputs: NO_ROUNDS,
-        missingOutputs: NO_ROUNDS,
-        compileFailures: NO_ROUNDS,
-      };
-  }
+  return { ...common, documentTask: false, plan: null };
 }
 
 /**
@@ -698,9 +672,10 @@ function nonEmpty(text: string | undefined): string | undefined {
   return text !== undefined && text.trim().length > 0 ? text : undefined;
 }
 
-/** A workflow run's newest operational summary: what its tool, phase, card,
- *  error, or plain log row last said. */
-function workflowOperationalLatestLine(
+/** A run's newest operational summary, for one with no reply to show (a
+ *  script's run, a document task): what its tool, phase, card, error, or
+ *  plain log row last said. */
+function operationalLatestLine(
   rows: readonly TranscriptRow[],
 ): string | undefined {
   for (let index = rows.length - 1; index >= 0; index -= 1) {
@@ -790,9 +765,9 @@ function withTranscriptFacts(run: RunView): RunView {
   );
   const { thinkingActive, compactingActive } = transcriptActivity(transcript);
   const latestLine =
-    (run.category === AgentCategory.Workflow
-      ? workflowOperationalLatestLine(transcript.rows)
-      : latestConversationLine(transcript.rows, settledRows)) ?? run.latestLine;
+    latestConversationLine(transcript.rows, settledRows) ??
+    operationalLatestLine(transcript.rows) ??
+    run.latestLine;
   if (
     settledRows === transcript.settledRows &&
     thinkingActive === run.thinkingActive &&
@@ -829,14 +804,6 @@ function foldTextChunk(view: SessionView, chunk: TextChunk): boolean {
 // Durable events
 // ---------------------------------------------------------------------------
 
-/** A tool-use fact on a run whose arm cannot hold it is a publisher defect,
- *  made loud at the fold's boundary. */
-function wrongArm(run: RunView, name: string): never {
-  throw new Error(
-    `${name} names ${run.id}, a ${run.category} run; the fact belongs to the ${AgentCategory.ToolUse} arm`,
-  );
-}
-
 /** A durable event `runRows.ts` does not own, bar a priced turn. */
 type OwnEvent = Exclude<DisplaySessionEvent, SharedRunRow | { type: 'usage' }>;
 
@@ -854,7 +821,6 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
     case 'response.finalized':
     case 'run.start':
     case 'approval.policy':
-    case 'inquiryThreadUpdated':
     case 'run.removed':
       // Existence cannot become more true (5.2); the rest move session slices.
       return run;
@@ -875,7 +841,7 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         status: RUN_PHASE.RUNNING,
         substate,
         runStartedAt: event.at,
-        position: null,
+        turn: null,
       };
     }
     case 'run.config': {
@@ -889,6 +855,7 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         modelLabel: model === null ? null : getModelLabel(model),
         command: run.identity.kind === 'process' ? config.instruction : null,
         inputFiles: 'inputFiles' in config ? config.inputFiles : [],
+        documentTask: isDocumentTaskConfig(config),
       };
     }
     case 'run.model':
@@ -914,8 +881,6 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
     case 'run.fact': {
       // Each family (and `plugin.fact` kind) is its own latest-only key.
       const fact = event.fact;
-      if (run.category !== AgentCategory.ToolUse)
-        return wrongArm(run, `run.fact ${fact.key}`);
       return { ...run, plan: fact.plan };
     }
     case 'plugin.fact':
@@ -924,7 +889,7 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         facts: { ...run.facts, [`${event.plugin}/${event.kind}`]: event.value },
       };
     case 'child.park':
-      // A loop-driven child's park or pause; no run history, so `position` stays null.
+      // A loop-driven child's park or pause; no run history, so `turn` stays null.
       return event.phase === 'paused'
         ? { ...parked(run, true, event.at), substate: RUN_SUBSTATE.PAUSED }
         : parked(run, phaseMoveOf(event) === RUN_PHASE.WAITING, event.at);
@@ -961,11 +926,11 @@ function withPosition(run: RunView, rows: RunRows, row: SharedRunRow) {
     (row.payload.at === 'waiting' || row.payload.at === 'halted')
   )
     run = { ...run, forkPoint: row.seq };
-  const position = loopCoordinate(rows.turn, run.category);
+  const turn = rows.turn;
   const phase = phaseMoveOf(row);
   return phase === null
-    ? { ...run, position }
-    : parked({ ...run, position }, phase === RUN_PHASE.WAITING, row.at);
+    ? { ...run, turn }
+    : parked({ ...run, turn }, phase === RUN_PHASE.WAITING, row.at);
 }
 
 /** The run window (3.3): a park closes it and settles the transcript, any
@@ -1001,23 +966,20 @@ function applySessionSlices(
       if (runId !== null)
         writableMap(view, 'policy').set(runId, event.snapshot);
       return;
-    case 'inquiryThreadUpdated': {
-      const {
-        type: _type,
-        aggregateId: _aggregateId,
-        seq: _seq,
-        commit: _commit,
-        origin: _origin,
-        at: _at,
-        ...thread
-      } = event;
-      const at = view.inquiries.findIndex(
-        (i) => i.threadId === thread.threadId,
+    case 'plugin.fact': {
+      // A run's own rows fold onto the run (`applyOwnArm`).
+      if (runId !== null) return;
+      const { seq: _s, commit: _c, origin: _o, at: _a, ...fact } = event;
+      const held = view.pluginFacts.findIndex(
+        (old) =>
+          old.aggregateId === fact.aggregateId &&
+          old.plugin === fact.plugin &&
+          old.kind === fact.kind,
       );
-      view.inquiries =
-        at === -1
-          ? [...view.inquiries, thread]
-          : view.inquiries.with(at, thread);
+      view.pluginFacts =
+        held === -1
+          ? [...view.pluginFacts, fact]
+          : view.pluginFacts.with(held, fact);
       return;
     }
     default:
@@ -1047,20 +1009,7 @@ function applyRowFacts(
   rows.set(run.id, after);
   if (moved.requests !== undefined) projectRequests(view, run.id, after);
   if (moved.followUps !== undefined) projectFollowUps(view, run.id, after);
-  const next = moved.at === undefined ? run : withPosition(run, after, event);
-  const rounds = moved.roundOutputs;
-  if (rounds === undefined) return next;
-  const byRound = <T>(pick: (round: RoundOutput) => T) =>
-    Object.fromEntries(rounds.map((r) => [r.round, pick(r)]));
-  const files = nonEmptyRounds(byRound((r) => r.outputs));
-  return {
-    ...next,
-    ...(run.category === AgentCategory.Workflow
-      ? { files }
-      : { outputs: files }),
-    compileFailures: nonEmptyRounds(byRound((r) => r.compileFailures)),
-    missingOutputs: byRound((r) => r.missingOutputs),
-  };
+  return moved.at === undefined ? run : withPosition(run, after, event);
 }
 
 /** `view.requests` is every run's open requests, in the order the rows
@@ -1161,9 +1110,8 @@ function foldDurable(
   const newest = latest.get(listingKey);
   if (newest !== undefined && event.commit <= newest) return traceChanged;
 
-  // The run the event names: its aggregate, bar an inquiry's thread.
-  const runId =
-    event.type === 'inquiryThreadUpdated' ? null : runIdOf(event.aggregateId);
+  // The run the event names: its aggregate, bar a plugin's own.
+  const runId = runIdOf(event.aggregateId);
   if (runId === null) {
     latest.set(listingKey, event.commit);
     applySessionSlices(view, null, event);
@@ -1240,9 +1188,6 @@ function foldTraceEvent(
     debug: view.debug,
     lifecycleToTaskGroups: lifecycleToTaskGroups(run),
     runLabels: view.runs,
-    ...(run.category === AgentCategory.Workflow
-      ? { statistics: { model: run.model } }
-      : {}),
   });
   writableMap(view, 'folded').set(event.aggregateId, event.seq);
   // A filtered fact still advances its source cursor. Keep the run and
@@ -1277,8 +1222,10 @@ function foldRunRemoved(view: SessionView, runId: RunId): boolean {
   if (view.requests.some((r) => r.runId === run.id)) {
     view.requests = view.requests.filter((r) => r.runId !== run.id);
   }
-  if (view.inquiries.some((i) => i.parentRunId === run.id)) {
-    view.inquiries = view.inquiries.filter((i) => i.parentRunId !== run.id);
+  if (view.pluginFacts.some((fact) => fact.parent === run.id)) {
+    view.pluginFacts = view.pluginFacts.filter(
+      (fact) => fact.parent !== run.id,
+    );
   }
   view.order = withoutId(view.order, run.id);
   const parent =

@@ -9,7 +9,6 @@ import { useLayoutEffect, type ReactNode } from 'react';
 // Local imports - shared constants and schemas
 import { clampModalWidth } from '@cli/tui/ui/theme';
 import type { RunId } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
 import { interruptedTasks } from '@ui/copy/interruptedTasks';
 import { clamp } from '@utils/core';
 
@@ -107,8 +106,7 @@ export function ConversationRegion({
   const staticTranscriptRepaint = useSignal(staticTranscriptRepaintEpoch);
   const staticTranscriptKey = `${scrollbackTarget.ownerKey}:${staticTranscriptRepaint}`;
 
-  const activePlan =
-    activeRun?.category === AgentCategory.ToolUse ? activeRun.plan : null;
+  const activePlan = activeRun?.plan ?? null;
   const queuedFollowUpMessages = (
     activeRunId === undefined
       ? []

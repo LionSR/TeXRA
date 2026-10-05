@@ -36,7 +36,7 @@ serve as supporting capabilities within your research project.
 ## Understand the system
 
 - [**Built-in agents**](./built-in-agents.md): the full catalog
-- [**Agent architecture**](./agent-architecture.md): workflow vs. tool-use, reflection, planning
+- [**Agent architecture**](./agent-architecture.md): document tasks vs. chats, reflection, planning
 - [**Multi-agent workflows**](./multi-agent-workflows.md): how a team lead fans work out to specialists in parallel
 - [**Models**](./models.md): picking a model for the job
 - [**Custom agents**](./custom-agents.md): define your own in YAML
@@ -76,8 +76,8 @@ live in the extension's Sessions view, and vice versa.
 ```mermaid
 graph TB
     User[User] --> |selects files + agent| Orchestrator[Agent Orchestrator]
-    Orchestrator --> WA[Workflow Agents]
-    Orchestrator --> IA[Tool-use Agents]
+    Orchestrator --> WA[Document Tasks]
+    Orchestrator --> IA[Chat Agents]
 
     WA --> |polish, correct, merge| Output[Versioned Output Files]
     Output --> Diff[Color-Coded Diff]
@@ -91,11 +91,11 @@ graph TB
     Shell --> Wolfram[WolframScript]
 ```
 
-TeXRA's agents come in two classes:
+TeXRA's agents run in two ways:
 
 <AgentClasses />
 
-<p class="hero-caption">Workflow agents run a structured pipeline and return a diff; tool-use agents work conversationally with grounded tools.</p>
+<p class="hero-caption">A document task runs a structured pipeline and returns a diff; a chat works conversationally with grounded tools.</p>
 
 The system rests on three established AI design patterns: **reflection**
 (agents critique their own output and iterate), **tool use** (agents

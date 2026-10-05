@@ -9,7 +9,6 @@
 import { z } from 'zod';
 
 import {
-  AgentCategorySchema,
   AgentConfigBannerDataSchema,
   AgentOptionDataSchema,
   DependencyBannerDataSchema,
@@ -66,7 +65,8 @@ export function projectDisplayOf(
 
 export const HostSnapshotSchema = z.object({
   project: ProjectDisplaySchema,
-  agentOptions: z.record(AgentCategorySchema, z.array(AgentOptionDataSchema)),
+  /** Every agent; one that is also a document task carries its `rounds`. */
+  agentOptions: z.array(AgentOptionDataSchema),
   modelOptions: z.array(ModelOptionDataSchema),
   teamOptions: z.array(TeamOptionDataSchema),
   workspaceRoots: z.array(WorkspaceRootOptionDataSchema),
@@ -90,7 +90,7 @@ export type HostSnapshot = z.infer<typeof HostSnapshotSchema>;
 export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
   return {
     project,
-    agentOptions: { toolUse: [], workflow: [] },
+    agentOptions: [],
     modelOptions: [],
     teamOptions: [],
     workspaceRoots: [],

@@ -247,6 +247,18 @@ export const RunUsageTotalsSchema = z.object({
 
 export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
 
+/** `totals` summed field by field; the first input is the first's. */
+export function sumRunUsageTotals(
+  totals: readonly RunUsageTotals[],
+): RunUsageTotals {
+  const sum = RunUsageTotalsSchema.parse({});
+  for (const usage of totals)
+    for (const key of RunUsageTotalsSchema.keyof().options)
+      if (key !== 'firstInputTokens') sum[key] += usage[key];
+  sum.firstInputTokens = totals[0]?.firstInputTokens ?? 0;
+  return sum;
+}
+
 /** A run's usage before its first turn: every counter at its zero. */
 export const EMPTY_RUN_USAGE_TOTALS: RunUsageTotals = Object.freeze(
   RunUsageTotalsSchema.parse({}),

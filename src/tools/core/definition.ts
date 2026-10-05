@@ -11,7 +11,6 @@ import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
   ToolError,
-  type ToolDefinition,
   type ToolResult,
 } from '@shared/schemas';
 import { findStorageRefusal } from '@shared/session/runHistory';
@@ -44,8 +43,6 @@ export type DefineToolOptions<T, R = never> = {
   name: string;
   description: string;
   schema: ZodType<T, unknown>;
-  /** Agent category this delegation tool launches. */
-  availabilityCategory?: ToolDefinition['availabilityCategory'];
   /** See {@link ToolDefinition.scriptReturns}. */
   scriptReturns?: string;
   /** Product hosts this tool definition statically excludes itself from. */
@@ -104,9 +101,6 @@ export function defineTool<T, R = never>(
       // The Zod schema is the tool's only parameter representation; the
       // provider converters derive JSON Schema from it per request.
       zodSchema: def.schema,
-      ...(def.availabilityCategory && {
-        availabilityCategory: def.availabilityCategory,
-      }),
       ...(def.scriptReturns !== undefined && {
         scriptReturns: def.scriptReturns,
       }),

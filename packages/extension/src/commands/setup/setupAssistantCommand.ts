@@ -207,7 +207,6 @@ export function launchSetupAssistant(
 
     const config = AgentConfigSchema.parse({
       agent: 'setup',
-      agentCategory: 'toolUse',
       model: resolution.model,
       instruction: SETUP_INSTRUCTION,
     });

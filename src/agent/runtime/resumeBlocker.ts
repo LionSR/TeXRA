@@ -26,7 +26,7 @@ import type { SessionHandle } from './SessionHandle';
 /** What blocks resuming a run of `config` here, or null when nothing does. */
 export const resumeBlocker = Effect.fn('resumeBlocker')(function* (
   session: SessionHandle,
-  config: Pick<AgentConfig, 'agent' | 'agentCategory' | 'agentSource'>,
+  config: Pick<AgentConfig, 'agent' | 'agentSource'>,
 ): Effect.fn.Return<
   ResumeBlocker | null,
   AgentCatalogLoadError | StateReadFailed,
@@ -36,7 +36,6 @@ export const resumeBlocker = Effect.fn('resumeBlocker')(function* (
   // miss, so an agent saved a moment ago is found.
   const resolve = resolveAgentForLaunch(
     session.roots,
-    config.agentCategory,
     config.agent,
     config.agentSource,
   );

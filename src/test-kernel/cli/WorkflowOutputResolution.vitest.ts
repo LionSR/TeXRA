@@ -11,12 +11,7 @@ import {
   type CliWorkflowRunResult,
 } from '@cli/runtime/workflowOutput';
 import type { CliContext } from '@cli/runtime/cliContext';
-import {
-  RUN_OUTCOME,
-  type RunId,
-  type RunOutcome,
-  AgentCategory,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type RunId, type RunOutcome } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -62,22 +57,25 @@ function workflowResult(
     round?: number;
   }>,
   outcome: RunOutcome = RUN_OUTCOME.COMPLETED,
-): WorkflowResult {
+): WorkflowResult & { readonly output: CliWorkflowRunResult['output'] } {
   return {
     outcome,
     output: {
-      category: AgentCategory.Workflow,
-      compileFailures: [],
-      diffs: [],
-      outputs: outputs.map((output) => ({
-        round: output.round ?? 1,
-        relativePath: output.relativePath,
-        absolutePath: output.absolutePath,
-        location: 'runStorage',
-        originalPath: output.originalPath ?? null,
-        added: null,
-        removed: null,
-      })),
+      response: '',
+      files: [],
+      documents: {
+        compileFailures: [],
+        diffs: [],
+        outputs: outputs.map((output) => ({
+          round: output.round ?? 1,
+          relativePath: output.relativePath,
+          absolutePath: output.absolutePath,
+          location: 'runStorage',
+          originalPath: output.originalPath ?? null,
+          added: null,
+          removed: null,
+        })),
+      },
     },
     runId: TEST_RUN_ID,
   };

@@ -19,13 +19,7 @@ import {
 } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
-import {
-  aggregateId,
-  AgentCategory,
-  ownerPid,
-  RUN_PHASE,
-  type RunId,
-} from '@shared/schemas';
+import { aggregateId, ownerPid, RUN_PHASE, type RunId } from '@shared/schemas';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
 import { heldElsewhereBy } from '@shared/session/database';
 import { RunHistoryRefused } from '@shared/session/runHistory';
@@ -221,23 +215,7 @@ const resumeHere = Effect.fn('resumeHere')(function* (
     yield* options.onResumeResolved(runId);
     if (cancelled()) return REFUSED;
   }
-  if (config.agentCategory === AgentCategory.ToolUse) {
-    return yield* resumeQueuedToolUse(session, resume, options);
-  }
-  if (cancelled()) return REFUSED;
-  const launched = yield* Effect.result(
-    session.runs.launchRun(
-      runId,
-      resumeToolUseFromResumeData(resume, runLaunchOptions(options)),
-    ),
-  );
-  if (Result.isFailure(launched)) {
-    const refused = yield* refusalFor(launched.failure, session, runId);
-    if (refused) return refused;
-    return yield* Effect.fail(launched.failure);
-  }
-  const result = launched.success;
-  return { started: true, delivered: true, outcome: result.outcome, result };
+  return yield* resumeQueuedToolUse(session, resume, options);
 }, Effect.scoped);
 
 /** What every resumed run takes from the resume's caller. */
@@ -342,8 +320,8 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
         };
         // A background script reports once, at its end: no progress.
         const script =
-          resume.agentConfig.agentCategory === AgentCategory.ToolUse
-            ? (resume.agentConfig.backgroundScript ?? null)
+          resume.agentConfig.script?.kind === 'background'
+            ? resume.agentConfig.script
             : null;
         completion = yield* startChildRunLoop({
           session,

@@ -28,6 +28,18 @@ All notable changes to this project will be documented in this file.
   custom agent in the old format is reported as unloadable, naming the
   unrecognized keys. Every bundled and Lean agent and both creation
   templates use the new format.
+- **Workflow and tool-use agents are now one kind of agent.** Every agent
+  can chat with its tools, and one that defines a document task can also
+  revise your files: each revision asks the agent once, then extracts,
+  compiles and diffs its documents, and at the end you accept the revised
+  files as before. The agent menu has **Chat** and **Document task**
+  sections, and Settings → Agents is one list with **New chat agent** and
+  **New document task**. A lead agent now runs another agent's document
+  task with a separate tool from the one it chats with. In the CLI,
+  `texra agents list --tasks` replaces `--category`,
+  `texra config agents --agents` replaces `--workflow` and `--tool-use`, and
+  bundled agents are named `builtIn:<name>`. An interrupted document task
+  resumes where it stopped.
 - **Outdated tools are removed: the todo list, Crossref search, DOI lookup,
   `texcount`, `arxiv_metadata` and `wolfram`.** Agents no longer keep a
   todo list: the `todo_write` tool is gone, and with it the Todos panel in
@@ -339,6 +351,12 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Document tasks can reflect with a critic.** Opt in with
+  `texra run <agent> --reflect` or `reflect: true` on `document_task`: after
+  each revision but the last, the bundled `critic` agent reads the diff and
+  compile result and returns grounded corrections plus one optional
+  improvement, which the next revision's prompt carries. The revision count
+  is unchanged.
 - **A chat shows its project's background-task notices (CLI).** A task the
   TeXRA service runs now tells a window of its own project what it would
   show on screen (a refused resume, an error with its guide link), and a
@@ -376,7 +394,7 @@ All notable changes to this project will be documented in this file.
   answer instead of having the tool withheld.
 
 - **One background TeXRA service runs tasks for every terminal (CLI).**
-  `texra tasks start <agent> --instruction "…"` starts a tool-use task in a
+  `texra tasks start <agent> --instruction "…"` starts an agent as a task in a
   per-user service, which starts on its own the first time it is needed and
   keeps the task running after the terminal closes. `texra tasks list` shows
   the tasks of every project, `texra tasks attach <id>` follows one live from
@@ -732,6 +750,12 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Document tasks run on a VS Code editor model (Copilot) again.** Since
+  document tasks became a recipe, a task launched with an editor model
+  failed at its first step; its revisions now run on that model as before.
+  A script can also run in the background on an editor model. The terminal's
+  progress line names the agent as the progress cards do (`polish`, not
+  `builtIn:polish`).
 - **Gemini calls work again.** After a change on Google's side, every
   Gemini request failed with a validation error before any output arrived.
 - **Gemini agents can call tools again, and background Gemini runs

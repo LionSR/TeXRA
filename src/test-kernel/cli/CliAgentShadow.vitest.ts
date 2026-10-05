@@ -5,29 +5,21 @@ import { resolve } from 'node:path';
 // Third-party imports
 import { Deferred, Effect, Fiber, Layer } from 'effect';
 import { it as effectIt } from '@effect/vitest';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { getAgentsByCategory, resolveAgentForLaunch } from '@agent/index';
+import { resolveAgentForLaunch } from '@agent/index';
 import { refresh } from '@agent/index/agentRegistry';
 import {
   applyInitialCliAgentSelection,
   resolveChatToolUseAgent,
 } from '@cli/chat/tui/commands/handlers/agentModelCommands';
 import { patchSessionMeta, sessionMeta } from '@cli/chat/tui/state/cliState';
-import {
-  checkCliAgentLaunch,
-  formatCliAgentList,
-  resolveCliRunAgent,
-} from '@cli/runtime/agents';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { AgentDirectories, AppState } from '@platform/interfaces';
-import type { ProcessServices } from '@platform/processRuntime';
 import { GlobalStorageFs } from '@platform/rootedFs';
-import { AgentCategory } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import {
@@ -46,19 +38,11 @@ vi.mock('@cli/chat/tui/state/transcript', () => ({
 }));
 
 /**
- * A custom *workflow* agent named `assistant` shadows the bundled *tool-use*
- * `assistant`. CLI validation used to resolve by source priority, which picked
- * the workflow shadow: `texra chat --agent assistant` failed with a category
- * mismatch while the extension launched the tool-use agent, and the delegation
- * probe read `tools` off the shadow. Validation now resolves through the same
- * category-scoped launch resolver the run itself uses.
+ * A custom agent named `assistant` (a document task) shadows the bundled
+ * `assistant`: CLI validation resolves through the launch resolver the run
+ * itself uses, so the bare name lands on the custom entry and a
+ * source-qualified key reaches the shadowed one.
  */
-/** Settle a CLI agent lookup the way a CLI entry point does. */
-function runCliAgentLookup<A, E>(
-  lookup: Effect.Effect<A, E, ProcessServices>,
-): Promise<A> {
-  return testRuntime().runPromise(lookup);
-}
 
 describe('CLI agent validation with a shadowed name', () => {
   const tempDirs: string[] = [];
@@ -120,20 +104,13 @@ describe('CLI agent validation with a shadowed name', () => {
   });
 
   effectIt.effect(
-    'validates the shadowed name against the tool-use entry launch will run',
+    'validates the shadowed name against the entry launch will run',
     () =>
       Effect.gen(function* () {
-        const entry = yield* resolveAgentForLaunch(
-          hostStores(),
-          AgentCategory.ToolUse,
-          'assistant',
-        );
+        const entry = yield* resolveAgentForLaunch(hostStores(), 'assistant');
 
-        expect(entry?.source).toBe('builtInToolUse');
-        expect(entry?.category).toBe(AgentCategory.ToolUse);
-        expect(
-          yield* checkCliAgentLaunch(hostStores(), 'assistant', entry, 'chat'),
-        ).toBe(entry);
+        expect(entry?.source).toBe('custom');
+        expect(entry?.task).not.toBeNull();
         expect(yield* resolveChatToolUseAgent(hostStores(), 'assistant')).toBe(
           entry,
         );
@@ -141,101 +118,17 @@ describe('CLI agent validation with a shadowed name', () => {
   );
 
   effectIt.effect(
-    'reads delegation support off the tool-use entry, not the shadow',
-    () =>
-      Effect.gen(function* () {
-        expect(
-          (yield* resolveAgentForLaunch(
-            hostStores(),
-            AgentCategory.Workflow,
-            'assistant',
-          ))?.source,
-        ).toBe('custom');
-      }),
-  );
-
-  effectIt.effect(
-    'still reports the category mismatch for a workflow-only agent',
-    () =>
-      Effect.gen(function* () {
-        expect(
-          yield* resolveAgentForLaunch(
-            hostStores(),
-            AgentCategory.ToolUse,
-            'polish',
-          ),
-        ).toBeUndefined();
-        expect(
-          String(yield* resolveChatToolUseAgent(hostStores(), 'polish')),
-        ).toContain(
-          'Agent "polish" is a workflow agent; `texra chat` only handles tool-use agents.',
-        );
-      }),
-  );
-
-  // `texra run` serves both categories, so a shadowed name has two candidate
-  // run shapes. Picking one silently would change what an existing invocation
-  // does without saying so; the qualified spellings the error offers are
-  // unambiguous because the registry is keyed by `source:name`.
-  it('refuses a shadowed name for `texra run` and names both candidates', async () => {
-    await expect(
-      runCliAgentLookup(resolveCliRunAgent(hostStores(), 'assistant')),
-    ).rejects.toThrow(
-      'Agent name "assistant" is ambiguous: it matches the workflow agent custom:assistant and the toolUse agent builtInToolUse:assistant. Re-run with the source-qualified name to pick one: `texra run custom:assistant` or `texra run builtInToolUse:assistant`.',
-    );
-    expect(
-      (
-        await runCliAgentLookup(
-          resolveCliRunAgent(hostStores(), 'custom:assistant'),
-        )
-      ).category,
-    ).toBe(AgentCategory.Workflow);
-    expect(
-      (
-        await runCliAgentLookup(
-          resolveCliRunAgent(hostStores(), 'builtInToolUse:assistant'),
-        )
-      ).category,
-    ).toBe(AgentCategory.ToolUse);
-  });
-
-  // Shell completion feeds `texra run` from the name column of
-  // `agents list --quiet --all`, so that column has to hold spellings the
-  // command accepts: the qualified keys for the shadowed name, whose bare form
-  // the test above shows is refused, and the plain name for everything else.
-  it('lists a name two agents share as their source-qualified keys', () => {
-    const names = formatCliAgentList([
-      ...getAgentsByCategory(AgentCategory.Workflow),
-      ...getAgentsByCategory(AgentCategory.ToolUse),
-    ])
-      .split('\n')
-      .map((row) => row.split('\t')[1]);
-
-    expect(names).toContain('custom:assistant');
-    expect(names).toContain('builtInToolUse:assistant');
-    expect(names).not.toContain('assistant');
-    expect(names).toContain('polish');
-  });
-
-  effectIt.effect(
     'resolves a source-qualified identifier to that exact source',
     () =>
       Effect.gen(function* () {
         expect(
-          (yield* resolveAgentForLaunch(
-            hostStores(),
-            AgentCategory.ToolUse,
-            'builtInToolUse:assistant',
-          ))?.source,
-        ).toBe('builtInToolUse');
-        // The workflow shadow's own key stays out of the tool-use category.
+          (yield* resolveAgentForLaunch(hostStores(), 'builtIn:assistant'))
+            ?.source,
+        ).toBe('builtIn');
         expect(
-          yield* resolveAgentForLaunch(
-            hostStores(),
-            AgentCategory.ToolUse,
-            'custom:assistant',
-          ),
-        ).toBeUndefined();
+          (yield* resolveAgentForLaunch(hostStores(), 'custom:assistant'))
+            ?.source,
+        ).toBe('custom');
       }),
   );
 
@@ -249,10 +142,7 @@ describe('CLI agent validation with a shadowed name', () => {
         patchSessionMeta({
           teamName: 'Physicist',
           cliTeamId: 'physicist',
-          delegationAgentScope: {
-            workflow: ['builtInWorkflow:polish'],
-            toolUse: ['builtInToolUse:assistant'],
-          },
+          delegationAgentScope: ['builtIn:polish', 'builtIn:assistant'],
         });
         const context = {
           // The workspace agents slots only gate visibility, which this registry leaves

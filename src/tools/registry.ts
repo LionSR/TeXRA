@@ -7,15 +7,13 @@
 
 // Third-party imports
 import { Effect, Layer } from 'effect';
-import { z } from 'zod';
 
 // Local imports
-import { documentRoundMode } from '@agent/output/documentRoundPolicy';
 import { isTexFile } from '@common/files/fileTypeUtils';
 import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
-import { extractionShorthandToolConfig } from '@shared/schemas';
+import { DOCUMENTS_SETTINGS } from '@shared/settingsView/documentsSettings';
 import {
   codemode,
   fileOps,
@@ -24,7 +22,6 @@ import {
   multiAgent,
   web,
 } from '@tools/builtinPlugins';
-import type { WorkflowAgentOptions } from '@tools/delegation/AgentTool';
 import type { WriteFilter } from '@tools/WriteTool';
 import {
   claudeAgent,
@@ -50,6 +47,15 @@ import {
   type InlineCommentProvider,
 } from './comment/InlineCommentTool';
 import { DiagnosticsTool } from './DiagnosticsTool';
+import {
+  DocumentCompileTool,
+  DocumentContextTool,
+  DocumentDiffTool,
+  DocumentExtractTool,
+  DocumentProposeTool,
+} from './documents/documentTools';
+import { DocumentReviewTool } from './documents/DocumentReviewTool';
+import { DocumentTaskTool } from './documents/DocumentTaskTool';
 import { ExtractBibliographyTool } from './latex/ExtractBibliographyTool';
 import { ExtractLatexFiguresTool } from './latex/ExtractFiguresTool';
 import { ExtractTikzFiguresTool } from './latex/ExtractTikzFiguresTool';
@@ -101,29 +107,6 @@ const texWriteFilter: WriteFilter = (path, content, config) => {
   return logReplacementDiagnostics(replaced.diagnostics).pipe(
     Effect.as(replaced.text),
   );
-};
-
-/**
- * TeXRA's workflow options on `agent`: the figure-extraction pair, which
- * reaches a workflow child as its tool configuration
- * (`autoExtractFigure` / `autoExtractTikzFigure`).
- */
-const FIGURE_OPTIONS: WorkflowAgentOptions = {
-  fields: {
-    extractFigures: z
-      .boolean()
-      .nullish()
-      .describe(
-        'Workflow agents: attach the figures the input LaTeX includes as media.',
-      ),
-    extractTikz: z
-      .boolean()
-      .nullish()
-      .describe(
-        'Workflow agents: compile the input LaTeX TikZ figures and attach them.',
-      ),
-  },
-  toolConfig: extractionShorthandToolConfig,
 };
 
 const latexExtract: Plugin = {
@@ -215,17 +198,27 @@ const setup: Plugin = {
   hidden: true,
 };
 
-/** Workflow agents: their rounds, and accepting the documents a run
- *  produced into the workspace. */
+/** Document tasks: the tools their recipe calls, launching one as a child
+ *  (`document_task`), and accepting the documents a run produced into the
+ *  workspace. */
 const documents: Plugin = {
   id: 'documents',
   name: 'Documents',
   category: 'workflow',
   description:
-    'Run workflow agents: rounds that rewrite documents, with diffs and compile checks, and accept their outputs into the workspace.',
-  tools: { accept_run_files: AcceptRunFilesTool },
+    'Run document tasks: revisions that rewrite documents, with diffs and compile checks, and accept their outputs into the workspace.',
+  tools: {
+    accept_run_files: AcceptRunFilesTool,
+    document_task: DocumentTaskTool,
+    document_context: DocumentContextTool,
+    document_extract: DocumentExtractTool,
+    document_compile: DocumentCompileTool,
+    document_diff: DocumentDiffTool,
+    document_review: DocumentReviewTool,
+    document_propose: DocumentProposeTool,
+  },
+  settings: DOCUMENTS_SETTINGS,
   hidden: true,
-  rounds: documentRoundMode,
 };
 
 /**
@@ -256,7 +249,7 @@ export const texraPlugins = (
   host.lean === undefined
     ? lean4
     : { ...lean4, processLayer: { layer: host.lean } },
-  multiAgent(FIGURE_OPTIONS),
+  multiAgent,
   githubActivity,
   externalInquiry,
   codex,

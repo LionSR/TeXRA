@@ -1,6 +1,6 @@
 import { agentName } from '../schemas/agent';
 
-/** Bundled tool-use agent that runs the agent-led setup conversation. */
+/** Bundled agent that runs the agent-led setup conversation. */
 export const SETUP_AGENT_NAME = 'setup';
 
 /**
@@ -14,7 +14,7 @@ export const BUILTIN_TEAM_ROOT_AGENT_NAMES = [
 ] as const;
 
 /**
- * Preferred tool-use agents for dropdown fallback and sorting.
+ * Preferred agents for dropdown fallback and sorting.
  * Orchestrators come first, then general and task-flavored fallbacks.
  */
 export const PREFERRED_TOOL_USE_AGENTS = [
@@ -29,7 +29,7 @@ export const PREFERRED_TOOL_USE_AGENTS = [
 // partner. They remain available when chosen explicitly with `--agent`.
 const NON_DEFAULT_TOOL_USE_AGENTS = new Set(['simplifier']);
 
-/** Whether `agent` may be chosen as the implicit default tool-use agent. */
+/** Whether `agent` may be chosen as the implicit default agent. */
 export function isImplicitDefaultEligible(agent: string): boolean {
   return !NON_DEFAULT_TOOL_USE_AGENTS.has(
     agentName(agent.trim()).toLowerCase(),

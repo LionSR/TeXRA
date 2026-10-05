@@ -3,7 +3,6 @@
  * and the refusal every handler words when a run no longer takes one.
  */
 import {
-  AgentCategory,
   isLoopDriven,
   isPlainAgentIdentity,
   RUN_PHASE,
@@ -23,17 +22,17 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * into `RunView.actions`. A run another process holds (or one this process
  * cannot read) is inspect-only. A live run (`isLiveRun`: working, waiting,
  * or spawned and not started yet) can be stopped; while it works, an
- * agent's run takes approval grants, and a tool-use agent's its compaction
- * and a reset or handoff. Nothing that rewrites or removes a run's files or
- * history is offered while it is live. Any run this process can act on can
- * be renamed, and a tool-use conversation whose first turn has ended
- * forked (at its latest settled point, before any turn it is in now). After, a
- * run can be deleted; a plain agent's run again; a workflow agent's outputs
+ * agent's run takes approval grants, and a conversation (not a document
+ * task) its compaction and a reset or handoff. Nothing that rewrites or
+ * removes a run's files or history is offered while it is live. Any run this
+ * process can act on can be renamed, and a conversation whose first turn has
+ * ended forked (at its latest settled point, before any turn it is in now). After, a
+ * run can be deleted; a plain agent's run again; a document task's outputs
  * diffed, archived, or removed. Resume is offered where it is the way to
- * continue: on any loop-driven run that was interrupted, and on a settled one
- * that takes no message (a workflow, from its saved outputs; a background
- * script that did not complete). A settled conversation continues through its
- * composer. Whether a resume can proceed is `deriveResumability`'s.
+ * continue: on any loop-driven run that was interrupted, and on a background
+ * script that did not complete. A settled document task runs again; a
+ * settled conversation continues through its composer. Whether a resume can
+ * proceed is `deriveResumability`'s.
  */
 export function runActions(
   run: Pick<
@@ -43,7 +42,7 @@ export function runActions(
     | 'status'
     | 'substate'
     | 'identity'
-    | 'category'
+    | 'documentTask'
     | 'parentId'
     | 'forkPoint'
   >,
@@ -53,9 +52,7 @@ export function runActions(
     const working = run.group === 'running' || run.group === 'waiting';
     const agent = working && run.identity.kind === 'agent';
     const compact =
-      agent &&
-      run.category === AgentCategory.ToolUse &&
-      run.substate !== RUN_SUBSTATE.STARTING;
+      agent && !run.documentTask && run.substate !== RUN_SUBSTATE.STARTING;
     return [
       'stop',
       ...(agent ? (['grant'] as const) : []),
@@ -71,7 +68,6 @@ export function runActions(
   if (
     isLoopDriven(run.identity) &&
     (run.group === 'interrupted' ||
-      run.category === AgentCategory.Workflow ||
       (run.identity.kind === 'script' && run.status !== RUN_PHASE.COMPLETED))
   )
     actions.push('resume');
@@ -79,18 +75,18 @@ export function runActions(
     actions.push('runNew');
     if (forkable(run)) actions.push('fork');
   }
-  if (run.identity.kind === 'agent' && run.category === AgentCategory.Workflow)
+  if (run.identity.kind === 'agent' && run.documentTask)
     actions.push('diff', 'pack', 'clean');
   return [...actions, ...inspectActions()];
 }
 
-/** A conversation with a settled point to cut at: a plain tool-use agent
- *  whose first turn has ended. */
+/** A conversation with a settled point to cut at: a plain agent's run, not
+ *  a document task, whose first turn has ended. */
 const forkable = (
-  run: Pick<RunView, 'identity' | 'category' | 'forkPoint'>,
+  run: Pick<RunView, 'identity' | 'documentTask' | 'forkPoint'>,
 ): boolean =>
   isPlainAgentIdentity(run.identity) &&
-  run.category === AgentCategory.ToolUse &&
+  !run.documentTask &&
   run.forkPoint !== null;
 
 /** Why a run no longer takes `action`: the refusal every handler words. */

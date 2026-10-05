@@ -20,6 +20,7 @@ import { entryExists } from '@utils/files/fsEntryExists';
 import {
   BUILTIN_WORKFLOW_AGENTS_DIR,
   BUILTIN_TOOL_USE_AGENTS_DIR,
+  builtInToolUseRoots,
 } from './BundledAgentDirectories';
 
 type AgentDirectoryDocsId = 'custom-agents';
@@ -243,31 +244,29 @@ export class AgentDirectoryService {
 }
 
 /**
- * The one `AgentSource` to local-directory mapping. It reads the port, not the
- * service, so every holder of an `AgentDirectoriesPort` answers a source
- * through the same three readers and gives `plugin` the same verdict, instead
- * of repeating the switch at its own composition root. For `builtInToolUse`
- * it is the core directory only: tool plugin agents sit in the further roots
- * `builtInToolUseRoots` adds, so a caller must not assume every entry of that
- * source lies under the directory returned here.
+ * The one `AgentSource` to local-directories mapping, read off the port so
+ * every holder of an `AgentDirectoriesPort` answers a source the same way:
+ * the custom directory, or the bundled directories (the workflow and tool-use
+ * ones, then each enabled tool plugin's). A plugin agent has none: it lives
+ * in its own plugin's.
  */
-export function agentSourceDirectory(
+export function agentSourceRoots(
   directories: AgentDirectoriesPort,
   source: AgentSource,
 ): Effect.Effect<
-  string | undefined,
+  readonly string[],
   AgentDirectoriesFailed,
   GlobalStorageFs | FileSystem.FileSystem
 > {
   switch (source) {
     case 'custom':
-      return directories.custom();
-    case 'builtInWorkflow':
-      return directories.builtIn();
-    case 'builtInToolUse':
-      return directories.builtInToolUse();
-    // No single directory: a plugin agent lives in its own plugin's.
+      return Effect.map(directories.custom(), (dir) => [dir]);
+    case 'builtIn':
+      return Effect.map(
+        Effect.all([directories.builtIn(), directories.builtInToolUse()]),
+        ([workflow, toolUse]) => [workflow, ...builtInToolUseRoots(toolUse)],
+      );
     case 'plugin':
-      return Effect.succeed(undefined);
+      return Effect.succeed([]);
   }
 }

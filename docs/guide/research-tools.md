@@ -117,9 +117,9 @@ Specialist research agents are tuned for different stages of the work. Pick one 
   valueIcon="sparkle"
   maxWidth="320px"
   :groups="[{ label: 'Research & Verification', items: [
-    { name: 'search', icon: 'mortar-board', badge: 'tool-use', badgeVariant: 'info', active: true },
-    { name: 'research', icon: 'symbol-operator', badge: 'tool-use', badgeVariant: 'info' },
-    { name: 'lean', icon: 'beaker', badge: 'tool-use', badgeVariant: 'info' },
+    { name: 'search', icon: 'mortar-board', badge: 'chat', badgeVariant: 'info', active: true },
+    { name: 'research', icon: 'symbol-operator', badge: 'chat', badgeVariant: 'info' },
+    { name: 'lean', icon: 'beaker', badge: 'chat', badgeVariant: 'info' },
   ] }]"
 />
 

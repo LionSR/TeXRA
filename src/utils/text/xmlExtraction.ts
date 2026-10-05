@@ -11,7 +11,6 @@
 import { OUTPUT_DOCUMENT_TAG } from '@shared/schemas';
 
 // Local imports
-import { createHtmlToMarkdown } from './htmlToMarkdown';
 import { removeCDATA } from './xmlCdata';
 
 /** A single extracted document: its LaTeX/text content and its `name` attribute. */
@@ -67,56 +66,6 @@ function extractNamedDocuments(content: string): NamedDocument[] {
     name: (match[1] ?? match[2]) || 'unnamed',
     content: removeCDATA(match[3] ?? ''),
   }));
-}
-
-const HTML_PATTERN = /<(?:br|p|div|strong|em|code|pre|h[1-6]|ul|ol|li)\b[^>]*>/;
-const LATEX_PATTERN = /\\(?:begin|end|section|subsection|textbf|textit|item)\{/;
-
-const LATEX_REPLACEMENTS: Array<[RegExp, string]> = [
-  // Drop list-environment markers; the inner \item lines become bullets below.
-  [/\\begin\{itemize\}/g, ''],
-  [/\\end\{itemize\}/g, ''],
-  [/\\begin\{enumerate\}/g, ''],
-  [/\\end\{enumerate\}/g, ''],
-  [/\\section\{([^}]+)\}/g, '## $1\n\n'],
-  [/\\subsection\{([^}]+)\}/g, '### $1\n\n'],
-  [/\\textbf\{([^}]+)\}/g, '**$1**'],
-  [/\\textit\{([^}]+)\}/g, '*$1*'],
-  [/\\emph\{([^}]+)\}/g, '*$1*'],
-  [/\\item\s+/g, '\n- '],
-];
-
-/**
- * Extract scratchpad content from the given output and format it for
- * display.
- *
- * Deterministic and dependency-free: an HTML scratchpad goes through
- * Turndown, a LaTeX one through {@link LATEX_REPLACEMENTS}, and Markdown —
- * what models write into the scratchpad in practice — is returned trimmed and
- * otherwise unchanged. Every machine renders the same text, with no external
- * converter to install and no `pandoc --version` probe per workflow round.
- *
- * @param outputContent The content to extract scratchpad from
- * @param thinkingTag The XML tag name used for the scratchpad content
- */
-export function extractScratchpad(
-  outputContent: string,
-  thinkingTag: string,
-): string | null {
-  const extractedContent = extractTextFromTag(outputContent, thinkingTag);
-  if (!extractedContent) return null;
-  let result = extractedContent.trim();
-  if (HTML_PATTERN.test(result)) {
-    result = createHtmlToMarkdown().turndown(result);
-  }
-  if (LATEX_PATTERN.test(result)) {
-    result = LATEX_REPLACEMENTS.reduce(
-      (content, [pattern, replacement]) =>
-        content.replace(pattern, replacement),
-      result,
-    );
-  }
-  return result;
 }
 
 export interface MultipleExtractionResult {

@@ -34,7 +34,6 @@ describe('persisted parent edge', () => {
             type: 'run.start',
             aggregateId: aggregateId('run', 'aaa010' as RunId),
             identity: { kind: 'agent', agent: 'assistant' },
-            category: 'toolUse',
             userFollowUpSupport: 'unsupported',
             parent: { id: 'aaa0ff' as RunId, callId: null },
             provenance: null,

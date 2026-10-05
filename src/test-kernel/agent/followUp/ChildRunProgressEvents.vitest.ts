@@ -21,7 +21,6 @@ import {
   RUN_PHASE,
   type RunId,
   type UserFollowUpSupport,
-  AgentCategory,
 } from '@shared/schemas';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import {
@@ -46,7 +45,6 @@ const failedRunId = 'c11116' as RunId;
 const unformattableRunId = 'c11117' as RunId;
 const workflowRelaunchRunId = 'c11119' as RunId;
 const config = AgentConfigSchema.parse({
-  agentCategory: AgentCategory.ToolUse,
   model: 'test-model',
   agent: 'test-agent',
 });
@@ -56,7 +54,7 @@ const createRegisteredChildRun = Effect.fn('createRegisteredChildRun')(
     session: SessionHandle,
     runId: RunId,
     parentRunId: RunId,
-    options: Omit<Parameters<typeof createChildRun>[3], 'category'> & {
+    options: Parameters<typeof createChildRun>[3] & {
       readonly config: typeof config;
       readonly userFollowUpSupport: UserFollowUpSupport;
       readonly description: string;
@@ -70,7 +68,6 @@ const createRegisteredChildRun = Effect.fn('createRegisteredChildRun')(
     });
     const child = yield* createChildRun(session, runId, parentRunId, {
       run: options.run,
-      category: options.config.agentCategory,
     }).pipe(
       Effect.provideService(Runs, session.runs),
       Effect.onError(() => session.commitRunEnd(runId).pipe(Effect.orDie)),
@@ -152,7 +149,6 @@ describe('child run progress events', () => {
           expect.objectContaining({
             aggregateId: qualifyAggregateId('run', runId),
             identity: { kind: 'process', tool: 'bash' },
-            category: AgentCategory.ToolUse,
             // The whole parent edge, stamped on the birth fact.
             parent: expect.objectContaining({ id: parentRunId }),
           }),
@@ -167,7 +163,6 @@ describe('child run progress events', () => {
           {
             type: 'run.activate',
             aggregateId: qualifyAggregateId('run', runId),
-            category: AgentCategory.ToolUse,
           },
         ]);
         expect(
@@ -272,7 +267,6 @@ describe('child run progress events', () => {
       const workerConfig = {
         ...config,
         agent: 'generic',
-        agentCategory: AgentCategory.Workflow,
       };
 
       const childRun = yield* createRegisteredChildRun(
@@ -304,7 +298,6 @@ describe('child run progress events', () => {
         testDefaultSession().runs.getHandle(workflowRelaunchRunId),
       ).toMatchObject({
         agentName: 'repo-cleanup-readonly-pilot-2026-07-24',
-        category: AgentCategory.Workflow,
       });
 
       yield* childRun.finalize({ outcome: RUN_OUTCOME.COMPLETED });
@@ -330,7 +323,6 @@ describe('child run progress events', () => {
           expect.objectContaining({
             type: 'run.start',
             aggregateId: qualifyAggregateId('run', runId),
-            category: AgentCategory.ToolUse,
             parent: expect.objectContaining({ id: parentRunId }),
             provenance: null,
           }),

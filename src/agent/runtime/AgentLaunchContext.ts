@@ -33,11 +33,12 @@ import {
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
-import { type AttachedMemoryMiss, type RunId } from '@shared/schemas';
 import {
-  AgentCategory,
   INSTRUCTION_ACTION,
+  isDocumentTaskConfig,
   RUN_OUTCOME,
+  type AttachedMemoryMiss,
+  type RunId,
 } from '@shared/schemas';
 import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { parseWorkingDirectory } from '@tools/pathResolution';
@@ -222,19 +223,17 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
   function* (input: {
     config: AgentConfig;
     session: SessionHandle;
-    enforceCategory?: boolean;
     suppressErrorNotification?: boolean;
   }) {
     const fullConfig = input.config;
     const interactions = input.session.interactions;
     // Single launch resolution rule (see resolveAgentForLaunch): pinned
-    // (source, name), else the visible set validation used, else the full
-    // category; never blind source-priority on a bare name. The catalog is settled
+    // (source, name), else the visible set validation used, else the
+    // catalog; never blind source-priority on a bare name. The catalog is settled
     // first (a saved edit inside the watcher's debounce is loaded now), and a
     // miss rescans once more.
     const resolve = resolveAgentForLaunch(
       input.session.roots,
-      fullConfig.agentCategory,
       fullConfig.agent,
       fullConfig.agentSource,
     );
@@ -250,7 +249,6 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
         'showAgentConfigBanner',
         {
           agentName: fullConfig.agent,
-          category: fullConfig.agentCategory,
         },
       ));
     if (agentEntry.source === 'plugin')
@@ -276,21 +274,6 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
         ),
       );
 
-    // Block category mismatch. Resolution is already category-scoped; this
-    // catches what the registry's pre-merge category can't see: an agent that
-    // `inherits` a parent of the other category, or an `agentSource` pinned
-    // from a run record. Opt-in: chat roots, the CLI, subagents and resume.
-    if (
-      input.enforceCategory &&
-      fullConfig.agentCategory !== agentEntry.category
-    ) {
-      return yield* Effect.fail(
-        new AgentError(
-          `Agent '${fullConfig.agent}' is a ${agentEntry.category} agent but was launched as ${fullConfig.agentCategory}.`,
-        ),
-      );
-    }
-
     // Validated before registration, so a typo'd model name registers no
     // FAILED execution and surfaces only its targeted instruction.
     const modelConfig = yield* validateModelExists(
@@ -306,7 +289,6 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     const explicit = fullConfig.outputFiles.filter(Boolean);
     const config: AgentConfig = {
       ...fullConfig,
-      agentCategory: agentEntry.category,
       agentSource: agentEntry.source,
       outputFiles: explicit.some(
         (file) => !fullConfig.inputFiles.includes(file),
@@ -400,23 +382,19 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     // resolves, so nothing drains here (lost facts are the terminal drain's),
     // and the append is uninterruptible: a stop lands before or after.
     if (input.resumed) {
-      yield* Effect.uninterruptible(
-        commitResumedActivation(session, runId, config.agentCategory),
-      );
+      yield* Effect.uninterruptible(commitResumedActivation(session, runId));
     }
 
     input.onRunResolved?.(runId);
 
-    // Log the initial instruction as a user message so both workflow and
-    // tool-use tabs display it inline with the stream log (no separate panel).
+    // Log the initial instruction as a user message so the run's tab
+    // displays it inline with the stream log (no separate panel).
     const displayInstruction = getDisplayedInstruction(config);
     const initialInstruction =
       displayInstruction && !input.resumed ? displayInstruction : undefined;
     const supportsMediaInMessage =
-      task === null
-        ? modelConfig.capabilities.supportsVision ||
-          modelConfig.capabilities.supportsNativeAudio
-        : modelConfig.capabilities.supportsVision;
+      modelConfig.capabilities.supportsVision ||
+      modelConfig.capabilities.supportsNativeAudio;
     const initialMediaMayBeInserted =
       config.mediaFiles.length > 0 && supportsMediaInMessage;
 
@@ -428,18 +406,15 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
           initialMediaMayBeInserted ? undefined : initialInstruction,
         ),
       ),
-      // A scope that closes in failure before the run's terminal row closed
-      // this stage leaves it open in the transcript; `end` is idempotent, so a
-      // run that already published its verdict keeps it.
+      // A scope that fails before the run's terminal row closes the stage
+      // as failed; `end` is idempotent, so a published verdict stands.
       (stage, exit) =>
         Exit.isSuccess(exit)
           ? Effect.void
           : Effect.sync(() => stage.end(RUN_OUTCOME.FAILED)),
     );
 
-    // Tell the user when attached images will be dropped because the chosen model
-    // lacks vision. The loop's media input skips them with a per-file warning
-    // otherwise.
+    // Attached images the chosen model cannot see are dropped: say so.
     const visionWarning = mediaNeedsVisionWarning(
       config.mediaFiles,
       modelConfig.capabilities,
@@ -449,26 +424,29 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     if (visionWarning) agentLogger.warn(visionWarning);
 
     const agentPath = path.dirname(agentEntry.path);
+    // Only a run opened on the recipe is a document task; its persona chats.
+    const documentTask = isDocumentTaskConfig(config) ? task : null;
     const buildVars = (stageId?: string) =>
       buildTemplateInputs(
         config,
-        task,
+        documentTask,
         agentPath,
         modelConfig.provider === ModelProvider.ANTHROPIC,
         agentLogger,
         {
-          // The session's own root, handed to prompt assembly as data: file
-          // names, readable-file reads and CWD resolve against this project's
-          // folder rather than whatever roots the calling fiber carries.
+          // The session's own roots, handed to prompt assembly as data, so
+          // file reads resolve in this project, not the calling fiber's.
           workspacePath: session.roots.workspace,
           storageRoot: session.roots.storage,
           stageId,
         },
       );
 
-    // A tool-use run whose rows hold its opening renders nothing again.
+    // A conversation whose rows hold its opening renders nothing again; a
+    // document task's tools render its templates from it at every call, a
+    // resumed run's included.
     const opening = yield* Effect.suspend(() => {
-      if (task === null)
+      if (documentTask === null)
         return recorded === undefined ? buildVars() : Effect.succeed(null);
 
       const initStage = parentStage.child('Init');
@@ -490,16 +468,15 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
       config,
       resolvedAgentDescription: agentEntry.description,
       persona,
-      task,
+      task: documentTask,
       modelConfig,
       ownApiKeyFallback: input.ownApiKeyFallback ?? false,
-      // Frozen so nothing mutates it mid-run. A background script's run
-      // ends when its script settles, launched or resumed: it has no later
-      // turn for anything to wait for.
+      // Frozen so nothing mutates it mid-run. A script's run ends when its
+      // script settles, launched or resumed: it has no later turn for
+      // anything to wait for.
       toolPolicy: Object.freeze({
         ...input.toolPolicy,
-        ...(config.agentCategory === AgentCategory.ToolUse &&
-          config.backgroundScript != null && { stopAfterCycle: true }),
+        ...(config.script != null && { stopAfterCycle: true }),
       }),
       stores,
       logger: agentLogger,

@@ -193,7 +193,6 @@ import { loadAgents } from '@agent/index/agentRegistry';
 import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { runAgent } from '@agent/runtime/runAgent';
 import { validateRunRequest } from '@agent/core/state/runRequests';
-import { AgentCategory } from '@shared/schemas/agent';
 
 // Step 1 — the process services: agent directories, filesystem, secrets,
 // application state, and the rest.
@@ -247,7 +246,6 @@ await runtime.runPromise(
     const validated = validateRunRequest({
       config: {
         agent: 'assistant',
-        agentCategory: AgentCategory.ToolUse,
         instruction: 'Hello',
       },
     });
@@ -268,13 +266,12 @@ exceptions may instead run `AgentConfigSchema.parse` and construct the
 `ValidatedExecutionRequest` structurally, as production extension callers do
 (`packages/extension/src/commands/agent/executeCommand.ts:37-46`).
 `agent`, `model`, and `instruction` all have `.prefault()` defaults
-(`src/agent/core/definition/AgentConfig.ts:18,27,28`), and an absent
-`agentCategory` normalizes to `Workflow`
-(`src/agent/core/definition/AgentConfig.ts:77-88`). The example sets
-`AgentCategory.ToolUse` explicitly because `assistant` is loaded from the
-tool-use agent directory (`src/agent/index/agentYamlScanner.ts:289-291`);
-launch resolution searches only the requested category
-(`src/agent/index/agentRegistry.ts:507-521`).
+(`src/agent/core/definition/AgentConfig.ts`). A launch names no agent
+category: every agent runs as a chat, and launch resolution
+(`resolveAgentForLaunch` in `src/agent/index/agentRegistry.ts`) finds the
+agent by name across sources. Running an agent's document task instead
+means opening the run on the document recipe
+(`documentTaskConfig` in `src/agent/output/documentRecipe.ts`).
 
 ---
 

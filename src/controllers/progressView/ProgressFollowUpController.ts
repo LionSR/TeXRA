@@ -9,7 +9,7 @@ import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
 import type { StateReadFailed } from '@platform/interfaces';
 import {
-  AgentCategory,
+  isDocumentTaskConfig,
   fileLocationAddressPath,
   MODEL_AVAILABILITY_STATUS,
   type CompileFailure,
@@ -142,16 +142,16 @@ export class ProgressFollowUpController {
       this: ProgressFollowUpController,
       input: CompileFixerInput,
     ): Effect.fn.Return<ProgressFollowUpPlan, PlatformError.PlatformError> {
-      // The compile-fixer planner is workflow-only; tool-use runs have no plan.
+      // The compile-fixer planner serves document tasks only.
       const workflowConfig =
-        input.runConfig?.agentCategory === AgentCategory.Workflow
+        input.runConfig && isDocumentTaskConfig(input.runConfig)
           ? input.runConfig
           : undefined;
       if (!workflowConfig) {
         return {
           kind: 'warning',
           message:
-            'No workflow state found for this stream. Cannot run latexFixer.',
+            'No document task found for this stream. Cannot run latexFixer.',
         };
       }
 
@@ -296,7 +296,8 @@ export class ProgressFollowUpController {
       agent: 'latexFixer',
       model,
       instruction,
-      agentCategory: AgentCategory.ToolUse,
+      // A chat with latexFixer, not the task's recipe again.
+      script: null,
       inputFiles: editableFiles,
       outputFiles: [],
       editedFile: null,

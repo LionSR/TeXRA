@@ -13,7 +13,6 @@ import {
   MESSAGE_TYPES,
   RUN_OUTCOME,
   type RunId,
-  AgentCategory,
 } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import {
@@ -37,7 +36,6 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
     agent: 'orchestrator',
     model: 'deepseek/deepseek-v4-flash',
     instruction: 'Solve the problem.',
-    agentCategory: AgentCategory.ToolUse,
     workingDirectory: '/workspace',
     ...overrides,
   });
@@ -70,7 +68,7 @@ describe('trace-viewer TraceDocumentSchema', () => {
           type: 'run.end',
           aggregateId: aggregateId('run', runId),
           outcome: RUN_OUTCOME.COMPLETED,
-          output: emptyRunEndOutput(AgentCategory.ToolUse),
+          output: emptyRunEndOutput(),
         },
       ]);
       yield* session.settlePublications();

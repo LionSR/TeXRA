@@ -358,6 +358,7 @@ function buildDelegationSections(ctx: SectionContext): ToolSection[] {
   const badges = [
     input.extractFigures ? 'Extract figures' : undefined,
     input.extractTikz ? 'Extract TikZ' : undefined,
+    input.reflect ? 'Critic review' : undefined,
   ].filter(filterNotNullish);
   if (badges.length > 0) {
     sections.push({ kind: 'badges', label: 'Extraction:', badges });

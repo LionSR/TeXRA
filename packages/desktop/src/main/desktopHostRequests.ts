@@ -491,14 +491,9 @@ export function createDesktopHostRequests(
     openApiKeyGuide: Effect.suspend(() =>
       options.openExternalUrl('https://texra.ai/guide/configuration.html'),
     ),
-    openAgentSettings: (sessionType) =>
-      Effect.sync(() =>
-        postDesktopSettingsView(
-          options.postToRenderer,
-          'agents/library',
-          sessionType,
-        ),
-      ),
+    openAgentSettings: Effect.sync(() =>
+      postDesktopSettingsView(options.postToRenderer, 'agents/library'),
+    ),
     openCustomAgentDirectory: Effect.gen(function* () {
       const directory = yield* options.getCustomAgentDirectory();
       yield* host.openPath(directory);

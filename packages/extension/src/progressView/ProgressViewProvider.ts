@@ -13,7 +13,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { getCategoryAgent, refresh } from '@agent/index';
+import { getCatalogAgent, refresh } from '@agent/index';
 import { PdfOpenFailed, type SessionHandle } from '@agent/runtime';
 import {
   BundledViewContentProvider,
@@ -55,12 +55,7 @@ import type { LanguageModel } from '@platform/languageModel';
 import { withProcessServices } from '@platform/processRuntime';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
-import {
-  agentKeyOf,
-  AgentCategory,
-  type SessionType,
-  type RunId,
-} from '@shared/schemas';
+import { agentKeyOf, type RunId } from '@shared/schemas';
 import { projectDisplayOf } from '@shared/session/hostSnapshot';
 import {
   getFirstRunDone,
@@ -192,11 +187,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           yield* this.snapshot.setOnboarding(transition.state);
           if (!transition.selectSetupAgent) return;
           // Resolve the registry key so the dropdown matches by value.
-          const entry = getCategoryAgent(AgentCategory.ToolUse, 'setup');
+          const entry = getCatalogAgent('setup');
           this.surfaceAction({
             kind: 'launch',
             patch: {
-              sessionType: 'toolUse',
+              sessionType: 'chat',
               agent: entry ? agentKeyOf(entry) : 'setup',
             },
           });
@@ -321,7 +316,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // Attached for the window's life, before the first run of this window
     // asks anything. Requests this host does not present (bash, plan,
     // proposal, retry, question) stay pending in the fold until the view's
-    // request row decides them. A workflow run's `run.end` is the completion
+    // request row decides them. A document task's `run.end` is the completion
     // chime, one per process (PRD 12.4), never a renderer transition hook
     // that every subscriber would replay. A failed run does not chime.
     const hostScope = this.runtime.runSync(Scope.make());
@@ -356,9 +351,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           }),
         onEvent: (event) =>
           Effect.sync(() => {
+            // A document task's end carries its documents.
             if (
               event.type === 'run.end' &&
-              event.output.category === 'workflow' &&
+              event.output.documents !== undefined &&
               event.outcome !== 'failed'
             )
               this.chime();
@@ -429,7 +425,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public refreshCatalogs(
     options: {
       agentCatalogAlreadyFresh?: boolean;
-      selectedToolUseAgent?: string;
+      selectedAgent?: string;
     } = {},
   ) {
     return Effect.suspend(() =>
@@ -438,11 +434,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       Effect.andThen(this.snapshot.refreshCatalogs),
       Effect.andThen(
         Effect.sync(() => {
-          const agent = options.selectedToolUseAgent;
+          const agent = options.selectedAgent;
           if (agent)
             this.surfaceAction({
               kind: 'launch',
-              patch: { sessionType: 'toolUse', agent },
+              patch: { sessionType: 'chat', agent },
             });
         }),
       ),
@@ -450,13 +446,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   /** A launch could not find its agent. */
-  public showAgentConfigBanner(
-    agentName: string,
-    sessionType: SessionType,
-  ): Effect.Effect<void> {
+  public showAgentConfigBanner(agentName: string): Effect.Effect<void> {
     return withProcessServices(
       this.runtime,
-      this.snapshot.showAgentConfigBanner(agentName, sessionType),
+      this.snapshot.showAgentConfigBanner(agentName),
     );
   }
 

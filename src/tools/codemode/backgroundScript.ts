@@ -2,7 +2,7 @@
  * A `script` call sent to the background: the call returns at once with the
  * id of a child run that makes the same call, `{ kind: 'script', title }`.
  * That run is the parent's agent with the parent's tools, model and working
- * directory, opened on the call (`AgentConfig.backgroundScript`); its result reaches
+ * directory, opened on the call (`AgentConfig.script`); its result reaches
  * the parent as one follow-up (`createScriptRunStrategy`), and a resume
  * replays it from its own rows.
  */
@@ -14,13 +14,7 @@ import { offeredBy } from '@agent/runtime/loop/step';
 import { createScriptRunStrategy } from '@agent/runtime/scriptRun';
 import { registerRun } from '@agent/storage/runLifecycle';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  AgentCategory,
-  ToolError,
-  USER_FOLLOW_UP_SUPPORT,
-  type JsonValue,
-  type RunId,
-} from '@shared/schemas';
+import { USER_FOLLOW_UP_SUPPORT, type RunId } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import { executed } from '@tools/core/result';
 import type { RunToolCall } from '@tools/core/toolRun';
@@ -50,8 +44,7 @@ const receipt = (title: string, runId: RunId, again: boolean) => ({
  */
 export const launchBackgroundScript = Effect.fn('script.background')(function* (
   call: RunToolCall,
-  tool: string,
-  input: { readonly [field: string]: JsonValue },
+  input: { readonly code: string; readonly timeoutMs?: number },
   title: string,
 ) {
   const { run } = call;
@@ -59,21 +52,14 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
   const earlier = yield* earlierChild(call);
   if (earlier !== null) return receipt(title, earlier, true);
   const bound = yield* SynchronizedRef.get(run.model);
-  // An editor binding's turns carry no calls for the run to open on.
-  if (bound.origin.protocol === 'vscode-lm')
-    return yield* Effect.fail(
-      new ToolError(
-        'A script cannot run in the background on a VS Code language model. Run it in the foreground.',
-      ),
-    );
   const runId = agentChildRunId(call);
   const workingDirectory = call.workingDirectory ?? run.config.workingDirectory;
+  const parentOffered = yield* offeredBy(run);
   // The parent's agent, model and tools, opened on the call rather than on
   // a prompt: it reads no input files and renders no instruction.
   const definition = yield* prepareAgentDefinition({
     config: AgentConfigSchema.parse({
       ...run.config,
-      agentCategory: AgentCategory.ToolUse,
       model: bound.modelId,
       instruction: '',
       displayInstruction: null,
@@ -87,13 +73,21 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
       cli: null,
       workingDirectory: workingDirectory ?? null,
       delegationAgentScope: run.delegationAgentScope ?? null,
-      backgroundScript: { tool, input, title },
+      script: {
+        code: input.code,
+        title,
+        // The tools its parent's step offered it, less the parent's own
+        // terminal tool and the script tool its run adds itself.
+        tools: parentOffered.flatMap(({ name, plugin }) =>
+          plugin === 'run' || name === 'script' ? [] : [name],
+        ),
+        ...(input.timeoutMs !== undefined && { timeoutMs: input.timeoutMs }),
+        kind: 'background',
+      },
     }),
     session,
-    enforceCategory: true,
     suppressErrorNotification: true,
   });
-  const parentOffered = yield* offeredBy(run);
   // Its calls' approvals follow the parent's live ones.
   const inherit = (childRunId: RunId): void =>
     configureDelegatedChildApprovals(

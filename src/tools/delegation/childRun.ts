@@ -18,7 +18,7 @@ import {
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { escapeText } from '@shared/utils/xmlEscape';
-import type { AgentCategory, RunId, RunIdentity } from '@shared/schemas';
+import type { RunId, RunIdentity } from '@shared/schemas';
 import { ToolError } from '@shared/schemas';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { generateRunId } from '@utils/core';
@@ -27,7 +27,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 interface CreateChildRunOptions {
   /** What owns this run — the launch site declares the truth once. */
   run: RunIdentity;
-  category: AgentCategory;
 }
 
 /**
@@ -64,7 +63,6 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
     {
       runId,
       identity: options.run,
-      category: options.category,
     },
     parentRunId,
     trace,
@@ -104,7 +102,7 @@ interface FinalizeChildRunArgs {
  * No `output` is passed, by rule rather than by omission: a child loop's
  * product is the per-turn delivery routed to its parent (and the result
  * manifest a strategy persists beside it), not a flow output. Its `run.end`
- * row therefore carries the category's empty output.
+ * row therefore carries an empty output.
  */
 const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
   args: FinalizeChildRunArgs,

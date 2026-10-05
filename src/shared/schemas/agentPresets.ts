@@ -2,7 +2,7 @@
  * Agent teams - predefined collections of enabled agents
  * for different academic disciplines.
  *
- * Each team specifies which workflow and tool-use agents to enable.
+ * Each team lists the agents it enables, document tasks included.
  * Agent names are plain strings (not source-prefixed keys) so they
  * match across built-in and custom sources.
  */
@@ -10,8 +10,6 @@
 import { z } from 'zod';
 
 import type { TeXRAIconName } from '@shared/iconNames';
-
-import { AgentCategorySchema } from './agent';
 
 const AGENT_MODE_PRESET_ICON_NAMES = [
   'bookmark',
@@ -22,13 +20,13 @@ const AGENT_MODE_PRESET_ICON_NAMES = [
   'screwdriver-wrench',
 ] as const satisfies readonly TeXRAIconName[];
 
-/** Schema for a single agent team: members keyed by category. */
+/** Schema for a single agent team: its members, by name. */
 export const AgentModePresetSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
   icon: z.enum(AGENT_MODE_PRESET_ICON_NAMES),
-  agents: z.record(AgentCategorySchema, z.array(z.string())),
+  agents: z.array(z.string()),
 });
 
 export type AgentModePreset = z.infer<typeof AgentModePresetSchema>;
@@ -69,17 +67,16 @@ export const STARTER_AGENT_MODE_PRESET: AgentModePreset = {
   name: 'Starter',
   description: 'Balanced default team for a first project.',
   icon: 'rocket',
-  agents: {
-    workflow: ['correct', 'polish'],
-    toolUse: [
-      'assistant',
-      'research',
-      'review',
-      'latexFixer',
-      'setup',
-      'orchestrator',
-    ],
-  },
+  agents: [
+    'assistant',
+    'research',
+    'review',
+    'latexFixer',
+    'setup',
+    'orchestrator',
+    'correct',
+    'polish',
+  ],
 };
 
 /**
@@ -95,18 +92,15 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     description:
       'For Lean 4 projects -- theorem search, tactic simplification, and blueprints.',
     icon: 'diagram-project',
-    agents: {
-      workflow: [],
-      toolUse: [
-        'lean',
-        'leanSearch',
-        'leanSimplifier',
-        'leanBlueprint',
-        'latexFixer',
-        'progressCheck',
-        'leanOrchestrator',
-      ],
-    },
+    agents: [
+      'lean',
+      'leanSearch',
+      'leanSimplifier',
+      'leanBlueprint',
+      'latexFixer',
+      'progressCheck',
+      'leanOrchestrator',
+    ],
   },
   {
     id: 'physicist',
@@ -114,27 +108,23 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     description:
       'For physics papers -- analytical derivations, numerical experiments, literature search, slides, and critical review.',
     icon: 'cube',
-    agents: {
-      workflow: [
-        'correct',
-        'polish',
-        'generic',
-        'devise',
-        'apply',
-        'criticize',
-      ],
-      toolUse: [
-        'orchestrator',
-        'research',
-        'numerics',
-        'review',
-        'presenter',
-        'simplifier',
-        'latexFixer',
-        'progressCheck',
-        'search',
-      ],
-    },
+    agents: [
+      'orchestrator',
+      'research',
+      'numerics',
+      'review',
+      'presenter',
+      'simplifier',
+      'latexFixer',
+      'progressCheck',
+      'search',
+      'correct',
+      'polish',
+      'generic',
+      'devise',
+      'apply',
+      'criticize',
+    ],
   },
   {
     id: 'mathematician',
@@ -142,27 +132,23 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     description:
       'For math research -- attacking open problems, proofs, Lean 4 formalization, and LaTeX correction.',
     icon: 'hashtag',
-    agents: {
-      workflow: [
-        'correct',
-        'polish',
-        'generic',
-        'devise',
-        'apply',
-        'criticize',
-      ],
-      toolUse: [
-        'prover',
-        'lean',
-        'research',
-        'numerics',
-        'review',
-        'simplifier',
-        'latexFixer',
-        'progressCheck',
-        'orchestrator',
-      ],
-    },
+    agents: [
+      'prover',
+      'lean',
+      'research',
+      'numerics',
+      'review',
+      'simplifier',
+      'latexFixer',
+      'progressCheck',
+      'orchestrator',
+      'correct',
+      'polish',
+      'generic',
+      'devise',
+      'apply',
+      'criticize',
+    ],
   },
   {
     id: 'cs-ml',
@@ -170,22 +156,24 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     description:
       'For CS papers -- algorithm design, code-driven experiments and ablations, tests for reproducibility, literature search, and critical review.',
     icon: 'cube',
-    agents: {
-      workflow: ['criticize', 'generic', 'devise', 'apply', 'polish'],
-      toolUse: [
-        'orchestrator',
-        'research',
-        'numerics',
-        'coder',
-        'testEngineer',
-        'search',
-        'review',
-        'presenter',
-        'simplifier',
-        'latexFixer',
-        'progressCheck',
-      ],
-    },
+    agents: [
+      'orchestrator',
+      'research',
+      'numerics',
+      'coder',
+      'testEngineer',
+      'search',
+      'review',
+      'presenter',
+      'simplifier',
+      'latexFixer',
+      'progressCheck',
+      'criticize',
+      'generic',
+      'devise',
+      'apply',
+      'polish',
+    ],
   },
   {
     id: 'software-engineer',
@@ -193,15 +181,12 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     description:
       "For a project's code -- the engineer lead delegates implementation, review, debugging, and testing across a team of specialists.",
     icon: 'screwdriver-wrench',
-    agents: {
-      workflow: [],
-      toolUse: [
-        'engineer',
-        'coder',
-        'codeReviewer',
-        'testEngineer',
-        'codeSimplifier',
-      ],
-    },
+    agents: [
+      'engineer',
+      'coder',
+      'codeReviewer',
+      'testEngineer',
+      'codeSimplifier',
+    ],
   },
 ];

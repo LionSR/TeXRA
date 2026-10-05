@@ -47,9 +47,10 @@ export {
   RunWorkspaceFilesSchema,
   storedResultMeta,
   storedRunOutput,
-  ToolUseRunEndOutputSchema,
-  WorkflowRunEndOutputSchema,
+  RunDocumentsSchema,
+  isDocumentTaskConfig,
   type ResultDiffSummary,
+  type RunDocuments,
   type DeliveredResult,
   type ResultMeta,
   type RunEnd,
@@ -66,7 +67,6 @@ export * from './subagentProgress';
 export * from './inquiry';
 export * from './prompts';
 export * from './request';
-export * from './proposalInput';
 export * from './diffResult';
 
 // Layer 4: MainView schemas

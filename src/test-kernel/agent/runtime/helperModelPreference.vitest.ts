@@ -43,12 +43,8 @@ const MODEL_CONFIGS = vi.hoisted(() => ({
   undeclared: { capabilities: {} },
 }));
 
-function configFor(model: string, agentCategory = 'toolUse'): AgentConfig {
-  return {
-    agent: 'latexFixer',
-    model,
-    agentCategory,
-  } as unknown as AgentConfig;
+function configFor(model: string): AgentConfig {
+  return { agent: 'latexFixer', model } as unknown as AgentConfig;
 }
 
 describe('applyHelperModelPreference', () => {
@@ -78,45 +74,27 @@ describe('applyHelperModelPreference', () => {
     { helper: 'opus', scenario: 'the helper model already equals it' },
     {
       helper: 'chatonly',
-      scenario: 'a tool-use helper cannot call functions',
+      scenario: 'a helper cannot call functions',
     },
     {
       helper: 'mysteryModel',
-      scenario: 'the tool-use helper model is unknown to the registry',
+      scenario: 'the helper model is unknown to the registry',
     },
     // Capabilities present but supportsFunctionCalling omitted — the provider
     // adapters would strip the function tools, so don't swap.
     {
       helper: 'undeclared',
-      scenario: "the tool-use helper model doesn't declare function calling",
+      scenario: "the helper model doesn't declare function calling",
     },
   ])('keeps the selected model when $scenario', ({ helper }) =>
     Effect.gen(function* () {
       getHelperModelName.mockReturnValue(Effect.succeed(helper));
 
-      const result = yield* resolve(configFor('opus', 'toolUse'));
+      const result = yield* resolve(configFor('opus'));
 
       expect(result.model).toBe('opus');
       expect(readModelAvailabilityInputs).not.toHaveBeenCalled();
     }),
-  );
-
-  it.effect(
-    'swaps a workflow agent without applying the tool-capability guard',
-    () =>
-      Effect.gen(function* () {
-        // A workflow agent doesn't use the tool-use flow, so a
-        // non-function-calling helper is fine.
-        getHelperModelName.mockReturnValue(Effect.succeed('chatonly'));
-        modelUnavailableReasonFrom.mockReturnValue(undefined);
-
-        const result = yield* resolve(configFor('opus', 'workflow'));
-
-        expect(result.model).toBe('chatonly');
-        expect(readModelAvailabilityInputs).toHaveBeenCalledWith(STORES, [
-          'chatonly',
-        ]);
-      }),
   );
 
   it.effect(

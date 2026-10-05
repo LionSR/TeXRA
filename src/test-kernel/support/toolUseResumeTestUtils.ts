@@ -15,7 +15,6 @@ export function createToolUseResumeData(
     agentConfig: AgentConfigSchema.parse({
       agent: 'test-agent',
       model: 'test-model',
-      agentCategory: 'toolUse',
     }),
     ...overrides,
   };

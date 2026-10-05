@@ -80,16 +80,11 @@ async function writeCanonicalRunFixtures(
             type: 'run.start',
             aggregateId: id,
             identity: { kind: 'agent', agent: runFixture.agent },
-            category: 'toolUse',
             userFollowUpSupport: 'nativeInteractive',
             parent: null,
             provenance: null,
           },
-          {
-            type: 'run.activate',
-            aggregateId: id,
-            category: 'toolUse',
-          },
+          { type: 'run.activate', aggregateId: id },
           {
             type: 'stage.start',
             aggregateId: id,

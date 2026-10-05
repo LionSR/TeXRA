@@ -23,7 +23,7 @@ export const STATUS_DIAMOND = '◆';
 /** Warning marker for inline failure notices (e.g. render-error fallback). */
 export const WARNING = '⚠';
 
-/** A step not reached yet (a planned workflow round). */
+/** A step not reached yet (a planned round). */
 export const PENDING_BOX = '□';
 
 /** Terminal-failure marker; the ✗/✓ counterpart to TICK. */

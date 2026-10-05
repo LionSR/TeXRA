@@ -2,9 +2,9 @@
  * The composer, one component in two states (PRD 12.1). Expanded, it is the
  * new-task launcher: the instruction, chips for agent and model (and the
  * working directory, only with two or more roots), and the polish,
- * dictation, attach, and send controls. The agent menu lists interactive
- * agents, document passes and teams as sections: the agent picked is the
- * run type. Compact, it is the follow-up line with the same trailing
+ * dictation, attach, and send controls. The agent menu lists chat agents,
+ * document tasks and teams as sections: the section picked is the launch
+ * mode. Compact, it is the follow-up line with the same trailing
  * controls, under a line that offers the parent instead when there is one.
  *
  * It reads `Surface` (the draft or the launch selections) and the `host`
@@ -24,7 +24,7 @@ import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
-import { type SessionType, type RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import {
@@ -434,13 +434,8 @@ export class SessionComposer extends LitElement {
     this.dispatchEvent(SessionUiEvents.surface({ kind: 'launch', patch }));
   }
 
-  private openSettings(
-    section: 'agents' | 'teams' | 'models',
-    sessionType?: SessionType,
-  ): void {
-    this.dispatchEvent(
-      SessionUiEvents.host({ kind: 'openSettings', section, sessionType }),
-    );
+  private openSettings(section: 'agents' | 'teams' | 'models'): void {
+    this.dispatchEvent(SessionUiEvents.host({ kind: 'openSettings', section }));
   }
 
   private chipMenus(): ChipMenu[] {
@@ -449,8 +444,7 @@ export class SessionComposer extends LitElement {
     if (!launch || !host) return [];
     return launcherChipMenus(launch, host, {
       setLaunch: (patch) => this.setLaunch(patch),
-      openSettings: (section, sessionType) =>
-        this.openSettings(section, sessionType),
+      openSettings: (section) => this.openSettings(section),
     });
   }
 

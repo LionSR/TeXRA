@@ -3,7 +3,6 @@ import { html, nothing, type TemplateResult } from 'lit';
 
 import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { AgentCategory } from '@shared/schemas';
 import type { AgentSelectionItem } from '@shared/settingsView/settingsViewMessages';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsBanner } from '@ui/wa/settingsBanner';
@@ -14,13 +13,12 @@ import { renderSettingsBanner } from '@ui/wa/settingsBanner';
  */
 export function renderNewerBuiltInNotice(
   agent: AgentSelectionItem,
-  category: AgentCategory,
 ): TemplateResult | typeof nothing {
   const builtInSource = agent.newerBuiltIn;
   if (!builtInSource) return nothing;
   const agentName = agent.name;
   return renderSettingsBanner({
-    id: `${category}-agent-newer-built-in`,
+    id: 'agent-newer-built-in',
     variant: 'brand',
     icon: 'arrow-up',
     title: 'A newer built-in version is available',

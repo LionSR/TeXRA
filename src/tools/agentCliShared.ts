@@ -255,7 +255,6 @@ export const launchAgentCliSession = Effect.fn(
             Effect.andThen(
               createChildRun(params.session, runId, params.parentRunId, {
                 run: identity,
-                category: params.config.agentCategory,
               }),
             ),
           ),

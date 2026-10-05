@@ -320,8 +320,8 @@ function validateTeamListAvailability() {
     // The Lean agents ship bundled (#13080), so the preset is whole without
     // any sign-in: a full count and no degraded/unavailable marker.
     assert(
-      /\ttool-use:7$/.test(leanProjectLine),
-      `lean-project should show its bundled tool-use agents as available without auth\nline:\n${leanProjectLine}`,
+      /\tagents:7$/.test(leanProjectLine),
+      `lean-project should show its bundled agents as available without auth\nline:\n${leanProjectLine}`,
     );
 
     const json = runList(['--output-format', 'json']);
@@ -332,15 +332,15 @@ function validateTeamListAvailability() {
     );
     const leanProjectAvailability = leanProjectJson?.availability;
     assert(
-      leanProjectAvailability?.agents?.toolUse?.label != null,
+      leanProjectAvailability?.agents?.label != null,
       `team list JSON should include planned availability\nstdout:\n${json.stdout}`,
     );
-    const leanProjectToolUse = leanProjectAvailability?.agents?.toolUse;
+    const leanProjectAgents = leanProjectAvailability?.agents;
     assert(
       leanProjectAvailability?.status === 'available' &&
-        leanProjectToolUse?.available === 7 &&
-        leanProjectToolUse?.total === 7 &&
-        leanProjectToolUse?.missing?.length === 0,
+        leanProjectAgents?.available === 7 &&
+        leanProjectAgents?.total === 7 &&
+        leanProjectAgents?.missing?.length === 0,
       `lean-project JSON should report its bundled agents as available without auth\nrecord:\n${JSON.stringify(leanProjectJson, null, 2)}`,
     );
 
@@ -351,7 +351,7 @@ function validateTeamListAvailability() {
       'team list NDJSON',
     ).find((record) => record.preset?.id === 'lean-project');
     assert(
-      leanProjectNdjson?.preset?.availability?.agents?.toolUse?.label != null,
+      leanProjectNdjson?.preset?.availability?.agents?.label != null,
       `team list NDJSON should include planned availability\nstdout:\n${ndjson.stdout}`,
     );
   } finally {
@@ -749,6 +749,19 @@ function validateRunCommand() {
       `a successful text run should not report the cancelled stopped label\nstderr:\n${text.stderr}`,
     );
 
+    // Opt-in reflection: the bundled critic reviews revision 1, and revision
+    // 2 reads its critique.
+    const reflected = run(process.execPath, [...baseArgs, '--reflect'], {
+      cwd: repoRoot,
+      validationModel: true,
+      validationFlagPath,
+    });
+    assertSuccess(reflected, 'texra run --reflect');
+    assert(
+      reflected.stderr.includes('Critique 1 · critic'),
+      `a --reflect run should call the critic between revisions\nstderr:\n${reflected.stderr}`,
+    );
+
     const json = run(
       process.execPath,
       [...baseArgs, '--output-format', 'json'],
@@ -757,10 +770,10 @@ function validateRunCommand() {
     assertSuccess(json, 'texra run JSON');
     const jsonResult = JSON.parse(json.stdout);
     assert(
-      jsonResult.output?.category === 'workflow',
-      'JSON run output should serialize the workflow result',
+      jsonResult.output?.documents != null,
+      'JSON run output should serialize the document task result',
     );
-    const finalOutput = jsonResult.output.outputs.at(-1);
+    const finalOutput = jsonResult.output.documents.outputs.at(-1);
     assert(
       outputPathPattern.test(finalOutput?.relativePath ?? ''),
       'JSON run output should report the run-storage output path',
@@ -844,14 +857,14 @@ function validateToolUseAgentRunCommand() {
 
     const jsonResult = JSON.parse(result.stdout);
     assert(
-      jsonResult.output?.category === 'toolUse',
-      'JSON agent run output should serialize the tool-use result',
+      jsonResult.output != null && jsonResult.output.documents === undefined,
+      'JSON agent run output should serialize the chat result',
     );
     assert(
       String(jsonResult.output?.response ?? '').includes(
         'Validated CLI Runtime',
       ),
-      'tool-use agent run should return the validation model response',
+      'agent run should return the validation model response',
     );
   } finally {
     rmSync(cwd, { recursive: true, force: true });
@@ -859,7 +872,7 @@ function validateToolUseAgentRunCommand() {
 }
 
 /**
- * The executions `query` action end to end: a tool-use agent whose (canned)
+ * The executions `query` action end to end: an agent whose (canned)
  * model asks the run history one SQL question through the real tool schema,
  * the real session, and the history store's own process, spawned from this
  * binary. The NDJSON the run printed is kept as the artifact.
@@ -2150,7 +2163,7 @@ prompt: |
 
 function validateTeamRunCommand() {
   const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-team-run-'));
-  // A preset whose members are all tool-use agents keeps this check cheap.
+  // A preset whose members are all chat agents keeps this check cheap.
   const validationPreset = 'software-engineer';
   try {
     const inputPath = path.join(cwd, 'math-problem.md');
@@ -2192,8 +2205,9 @@ function validateTeamRunCommand() {
       'team run should select an available preset root agent',
     );
     assert(
-      jsonResult.result?.output?.category === 'toolUse',
-      'team JSON output should serialize the tool-use result',
+      jsonResult.result?.output != null &&
+        jsonResult.result.output.documents === undefined,
+      'team JSON output should serialize the chat result',
     );
     assert(
       String(jsonResult.result?.output?.response ?? '').includes(
@@ -2228,8 +2242,9 @@ function validateTeamRunCommand() {
       'instruction-only team JSON output should identify the preset',
     );
     assert(
-      inlineJsonResult.result?.output?.category === 'toolUse',
-      'instruction-only team JSON output should serialize the tool-use result',
+      inlineJsonResult.result?.output != null &&
+        inlineJsonResult.result.output.documents === undefined,
+      'instruction-only team JSON output should serialize the chat result',
     );
     assert(
       String(inlineJsonResult.result?.output?.response ?? '').includes(

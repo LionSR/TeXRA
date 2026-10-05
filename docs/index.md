@@ -106,7 +106,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
   <!-- Two paradigms -->
   <div class="paradigms">
     <div class="paradigm paradigm-workflow">
-      <div class="paradigm-label">Workflow agents</div>
+      <div class="paradigm-label">Document tasks</div>
       <div class="paradigm-flow">
         <span class="pf-node">Read project</span>
         <span class="pf-edge">&rarr;</span>
@@ -129,7 +129,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
       <div class="orch-desc">Breaks work into sub-tasks, delegates to specialized agents, coordinates results</div>
     </div>
     <div class="paradigm paradigm-tooluse">
-      <div class="paradigm-label">Tool-use agents</div>
+      <div class="paradigm-label">Chat agents</div>
       <div class="paradigm-flow">
         <span class="pf-node">Your question</span>
         <span class="pf-edge">&rarr;</span>

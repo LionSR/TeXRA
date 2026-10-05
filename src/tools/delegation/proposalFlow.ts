@@ -11,17 +11,16 @@ import { Cause, Effect, Exit } from 'effect';
 // Local imports
 import {
   findAgentByIdentifier,
+  getCatalogAgent,
   resolveDelegationScopeAgents,
   type WorkspaceAgentsStores,
 } from '@agent/index/agentRegistry';
+import { isDocumentTaskConfig } from '@shared/schemas';
 import type {
-  AgentDelegationScope,
+  AgentProposal,
   RequestDecision,
   ToolResult,
-  ToolUseAgentProposal,
-  WorkflowAgentProposal,
 } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
 import type {
   DatabaseNotOwner,
   DatabaseReadFailed,
@@ -49,36 +48,35 @@ const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
   'continue directly with available context, or ask the user a clarifying question.',
 ].join(' ');
 
-/** Resolve either category from the current agent list, reporting both on failure. */
-export const requireWorkflowOrToolUseAgent = Effect.fn(
-  'requireWorkflowOrToolUseAgent',
-)(function* (
+/** Resolve `name` from the agents `run` may launch, listing them on
+ *  failure. A recipe's calls name the agents TeXRA chose (its persona by
+ *  key, the bundled `critic`), so they resolve past any scope or shadowing. */
+export const requireAgent = Effect.fn('requireAgent')(function* (
   stores: WorkspaceAgentsStores,
   name: string,
-  scope?: AgentDelegationScope,
+  run: Pick<RunToolCall['run'], 'config' | 'delegationAgentScope'>,
 ) {
-  const available: string[] = [];
-  for (const category of [AgentCategory.Workflow, AgentCategory.ToolUse]) {
-    const agents = yield* resolveDelegationScopeAgents(stores, scope, category);
-    const agent = findAgentByIdentifier(agents, name);
-    if (agent) return agent;
-    available.push(
-      `${category}: ${agents.map((a) => a.name).join(', ') || 'none'}`,
-    );
-  }
+  const pinned = isDocumentTaskConfig(run.config)
+    ? getCatalogAgent(name)
+    : undefined;
+  if (pinned) return pinned;
+  const agents = yield* resolveDelegationScopeAgents(
+    stores,
+    run.delegationAgentScope ?? undefined,
+  );
+  const agent = findAgentByIdentifier(agents, name);
+  if (agent) return agent;
   return yield* Effect.fail(
     new Error(
-      `Unknown workflow or toolUse agent '${name}'. Available: ${available.join('; ')}`,
+      `Unknown agent '${name}'. Available: ${agents.map((a) => a.name).join(', ') || 'none'}`,
     ),
   );
 });
 
 /** Build a concise summary of proposal parameters for rejection echo. */
-function summarizeProposal(
-  proposal: WorkflowAgentProposal | ToolUseAgentProposal,
-): string {
+function summarizeProposal(proposal: AgentProposal): string {
   const parts = [`Agent: ${proposal.agent}`, `Model: ${proposal.model}`];
-  if ('inputFiles' in proposal && proposal.inputFiles?.[0]) {
+  if (proposal.inputFiles[0]) {
     parts.push(`File: ${proposal.inputFiles[0]}`);
   }
   if (proposal.memories.length > 0) {
@@ -94,7 +92,7 @@ function summarizeProposal(
 function proposalResultToToolResult(
   result: RequestDecision,
   agentName: string,
-  proposal: WorkflowAgentProposal | ToolUseAgentProposal,
+  proposal: AgentProposal,
 ): ToolResult | null {
   const echo = summarizeProposal(proposal);
 
@@ -156,11 +154,15 @@ type ProposalRequestError =
  *  calls of one script share one request (`agent`). */
 const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
   function* (
-    proposal: WorkflowAgentProposal | ToolUseAgentProposal,
+    proposal: AgentProposal,
     parent: RunToolCall,
     ask?: Effect.Effect<RequestDecision, ProposalRequestError>,
   ): Effect.fn.Return<DelegationProposalDecision, ProposalRequestError> {
-    const { session, runId } = parent.run;
+    const { session, runId, config } = parent.run;
+    // A document task's recipe calls its persona under the approval its
+    // launch got.
+    if (isDocumentTaskConfig(config))
+      return { result: { action: 'approve' }, childApproval: 'inherit' };
     const decision = decideProposalApproval({
       policy: session.approvalPolicy,
       scopedBypass: session.approvals.proposal.isBypassed(runId),
@@ -206,7 +208,7 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
 /** How an approved delegation launches: the proposal with the agent and
  *  model the approval settled on, and how it was approved. */
 interface ApprovedDelegation {
-  readonly proposal: WorkflowAgentProposal | ToolUseAgentProposal;
+  readonly proposal: AgentProposal;
   readonly approvalMeta: ApprovalMeta;
 }
 
@@ -219,7 +221,7 @@ interface ApprovedDelegation {
  */
 export const decideDelegation = Effect.fn('decideDelegation')(function* (
   parent: RunToolCall,
-  proposal: WorkflowAgentProposal | ToolUseAgentProposal,
+  proposal: AgentProposal,
   ask?: Effect.Effect<RequestDecision, ProposalRequestError>,
 ) {
   const decision = yield* requestDelegationProposal(proposal, parent, ask);
@@ -285,7 +287,6 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
         yield* resolveDelegationScopeAgents(
           parent.roots,
           parent.run.delegationAgentScope ?? undefined,
-          proposal.agentCategory,
         ),
         agentOverride,
       )
@@ -297,7 +298,7 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
   // synchronously instead of after an async launch.
   if (agentOverride && !resolvedAgentOverride) {
     return errorResult(
-      `Cannot launch '${agentOverride}': it is not currently a visible ${proposal.agentCategory} agent (removed, renamed, or disabled since the proposal was shown). Re-propose the delegation.`,
+      `Cannot launch '${agentOverride}': it is not currently a visible agent (removed, renamed, or disabled since the proposal was shown). Re-propose the delegation.`,
       {
         summary: `Approved agent override '${agentOverride}' is not available`,
       },

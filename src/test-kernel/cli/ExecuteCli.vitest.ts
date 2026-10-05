@@ -129,7 +129,7 @@ type CliRequest = Parameters<typeof executeCliRequest>[0];
 /** Result shape the default `runAgent` stub resolves with. */
 const COMPLETED_RUN = {
   outcome: 'completed',
-  output: { category: 'toolUse', response: '', files: [] },
+  output: { response: '', files: [] },
   runId: 'exec-1',
 } as const;
 
@@ -138,10 +138,9 @@ const COMPLETED_WORKFLOW_RUN: Parameters<
 >[0] = {
   outcome: 'completed',
   output: {
-    category: 'workflow',
-    outputs: [],
-    compileFailures: [],
-    diffs: [],
+    response: '',
+    files: [],
+    documents: { outputs: [], compileFailures: [], diffs: [] },
   },
   runId: 'exec-1' as RunId,
 };
@@ -158,7 +157,6 @@ function toolUseConfig() {
     contextFiles: [] as string[],
     instruction: 'Check this.',
     workingDirectory: '/tmp/project',
-    agentCategory: 'toolUse' as const,
   };
 }
 
@@ -252,7 +250,6 @@ function stubHangingRun(published: Deferred.Deferred<LeaseOptions>): {
       {
         runId,
         identity: { kind: 'agent', agent: 'chat' },
-        category: 'toolUse',
       },
       null,
     );
@@ -519,7 +516,7 @@ describe('executeCliRequest', () => {
         callOrder.push('runAgent');
         return {
           outcome: 'completed',
-          output: { category: 'toolUse', response: '', files: [] },
+          output: { response: '', files: [] },
           runId: 'exec-1',
         };
       });
@@ -716,7 +713,7 @@ describe('executeCliRequest', () => {
         outcomePersisted: true,
         result: {
           outcome: 'cancelled',
-          output: { category: 'toolUse', response: '', files: [] },
+          output: { response: '', files: [] },
           runId: 'exec-1',
         },
       });
@@ -1002,7 +999,7 @@ describe('executeCliRequest', () => {
         );
         const killSpy = vi.spyOn(testDefaultSession().runs, 'stop');
         const outputFailure = new Error(
-          'Workflow completed without generated outputs; nothing was copied to out.',
+          'Document task completed without generated outputs; nothing was copied to out.',
         );
         let publicationCommitted: boolean | undefined;
         let outputResolutionFailed = false;
@@ -1164,7 +1161,7 @@ describe('executeCliRequest', () => {
         outcomePersisted: true,
         result: {
           outcome: 'cancelled',
-          output: { category: 'toolUse', response: '', files: [] },
+          output: { response: '', files: [] },
           runId: 'exec-1',
         },
       });
@@ -1391,15 +1388,11 @@ describe('executeCliConfig', () => {
           { globalState, globalStorage: pluginDir },
           () => Effect.succeed(true),
         ).pipe(Effect.provide(NodeFileSystem.layer));
-        const { AgentCategory } = yield* Effect.promise(
-          () => import('@shared/schemas'),
-        );
         const { executeCliToolUseConfig } =
           yield* Effect.promise(loadExecuteCli);
         mocks.runAgent.mockResolvedValueOnce({
           outcome: 'completed',
           output: {
-            category: AgentCategory.ToolUse,
             response: 'Done.',
             files: [],
           },

@@ -1,4 +1,3 @@
-/* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,7 +9,6 @@ import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 import { cliOutputMock } from '@test/support/cliOutputMock';
 
-import { AgentCategory } from '@shared/schemas';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 import { testRuntime } from '@test/support/testProcessRuntime';
 
@@ -27,7 +25,6 @@ vi.mock('@cli/runtime/agents', async (importOriginal) => ({
 // so their imports resolve to the mocked modules. Top-level (not beforeAll) so
 // the import cost lands in file load, not the first test's timeout budget.
 const { listAgents, showAgent } = await import('@cli/commands/agents');
-const { parseCliAgentCategoryFilter } = await import('@cli/runtime/agents');
 
 // Both entries are programs now; the command runs them on the process runtime
 // it installs, and here that is the harness's.
@@ -38,43 +35,36 @@ const runShowAgent = (...args: Parameters<typeof showAgent>) =>
 
 const LEAN_AGENT = {
   name: 'lean',
-  source: 'builtInToolUse',
+  source: 'builtIn',
   path: '/tmp/resources/tool_use_agents/lean.yaml',
-  category: AgentCategory.ToolUse,
+  task: null,
   description: 'Lean 4 proof assistant.',
 };
 
 const CHAT_AGENT = {
   name: 'chat',
-  source: 'builtInToolUse',
+  source: 'builtIn',
   path: '/tmp/resources/tool_use_agents/chat.yaml',
-  category: AgentCategory.ToolUse,
+  task: null,
   description: 'Interactive assistant.',
 };
 
 const CORRECT_AGENT = {
   name: 'correct',
-  source: 'builtInWorkflow',
+  source: 'builtIn',
   path: '/tmp/resources/agents/correct.yaml',
-  category: AgentCategory.Workflow,
+  task: { outputs: ['corrected.tex'] },
   description: 'Corrects LaTeX.',
 };
 
-type CategoryCatalog = Partial<
-  Record<
-    AgentCategory,
-    { visible?: readonly unknown[]; all: readonly unknown[] }
-  >
->;
-
-function stubCatalog(catalog: CategoryCatalog): void {
-  agentCatalogMock.getVisibleAgents.mockImplementation(
-    (_stores: unknown, category: AgentCategory) =>
-      Effect.succeed(catalog[category]?.visible ?? []),
+function stubCatalog(catalog: {
+  visible?: readonly unknown[];
+  all: readonly unknown[];
+}): void {
+  agentCatalogMock.getVisibleAgents.mockReturnValue(
+    Effect.succeed(catalog.visible ?? []),
   );
-  agentCatalogMock.getAgentsByCategory.mockImplementation(
-    (category: AgentCategory) => catalog[category]?.all ?? [],
-  );
+  agentCatalogMock.getCatalogAgents.mockReturnValue(catalog.all);
 }
 
 interface EmittedAgentsPayload {
@@ -98,28 +88,12 @@ describe('CLI agents command', () => {
     cliInitPlatformMock.initCliPlatform.mockReturnValue(
       Effect.succeed({ runtime: testRuntime() }),
     );
-    agentCatalogMock.getAgentsByCategory.mockReturnValue([]);
+    agentCatalogMock.getCatalogAgents.mockReturnValue([]);
     agentCatalogMock.getVisibleAgents.mockReturnValue(Effect.succeed([]));
   });
 
-  it('parses agent category filter spellings', () => {
-    expect(parseCliAgentCategoryFilter('workflow')).toBe(
-      AgentCategory.Workflow,
-    );
-    expect(parseCliAgentCategoryFilter('toolUse')).toBe(AgentCategory.ToolUse);
-    expect(parseCliAgentCategoryFilter('tool-use')).toBe(AgentCategory.ToolUse);
-    expect(parseCliAgentCategoryFilter('tool_use')).toBe(AgentCategory.ToolUse);
-    expect(parseCliAgentCategoryFilter('work-flow')).toBeUndefined();
-    expect(parseCliAgentCategoryFilter('unknown')).toBeUndefined();
-  });
-
   it('lists visible agents by default and reports hidden agents', async () => {
-    stubCatalog({
-      [AgentCategory.ToolUse]: {
-        visible: [LEAN_AGENT],
-        all: [LEAN_AGENT, CHAT_AGENT],
-      },
-    });
+    stubCatalog({ visible: [LEAN_AGENT], all: [LEAN_AGENT, CHAT_AGENT] });
 
     const exitCode = await runListAgents(createRunCommandCliContext());
 
@@ -127,7 +101,7 @@ describe('CLI agents command', () => {
     expectEmittedAgents({
       json: [LEAN_AGENT],
       ndjson: [{ kind: 'agent', agent: LEAN_AGENT }],
-      text: 'toolUse\tlean\tLean 4 proof assistant.',
+      text: 'chat\tlean\tLean 4 proof assistant.',
     });
     expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledWith(
       'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --all` to show all agents.',
@@ -135,13 +109,11 @@ describe('CLI agents command', () => {
   });
 
   it('keeps quiet empty agent lists byte-empty for shell completion', async () => {
-    stubCatalog({ [AgentCategory.Workflow]: { all: [CORRECT_AGENT] } });
+    stubCatalog({ all: [CORRECT_AGENT] });
 
     const exitCode = await runListAgents(
       createRunCommandCliContext({ quietLogs: true }),
-      {
-        category: AgentCategory.Workflow,
-      },
+      { tasks: true },
     );
 
     expect(exitCode).toBe(0);
@@ -154,7 +126,7 @@ describe('CLI agents command', () => {
   });
 
   it('reports missing agents after CLI agent resolution misses', async () => {
-    mocks.resolveCliAgent.mockReturnValue(Effect.succeed(undefined));
+    mocks.resolveCliAgent.mockReturnValue(undefined);
 
     const exitCode = await runShowAgent(
       createRunCommandCliContext(),

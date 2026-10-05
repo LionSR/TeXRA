@@ -8,7 +8,6 @@ import { resolveSetupLaunchModel } from '@model/setupCredentialAccess';
 import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { AgentCategory } from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 
 /** Instruction handed to the setup agent when launched. Shared by every host. */
@@ -34,7 +33,6 @@ export function buildDesktopSetupRunRequest(
     const validation = validateRunRequest({
       config: {
         agent: SETUP_AGENT_NAME,
-        agentCategory: AgentCategory.ToolUse,
         model,
         instruction: SETUP_INSTRUCTION,
       },

@@ -9,7 +9,7 @@ import { globalDatabaseLayer } from '@controllers/session/Database';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { RunIdSchema, ToolError } from '@shared/schemas';
-import { InquiryRecords } from '@shared/session/inquiryRecords';
+import { InquiryRecords } from '@shared/plugins/externalInquiry';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 

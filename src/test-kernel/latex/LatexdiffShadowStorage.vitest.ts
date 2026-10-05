@@ -11,7 +11,7 @@ import {
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import type { RunId, OutputFileInfo } from '@shared/schemas';
-import { TexraStateKey } from '@shared/settingsView/texraSettings';
+import { DocumentsStateKey } from '@shared/settingsView/documentsSettings';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -155,11 +155,11 @@ describe('LaTeXdiffService shadow output', () => {
           workspaceState: new MemoryStateStore(),
         };
         yield* testWorkspaceRoots().workspaceState.update(
-          TexraStateKey.LATEXDIFF_MATH_MARKUP,
+          DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
           'coarse',
         );
         yield* sessionRoots.workspaceState.update(
-          TexraStateKey.LATEXDIFF_MATH_MARKUP,
+          DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
           'off',
         );
         const { LaTeXdiffService } = yield* Effect.promise(
@@ -232,7 +232,7 @@ describe('LaTeXdiffService shadow output', () => {
         diff: null,
       });
       yield* testWorkspaceRoots().workspaceState.update(
-        TexraStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+        DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS,
         true,
       );
       const { runLatexdiffForRun } = yield* Effect.promise(

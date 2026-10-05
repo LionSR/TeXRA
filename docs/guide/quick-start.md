@@ -87,10 +87,11 @@ Open the TeXRA panel from the brain icon in the sidebar, or run **TeXRA: New Tas
 
 ### Select files
 
-The **Input** and **Context** sections appear once you pick a document-pass
-agent such as `polish` or `correct`, because only those agents read them. An
-interactive agent (the orchestrator, the assistant) gets your instruction and
-any attachments, so the New task view shows only **Media** for it.
+The **Input** and **Context** sections appear once you pick a document task
+such as `polish` or `correct`, because only a document task reads them. A
+chat (with the orchestrator, the assistant, or any other agent) gets your
+instruction and any attachments, so the New task view shows only **Media**
+for it.
 
 1. In the **Input** section, select <wa-icon library="texra" name="add"></wa-icon> **Add files** and pick your document from the file picker. You can also drag it from the OS file manager. If you have several `.tex` files open and want them all, use <wa-icon library="texra" name="folder-opened"></wa-icon> **Add opened files**; it appends every editor tab whose extension matches.
 2. (Optional) Use the same buttons in **Context** to add read-only references or preamble, and **Media** to add figure files.
@@ -107,9 +108,10 @@ Each category holds an ordered list. Add as many files as the task needs and dra
 
 The dropdown menus at the bottom of the instruction box pick the agent
 (e.g. `polish` for improving writing) and the model (e.g. `anthropic/claude-sonnet-5-5`). The
-agent menu lists interactive agents, document passes and teams in three
-sections, and the agent you pick decides what kind of run starts: there is
-no separate mode to set.
+agent menu has three sections: **Chat** lists every agent, **Document task**
+lists the agents that also have a document task, and the third lists teams.
+The section you pick from decides what kind of run starts: there is no
+separate mode to set.
 Then write a specific instruction in the text area:
 
 ```
@@ -124,7 +126,7 @@ Be specific about your objectives: state both what the agent should improve and 
 
 ### Configure tools
 
-Two icon buttons sit in the file-group header rows of the file selector: one next to the **Input** label, one next to the **Media** label. They light up when a helper is active, and they appear only for a document-pass agent, the only kind that uses them.
+Two icon buttons sit in the file-group header rows of the file selector: one next to the **Input** label, one next to the **Media** label. They light up when a helper is active, and they appear only for a document task, the only kind of run that uses them.
 
 1. Select the <wa-icon library="texra" name="tools"></wa-icon> **Tool configuration options** button to:
    - **Attach TeX Count**: include document word-count statistics so the agent knows the document's size and structure
@@ -133,7 +135,7 @@ Two icon buttons sit in the file-group header rows of the file selector: one nex
    - **TikZ Figures**: extract TikZ figures
    - **Compile Input PDF**: compile the input to PDF first
 
-The selected agent controls reflection rounds; most writing agents already include a follow-up critique pass.
+The selected agent controls how many revisions run; most writing agents already include a follow-up critique pass.
 
 <ToolConfigHero />
 
@@ -149,7 +151,7 @@ Press **Execute** (<wa-icon library="texra" name="play"></wa-icon>). The Progres
 
 <GuideIntroHero />
 
-<p class="hero-caption">The ProgressBoard streams the run live (delegated subagents and the tool-use log) with the output files alongside.</p>
+<p class="hero-caption">The ProgressBoard streams the run live (delegated subagents and the tool calls) with the output files alongside.</p>
 
 ### Review results
 
@@ -160,7 +162,7 @@ Press **Execute** (<wa-icon library="texra" name="play"></wa-icon>). The Progres
 
      <CompareHero />
 
-     <p class="hero-caption">VS Code's diff editor opens with your original on the left and the round-0 output (<code>r0/draft.tex</code>) on the right: removed text in red, improved text in green.</p>
+     <p class="hero-caption">VS Code's diff editor opens with your original on the left and the first revision (<code>r0/draft.tex</code>) on the right: removed text in red, improved text in green.</p>
 
      You can accept reviewed outputs from the ProgressBoard after comparing the changes.
 
@@ -169,9 +171,9 @@ Press **Execute** (<wa-icon library="texra" name="play"></wa-icon>). The Progres
 <div class="quick-pdf-viewer">
   <div class="pdf-tabs">
     <button type="button" class="pdf-tab active" data-pdf="/examples/draft.pdf">Original</button>
-    <button type="button" class="pdf-tab" data-pdf="/examples/draft_polish_r0_gemini25p_diff.pdf">Round 0 Changes</button>
-    <button type="button" class="pdf-tab" data-pdf="/examples/draft_polish_r1_gemini25p_diff.pdf">Round 1 Changes</button>
-    <button type="button" class="pdf-tab" data-pdf="/examples/draft_polish_r1_gemini25p_diffr1r0.pdf">Round 0 vs Round 1</button>
+    <button type="button" class="pdf-tab" data-pdf="/examples/draft_polish_r0_gemini25p_diff.pdf">Revision 1 Changes</button>
+    <button type="button" class="pdf-tab" data-pdf="/examples/draft_polish_r1_gemini25p_diff.pdf">Revision 2 Changes</button>
+    <button type="button" class="pdf-tab" data-pdf="/examples/draft_polish_r1_gemini25p_diffr1r0.pdf">Revision 1 vs Revision 2</button>
   </div>
   <iframe src="/examples/draft.pdf" id="pdf-frame" class="quick-pdf-frame"></iframe>
   <a href="/examples/draft.pdf" target="_blank" id="pdf-link" class="quick-pdf-link">Open full example</a>
@@ -201,7 +203,7 @@ texra setup
 texra run polish --input draft.tex \
   --instruction "Improve clarity; preserve math and citations."
 
-# Or open an interactive tool-use session:
+# Or open an interactive chat:
 texra chat
 ```
 
@@ -214,7 +216,7 @@ texra chat
   :outputs="['executions/9f3a6c81d24e/r1/draft.tex']"
 />
 
-<p class="hero-caption">What a one-shot run looks like: rounds stream as progress, then the path to the revised document prints on stdout.</p>
+<p class="hero-caption">What a one-shot run looks like: revisions stream as progress, then the path to the revised document prints on stdout.</p>
 
 Run history is shared with VS Code, so a run started in the CLI shows up in the
 extension's ProgressBoard (and vice versa). Read the [TeXRA CLI guide](./texra-cli.md) for
@@ -316,16 +318,16 @@ Some common tasks to try with TeXRA. Each is an agent, a model, and a one-line i
 ## Understanding the output
 
 A completed run writes everything into the run folder under run storage, one
-folder per round. Each round holds three artifacts, and the document keeps your
+folder per revision. Each revision holds three artifacts, and the document keeps your
 **input filename** (`draft.tex`, not `output.tex`):
 
 <OutputArtifactsTree />
 
-<p class="hero-caption">One folder per round under <code>r{round}/&lt;input-filename&gt;</code>: the revised <strong>Output</strong>, a <strong>Log</strong> of the run, and the <strong>Diff</strong> PDF. Round 1 (and any further reflection rounds) repeat the same trio.</p>
+<p class="hero-caption">One folder per revision under <code>r{round}/&lt;input-filename&gt;</code>: the revised <strong>Output</strong>, a <strong>Log</strong> of the run, and the <strong>Diff</strong> PDF. The second revision (and any further one) repeats the same trio in <code>r1/</code>, <code>r2/</code>, …</p>
 
-So if your input file is `draft.tex`, the first round's output lands at
+So if your input file is `draft.tex`, the first revision's output lands at
 `r0/draft.tex`, the filename you started with, never `output.tex`. The CLI
-writes the same per-round tree under `executions/<run-id>/` in the
+writes the same per-revision tree under `executions/<run-id>/` in the
 workspace store. Read
 [First run](./first-run.md) for the terminal walkthrough.
 

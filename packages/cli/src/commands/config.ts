@@ -92,8 +92,7 @@ const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
       readonly inherit: boolean;
       readonly all: boolean;
       readonly team?: string;
-      readonly workflow?: string;
-      readonly toolUse?: string;
+      readonly agents?: string;
       readonly defaultTeam?: string;
       readonly clearDefault: boolean;
       readonly defaultAgent?: string;
@@ -102,17 +101,15 @@ const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
   ) {
     const roots = services.roots;
     const workspaceAgents = createWorkspaceAgentsController(roots);
-    const customRequested =
-      input.workflow !== undefined || input.toolUse !== undefined;
     const workspaceChoices = [
       input.inherit,
       input.all,
       Boolean(input.team),
-      customRequested,
+      input.agents !== undefined,
     ].filter(Boolean).length;
     if (workspaceChoices > 1) {
       return yield* failUsage(
-        'Choose one set of workspace agents: --inherit, --all, --team, or the custom --workflow/--tool-use lists.',
+        'Choose one set of workspace agents: --inherit, --all, --team, or a custom --agents list.',
       );
     }
     if (input.defaultTeam && input.clearDefault) {
@@ -134,21 +131,8 @@ const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
         .setTeam(teamId)
         .pipe(Effect.mapError(asTeamUsageError));
     }
-    if (input.workflow !== undefined && input.toolUse !== undefined) {
-      yield* workspaceAgents.setCustom({
-        workflow: parseAgentKeys(input.workflow),
-        toolUse: parseAgentKeys(input.toolUse),
-      });
-    } else if (input.workflow !== undefined) {
-      yield* workspaceAgents.setEnabledAgentKeys(
-        'workflow',
-        parseAgentKeys(input.workflow),
-      );
-    } else if (input.toolUse !== undefined) {
-      yield* workspaceAgents.setEnabledAgentKeys(
-        'toolUse',
-        parseAgentKeys(input.toolUse),
-      );
+    if (input.agents !== undefined) {
+      yield* workspaceAgents.setEnabledAgentKeys(parseAgentKeys(input.agents));
     }
     const defaultTeamId = input.defaultTeam;
     if (defaultTeamId) {
@@ -158,7 +142,7 @@ const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
     }
     if (input.clearDefault) yield* workspaceAgents.clearDefaultTeam();
     if (input.defaultAgent) {
-      const available = yield* workspaceAgents.getVisibleAgents('toolUse');
+      const available = yield* workspaceAgents.getVisibleAgents();
       const selected = available.find(
         (agent) =>
           agent.name === input.defaultAgent ||
@@ -202,15 +186,10 @@ const configAgentsCommand = defineCliCommand({
       description: 'Set the workspace agents to every agent',
     },
     team: { type: 'string', description: 'Use a built-in or saved team id' },
-    workflow: {
+    agents: {
       type: 'string',
       valueHint: 'agent,...',
-      description: 'Use an exact comma-separated workflow-agent list',
-    },
-    'tool-use': {
-      type: 'string',
-      valueHint: 'agent,...',
-      description: 'Use an exact comma-separated tool-use-agent list',
+      description: 'Use an exact comma-separated agent list',
     },
     'default-team': {
       type: 'string',
@@ -236,8 +215,7 @@ const configAgentsCommand = defineCliCommand({
         inherit: ctx.args.inherit === true,
         all: ctx.args.all === true,
         team: optString(ctx.args.team),
-        workflow: optString(ctx.args.workflow),
-        toolUse: optString(ctx.args['tool-use']),
+        agents: optString(ctx.args.agents),
         defaultTeam: optString(ctx.args['default-team']),
         clearDefault: ctx.args['clear-default'] === true,
         defaultAgent: optString(ctx.args['default-agent']),

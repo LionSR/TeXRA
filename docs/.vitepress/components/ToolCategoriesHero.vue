@@ -83,7 +83,7 @@ const categories = [
     class="tcats"
     icon="tools"
     title="Dashboard → Tools"
-    sub="tools you can grant a tool-use agent"
+    sub="tools you can grant an agent"
   >
     <ul class="tcats-list">
       <li v-for="(c, i) in categories" :key="i" class="tcat">

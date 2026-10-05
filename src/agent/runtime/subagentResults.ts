@@ -160,30 +160,31 @@ export function formatSubagentDelivery(
   });
 
   const { output } = result;
-  if (output.category === 'workflow') {
-    if (output.diffsUnavailable) {
+  const { documents } = output;
+  if (documents !== undefined) {
+    if (documents.diffsUnavailable) {
       lines.push(
-        `<diffs-unavailable reason="${escapeAttr(output.diffsUnavailable)}">Diff computation failed: read the output files directly to review the changes.</diffs-unavailable>`,
+        `<diffs-unavailable reason="${escapeAttr(documents.diffsUnavailable)}">Diff computation failed: read the output files directly to review the changes.</diffs-unavailable>`,
       );
     }
-    if (output.outputs.length > 0) {
+    if (documents.outputs.length > 0) {
       const diffsByPath = new Map(
-        output.diffs.map((diff) => [diff.path, diff] as const),
+        documents.diffs.map((diff) => [diff.path, diff] as const),
       );
       lines.push(
-        ...formatWorkflowOutputs(output.outputs, options.runId, diffsByPath),
+        ...formatWorkflowOutputs(documents.outputs, options.runId, diffsByPath),
       );
     }
-    if (output.compileFailures.length > 0) {
+    if (documents.compileFailures.length > 0) {
       lines.push('<compile-failures>');
-      for (const failure of output.compileFailures) {
+      for (const failure of documents.compileFailures) {
         lines.push(
           `<failure round="${failure.round}" file="${escapeAttr(failure.displayName)}" output="${escapeAttr(failure.outputPath)}" log="${escapeAttr(failure.logPath)}" />`,
         );
       }
       lines.push('</compile-failures>');
     }
-  } else if (output.category === 'toolUse') {
+  } else {
     if (output.response) {
       lines.push('<response>', escapeText(output.response), '</response>');
     }
@@ -201,7 +202,9 @@ export function formatSubagentDelivery(
     runId: options.runId,
     attributes: [
       { name: 'agent', value: agentName },
-      { name: 'category', value: output.category },
+      ...(documents !== undefined
+        ? [{ name: 'kind', value: 'document-task' }]
+        : []),
       { name: 'status', value: result.outcome },
     ],
     wallTime:
@@ -392,10 +395,8 @@ const computeAndWriteWorkflowDiffs = Effect.fn(
 // Built terminal results
 // ============================================================================
 
-type WorkflowRunEndOutput = Extract<RunEndOutput, { category: 'workflow' }>;
-
 /**
- * A workflow output with its diffs: computes them against each output's
+ * A document task's output with its diffs: computes them against each output's
  * original, writes them as files to the run's run directory, and records
  * their paths on the output so a reader can open them on demand. The one
  * owner of `diffs`/`diffsUnavailable`, for both deliveries that report a
@@ -407,9 +408,10 @@ export const withWorkflowDiffs = Effect.fn('subagentResults.withWorkflowDiffs')(
   function* (
     storageRoot: string,
     runId: RunId,
-    output: WorkflowRunEndOutput,
-  ): Effect.fn.Return<WorkflowRunEndOutput, never, FileSystem.FileSystem> {
-    if (output.outputs.length === 0) return output;
+    run: RunEndOutput,
+  ): Effect.fn.Return<RunEndOutput, never, FileSystem.FileSystem> {
+    const output = run.documents;
+    if (output === undefined || output.outputs.length === 0) return run;
     let diffsUnavailable: string | undefined;
     const diffInfos = yield* computeAndWriteWorkflowDiffs(
       storageRoot,
@@ -423,17 +425,17 @@ export const withWorkflowDiffs = Effect.fn('subagentResults.withWorkflowDiffs')(
         ).pipe(withLogChannel(DELIVERY_CHANNEL), Effect.as(undefined));
       }),
     );
+    const diffs = output.outputs.flatMap((file) => {
+      const diff = diffInfos?.get(file.absolutePath);
+      return diff ? [{ path: file.absolutePath, ...diff }] : [];
+    });
     return {
-      ...output,
-      ...(diffInfos
-        ? {
-            diffs: output.outputs.flatMap((file) => {
-              const diff = diffInfos.get(file.absolutePath);
-              return diff ? [{ path: file.absolutePath, ...diff }] : [];
-            }),
-          }
-        : {}),
-      ...(diffsUnavailable !== undefined ? { diffsUnavailable } : {}),
+      ...run,
+      documents: {
+        ...output,
+        ...(diffInfos && { diffs }),
+        ...(diffsUnavailable !== undefined && { diffsUnavailable }),
+      },
     };
   },
 );
@@ -458,9 +460,6 @@ export const buildSubagentResult = Effect.fn(
 ): Effect.fn.Return<SubagentResultMeta, never, FileSystem.FileSystem> {
   // The run's wall time, not the diff computation that follows it.
   const wallTimeMs = Date.now() - options.startedAt;
-  const enriched: RunEndOutput =
-    output.category === 'workflow'
-      ? yield* withWorkflowDiffs(options.storageRoot, runId, output)
-      : output;
+  const enriched = yield* withWorkflowDiffs(options.storageRoot, runId, output);
   return buildSubagentResultMeta(agentName, enriched, wallTimeMs);
 });

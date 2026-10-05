@@ -6,15 +6,12 @@ import { Deferred, Effect, Exit, Fiber, Stream } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { documentTaskConfig } from '@agent/output/documentRecipe';
 import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  RUN_OUTCOME,
-  AgentCategory,
-  agentMatchesIdentifier,
-} from '@shared/schemas';
+import { RUN_OUTCOME, agentMatchesIdentifier } from '@shared/schemas';
 import type { ModelOptionData, RequestDecision, RunId } from '@shared/schemas';
 import { untrackRun, closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -68,11 +65,8 @@ vi.mock('@agent/runtime/executeAgent', async (importOriginal) => ({
 // agentRegistry's own rule — mirrored here rather than re-implemented.
 vi.mock('@agent/index/agentRegistry', () => ({
   getVisibleAgents: mocks.getVisibleAgents,
-  resolveDelegationScopeAgents: (
-    _stores: unknown,
-    scope: unknown,
-    category: AgentCategory,
-  ) => (scope ? [] : mocks.getVisibleAgents(category)),
+  resolveDelegationScopeAgents: (_stores: unknown, scope: unknown) =>
+    scope ? [] : mocks.getVisibleAgents(),
   findAgentByIdentifier: (
     entries: readonly { source: string; name: string }[],
     identifier: string,
@@ -178,7 +172,7 @@ function parentRunContext(
 let testEngine: AgentEngine['Service'];
 
 function callDelegateReview(call = parentRunContext()) {
-  return agentTool({ fields: {}, toolConfig: () => ({}) })
+  return agentTool()
     .call({
       agentName: 'review',
       prompt: 'Check the proof.',
@@ -280,7 +274,6 @@ function delegationOptions(
   return {
     configPayload: {
       agent: 'review',
-      agentCategory: AgentCategory.ToolUse,
       model: 'deepseek/deepseek-v4-flash',
     },
     parentRunId: IN_BAND_PARENT_RUN_ID,
@@ -314,7 +307,7 @@ function mockExecuteAgentErrorOnce(
     outcome: 'failed',
     runId: CHILD_RUN_ID,
     usage: { totalCost: totalCostUsd },
-    output: { category: 'toolUse', response: '', files: [] },
+    output: { response: '', files: [] },
     error: { message: 'review model failed', userRetryable: true },
     ...extra,
   });
@@ -343,7 +336,6 @@ function mockTrackedChildOnce(
       return {
         outcome: RUN_OUTCOME.COMPLETED,
         output: {
-          category: 'toolUse',
           response: 'The proof is correct.',
           files: [],
         },
@@ -490,7 +482,7 @@ describe('headless delegation', () => {
       Effect.succeed([
         {
           name: 'review',
-          source: 'builtInToolUse',
+          source: 'builtIn',
           description: 'Review work.',
           tools: [],
         },
@@ -524,7 +516,6 @@ describe('headless delegation', () => {
       outcome: 'completed',
       runId: CHILD_RUN_ID,
       output: {
-        category: 'toolUse',
         response: 'The proof is correct.',
         files: [],
       },
@@ -535,21 +526,21 @@ describe('headless delegation', () => {
     'validates workflow inputs against its once-loaded definition before registration',
     () =>
       Effect.gen(function* () {
-        const task = { outputs: [] as string[] };
+        const task = { outputs: ['generated.tex'] };
         mocks.prepareAgentDefinition.mockImplementation(
           ({ config }: { config: unknown }) =>
             Effect.succeed({ config, persona: { tools: [] }, task }),
         );
-        const options = delegationOptions({
-          configPayload: {
-            agent: 'review',
-            agentSource: 'plugin',
-            agentCategory: AgentCategory.Workflow,
-            model: 'deepseek/deepseek-v4-flash',
-          },
-        });
-        const run = () =>
-          Effect.provide(
+        const run = (inputFiles: string[]) => {
+          const options = delegationOptions({
+            configPayload: documentTaskConfig({
+              agent: 'review',
+              agentSource: 'plugin',
+              model: 'deepseek/deepseek-v4-flash',
+              inputFiles,
+            }),
+          });
+          return Effect.provide(
             executeSubagentInBandEffect({
               ...options,
               runId: IN_BAND_RUN_ID,
@@ -559,22 +550,22 @@ describe('headless delegation', () => {
             ),
             fakeProcessServices(),
           );
-        expect(yield* Effect.flip(run())).toMatchObject({
-          message: expect.stringContaining('pass options.inputFiles'),
+        };
+        // Declared outputs do not stand in for the files it revises.
+        expect(yield* Effect.flip(run([]))).toMatchObject({
+          message: expect.stringContaining('pass inputFiles'),
         });
         expect(mocks.registerRun).not.toHaveBeenCalled();
-        task.outputs = ['generated.tex'];
         mocks.prepareAgentDefinition.mockClear();
         mocks.executeAgent.mockResolvedValue({
           outcome: 'completed',
           output: {
-            category: 'workflow',
-            outputs: [],
-            compileFailures: [],
-            diffs: [],
+            response: '',
+            files: [],
+            documents: { outputs: [], compileFailures: [], diffs: [] },
           },
         });
-        yield* run();
+        yield* run(['main.tex']);
         expect(mocks.prepareAgentDefinition).toHaveBeenCalledOnce();
         expect(mocks.executeAgent).toHaveBeenCalledWith(
           expect.objectContaining({ task }),
@@ -610,7 +601,6 @@ describe('headless delegation', () => {
         expect.objectContaining({
           config: expect.objectContaining({
             agent: 'review',
-            agentCategory: AgentCategory.ToolUse,
             instruction: expect.stringContaining('Check the proof.'),
             model: 'deepseek/deepseek-v4-flash',
           }),
@@ -645,7 +635,6 @@ describe('headless delegation', () => {
         expect(result.result).toEqual({
           outcome: 'completed',
           output: {
-            category: 'toolUse',
             response: 'The proof is correct.',
             files: [],
           },
@@ -739,7 +728,6 @@ describe('headless delegation', () => {
       mockExecuteAgentErrorOnce(0.61, {
         runId: IN_BAND_RUN_ID,
         output: {
-          category: 'toolUse',
           response: 'Partial review.',
           files: [],
         },
@@ -806,7 +794,7 @@ describe('headless delegation', () => {
             return {
               outcome: 'cancelled',
               runId: CHILD_RUN_ID,
-              output: { category: 'toolUse', response: '', files: [] },
+              output: { response: '', files: [] },
             };
           },
         );
@@ -887,7 +875,7 @@ describe('headless delegation', () => {
           expect.objectContaining({
             config: expect.objectContaining({
               agent: 'review',
-              agentSource: 'builtInToolUse',
+              agentSource: 'builtIn',
             }),
           }),
           expect.any(String),

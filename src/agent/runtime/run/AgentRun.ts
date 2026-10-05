@@ -27,7 +27,6 @@ import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
 import {
   AGENT_SOURCE,
-  AgentCategory,
   DeclinableUsageRouteSchema,
   type AgentDelegationScope,
   type DeclinableUsageRoute,
@@ -72,13 +71,17 @@ interface RunCallbacks {
   readonly onIdle?: () => void;
 }
 
+/** The tool a script's run makes its one call to. */
+const SCRIPT_TOOL = 'script';
+
 export interface AgentRunShape {
   readonly runId: RunId;
   readonly session: SessionHandle;
   readonly config: AgentConfig;
   /** The persona the run is, with the tools it declares. */
   readonly persona: Persona;
-  /** The document task it runs, or null for a conversation. */
+  /** The document task it runs, or null for a conversation (a task's
+   *  persona called by its recipe or chatted with included). */
   readonly task: DocumentTask | null;
   readonly logger: AgentTrace;
   readonly parentStage: StageHandle;
@@ -194,39 +197,45 @@ export const agentRunLayer = (
       const structured: { value: JsonValue | undefined } = {
         value: undefined,
       };
-      const outputSchema =
-        config.agentCategory === AgentCategory.ToolUse
-          ? config.outputSchema
-          : undefined;
+      const outputSchema = config.outputSchema ?? undefined;
       const terminalTool = outputSchema
         ? buildTerminalTool(outputSchema, (value) => {
             structured.value = value;
           })
         : undefined;
       const finalToolName = terminalTool?.definition.name ?? null;
-      // The loaded plugins (MCP servers) the declared tools name, held for
-      // the run's life; the read's problems reach its transcript. A
-      // workflow run's rounds offer no tools, so it holds none.
-      const workflow = task !== null;
+      // A script's run offers its script and exactly the tools its launch
+      // names (a background script's parent's, a document task's recipe's).
+      const script = config.script ?? null;
       // A plugin agent that names no tools inherits them, as a Claude Code
       // subagent does: a child every tool its parent's step offered (the
       // narrow-only rule then keeps exactly those), a top-level run the
       // standard file, shell and web tools and the installed plugins' tools.
       const inherits =
         config.agentSource === AGENT_SOURCE.PLUGIN &&
-        !workflow &&
+        script === null &&
         persona.tools.length === 0;
+      // A persona that declares no tools writes text only: the injected
+      // tools stay out, and its turns get the model's whole output budget.
+      const textOnly =
+        script === null && !inherits && persona.tools.length === 0;
       const parentOffered = ctx.toolPolicy.parentOffered;
-      const tools = inherits
-        ? (
-            parentOffered
-              ?.filter(({ plugin }) => plugin !== 'run')
-              .map(({ name }) => name) ?? PLUGIN_AGENT_DEFAULT_TOOLS
-          ).map((name) => ({ name }))
-        : persona.tools;
+      // A script run offers its script; an inheriting plugin agent what its
+      // parent was offered (or the defaults); anyone else its persona's.
+      let tools = persona.tools;
+      if (script !== null)
+        tools = [SCRIPT_TOOL, ...script.tools].map((name) => ({ name }));
+      else if (inherits)
+        tools = (
+          parentOffered
+            ?.filter(({ plugin }) => plugin !== 'run')
+            .map(({ name }) => name) ?? PLUGIN_AGENT_DEFAULT_TOOLS
+        ).map((name) => ({ name }));
+      // The loaded plugins (MCP servers) the declared tools name, held for
+      // the run's life; the read's problems reach its transcript.
       const declared = declaredToolNames(tools);
       const held = yield* (yield* LiveTools)
-        .hold(workflow ? [] : declared)
+        .hold(declared)
         .pipe(Scope.provide(scope));
       for (const warning of held.warnings) logger.warn(warning);
       const toolInputs: AgentRunShape['toolInputs'] = {
@@ -235,20 +244,19 @@ export const agentRunLayer = (
         runTools: terminalTool
           ? [...(input.tools ?? []), terminalTool]
           : (input.tools ?? []),
-        // A workflow run injects none: memory and plan are tool-use
-        // infrastructure.
-        // A plugin agent that names its tools gets only those.
+        // A script's run and a text-only persona inject none. A plugin
+        // agent that names its tools gets only those.
         injectTools:
-          !workflow && (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
+          script === null &&
+          !textOnly &&
+          (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
         // The installed plugins' tools reach a top-level run of any agent but
         // a plugin agent that names its tools; a child gets what it declares,
-        // narrowed to its parent's. A background script's run is its
-        // parent's agent with its parent's tools, installed ones included.
+        // narrowed to its parent's.
         injectInstalled:
-          !workflow &&
-          (parentOffered === undefined ||
-            (config.agentCategory === AgentCategory.ToolUse &&
-              config.backgroundScript != null)) &&
+          script === null &&
+          !textOnly &&
+          parentOffered === undefined &&
           (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
         stores: ctx.stores,
         workspaceRoot: session.roots.workspace,
@@ -288,7 +296,7 @@ export const agentRunLayer = (
         backend,
         ownApiKeyFallback: ctx.ownApiKeyFallback,
         declinedRoutes,
-        agentCategory: config.agentCategory,
+        textOnly,
         temperature: persona.temperature,
       }).pipe(Scope.provide(bindingScope));
       const model = yield* SynchronizedRef.make(bound);

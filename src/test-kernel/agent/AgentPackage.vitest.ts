@@ -34,7 +34,6 @@ type FakeSessionView = Omit<RuntimeSessionView, 'runs'> & {
 };
 
 const mocks = vi.hoisted(() => ({
-  agentCategory: 'toolUse',
   /** The runtime owner's close, as the package reaches it: by storage root. */
   closeSession: vi.fn((_root: string) =>
     Effect.succeed({ settled: true, abandoned: [] as string[] }),
@@ -78,7 +77,6 @@ vi.mock('@utils/core', async (importActual) => ({
 
 vi.mock('@agent/index', () => ({
   getAgent: () => ({
-    category: mocks.agentCategory,
     source: 'custom',
     name: 'assistant',
   }),
@@ -270,7 +268,6 @@ describe('agent package sessions', () => {
   beforeEach(() => {
     mocks.sessionInits.splice(0);
     vi.clearAllMocks();
-    mocks.agentCategory = 'toolUse';
     mocks.eventListener = undefined;
     mocks.ownerRuntime = undefined;
     mocks.installRuntime.mockImplementation(() => {

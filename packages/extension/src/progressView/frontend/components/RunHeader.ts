@@ -37,7 +37,7 @@ import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 import {
   ELEMENT_IDS,
   NEUTRAL_RUN_ACTIONS,
-  RUN_MENU_ACTIONS,
+  runMenuActions,
   type RunMenuAction,
 } from '../constants';
 import { progressBadgeLabel } from '../formatters/progressBadgeFormatter';
@@ -275,7 +275,7 @@ export class RunHeader extends LitElement {
   @property({ attribute: false }) view: SessionView | null = null;
   /** The shell's window items, after the run's actions in its menu. */
   @property({ attribute: false }) menuItems: readonly HeaderMenuItem[] = [];
-  /** A workflow agent's planned pass count, from the agent catalog. */
+  /** A document task's planned pass count, from the agent catalog. */
   @property({ attribute: false }) plannedPasses: number | undefined;
 
   /** The title is a field while the user renames the run. */
@@ -444,7 +444,7 @@ export class RunHeader extends LitElement {
     // The header offers exactly what the fold's `actions` licenses.
     const canStop = run.actions.includes('stop');
     const canGrant = run.actions.includes('grant');
-    const passLabel = progressBadgeLabel(run.position, this.plannedPasses);
+    const passLabel = progressBadgeLabel(run, this.plannedPasses);
 
     return html`
       <div class="log-header">
@@ -505,12 +505,13 @@ export class RunHeader extends LitElement {
     statusLabel: string,
     passLabel: string | undefined,
   ): TemplateResult {
-    // An agent run's menu lists its category's actions, a process's or a
-    // workflow container's the neutral ones, each shown only while the
-    // run's `actions` holds it. The task's forks are listed after them.
+    // An agent run's menu lists a document task's or a conversation's
+    // actions, a process's or a workflow container's the neutral ones, each
+    // shown only while the run's `actions` holds it. The task's forks are
+    // listed after them.
     const actions = (
       run.identity.kind === 'agent'
-        ? RUN_MENU_ACTIONS[run.category]
+        ? runMenuActions(run.documentTask)
         : NEUTRAL_RUN_ACTIONS
     ).filter((action) => run.actions.includes(action.action));
     const copied = this.copyDiagnostics.state.copied;

@@ -23,7 +23,7 @@ import type { LanguageModel } from '@platform/languageModel';
 import type { AgentCatalogServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { type FileOptions, type SessionType } from '@shared/schemas';
+import { type FileOptions } from '@shared/schemas';
 import type {
   HostSnapshot,
   ProjectDisplay,
@@ -121,12 +121,11 @@ export interface HostSnapshotSource {
   refreshWorkspaceRoots(): Effect.Effect<void>;
   /** The one recorder per process started or stopped. */
   setRecording(recording: HostSnapshot['recording']): Effect.Effect<void>;
-  /** A launch could not find its agent, under the category it was launched
-   *  as: the banner's actions edit that catalog, and open the custom agent
-   *  directory only when the user configured one. */
+  /** A launch could not find its agent: the banner's actions edit the
+   *  agents, and open the custom agent directory only when the user
+   *  configured one. */
   showAgentConfigBanner(
     agentName: string,
-    sessionType: SessionType,
   ): Effect.Effect<void, never, AgentDirectories | FileSystem.FileSystem>;
   /** A launch resolved its agent and started a run, so the missing-agent
    *  warning no longer describes the launcher. */
@@ -144,7 +143,7 @@ export function createHostSnapshotSource(
     HostSnapshot,
     'agentOptions' | 'modelOptions' | 'teamOptions'
   > = {
-    agentOptions: { toolUse: [], workflow: [] },
+    agentOptions: [],
     modelOptions: [],
     teamOptions: [],
   };
@@ -281,7 +280,7 @@ export function createHostSnapshotSource(
       Effect.sync(() => {
         recording = next;
       }).pipe(Effect.andThen(publish)),
-    showAgentConfigBanner: (agentName, sessionType) =>
+    showAgentConfigBanner: (agentName) =>
       Effect.gen(function* () {
         // An unreadable setting is reported and the banner offers the agent
         // settings, which always open, instead of a directory it cannot name.
@@ -295,7 +294,7 @@ export function createHostSnapshotSource(
             }),
           ),
         );
-        agentConfig = { visible: true, agentName, sessionType, customDirSet };
+        agentConfig = { visible: true, agentName, customDirSet };
         yield* publish;
       }),
     clearAgentConfigBanner: Effect.suspend(() => {

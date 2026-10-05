@@ -1,10 +1,7 @@
 import { Cause, Effect } from 'effect';
 
-import {
-  resolveAgentForLaunch,
-  type WorkspaceAgentsStores,
-} from '@agent/index';
-import { checkCliAgentLaunch } from '@cli/runtime/agents';
+import type { WorkspaceAgentsStores } from '@agent/index';
+import { resolveCliRunAgent } from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
@@ -26,7 +23,7 @@ import {
   resolveTeamLaunch,
 } from '@common/teams/TeamPlan';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
-import { AgentCategory, agentName as bareAgentName } from '@shared/schemas';
+import { agentName as bareAgentName } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,
@@ -38,14 +35,12 @@ export function resolveChatToolUseAgent(
   stores: WorkspaceAgentsStores,
   agentName: string,
 ) {
-  return Effect.gen(function* () {
-    return yield* checkCliAgentLaunch(
-      stores,
-      agentName,
-      yield* resolveAgentForLaunch(stores, AgentCategory.ToolUse, agentName),
-      'chat',
-    );
-  });
+  return resolveCliRunAgent(stores, agentName).pipe(
+    Effect.catchIf(
+      (error): error is CliUsageError => error instanceof CliUsageError,
+      (refusal) => Effect.succeed(refusal),
+    ),
+  );
 }
 
 export function applyInitialCliAgentSelection(

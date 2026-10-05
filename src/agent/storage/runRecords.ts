@@ -25,10 +25,11 @@ import { foldRunState } from '@shared/session/runStateFold';
 import {
   ResultMetaSchema,
   storedResultMeta,
-  WorkflowRunEndOutputSchema,
   aggregateId,
-  roundOutputsToCompileFailureSummaries,
-  roundOutputsToOutputSummaries,
+  emptyRunEndOutput,
+  isDocumentTaskConfig,
+  sumRunUsageTotals,
+  type RunUsageTotals,
   RunWorkspaceFilesSchema,
   type AggregateId,
   type DeliveredResult,
@@ -38,7 +39,6 @@ import {
   type SessionEventDraft,
   type RunId,
 } from '@shared/schemas';
-
 import { deriveRunId } from '@utils/core/idHash';
 
 import { deliveredOutput, type RunResult } from './resultMeta';
@@ -241,25 +241,33 @@ function latestOfType<T extends SessionEvent['type']>(
   );
 }
 
+/** `own` with the spend of `runId`'s children: a document task's
+ *  revisions are its children's runs, which hold what it cost. */
+export const withChildSpend = (
+  session: SessionHandle,
+  runId: RunId,
+  own: RunUsageTotals | undefined,
+): Effect.Effect<RunUsageTotals, DatabaseReadFailed> =>
+  Effect.forEach(session.runView(runId)?.childIds ?? [], (child) =>
+    getRunRecords(session, child).readRunEnd(),
+  ).pipe(
+    Effect.map((ends) =>
+      sumRunUsageTotals(
+        [own, ...ends.map((end) => end?.usage)].filter((u) => u !== undefined),
+      ),
+    ),
+  );
+
 /** Native access to named run metadata, with no file-backed read arm. */
 export function getRunRecords(session: SessionHandle, runId: RunId) {
   const id = aggregateId('run', runId);
-  /** A workflow run's files: its newest `output.produced` row's rounds. */
-  const workflowOutputOf = (rows: readonly SessionEvent[]) => {
-    const rounds = latestOfType(rows, id, 'output.produced')?.rounds ?? [];
-    return WorkflowRunEndOutputSchema.parse({
-      category: 'workflow',
-      outputs: roundOutputsToOutputSummaries(rounds),
-      compileFailures: roundOutputsToCompileFailureSummaries(rounds),
-    });
-  };
   /**
    * The run's terminal result: the `run.end` row's outcome, error and
-   * tool-use reply, a workflow run's files ({@link workflowOutputOf}), and
-   * the usage the run history folds from its priced response rows. Absent
-   * usage is a run with no run history (an agent-CLI child, a launch that failed
-   * before its first batch); an unreadable run history is logged and reads the
-   * same, so it never also costs the run its terminal fact.
+   * output, and the usage its run history folds from its priced response
+   * rows (a document task's: its revisions', {@link withChildSpend}). Absent
+   * usage is a run with no run history (an agent-CLI child, a launch that
+   * failed before its first batch); an unreadable run history is logged and
+   * reads the same, so it never also costs the run its terminal fact.
    */
   const runEndOf = (rows: readonly SessionEvent[]) =>
     Effect.gen(function* () {
@@ -276,16 +284,18 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
           'Failed to fold the run usage from its run history rows',
         ).pipe(Effect.annotateLogs({ runId, error: folded.failure.message }));
       }
-      const usage = Result.isSuccess(folded)
-        ? folded.success?.usage
-        : undefined;
+      const own = Result.isSuccess(folded) ? folded.success?.usage : undefined;
+      const config = latestOfType(rows, id, 'run.config')?.config;
+      const usage =
+        config && isDocumentTaskConfig(config)
+          ? yield* withChildSpend(session, runId, own)
+          : own;
       const { outcome, error, output } = end;
       return {
         outcome,
         ...(error !== undefined ? { error } : {}),
         ...(usage !== undefined ? { usage } : {}),
-        output:
-          output.category === 'workflow' ? workflowOutputOf(rows) : output,
+        output,
       } satisfies RunEnd;
     });
   /** Every row of the run, in one read; none for a closed (tombstoned) run,
@@ -313,28 +323,17 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
       read((rows) =>
         rows.some((row) => row.aggregateId === id && row.type === 'run.start'),
       ),
-    /**
-     * The run is closed by its tombstone. This is the fact {@link exists}
-     * cannot report: the listing drops a closed run entirely, so an id the
-     * user deleted and one that never started read alike there. A
-     * `run.removed` row is the aggregate's last row and is final, so the id
-     * can never start again; deletion later collects the aggregate outright,
-     * and an id with nothing behind it is free to start. Reads the aggregate,
-     * because a closed run's records are no longer listed.
-     */
+    /** The run is closed by its tombstone, which {@link exists} cannot
+     *  tell from never started (the listing drops a closed run). The final
+     *  `run.removed` row means the id never starts again; read from the
+     *  aggregate, since a closed run's records are no longer listed. */
     isRemoved: (): Effect.Effect<boolean, DatabaseReadFailed> =>
       session
         .readAggregate(id, ['run.removed'])
         .pipe(Effect.map((rows) => rows.length > 0)),
-    /**
-     * How many times this run has been activated: once when registration
-     * committed it, once more for every resume. It is the identity of a
-     * lifecycle, which the terminal row alone cannot give — a resume that
-     * ran to its own end usually ends `completed` too, so a caller holding a
-     * result cannot separate the row that carried it from a later row of the
-     * same outcome. Reads every `run.activate` row, because the record read
-     * keeps only the latest row of each type.
-     */
+    /** How many times this run has been activated (registration, then each
+     *  resume): a lifecycle's identity, which a terminal row of the same
+     *  outcome cannot give. Reads every `run.activate` row. */
     countActivations: (): Effect.Effect<number, DatabaseReadFailed> =>
       session
         .readAggregate(id, ['run.activate'])
@@ -373,15 +372,9 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
      *  lifecycle it is in has not ended. */
     readRunEnd: (): Effect.Effect<RunEnd | null, DatabaseReadFailed> =>
       runRows.pipe(Effect.flatMap(runEndOf)),
-    /**
-     * The run's result endpoint: its producer record joined to its terminal
-     * result, carrying the output as the delivery reported it
-     * ({@link deliveredOutput}), with the producer's own context dropped.
-     * Null when no producer recorded one; the terminal fields are absent
-     * while the run has not ended. A background command is its own result:
-     * the `run.end` row of the run that launched it says nothing about the
-     * command, so that record passes through whole.
-     */
+    /** The run's result: its producer record joined to its terminal result,
+     *  the output as delivered ({@link deliveredOutput}). Null with no
+     *  producer record; a background command's record is its own result. */
     readResult: (): Effect.Effect<RunResult | null, DatabaseReadFailed> =>
       Effect.gen(function* () {
         const rows = yield* runRows;
@@ -390,7 +383,7 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
         const end = yield* runEndOf(rows);
         return {
           ...(end ?? {}),
-          output: deliveredOutput(meta, end?.output ?? workflowOutputOf(rows)),
+          output: deliveredOutput(meta, end?.output ?? emptyRunEndOutput()),
         };
       }),
     clearReport: () =>

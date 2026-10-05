@@ -12,7 +12,6 @@ import { ModelOriginSchema } from '@texra-ai/llm';
 import { runHistoryRows, storedDraft } from '@agent/runtime/storedTurn';
 import {
   aggregateId as qualifyAggregateId,
-  AgentCategory,
   emptyRunEndOutput,
   DISPLAY_EVENT_TYPES,
   listingTypeOf,
@@ -42,6 +41,7 @@ import {
   type RunView,
 } from '@shared/session/sessionView';
 import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
+import { DOCUMENTS_OUTPUT_ARM, documentsOf } from '@shared/plugins/documents';
 
 import { createExternalLocation } from '@utils/files/fileLocation';
 
@@ -70,14 +70,9 @@ function runView(view: SessionView, id: RunId): RunView {
   return found;
 }
 
-/** The three round-keyed maps of a tool-use run, which holds its output
- *  files in `outputs` (a workflow run holds them in `files`). */
+/** The three round-keyed maps of a run's documents. */
 function roundMapsOf(view: SessionView, id: RunId) {
-  const run = runView(view, id);
-  if (run.category !== AgentCategory.ToolUse)
-    throw new Error(`run ${id} is not a tool-use run`);
-  const { outputs, missingOutputs, compileFailures } = run;
-  return { outputs, missingOutputs, compileFailures };
+  return documentsOf(runView(view, id));
 }
 
 const alive = local({ self: [OWNER] });
@@ -92,7 +87,6 @@ describe('sessionFold', () => {
       type: 'run.start',
       identity: CHILD_IDENTITY,
       userFollowUpSupport: 'unsupported',
-      category: AgentCategory.ToolUse,
       parent: null,
       provenance: null,
     });
@@ -217,7 +211,6 @@ describe('sessionFold', () => {
     expect(view.order).toStrictEqual([PROCESS, ROOT]);
 
     expect(root.label).toBe(runIdentityDisplayName(ROOT_IDENTITY));
-    expect(root.category).toBe(AgentCategory.ToolUse);
     expect(root.worktree).toStrictEqual({
       workingDirectory: '/paper',
       branch: 'main',
@@ -236,7 +229,6 @@ describe('sessionFold', () => {
       { id: ROOT, label: 'review' },
       { id: CHILD, label: child.label },
     ]);
-    expect(runView(view, GRANDCHILD)).toMatchObject({ outputs: {} });
     expect(child.label).toBe(runIdentityDisplayName(CHILD_IDENTITY));
     expect(child.model).toBe('claude-sonnet-4-5');
     expect(child.followUpSupport).toBe('nativeInteractive');
@@ -244,7 +236,6 @@ describe('sessionFold', () => {
     // Process runs carry the command, never a model.
     expect(runView(view, PROCESS).command).toBe('npm test');
     expect(runView(view, PROCESS).model).toBeNull();
-    expect(runView(view, PROCESS).category).toBe(AgentCategory.ToolUse);
     // The tail advanced the cursor to the last commit.
     expect(view.cursor).toBe(scenario.log.events.length);
   });
@@ -356,7 +347,7 @@ describe('sessionFold', () => {
         scenario.log.emit(CHILD, 1851, {
           type: 'run.end',
           outcome: 'cancelled',
-          output: emptyRunEndOutput(AgentCategory.ToolUse),
+          output: emptyRunEndOutput(),
         }),
       ),
     );
@@ -428,7 +419,6 @@ describe('sessionFold', () => {
     log.emit(CHILD, 1650, {
       type: 'run.start',
       identity: CHILD_IDENTITY,
-      category: AgentCategory.ToolUse,
       userFollowUpSupport: 'unsupported',
       parent: null,
       provenance: null,
@@ -436,7 +426,6 @@ describe('sessionFold', () => {
     log.emit(PROCESS, 1650, {
       type: 'run.start',
       identity: { kind: 'process', tool: 'bash' },
-      category: AgentCategory.ToolUse,
       parent: null,
       provenance: null,
       userFollowUpSupport: 'unsupported',
@@ -508,7 +497,6 @@ describe('sessionFold', () => {
     log.emit(CHILD, 1600, {
       type: 'run.start',
       identity: CHILD_IDENTITY,
-      category: AgentCategory.ToolUse,
       userFollowUpSupport: 'unsupported',
       parent: null,
       provenance: null,
@@ -567,7 +555,6 @@ describe('sessionFold', () => {
     log.emit(CHILD, 1500, {
       type: 'run.start',
       identity: CHILD_IDENTITY,
-      category: AgentCategory.ToolUse,
       userFollowUpSupport: 'unsupported',
       parent: null,
       provenance: null,
@@ -647,7 +634,7 @@ describe('sessionFold', () => {
         log.emit(CHILD, 1502, {
           type: 'run.end',
           outcome: 'completed',
-          output: emptyRunEndOutput(AgentCategory.ToolUse),
+          output: emptyRunEndOutput(),
         }),
       ),
     );
@@ -702,7 +689,6 @@ describe('sessionFold', () => {
       type: 'run.start',
       identity: CHILD_IDENTITY,
       userFollowUpSupport: 'unsupported',
-      category: AgentCategory.ToolUse,
       parent: null,
       provenance: null,
     });
@@ -763,7 +749,6 @@ describe('sessionFold', () => {
         type: 'run.start',
         identity: id === ROOT ? ROOT_IDENTITY : CHILD_IDENTITY,
         userFollowUpSupport: 'unsupported',
-        category: AgentCategory.ToolUse,
         parent: parent === null ? null : log.parent(parent),
         provenance: null,
       });
@@ -808,7 +793,7 @@ describe('sessionFold', () => {
   });
 
   it('takes each round map from the newest row, on a cold read and on replay', () => {
-    // `output.produced` is a latest-only listing key, so a cold read hands
+    // The documents row is a latest-only listing key, so a cold read hands
     // the fold one row per run. It carries the whole round collection, and
     // the fold replaces rather than merges the derived maps.
     const log = new Log();
@@ -816,7 +801,6 @@ describe('sessionFold', () => {
       type: 'run.start',
       identity: CHILD_IDENTITY,
       userFollowUpSupport: 'unsupported',
-      category: AgentCategory.ToolUse,
       parent: null,
       provenance: null,
     });
@@ -841,24 +825,23 @@ describe('sessionFold', () => {
       compileFailures: round === 0 ? [failureOf(0)] : [],
       missingOutputs: round === 0 ? ['intro.tex'] : [],
     });
-    const firstRound = [
-      log.emit(CHILD, 3010, {
-        type: 'output.produced',
-        rounds: [roundOutput(0)],
-      }),
-    ];
+    const documentsRow = (rounds: ReturnType<typeof roundOutput>[]) => ({
+      type: 'plugin.fact' as const,
+      plugin: DOCUMENTS_OUTPUT_ARM.plugin,
+      kind: DOCUMENTS_OUTPUT_ARM.kind,
+      version: DOCUMENTS_OUTPUT_ARM.version,
+      value: { rounds },
+      parent: null,
+    });
+    const firstRound = [log.emit(CHILD, 3010, documentsRow([roundOutput(0)]))];
     const secondRound = [
-      log.emit(CHILD, 3020, {
-        type: 'output.produced',
-        rounds: [roundOutput(0), roundOutput(1)],
-      }),
+      log.emit(CHILD, 3020, documentsRow([roundOutput(0), roundOutput(1)])),
     ];
     const bothRounds = {
-      // An empty round is not a round the outputs tab shows, so a compile
-      // failure map drops it; a missing-output map keeps it, where it means
-      // "checked, nothing missing".
-      outputs: { 0: [outputOf(0)], 1: [outputOf(1)] },
-      missingOutputs: { 0: ['intro.tex'], 1: [] },
+      // An empty round is not a round the outputs tab shows, so each map
+      // drops it.
+      files: { 0: [outputOf(0)], 1: [outputOf(1)] },
+      missingOutputs: { 0: ['intro.tex'] },
       compileFailures: { 0: [failureOf(0)] },
     };
 
@@ -898,19 +881,14 @@ describe('sessionFold', () => {
     // A row is the map, so a round it does not name is not in the run's
     // state: the newest row replaces what the view holds, never merges.
     const dropped = foldAll(
-      [
-        log.emit(CHILD, 3030, {
-          type: 'output.produced',
-          rounds: [roundOutput(1)],
-        }),
-      ].map((event) => ({
+      [log.emit(CHILD, 3030, documentsRow([roundOutput(1)]))].map((event) => ({
         _tag: 'event' as const,
         read: 'all' as const,
         event,
       })),
       fromScratch,
     );
-    expect(roundMapsOf(dropped, CHILD).outputs).toStrictEqual({
+    expect(roundMapsOf(dropped, CHILD).files).toStrictEqual({
       1: [outputOf(1)],
     });
   });
@@ -948,7 +926,6 @@ describe('sessionFold', () => {
       type: 'run.start',
       identity: { kind: 'process', tool: 'bash' },
       userFollowUpSupport: 'unsupported',
-      category: AgentCategory.ToolUse,
       parent: null,
       provenance: null,
     });
@@ -1168,7 +1145,6 @@ describe('sessionFold', () => {
         origin: OWNER,
         at: 3900,
         type: 'run.activate',
-        category: AgentCategory.ToolUse,
       }),
       tail({
         aggregateId: qualifyAggregateId('run', CHILD),
@@ -1823,13 +1799,11 @@ describe('foldRunState', () => {
                 type: 'run.start',
                 identity: { kind: 'agent', agent: 'chat' },
                 userFollowUpSupport: 'unsupported',
-                category: AgentCategory.ToolUse,
                 parent: null,
                 provenance: null,
               }),
               runHistoryRow(2, {
                 type: 'run.activate',
-                category: AgentCategory.ToolUse,
               }),
             ]),
           ),

@@ -1,47 +1,10 @@
 import { z } from 'zod';
 
-/**
- * Workflow: fixed-round document processing. ToolUse: interactive tool-calling.
- *
- * Exported as a const object (not a TS enum) so it can be imported from
- * `@shared/*` zones (which forbid `vscode`-flavored TS-only constructs) and
- * still supports enum-style member access (`AgentCategory.Workflow`).
- */
-export const AgentCategory = {
-  Workflow: 'workflow',
-  ToolUse: 'toolUse',
-} as const;
-export type AgentCategory = (typeof AgentCategory)[keyof typeof AgentCategory];
-
-export const AgentCategorySchema = z.enum(AgentCategory);
-
-/** Every agent category, in canonical display order. */
-export const AGENT_CATEGORIES = [
-  AgentCategory.Workflow,
-  AgentCategory.ToolUse,
-] as const;
-
-/**
- * One value per agent category. The single generic shape for every
- * category-partitioned fact (agent lists, selections, catalogs, form state) —
- * replaces the historical `workflow*`/`toolUse*` field pairs.
- */
-export type ByCategory<T> = Record<AgentCategory, T>;
-
-/** Build a {@link ByCategory} record by evaluating `build` per category. */
-export function byCategory<T>(
-  build: (category: AgentCategory) => T,
-): ByCategory<T> {
-  return {
-    [AgentCategory.Workflow]: build(AgentCategory.Workflow),
-    [AgentCategory.ToolUse]: build(AgentCategory.ToolUse),
-  };
-}
-
 export const AGENT_SOURCE = {
   CUSTOM: 'custom',
-  BUILT_IN_WORKFLOW: 'builtInWorkflow',
-  BUILT_IN_TOOL_USE: 'builtInToolUse',
+  /** Shipped with TeXRA: the bundled agent directories and those of the
+   *  first-party plugins that are on. */
+  BUILT_IN: 'builtIn',
   /** An installed Claude Code or Codex plugin's agent, named `<plugin>:<name>`. */
   PLUGIN: 'plugin',
 } as const;
@@ -53,17 +16,13 @@ export type AgentSource = z.infer<typeof AgentSourceSchema>;
 
 /**
  * True for the sources whose definitions are read in place and are not the
- * user's to edit: the two that ship inside the host bundle, and an installed
+ * user's to edit: the bundled one, and an installed
  * plugin's. Every surface that offers to open one presents it read-only and
  * points edits at the custom copy; the extension additionally registers the
  * bundled directories `writable: false` for its file tools.
  */
 export function isPackagedAgentSource(source: AgentSource): boolean {
-  return (
-    source === AGENT_SOURCE.BUILT_IN_WORKFLOW ||
-    source === AGENT_SOURCE.BUILT_IN_TOOL_USE ||
-    source === AGENT_SOURCE.PLUGIN
-  );
+  return source === AGENT_SOURCE.BUILT_IN || source === AGENT_SOURCE.PLUGIN;
 }
 
 const AGENT_NAME_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_-]*$/u;
@@ -95,7 +54,8 @@ const CatalogAgentNameSchema = z
  */
 export const AgentMetadataBaseSchema = z.object({
   name: CatalogAgentNameSchema,
-  category: AgentCategorySchema,
+  /** Its file has a `task` block: it is also launchable as a document task. */
+  hasTask: z.boolean(),
   description: z.string().optional(),
 });
 

@@ -4,9 +4,6 @@
  * own (`@tools/registry` for TeXRA); `harnessBuiltins.all` is every one with
  * no app options, and `harnessBuiltins.minimal` only files and the shell: a
  * complete harness whose other tools are absent.
- *
- * A built-in an app changes takes options rather than a hook: `multiAgent`
- * takes the workflow options the app adds to `agent` (TeXRA's figure pair).
  */
 
 // Local imports
@@ -16,10 +13,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import { BashTool } from '@tools/bash';
 import { codeSandboxLayer, ScriptTool } from '@tools/codemode/ScriptTool';
-import {
-  agentTool,
-  type WorkflowAgentOptions,
-} from '@tools/delegation/AgentTool';
+import { agentTool } from '@tools/delegation/AgentTool';
 import { EditFileTool } from '@tools/EditTool';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { GlobTool } from '@tools/glob';
@@ -97,7 +91,7 @@ export const memoryWorkflow: Plugin = {
 
 /**
  * The `plan` tool owns planning and the goal lifecycle (update, pause,
- * complete), so any tool-use agent can drive the goal loop while the plugin
+ * complete), so any agent with tools can drive the goal loop while the plugin
  * is on; the synthetic turns are its continuation
  * (`@tools/goal/goalContinuation`). Its rows are the `goal/state` arm
  * (`@tools/pluginArms`).
@@ -120,22 +114,14 @@ export const goal: Plugin = {
   continuation: goalContinuation,
 };
 
-/** No workflow options on `agent`: the harness names none of its own. */
-const NO_WORKFLOW_OPTIONS: WorkflowAgentOptions = {
-  fields: {},
-  toolConfig: () => ({}),
-};
-
-/** Child agents: the `agent` tool, with the workflow options an app adds. */
-export const multiAgent = (
-  options: WorkflowAgentOptions = NO_WORKFLOW_OPTIONS,
-): Plugin => ({
+/** Child agents: the `agent` tool. */
+export const multiAgent: Plugin = {
   id: 'multi-agent',
   name: 'Multi-Agent Workflow',
   category: 'workflow',
   description:
     'Run named agents as children of a run: one at a time, or fanned out and joined from a script, resuming safely after interruption. An agent only gets the agent tool if its own configuration names it: this switch is an additional kill switch on top of that per-agent opt-in.',
-  tools: { [AGENT_TOOL_NAME]: agentTool(options) },
+  tools: { [AGENT_TOOL_NAME]: agentTool() },
   setup: Object.freeze({
     configNotes:
       'No local install required. Turning this off removes the agent tool from every agent tool list, even agents whose configuration names it explicitly, so no agent can delegate.',
@@ -145,7 +131,7 @@ export const multiAgent = (
   onByDefault: true,
   availability: ALWAYS_AVAILABLE,
   skills: true,
-});
+};
 
 /**
  * The `script` tool: a program that calls the run's other tools. An agent
@@ -169,6 +155,6 @@ export const harnessBuiltins: {
   readonly all: readonly Plugin[];
   readonly minimal: readonly Plugin[];
 } = {
-  all: [fileOps(), web, memoryWorkflow, goal, multiAgent(), codemode],
+  all: [fileOps(), web, memoryWorkflow, goal, multiAgent, codemode],
   minimal: [fileOps()],
 };

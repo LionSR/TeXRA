@@ -7,7 +7,7 @@ describe('CLI implicit default agent policy', () => {
   it('filters implicit default candidates without mutating explicit options', () => {
     const candidates = [
       { name: 'simplifier', source: 'built-in' },
-      { name: 'builtInToolUse:simplifier', source: 'built-in' },
+      { name: 'builtIn:simplifier', source: 'built-in' },
       { name: 'SIMPLIFIER', source: 'built-in' },
       { name: 'assistant', source: 'built-in' },
       { name: 'review', source: 'built-in' },

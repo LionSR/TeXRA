@@ -178,7 +178,19 @@ describe('plugin rosters', () => {
         ],
       ],
       ['copilot', []],
-      ['documents', ['accept_run_files']],
+      [
+        'documents',
+        [
+          'accept_run_files',
+          'document_task',
+          'document_context',
+          'document_extract',
+          'document_compile',
+          'document_diff',
+          'document_review',
+          'document_propose',
+        ],
+      ],
     ]);
   });
 
@@ -189,7 +201,11 @@ describe('plugin rosters', () => {
         `${plugin}/${kind}`,
         ids.has(plugin),
       ]),
-    ).toEqual([['goal/state', true]]);
+    ).toEqual([
+      ['goal/state', true],
+      ['documents/output', true],
+      ['external-inquiry/thread', true],
+    ]);
   });
 
   it("pins the harness's built-in lists", () => {

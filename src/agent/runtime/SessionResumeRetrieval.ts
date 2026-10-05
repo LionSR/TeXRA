@@ -39,25 +39,24 @@ export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
     agentConfig: AgentConfig,
     session: SessionHandle,
   ): Effect.fn.Return<ResumeData | null, Error> {
-    const type = agentConfig.agentCategory;
     const resumability = yield* deriveResumability(runId, session);
     if (resumability.kind === 'unreadable') {
       return yield* Effect.fail(
         new Error(
-          `Failed to retrieve ${type} resume data for run: ${runId}: ${resumability.cause}`,
+          `Failed to retrieve resume data for run: ${runId}: ${resumability.cause}`,
         ),
       );
     }
     if (resumability.kind === 'none') {
       yield* Effect.logWarning('Run is not resumable').pipe(
-        Effect.annotateLogs({ data: { agentType: type, runId } }),
+        Effect.annotateLogs({ data: { agent: agentConfig.agent, runId } }),
         withLogChannel(CHANNEL),
       );
       return null;
     }
-    yield* Effect.logDebug(
-      `Retrieved ${type} resume data for run: ${runId}`,
-    ).pipe(withLogChannel(CHANNEL));
+    yield* Effect.logDebug(`Retrieved resume data for run: ${runId}`).pipe(
+      withLogChannel(CHANNEL),
+    );
     // A run never opened is on the model it was registered with.
     return resumability.kind === 'unopened'
       ? { runId, agentConfig }

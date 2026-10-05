@@ -85,7 +85,6 @@ type RunHistoryDraftType =
   | 'tools.offered'
   | 'context.blob'
   | 'hook.outcome'
-  | 'output.produced'
   | 'tool.start'
   | 'tool.end'
   | 'stream.end'
@@ -249,7 +248,6 @@ const IGNORED_ROW_TYPES: Readonly<
   'run.fact': true,
   'child.park': true,
   'plugin.fact': true,
-  inquiryThreadUpdated: true,
   'approval.policy': true,
   log: true,
   'stage.start': true,
@@ -416,9 +414,6 @@ function foldRow(
     // The rows `sessionFold` reads too: applied once, in `runRows.ts`.
     // `unresolved` is a malformed aggregate here: this fold reads a run's
     // whole history, so a decision always follows the opening it answers.
-    if (row.type === 'output.produced' && !opened(current)) {
-      return outOfOrder('output before opening snapshot');
-    }
     const verdict = applyRunRow(current, row, pass);
     if (verdict.kind === 'unchanged') return null;
     if (verdict.kind === 'unresolved') {

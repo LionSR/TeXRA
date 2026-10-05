@@ -106,7 +106,7 @@ export function formatTeamRunInstruction(
     `Run the "${preset.name}" team.`,
     preset.description,
     `Workspace root for this run: ${JSON.stringify(init.workingDirectory)}. Resolve relative file paths against this directory, and tell delegated agents to use these same relative paths instead of inventing container roots such as /workspace.`,
-    'Use the visible workflow and tool-use agents as the team available for delegation.',
+    'Use the visible agents as the team available for delegation.',
     COMPLETENESS_GUIDANCE,
     TERMINAL_RUN_GUIDANCE,
   ];

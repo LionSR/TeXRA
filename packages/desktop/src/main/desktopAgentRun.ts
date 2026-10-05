@@ -26,11 +26,7 @@ import {
   type ProcessRuntime,
   withProcessServices,
 } from '@platform/processRuntime';
-import type {
-  AgentCategory,
-  RequestOpenFilePayload,
-  RunId,
-} from '@shared/schemas';
+import type { RequestOpenFilePayload, RunId } from '@shared/schemas';
 
 import {
   DesktopToolEditApprovalHost,
@@ -51,10 +47,7 @@ export interface DesktopAgentRunOptions {
   session: SessionHandle;
   /** A launch could not find its agent: the New-task state's
    *  agent-config banner (`HostSnapshot.banners`). */
-  showAgentConfigBanner(data: {
-    agentName: string;
-    category: AgentCategory;
-  }): Effect.Effect<void>;
+  showAgentConfigBanner(data: { agentName: string }): Effect.Effect<void>;
   /** Select the run launched by this window. */
   onLaunched?: (runId: RunId) => void;
   /** The process runtime this window was handed; the run and its approval
@@ -117,8 +110,8 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
       // the info-style dialog with each action token as a real button.
       requestShowInstruction: (instruction) =>
         host.showInstructionDialog(instruction.message, instruction.actions),
-      showAgentConfigBanner: ({ agentName, category }) =>
-        options.showAgentConfigBanner({ agentName, category }),
+      showAgentConfigBanner: ({ agentName }) =>
+        options.showAgentConfigBanner({ agentName }),
       // Desktop has no editor integration to preview through, so the
       // resolved path goes to the preview-with-fallback host directly.
       requestOpenFile: (data: RequestOpenFilePayload) =>

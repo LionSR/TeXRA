@@ -29,7 +29,7 @@ import {
   type OutputFileInfo,
   type RunId,
 } from '@shared/schemas';
-import { TexraStateKey } from '@shared/settingsView/texraSettings';
+import { DocumentsStateKey } from '@shared/settingsView/documentsSettings';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { getSafeDocumentRelativePath } from '@utils/files/outputFileUtils';
 
@@ -88,7 +88,7 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
 
     const generateBetweenRoundDiffs = yield* readSettingFrom<boolean>(
       roots,
-      TexraStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+      DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS,
     );
     yield* Effect.logDebug(`Between rounds: ${generateBetweenRoundDiffs}`);
 

@@ -9,7 +9,6 @@
   "src/agent/runtime/helperModelName.ts": 1,
   "src/agent/runtime/loop/hooks.ts": 1,
   "src/agent/runtime/loop/modelSwitch.ts": 1,
-  "src/agent/runtime/loop/rounds.ts": 1,
   "src/agent/runtime/loop/rows.ts": 1,
   "src/agent/runtime/loop/step.ts": 1,
   "src/agent/runtime/run/backgroundTurn.ts": 1,

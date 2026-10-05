@@ -1,8 +1,8 @@
 {
   "@texra-ai/agent": 386,
-  "@texra-ai/agent/node": 135,
-  "@texra-ai/agent/plugins": 384,
-  "@texra-ai/agent/schemas": 76,
+  "@texra-ai/agent/node": 134,
+  "@texra-ai/agent/plugins": 383,
+  "@texra-ai/agent/schemas": 74,
   "@texra-ai/llm": 23,
   "@texra-ai/llm/node": 32
 }

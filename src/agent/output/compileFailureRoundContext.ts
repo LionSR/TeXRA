@@ -6,7 +6,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const COMPILE_LOG_EXCERPT_CHAR_LIMIT = 12000;
 
-export function formatCompileFailureRoundContext(
+function formatCompileFailureRoundContext(
   result: CompileResult | undefined,
 ): string | undefined {
   if (result?.status !== 'failed') return undefined;
@@ -17,7 +17,7 @@ export function formatCompileFailureRoundContext(
 
   return [
     '<compile_failure_context>',
-    'The previous workflow round was rejected because LaTeX compilation failed.',
+    'The previous revision was rejected because LaTeX compilation failed.',
     'Use the log excerpt below to repair the next output.',
     '',
     'Failed outputs:',

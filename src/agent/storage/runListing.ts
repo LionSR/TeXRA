@@ -12,15 +12,12 @@ import {
 } from '@agent/core/definition/RunRecord';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  AgentCategory,
   aggregateTarget,
   type SessionEvent,
   type RunId,
   type RunIdentity,
   RUN_SUBSTATE,
   type BlockedAggregate,
-  type OutputFileInfo,
-  type ReadonlyRoundIndexed,
   type RunLifecycleStatus,
 } from '@shared/schemas';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
@@ -196,27 +193,3 @@ export const listRuns = Effect.fn('listRuns')(function* (
     (item) => item.timestamp,
   );
 });
-
-/**
- * One run's recorded output files by round, from the session's fold: a
- * workflow run's documents, or a tool-use run's outputs. Hosts hand it to
- * latexdiff orchestration, whose run-discovery port it satisfies.
- */
-export function runOutputReader(session: SessionHandle): {
-  readonly readRunOutputs: (
-    runId: RunId,
-  ) => Effect.Effect<ReadonlyRoundIndexed<OutputFileInfo>, Error>;
-} {
-  return {
-    readRunOutputs: (runId) =>
-      session.readView([runId]).pipe(
-        Effect.map((view) => {
-          const run = view.runs.get(runId);
-          if (run === undefined) return {};
-          return run.category === AgentCategory.Workflow
-            ? run.files
-            : run.outputs;
-        }),
-      ),
-  };
-}

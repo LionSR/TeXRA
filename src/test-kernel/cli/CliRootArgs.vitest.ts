@@ -9,6 +9,7 @@ import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { initializeDefaultSession } from '@agent/runtime';
+import { documentTaskConfig } from '@agent/output/documentRecipe';
 import { rootCommand, runCli } from '@cli/commands/root';
 import {
   normalizeRootShortcuts,
@@ -37,7 +38,7 @@ import {
   resolveKnownCliModelId,
 } from '@cli/runtime/cliConfig';
 import { pickGlobalArgs } from '@cli/runtime/globalArgs';
-import { RUN_OUTCOME, AgentCategory, type RunId } from '@shared/schemas';
+import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
@@ -56,14 +57,15 @@ function storedConfig(
   overrides: Partial<StoredResumeConfig> = {},
 ): StoredResumeConfig {
   return {
-    agent: 'polish',
-    model: 'deepseek/deepseek-v4-flash',
-    inputFiles: ['paper.tex'],
-    contextFiles: [],
-    outputFiles: [],
-    instruction: undefined,
-    workingDirectory: '/tmp/project',
-    agentCategory: AgentCategory.Workflow,
+    ...documentTaskConfig({
+      agent: 'polish',
+      model: 'deepseek/deepseek-v4-flash',
+      inputFiles: ['paper.tex'],
+      contextFiles: [],
+      outputFiles: [],
+      instruction: undefined,
+      workingDirectory: '/tmp/project',
+    }),
     ...overrides,
   };
 }
@@ -794,10 +796,9 @@ describe('CLI root argument routing', () => {
           {
             outcome: RUN_OUTCOME.FAILED,
             output: {
-              category: AgentCategory.Workflow,
-              outputs: [],
-              compileFailures: [],
-              diffs: [],
+              response: '',
+              files: [],
+              documents: { outputs: [], compileFailures: [], diffs: [] },
             },
             runId: 'run-without-output' as RunId,
           },
@@ -810,7 +811,7 @@ describe('CLI root argument routing', () => {
           '/tmp/storage',
           'run-without-output' as RunId,
         ),
-        output: { outputs: [] },
+        output: { documents: { outputs: [] } },
       });
     }),
   );
@@ -843,7 +844,7 @@ describe('CLI root argument routing', () => {
         }),
       ),
     ).toThrow(
-      'Stored workflow output file is not absolute: out/paper.polished.tex',
+      'Stored document task output file is not absolute: out/paper.polished.tex',
     );
   });
 
@@ -879,11 +880,11 @@ describe('CLI root argument routing', () => {
     ).toBeUndefined();
   });
 
-  it('does not infer resume output targets for tool-use configs', () => {
+  it('does not infer resume output targets for chat configs', () => {
     expect(
       resumeWorkflowOutputFile(
         storedConfig({
-          agentCategory: AgentCategory.ToolUse,
+          script: null,
           outputFiles: ['paper.polished.tex'],
         }),
       ),
@@ -895,7 +896,9 @@ describe('CLI root argument routing', () => {
       resumeWorkflowOutputDirectory(
         storedConfig({ cli: { outputDirectory: 'out/polished' } }),
       ),
-    ).toThrow('Stored workflow output directory is not absolute: out/polished');
+    ).toThrow(
+      'Stored document task output directory is not absolute: out/polished',
+    );
   });
 
   it.effect(
@@ -909,10 +912,9 @@ describe('CLI root argument routing', () => {
             {
               outcome: RUN_OUTCOME.COMPLETED,
               output: {
-                category: AgentCategory.Workflow,
-                outputs: [],
-                compileFailures: [],
-                diffs: [],
+                response: '',
+                files: [],
+                documents: { outputs: [], compileFailures: [], diffs: [] },
               },
               runId: 'completed-without-output' as RunId,
             },
@@ -923,7 +925,7 @@ describe('CLI root argument routing', () => {
 
         expect(error).toEqual(
           new Error(
-            'Workflow completed without a generated output; corrected.tex was not written.',
+            'Document task completed without a generated output; corrected.tex was not written.',
           ),
         );
       }),
@@ -939,10 +941,9 @@ describe('CLI root argument routing', () => {
           {
             outcome: RUN_OUTCOME.CANCELLED,
             output: {
-              category: AgentCategory.Workflow,
-              outputs: [],
-              compileFailures: [],
-              diffs: [],
+              response: '',
+              files: [],
+              documents: { outputs: [], compileFailures: [], diffs: [] },
             },
             runId: 'stopped-without-output' as RunId,
           },

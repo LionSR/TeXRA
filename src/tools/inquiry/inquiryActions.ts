@@ -17,7 +17,10 @@ import { withLogChannel } from '@logger/effectLog';
 
 // Local imports - shared
 import {
-  aggregateId as qualifyAggregateId,
+  InquiryRecords,
+  inquiryThreadRow,
+} from '@shared/plugins/externalInquiry';
+import {
   type ExternalInquiryPermission,
   type InquiryThreadId,
   type InquiryThreadRecord,
@@ -25,7 +28,6 @@ import {
   type RequestDecision,
   type RunId,
 } from '@shared/schemas';
-import { InquiryRecords } from '@shared/session/inquiryRecords';
 import {
   formatRelativeTime,
   previewLabel,
@@ -105,13 +107,7 @@ const publishThreadUpdate = Effect.fn('publishInquiryThreadUpdate')(function* (
   const records = yield* InquiryRecords;
   const summary = yield* records.getThreadSummary(threadId);
   if (!summary) return;
-  session.publish([
-    {
-      type: 'inquiryThreadUpdated',
-      aggregateId: qualifyAggregateId('inquiry', summary.threadId),
-      ...summary,
-    },
-  ]);
+  session.publish([inquiryThreadRow(summary)]);
 });
 
 /**

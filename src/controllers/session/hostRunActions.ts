@@ -33,7 +33,8 @@ import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
 import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
 import type { AppState, StateReadFailed } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
-import { AgentCategory, type RunId } from '@shared/schemas';
+import { documentsOf } from '@shared/plugins/documents';
+import { isDocumentTaskConfig, type RunId } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import type { HostRequest } from '@shared/session/hostRequest';
 import {
@@ -259,15 +260,14 @@ export const createHostRunActions = (
         );
     };
 
-    const getOutputFiles = (runId: RunId) => {
+    const documentsOfRun = (runId: RunId) => {
       const run = runView(runId);
-      if (run === undefined) return {};
-      return run.category === AgentCategory.Workflow ? run.files : run.outputs;
+      return run === undefined ? undefined : documentsOf(run);
     };
     const runOutputs = {
-      getOutputFiles,
+      getOutputFiles: (runId: RunId) => documentsOfRun(runId)?.files ?? {},
       getCompileFailures: (runId: RunId) =>
-        runView(runId)?.compileFailures ?? {},
+        documentsOfRun(runId)?.compileFailures ?? {},
     };
 
     const readConfig = Effect.fn('HostRunActions.readConfig')(function* (
@@ -288,8 +288,8 @@ export const createHostRunActions = (
       return config ?? undefined;
     });
 
-    /** The saved config of a workflow run, or `undefined` when the toolbar
-     *  action does not apply. */
+    /** The saved config of a document task's run, or `undefined` when the
+     *  toolbar action does not apply. */
     const workflowConfig = Effect.fn('HostRunActions.workflowConfig')(
       function* (runId: RunId) {
         const config = yield* readConfig(runId);
@@ -300,9 +300,7 @@ export const createHostRunActions = (
           ).pipe(withLogChannel(CHANNEL));
           return undefined;
         }
-        return config.agentCategory === AgentCategory.Workflow
-          ? config
-          : undefined;
+        return isDocumentTaskConfig(config) ? config : undefined;
       },
     );
 

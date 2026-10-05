@@ -30,6 +30,7 @@ import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
+import { inquiryThreadsUnder } from '@shared/plugins/externalInquiry';
 import type { InquiryThreadSummary, RunId } from '@shared/schemas';
 import {
   rollupOf,
@@ -273,9 +274,7 @@ export class BackgroundTasksPanel extends LitElement {
   }
 
   private inquiriesOf(run: RunView): InquiryThreadSummary[] {
-    return (this.view?.inquiries ?? []).filter(
-      (thread) => thread.parentRunId === run.id,
-    );
+    return this.view ? inquiryThreadsUnder(this.view, run.id) : [];
   }
 
   override render(): TemplateResult | typeof nothing {
