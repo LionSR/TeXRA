@@ -65,7 +65,7 @@ export const BUILD_VERSION: string =
 
 /** Bumped whenever a procedure or a payload changes shape. A client newer
  *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 7;
+export const PROTOCOL_VERSION = 8;
 
 /** `value` as JSON carries it: an absent field (`undefined`) is left out,
  *  which the wire's JSON check otherwise refuses. */

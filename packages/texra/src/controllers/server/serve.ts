@@ -129,6 +129,13 @@ export const serve = Effect.fn('server.serve')(function* (
   if (existing !== null)
     return yield* Effect.fail(new ServiceAlreadyRunning({ info: existing }));
   yield* removeDeadSockets(paths);
+  // A socket of this pid is a dead process's whose pid this one reuses: no
+  // other live process can have it.
+  yield* fs
+    .remove(socket, { force: true })
+    .pipe(
+      Effect.mapError((cause) => new ServiceListenFailed({ socket, cause })),
+    );
 
   const startedAt = yield* Clock.currentTimeMillis;
   const ended = yield* Deferred.make<ServeExit>();
@@ -210,9 +217,16 @@ export const serve = Effect.fn('server.serve')(function* (
       return;
     }
     // Another service's record replaced this one's (two started at once):
-    // no new client finds this one, so it leaves once nothing works here.
+    // no new client finds this one, so it leaves once nothing works here
+    // and no client it already answered is connected. A record it cannot
+    // read is not a replacement.
     const record = yield* readServiceRecord(paths);
-    if (record?.pid !== process.pid && working === 0) {
+    if (
+      record !== null &&
+      record.pid !== process.pid &&
+      working === 0 &&
+      (yield* control.clients) === 0
+    ) {
       yield* Deferred.succeed(ended, 'replaced');
       return;
     }
