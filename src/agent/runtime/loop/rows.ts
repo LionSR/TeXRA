@@ -13,12 +13,6 @@ import { isDeepStrictEqual } from 'node:util';
 import { Effect, SynchronizedRef } from 'effect';
 
 import {
-  originOf,
-  type MessageSchema,
-  type ModelOrigin,
-  type TurnResult,
-} from '@texra-ai/llm';
-import {
   aggregateId as qualifyAggregateId,
   type JsonValue,
   type PositionAt,
@@ -33,9 +27,9 @@ import {
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
-import { sha256 } from '@tools/catalogEntries';
 import { generateShortId } from '@utils/core';
 import { dispatchFactsFor } from '../run/tools';
+import type { MessageSchema } from '@texra-ai/llm';
 import type { z } from 'zod';
 
 import type { AgentRunShape } from '../run/AgentRun';
@@ -217,89 +211,39 @@ export function displayRow(
 const SCRIPT_TOOL_NAME = 'script';
 
 /**
- * The origin a script's handed-down call records: the run's binding, or,
- * on an editor binding (whose turns dispatch no local calls), a neutral one
- * on the same model. The call is sent to no model either way, and the run's
- * `agent()` children still bind the editor model. `.invalid` never resolves.
- */
-function handedDownOrigin(
-  origin: ModelOrigin,
-): Exclude<ModelOrigin, { protocol: 'vscode-lm' }> {
-  if (origin.protocol !== 'vscode-lm') return origin;
-  return originOf({
-    protocol: 'openai-responses',
-    requestedModel: origin.requestedModel,
-    deployment: {
-      endpoint: 'https://script.invalid/v1',
-      credentialScope: 'script',
-    },
-  });
-}
-
-/**
- * The rows of a script's run's one response: the call it was handed, at
- * `handedDownOrigin`, with no usage. Committed once, at its first turn.
+ * The row of a script's run's one call (`AgentConfig.script`): the call the
+ * application handed it, which no model produced, so it records no attempt,
+ * origin or usage. It stands as the pending response the loop dispatches.
+ * Committed once, at its first turn.
  */
 export const handedDown = Effect.fn('rows.handedDown')(function* (
-  run: Pick<AgentRunShape, 'model' | 'steps' | 'logger' | 'runId'>,
+  run: Pick<AgentRunShape, 'steps' | 'logger' | 'runId'>,
   state: RunState,
   call: NonNullable<AgentRunShape['config']['script']>,
 ) {
   const { runId } = run;
-  const origin = handedDownOrigin(
-    (yield* SynchronizedRef.get(run.model)).origin,
-  );
-  const invocation = { invocationId: randomUUID(), attempt: 1 };
   const argumentsText = JSON.stringify({
     code: call.code,
     title: call.title,
     ...(call.timeoutMs != null && { timeoutMs: call.timeoutMs }),
   });
-  const turn: TurnResult = {
-    kind: 'http',
-    providerResponseId: `script-${runId}`,
-    requestedOrigin: origin,
-    returnedModel: null,
-    modelFingerprint: null,
-    content: [
-      {
-        kind: 'local-call',
-        providerCallId: SCRIPT_CALL_ID,
-        name: SCRIPT_TOOL_NAME,
-        argumentsText,
-      },
-    ],
-    finishReason: 'tool-calls',
-    usage: null,
-  };
-  const aggregateId = rowAggregate(runId);
+  const [facts] = dispatchFactsFor(
+    [{ callId: SCRIPT_CALL_ID, name: SCRIPT_TOOL_NAME, argumentsText }],
+    (yield* SynchronizedRef.get(run.steps))?.tools.registry,
+    run.logger,
+    generateShortId,
+  );
+  if (facts === undefined)
+    return yield* Effect.die(new Error('One call in, one dispatch fact out.'));
   return [
     {
       type: 'model.message',
-      aggregateId,
+      aggregateId: rowAggregate(runId),
       payload: {
-        kind: 'attempt',
-        invocation,
-        request: sha256(argumentsText),
-        origin,
-        delivery: 'blocking',
-      },
-    },
-    {
-      type: 'model.message',
-      aggregateId,
-      payload: {
-        kind: 'response',
+        kind: 'handed-down',
         responseId: randomUUID(),
-        invocation,
-        turn,
-        calls: dispatchFactsFor(
-          turn,
-          (yield* SynchronizedRef.get(run.steps))?.tools.registry,
-          run.logger,
-          generateShortId,
-        ),
-        usage: null,
+        call: facts,
+        argumentsText,
       },
     },
     positionRow(runId, state, 'response.ready'),

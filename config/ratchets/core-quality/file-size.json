@@ -47,7 +47,7 @@
   "src/shared/schemas/sessionEvent.ts": 680,
   "src/shared/session/database.ts": 469,
   "src/shared/session/runRows.ts": 434,
-  "src/shared/session/runStateFold.ts": 885,
+  "src/shared/session/runStateFold.ts": 860,
   "src/shared/session/sessionFold.ts": 1316,
   "src/shared/session/sessionView.ts": 473,
   "src/shared/session/surface.ts": 494,

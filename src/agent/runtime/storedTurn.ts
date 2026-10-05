@@ -120,6 +120,7 @@ function livePayload(
 ): ModelMessagePayload {
   switch (p.kind) {
     case 'identified':
+    case 'handed-down':
       return p;
     case 'attempt':
       return { ...p, origin: ModelOriginSchema.parse(p.origin) };

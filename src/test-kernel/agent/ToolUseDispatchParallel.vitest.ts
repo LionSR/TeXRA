@@ -58,7 +58,7 @@ import {
 } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
-import { dispatchFactsFor } from '@agent/runtime/run/tools';
+import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentTrace } from '@agent/trace';
 import type { PluginContext } from '@platform/processRuntime';
@@ -312,7 +312,12 @@ const openDispatch = Effect.fn('openDispatch')(function* (
         responseId: RESPONSE_ID,
         invocation: INVOCATION,
         turn,
-        calls: dispatchFactsFor(turn, tools, logger, () => 'log-id'),
+        calls: dispatchFactsFor(
+          localCallsOf(turn.content),
+          tools,
+          logger,
+          () => 'log-id',
+        ),
         usage: null,
       },
     },

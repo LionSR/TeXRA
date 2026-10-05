@@ -7,16 +7,13 @@
  * window is a duplicate that never executes.
  */
 import { Effect, Result } from 'effect';
-import {
-  JsonObjectSchema,
-  type TurnRequest,
-  type TurnResult,
-} from '@texra-ai/llm';
+import { JsonObjectSchema, type TurnRequest } from '@texra-ai/llm';
 import type { RuntimeToolRegistry as IToolRegistry } from '@agent/runtime/ToolServices';
 import { partitionDuplicateCalls } from '@agent/core/tools/toolCallParsing';
 import type { AgentTrace } from '@agent/trace';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { DispatchFacts, ToolDefinition } from '@shared/schemas';
+import type { HistoryMessage } from '@shared/session/historyTurns';
 import { isObject } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -37,16 +34,18 @@ export function toolDefinitionsFor(
   }));
 }
 
-/** One local call of a completed turn. */
+/** One local call of a pending response. */
 export interface LocalCall {
   readonly callId: string;
   readonly name: string;
   readonly argumentsText: string;
 }
 
-export function localCallsOf(turn: TurnResult): readonly LocalCall[] {
-  if (turn.kind !== 'http') return [];
-  return turn.content
+/** The local-call parts of `content`, in order. */
+export function localCallsOf(
+  content: Extract<HistoryMessage, { readonly role: 'assistant' }>['content'],
+): readonly LocalCall[] {
+  return content
     .filter((part) => part.kind === 'local-call')
     .map((part) => ({
       callId: part.providerCallId,
@@ -76,18 +75,18 @@ export function parseCallArguments(
 }
 
 /**
- * The dispatch facts of one completed turn, stamped at append time. Every
+ * The dispatch facts of one response's local calls (an editor turn's are its
+ * host's to run, so it passes none), stamped at append time. Every
  * call gets its card id here: a slow tool's card opens under it before the
  * call runs; a fast tool's opens and closes with its settlement.
  */
 export function dispatchFactsFor(
-  turn: TurnResult,
+  calls: readonly LocalCall[],
   /** The request's step's tools; undefined while no step is open. */
   registry: IToolRegistry | undefined,
   logger: AgentTrace,
   mintLogId: () => string,
 ): readonly DispatchFacts[] {
-  const calls = localCallsOf(turn);
   const parsed = calls.map((call) => ({
     callId: call.callId,
     name: call.name,

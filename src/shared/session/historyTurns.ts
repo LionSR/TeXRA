@@ -37,6 +37,7 @@ export type ModelMessagePayload =
       { readonly evidence: CancellationEvidence }
     >
   | Replace<StoredMessage<'response'>, { readonly turn: TurnResult }>
+  | StoredMessage<'handed-down'>
   | Replace<
       StoredMessage<'append'>,
       { readonly messages: readonly HistoryMessage[] }

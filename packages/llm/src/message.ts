@@ -191,7 +191,7 @@ export const EVIDENCE_PROTOCOL = {
 } as const;
 
 export function validateAssistantContent(
-  origin: ModelOrigin,
+  origin: ModelOrigin | null,
   content: z.infer<typeof ContentSchema>,
   ctx: z.RefinementCtx,
 ): void {
@@ -201,7 +201,7 @@ export function validateAssistantContent(
     const evidence = part.evidence;
     if (
       evidence != null &&
-      origin.protocol !== EVIDENCE_PROTOCOL[evidence.kind]
+      origin?.protocol !== EVIDENCE_PROTOCOL[evidence.kind]
     ) {
       ctx.addIssue({
         code: 'custom',
@@ -254,16 +254,16 @@ export function validateAssistantContent(
 const AssistantMessageSchema = z
   .strictObject({
     role: z.literal('assistant'),
-    origin: ModelOriginSchema,
+    /** `null` when no model produced the content (a handed-down call). */
+    origin: ModelOriginSchema.nullable(),
     content: ContentSchema,
   })
   .superRefine((message, ctx) => {
-    if (message.origin.protocol === 'vscode-lm') {
+    if (message.origin?.protocol === 'vscode-lm') {
       const parsed = EditorContentSchema.safeParse(message.content);
       if (!parsed.success) {
-        for (const issue of parsed.error.issues) {
+        for (const issue of parsed.error.issues)
           ctx.addIssue({ ...issue, path: ['content', ...issue.path] });
-        }
       }
     }
     validateAssistantContent(message.origin, message.content, ctx);
@@ -373,7 +373,7 @@ export function replayableHistory(
     let next = message;
     if (
       message.role === 'assistant' &&
-      message.origin.protocol === turn.protocol &&
+      message.origin?.protocol === turn.protocol &&
       !sameModelOrigin(message.origin, turn)
     ) {
       const content = message.content.flatMap(
