@@ -63,7 +63,6 @@
   "packages/harness/src/controllers/session/WorkspaceRoots.ts": 1,
   "packages/harness/src/platform/defaults/jsonConfigProvider.ts": 1,
   "packages/harness/src/platform/defaults/nodeHost.ts": 1,
-  "packages/harness/src/platform/defaults/nodeHostEnvironment.ts": 1,
   "packages/harness/src/platform/defaults/nodePlatform.ts": 1,
   "packages/harness/src/platform/defaults/nodeStorage.ts": 1,
   "packages/harness/src/platform/defaults/workspaceStorage.ts": 1,

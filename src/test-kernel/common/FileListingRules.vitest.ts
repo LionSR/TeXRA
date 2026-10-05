@@ -4,7 +4,7 @@ import {
   passesFileFilters,
   prepareFileFilters,
   shouldVisitDirectory,
-} from '@common/files/fileListingRules';
+} from '@texra/common/files/fileListingRules';
 import { matchesEditedFile } from '@texra/shared/launcher/editedFileMatch';
 
 describe('shared file-listing rules', () => {

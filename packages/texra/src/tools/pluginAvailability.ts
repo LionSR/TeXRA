@@ -45,7 +45,7 @@ import {
   zoteroProbePort,
   type SdkBinaryStatus,
 } from '@texra/tools/availabilityProbes';
-import { isGitRepository } from '@utils/git/isGitRepository';
+import { isGitRepository } from '@texra/utils/git/isGitRepository';
 import { envVar } from '@utils/system/envFlags';
 import { findToolInCommonPaths } from '@utils/system/binaryResolver';
 import { formatResultCount } from '@utils/text/stringUtils';

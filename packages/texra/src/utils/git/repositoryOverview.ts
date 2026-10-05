@@ -19,13 +19,13 @@
 import { Effect } from 'effect';
 
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { executeCommand } from '@utils/system/execUtils';
-import { isGitRepository } from '@utils/git/isGitRepository';
+import { isGitRepository } from '@texra/utils/git/isGitRepository';
 
 import {
   COMMIT_LABEL_FORMAT,
   splitCommitLines,
-} from '@utils/git/commitLogFormat';
+} from '@texra/utils/git/commitLogFormat';
+import { executeCommand } from '@utils/system/execUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**

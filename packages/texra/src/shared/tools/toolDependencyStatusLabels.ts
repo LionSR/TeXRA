@@ -1,4 +1,4 @@
-import type { ToolDependencyStatus } from '@shared/tools/toolPlugin';
+import type { ToolDependencyStatus } from '@texra/shared/tools/toolPlugin';
 
 import { safeLookup } from '@utils/core';
 

@@ -8,7 +8,7 @@
 
 import { SCRATCHPAD_TAG } from '@shared/schemas';
 import { diffTextLevenshtein } from '@texra/utils/text/diff';
-import type { NamedDocument } from '@utils/text/xmlExtraction';
+import type { NamedDocument } from '@texra/utils/text/xmlExtraction';
 
 // ---------------------------------------------------------------------------
 // responseText

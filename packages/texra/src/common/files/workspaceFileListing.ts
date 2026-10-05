@@ -10,7 +10,7 @@ import {
   prepareFileFilters,
   shouldVisitDirectory,
   type FileFilterConfig,
-} from '@common/files/fileListingRules';
+} from '@texra/common/files/fileListingRules';
 import { byString, normalizeFilePath } from '@utils/core';
 import { absentReason } from '@utils/files/fsEntryExists';
 
