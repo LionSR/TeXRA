@@ -88,7 +88,6 @@ function runServe(context: CliContext, idleSeconds: number) {
     const served = Effect.gen(function* () {
       const projects = yield* cliServiceProjects(context, scope);
       return yield* serve({
-        version: context.version,
         idleAfter: `${idleSeconds} seconds`,
         shutdown,
         settle: closeAllSessions(),
@@ -227,7 +226,7 @@ const restartCommand = defineCliCommand({
     Effect.gen(function* () {
       yield* stopService(context);
       const { info } = yield* Effect.scoped(
-        connectCliService(context.storageRoot, context.version),
+        connectCliService(context.storageRoot),
       );
       emitStatus(context, info);
       return CliExitCode.Success;

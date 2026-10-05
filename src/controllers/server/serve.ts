@@ -50,7 +50,12 @@ import {
   serviceHandlers,
   ServiceProjects,
 } from './handlers';
-import { PROTOCOL_VERSION, TexraRpcs, type ServiceInfo } from './protocol';
+import {
+  BUILD_VERSION,
+  PROTOCOL_VERSION,
+  TexraRpcs,
+  type ServiceInfo,
+} from './protocol';
 
 /** A live service already answers on this storage root's socket. */
 export class ServiceAlreadyRunning extends Data.TaggedError(
@@ -74,8 +79,6 @@ export class ServiceListenFailed extends Data.TaggedError(
 type ServeExit = 'stopped' | 'drained' | 'idle' | 'replaced';
 
 interface ServeOptions {
-  /** The build that serves, reported by `service.hello`. */
-  readonly version: string;
   /** Exit after this long with no client and no running task. */
   readonly idleAfter: Duration.Input;
   /** The host's own stop (a signal): ends the run as a `stop` would. */
@@ -129,11 +132,16 @@ export const serve = Effect.fn('server.serve')(function* (
   let clients: Effect.Effect<number> = Effect.succeed(0);
   // Known once the socket is bound; until then there is nothing to remove.
   let own: ServiceOwnership | null = null;
-  const release = Effect.suspend(() =>
-    own === null ? Effect.void : removeServiceFiles(paths, own),
-  ).pipe(Effect.provideService(FileSystem.FileSystem, fs));
+  // Once: a drain releases the name early, and the exit after it must not
+  // release again, since a newer service's socket can reuse the inode this
+  // one's had and would be removed in its place.
+  const release = Effect.suspend(() => {
+    const mine = own;
+    own = null;
+    return mine === null ? Effect.void : removeServiceFiles(paths, mine);
+  }).pipe(Effect.provideService(FileSystem.FileSystem, fs));
   const control: Context.Service.Shape<typeof ServiceControl> = {
-    version: options.version,
+    version: BUILD_VERSION,
     socket: paths.socket,
     startedAt,
     clients: Effect.suspend(() => clients),
@@ -209,7 +217,7 @@ export const serve = Effect.fn('server.serve')(function* (
   yield* writeServiceRecord(paths, {
     pid: process.pid,
     protocol: PROTOCOL_VERSION,
-    version: options.version,
+    version: BUILD_VERSION,
     socket: paths.socket,
     startedAt,
   }).pipe(
@@ -219,7 +227,7 @@ export const serve = Effect.fn('server.serve')(function* (
   );
   yield* Effect.addFinalizer(() => release);
   yield* Effect.logInfo(
-    `TeXRA service ${options.version} listening on ${paths.socket}`,
+    `TeXRA service ${BUILD_VERSION} listening on ${paths.socket}`,
   );
 
   const idleAfter = Duration.toMillis(options.idleAfter);

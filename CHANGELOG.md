@@ -788,6 +788,13 @@ show` print the same notice, and the new `texra agents customize`,
   whose stored shape this version no longer reads now says it was made by
   an older TeXRA and can't be opened here, instead of calling it corrupt,
   and the log names the field that did not match.
+- **The background service is retired by build, not by product version.**
+  Every TeXRA bundle (the CLI, the VS Code extension, the desktop app) now
+  carries the same build identity, and a newer build retires an older
+  service by it, so a preview extension, whose Marketplace number differs
+  from the CLI's, no longer retires a service of its own build. A service
+  that retired an older one no longer disappears a moment later: the old
+  service's exit could remove the new one's socket.
 - **Desktop header controls and menus take clicks again.** The "+" menu of
   a side or bottom panel (Files, Terminal, Browser, Logs), a tab's menu, and
   the task header's controls (the "More" button and its menu, renaming, the
