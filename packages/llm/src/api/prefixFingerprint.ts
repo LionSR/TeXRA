@@ -5,8 +5,8 @@ import { hash } from 'node:crypto';
 import { Effect } from 'effect';
 
 // Local imports - canonical model contract
+import { originOf, type ModelOrigin } from '../protocol.js';
 import type { ResolvedTurn } from '../turn.js';
-import type { ModelOrigin } from '../protocol.js';
 import type { RemoteOperation } from '../errors.js';
 
 /** Turn protocols a provider origin can name; an editor binding names none. */
@@ -45,17 +45,7 @@ export function admittedFingerprint(
   domain: string,
   turn: Extract<ResolvedTurn, { protocol: OriginProtocol }>,
 ): string {
-  return prefixFingerprint(
-    domain,
-    {
-      protocol: turn.protocol,
-      codecVersion: turn.codecVersion,
-      requestedModel: turn.requestedModel,
-      deployment: turn.deployment,
-    },
-    turn.system,
-    turn.messages,
-  );
+  return prefixFingerprint(domain, originOf(turn), turn.system, turn.messages);
 }
 
 /**

@@ -15,8 +15,8 @@ import {
   responsesUsage,
 } from './openaiResponsesUsage.js';
 import { assembleTurn, type AssemblyOptions } from './assembleTurn.js';
-import type { ResolvedTurn, TurnEvent } from '../turn.js';
-import type { HttpTurnResult, Part, PartEvent } from './parts.js';
+import type { TurnEvent } from '../turn.js';
+import type { HttpTurnResult, InputPart, Part, PartEvent } from './parts.js';
 
 type Append = Extract<PartEvent, { kind: 'append' }>;
 
@@ -252,15 +252,7 @@ const RESPONSES_IMAGE_DETAIL = {
   high: 'high',
   'ultra-high': 'high',
 } as const satisfies Record<
-  NonNullable<
-    Extract<
-      Extract<
-        ResolvedTurn['messages'][number],
-        { role: 'user' }
-      >['content'][number],
-      { kind: 'image' }
-    >['detail']
-  >,
+  NonNullable<Extract<InputPart, { kind: 'image' }>['detail']>,
   OpenAI.Responses.ResponseInputImage['detail']
 >;
 
@@ -326,10 +318,7 @@ function gifFrameCount(bytes: Uint8Array): number | null {
  * before any request, rather than by the provider.
  */
 export const responsesContent = Effect.fn('llm.responses.content')(function* (
-  part: Extract<
-    ResolvedTurn['messages'][number],
-    { role: 'user' }
-  >['content'][number],
+  part: InputPart,
   documents: DocumentAccess,
 ): Effect.fn.Return<OpenAI.Responses.ResponseInputContent, ModelError> {
   switch (part.kind) {

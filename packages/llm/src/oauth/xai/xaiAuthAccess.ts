@@ -12,7 +12,12 @@ import {
   SubscriptionOAuthCoordinator,
   type SubscriptionSessionStatus,
 } from '../SubscriptionOAuthCoordinator.js';
-import { XAI_SESSION_SECRET_KEY } from './xaiConstants.js';
+import { defineLoopbackLogin } from '../loopbackLogin.js';
+import {
+  XAI_CALLBACK_PATH,
+  XAI_CALLBACK_PORT,
+  XAI_SESSION_SECRET_KEY,
+} from './xaiConstants.js';
 import { XAI_POLICY } from './xaiSessionPolicy.js';
 import type { CredentialStore } from '../../providers/credentials.js';
 import type { XaiSession } from './xaiSessionTypes.js';
@@ -39,3 +44,10 @@ export function getXaiStatus(
     'Grok',
   );
 }
+
+/** The browser sign-in, bound to the registered Grok callback. */
+export const xaiLoginWithLoopback = defineLoopbackLogin<XaiSession>({
+  ports: [XAI_CALLBACK_PORT],
+  callbackPath: XAI_CALLBACK_PATH,
+  displayName: 'Grok',
+});
