@@ -13,7 +13,10 @@ import {
   findBuildDirectories,
   removeBuildDirectories,
 } from '@housekeeping/clean';
-import { fileOpResultMessage, runCleanRunDir } from '@housekeeping/runDirOps';
+import {
+  fileOpResultMessage,
+  runWorkflowFileOp,
+} from '@housekeeping/runDirOps';
 import { withLogChannel } from '@logger/effectLog';
 
 import type { FileOpResult } from '@shared/schemas';
@@ -40,7 +43,7 @@ export const handleClean = Effect.fn('cleanCommands.handleClean')(function* (
   yield* Effect.logDebug(
     `Clean command called with config: ${JSON.stringify(config)}`,
   ).pipe(withLogChannel(CHANNEL));
-  const result = yield* runCleanRunDir(config.runId);
+  const result = yield* runWorkflowFileOp('clean', config);
   yield* showCleanResult(result, config.inputFile);
 });
 

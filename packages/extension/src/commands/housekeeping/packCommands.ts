@@ -11,7 +11,10 @@ import {
   showLoggedInfoMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { fileOpResultMessage, packRunOutputs } from '@housekeeping/runDirOps';
+import {
+  fileOpResultMessage,
+  runWorkflowFileOp,
+} from '@housekeeping/runDirOps';
 import { filesystemFor } from '@housekeeping/utils';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { type FileOpResult } from '@shared/schemas';
@@ -54,7 +57,7 @@ export const handlePack = Effect.fn('packCommands.handlePack')(function* (
   config: WorkflowFileOperationRequest,
 ) {
   const workspaceFs = yield* WorkspaceFs;
-  const result = yield* packRunOutputs(config);
+  const result = yield* runWorkflowFileOp('pack', config);
 
   const folder = result.status === 'success' ? result.outputFolder : undefined;
   const folderPath = folder

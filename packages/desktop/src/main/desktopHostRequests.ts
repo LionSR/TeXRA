@@ -37,8 +37,7 @@ import {
 } from '@housekeeping/packLatexdiffvc';
 import {
   fileOpResultMessage,
-  packRunOutputs,
-  runCleanRunDir,
+  runWorkflowFileOp,
 } from '@housekeeping/runDirOps';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { withLogChannel } from '@logger/effectLog';
@@ -306,37 +305,8 @@ export function createDesktopHostRequests(
     request: WorkflowFileOperationRequest,
   ) =>
     Effect.gen(function* () {
-      const { agent, model, inputFile, runId } = request;
-      if (!agent || !model || !inputFile) {
-        return yield* reportFileOperationResult(
-          operation,
-          { status: 'missingParams' },
-          inputFile,
-        );
-      }
-      if (!runId) {
-        return yield* Effect.fail(
-          new Rejected({ reason: `Missing run identity for ${operation}.` }),
-        );
-      }
-      const ran = yield* Effect.exit(
-        operation === 'pack'
-          ? packRunOutputs(request)
-          : runCleanRunDir(runId as RunId),
-      );
-      if (Exit.isFailure(ran)) {
-        const error = Cause.squash(ran.cause);
-        yield* Effect.logError(`Desktop ${operation} operation failed`).pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
-        );
-        return yield* reportFileOperationResult(
-          operation,
-          { status: 'error', error: toErrorMessage(error) },
-          inputFile,
-        );
-      }
-      yield* reportFileOperationResult(operation, ran.value, inputFile);
+      const result = yield* runWorkflowFileOp(operation, request);
+      yield* reportFileOperationResult(operation, result, request.inputFile);
     });
 
   /**

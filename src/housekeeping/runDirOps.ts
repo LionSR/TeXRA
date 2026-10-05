@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Cause, Effect } from 'effect';
 
 // Local imports
 import { modelFileName } from '@texra-ai/llm';
@@ -11,6 +11,7 @@ import { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import type { RunId, FileOpResult } from '@shared/schemas';
 import { agentFileName } from '@shared/schemas';
 import { resolveRunStoragePath } from '@utils/files/runStorageFs';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { copyDereferenced } from '@utils/files/fsDurability';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
@@ -44,88 +45,124 @@ const runDirExists = (storageFs: RootedFileSystem, runDirRelative: string) =>
  * filesystem, and the copy between them names only the two absolute paths
  * each root produced.
  */
-export const packRunOutputs = Effect.fn('housekeeping.packRunOutputs')(
-  function* ({
-    runId,
-    agent,
-    model,
-    inputFile,
-  }: {
-    readonly runId: RunId;
-    readonly agent: string;
-    readonly model: string;
-    readonly inputFile: string;
-  }) {
-    yield* Effect.logInfo(
-      `Packing runDir for run ${runId} (agent=${agent}, model=${model}, inputFile=${inputFile})`,
-    ).pipe(withLogChannel(CHANNEL));
+const packRunOutputs = Effect.fn('housekeeping.packRunOutputs')(function* ({
+  runId,
+  agent,
+  model,
+  inputFile,
+}: {
+  readonly runId: RunId;
+  readonly agent: string;
+  readonly model: string;
+  readonly inputFile: string;
+}) {
+  yield* Effect.logInfo(
+    `Packing runDir for run ${runId} (agent=${agent}, model=${model}, inputFile=${inputFile})`,
+  ).pipe(withLogChannel(CHANNEL));
 
-    const storageFs = yield* StorageFs;
-    const workspaceFs = yield* WorkspaceFs;
+  const storageFs = yield* StorageFs;
+  const workspaceFs = yield* WorkspaceFs;
 
-    return yield* Effect.gen(function* () {
-      const runDirRelative = resolveRunStoragePath(runId);
-      if (!(yield* runDirExists(storageFs, runDirRelative))) {
-        yield* Effect.logWarning(
-          `Run directory not found for run ${runId}`,
-        ).pipe(withLogChannel(CHANNEL));
-        return { status: 'noFiles' } satisfies FileOpResult;
-      }
-
-      const baseName = inputFile ? path.parse(inputFile).name : 'run';
-      const cleanAgent = agentFileName(agent);
-      // Include a runId fragment in the destination folder so two runs packed
-      // within the same second (the timestamp's granularity) don't collide.
-      const idFragment = runId.replaceAll('-', '').slice(0, 8);
-      const destinationRelative = path.join(
-        HISTORY_DIR,
-        `${generateTimestamp()}_${baseName}_${cleanAgent}_${modelFileName(model)}_${idFragment}`,
-      );
-
-      const source = yield* storageFs.resolve(runDirRelative);
-      const destination = yield* workspaceFs.resolve(destinationRelative);
-      yield* workspaceFs.makeDirectory(HISTORY_DIR, { recursive: true });
-      // The copy creates the folder and fails on an existing one, so a
-      // second pack of the same run within that second reports an error
-      // instead of merging into the first snapshot.
-      yield* copyDereferenced(source, destination);
-      yield* Effect.logInfo(`Packed runDir ${source} -> ${destination}`).pipe(
+  return yield* Effect.gen(function* () {
+    const runDirRelative = resolveRunStoragePath(runId);
+    if (!(yield* runDirExists(storageFs, runDirRelative))) {
+      yield* Effect.logWarning(`Run directory not found for run ${runId}`).pipe(
         withLogChannel(CHANNEL),
       );
-      return {
-        status: 'success',
-        outputFolder: destinationRelative,
-      } satisfies FileOpResult;
-    }).pipe(Effect.catch(asErrorResult('Pack runDir')));
-  },
-);
+      return { status: 'noFiles' } satisfies FileOpResult;
+    }
+
+    const baseName = inputFile ? path.parse(inputFile).name : 'run';
+    const cleanAgent = agentFileName(agent);
+    // Include a runId fragment in the destination folder so two runs packed
+    // within the same second (the timestamp's granularity) don't collide.
+    const idFragment = runId.replaceAll('-', '').slice(0, 8);
+    const destinationRelative = path.join(
+      HISTORY_DIR,
+      `${generateTimestamp()}_${baseName}_${cleanAgent}_${modelFileName(model)}_${idFragment}`,
+    );
+
+    const source = yield* storageFs.resolve(runDirRelative);
+    const destination = yield* workspaceFs.resolve(destinationRelative);
+    yield* workspaceFs.makeDirectory(HISTORY_DIR, { recursive: true });
+    // The copy creates the folder and fails on an existing one, so a
+    // second pack of the same run within that second reports an error
+    // instead of merging into the first snapshot.
+    yield* copyDereferenced(source, destination);
+    yield* Effect.logInfo(`Packed runDir ${source} -> ${destination}`).pipe(
+      withLogChannel(CHANNEL),
+    );
+    return {
+      status: 'success',
+      outputFolder: destinationRelative,
+    } satisfies FileOpResult;
+  }).pipe(Effect.catch(asErrorResult('Pack runDir')));
+});
 
 /**
  * Delete a run's runDir. Irreversible. Used when the user discards a run
  * from the progress-view toolbar.
  */
-export const runCleanRunDir = Effect.fn('housekeeping.runCleanRunDir')(
-  function* (runId: RunId) {
-    const storageFs = yield* StorageFs;
+const runCleanRunDir = Effect.fn('housekeeping.runCleanRunDir')(function* (
+  runId: RunId,
+) {
+  const storageFs = yield* StorageFs;
 
-    return yield* Effect.gen(function* () {
-      const runDirRelative = resolveRunStoragePath(runId);
-      if (!(yield* runDirExists(storageFs, runDirRelative))) {
-        yield* Effect.logWarning(
-          `Run directory not found for run ${runId}`,
-        ).pipe(withLogChannel(CHANNEL));
-        return { status: 'noFiles' } satisfies FileOpResult;
-      }
+  return yield* Effect.gen(function* () {
+    const runDirRelative = resolveRunStoragePath(runId);
+    if (!(yield* runDirExists(storageFs, runDirRelative))) {
+      yield* Effect.logWarning(`Run directory not found for run ${runId}`).pipe(
+        withLogChannel(CHANNEL),
+      );
+      return { status: 'noFiles' } satisfies FileOpResult;
+    }
 
-      yield* Effect.logInfo(
-        `Removing runDir for run ${runId}: ${runDirRelative}`,
-      ).pipe(withLogChannel(CHANNEL));
-      yield* storageFs.remove(runDirRelative, {
-        recursive: true,
-        force: true,
-      });
-      return { status: 'success' } satisfies FileOpResult;
-    }).pipe(Effect.catch(asErrorResult('Clean runDir')));
+    yield* Effect.logInfo(
+      `Removing runDir for run ${runId}: ${runDirRelative}`,
+    ).pipe(withLogChannel(CHANNEL));
+    yield* storageFs.remove(runDirRelative, {
+      recursive: true,
+      force: true,
+    });
+    return { status: 'success' } satisfies FileOpResult;
+  }).pipe(Effect.catch(asErrorResult('Clean runDir')));
+});
+
+/**
+ * The one Pack/Clean entry both hosts run for the workflow toolbar: a request
+ * with no agent, model or input file is `missingParams`, and a failure of the
+ * operation itself comes back as an `error` result, logged here. Hosts only
+ * render the {@link FileOpResult} through {@link fileOpResultMessage}.
+ */
+export const runWorkflowFileOp = Effect.fn('housekeeping.runWorkflowFileOp')(
+  function* (
+    operation: 'pack' | 'clean',
+    request: {
+      readonly runId: RunId;
+      readonly agent: string;
+      readonly model: string;
+      readonly inputFile: string;
+    },
+  ): Effect.fn.Return<FileOpResult, never, StorageFs | WorkspaceFs> {
+    if (!request.agent || !request.model || !request.inputFile) {
+      return { status: 'missingParams' } satisfies FileOpResult;
+    }
+    return yield* (
+      operation === 'pack'
+        ? packRunOutputs(request)
+        : runCleanRunDir(request.runId)
+    ).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logError(`${operation} operation failed`).pipe(
+          Effect.annotateLogs({ data: Cause.squash(cause) }),
+          withLogChannel(CHANNEL),
+          Effect.as({
+            status: 'error',
+            error: toErrorMessage(Cause.squash(cause)),
+          } satisfies FileOpResult),
+        ),
+      ),
+    );
   },
 );
 
