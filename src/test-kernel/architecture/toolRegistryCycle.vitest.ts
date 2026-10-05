@@ -47,7 +47,7 @@ const DOMAIN_PREFIXES = [
 ] as const;
 
 function defineToolModules(): string[] {
-  return ['src/tools', 'packages/texra/src/tools']
+  return ['packages/harness/src/tools', 'packages/texra/src/tools']
     .flatMap((dir) =>
       sourceFilesUnder(`${REPO_ROOT}/${dir}`, { repoRelative: true }),
     )
@@ -95,7 +95,9 @@ describe('tool module closures', () => {
 
   it('enumerates every defineTool() module', () => {
     expect(closures.size).toBeGreaterThan(40);
-    expect([...closures.keys()]).toContain('src/tools/bash.ts');
+    expect([...closures.keys()]).toContain(
+      'packages/harness/src/tools/bash.ts',
+    );
   });
 
   it('keeps @tools/registry out of tool module closures', () => {
@@ -120,7 +122,7 @@ describe('tool module closures', () => {
   });
 
   it('leaves no LaTeX, Lean, arxiv or Zotero file in bash’s closure', () => {
-    const files = closures.get('src/tools/bash.ts') ?? [];
+    const files = closures.get('packages/harness/src/tools/bash.ts') ?? [];
 
     expect(files).not.toEqual([]);
     expect(

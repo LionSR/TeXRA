@@ -42,11 +42,21 @@ interface HostBaseline {
 const BASELINE_FILE = 'config/ratchets/host-agent-import-baseline.json';
 const BASELINE_PATH = resolve(REPO_ROOT, BASELINE_FILE);
 
-const HOST_DIRS: Record<Host, string> = {
-  cli: resolve(REPO_ROOT, 'packages/cli/src'),
-  desktop: resolve(REPO_ROOT, 'packages/desktop/src'),
-  extension: resolve(REPO_ROOT, 'packages/extension/src'),
-  harness: resolve(REPO_ROOT, 'packages/harness/src'),
+const HARNESS_SRC = resolve(REPO_ROOT, 'packages/harness/src');
+
+/** Each package's files; the SDK's are its entry files and its Effect
+ *  boundary, not the harness modules under them (those are `@agent/*`). */
+const HOST_FILES: Record<Host, () => string[]> = {
+  cli: () => sourceFilesUnder(resolve(REPO_ROOT, 'packages/cli/src')),
+  desktop: () => sourceFilesUnder(resolve(REPO_ROOT, 'packages/desktop/src')),
+  extension: () =>
+    sourceFilesUnder(resolve(REPO_ROOT, 'packages/extension/src')),
+  harness: () => [
+    ...['index', 'node', 'plugins', 'schemas'].map((entry) =>
+      resolve(HARNESS_SRC, `${entry}.ts`),
+    ),
+    ...sourceFilesUnder(resolve(HARNESS_SRC, 'effect')),
+  ],
 };
 
 const AGENT_DEEP_IMPORT = /^@agent\//;
@@ -63,7 +73,7 @@ function collectAgentDeepImportSpecifiers(file: string): string[] {
 
 function collectHostAgentDeepImportSpecifiers(host: Host): string[] {
   const specifiers = new Set<string>();
-  for (const file of sourceFilesUnder(HOST_DIRS[host])) {
+  for (const file of HOST_FILES[host]()) {
     for (const specifier of collectAgentDeepImportSpecifiers(file)) {
       specifiers.add(specifier);
     }

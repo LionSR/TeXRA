@@ -27,16 +27,16 @@ import {
  * statement parses `event.data`, `blob.value`, `current_value.value` or a
  * projection's data.
  *
- * Exempt by name: the history query store (`src/agent/runtime/historyQuery/`),
+ * Exempt by name: the history query store (`packages/harness/src/agent/runtime/historyQuery/`),
  * a separate `:memory:` database built from decoded display rows, whose
  * `json_extract` views are the query contract offered to the model, not
  * reads of the session store. The write ratchet exempts it the same way.
  */
-const PRODUCTION_ROOTS = [...ALL_HOST_PRODUCTION_ROOTS, 'packages/harness/src'];
-const HISTORY_QUERY_STORE = 'src/agent/runtime/historyQuery/';
-const ROW_CODEC = 'src/controllers/session/rowCodec.ts';
-const ROW_VERSIONS = 'src/shared/schemas/rowVersions.ts';
-const SESSION_EVENT = 'src/shared/schemas/sessionEvent.ts';
+const PRODUCTION_ROOTS = ALL_HOST_PRODUCTION_ROOTS;
+const HISTORY_QUERY_STORE = 'packages/harness/src/agent/runtime/historyQuery/';
+const ROW_CODEC = 'packages/harness/src/controllers/session/rowCodec.ts';
+const ROW_VERSIONS = 'packages/harness/src/shared/schemas/rowVersions.ts';
+const SESSION_EVENT = 'packages/harness/src/shared/schemas/sessionEvent.ts';
 
 /** A SQLite JSON function other than `json_each` over one bound parameter. */
 const PAYLOAD_JSON_READ =
@@ -193,13 +193,17 @@ describe('stored shape boundary', () => {
   it('stores no shape the llm package owns', () => {
     const { reached, llm } = llmImportsOfStoredShapes();
     // Not vacuous: the walk reaches the stored turn and its run history arms.
-    expect(reached).toContain('src/shared/schemas/runHistoryEvent.ts');
-    expect(reached).toContain('src/shared/schemas/storedTurn.ts');
+    expect(reached).toContain(
+      'packages/harness/src/shared/schemas/runHistoryEvent.ts',
+    );
+    expect(reached).toContain(
+      'packages/harness/src/shared/schemas/storedTurn.ts',
+    );
     expect(
       llm,
       llm.length === 0
         ? undefined
-        : 'A stored shape is storage-owned (`storedTurn.ts`); `RunHistory` converts the package’s values (`src/agent/runtime/storedTurn.ts`).',
+        : 'A stored shape is storage-owned (`storedTurn.ts`); `RunHistory` converts the package’s values (`packages/harness/src/agent/runtime/storedTurn.ts`).',
     ).toEqual([]);
   });
 });

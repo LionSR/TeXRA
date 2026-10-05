@@ -104,16 +104,6 @@ const CLI_PROCESS_OUTPUT_BOUNDARY = [
 const CLI_PROCESS_IO_BOUNDARY = ['packages/cli/src/chat/tui/runChatTui.tsx'];
 
 const VSCODE_FREE_ZONE_DIRS = [
-  'src/agent',
-  'src/model',
-  'src/tools',
-  'src/controllers',
-  'src/shared',
-  'src/eventBus',
-  'src/hosts',
-  'src/common',
-  'src/utils',
-  'src/logger',
   'packages/harness/src',
   'packages/texra/src',
   'packages/llm/src',
@@ -129,15 +119,28 @@ for (const dir of VSCODE_FREE_ZONE_DIRS) {
   }
 }
 
+// The SDK's entry files: the package's public surface and its Effect
+// boundary (the host door below), as opposed to the harness modules under it.
+const HARNESS_ENTRY_FILES = [
+  'packages/harness/src/index.ts',
+  'packages/harness/src/node.ts',
+  'packages/harness/src/plugins.ts',
+  'packages/harness/src/schemas.ts',
+];
+const HARNESS_ENTRY_GLOBS = [
+  ...HARNESS_ENTRY_FILES,
+  'packages/harness/src/effect/**/*.{ts,tsx,mts}',
+];
+
 // The named runtime entries that may call `Effect.run*` outside a host
 // package (the no-restricted-syntax block below); the core-quality ratchet
 // reads the same list.
 export const EFFECT_RUN_ENTRIES = [
   'packages/extension/src/progressView/frontend/sessionTransport.ts',
   'packages/texra/src/shared/signals.ts',
-  'src/platform/processRuntime.ts',
+  'packages/harness/src/platform/processRuntime.ts',
   // Worker entry: no process runtime exists in the worker.
-  'src/agent/codeSandbox/worker.ts',
+  'packages/harness/src/agent/codeSandbox/worker.ts',
 ];
 
 // The core the quality bar holds (owner, 2026-10-03: "super high coding
@@ -147,13 +150,14 @@ export const EFFECT_RUN_ENTRIES = [
 // scripts/check-core-quality.mjs over config/ratchets/core-quality/. M8
 // re-keys it to packages/harness and packages/llm.
 export const CORE_QUALITY_DIRS = [
-  'src/agent',
-  'src/shared/session',
-  'src/shared/schemas',
-  'src/tools',
-  'src/controllers/session',
-  'src/platform',
-  'packages/harness/src',
+  'packages/harness/src/agent',
+  'packages/harness/src/shared/session',
+  'packages/harness/src/shared/schemas',
+  'packages/harness/src/tools',
+  'packages/harness/src/controllers/session',
+  'packages/harness/src/platform',
+  'packages/harness/src/effect',
+  ...HARNESS_ENTRY_FILES,
   'packages/llm/src',
 ];
 
@@ -209,13 +213,13 @@ const HARNESS_NO_APP_IMPORT_PATTERNS = [
 // inquiry decision and the LaTeX tool table (split design M2/M3 leftovers,
 // #13719). Shrink-only: delete an entry when its import goes.
 const HARNESS_APP_IMPORT_RESIDENTS = [
-  'src/agent/runtime/executeAgent.ts',
-  'src/agent/runtime/index.ts',
-  'src/controllers/session/SessionRequests.ts',
-  'src/controllers/session/sessionLayer.ts',
-  'src/platform/processRuntime.ts',
-  'src/tools/toolProbes.ts',
-  'src/utils/system/toolUtils.ts',
+  'packages/harness/src/agent/runtime/executeAgent.ts',
+  'packages/harness/src/agent/runtime/index.ts',
+  'packages/harness/src/controllers/session/SessionRequests.ts',
+  'packages/harness/src/controllers/session/sessionLayer.ts',
+  'packages/harness/src/platform/processRuntime.ts',
+  'packages/harness/src/tools/toolProbes.ts',
+  'packages/harness/src/utils/system/toolUtils.ts',
 ];
 
 const AGENT_CORE_RESTRICTED_IMPORT_PATTERNS = [
@@ -763,7 +767,9 @@ export default tseslint.config(
   // The core holds no `any` (count 0 at 2026-10-03), so it is a lint error
   // rather than a ratchet row.
   {
-    files: CORE_QUALITY_DIRS.map((dir) => `${dir}/**/*.{ts,tsx,mts}`),
+    files: CORE_QUALITY_DIRS.map((entry) =>
+      entry.endsWith('.ts') ? entry : `${entry}/**/*.{ts,tsx,mts}`,
+    ),
     ignores: ['**/*.vitest.ts'],
     rules: { '@typescript-eslint/no-explicit-any': 'error' },
   },
@@ -846,11 +852,11 @@ export default tseslint.config(
     },
   },
 
-  // The harness side of the split (repo-root src/ until the harness move)
-  // imports nothing from the app, except the residents named above.
+  // The harness imports nothing from the app, except the residents named
+  // above.
   {
-    files: ['src/**/*.{ts,tsx,mts}'],
-    ignores: ['src/test-kernel/**', ...HARNESS_APP_IMPORT_RESIDENTS],
+    files: ['packages/harness/src/**/*.{ts,tsx,mts}'],
+    ignores: HARNESS_APP_IMPORT_RESIDENTS,
     rules: {
       'no-restricted-imports': [
         'error',
@@ -868,7 +874,7 @@ export default tseslint.config(
   // Agent core is the neutral execution layer. It may depend on shared agent
   // contracts, but not on concrete provider-handler implementations.
   {
-    files: ['src/agent/core/**/*.{ts,tsx,mts}'],
+    files: ['packages/harness/src/agent/core/**/*.{ts,tsx,mts}'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -940,7 +946,8 @@ export default tseslint.config(
   // every edge and the frontends' reachable closure stays these five files.
   {
     files: BROWSER_SAFE_UTILS.map(
-      (mod) => `${mod.replace('@utils', 'src/utils')}{.ts,/index.ts}`,
+      (mod) =>
+        `${mod.replace('@utils', 'packages/harness/src/utils')}{.ts,/index.ts}`,
     ),
     rules: {
       'import/no-nodejs-modules': 'error',
@@ -1059,7 +1066,7 @@ export default tseslint.config(
     },
   },
 
-  // Effect runs belong at a host entry (packages/{extension,desktop,cli,harness}/src)
+  // Effect runs belong at a host entry (packages/{extension,desktop,cli}/src, or the SDK entry files and packages/harness/src/effect)
   // or at a webview/runtime composition root that owns its runtime (owner
   // ruling 2026-09-06, Effect 4 migration R1; 2026-09-14 for the named
   // entries, which are exempt whole-file: that the run is on the entry's own
@@ -1076,7 +1083,7 @@ export default tseslint.config(
         'Build <wa-icon> markup via waIcon() from @ui/wa/webAwesomeIcons instead of a hand-rolled template.',
     };
     const runMessage =
-      'Effect runs belong at a host entry (packages/{extension,desktop,cli,harness}/src) or a named runtime entry in eslint.config.mjs. Convert this file and its callers so the run moves there.';
+      'Effect runs belong at a host entry (packages/{extension,desktop,cli}/src, or the SDK entry files and packages/harness/src/effect) or a named runtime entry in eslint.config.mjs. Convert this file and its callers so the run moves there.';
     // `runMain` is `NodeRuntime.runMain`, the run of a process or worker entry.
     const runNames = '/^run(Promise|PromiseExit|Sync|Fork|Callback|Main)$/';
     const run = [
@@ -1096,7 +1103,7 @@ export default tseslint.config(
     };
     const entries = EFFECT_RUN_ENTRIES;
     const residents = [
-      'src/agent/runtime/childRunLoop.ts',
+      'packages/harness/src/agent/runtime/childRunLoop.ts',
       'packages/texra/src/tools/claudeAgent.ts',
     ];
     const iconFile = 'packages/texra/src/ui/wa/webAwesomeIcons.ts';
@@ -1112,7 +1119,7 @@ export default tseslint.config(
           'packages/extension/src/**/*.{ts,tsx,mts}',
           'packages/desktop/src/**/*.{ts,tsx,mts}',
           'packages/cli/src/**/*.{ts,tsx,mts}',
-          'packages/harness/src/**/*.{ts,tsx,mts}',
+          ...HARNESS_ENTRY_GLOBS,
         ],
         ['**/*.vitest.ts', iconFile, ...entries],
         waIcon,
@@ -1123,6 +1130,7 @@ export default tseslint.config(
       block(
         [
           'src/**/*.{ts,tsx,mts}',
+          'packages/harness/src/**/*.{ts,tsx,mts}',
           'packages/texra/src/**/*.{ts,tsx,mts}',
           'packages/llm/src/**/*.{ts,tsx,mts}',
           'packages/trace-viewer/src/**/*.{ts,tsx,mts}',
@@ -1135,6 +1143,7 @@ export default tseslint.config(
           iconFile,
           ...entries,
           ...residents,
+          ...HARNESS_ENTRY_GLOBS,
         ],
         waIcon,
         ...run,

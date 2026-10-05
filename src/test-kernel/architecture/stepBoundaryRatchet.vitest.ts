@@ -16,7 +16,7 @@ import {
 /**
  * Invariant 7 of the core concepts: a run's tools, continuation and prompt
  * contributions change only at a step boundary, and the change is recorded
- * there. The step (`src/agent/runtime/loop/step.ts`) is the one module that
+ * there. The step (`packages/harness/src/agent/runtime/loop/step.ts`) is the one module that
  * applies the plugin switches to the live catalog, pins its tool generation
  * and the plugins on (whose continuations and prompt sections it reads),
  * installs the run's current step, and authors the
@@ -35,7 +35,7 @@ import {
  *   set no `tools.offered` row records;
  * - a second author of `tools.offered` records a set no step offered.
  */
-const STEP = 'src/agent/runtime/loop/step.ts';
+const STEP = 'packages/harness/src/agent/runtime/loop/step.ts';
 
 const RULES: readonly {
   readonly what: string;
@@ -49,7 +49,10 @@ const RULES: readonly {
     // The catalog itself, which serializes the switch read with the pin, and
     // the process's plugin catalog layer, which applies a switch flipped in this
     // process to the catalog at once (it pins nothing past the call).
-    also: ['src/tools/liveTools.ts', 'src/tools/pluginCatalog.ts'],
+    also: [
+      'packages/harness/src/tools/liveTools.ts',
+      'packages/harness/src/tools/pluginCatalog.ts',
+    ],
   },
   {
     what: "writes a run's current step",
@@ -71,13 +74,13 @@ const RULES: readonly {
     // drain; the settings Git tab's read of the GitHub plugin's process
     // services. None offers a run anything or pins a generation.
     also: [
-      'src/agent/runtime/run/AgentRun.ts',
-      'src/tools/pluginCatalog.ts',
-      'src/controllers/session/sessionLayer.ts',
+      'packages/harness/src/agent/runtime/run/AgentRun.ts',
+      'packages/harness/src/tools/pluginCatalog.ts',
+      'packages/harness/src/controllers/session/sessionLayer.ts',
       'packages/texra/src/controllers/settingsView/githubSubscriptions.ts',
       // The availability probes, which run each plugin's probe with its
       // own process services while its layer is up; they pin nothing.
-      'src/tools/toolAvailability.ts',
+      'packages/harness/src/tools/toolAvailability.ts',
       'packages/extension/src/frontend/lm/registerLanguageModelTools.ts',
     ],
   },

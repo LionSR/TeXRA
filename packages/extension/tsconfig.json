@@ -1,6 +1,6 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {},
-  "include": ["src/**/*.ts", "src/**/*.tsx", "../../src/types/**/*.d.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "../harness/src/types/**/*.d.ts"],
   "exclude": ["node_modules"]
 }

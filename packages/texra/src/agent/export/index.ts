@@ -1,5 +1,5 @@
 /**
- * Chat export — the cross-host public surface of `src/agent/export`.
+ * Chat export — the cross-host public surface of `packages/harness/src/agent/export`.
  *
  * One curated barrel the hosts import instead of deep-reaching each export
  * module by path: loading a conversation into the export input shape

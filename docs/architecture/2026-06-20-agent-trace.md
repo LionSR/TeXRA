@@ -16,8 +16,8 @@ there is a single runtime implementation behind both.
                                                │
                                                ▼
                           ┌────────────────────────────────────────┐
-                          │  src/agent/trace/helpers.ts            │
-                          │  src/agent/trace/toolUseHelpers.ts     │
+                          │  packages/harness/src/agent/trace/helpers.ts            │
+                          │  packages/harness/src/agent/trace/toolUseHelpers.ts     │
                           │  ────────────────────────────────────  │
                           │  TeXRA helpers — plain functions       │
                           │  taking an AgentTrace:                 │
@@ -29,7 +29,7 @@ there is a single runtime implementation behind both.
                                                │  call
                                                ▼
                           ┌────────────────────────────────────────┐
-                          │  src/agent/trace/AgentTrace   (TYPE)   │
+                          │  packages/harness/src/agent/trace/AgentTrace   (TYPE)   │
                           │  ────────────────────────────────────  │
                           │  agent-general SDK surface             │
                           │  • emit / subscribe                    │
@@ -42,7 +42,7 @@ there is a single runtime implementation behind both.
                                                │
                                                ▼
                           ┌────────────────────────────────────────┐
-                          │  src/agent/trace/TraceEmitter (CLASS)  │
+                          │  packages/harness/src/agent/trace/TraceEmitter (CLASS)  │
                           │     the one implementation             │
                           │     single-stamp at emit() boundary    │
                           │     AsyncLocalStorage for stage stack  │
@@ -87,7 +87,7 @@ helper.
 ## Where things live
 
 ```
-src/agent/trace/                  ← agent-general (no TeXRA)
+packages/harness/src/agent/trace/                  ← agent-general (no TeXRA)
 ├── events.ts                     ← AgentEvent discriminated union
 ├── AgentTrace.ts                 ← lean SDK interface
 ├── TraceEmitter.ts               ← in-process implementation
@@ -95,18 +95,18 @@ src/agent/trace/                  ← agent-general (no TeXRA)
 ├── toolUseHelpers.ts             ← tool-use card helpers
 └── index.ts                      ← the module's public surface
 
-src/logger/                       ← channel output and redaction only
+packages/harness/src/logger/                       ← channel output and redaction only
 ├── logSink.ts                    ← the host sink: entry shape, rendering, writeLogEntry
 ├── effectLog.ts                  ← withLogChannel for Effect.log*
 └── redaction.ts                  ← provider-key redaction for logged text
 
-src/transcript/                   ← TeXRA transcript plane
+packages/harness/src/transcript/                   ← TeXRA transcript plane
 ├── TexraTranscriptRecorder.ts    ← subscriber → StreamLogStore (transcript)
 └── StreamLogStore.ts             ← transcript persistence (file-backed)
 
 src/telemetry/
 └── UsageLogService.ts            ← usage write path, fed per priced call by
-                                    `reportUsage` (`src/agent/runtime/run/modelCall.ts`,
+                                    `reportUsage` (`packages/harness/src/agent/runtime/run/modelCall.ts`,
                                     called from `ModelInvoker` and `modelCall`)
 ```
 
@@ -138,7 +138,7 @@ this channel replaced down to this single point.
 
 ## Adding a new event arm
 
-1. Extend `AgentEvent` in `src/agent/trace/events.ts`.
+1. Extend `AgentEvent` in `packages/harness/src/agent/trace/events.ts`.
 2. The exhaustive `switch (event.type)` in `TexraTranscriptRecorder.ts`
    (and any other subscriber) fails to compile until handled.
 3. Add a sugar method on `AgentTrace` that reduces to `emit({type:'…'})`,

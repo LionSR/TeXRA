@@ -9,7 +9,7 @@
  * a {@link SubscriptionSignInPresenter}. Adding a third provider is one row
  * here, not another descriptor in each host.
  *
- * Lives in `src/controllers/` rather than in `@texra-ai/llm` because a row
+ * Lives in `packages/harness/src/controllers/` rather than in `@texra-ai/llm` because a row
  * binds a sign-in flow to its model-layer routing preference, a setting the
  * package never reads; {@link subscriptionAuthStatus} joins the same two
  * facts for the settings views.

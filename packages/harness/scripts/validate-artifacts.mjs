@@ -48,6 +48,12 @@ for (const alias of internalAliases) {
     throw new Error(`Unresolved internal declaration alias remains: ${alias}`);
   }
 }
+const distManifest = JSON.parse(
+  await readFile(path.join(distRoot, 'package.json'), 'utf8'),
+);
+if (distManifest.type !== 'module') {
+  throw new Error('dist/package.json must mark the built output as ESM.');
+}
 if (allFiles.some((file) => file.endsWith('.map'))) {
   throw new Error('Source or declaration maps must not be published.');
 }

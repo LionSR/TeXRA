@@ -1,4 +1,4 @@
-// Suites for src/utils/files (workspaceFS, mime, entry probes, pasted images,
+// Suites for packages/harness/src/utils/files (workspaceFS, mime, entry probes, pasted images,
 // rooted filesystem confinement).
 
 import * as assert from 'node:assert';

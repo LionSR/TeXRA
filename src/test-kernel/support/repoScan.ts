@@ -17,18 +17,17 @@ export const REPO_ROOT = resolve(
   '../../..',
 );
 
-/** The host production roots (the hosts, the app and `src`) most architecture ratchets scan. */
+/** The production roots most architecture ratchets scan: the hosts, the harness and the app. */
 export const ALL_HOST_PRODUCTION_ROOTS = Object.freeze([
   'packages/cli/src',
   'packages/desktop/src',
   'packages/extension/src',
+  'packages/harness/src',
   'packages/texra/src',
-  'src',
 ] as const);
 
 /**
- * Every production source root: `src` plus each workspace package that has
- * one, derived from the tree rather than listed, so a package added later is
+ * Every production source root: each workspace package that has one, derived from the tree rather than listed, so a package added later is
  * covered on the day it lands. Wider than ALL_HOST_PRODUCTION_ROOTS, which is
  * the four host roots; the budget ratchets (file size, unknown error channel)
  * scan this.
@@ -37,7 +36,7 @@ export function productionRoots(): string[] {
   const packages = readdirSync(resolve(REPO_ROOT, 'packages'))
     .filter((name) => existsSync(resolve(REPO_ROOT, 'packages', name, 'src')))
     .map((name) => posix.join('packages', name, 'src'));
-  return ['src', ...packages.toSorted((a, b) => a.localeCompare(b))];
+  return packages.toSorted((a, b) => a.localeCompare(b));
 }
 
 export const SOURCE_FILE = /\.(?:ts|tsx|mts|cts)$/;
