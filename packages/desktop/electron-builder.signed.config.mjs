@@ -14,13 +14,9 @@ function hasEnv(name) {
 
 function hasAppleNotarizationCredentials() {
   return (
-    (hasEnv('APPLE_API_KEY') &&
-      hasEnv('APPLE_API_KEY_ID') &&
-      hasEnv('APPLE_API_ISSUER')) ||
-    (hasEnv('APPLE_ID') &&
-      hasEnv('APPLE_APP_SPECIFIC_PASSWORD') &&
-      hasEnv('APPLE_TEAM_ID')) ||
-    (hasEnv('APPLE_KEYCHAIN') && hasEnv('APPLE_KEYCHAIN_PROFILE'))
+    hasEnv('APPLE_API_KEY') &&
+    hasEnv('APPLE_API_KEY_ID') &&
+    hasEnv('APPLE_API_ISSUER')
   );
 }
 
