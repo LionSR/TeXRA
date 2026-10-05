@@ -51,6 +51,18 @@ import {
   HostFrameSchema,
 } from './hostCalls';
 
+/**
+ * The build every TeXRA bundle carries: the workspace version, stamped by
+ * each bundler (`process.env.TEXRA_BUILD_VERSION`, replaced at build time).
+ * The service reports it and a client retires an older one by it. It is not
+ * a host product's own version: a preview VSIX is renumbered for the
+ * Marketplace while the CLI and the desktop app of the same build are not,
+ * so comparing those would retire a service of the very same build. An
+ * unbundled run (tests, `tsx`) is `unknown`, which retires nothing.
+ */
+export const BUILD_VERSION: string =
+  process.env.TEXRA_BUILD_VERSION || 'unknown';
+
 /** Bumped whenever a procedure or a payload changes shape. A client newer
  *  than the running service retires it; an older one stays in process. */
 export const PROTOCOL_VERSION = 7;

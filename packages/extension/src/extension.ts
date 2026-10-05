@@ -471,11 +471,9 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   // Every window is a client of the one background service, so its tasks
   // keep running when it closes and other windows and terminals see them.
   // A window that cannot reach it runs them here, and says so once.
-  const extensionVersion = context.extension.packageJSON?.version;
-  const service = yield* reachExtensionService(
-    context.extensionPath,
-    typeof extensionVersion === 'string' ? extensionVersion : 'unknown',
-  ).pipe(Effect.result);
+  const service = yield* reachExtensionService(context.extensionPath).pipe(
+    Effect.result,
+  );
   const runtimeSession = yield* initializeDefaultSession({
     roots,
     responseTextProcessing: createTexraResponseTextProcessing(),

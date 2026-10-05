@@ -38,6 +38,10 @@ const hostHarnessPath = path.join(
   path.dirname(binaryPath),
   'service-host-harness.js',
 );
+// The same CLI stamped as a newer build: what a client of a later release
+// finds when an older build's service runs.
+const NEXT_BUILD = '999.0.0';
+const nextBuildPath = path.join(path.dirname(binaryPath), 'texra-next.js');
 const validationResourcesPath = path.join(validationRoot, 'resources');
 const validationEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL';
 const validationFlagEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_FLAG';
@@ -1576,6 +1580,95 @@ async function validateServiceChatsSeeEachOther() {
 }
 
 /**
+ * The service's build identity (D1-D4): clients of one build share its
+ * service; a client of a newer build retires it and starts its own; a client
+ * of the older build then leaves the newer service alone. Every host stamps
+ * the same workspace version, so this holds across the CLI, the extension
+ * and the desktop app. The statuses each client saw are the artifact.
+ */
+async function validateServiceBuildIdentity() {
+  const cwd = makeScratch('texra-cli-service-builds-');
+  const project = echoProject(cwd);
+  const env = { ...project.ptyEnv, TEXRA_NO_TELEMETRY: '1' };
+  const texraWith = (binary, args, label) => {
+    const result = run(
+      process.execPath,
+      [binary, ...args, '--cwd', project.work],
+      { cwd: project.work, env },
+    );
+    assertSuccess(result, label);
+    return result.stdout.trim();
+  };
+  const status = (binary, label) =>
+    parseJson(
+      texraWith(
+        binary,
+        ['service', 'status', '--output-format', 'json'],
+        label,
+      ),
+      label,
+    );
+  const alive = (pid) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  try {
+    texraWith(binaryPath, ['tasks', 'list'], 'texra tasks list (this build)');
+    const first = status(binaryPath, 'service status (this build)');
+    texraWith(
+      binaryPath,
+      ['tasks', 'list'],
+      'texra tasks list (this build, again)',
+    );
+    const same = status(binaryPath, 'service status (this build, again)');
+    texraWith(
+      nextBuildPath,
+      ['tasks', 'list'],
+      'texra tasks list (next build)',
+    );
+    const next = status(nextBuildPath, 'service status (next build)');
+    texraWith(
+      binaryPath,
+      ['tasks', 'list'],
+      'texra tasks list (this build, after)',
+    );
+    const after = status(binaryPath, 'service status (this build, after)');
+    const deadline = Date.now() + 30_000;
+    while (alive(first.pid) && Date.now() < deadline)
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    const artifactPath = writeArtifact('service-builds.json', {
+      first,
+      same,
+      next,
+      after,
+      retiredGone: !alive(first.pid),
+    });
+    assert(
+      same.pid === first.pid,
+      `two clients of one build should share its service (artifact: ${artifactPath})`,
+    );
+    assert(
+      next.version === NEXT_BUILD && next.pid !== first.pid,
+      `a newer build should retire the older service and start its own (artifact: ${artifactPath})`,
+    );
+    assert(
+      after.pid === next.pid && after.version === NEXT_BUILD,
+      `an older build should leave a newer service running (artifact: ${artifactPath})`,
+    );
+    assert(
+      !alive(first.pid),
+      `the retired service should exit (artifact: ${artifactPath})`,
+    );
+  } finally {
+    removeScratch(cwd);
+  }
+}
+
+/**
  * Host calls (the service's runs reaching a window's editor): an
  * editor-less window attaches to the service offering `readDiagnostics`,
  * and a service task's diagnostics tool gets that window's answer. A second
@@ -2366,6 +2459,7 @@ async function validateCliRunArtifacts(options = {}) {
   await validateServiceTasksInTui();
   await validateServiceChatsSeeEachOther();
   await validateServiceHostCalls();
+  await validateServiceBuildIdentity();
   validateScriptFanoutRunCommand();
   validateTeamRunCommand();
   console.log('CLI run validation passed');
@@ -2389,6 +2483,16 @@ function buildValidationBundle() {
   runCliPackageScript('copy:resources', {
     env: { TEXRA_CLI_RESOURCES_OUTDIR: validationResourcesPath },
   });
+  assertSuccess(
+    run(process.execPath, ['scripts/build-bundle.mjs'], {
+      cwd: cliRoot,
+      env: {
+        TEXRA_CLI_BUNDLE_OUTFILE: nextBuildPath,
+        TEXRA_BUILD_VERSION: NEXT_BUILD,
+      },
+    }),
+    'build the next-build CLI',
+  );
   assertSuccess(
     run(process.execPath, ['scripts/build-bundle.mjs', '--host-harness'], {
       cwd: cliRoot,

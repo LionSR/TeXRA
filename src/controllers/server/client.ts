@@ -18,7 +18,12 @@ import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { ensureError } from '@utils/errors/errorMessage';
 import { prepareServiceDirectories, servicePaths } from './discovery';
 
-import { PROTOCOL_VERSION, TexraRpcs, type ServiceInfo } from './protocol';
+import {
+  BUILD_VERSION,
+  PROTOCOL_VERSION,
+  TexraRpcs,
+  type ServiceInfo,
+} from './protocol';
 import type { SocketError } from 'effect/socket/Socket';
 
 /** The procedures as a client calls them. */
@@ -54,14 +59,14 @@ const START_TIMEOUT = '60 seconds';
 const HELLO_TIMEOUT = '10 seconds';
 
 /** A service the caller should retire: an older protocol, or an older
- *  build of this one (a development build, versioned `unknown`, never is). */
-function isOlder(info: ServiceInfo, version: string): boolean {
+ *  build ({@link BUILD_VERSION}; a development build, `unknown`, never is). */
+function isOlder(info: ServiceInfo): boolean {
   if (info.protocol !== PROTOCOL_VERSION)
     return info.protocol < PROTOCOL_VERSION;
   return (
     semverValid(info.version) !== null &&
-    semverValid(version) !== null &&
-    semverLt(info.version, version)
+    semverValid(BUILD_VERSION) !== null &&
+    semverLt(info.version, BUILD_VERSION)
   );
 }
 
@@ -182,12 +187,11 @@ export function askServiceToStop(
 /**
  * Connect to this storage root's service, starting it with `start` (which
  * spawns the service detached and returns) when none answers, and retiring
- * one that speaks an older protocol or runs an older build than `version`
+ * one that speaks an older protocol or runs an older build than this one
  * first.
  */
 export const ensureService = Effect.fn('server.ensureService')(function* (
   storageRoot: string,
-  version: string,
   start: Effect.Effect<void, Error>,
 ): Effect.fn.Return<ServiceConnection, ServiceUnavailable, Scope.Scope> {
   if (process.platform === 'win32')
@@ -203,7 +207,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
       }),
     );
   let retired: number | null = null;
-  if (info !== null && isOlder(info, version)) {
+  if (info !== null && isOlder(info)) {
     const retiring = info;
     retired = info.pid;
     yield* Effect.logInfo(

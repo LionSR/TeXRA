@@ -28,7 +28,6 @@ await Effect.runPromise(
     Effect.gen(function* () {
       const { client } = yield* ensureService(
         storageRoot,
-        'unknown',
         Effect.fail(
           new Error('The harness attaches to a running service only.'),
         ),

@@ -163,10 +163,10 @@ export async function runChat(
       // Every chat is a client of the one service, so other terminals and
       // windows see its task; one that cannot reach it runs here, and says
       // so once.
-      const service = yield* reachCliService(
-        context.storageRoot,
-        context.version,
-      ).pipe(Scope.provide(chatScope), Effect.result);
+      const service = yield* reachCliService(context.storageRoot).pipe(
+        Scope.provide(chatScope),
+        Effect.result,
+      );
       const services = yield* initCliPlatform({
         ...context,
         presentsStoreMovedAside: true,
@@ -480,7 +480,7 @@ export async function runChat(
   // Pre-register the slash commands the input palette uses.
   registerBuiltinSlashCommands({
     backend,
-    connectService: () => reachCliService(context.storageRoot, context.version),
+    connectService: () => reachCliService(context.storageRoot),
     onAccountChanged: () =>
       connectChatModel(
         slashCommandContext(),

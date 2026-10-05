@@ -184,18 +184,16 @@ export function probeCliService(
 const NO_SERVICE = 'TEXRA_NO_SERVICE';
 
 /** Connect to the storage root's service, starting it when none answers
- *  and retiring one older than this build (`version`). Leaves the process's
- *  log sink as it is: what the chat uses. */
+ *  and retiring one older than this build. Leaves the process's log sink as
+ *  it is: what the chat uses. */
 export function reachCliService(
   storageRoot: string,
-  version: string,
 ): Effect.Effect<ServiceConnection, Error, Scope.Scope> {
   return Effect.flatMap(envFlag(NO_SERVICE), (off) =>
     off
       ? Effect.fail(new Error(`${NO_SERVICE} is set`))
       : ensureService(
           storageRoot,
-          version,
           // The same Node and entry as this process.
           spawnService(storageRoot, process.execPath, [
             ...process.execArgv,
@@ -234,9 +232,6 @@ export function heldByService(
  *  its own result. */
 export function connectCliService(
   storageRoot: string,
-  version: string,
 ): Effect.Effect<ServiceConnection, Error, Scope.Scope> {
-  return quietClient.pipe(
-    Effect.andThen(reachCliService(storageRoot, version)),
-  );
+  return quietClient.pipe(Effect.andThen(reachCliService(storageRoot)));
 }

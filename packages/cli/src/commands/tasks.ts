@@ -69,10 +69,7 @@ function requestTask(
   request: (runId: RunId) => RuntimeRequest,
 ) {
   return Effect.gen(function* () {
-    const { client } = yield* connectCliService(
-      context.storageRoot,
-      context.version,
-    );
+    const { client } = yield* connectCliService(context.storageRoot);
     const task = yield* findTask(client, id);
     const outcome: Outcome = yield* client['task.request']({
       workspace: task.workspace,
@@ -102,10 +99,7 @@ const listCommand = defineCliCommand({
   catchExitCode: CliExitCode.AgentError,
   run: (context) =>
     Effect.gen(function* () {
-      const { client } = yield* connectCliService(
-        context.storageRoot,
-        context.version,
-      );
+      const { client } = yield* connectCliService(context.storageRoot);
       const tasks = yield* client['tasks.list']({ all: false });
       emitCliResult(context, {
         json: tasks,
@@ -133,10 +127,7 @@ const attachCommand = defineCliCommand({
         '`texra tasks attach` prints text or NDJSON (`--output-format ndjson`), not JSON.',
       );
     return Effect.gen(function* () {
-      const { client } = yield* connectCliService(
-        context.storageRoot,
-        context.version,
-      );
+      const { client } = yield* connectCliService(context.storageRoot);
       const task = yield* findTask(client, ctx.args.id);
       const outcome = yield* attachTask(client, task, {
         format: context.outputFormat === 'ndjson' ? 'ndjson' : 'text',
@@ -208,10 +199,7 @@ const startCommand = defineCliCommand({
       });
       const runId = yield* Effect.scoped(
         Effect.gen(function* () {
-          const { client } = yield* connectCliService(
-            context.storageRoot,
-            context.version,
-          );
+          const { client } = yield* connectCliService(context.storageRoot);
           // This command's approval policy (its flag, `--no-input`, or the
           // config) becomes the project's in the service before the task
           // starts, so the task runs under what this command was asked.
