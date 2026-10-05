@@ -5,7 +5,6 @@ import { Data, Effect, Fiber, Layer } from 'effect';
 import type { AgentEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
-import { withRevisionSpend } from '@agent/output/documentRecipe';
 import { persistedParentRunId } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
@@ -19,6 +18,7 @@ import {
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
+import { withRevisionSpend } from '@texra/agent/output/documentRecipe';
 
 import {
   buildAgentLaunchContext,

@@ -19,12 +19,12 @@ import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
+import type { AgentScanIssue } from '@shared/schemas';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   type AgentSelectionItem,
   type SettingsSectionName,
-} from '@shared/settingsView/settingsViewMessages';
-import type { AgentScanIssue } from '@shared/schemas';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+} from '@texra/shared/settingsView/settingsViewMessages';
 import {
   commonViewStyles,
   designTokens,

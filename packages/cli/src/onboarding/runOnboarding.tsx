@@ -29,10 +29,6 @@ import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
 import { CROSS } from '@cli/tui/ui/glyphs';
-import {
-  subscriptionProvider,
-  type SubscriptionAccount,
-} from '@controllers/modelAccess/subscriptionProviders';
 import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -40,6 +36,10 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import type { StateWriteFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { setOnboardingDeclined } from '@shared/state/onboardingState';
+import {
+  subscriptionProvider,
+  type SubscriptionAccount,
+} from '@texra/controllers/modelAccess/subscriptionProviders';
 
 import {
   ONBOARDING_CARD_TITLE,

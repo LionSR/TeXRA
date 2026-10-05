@@ -14,10 +14,10 @@ import {
   type FileSelectConfig,
   type SessionType,
 } from '@shared/schemas';
-import { SortableController } from '@shared/litControllers/SortableController';
 import type { SurfaceAction } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import type { TeXRAIconName } from '@shared/iconNames';
+import { SortableController } from '@texra/shared/litControllers/SortableController';
 import { dropCueStyles } from '@ui/styles/commonViewStyles';
 import { designTokens } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';

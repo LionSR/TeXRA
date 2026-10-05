@@ -2,17 +2,17 @@ import { it } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import {
   detectLatexSettingsStatus,
   isAllowedLatexInstallCommand,
-} from '@controllers/settingsView/LatexToolingController';
-import { DEFAULT_LATEX_SETTINGS_STATUS } from '@shared/settingsView/settingsViewMessages';
+} from '@texra/controllers/settingsView/LatexToolingController';
+import { DEFAULT_LATEX_SETTINGS_STATUS } from '@texra/shared/settingsView/settingsViewMessages';
 import {
   HOMEBREW_INSTALL_COMMAND,
   normalizePlatform,
-} from '@shared/constants/latexToolchain';
-import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { SetupPlatform } from '@tools/setup/platform';
+} from '@texra/shared/constants/latexToolchain';
+import { SetupPlatform } from '@texra/tools/setup/platform';
 
 /** The probes the status reads, doubled so no tool is spawned. */
 const probes = vi.hoisted(() => ({

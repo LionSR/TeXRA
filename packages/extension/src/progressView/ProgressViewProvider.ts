@@ -30,33 +30,32 @@ import {
   EXTENSION_CATEGORIES,
   getFilterExtensions,
 } from '@common/files/fileTypeUtils';
-import type { ServiceClient } from '@controllers/server/client';
+import type { ServiceClient } from '@texra/controllers/server/client';
 import {
   attachWindowHost,
   type WindowHost,
-} from '@controllers/server/windowHost';
-import type { SessionBackend } from '@controllers/session/sessionBackend';
-import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
-import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
-import { OnboardingFunnelRefresher } from '@controllers/onboarding/onboardingFunnel';
+} from '@texra/controllers/server/windowHost';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
+import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
+import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
+import { OnboardingFunnelRefresher } from '@texra/controllers/onboarding/onboardingFunnel';
 import {
   SessionBridge,
   type AttachedPort,
-} from '@controllers/session/SessionBridge';
+} from '@texra/controllers/session/SessionBridge';
 import {
   createHostSnapshotSource,
   HostSnapshotReadFailed,
   type HostSnapshotSource,
-} from '@controllers/session/hostSnapshotSource';
-import { workspaceFileOptions } from '@controllers/session/workspaceFileOptions';
-import { attachSessionHost } from '@controllers/session/attachSessionHost';
+} from '@texra/controllers/session/hostSnapshotSource';
+import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
+import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { withLogChannel } from '@logger/effectLog';
-import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import type {
   StateStore,
   StateReadFailed,
@@ -78,9 +77,25 @@ import type {
   DownMessage,
   SurfaceActionMessage,
 } from '@shared/session/sessionFrames';
+import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
+import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
+import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
+import {
+  createHostSnapshotSource,
+  HostSnapshotReadFailed,
+  type HostSnapshotSource,
+} from '@texra/controllers/session/hostSnapshotSource';
+import {
+  SessionBridge,
+  type AttachedPort,
+} from '@texra/controllers/session/SessionBridge';
+import { OnboardingFunnelRefresher } from '@texra/controllers/onboarding/onboardingFunnel';
+import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
+import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
+import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies';
 import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { checkCoreDependencies } from '@utils/system/checkCoreDependencies';
 
 import { createExtensionHostRequests } from './extensionHostRequests';
 import { RequestAttention } from './requestAttention';

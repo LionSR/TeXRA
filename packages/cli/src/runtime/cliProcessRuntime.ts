@@ -58,10 +58,10 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { GlobalDatabase } from '@shared/session/database';
-import { TEXRA_SETTING_ROWS } from '@shared/settingsView/texraSettings';
 import { usageLogLayer } from '@telemetry/UsageLogService';
+import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
+import { texraPlugins } from '@texra/tools/registry';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
-import { texraPlugins } from '@tools/registry';
 
 import { readCliVersion } from './cliContext';
 import { cliSecrets } from './cliSecrets';

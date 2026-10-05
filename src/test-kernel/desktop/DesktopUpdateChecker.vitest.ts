@@ -3,7 +3,6 @@ import { it } from '@effect/vitest';
 import { Effect, FileSystem, Layer } from 'effect';
 import { describe, expect, vi } from 'vitest';
 import { globalDatabaseLayer } from '@controllers/session/Database';
-import { updateCheckRecordsLayer } from '@controllers/session/updateCheckRecords';
 import { checkForDesktopUpdate } from '@desktop/main/desktopUpdateChecker';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
@@ -11,6 +10,7 @@ import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { withEnv } from '@test/support/testEnv';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
 
 import type { HttpClient } from 'effect/http';
 

@@ -35,16 +35,16 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared webview
 import '@ui/wa/spinner';
-import {
-  FILE_SELECT_CONFIGS,
-  LAUNCH_FILE_LISTS,
-} from '@shared/launcher/fileSelectConfigs';
-import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
 import { agentName } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
+import { installToolbarTooltips } from '@texra/shared/litControllers/TooltipController';
+import {
+  FILE_SELECT_CONFIGS,
+  LAUNCH_FILE_LISTS,
+} from '@texra/shared/launcher/fileSelectConfigs';
 import { designTokens } from '@ui/styles';
 import {
   renderIconActionButton,
@@ -392,7 +392,7 @@ export class ProgressApp extends LitElement {
    *  pending, else the project starter while the folder has no LaTeX
    *  files, else the prompt. Without a credential the welcome card
    *  replaces the whole state (see below). */
-  private renderHero(host: HostSnapshot): TemplateResult {
+  private renderHero(host: HostSnapshot, surface: Surface): TemplateResult {
     if (host.onboarding === 'setup') {
       return html`<section class="hero" aria-labelledby="shell-hero-title">
         <div class="hero-mark" aria-hidden="true">${waIcon('rocket')}</div>
@@ -422,6 +422,7 @@ export class ProgressApp extends LitElement {
     }
     return html`<new-task-hero
       .projectName=${host.project.name}
+      .instruction=${surface.launch.instruction}
     ></new-task-hero>`;
   }
 
@@ -451,7 +452,7 @@ export class ProgressApp extends LitElement {
     return html`
       <div class="empty">
         <div class="hero-wrap">
-          ${this.renderHero(host)}
+          ${this.renderHero(host, surface)}
           ${
             documentPass
               ? html`<wa-details class="context" open>

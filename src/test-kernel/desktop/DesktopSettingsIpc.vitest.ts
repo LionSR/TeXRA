@@ -17,7 +17,6 @@ import {
   type StateStore,
 } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
-import { DocumentsStateKey } from '@shared/settingsView/documentsSettings';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -25,13 +24,6 @@ import {
   AGENT_SKILLS_CONFIG_KEY,
 } from '@shared/schemas';
 import type { ModelOptionData } from '@shared/schemas';
-import {
-  DEFAULT_LATEX_SETTINGS_STATUS,
-  SettingsViewInboundMessageSchema,
-  type DerivedSettingsSnapshot,
-} from '@shared/settingsView/settingsViewMessages';
-import { CodexStateKey } from '@shared/settingsView/integrationSettings';
-import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -42,6 +34,14 @@ import {
   FakeStateStore,
 } from '@test/support/FakePlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
+import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
+import {
+  DEFAULT_LATEX_SETTINGS_STATUS,
+  SettingsViewInboundMessageSchema,
+  type DerivedSettingsSnapshot,
+} from '@texra/shared/settingsView/settingsViewMessages';
+import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 
 import {
   commandOf,
@@ -58,10 +58,10 @@ const readModelAvailabilityInputs = vi.hoisted(() =>
 // the machine's tools, as the harness's unprobed tool availability does for
 // the Tools page.
 vi.mock(
-  '@controllers/settingsView/LatexToolingController',
+  '@texra/controllers/settingsView/LatexToolingController',
   async (importOriginal) => ({
     ...(await importOriginal<
-      typeof import('@controllers/settingsView/LatexToolingController')
+      typeof import('@texra/controllers/settingsView/LatexToolingController')
     >()),
     detectLatexSettingsStatus: () =>
       Effect.succeed(DEFAULT_LATEX_SETTINGS_STATUS),

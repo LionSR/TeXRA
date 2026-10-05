@@ -25,18 +25,18 @@ import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
 import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
-import type { ToolEditPreview } from '@controllers/server/protocol';
-import {
-  ApiKeyPromptFailed,
-  ProgressApiKeyRetryController,
-} from '@controllers/progressView/ProgressApiKeyRetryController';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { RetryPermission } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { HostRequest } from '@shared/session/hostRequest';
-import { subscribeToSignalChanges } from '@shared/signals';
+import {
+  ApiKeyPromptFailed,
+  ProgressApiKeyRetryController,
+} from '@texra/controllers/progressView/ProgressApiKeyRetryController';
+import type { ToolEditPreview } from '@texra/controllers/server/protocol';
+import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { notify } from '../notifications/terminalNotifier';

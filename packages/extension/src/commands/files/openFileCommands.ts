@@ -4,11 +4,11 @@ import * as vscode from 'vscode';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime';
-import { listWorkspaceFilesOfType } from '@controllers/session/workspaceFileOptions';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { withLogChannel } from '@logger/effectLog';
 import { WorkspaceFs } from '@platform/rootedFs';
+import { listWorkspaceFilesOfType } from '@texra/controllers/session/workspaceFileOptions';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';

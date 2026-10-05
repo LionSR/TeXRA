@@ -7,7 +7,7 @@ import {
   createExtensionCommandActions,
   registerExtensionCommandRegistry,
 } from '@commands/extensionCommandSurface';
-import type { SessionBackend } from '@controllers/session/sessionBackend';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 
 // Local imports - components
 import type { StateStore } from '@platform/interfaces';

@@ -25,8 +25,8 @@ import {
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
+import { texraPlugins } from '@texra/tools/registry';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
-import { texraPlugins } from '@tools/registry';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 
 /**

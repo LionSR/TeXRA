@@ -6,12 +6,12 @@ import { Effect, Layer, Result } from 'effect';
 import { afterEach, beforeEach, describe, expect } from 'vitest';
 
 import { globalDatabaseLayer } from '@controllers/session/Database';
-import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { RunIdSchema, ToolError } from '@shared/schemas';
 import { InquiryRecords } from '@shared/plugins/externalInquiry';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { inquiryRecordsLayer } from '@texra/controllers/session/inquiryRecords';
 
 const RUN_A = RunIdSchema.parse('1a1a1a1a1a1a');
 const RUN_B = RunIdSchema.parse('1b1b1b1b1b1b');

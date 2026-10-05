@@ -21,7 +21,6 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
 import type { SurfacedSettingEntry } from '@shared/state/stateSettings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -42,7 +41,8 @@ import {
   isStored,
   makeFakeSettingsStores,
 } from '@test/support/settingsStoresFake';
-import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { GITHUB_TOKEN_STORAGE_KEY } from '@texra/tools/github/githubAuth';
 
 const providerApiKeyRuntime = vi.hoisted(() => ({
   load: vi.fn(),

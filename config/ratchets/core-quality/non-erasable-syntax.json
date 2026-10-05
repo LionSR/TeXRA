@@ -8,7 +8,6 @@
   "src/agent/runtime/runRegistry.ts": 1,
   "src/agent/trace/TraceEmitter.ts": 5,
   "src/agent/workspaceAgents/WorkspaceAgentsController.ts": 1,
-  "src/controllers/session/SessionBridge.ts": 3,
   "src/controllers/session/sessionLayer.ts": 1,
   "src/platform/defaults/jsonStore.ts": 2
 }

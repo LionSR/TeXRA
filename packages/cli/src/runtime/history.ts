@@ -12,7 +12,6 @@ import {
   type RunResult,
 } from '@agent/storage';
 import type { AgentConfig, SessionHandle } from '@agent/runtime';
-import { loadChatExportInput, type ChatExportInput } from '@agent/export';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
   RunIdSchema,
@@ -27,6 +26,7 @@ import {
 import type { SessionOpenError } from '@shared/session/database';
 import type { RunView } from '@shared/session/sessionView';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
+import { loadChatExportInput, type ChatExportInput } from '@texra/agent/export';
 import {
   listRunGeneratedFiles,
   type RunGeneratedFile,

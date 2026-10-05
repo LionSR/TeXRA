@@ -7,7 +7,7 @@ import {
   EXTENSION_COMMAND_HANDLERS,
   type ExtensionCommandActions,
 } from '@commands/extensionCommandHandlers';
-import { dispatchCommandFromRegistry } from '@shared/commands/registry';
+import { dispatchCommandFromRegistry } from '@texra/shared/commands/registry';
 
 // `extensionCommandHandlers.ts` is deliberately free of `vscode` imports, so
 // the production handler map is exercised directly here. Only

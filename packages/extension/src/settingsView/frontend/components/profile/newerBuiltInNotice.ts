@@ -3,7 +3,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 
 import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { AgentSelectionItem } from '@shared/settingsView/settingsViewMessages';
+import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsBanner } from '@ui/wa/settingsBanner';
 

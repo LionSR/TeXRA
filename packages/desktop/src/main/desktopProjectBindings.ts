@@ -7,16 +7,6 @@
 
 import { Effect, Exit, Scope } from 'effect';
 
-import { localSessionBackend } from '@controllers/session/sessionBackend';
-import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
-import {
-  createHostSnapshotSource,
-  HostSnapshotReadFailed,
-} from '@controllers/session/hostSnapshotSource';
-import {
-  SessionBridge,
-  type AttachedPort,
-} from '@controllers/session/SessionBridge';
 import type { AgentDirectoriesPort } from '@platform/interfaces';
 import {
   withProcessServices,
@@ -24,6 +14,16 @@ import {
   type ProcessServices,
 } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
+import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
+import {
+  createHostSnapshotSource,
+  HostSnapshotReadFailed,
+} from '@texra/controllers/session/hostSnapshotSource';
+import {
+  SessionBridge,
+  type AttachedPort,
+} from '@texra/controllers/session/SessionBridge';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import {
   DESKTOP_WORKSPACE_COMMANDS,

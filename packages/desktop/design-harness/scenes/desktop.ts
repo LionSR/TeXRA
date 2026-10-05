@@ -314,7 +314,10 @@ function sceneDesktopEmptyProject(): TemplateResult {
       projects,
       co,
       undefined,
-      html`<new-task-hero .projectName=${co.display.name}></new-task-hero>`,
+      html`<new-task-hero
+        .projectName=${co.display.name}
+        .instruction=${''}
+      ></new-task-hero>`,
     ),
   );
 }

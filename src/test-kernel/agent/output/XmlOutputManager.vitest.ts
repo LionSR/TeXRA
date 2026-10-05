@@ -4,22 +4,22 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { assignByContentSimilarity } from '@agent/output/extraction/contentSimilarity';
-import { extractFilesFromXml } from '@agent/output/outputFileExtraction';
-import {
-  createOutputState,
-  ensureRoundData,
-  type OutputDependencies,
-  type OutputState,
-} from '@agent/output/outputState';
 
-import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { MESSAGE_TYPES, type FileLocation, type RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
+import { XmlOutputManager } from '@texra/agent/output/XmlOutputManager';
+import {
+  createOutputState,
+  ensureRoundData,
+  type OutputDependencies,
+  type OutputState,
+} from '@texra/agent/output/outputState';
+import { extractFilesFromXml } from '@texra/agent/output/outputFileExtraction';
+import { assignByContentSimilarity } from '@texra/agent/output/extraction/contentSimilarity';
 import { createExternalLocation } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
 

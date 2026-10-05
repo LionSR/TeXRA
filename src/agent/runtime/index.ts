@@ -114,4 +114,4 @@ export { withWorkflowDiffs } from './subagentResults';
 
 // The document task launch: a host lowers a launch of an agent's task to a
 // run of its persona opened on the documents recipe.
-export { documentTaskConfig } from '../output/documentRecipe';
+export { documentTaskConfig } from '@texra/agent/output/documentRecipe';

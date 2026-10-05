@@ -11,7 +11,6 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { documentTaskConfig } from '@agent/output/documentRecipe';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
@@ -25,6 +24,7 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { seedRunRecord as commitRunRecord } from '@test/support/runRecordSeeds';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 
 const mocks = vi.hoisted(() => ({
   assertOutputDirAvailable: vi.fn(),

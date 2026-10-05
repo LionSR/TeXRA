@@ -1,7 +1,7 @@
 import { Cause, Effect, Stream, type Scope } from 'effect';
 import * as vscode from 'vscode';
 
-import type { SessionBackend } from '@controllers/session/sessionBackend';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { outputFilesProduced } from '@frontend/events/runFactSubscriptions';
 

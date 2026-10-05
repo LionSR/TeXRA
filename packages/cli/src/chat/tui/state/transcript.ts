@@ -14,7 +14,7 @@ import { withLogChannel } from '@logger/effectLog';
 import type { RunId } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
 import type { RequestError } from '@shared/session/requestErrors';
-import { transcriptText, type TranscriptRow } from '@ui/transcript';
+import { transcriptText, type TranscriptRow } from '@shared/transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   CLI_LOCAL_RUN_ID,

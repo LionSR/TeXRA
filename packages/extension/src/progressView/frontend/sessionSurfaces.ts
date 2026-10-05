@@ -12,8 +12,6 @@
 import { signal, type Signal } from '@lit-labs/signals';
 
 import type { RunId } from '@shared/schemas';
-import { subscribeToSignalChanges } from '@shared/signals';
-import { LAUNCH_FILE_LISTS } from '@shared/launcher/fileSelectConfigs';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
@@ -35,6 +33,8 @@ import {
   PersistedState,
   type KeyValueStore,
 } from '@shared/state/PersistedState';
+import { LAUNCH_FILE_LISTS } from '@texra/shared/launcher/fileSelectConfigs';
+import { subscribeToSignalChanges } from '@texra/shared/signals';
 
 import { playCompletionSound } from './audioNotification';
 import {

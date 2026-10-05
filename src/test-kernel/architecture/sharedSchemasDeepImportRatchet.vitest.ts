@@ -48,11 +48,20 @@ const MOVED_OUT: ReadonlyArray<readonly [string, string]> = [
   ['stateSettings.ts', 'src/shared/state/stateSettings.ts'],
   [
     'settingsViewMessages.ts',
-    'src/shared/settingsView/settingsViewMessages.ts',
+    'packages/texra/src/shared/settingsView/settingsViewMessages.ts',
   ],
-  ['memoryViewMessages.ts', 'src/shared/settingsView/memoryViewMessages.ts'],
-  ['profileViewMessages.ts', 'src/shared/settingsView/profileViewMessages.ts'],
-  ['messageFactories.ts', 'src/shared/settingsView/messageFactories.ts'],
+  [
+    'memoryViewMessages.ts',
+    'packages/texra/src/shared/settingsView/memoryViewMessages.ts',
+  ],
+  [
+    'profileViewMessages.ts',
+    'packages/texra/src/shared/settingsView/profileViewMessages.ts',
+  ],
+  [
+    'messageFactories.ts',
+    'packages/texra/src/shared/settingsView/messageFactories.ts',
+  ],
 ];
 
 function scanRoots(): string[] {

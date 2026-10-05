@@ -8,7 +8,7 @@ import type { AgentTrace } from '@agent/trace';
 import { CODEX_TURN_TOOL } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
-import { runStreamedTurn } from '@tools/codex';
+import { runStreamedTurn } from '@texra/tools/codex';
 import type {
   CommandExecutionItem,
   Thread,

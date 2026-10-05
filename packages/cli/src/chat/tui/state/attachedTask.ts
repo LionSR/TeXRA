@@ -6,11 +6,6 @@
 import { Effect, type Scope, Stream } from 'effect';
 
 import { describeWireRefusal, watchTask } from '@cli/runtime/taskAttach';
-import type { ServiceConnection } from '@controllers/server/client';
-import type {
-  TaskSummary,
-  ToolEditPreview,
-} from '@controllers/server/protocol';
 import { aggregateId } from '@shared/schemas';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import {
@@ -18,6 +13,11 @@ import {
   type RunView,
   type SessionView,
 } from '@shared/session/sessionView';
+import type {
+  TaskSummary,
+  ToolEditPreview,
+} from '@texra/controllers/server/protocol';
+import type { ServiceConnection } from '@texra/controllers/server/client';
 
 /** One level of the attached task, as the view paints it. */
 export interface AttachedTaskLevel {

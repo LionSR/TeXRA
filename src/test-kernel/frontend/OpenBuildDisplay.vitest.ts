@@ -11,12 +11,12 @@ import {
 } from '@frontend/latex/openBuild';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import {
   LATEX_VIEWER_OPEN_DELAY_MS,
   LATEX_VIEWER_REFRESH_DELAY_MS,
-} from '@shared/constants/latexTiming';
-import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { captureLogEntries } from '@test/support/logSinkCapture';
+} from '@texra/shared/constants/latexTiming';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const mocks = vi.hoisted(() => ({

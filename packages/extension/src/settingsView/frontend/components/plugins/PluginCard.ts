@@ -23,15 +23,15 @@ import { customElement, property } from 'lit/decorators.js';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import type { PluginActionMessage } from '@shared/settingsView/pluginMessages';
+import { toolDependencyStatusLabel } from '@shared/tools/toolDependencyStatusLabels';
+import type { PluginActionMessage } from '@texra/shared/settingsView/pluginMessages';
 import type {
   PluginRow,
   ToolCommandKind,
   ToolDashboardItem,
   ToolInstallAction,
-} from '@shared/settingsView/settingsViewMessages';
-import { DetailsOpenController } from '@shared/litControllers/DetailsOpenController';
-import { toolDependencyStatusLabel } from '@shared/tools/toolDependencyStatusLabels';
+} from '@texra/shared/settingsView/settingsViewMessages';
+import { DetailsOpenController } from '@texra/shared/litControllers/DetailsOpenController';
 import {
   PLUGINS_PAGE,
   pluginRowName,

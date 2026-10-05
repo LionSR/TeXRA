@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { LOG_LEVELS, MESSAGE_TYPES } from '@shared/schemas';
-import { streamingTextRow, type TranscriptRow } from '@ui/transcript';
+import { streamingTextRow, type TranscriptRow } from '@shared/transcript';
 
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 

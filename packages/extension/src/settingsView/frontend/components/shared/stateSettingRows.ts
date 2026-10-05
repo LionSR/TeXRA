@@ -14,9 +14,9 @@ import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 
 import type { SettingEnumChoice } from '@shared/state/stateSettings';
-import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
-import type { StateSettingValue } from '@shared/settingsView/settingsViewMessages';
 import { settingEnumChoices } from '@shared/state/stateSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import type { StateSettingValue } from '@texra/shared/settingsView/settingsViewMessages';
 import { readSelectValue } from '@ui/wa/selectTemplates';
 import { renderSettingsToggleRow } from '@ui/wa/settingsSection';
 

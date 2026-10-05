@@ -18,7 +18,7 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
-import { OpenPdfTool } from '@tools/OpenPdfTool';
+import { OpenPdfTool } from '@texra/tools/OpenPdfTool';
 
 /** The request shape the host's PDF opener receives, derived from the port. */
 type OpenPdfRequest = Parameters<NonNullable<HostInteractions['openPdf']>>[0];

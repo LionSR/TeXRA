@@ -7,8 +7,8 @@ import {
   TOOL_CALL_STATUS,
   type RunId,
 } from '@shared/schemas';
+import type { TranscriptRow } from '@shared/transcript';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
-import type { TranscriptRow } from '@ui/transcript';
 
 /** A fold built into a fresh trace, plus its rows and groups. */
 function attachRecorder(runId: RunId = 'stream:test' as RunId) {

@@ -42,8 +42,6 @@ import {
   type TurnOutcome,
 } from '@cli/runtime/terminalStatus';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
-import type { SessionBackend } from '@controllers/session/sessionBackend';
-import type { WindowHost } from '@controllers/server/windowHost';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import type { DisposableStore } from '@platform/disposable';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
@@ -63,6 +61,8 @@ import type {
   RuntimeRequest,
 } from '@shared/session/runtimeRequest';
 import { escapeText } from '@shared/utils/xmlEscape';
+import type { WindowHost } from '@texra/controllers/server/windowHost';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { generateRunId } from '@utils/core';

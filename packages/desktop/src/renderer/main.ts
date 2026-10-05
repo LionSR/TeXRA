@@ -30,7 +30,7 @@ import {
   type KeyValueStore,
 } from '@shared/state/PersistedState';
 
-import { formatDesktopAccelerator } from '@shared/commands/accelerators';
+import { formatDesktopAccelerator } from '@texra/shared/commands/accelerators';
 
 import { applyHostBodyTheme } from '@ui/wa/hostTheme';
 import {

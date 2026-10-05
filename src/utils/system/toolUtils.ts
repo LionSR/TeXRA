@@ -21,7 +21,7 @@ import {
   LATEXMK_INSTALL_GUIDE,
   TEXFMT_INSTALL_GUIDE,
   getInstallGuide,
-} from '@shared/constants/latexToolchain';
+} from '@texra/shared/constants/latexToolchain';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports

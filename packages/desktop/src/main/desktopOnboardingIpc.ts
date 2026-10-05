@@ -1,5 +1,4 @@
 import { Data, Effect } from 'effect';
-import { OnboardingFunnelRefresher } from '@controllers/onboarding/onboardingFunnel';
 import type { ProcessServices } from '@platform/processRuntime';
 import type {
   StateStore,
@@ -16,6 +15,7 @@ import {
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
+import { OnboardingFunnelRefresher } from '@texra/controllers/onboarding/onboardingFunnel';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**

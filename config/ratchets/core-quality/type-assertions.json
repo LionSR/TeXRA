@@ -23,7 +23,6 @@
   "src/agent/runtime/SessionEvents.ts": 1,
   "src/agent/runtime/storedTurn.ts": 2,
   "src/agent/runtime/terminalResultToast.ts": 1,
-  "src/controllers/session/inquiryRecords.ts": 1,
   "src/controllers/session/projections.ts": 1,
   "src/controllers/session/sessionInputs.ts": 2,
   "src/controllers/session/storeAside.ts": 3,

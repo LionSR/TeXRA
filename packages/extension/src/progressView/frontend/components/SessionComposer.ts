@@ -285,6 +285,13 @@ export class SessionComposer extends LitElement {
     );
   }
 
+  /** Focus the field, caret after its text: a starter just filled it in. */
+  focusAtEnd(): void {
+    const end = this.textArea?.value.length ?? 0;
+    this.textArea?.focus();
+    this.textArea?.setSelectionRange(end, end);
+  }
+
   private setText(text: string, patch: Partial<Draft> = {}): void {
     const run = this.run;
     if (run) {

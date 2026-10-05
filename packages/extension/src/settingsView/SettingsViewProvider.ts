@@ -8,14 +8,14 @@ import {
   BundledViewContentProvider,
   getSharedLocalResourceRoots,
 } from '@common/webview';
-import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
 import { DisposableStore } from '@platform/disposable';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { SettingsTarget } from '@shared/settingsView/settingsViewMessages';
+import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
+import type { SettingsTarget } from '@texra/shared/settingsView/settingsViewMessages';
 
 // Local file imports
 import {

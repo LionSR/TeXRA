@@ -5,11 +5,11 @@ import { resolve } from 'node:path';
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
+import { TEXRA_PLUGIN_CARDS } from '@texra/tools/pluginCards';
+import { texraPlugins } from '@texra/tools/registry';
 import { harnessBuiltins } from '@tools/builtinPlugins';
 import { PLUGIN_ARMS } from '@tools/pluginArms';
-import { TEXRA_PLUGIN_CARDS } from '@tools/pluginCards';
 import type { Plugin } from '@tools/plugins';
-import { texraPlugins } from '@tools/registry';
 import {
   ALL_HOST_PRODUCTION_ROOTS,
   collectModuleSpecifiers,
@@ -53,25 +53,28 @@ const PLUGIN_SERVICES: readonly {
   {
     tag: 'GitHubSubscriptions',
     users:
-      /^src\/tools\/(?:github\/|integrationPlugins\.ts$)|^src\/controllers\/settingsView\/githubSubscriptions\.ts$/,
+      /^packages\/texra\/src\/(?:tools\/(?:github\/|integrationPlugins\.ts$)|controllers\/settingsView\/githubSubscriptions\.ts$)/,
   },
-  { tag: 'CodexThreads', users: /^src\/tools\/codex\.ts$/ },
-  { tag: 'ClaudeAgentSessions', users: /^src\/tools\/claudeAgent\.ts$/ },
+  { tag: 'CodexThreads', users: /^packages\/texra\/src\/tools\/codex\.ts$/ },
+  {
+    tag: 'ClaudeAgentSessions',
+    users: /^packages\/texra\/src\/tools\/claudeAgent\.ts$/,
+  },
   // The Lean 4 plugin's port: its tools and probe, and the VS Code host's
   // bridge, which that host passes as the plugin's layer.
   {
     tag: 'LeanLanguageServices',
     users:
-      /^src\/tools\/(?:lean\/|pluginAvailability\.ts$)|^packages\/extension\/src\/(?:extension\.ts|frontend\/lean\/VscodeIntegration\.ts)$/,
+      /^packages\/texra\/src\/tools\/(?:lean\/|pluginAvailability\.ts$)|^packages\/extension\/src\/(?:extension\.ts|frontend\/lean\/VscodeIntegration\.ts)$/,
   },
   // The `core` plugin's Comments UI port: its tool.
-  { tag: 'InlineComments', users: /^src\/tools\/comment\// },
+  { tag: 'InlineComments', users: /^packages\/texra\/src\/tools\/comment\// },
 ];
 /** Where the services are declared, typed and built. */
 const SERVICE_HOMES = new Set([
-  'src/tools/agentCliSessionStores.ts',
-  'src/tools/integrationPlugins.ts',
-  'src/tools/registry.ts',
+  'packages/texra/src/tools/agentCliSessionStores.ts',
+  'packages/texra/src/tools/integrationPlugins.ts',
+  'packages/texra/src/tools/registry.ts',
   'src/platform/processRuntime.ts',
 ]);
 

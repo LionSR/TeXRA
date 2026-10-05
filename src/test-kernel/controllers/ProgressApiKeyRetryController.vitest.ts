@@ -5,10 +5,10 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
 import type { AppState } from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
 import { fakeProcessServices } from '@test/support/setupPlatform';
+import { ProgressApiKeyRetryController } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import type { ApiKeyProviderId } from '@texra-ai/llm';
 
 /**

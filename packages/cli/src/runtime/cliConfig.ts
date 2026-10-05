@@ -20,8 +20,8 @@ import type { ConfigProvider } from '@platform/interfaces';
 // Local imports - shared
 import { canonicalConfigKey } from '@shared/config/configKeys';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
 import { installSettingsCatalog } from '@shared/state/stateSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 // Local imports - tools
 import { mcpConfigWarnings, USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';

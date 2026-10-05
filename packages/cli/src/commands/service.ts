@@ -2,13 +2,13 @@ import { defineCommand } from 'citty';
 import { Deferred, Effect, Exit, Schedule, Scope } from 'effect';
 
 import { closeAllSessions } from '@agent/runtime';
-import { askServiceToStop } from '@controllers/server/client';
-import { servicePaths } from '@controllers/server/discovery';
-import { ServiceProjects } from '@controllers/server/handlers';
-import { serve } from '@controllers/server/serve';
-import type { ServiceInfo } from '@controllers/server/protocol';
 import { entryChannel, entryMessage, setLogSink } from '@logger/logSink';
 import { adoptLoginShellEnvironment } from '@platform/defaults/loginShellEnv';
+import { askServiceToStop } from '@texra/controllers/server/client';
+import { servicePaths } from '@texra/controllers/server/discovery';
+import { ServiceProjects } from '@texra/controllers/server/handlers';
+import { serve } from '@texra/controllers/server/serve';
+import type { ServiceInfo } from '@texra/controllers/server/protocol';
 
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 import {

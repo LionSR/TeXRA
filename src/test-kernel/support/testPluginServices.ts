@@ -10,9 +10,9 @@ import type { PluginContext } from '@platform/processRuntime';
 import {
   claudeAgentSessionsLayer,
   codexThreadsLayer,
-} from '@tools/agentCliSessionStores';
+} from '@texra/tools/agentCliSessionStores';
+import { GitHubSubscriptions } from '@texra/tools/github/subscriptionBindings';
 import { codeSandboxLayer } from '@tools/codemode/ScriptTool';
-import { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
 import { PluginHold } from '@tools/toolTable';
 
 /** A test session's services live for the test: a hold holds nothing. */

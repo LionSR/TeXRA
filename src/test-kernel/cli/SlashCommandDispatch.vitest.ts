@@ -51,7 +51,6 @@ import type { CliLogoutTarget } from '@cli/runtime/loginOptions';
 import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
 import * as cliProviderKeys from '@cli/chat/tui/hosts/cliProviderKeys';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
-import { localSessionBackend } from '@controllers/session/sessionBackend';
 import * as subscriptionAccess from '@model/subscriptionAccess';
 import { withProcessServices } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
@@ -63,12 +62,13 @@ import {
   type RunPhase,
 } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
+import type { TranscriptRow } from '@shared/transcript';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import type { TranscriptRow } from '@ui/transcript';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import {
   bindTestSessionView,
   makeRunView,

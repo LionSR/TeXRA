@@ -13,7 +13,7 @@ import {
   withProcessServices,
 } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { monacoLanguageForPath } from '@shared/monaco/monacoLanguage';
+import { monacoLanguageForPath } from '@texra/shared/monaco/monacoLanguage';
 import { countLineChanges } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {

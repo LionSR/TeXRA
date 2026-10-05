@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { withLogChannel } from '@logger/effectLog';
 import type { StateStore } from '@platform/interfaces';
-import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
+import { LATEX_WORKSHOP_EXT_ID } from '@texra/shared/constants/latexToolchain';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { extendEnvPath } from '@utils/system/platformPaths';
 

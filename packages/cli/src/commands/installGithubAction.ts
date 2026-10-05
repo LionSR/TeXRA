@@ -2,7 +2,10 @@ import path from 'node:path';
 
 import { Effect, FileSystem, PlatformError } from 'effect';
 
-import { parseGitHubSlug, type GitHubSlug } from '@tools/github/githubSlug';
+import {
+  parseGitHubSlug,
+  type GitHubSlug,
+} from '@texra/tools/github/githubSlug';
 import { pathExists } from '@utils/files/fsDurability';
 
 import { CliExitCode } from '../runtime/exitCodes';

@@ -4,11 +4,11 @@ import { Effect, FileSystem } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
   createFileMapping,
   replaceInputCommands,
-} from '@agent/output/fileMapping';
-import { nodePlatformLayer } from '@test/support/fsTestUtils';
+} from '@texra/agent/output/fileMapping';
 import { createExternalLocation as externalLocation } from '@utils/files/fileLocation';
 
 /**

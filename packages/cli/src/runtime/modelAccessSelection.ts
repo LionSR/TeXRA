@@ -2,17 +2,17 @@ import { Data, Effect } from 'effect';
 
 import { hasUsableApiKey } from '@texra-ai/llm';
 import {
-  subscriptionAuthStatus,
-  subscriptionProvider,
-  type SubscriptionProviderId,
-} from '@controllers/modelAccess/subscriptionProviders';
-import {
   codingPlanSubscriptionRuntimes,
   type CodingPlanSubscriptionRuntime,
 } from '@model/codingPlanSubscriptions';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
+import {
+  subscriptionAuthStatus,
+  subscriptionProvider,
+  type SubscriptionProviderId,
+} from '@texra/controllers/modelAccess/subscriptionProviders';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {

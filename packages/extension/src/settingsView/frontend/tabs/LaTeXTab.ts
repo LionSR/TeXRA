@@ -10,15 +10,15 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared webview
-import { DocumentsStateKey } from '@shared/settingsView/documentsSettings';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import { TexraStateKey } from '@shared/settingsView/texraSettings';
+import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
+import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import {
   type LatexSettingsStatus,
   type SettingsSectionName,
   DEFAULT_LATEX_SETTINGS_STATUS,
-} from '@shared/settingsView/settingsViewMessages';
+} from '@texra/shared/settingsView/settingsViewMessages';
 
 // Local imports - LaTeX toolchain (install guides + commands)
 import {
@@ -33,7 +33,7 @@ import {
   SCOOP_INSTALL_COMMAND,
   type InstallCommand,
   type OSPlatform,
-} from '@shared/constants/latexToolchain';
+} from '@texra/shared/constants/latexToolchain';
 
 // Local imports - shared webview toolkit
 import {

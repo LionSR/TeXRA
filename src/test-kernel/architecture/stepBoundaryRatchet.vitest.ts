@@ -74,7 +74,7 @@ const RULES: readonly {
       'src/agent/runtime/run/AgentRun.ts',
       'src/tools/pluginCatalog.ts',
       'src/controllers/session/sessionLayer.ts',
-      'src/controllers/settingsView/githubSubscriptions.ts',
+      'packages/texra/src/controllers/settingsView/githubSubscriptions.ts',
       // The availability probes, which run each plugin's probe with its
       // own process services while its layer is up; they pin nothing.
       'src/tools/toolAvailability.ts',

@@ -22,7 +22,7 @@ import {
   USER_ENTRY_PREFIX,
 } from '@cli/tui/ui/glyphs';
 import type { CompactionActivityStatus } from '@shared/runs/compactionActivityProjection';
-import type { TranscriptRow, TranscriptRowKind } from '@ui/transcript';
+import type { TranscriptRow, TranscriptRowKind } from '@shared/transcript';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { transcriptRowBodyLines } from '../render/transcriptRowLines';
 import {

@@ -36,7 +36,7 @@ export interface DeliveryTagEntry {
    * Whether the envelope body is XML-entity-escaped (via `escapeText()` in
    * the producer) and needs `decodeXmlEntities()` before display.
    * `github-webhook-activity` neutralizes embedded tag names instead
-   * (see `wrapWebhookEvent()` in `src/tools/github/formatUtils.ts`) rather
+   * (see `wrapWebhookEvent()` in `packages/texra/src/tools/github/formatUtils.ts`) rather
    * than XML-entity-escaping, so it is not in the escaped subset.
    */
   readonly escaped: boolean;

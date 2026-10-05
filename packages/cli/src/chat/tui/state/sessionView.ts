@@ -17,12 +17,12 @@ import {
   type RunPhase,
   type RunId,
 } from '@shared/schemas';
-import { toSignal, type StreamSignal } from '@shared/signals';
 import type {
   FollowUpHost,
   SessionView,
   RunView,
 } from '@shared/session/sessionView';
+import { toSignal, type StreamSignal } from '@texra/shared/signals';
 
 /** The bound bridge, itself a signal so a computed over the view (the
  *  approval Surface's foreground) re-tracks when a chat session rebinds. */

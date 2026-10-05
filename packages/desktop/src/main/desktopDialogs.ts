@@ -5,9 +5,9 @@
 import { type BrowserWindow, dialog } from 'electron';
 import { Effect } from 'effect';
 
-import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
 import { NotificationFailed, PromptFailed } from '@hosts/uiHosts';
 import { INSTRUCTION_ACTION, type InstructionAction } from '@shared/schemas';
+import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Button labels for the instruction dialog below. Desktop has one settings
@@ -182,7 +182,7 @@ export function createDesktopDialogs(
       Effect.tryPromise({
         try: async () => {
           const { TRANSCRIPT_EXPORT_FORMAT_CHOICES } =
-            await import('@controllers/progressView/exportTranscript');
+            await import('@texra/controllers/progressView/exportTranscript');
           const { response } = await dialog.showMessageBox(window, {
             type: 'question',
             message: 'Export transcript',

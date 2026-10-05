@@ -17,11 +17,7 @@ import ts from 'typescript';
 import tseslint from 'typescript-eslint';
 import { parse as parseYaml } from 'yaml';
 
-import {
-  CORE_QUALITY_APP_PATHS,
-  CORE_QUALITY_DIRS,
-  EFFECT_RUN_ENTRIES,
-} from '../eslint.config.mjs';
+import { CORE_QUALITY_DIRS, EFFECT_RUN_ENTRIES } from '../eslint.config.mjs';
 import { coreEntries } from './core-quality-api-report.mjs';
 import { walkFiles } from './walkFiles.mjs';
 
@@ -117,26 +113,14 @@ export const MEASURED_ONLY = new Set(['decision-codes']);
 const SOURCE_FILE = /\.(?:ts|tsx|mts)$/;
 const NOT_SOURCE = /\.d\.ts$|\.(?:test|vitest|spec)\.tsx?$/;
 
-function appPathMatcher() {
-  const patterns = CORE_QUALITY_APP_PATHS.map((entry) =>
-    entry.includes('*')
-      ? new RegExp(`^${entry.replaceAll('.', '\\.').replaceAll('*', '[^/]*')}$`)
-      : new RegExp(`^${entry.replaceAll('.', '\\.')}(?:/|$)`),
-  );
-  return (file) => patterns.some((pattern) => pattern.test(file));
-}
-
 /** The repo-relative core source files, sorted. */
 function coreFiles(rootDir) {
-  const isAppPath = appPathMatcher();
   return CORE_QUALITY_DIRS.flatMap((dir) =>
     walkFiles(path.join(rootDir, dir), {
       include: (file) => SOURCE_FILE.test(file) && !NOT_SOURCE.test(file),
       prune: (dir) => dir.endsWith('node_modules'),
     }).map(({ relativePath }) => `${dir}/${relativePath}`),
-  )
-    .filter((file) => !isAppPath(file))
-    .toSorted();
+  ).toSorted();
 }
 
 function addSite(byRule, rule, file, line, detail) {

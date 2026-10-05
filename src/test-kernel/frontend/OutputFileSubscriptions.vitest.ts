@@ -8,10 +8,10 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
 import { documentsOutputRow } from '@shared/plugins/documents';
-import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
+import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import type * as VSCode from 'vscode';
 
 const mocks = vi.hoisted(() => ({

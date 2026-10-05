@@ -35,35 +35,35 @@ import {
   handleRunLatexdiff,
 } from '@commands/latex/latexdiffCommands';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
-import type { SessionBackend } from '@controllers/session/sessionBackend';
-import type { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
-import { normalizeMainViewFileExtension } from '@controllers/mainView/MainViewDroppedFilesController';
-import { ChatExportController } from '@controllers/progressView/ChatExportController';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
+import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
+import { normalizeMainViewFileExtension } from '@texra/controllers/mainView/MainViewDroppedFilesController';
+import { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
 import {
   exportRunTranscript,
   TRANSCRIPT_EXPORT_FORMAT_CHOICES,
   type TranscriptExportOpenKind,
-} from '@controllers/progressView/exportTranscript';
-import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
-import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
-import { ApiKeyPromptFailed } from '@controllers/progressView/ProgressApiKeyRetryController';
+} from '@texra/controllers/progressView/exportTranscript';
+import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
+import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
+import { ApiKeyPromptFailed } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import {
   fromHost,
   hostFailure,
   type HostCallFailed,
-} from '@controllers/session/hostCallFailure';
+} from '@texra/controllers/session/hostCallFailure';
 import {
   createHostRunActions,
   type HostRunActionPorts,
-} from '@controllers/session/hostRunActions';
-import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
-import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
+} from '@texra/controllers/session/hostRunActions';
+import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
+import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import {
   handleSharedHostRequest,
   isSharedHostRequest,
   type SharedHostRequestBindings,
   type SharedHostRequestPorts,
-} from '@controllers/session/sharedHostRequests';
+} from '@texra/controllers/session/sharedHostRequests';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
@@ -71,7 +71,6 @@ import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { ExternalOpenFailed } from '@hosts/uiHosts';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { withLogChannel } from '@logger/effectLog';
-import { loadModelOptions } from '@model/setupCredentialAccess';
 import {
   AgentDirectories,
   type StateStore,
@@ -108,13 +107,44 @@ import {
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
 
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import { pathToLocationIn } from '@utils/files/fileLocation';
+import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
+import { launchOnRun } from '@texra/controllers/mainView/backend/MainViewRunLaunchController';
+import { normalizeMainViewFileExtension } from '@texra/controllers/mainView/MainViewDroppedFilesController';
+import { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
+import {
+  exportRunTranscript,
+  TRANSCRIPT_EXPORT_FORMAT_CHOICES,
+  type TranscriptExportOpenKind,
+} from '@texra/controllers/progressView/exportTranscript';
+import { ApiKeyPromptFailed } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
+import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
+import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
+import {
+  fromHost,
+  hostFailure,
+  type HostCallFailed,
+} from '@texra/controllers/session/hostCallFailure';
+import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
+import {
+  createHostRunActions,
+  type HostRunActionPorts,
+} from '@texra/controllers/session/hostRunActions';
+import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
+import {
+  handleSharedHostRequest,
+  isSharedHostRequest,
+  type SharedHostRequestBindings,
+  type SharedHostRequestPorts,
+} from '@texra/controllers/session/sharedHostRequests';
+import { loadModelOptions } from '@texra/model/setupCredentialAccess';
+import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies';
 import {
   locateInWorkspace,
   workspaceRelativePath,
 } from '@utils/files/workspaceFS';
-import { checkCoreDependencies } from '@utils/system/checkCoreDependencies';
+import { pathToLocationIn } from '@utils/files/fileLocation';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getToolDocsCommand } from '@utils/system/toolUtils';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 

@@ -44,8 +44,8 @@ const GUIDANCE_FILES = [
   'src/README.md',
   'src/agent/core/README.md',
   'src/agent/runtime/README.md',
-  'src/replacement/README.md',
-  'src/latex/README.md',
+  'packages/texra/src/replacement/README.md',
+  'packages/texra/src/latex/README.md',
   'docs/README.md',
 ];
 // Standing docs: architecture notes and the published guide. Dated proposals

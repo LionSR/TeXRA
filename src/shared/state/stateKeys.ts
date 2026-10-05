@@ -1,7 +1,7 @@
 /**
  * State storage key enums — vscode-free.
  *
- * Lives in `@shared` so that vscode-free zones (`src/agent/`, `src/latex/`,
+ * Lives in `@shared` so that vscode-free zones (`src/agent/`, `packages/texra/src/latex/`,
  * `src/model/`, `src/tools/`) can name workspace and global state slots via the
  * natural `@shared/state/stateKeys` import path, without any risk of pulling in
  * the VS Code module.

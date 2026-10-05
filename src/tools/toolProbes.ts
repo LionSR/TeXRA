@@ -16,7 +16,7 @@ import {
 } from '@common/errors/errorPredicates';
 import type { Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { SetupPlatform } from '@tools/setup/platform';
+import type { SetupPlatform } from '@texra/tools/setup/platform';
 import { scopedClient } from '@tools/timeouts';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import { isWSL } from '@utils/system/wslDetect';

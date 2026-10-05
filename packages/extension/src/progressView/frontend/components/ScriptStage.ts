@@ -19,13 +19,13 @@ import type { RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import type { Surface, SurfaceRefusal } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { designTokens } from '@ui/styles';
 import {
   SCRIPT_CALL_STATUS_LABEL,
   TALK_TO_AGENT,
   type ScriptCallView,
   type ScriptStageView,
-} from '@ui/transcript';
+} from '@shared/transcript';
+import { designTokens } from '@ui/styles';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { assertNever } from '@utils/core';

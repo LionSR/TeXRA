@@ -31,9 +31,6 @@ import {
   clearTerminalScrollback,
 } from '@cli/tui/terminalCleanup';
 import { cliSecrets } from '@cli/runtime/cliSecrets';
-import { localSessionBackend } from '@controllers/session/sessionBackend';
-import { serviceSessionBackend } from '@controllers/server/serviceBackend';
-import { attachWindowHost } from '@controllers/server/windowHost';
 import { DisposableStore } from '@platform/disposable';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { aggregateId } from '@shared/schemas';
@@ -43,12 +40,15 @@ import {
 } from '@shared/approvalPolicy';
 import type { RunId } from '@shared/schemas';
 import { RUN_PHASE } from '@shared/schemas';
-import { subscribeToSignalChanges } from '@shared/signals';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import {
   isActivePhase,
   isTranscriptSettlementPhase,
 } from '@shared/runs/runStatus';
+import { subscribeToSignalChanges } from '@texra/shared/signals';
+import { attachWindowHost } from '@texra/controllers/server/windowHost';
+import { serviceSessionBackend } from '@texra/controllers/server/serviceBackend';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { serviceAgentRuns } from '../serviceAgentRuns';
 

@@ -3,13 +3,6 @@ import { Cause, Data, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import {
-  subscriptionProvider,
-  type SubscriptionAccount,
-  type SubscriptionProvider,
-  type SubscriptionProviderId,
-  type SubscriptionSignInPresenter,
-} from '@controllers/modelAccess/subscriptionProviders';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
@@ -21,6 +14,13 @@ import { withLogChannel } from '@logger/effectLog';
 import type { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
+import {
+  subscriptionProvider,
+  type SubscriptionAccount,
+  type SubscriptionProvider,
+  type SubscriptionProviderId,
+  type SubscriptionSignInPresenter,
+} from '@texra/controllers/modelAccess/subscriptionProviders';
 import { ensureError } from '@utils/errors/errorMessage';
 import type { HttpClient } from 'effect/http';
 

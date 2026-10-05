@@ -7,7 +7,7 @@ import {
   loadMonaco,
   monacoThemeForHostTheme,
   type MonacoModule,
-} from '@shared/monaco/monacoLoader';
+} from '@texra/shared/monaco/monacoLoader';
 import { commonViewStyles, designTokens } from '@ui/styles';
 
 // Local imports - shared Web Awesome helpers

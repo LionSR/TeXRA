@@ -17,11 +17,12 @@ export const REPO_ROOT = resolve(
   '../../..',
 );
 
-/** The four host production roots most architecture ratchets scan. */
+/** The host production roots (the hosts, the app and `src`) most architecture ratchets scan. */
 export const ALL_HOST_PRODUCTION_ROOTS = Object.freeze([
   'packages/cli/src',
   'packages/desktop/src',
   'packages/extension/src',
+  'packages/texra/src',
   'src',
 ] as const);
 

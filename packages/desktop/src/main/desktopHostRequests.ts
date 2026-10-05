@@ -9,27 +9,6 @@ import path from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, SubscriptionRef } from 'effect';
 import { presentRunFailure, type SessionHandle } from '@agent/runtime';
-import { localSessionBackend } from '@controllers/session/sessionBackend';
-import type { ChatExportController } from '@controllers/progressView/ChatExportController';
-import { exportRunTranscript } from '@controllers/progressView/exportTranscript';
-import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
-import { ApiKeyPromptFailed } from '@controllers/progressView/ProgressApiKeyRetryController';
-import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
-import { fromHost, hostFailure } from '@controllers/session/hostCallFailure';
-import {
-  createHostRunActions,
-  type WorkflowDiffRequest,
-  type WorkflowFileOperationRequest,
-} from '@controllers/session/hostRunActions';
-import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
-import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
-import {
-  handleSharedHostRequest,
-  isSharedHostRequest,
-  type SharedHostRequestBindings,
-  type SharedHostRequestPorts,
-} from '@controllers/session/sharedHostRequests';
-import { listWorkspaceFilesOfType } from '@controllers/session/workspaceFileOptions';
 import { ExternalOpenFailed } from '@hosts/uiHosts';
 import {
   latexdiffPackMessage,
@@ -42,7 +21,6 @@ import {
 } from '@housekeeping/runDirOps';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { withLogChannel } from '@logger/effectLog';
-import { loadModelOptions } from '@model/setupCredentialAccess';
 import type { AgentDirectoriesFailed } from '@platform/interfaces';
 import {
   withProcessServices,
@@ -70,6 +48,31 @@ import type {
   SurfaceActionMessage,
 } from '@shared/session/sessionFrames';
 
+import type { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
+import { exportRunTranscript } from '@texra/controllers/progressView/exportTranscript';
+import { ApiKeyPromptFailed } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
+import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
+import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
+import {
+  fromHost,
+  hostFailure,
+} from '@texra/controllers/session/hostCallFailure';
+import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
+import {
+  createHostRunActions,
+  type WorkflowDiffRequest,
+  type WorkflowFileOperationRequest,
+} from '@texra/controllers/session/hostRunActions';
+import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
+import {
+  handleSharedHostRequest,
+  isSharedHostRequest,
+  type SharedHostRequestBindings,
+  type SharedHostRequestPorts,
+} from '@texra/controllers/session/sharedHostRequests';
+import { listWorkspaceFilesOfType } from '@texra/controllers/session/workspaceFileOptions';
+import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   createExternalLocation,
@@ -355,7 +358,7 @@ export function createDesktopHostRequests(
       Effect.tryPromise({
         try: async () => {
           const { ChatExportController: Controller } =
-            await import('@controllers/progressView/ChatExportController');
+            await import('@texra/controllers/progressView/ChatExportController');
           return new Controller({ session, latexPreamble });
         },
         catch: (cause) =>

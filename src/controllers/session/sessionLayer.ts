@@ -113,20 +113,20 @@ import {
   settingsCatalog,
   type StateSettingEntry,
 } from '@shared/state/stateSettings';
+import { SetupPlatform } from '@texra/tools/setup/platform';
+import { inquiryRecordsLayer } from '@texra/controllers/session/inquiryRecords';
+import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
 import { releaseRunResources } from '@tools/approval';
 import { LiveTools } from '@tools/liveTools';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import type { Plugin } from '@tools/plugins';
 import { drainPlugins, sessionPluginLayers } from '@tools/pluginLayers';
-import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { followInterruptedTasks } from '@tools/interruptedTasks';
 import { processEnvConfigLayer } from '@utils/system/envFlags';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { inquiryRecordsLayer } from './inquiryRecords';
-import { updateCheckRecordsLayer } from './updateCheckRecords';
 import { databaseLayer } from './Database';
 import { projectDatabaseLayer } from './projectDatabase';
 import { collectPendingDeletions } from './deletionCleanup';
@@ -1016,7 +1016,7 @@ interface ProcessRuntimeOptions {
    * discovery discovers nothing and binding an editor model fails.
    */
   readonly languageModel: LanguageModelPort;
-  readonly setup?: SetupPlatformShape;
+  readonly setup?: Context.Service.Shape<typeof SetupPlatform>;
   /** The dependency probes every tool gate and Tools dashboard read: absent,
    *  every host's; a test harness passes one that starts no probe. */
   readonly toolAvailability?: typeof toolAvailabilityLayer;

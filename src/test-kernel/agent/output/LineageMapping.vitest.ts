@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { traceFileLineage } from '@agent/output/lineageMapping';
-import { createOutputState, ensureRoundData } from '@agent/output/outputState';
 import { fileLocationDisplayPath, type RunId } from '@shared/schemas';
+import { traceFileLineage } from '@texra/agent/output/lineageMapping';
+import {
+  createOutputState,
+  ensureRoundData,
+} from '@texra/agent/output/outputState';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 
 describe('workflow output lineage mapping', () => {

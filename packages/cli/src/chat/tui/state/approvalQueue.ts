@@ -12,7 +12,6 @@
 import { computed, signal } from '@lit-labs/signals';
 import { Cause, Effect } from 'effect';
 
-import type { SessionBackend } from '@controllers/session/sessionBackend';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type {
@@ -28,6 +27,7 @@ import {
 import type { HostRequest } from '@shared/session/hostRequest';
 import { attentionOf, type SessionView } from '@shared/session/sessionView';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { assertNever } from '@utils/core';
 
 import { registerCliStateResetHook, sessionRunIds } from './cliState';
