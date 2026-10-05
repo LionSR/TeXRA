@@ -58,7 +58,6 @@ import { faFileExport } from '@fortawesome/free-solid-svg-icons/faFileExport';
 import { faFileLines } from '@fortawesome/free-solid-svg-icons/faFileLines';
 import { faFilePdf } from '@fortawesome/free-solid-svg-icons/faFilePdf';
 import { faFish } from '@fortawesome/free-solid-svg-icons/faFish';
-import { faFlask } from '@fortawesome/free-solid-svg-icons/faFlask';
 import { faFloppyDisk } from '@fortawesome/free-solid-svg-icons/faFloppyDisk';
 import { faFolder } from '@fortawesome/free-solid-svg-icons/faFolder';
 import { faFolderOpen } from '@fortawesome/free-solid-svg-icons/faFolderOpen';
@@ -67,7 +66,6 @@ import { faForwardStep } from '@fortawesome/free-solid-svg-icons/faForwardStep';
 import { faGear } from '@fortawesome/free-solid-svg-icons/faGear';
 import { faGem } from '@fortawesome/free-solid-svg-icons/faGem';
 import { faGlobe } from '@fortawesome/free-solid-svg-icons/faGlobe';
-import { faGraduationCap } from '@fortawesome/free-solid-svg-icons/faGraduationCap';
 import { faHashtag } from '@fortawesome/free-solid-svg-icons/faHashtag';
 import { faHexagon } from '@fortawesome/free-solid-svg-icons/faHexagon';
 import { faImage } from '@fortawesome/free-solid-svg-icons/faImage';
@@ -90,7 +88,6 @@ import { faPlay } from '@fortawesome/free-solid-svg-icons/faPlay';
 import { faPlus } from '@fortawesome/free-solid-svg-icons/faPlus';
 import { faPlusMinus } from '@fortawesome/free-solid-svg-icons/faPlusMinus';
 import { faReply } from '@fortawesome/free-solid-svg-icons/faReply';
-import { faRightFromBracket } from '@fortawesome/free-solid-svg-icons/faRightFromBracket';
 import { faRightToBracket } from '@fortawesome/free-solid-svg-icons/faRightToBracket';
 import { faRobot } from '@fortawesome/free-solid-svg-icons/faRobot';
 import { faRocket } from '@fortawesome/free-solid-svg-icons/faRocket';
@@ -99,7 +96,6 @@ import { faSatellite } from '@fortawesome/free-solid-svg-icons/faSatellite';
 import { faScrewdriverWrench } from '@fortawesome/free-solid-svg-icons/faScrewdriverWrench';
 import { faServer } from '@fortawesome/free-solid-svg-icons/faServer';
 import { faShield } from '@fortawesome/free-solid-svg-icons/faShield';
-import { faSpinner } from '@fortawesome/free-solid-svg-icons/faSpinner';
 import { faStar } from '@fortawesome/free-solid-svg-icons/faStar';
 import { faTerminal } from '@fortawesome/free-solid-svg-icons/faTerminal';
 import { faThumbtack } from '@fortawesome/free-solid-svg-icons/faThumbtack';
@@ -207,7 +203,6 @@ const icons = {
   'file-lines': faFileLines,
   'file-pdf': faFilePdf,
   fish: faFish,
-  flask: faFlask,
   'floppy-disk': faFloppyDisk,
   folder: faFolder,
   'folder-open': faFolderOpen,
@@ -216,7 +211,6 @@ const icons = {
   gear: faGear,
   gem: faGem,
   globe: faGlobe,
-  'graduation-cap': faGraduationCap,
   hashtag: faHashtag,
   hexagon: faHexagon,
   image: faImage,
@@ -239,7 +233,6 @@ const icons = {
   plus: faPlus,
   'plus-minus': faPlusMinus,
   reply: faReply,
-  'right-from-bracket': faRightFromBracket,
   'right-to-bracket': faRightToBracket,
   robot: faRobot,
   rocket: faRocket,
@@ -248,7 +241,6 @@ const icons = {
   'screwdriver-wrench': faScrewdriverWrench,
   server: faServer,
   shield: faShield,
-  spinner: faSpinner,
   star: faStar,
   terminal: faTerminal,
   thumbtack: faThumbtack,

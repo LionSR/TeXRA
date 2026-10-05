@@ -12,7 +12,6 @@ import {
   type CheckboxValues,
   type DocumentFileType,
   type FileSelectConfig,
-  type SessionType,
 } from '@shared/schemas';
 import type { SurfaceAction } from '@shared/session/surface';
 import type { TeXRAIconName } from '@shared/iconNames';
@@ -66,10 +65,6 @@ export class FileSelectGroup extends LitElement {
   /** The tool and auto-extract toggles (`Surface.launch`). */
   @property({ attribute: false }) checkboxValues: CheckboxValues =
     ToolConfigFieldsSchema.parse({});
-
-  /** The launch mode: only a document task reads the tool and
-   *  auto-extract toggles. */
-  @property() sessionType: SessionType = 'task';
 
   @query('.multiple-files-list')
   private fileListElement?: HTMLElement;
@@ -239,10 +234,9 @@ export class FileSelectGroup extends LitElement {
     });
   }
 
-  /** Only a document task reads the tool and auto-extract toggles, so a
-   *  chat launch shows neither menu. */
+  /** The group renders only for a document task (ProgressApp's file
+   *  section), the one launch that reads these toggles. */
   private renderConfigMenu(): TemplateResult | typeof nothing {
-    if (this.sessionType !== 'task') return nothing;
     if (this.config.toolConfig === 'tool') return this.renderToolConfigMenu();
     if (this.config.toolConfig === 'autoExtract') {
       return this.renderAutoExtractMenu();
