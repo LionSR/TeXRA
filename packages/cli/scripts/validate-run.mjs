@@ -1050,6 +1050,7 @@ prompt: |
       let typed = false;
       let from = 0;
       let exiting = false;
+      let exitSent = false;
       const result = await runTexraPty(['resume', ...args], {
         label: `texra resume ${args.join(' ')}`,
         cwd: work,
@@ -1077,11 +1078,18 @@ prompt: |
             from += plain.indexOf(exchange.reply) + exchange.reply.length;
             at += 1;
             typed = false;
-            if (at === exchanges.length) {
-              exiting = true;
-              pty.setTimer(() => pty.write(ETX), 800);
-              pty.setTimer(() => pty.write(ETX), 2_000);
-            }
+            if (at === exchanges.length) exiting = true;
+          }
+          // Exit once the last turn is over: a reply can show before its
+          // turn ends, and a Ctrl-C then stops the turn instead.
+          if (
+            exiting &&
+            !exitSent &&
+            stripVTControlCharacters(pty.output).slice(from).includes('Idle')
+          ) {
+            exitSent = true;
+            pty.setTimer(() => pty.write(ETX), 800);
+            pty.setTimer(() => pty.write(ETX), 2_000);
           }
         },
       });

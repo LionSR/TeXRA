@@ -211,7 +211,7 @@ describe('CLI TUI session run state', () => {
       seedView(familyView({ [root]: { status: RUN_PHASE.WAITING } }));
       const session = new TuiSession(() => ({}) as never);
       if (runSettled) session.markRunPending(runSettled);
-      if (runCompleted) session.markRunCompleted();
+      if (runCompleted && runSettled) session.markRunCompleted(runSettled);
       session.runId = runId;
       expect(session.isResumableIdle()).toBe(expected);
     },
@@ -222,7 +222,10 @@ describe('CLI TUI session run state', () => {
     const session = new TuiSession(() => undefined);
     session.runId = root;
     session.runExitCode = CliExitCode.AgentError;
-    session.markRunCompleted();
+    const earlier = Effect.void;
+    session.markRunPending(earlier);
+    session.markRunCompleted(earlier);
+    session.runId = root;
     session.stopRequested = true;
 
     session.markRunPending(startupSettled);
@@ -239,7 +242,8 @@ describe('CLI TUI session run state', () => {
 
   it('publishes the run-control run id from the session itself', () => {
     const session = new TuiSession(() => undefined);
-    session.markRunPending(Effect.never);
+    const claim = Effect.never;
+    session.markRunPending(claim);
     expect(runStopFacts.get().runId).toBeUndefined();
 
     // The claim lives in the signal renders read, so no write can leave the
@@ -249,7 +253,7 @@ describe('CLI TUI session run state', () => {
     expect(runStopFacts.get().runId).toBe(root);
     expect(runStopFacts.get().runPending).toBe(true);
 
-    session.markRunCompleted();
+    session.markRunCompleted(claim);
 
     expect(runStopFacts.get().runId).toBe(root);
     expect(runStopFacts.get().runPending).toBe(false);
@@ -257,8 +261,9 @@ describe('CLI TUI session run state', () => {
 
   it('clears stale resume ids when clearing chat session run state', () => {
     const session = new TuiSession(() => undefined);
-    session.markRunPending(Effect.void);
-    session.markRunCompleted();
+    const claim = Effect.void;
+    session.markRunPending(claim);
+    session.markRunCompleted(claim);
     session.runId = root;
     session.interruptedRunId = root;
     session.runExitCode = CliExitCode.Interrupted;

@@ -177,7 +177,8 @@ interface SessionFixture {
 function makeSession(overrides: SessionFixture = {}): TuiSession {
   const session = new TuiSession(() => undefined);
   if (overrides.runSettled) session.markRunPending(overrides.runSettled);
-  if (overrides.runCompleted) session.markRunCompleted();
+  if (overrides.runCompleted && overrides.runSettled)
+    session.markRunCompleted(overrides.runSettled);
   if (overrides.runId) session.runId = overrides.runId;
   session.interruptedRunId = overrides.interruptedRunId;
   session.stopRequested = overrides.stopRequested ?? false;
@@ -1169,7 +1170,7 @@ describe('createChatSessionController', () => {
     await runSubmit(ctrl, 'And this one.');
     expect(sent).toEqual([]);
 
-    session.markRunCompleted();
+    session.markRunCompleted(teardown.settled);
     await teardown.settle();
     await vi.waitFor(() =>
       expect(sent).toEqual([

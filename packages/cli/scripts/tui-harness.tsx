@@ -1446,7 +1446,8 @@ if (SHOW_AGENT_PROPOSAL) {
 
 function markHarnessInterrupted(): void {
   canInterrupt = false;
-  harnessSession.markRunCompleted();
+  const claim = harnessSession.runSettled;
+  if (claim) harnessSession.markRunCompleted(claim);
   cancelHarnessRequests('Session interrupted.');
   appendHarnessAssistantTranscript(
     'Harness interrupt requested.',

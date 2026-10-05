@@ -105,8 +105,20 @@ export class TuiSession {
     this.stopRequested = false;
   }
 
-  markRunCompleted(): void {
-    rootRunClaim.set({ ...rootRunClaim.get(), runCompleted: true });
+  /** The exit code a claim's run ends with, while the slot still holds that
+   *  claim: a run it replaced does not set the chat's exit. */
+  settleExitCode(runSettled: RootRunSettled, code: CliExitCode): void {
+    if (rootRunClaim.get().runSettled === runSettled) this.runExitCode = code;
+  }
+
+  /** The claim `runSettled` belongs to is over. A claim the slot no longer
+   *  holds is left alone: a chain that settles after the slot moved on (a
+   *  resume taken up before the run it replaced finished settling) must not
+   *  free the claim that replaced it. */
+  markRunCompleted(runSettled: RootRunSettled): void {
+    const claim = rootRunClaim.get();
+    if (claim.runSettled !== runSettled) return;
+    rootRunClaim.set({ ...claim, runCompleted: true });
   }
 
   /**
