@@ -137,7 +137,7 @@
     "image-size": "catalog:",
     "ipaddr.js": "catalog:",
     "is-wsl": "catalog:",
-    "katex": "^0.18.9",
+    "katex": "^0.19.0",
     "lit": "^3.3.3",
     "llm-zoo": "catalog:",
     "lru-cache": "catalog:",
