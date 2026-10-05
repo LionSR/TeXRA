@@ -40,7 +40,6 @@
   "packages/harness/src/shared/session/sessionView.ts": 473,
   "packages/harness/src/shared/session/surface.ts": 494,
   "packages/harness/src/shared/session/transcriptState.ts": 429,
-  "packages/harness/src/tools/approval/toolEditApproval.ts": 406,
   "packages/harness/src/tools/bash.ts": 568,
   "packages/harness/src/tools/delegation/AgentTool.ts": 759,
   "packages/harness/src/tools/delegation/inBandSubagentRun.ts": 483,

@@ -24,7 +24,6 @@ const CHANNEL = 'execUtils';
 /** SIGTERM to SIGKILL escalation for every teardown the scope runs. */
 const FORCE_KILL_AFTER = Duration.seconds(5);
 const DEFAULT_MAX_BUFFER = 100_000_000;
-const MAX_LOGGED_STDERR = 150;
 /** The sentinel prefixed to a POSIX shell's script, reading the lifeline on
  *  fd 3. On its own line, so the shell's error messages quote only the
  *  command. */
@@ -81,23 +80,8 @@ function resultFromProcessOutput(
   };
 }
 
-/** The debug line that reports a command's stderr, or undefined when none. */
-function commandStderrLogLine(
-  stderr: string | null | undefined,
-  truncate = false,
-): string | undefined {
-  const normalized = normalizeOutput(stderr);
-  if (!normalized) return undefined;
-  const logged =
-    truncate && normalized.length > MAX_LOGGED_STDERR
-      ? `...${normalized.slice(-MAX_LOGGED_STDERR)}`
-      : normalized;
-  return `Command stderr: ${logged}`;
-}
-
 export interface ExecuteCommandBaseOptions {
   readonly channel?: string;
-  readonly truncate?: boolean;
   readonly env?: Record<string, string>;
   /** Milliseconds; undefined or `<= 0` sets no deadline. */
   readonly timeout?: number;
@@ -462,11 +446,10 @@ export const executeCommand = Effect.fn('executeCommand')(function* (
   );
   if (outcome._tag === 'SpawnFailed') {
     yield* logError(result.stderr);
-  } else if (!options.quiet) {
-    const stderrLine = commandStderrLogLine(result.stderr, options.truncate);
-    if (stderrLine !== undefined) {
-      yield* Effect.logDebug(stderrLine).pipe(withLogChannel(channel));
-    }
+  } else if (!options.quiet && result.stderr) {
+    yield* Effect.logDebug(`Command stderr: ${result.stderr}`).pipe(
+      withLogChannel(channel),
+    );
   }
   return result;
 });

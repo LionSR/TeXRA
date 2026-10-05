@@ -10,7 +10,7 @@ import type {
   NonRegexReplacementCategory,
   RegexReplacementCategory,
 } from '@texra/shared/constants/replacementCategories';
-import { assertNever } from '@utils/core';
+import { assertNever, ensureArray } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -324,11 +324,7 @@ export function applyReplacements(
   // Apply Unicode replacements in math environments first.
   let result = replaceMathUnicode(text);
 
-  const categories = Array.isArray(replacements)
-    ? replacements
-    : [replacements];
-
-  for (const category of categories) {
+  for (const category of ensureArray(replacements)) {
     if (category.isRegex) {
       for (const [pattern, repl] of Object.entries(category.patterns)) {
         const current = result;

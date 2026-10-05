@@ -158,23 +158,6 @@ export function countLineChanges(hunks: DiffHunks['hunks']): LineChanges {
 }
 
 /**
- * Added/removed line counts for an edit, folded from the very hunks the host
- * renders underneath them — the CLI card's `+N / −M` header and the diff body
- * below it are now two readings of one computation, not two engines.
- * The approval hosts call this (and {@link firstChangedLine}) on the pair
- * {@link requestToolEditApproval} already diffed and reported a timeout for,
- * so these re-readings do not report it again. A caller diffing a pair of its
- * own diffs it with `buildDiffHunks`, reports the timeout, and folds the hunks
- * with {@link countLineChanges}.
- */
-export function computeLineChangeSummary(
-  original: string,
-  proposed: string,
-): LineChanges {
-  return countLineChanges(diffEdit(original, proposed).hunks);
-}
-
-/**
  * The 0-based line number in the proposed text where the first change occurs,
  * used to scroll a host's diff view to it. Returns null if the content is
  * identical.
