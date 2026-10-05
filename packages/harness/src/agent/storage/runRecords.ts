@@ -240,21 +240,25 @@ function latestOfType<T extends SessionEvent['type']>(
   );
 }
 
-/** `own` with the spend of `runId`'s children: a document task's
- *  revisions are its children's runs, which hold what it cost. */
-export const withChildSpend = (
+/** `end` with its run's children's spend added to its own: a document
+ *  task's revisions are its children's runs, which hold what it cost. */
+export const withChildSpend = <
+  T extends { readonly runId: RunId; readonly usage?: RunUsageTotals },
+>(
   session: SessionHandle,
-  runId: RunId,
-  own: RunUsageTotals | undefined,
-): Effect.Effect<RunUsageTotals, DatabaseReadFailed> =>
-  Effect.forEach(session.runView(runId)?.childIds ?? [], (child) =>
+  end: T,
+): Effect.Effect<T & { readonly usage: RunUsageTotals }, DatabaseReadFailed> =>
+  Effect.forEach(session.runView(end.runId)?.childIds ?? [], (child) =>
     getRunRecords(session, child).readRunEnd(),
   ).pipe(
-    Effect.map((ends) =>
-      sumRunUsageTotals(
-        [own, ...ends.map((end) => end?.usage)].filter((u) => u !== undefined),
+    Effect.map((ends) => ({
+      ...end,
+      usage: sumRunUsageTotals(
+        [end.usage, ...ends.map((child) => child?.usage)].filter(
+          (u) => u !== undefined,
+        ),
       ),
-    ),
+    })),
   );
 
 /** Native access to named run metadata, with no file-backed read arm. */
@@ -287,7 +291,7 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
       const config = latestOfType(rows, id, 'run.config')?.config;
       const usage =
         config && isDocumentTaskConfig(config)
-          ? yield* withChildSpend(session, runId, own)
+          ? (yield* withChildSpend(session, { runId, usage: own })).usage
           : own;
       const { outcome, error, output } = end;
       return {

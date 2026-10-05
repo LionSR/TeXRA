@@ -35,6 +35,7 @@ import {
   type InquiryThreadSummary,
   type ToolResult,
 } from '@shared/schemas';
+import { inquiryRecordsLayer } from '@texra/tools/inquiry/inquiryRecords';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
@@ -221,7 +222,8 @@ function executeExternalInquiryTool(input: InquiryInput) {
       case 'list':
         return yield* executeList(input, runId);
     }
-  });
+    // The threads live on the process's global root.
+  }).pipe(Effect.provide(inquiryRecordsLayer));
 }
 
 function executeAsk(

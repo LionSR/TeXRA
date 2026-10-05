@@ -18,7 +18,7 @@
 // (`nodeSpawnerLayer`).
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import * as NodePath from '@effect/platform-node/NodePath';
-import { ConfigProvider, Effect, RcMap } from 'effect';
+import { ConfigProvider, Effect, Layer, RcMap } from 'effect';
 import { afterEach, beforeEach } from 'vitest';
 
 import { AgentEngine } from '@agent/runtime/AgentEngine';
@@ -41,14 +41,15 @@ import {
   type Database,
   type DatabaseOpenFailed,
 } from '@shared/session/database';
-import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
-import { InquiryRecords } from '@shared/plugins/externalInquiry';
 import { UsageLog } from '@shared/usageLog';
 import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
 } from '@texra/tools/lean/leanLanguageServices';
-import type { SetupPlatformShape } from '@texra/tools/setup/platform';
+import {
+  SetupPlatform,
+  type SetupPlatformShape,
+} from '@texra/tools/setup/platform';
 import { goalContinuation } from '@tools/goal/goalContinuation';
 import { toolTableLayer } from '@tools/liveTools';
 import { toolTable } from '@tools/toolTable';
@@ -61,7 +62,6 @@ import {
   type FakeProcessPorts,
   type FakePlatformOptions,
 } from './FakePlatform';
-import type { Layer } from 'effect';
 
 /**
  * A host's process ports and the workspace roots installed beside them, plus the
@@ -175,9 +175,9 @@ function installedSetup(): SetupPlatformShape {
 }
 
 /**
- * The `SetupPlatform` service of every test runtime: each member reads the
- * installed host's `setup` when called, so a suite that swaps hosts per test
- * swaps setup platforms with them.
+ * The setup platform of every test's TeXRA plugin list: each member reads
+ * the installed host's `setup` when called, so a suite that swaps hosts per
+ * test swaps setup platforms with them.
  */
 export const fakeSetupPlatform: SetupPlatformShape = {
   get commands() {
@@ -190,6 +190,13 @@ export const fakeSetupPlatform: SetupPlatformShape = {
     return installedSetup().terminal;
   },
 };
+
+/** `layer` with the setup plugin's service over the installed host's setup
+ *  platform, for a setup tool called outside a run's step. */
+export const withSetup = <A, E, R>(
+  layer: Layer.Layer<A, E, R>,
+): Layer.Layer<A | SetupPlatform, E, R> =>
+  Layer.merge(layer, SetupPlatform.layer(fakeSetupPlatform));
 
 /**
  * The `Secrets` and `AppState` services of every test runtime, in the shape
@@ -282,12 +289,11 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   const [
     { initTestWorkspaceRoots },
     { initTestProcessRuntime, tryTestProcessRuntime },
-    { Layer, ManagedRuntime },
+    { ManagedRuntime },
     { testHttpClientLayer },
     { Secrets },
     { AgentDirectories, AppState },
     { LanguageModel },
-    { SetupPlatform },
     { unprobedToolAvailability },
   ] = await Promise.all([
     import('@test/support/testWorkspaceRoots'),
@@ -297,7 +303,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     import('@platform/secrets'),
     import('@platform/interfaces'),
     import('@platform/languageModel'),
-    import('@texra/tools/setup/platform'),
     import('./toolAvailabilityTestLayer'),
   ]);
   current = host;
@@ -320,7 +325,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // The process environment, hermetic: the installed host's `env`, never
     // the developer's shell.
     ConfigProvider.layer(ConfigProvider.fromEnvRecord(harnessEnv)),
-    Layer.mock(UpdateCheckRecords, {}),
     // A wake resumes as in production. The module is read per call, so a
     // suite's own mock or spy of it is the resume the wake reaches.
     Layer.mock(AgentEngine, {
@@ -370,7 +374,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
           ),
       }),
     ),
-    Layer.mock(InquiryRecords, {}),
     // The Lean plugin's port, which a step serves its tools; a suite that
     // exercises a Lean tool provides its own innermost.
     // The run-end stop is absent, as on a host whose Lean integration owns
@@ -380,7 +383,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     AppState.layer(fakeHostAppState),
     LanguageModel.layer(fakeHostLanguageModel),
     AgentDirectories.layer(fakeHostAgentDirectories),
-    SetupPlatform.layer(fakeSetupPlatform),
     unprobedToolAvailability,
     // The cross-workspace storage view the process runtime serves, over the
     // installed host's global root. A suite that exercises it directly

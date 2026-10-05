@@ -3,7 +3,7 @@
  *
  * The model-facing tool is named `inquiry`; these schemas share its plain
  * `Inquiry…` vocabulary. The canonical storage implementation lives in
- * `packages/texra/src/controllers/session/inquiryRecords.ts`.
+ * `packages/texra/src/tools/inquiry/inquiryRecords.ts`.
  */
 import { z } from 'zod';
 

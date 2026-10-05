@@ -50,7 +50,7 @@ import { hasExtension } from '@utils/core/pathCore';
 import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 import {
-  latexRecommendedStatus,
+  latexEditorStatus,
   vscodeLatexSettingsHandlers,
 } from './handlers/latexSettingsHandlers';
 
@@ -196,7 +196,7 @@ export class SettingsViewMessageHandler {
             terminal.show();
             terminal.sendText(command);
           }),
-        latexRecommendedStatus,
+        latexEditorStatus,
         requiresOpenWorkspace: () => !session.roots.workspace,
       },
     });

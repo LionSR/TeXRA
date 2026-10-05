@@ -33,6 +33,7 @@ import type {
   PluginHold,
   ProcessPluginLayer,
   PromptSection,
+  RequestDecisionHook,
   SessionPluginLayer,
 } from '@tools/toolTable';
 
@@ -79,6 +80,9 @@ export interface Plugin {
   /** Session-lifetime services, one per open session, up while the plugin
    *  is switched on or a step of that session pins it. */
   readonly sessionLayer?: SessionPluginLayer;
+  /** Its side of a decision on a pending request of the kind it owns, run
+   *  whether or not it is switched on: the request outlives the switch. */
+  readonly decision?: RequestDecisionHook;
 }
 
 /**

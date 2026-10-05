@@ -109,13 +109,13 @@ import {
 } from '@texra/controllers/session/sharedHostRequests';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies';
+import { getToolDocsCommand } from '@texra/utils/system/toolChecks';
 import {
   locateInWorkspace,
   workspaceRelativePath,
 } from '@utils/files/workspaceFS';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { getToolDocsCommand } from '@utils/system/toolUtils';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const CHANNEL = 'ExtensionHostRequests';

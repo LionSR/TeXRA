@@ -2,10 +2,10 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { documentTaskConfig } from '@agent/runtime';
 import { getHelperModelName, type SessionHandle } from '@agent/runtime';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 
 const CHANNEL = 'MergeCommands';
 

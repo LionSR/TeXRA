@@ -19,7 +19,12 @@ import type { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import type { AppState, ConfigProvider } from '@platform/interfaces';
-import type { RunId } from '@shared/schemas';
+import type {
+  PermissionPayload,
+  RequestDecision,
+  RunId,
+} from '@shared/schemas';
+import type { GlobalDatabase } from '@shared/session/database';
 import type { RunState } from '@shared/session/runStateFold';
 import type { LiveTools } from '@tools/liveTools';
 import type { Plugin } from '@tools/plugins';
@@ -174,6 +179,23 @@ export type PromptSection = (ctx: {
   readonly config: ConfigProvider;
 }) => string;
 
+/**
+ * A plugin's side of a decision on a pending request of the kind it owns
+ * (the external inquiry's answer, recorded on its cross-project thread). The
+ * session runs it before the decision's row commits, under the request's
+ * decision lane, so a process that exits in between leaves the request
+ * pending and answerable rather than settled with nothing recorded.
+ */
+export interface RequestDecisionHook {
+  /** The request kind whose decisions this plugin records. */
+  readonly kind: PermissionPayload['kind'];
+  readonly record: (request: {
+    readonly payload: PermissionPayload;
+    readonly decision: RequestDecision;
+    readonly session: SessionHandle;
+  }) => Effect.Effect<void, Error, GlobalDatabase>;
+}
+
 /** The process's plugins by plugin id: what each contributes (its tools,
  *  continuation, prompt section and layers) is read off its value. */
 export interface ToolTable {
@@ -181,19 +203,22 @@ export interface ToolTable {
   readonly entries: ReadonlyMap<string, Plugin>;
   /** The tool registered under `name` in any plugin. */
   readonly get: (name: string) => ITool | undefined;
+  /** Each request kind's decision hook, from the plugin that owns it. */
+  readonly decisions: ReadonlyMap<string, RequestDecisionHook>;
 }
 
 /**
  * The table over `plugins`, which the app lists in order. A list that
  * spells an id other than lowercase letters, digits and dashes, repeats a
  * plugin id or a tool name, claims the parked runs'
- * continuation twice, or gives a switch to a plugin with no availability
+ * continuation or one request kind's decisions twice, or gives a switch to a plugin with no availability
  * probe is a defect of the list, refused when it is built.
  */
 export function toolTable(plugins: readonly Plugin[]): ToolTable {
   const entries = new Map<string, Plugin>();
   const byName = new Map<string, ITool>();
   let continued: string | null = null;
+  const decisions = new Map<string, RequestDecisionHook>();
   const refuse = (reason: string): never => {
     throw new Error(`The plugin list is not valid: ${reason}`);
   };
@@ -218,10 +243,17 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
         );
       continued = plugin.id;
     }
+    if (plugin.decision !== undefined) {
+      if (decisions.has(plugin.decision.kind))
+        refuse(
+          `plugin ${plugin.id} records ${plugin.decision.kind} decisions, which another plugin already does.`,
+        );
+      decisions.set(plugin.decision.kind, plugin.decision);
+    }
     if (plugin.availability === undefined && plugin.toggle !== undefined)
       refuse(`plugin ${plugin.id} has a switch but no availability probe.`);
   }
-  return { entries, get: (name) => byName.get(name) };
+  return { entries, get: (name) => byName.get(name), decisions };
 }
 
 /** The process's plugin table, which every run's offered tools come from. */

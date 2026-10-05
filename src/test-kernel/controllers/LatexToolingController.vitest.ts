@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
@@ -12,7 +12,6 @@ import {
   HOMEBREW_INSTALL_COMMAND,
   normalizePlatform,
 } from '@texra/shared/constants/latexToolchain';
-import { SetupPlatform } from '@texra/tools/setup/platform';
 
 /** The probes the status reads, doubled so no tool is spawned. */
 const probes = vi.hoisted(() => ({
@@ -20,19 +19,19 @@ const probes = vi.hoisted(() => ({
   checkToolInstalled: vi.fn<(tool: string) => boolean>(),
 }));
 
-vi.mock('@utils/system/toolUtils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@utils/system/toolUtils')>()),
+vi.mock('@texra/utils/system/toolChecks', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@texra/utils/system/toolChecks')>()),
   checkToolInstalled: (tool: string) =>
     Effect.sync(() => probes.checkToolInstalled(tool)),
+}));
+vi.mock('@utils/system/toolUtils', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@utils/system/toolUtils')>()),
   detectPackageManager: () => null,
 }));
 vi.mock('@utils/system/binaryResolver', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@utils/system/binaryResolver')>()),
   findToolInCommonPaths: () => Effect.succeed(null),
 }));
-
-/** A host with no extension surface; the spawner is mocked out above. */
-const layer = Layer.merge(nodeSpawnerLayer, SetupPlatform.layer({}));
 
 describe('LatexToolingController', () => {
   beforeEach(() => {
@@ -52,14 +51,13 @@ describe('LatexToolingController', () => {
         const status = yield* detectLatexSettingsStatus({
           outDir: false,
           autoRevealExclude: false,
+          latexWorkshopInstalled: false,
         });
 
         expect(status.texDistributionInstalled).toBe(true);
         expect(status.latexindentInstalled).toBe(false);
         expect(status.imageProcessingInstalled).toBe(false);
-        // No extension surface on this host.
-        expect(status.latexWorkshopInstalled).toBe(false);
-      }).pipe(Effect.provide(layer)),
+      }).pipe(Effect.provide(nodeSpawnerLayer)),
   );
 
   it.effect('falls back to defaults when detection fails', () =>
@@ -72,12 +70,13 @@ describe('LatexToolingController', () => {
         yield* detectLatexSettingsStatus({
           outDir: true,
           autoRevealExclude: true,
+          latexWorkshopInstalled: false,
         }),
       ).toStrictEqual({
         ...DEFAULT_LATEX_SETTINGS_STATUS,
         platform: normalizePlatform(process.platform),
       });
-    }).pipe(Effect.provide(layer)),
+    }).pipe(Effect.provide(nodeSpawnerLayer)),
   );
 
   it('allowlists structured install commands only', () => {

@@ -5,7 +5,6 @@ import { Data, Effect, Fiber, Layer } from 'effect';
 import type { AgentEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
-import { persistedParentRunId } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
@@ -18,8 +17,8 @@ import {
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
-import { withRevisionSpend } from '@texra/agent/output/documentRecipe';
 
+import { persistedParentRunId, withChildSpend } from '../storage/runRecords';
 import {
   buildAgentLaunchContext,
   prepareAgentDefinition,
@@ -151,7 +150,7 @@ function launchRun(
   const withDocuments = (ended: RunEndResult) =>
     Effect.gen(function* () {
       if (ctx.task === null) return ended;
-      const result = yield* withRevisionSpend(ctx.session, ended);
+      const result = yield* withChildSpend(ctx.session, ended);
       if (result.error || !shared.publishWorkflowOutput) return result;
       const publication = yield* shared.publishWorkflowOutput(
         result,

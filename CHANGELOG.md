@@ -1636,6 +1636,12 @@ show` print the same notice, and the new `texra agents customize`,
   `--input` is no longer a required flag, because a tool-use run may take none.
   A name carried by both categories is refused rather than resolved to one of
   them: the error names both candidates and their source-qualified spellings.
+- **A plugin can own one request kind's decisions (`Plugin.decision`).** The
+  harness runs the owning plugin's hook before a decision on a pending request
+  of that kind commits; TeXRA's external-inquiry plugin records its answers
+  this way. The harness no longer imports TeXRA's setup platform, inquiry
+  records or update-check records: a host passes its setup capabilities to
+  `texraPlugins({ setup })`, and `installProcessRuntime` has no `setup` option.
 
 #### Bug Fixes
 

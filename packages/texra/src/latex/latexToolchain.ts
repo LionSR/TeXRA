@@ -5,7 +5,7 @@ import {
   SUPPORTED_LATEX_COMPILERS,
   type DoctorLatexTool,
 } from '@texra/shared/constants/latexToolchain';
-import { checkToolInstalled } from '@utils/system/toolUtils';
+import { checkToolInstalled } from '@texra/utils/system/toolChecks';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 type LatexToolStatus = DoctorLatexTool & { readonly installed: boolean };

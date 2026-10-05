@@ -30,8 +30,9 @@ import {
   summarizeLeanServers,
   type LeanServerInfo,
 } from '@texra/tools/lean/leanServerRegistry';
-import { SetupPlatform } from '@texra/tools/setup/platform';
+import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import { ZOTERO_PORT_KEY } from '@texra/tools/zotero/bbtClient';
+import { checkToolInstalled } from '@texra/utils/system/toolChecks';
 import {
   prerequisitesChecks,
   probeSdkBinaryStatus,
@@ -45,7 +46,6 @@ import {
 import { isGitRepository } from '@utils/git/isGitRepository';
 import { envVar } from '@utils/system/envFlags';
 import { findToolInCommonPaths } from '@utils/system/binaryResolver';
-import { checkToolInstalled } from '@utils/system/toolUtils';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 const CHANNEL = 'pluginAvailability';
@@ -101,61 +101,64 @@ const leanServers = Effect.map(
   }),
 );
 
-export const LEAN4_AVAILABILITY = prerequisitesChecks({
-  probe: (inputs) =>
-    Effect.gen(function* () {
-      const setup = yield* SetupPlatform;
-      const servers = yield* leanServers;
-      const extensionAvailable =
-        setup.extensions?.isInstalled(LEAN4_EXTENSION_ID) ?? false;
-      const lakeAvailable = (yield* findToolInCommonPaths('lake')) !== null;
-      // Only the VS Code build drives Lean through the extension.
-      const requiresExtension = inputs.host === 'vscode';
-      return {
-        extensionAvailable,
-        lakeAvailable,
-        requiresExtension,
+/** The Lean 4 plugin's checks, reading the editor extension off the host's
+ *  setup capabilities (VS Code's; none elsewhere). */
+export const lean4Availability = (setup: SetupPlatformShape) =>
+  prerequisitesChecks({
+    probe: (inputs) =>
+      Effect.gen(function* () {
+        const servers = yield* leanServers;
+        const extensionAvailable =
+          setup.extensions?.isInstalled(LEAN4_EXTENSION_ID) ?? false;
+        const lakeAvailable = (yield* findToolInCommonPaths('lake')) !== null;
+        // Only the VS Code build drives Lean through the extension.
+        const requiresExtension = inputs.host === 'vscode';
+        return {
+          extensionAvailable,
+          lakeAvailable,
+          requiresExtension,
+          servers,
+        };
+      }),
+    fallback: () =>
+      Effect.map(leanServers, (servers) => ({
+        extensionAvailable: false,
+        lakeAvailable: false,
+        requiresExtension: false,
         servers,
-      };
-    }),
-  fallback: () =>
-    Effect.map(leanServers, (servers) => ({
-      extensionAvailable: false,
-      lakeAvailable: false,
-      requiresExtension: false,
-      servers,
-    })),
-  check: leanReady,
-  statusLabel: (prerequisites) => {
-    if (!leanReady(prerequisites)) return 'Needs setup';
-    const activeCount = prerequisites.servers.filter(isLeanServerActive).length;
-    return activeCount > 0
-      ? `${formatResultCount(activeCount, 'server')} active`
-      : undefined;
-  },
-  detailCheck: (prerequisites) =>
-    Effect.sync(() => {
-      const { extensionAvailable, lakeAvailable, requiresExtension } =
-        prerequisites;
-      const lines: string[] = [];
-      if (extensionAvailable) {
-        lines.push('VS Code Lean 4 extension installed.');
-      }
-      if (lakeAvailable && !requiresExtension) {
-        lines.push('Direct LSP mode available (`lake` on PATH).');
-      }
-      if (!leanReady(prerequisites)) {
-        lines.push(
-          requiresExtension
-            ? 'The VS Code build drives Lean through the leanprover.lean4 extension; install it to enable Lean tools. `lake` on PATH alone is not enough here.'
-            : 'No `lake` binary was detected. Install elan and make sure `lake` is on PATH to enable Lean tools.',
-        );
-      }
-      lines.push('');
-      lines.push(summarizeLeanServers(prerequisites.servers));
-      return lines.join('\n');
-    }),
-});
+      })),
+    check: leanReady,
+    statusLabel: (prerequisites) => {
+      if (!leanReady(prerequisites)) return 'Needs setup';
+      const activeCount =
+        prerequisites.servers.filter(isLeanServerActive).length;
+      return activeCount > 0
+        ? `${formatResultCount(activeCount, 'server')} active`
+        : undefined;
+    },
+    detailCheck: (prerequisites) =>
+      Effect.sync(() => {
+        const { extensionAvailable, lakeAvailable, requiresExtension } =
+          prerequisites;
+        const lines: string[] = [];
+        if (extensionAvailable) {
+          lines.push('VS Code Lean 4 extension installed.');
+        }
+        if (lakeAvailable && !requiresExtension) {
+          lines.push('Direct LSP mode available (`lake` on PATH).');
+        }
+        if (!leanReady(prerequisites)) {
+          lines.push(
+            requiresExtension
+              ? 'The VS Code build drives Lean through the leanprover.lean4 extension; install it to enable Lean tools. `lake` on PATH alone is not enough here.'
+              : 'No `lake` binary was detected. Install elan and make sure `lake` is on PATH to enable Lean tools.',
+          );
+        }
+        lines.push('');
+        lines.push(summarizeLeanServers(prerequisites.servers));
+        return lines.join('\n');
+      }),
+  });
 
 const getGitHubPRPrerequisites = Effect.fn('getGitHubPRPrerequisites')(
   function* (workspaceRoot: string | undefined) {

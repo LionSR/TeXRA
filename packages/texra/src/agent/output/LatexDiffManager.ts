@@ -19,10 +19,10 @@ import {
   type RunStorageFileLocation,
 } from '@shared/schemas';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
+import { checkToolInstalled } from '@texra/utils/system/toolChecks';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { RunFileService } from '@utils/files/runStorage';
-import { checkToolInstalled } from '@utils/system/toolUtils';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

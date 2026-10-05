@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 
 import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { LatexRecommendedStatus } from '@texra/controllers/settingsView/LatexToolingController';
+import type { LatexEditorStatus } from '@texra/controllers/settingsView/LatexToolingController';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import type { createSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
 import { LATEX_WORKSHOP_EXT_ID } from '@texra/shared/constants/latexToolchain';
@@ -116,11 +116,14 @@ function resolveUpdateValue(
   return { ...remaining, ...setting.value };
 }
 
-/** Which recommended settings are applied, for the LaTeX page's status. */
-export function latexRecommendedStatus(): LatexRecommendedStatus {
+/** Which recommended settings are applied and whether LaTeX Workshop is
+ *  installed, for the LaTeX page's status. */
+export function latexEditorStatus(): LatexEditorStatus {
   return {
     outDir: isRecommendedValueSet('outDir'),
     autoRevealExclude: isRecommendedValueSet('autoRevealExclude'),
+    latexWorkshopInstalled:
+      vscode.extensions.getExtension(LATEX_WORKSHOP_EXT_ID) !== undefined,
   };
 }
 

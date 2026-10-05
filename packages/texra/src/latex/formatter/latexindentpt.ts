@@ -4,8 +4,8 @@ import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { runToolWithCheck } from '@texra/utils/system/toolChecks';
 import { entryTypeIn } from '@utils/files/fsEntryExists';
-import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 

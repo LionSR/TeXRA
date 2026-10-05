@@ -8,7 +8,7 @@ import { describe } from 'vitest';
 
 // Local imports
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { installPlatform } from '@test/support/setupPlatform';
+import { installPlatform, withSetup } from '@test/support/setupPlatform';
 import { InvokeCommandTool } from '@texra/tools/setup/InvokeCommandTool';
 
 // Local file imports
@@ -41,7 +41,7 @@ async function setupTool(): Promise<{
 }
 
 const invoke = (tool: typeof InvokeCommandTool, input: unknown) =>
-  tool.call(input).pipe(Effect.provide(nativeToolTestLayer()));
+  tool.call(input).pipe(Effect.provide(withSetup(nativeToolTestLayer())));
 
 describe('InvokeCommandTool allowlist', () => {
   it.effect(

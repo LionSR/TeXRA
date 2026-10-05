@@ -12,10 +12,10 @@ import {
 // Local file imports
 import {
   checkToolInstalled,
-  detectImageTool,
   reportMissingImageTools,
   toolLabel,
-} from '@utils/system/toolUtils';
+} from '@texra/utils/system/toolChecks';
+import { detectImageTool } from '@utils/system/toolUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 function missingTool(

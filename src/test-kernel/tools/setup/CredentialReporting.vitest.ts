@@ -10,7 +10,11 @@ import { afterEach, beforeEach, describe, vi } from 'vitest';
 import * as apiProviders from '@texra-ai/llm';
 import { apiKeyEnvName, SecretsFailed } from '@texra-ai/llm';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
+import {
+  installPlatform,
+  setupPlatform,
+  withSetup,
+} from '@test/support/setupPlatform';
 import * as setupCredentialAccess from '@texra/model/setupCredentialAccess';
 import { ProbeEnvironmentTool } from '@texra/tools/setup/ProbeEnvironmentTool';
 import { VerifySetupTool } from '@texra/tools/setup/VerifySetupTool';
@@ -86,7 +90,7 @@ describe('setup credential reporting', () => {
           ),
         );
         const result = yield* ProbeEnvironmentTool.call({}).pipe(
-          Effect.provide(nativeToolTestLayer()),
+          Effect.provide(withSetup(nativeToolTestLayer())),
         );
 
         assert.match(outputOf(result), /"host": "cli"/);
@@ -110,7 +114,7 @@ describe('setup credential reporting', () => {
       );
 
       const result = yield* ProbeEnvironmentTool.call({}).pipe(
-        Effect.provide(nativeToolTestLayer()),
+        Effect.provide(withSetup(nativeToolTestLayer())),
       );
 
       assert.equal(result.status, 'executed');
@@ -128,7 +132,7 @@ describe('setup credential reporting', () => {
         installChatGptOnlySetupPlatform();
 
         const result = yield* VerifySetupTool.call({}).pipe(
-          Effect.provide(nativeToolTestLayer()),
+          Effect.provide(withSetup(nativeToolTestLayer())),
         );
 
         assert.equal(result.status, 'executed');

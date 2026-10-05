@@ -188,10 +188,12 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
               initialCommand: command,
             });
           }),
-        // There is no editor whose settings the LaTeX page could recommend.
-        latexRecommendedStatus: () => ({
+        // There is no editor whose settings the LaTeX page could recommend,
+        // nor one to install LaTeX Workshop into.
+        latexEditorStatus: () => ({
           outDir: true,
           autoRevealExclude: true,
+          latexWorkshopInstalled: false,
         }),
       };
     };

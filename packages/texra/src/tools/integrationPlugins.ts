@@ -21,7 +21,9 @@ import { CodexTool } from '@texra/tools/codex';
 import { GitHubSubscriptionTool } from '@texra/tools/github/githubSubscriptionTool';
 import { GitHubSubscriptions } from '@texra/tools/github/subscriptionBindings';
 import { gitHubSubscriptionsLayer } from '@texra/tools/github/subscriptionRegistries';
+import { inquiryRecordsLayer } from '@texra/tools/inquiry/inquiryRecords';
 import { ExternalInquiryTool } from '@texra/tools/inquiry/ExternalInquiryTool';
+import { recordInquiryDecision } from '@texra/tools/inquiry/inquiryActions';
 import {
   LeanDiagnosticsTool,
   LeanFileTool,
@@ -34,16 +36,18 @@ import {
   CLAUDE_CODE_AVAILABILITY,
   CODEX_AVAILABILITY,
   GITHUB_AVAILABILITY,
-  LEAN4_AVAILABILITY,
+  lean4Availability,
   WOLFRAM_AVAILABILITY,
   ZOTERO_AVAILABILITY,
 } from '@texra/tools/pluginAvailability';
+import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import { ZoteroAddTool } from '@texra/tools/zotero/ZoteroAddTool';
 import { ZoteroCollectionsTool } from '@texra/tools/zotero/ZoteroCollectionsTool';
 import { ZoteroExportTool } from '@texra/tools/zotero/ZoteroExportTool';
 import { ZoteroSearchTool } from '@texra/tools/zotero/ZoteroSearchTool';
 import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
 import { definePlugin, type Plugin } from '@tools/plugins';
+import type { ProcessPluginLayer } from '@tools/toolTable';
 
 /** A probe without tools: agents run `wolframscript` through `bash`. */
 export const wolfram: Plugin = {
@@ -63,19 +67,26 @@ export const zotero: Plugin = {
   availability: ZOTERO_AVAILABILITY,
 };
 
-export const lean4 = definePlugin<LeanLanguageServices>({
-  id: 'lean4',
-  tools: {
-    lean_diagnostics: LeanDiagnosticsTool,
-    lean_file: LeanFileTool,
-    lean_project: LeanProjectTool,
-    lean_inspect: LeanInspectTool,
-  },
-  availability: LEAN4_AVAILABILITY,
-  // The direct `lake env lean --server` pool; a host with an editor bridge
-  // passes its own (`texraPlugins`).
-  processLayer: { layer: directLeanLanguageServices() },
-});
+/**
+ * Lean 4 over the direct `lake env lean --server` pool, or over the host's
+ * editor bridge in its place; its probe reads the editor extension off the
+ * host's setup capabilities.
+ */
+export const lean4 = (host: {
+  readonly setup: SetupPlatformShape;
+  readonly services?: ProcessPluginLayer<LeanLanguageServices>['layer'];
+}): Plugin =>
+  definePlugin<LeanLanguageServices>({
+    id: 'lean4',
+    tools: {
+      lean_diagnostics: LeanDiagnosticsTool,
+      lean_file: LeanFileTool,
+      lean_project: LeanProjectTool,
+      lean_inspect: LeanInspectTool,
+    },
+    availability: lean4Availability(host.setup),
+    processLayer: { layer: host.services ?? directLeanLanguageServices() },
+  });
 
 export const githubActivity = definePlugin<GitHubSubscriptions>({
   // ID kept as `github-pr-subscription` for back-compat with persisted
@@ -97,6 +108,19 @@ export const externalInquiry: Plugin = {
   tools: { inquiry: ExternalInquiryTool },
   toggle: 'off',
   availability: ALWAYS_AVAILABLE,
+  // The answer is recorded on the thread and delivered to the run that
+  // asked, before the decision commits.
+  decision: {
+    kind: 'externalInquiry',
+    record: ({ payload, decision, session }) =>
+      payload.kind === 'externalInquiry'
+        ? recordInquiryDecision(payload.data, decision, session).pipe(
+            Effect.provide(inquiryRecordsLayer),
+          )
+        : Effect.die(
+            new Error(`external-inquiry records no ${payload.kind} decision.`),
+          ),
+  },
 };
 
 export const codex = definePlugin<CodexThreads>({

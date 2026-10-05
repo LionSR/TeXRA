@@ -13,7 +13,7 @@ import { describe } from 'vitest';
 import type { TerminalRunResult } from '@hosts/uiHosts';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { installPlatform } from '@test/support/setupPlatform';
+import { installPlatform, withSetup } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { SendToTerminalTool } from '@texra/tools/setup/SendToTerminalTool';
 
@@ -61,9 +61,11 @@ const callTool = (
 ) =>
   tool.call(input).pipe(
     Effect.provide(
-      nativeToolTestLayer({
-        run: { runId, session: testDefaultSession(), toolPolicy: {} },
-      }),
+      withSetup(
+        nativeToolTestLayer({
+          run: { runId, session: testDefaultSession(), toolPolicy: {} },
+        }),
+      ),
     ),
   );
 

@@ -17,9 +17,9 @@ const mocks = vi.hoisted(() => ({
   runToolWithCheck: vi.fn(),
 }));
 
-vi.mock('@utils/system/toolUtils', async (importOriginal) => {
+vi.mock('@texra/utils/system/toolChecks', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('@utils/system/toolUtils')>();
+    await importOriginal<typeof import('@texra/utils/system/toolChecks')>();
   return { ...actual, runToolWithCheck: mocks.runToolWithCheck };
 });
 
