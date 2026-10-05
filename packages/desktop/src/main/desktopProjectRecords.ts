@@ -1,7 +1,9 @@
 /** The desktop profile's ordered project selection, independent of project sessions. */
 import { Context, Effect, Result } from 'effect';
+import { z } from 'zod';
 
 import { GlobalDatabase } from '@shared/session/database';
+import type { ValueFamily } from '@shared/session/valueFamily';
 
 /** How many closed projects File > Open Recent offers. */
 const RECENT_PROJECT_LIMIT = 10;
@@ -15,6 +17,22 @@ interface ProjectLists {
 }
 
 const EMPTY: ProjectLists = { remembered: [], recent: [] };
+
+/**
+ * The desktop's remembered and recently closed projects, one value so one
+ * write changes both lists; one row, keyed by the profile.
+ *
+ * @public Exported for the storage freeze (`npm run storage:freeze`, which
+ * fingerprints every stored family), not for another module.
+ */
+export const DESKTOP_PROJECTS: ValueFamily<ProjectLists> = {
+  name: 'desktop-projects',
+  schema: z.object({
+    remembered: z.array(z.string().min(1)),
+    recent: z.array(z.string().min(1)),
+  }),
+  deletable: false,
+};
 
 /**
  * The remembered projects, on the process's handle on the global root.
@@ -33,14 +51,14 @@ const EMPTY: ProjectLists = { remembered: [], recent: [] };
 export const openDesktopProjectRecords = Effect.gen(function* () {
   const { values } = yield* GlobalDatabase;
   const lists = Effect.map(
-    values.get('desktop-projects', PROFILE),
+    values.get(DESKTOP_PROJECTS, PROFILE),
     (stored) => stored ?? EMPTY,
   );
   const read = Effect.map(lists, ({ remembered }) => remembered);
   const readRecent = Effect.map(lists, ({ recent }) => recent);
   // Both lists are one value, so a close that changes both is one write.
   const update = (change: (lists: ProjectLists) => ProjectLists) =>
-    values.modify('desktop-projects', PROFILE, (stored) => {
+    values.modify(DESKTOP_PROJECTS, PROFILE, (stored) => {
       const next = change(stored ?? EMPTY);
       return Result.succeed([
         undefined,

@@ -24,8 +24,8 @@ import type {
   AnsweredInquiryTurn,
   ExternalInquiryPermission,
   InquiryDraft,
-  InquiryThreadRecord,
 } from '@shared/schemas';
+import type { InquiryThreadRecord } from '@shared/plugins/externalInquiry';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import type { Surface } from '@shared/session/surface';

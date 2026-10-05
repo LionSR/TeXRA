@@ -33,7 +33,7 @@ interface RowKind {
 const V1 = { version: 1, upcast: [] } as const satisfies RowKind;
 
 /** The version every current-value family writes and reads
- *  (`CURRENT_VALUE_SCHEMAS`), until one gains an upcaster. */
+ *  (each `ValueFamily`), until one gains an upcaster. */
 export const CURRENT_VALUE_VERSION = 1;
 
 /** Every arm of `SessionEventDraftSchema`: a new arm without an entry does

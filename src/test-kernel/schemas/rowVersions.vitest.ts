@@ -12,12 +12,19 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
+import { DESKTOP_PROJECTS } from '@desktop/main/desktopProjectRecords';
+import { INQUIRY_THREADS } from '@shared/plugins/externalInquiry';
 import {
-  CURRENT_VALUE_SCHEMAS,
   CURRENT_VALUE_VERSION,
   ROW_KINDS,
   SessionEventDraftSchema,
 } from '@shared/schemas';
+import { UPDATE_CHECKS } from '@shared/session/updateCheckRecords';
+import {
+  APP_STATE,
+  REPO_STATE,
+  WORKSPACE_STORES,
+} from '@shared/session/valueFamily';
 import { PLUGIN_ARMS } from '@tools/pluginArms';
 import { REPO_ROOT } from '../support/repoScan';
 
@@ -44,6 +51,16 @@ interface Versioned {
   readonly schema: z.ZodType;
 }
 
+/** Every current-value family, each declared by its owner. */
+const VALUE_FAMILIES = [
+  APP_STATE,
+  REPO_STATE,
+  WORKSPACE_STORES,
+  DESKTOP_PROJECTS,
+  INQUIRY_THREADS,
+  UPDATE_CHECKS,
+];
+
 const VERSIONED: readonly Versioned[] = [
   ...SessionEventDraftSchema.options.map((arm) => {
     const kind = ROW_KINDS[arm.shape.type.value];
@@ -60,8 +77,8 @@ const VERSIONED: readonly Versioned[] = [
     upcasts: arm.upcasters.length,
     schema: arm.schema,
   })),
-  ...Object.entries(CURRENT_VALUE_SCHEMAS).map(([family, schema]) => ({
-    name: `current-value.${family}`,
+  ...VALUE_FAMILIES.map(({ name, schema }) => ({
+    name: `current-value.${name}`,
     version: CURRENT_VALUE_VERSION,
     upcasts: 0,
     schema,
