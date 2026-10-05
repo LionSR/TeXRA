@@ -103,6 +103,15 @@ jobs:
           fi
           pnpm --filter @texra/desktop exec electron-builder --config ${{ steps.desktop-signing.outputs.electron_builder_config }} --publish never
 
+      - name: Notarize macOS DMG
+        if: steps.desktop-signing.outputs.signed == 'true'
+        run: |
+          for dmg in packages/desktop/dist-packaged/*.dmg; do
+            xcrun notarytool submit "$dmg" --key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" --wait
+            xcrun stapler staple "$dmg"
+            xcrun stapler validate "$dmg"
+          done
+
       - name: Smoke-test macOS packaged desktop app
         run: >-
           pnpm run desktop:package:smoke -- --app

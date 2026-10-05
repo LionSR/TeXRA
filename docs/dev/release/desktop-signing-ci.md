@@ -8,7 +8,8 @@ secrets and produce unsigned artifacts for development.
 
 The macOS installer job signs and notarizes with
 `packages/desktop/electron-builder.signed.config.mjs` when it finds both a
-Developer ID certificate and an App Store Connect API key.
+Developer ID certificate and an App Store Connect API key. Both the app and the
+DMG are notarized and stapled; the zip carries the stapled app.
 
 Required certificate secrets:
 
