@@ -474,7 +474,6 @@ export class ProgressApp extends LitElement {
                           .config=${config}
                           .files=${launch[LAUNCH_FILE_LISTS[config.type]]}
                           .checkboxValues=${launch}
-                          .sessionType=${launch.sessionType}
                         ></file-select-group>
                       `,
                     )}

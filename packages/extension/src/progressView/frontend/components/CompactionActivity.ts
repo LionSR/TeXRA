@@ -67,18 +67,6 @@ export class CompactionActivity extends LitElement {
         min-width: 0;
         overflow-wrap: break-word;
       }
-
-      /* wa-spinner animates inside its own shadow root, so the wildcard
-         reduced-motion rule in designTokens can't reach it. Its rotation
-         lives on the svg exposed as ::part(base); stop it directly rather
-         than approximating "off" through the --speed duration, which would
-         leave the animation looping at an imperceptibly short but nonzero
-         duration instead of actually stopping. */
-      @media (prefers-reduced-motion: reduce) {
-        wa-spinner::part(base) {
-          animation: none;
-        }
-      }
     `,
   ];
 

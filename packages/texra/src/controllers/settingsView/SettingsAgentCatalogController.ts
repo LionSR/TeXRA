@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Result } from 'effect';
+import { Clock, Effect, Result } from 'effect';
 
 // Local imports
 import type { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
@@ -36,7 +36,6 @@ interface SettingsAgentCatalogControllerDeps {
   getAgents(): SettingsAgentCatalogEntry[];
   /** The source of the changed bundled agent a customized copy overrides. */
   newerBuiltInOf(entry: SettingsAgentCatalogEntry): AgentSource | undefined;
-  now?: () => number;
 }
 
 export class SettingsAgentCatalogController {
@@ -121,7 +120,7 @@ export class SettingsAgentCatalogController {
         (entry) => entry.name,
       );
       const preset: AgentModePreset = {
-        id: `custom-${this.deps.now?.() ?? Date.now()}`,
+        id: `custom-${yield* Clock.currentTimeMillis}`,
         name: trimmedName,
         description: `Custom team: ${agents.join(', ')}`,
         icon: 'bookmark',
@@ -209,7 +208,6 @@ export class SettingsAgentCatalogController {
       source: entry.source,
       hasTask: entry.task !== null,
       description: entry.description,
-      hasPath: Boolean(entry.path),
       filePath: entry.path || undefined,
       tools: entry.tools,
       newerBuiltIn: this.deps.newerBuiltInOf(entry),

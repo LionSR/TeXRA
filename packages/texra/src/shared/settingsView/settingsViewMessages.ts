@@ -208,7 +208,6 @@ const UpdateSettingsSnapshotMessageSchema = z.discriminatedUnion('snapshot', [
  */
 const AgentSelectionItemSchema = AgentMetadataBaseSchema.extend({
   source: AgentSourceSchema,
-  hasPath: z.boolean(),
   filePath: z.string().optional(),
   tools: z.array(z.string()).optional(),
   /**
@@ -639,10 +638,6 @@ const DeleteAgentModePresetMessageSchema = z.object({
 });
 
 // Tool dashboard inbound messages
-const OpenToolInstallUrlMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL),
-  url: z.url(),
-});
 const InstallToolExtensionMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION),
   extensionId: z.string().min(1),
@@ -743,7 +738,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     // Lifecycle
     WebviewReadyMessageSchema,
     // Tool dashboard messages
-    OpenToolInstallUrlMessageSchema,
     InstallToolExtensionMessageSchema,
     RecheckToolStatusMessageSchema,
     ToggleToolMessageSchema,

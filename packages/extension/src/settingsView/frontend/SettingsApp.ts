@@ -188,12 +188,6 @@ export class SettingsApp extends SignalWatcher(LitElement) {
     tabs[next].focus();
   }
 
-  private handleSetProviderKey(event: CustomEvent<{ provider: string }>): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY, {
-      provider: event.detail.provider,
-    });
-  }
-
   /**
    * The pages and sections this host shows: Shortcuts edits desktop key
    * bindings only, and the recommended VS Code settings exist only in VS Code.
@@ -304,7 +298,6 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             .helperModel=${helperModel.get()}
             .preferShortModelNames=${preferShortModelNames.get()}
             .usage=${subscriptionUsage.get()}
-            @provider-key-set=${this.handleSetProviderKey}
           >
             <subscriptions-tab
               slot="subscriptions"

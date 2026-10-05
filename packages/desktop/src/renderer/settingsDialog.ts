@@ -37,7 +37,7 @@ export function createDesktopSettingsDialog(
   };
   let settingsView = createSettingsView();
 
-  const { dialog, subtitleEl } = createOverlayDialog({
+  const { dialog } = createOverlayDialog({
     appRoot,
     prefix: 'desktop-settings',
     ariaLabel: 'Settings',
@@ -45,7 +45,6 @@ export function createDesktopSettingsDialog(
     title: 'Settings',
     content,
   });
-  subtitleEl.hidden = true;
   dialog.lightDismiss = true;
   // Nested WebAwesome popups (selects, dropdowns) inside the settings view
   // emit their own show/hide events, which bubble; only the dialog's count.

@@ -68,14 +68,6 @@ export const layoutStyles = css`
   .log-placeholder .empty-state-body {
     margin: var(--wa-space-3xs) 0 0;
   }
-
-  .log-placeholder .empty-state-actions {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: var(--wa-space-3xs);
-    margin-top: var(--wa-space-xs);
-  }
 `;
 
 /**

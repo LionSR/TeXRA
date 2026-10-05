@@ -571,7 +571,6 @@ export function executeCliRequest(
 
     shutdownStatusArmed = false;
     yield* Scope.close(shutdownStatusScope, Exit.void);
-    const cleanupFailures: unknown[] = [];
     const finalization = yield* Effect.result(
       Effect.gen(function* () {
         yield* finalizeShutdownStatus;
@@ -586,24 +585,18 @@ export function executeCliRequest(
         return undefined;
       }),
     );
-    if (Result.isFailure(finalization))
-      cleanupFailures.push(finalization.failure);
     Deferred.doneUnsafe(shutdownFinalizationDone, Effect.void);
     if (!runResult.ok || Result.isFailure(finalization)) {
       yield* detachPresentation;
     }
-    if (cleanupFailures.length > 0) {
-      const cleanupFailure = aggregateError(
-        cleanupFailures,
-        'CLI run cleanup encountered multiple failures',
-      );
+    if (Result.isFailure(finalization)) {
       return yield* Effect.die(
         primaryRunFailure
           ? aggregateError(
-              [primaryRunFailure.error, cleanupFailure],
+              [primaryRunFailure.error, finalization.failure],
               'CLI run failed and its final artifacts could not be persisted',
             )
-          : cleanupFailure,
+          : finalization.failure,
       );
     }
     if (primaryRunFailure) return yield* Effect.die(primaryRunFailure.error);
@@ -618,7 +611,7 @@ export function executeCliRequest(
     }
 
     return yield* Effect.sync(() => {
-      const { outcome, outcomePersisted } = Result.getOrThrow(finalization)!;
+      const { outcome, outcomePersisted } = finalization.success!;
       return {
         ok: true as const,
         outcomePersisted,

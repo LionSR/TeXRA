@@ -285,7 +285,7 @@ export class PluginCard extends LitElement {
             variant=${secondaryVariant}
             size="s"
             @click=${() =>
-              postMessage(SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL, {
+              postMessage(SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL, {
                 url: action.url,
               })}
           >

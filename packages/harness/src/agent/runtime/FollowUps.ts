@@ -38,7 +38,6 @@ import {
 } from '@agent/followUp/followUpMessages';
 import type { FollowUpBatch, ViewEdit } from '@agent/followUp/RunInput';
 import { logUserMessage } from '@agent/trace';
-import { mediaNeedsVisionWarning } from '@agent/runtime/mediaVisionWarning';
 import {
   ACTIVATED_SKILLS_MAX,
   type MediaAttachmentKind,
@@ -173,12 +172,6 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
       parts.push({ kind: 'text', text: content.text });
       const files = content.mediaFiles;
       if (!files?.length) continue;
-      const warning = mediaNeedsVisionWarning(
-        files,
-        bound.config.capabilities,
-        'pasted',
-      );
-      if (warning) logger.warn(warning);
       const media = yield* mediaInputParts(
         files.map((path) => run.fileService.createLocation(path)),
         bound,
