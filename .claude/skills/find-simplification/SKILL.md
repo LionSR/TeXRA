@@ -47,7 +47,7 @@ Use parallel subagents when the user asks for breadth or many candidates. Give e
 - Model protocol and binding: `packages/llm/src/`, `packages/harness/src/agent/runtime/run/modelBinding.ts`,
   `packages/harness/src/agent/runtime/modelRoutes.ts`.
 - Tools: `packages/harness/src/tools/`, delegation, tool schema defaults.
-- Platform and hosts: port interfaces versus their actual consumers, `packages/harness/src/hosts/`, per-host wiring in `packages/*/`.
+- Platform and hosts: port interfaces versus their actual consumers, `packages/texra/src/hosts/`, per-host wiring in `packages/*/`.
 - Webviews: the three parallel view trees (`webview`, `progressView`, `settingsView`) — duplicated manager or slice logic across them is a recurring find, but keep their directory structures aligned.
 - Storage and compatibility: `packages/harness/src/common/storage/`, persisted-state schemas, format readers with introduction dates.
 - Packages, scripts, resources: `packages/extension/resources/`, `scripts/`, `prompts/`, `supabase/functions/` — splits and inventories that outlived their consumer.
