@@ -978,6 +978,26 @@ export function crashConformanceSuite(plugins: string): void {
             const consumed = new Set(ids(rows, 'followup.consumed'));
             return settled(rows).every((id) => consumed.has(id));
           };
+          /** Every result read, and every child the resume launched (a
+           *  command it re-ran after its outcome was unknown) settled. */
+          const quiet = (rows: readonly Row[], n: number) =>
+            allRead(rows) &&
+            rows
+              .filter(
+                (row) =>
+                  row.commit > n &&
+                  row.type === 'run.start' &&
+                  row.parent === root,
+              )
+              .every((child) =>
+                rows.some(
+                  (row) =>
+                    row.run === child.run &&
+                    (row.type === 'run.end' ||
+                      (row.type === 'child.turn' &&
+                        json(row).phase === 'settled')),
+                ),
+              );
           const { points, clean } = yield* cleanPass(
             roots,
             (session) =>
@@ -1017,7 +1037,7 @@ export function crashConformanceSuite(plugins: string): void {
               clean,
               n,
               root,
-              (_, storage) => until(storage, allRead),
+              (_, storage) => until(storage, (rows) => quiet(rows, n)),
             );
             const twice = (type: string) =>
               ids(final, type).filter(
