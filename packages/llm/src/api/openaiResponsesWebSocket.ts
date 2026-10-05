@@ -9,7 +9,6 @@ import { z } from 'zod';
 // Local imports - canonical model contract
 import {
   ModelConfigurationSchema,
-  TurnResultSchema,
   type Model,
   type OpenAIResponsesConfiguration,
 } from '../turn.js';
@@ -19,7 +18,7 @@ import {
   enrichModelError,
   parseJsonOrModelError,
 } from '../errors.js';
-import { openaiResponsesContinuation } from './openaiResponsesLower.js';
+import { withResponsesContinuation } from './openaiResponsesLower.js';
 import { responseEvents } from './openaiResponsesCodec.js';
 import { originOf } from '../protocol.js';
 import { rejoin } from './transport.js';
@@ -354,7 +353,9 @@ export const openaiResponsesWebSocketModel = Effect.fn(
               }),
             ),
           );
-          return responseEvents(chunks, origin).pipe(
+          return responseEvents(chunks, origin, (result) =>
+            withResponsesContinuation(config, turn, result),
+          ).pipe(
             Stream.mapEffect((event) =>
               Effect.gen(function* () {
                 if (event.kind === 'identified') {
@@ -376,18 +377,8 @@ export const openaiResponsesWebSocketModel = Effect.fn(
                       'The Responses connection buffered data beyond its terminal event.',
                   });
                 latestResponseId = event.result.providerResponseId ?? undefined;
-                const continuation = yield* openaiResponsesContinuation(
-                  config,
-                  turn,
-                  event.result,
-                );
                 completed = true;
-                return {
-                  ...event,
-                  result: continuation
-                    ? TurnResultSchema.parse({ ...event.result, continuation })
-                    : event.result,
-                };
+                return event;
               }),
             ),
             Stream.mapError(enrich),

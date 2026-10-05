@@ -32,18 +32,6 @@
       "name": "scrollBoundedDiffDisplayLines"
     },
     {
-      "file": "packages/cli/src/commands/agents.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "listAgents"
-    },
-    {
-      "file": "packages/cli/src/commands/agents.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "showAgent"
-    },
-    {
       "file": "packages/cli/src/commands/history.ts",
       "category": "production-dead",
       "kind": "exports",
