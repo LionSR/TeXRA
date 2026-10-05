@@ -74,16 +74,5 @@ export function createLanguageModelPort(
 
     acquire: (configuration) =>
       acquireVscodeLanguageModel(context, configuration),
-
-    onDidChange(listener) {
-      const models = lmApi.onDidChangeChatModels(listener);
-      const access = accessInformation.onDidChange(listener);
-      return {
-        dispose() {
-          models.dispose();
-          access.dispose();
-        },
-      };
-    },
   };
 }

@@ -16,7 +16,7 @@ import { vi } from 'vitest';
  *
  * Ordering: the `vi.mock` below registers when this module evaluates, so the
  * import must precede anything that could load `@cli/runtime/logSinks` (see
- * `agentCatalogMock` for the idiom). The bag is `vi.hoisted`, so the mock
+ * `cliOutputMock` for the idiom). The bag is `vi.hoisted`, so the mock
  * factory can never observe it uninitialized.
  */
 const cliLogSinksMock = vi.hoisted(() => ({

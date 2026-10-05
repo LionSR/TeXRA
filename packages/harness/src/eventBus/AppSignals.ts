@@ -106,10 +106,10 @@ export interface AppSignalPayloads {
   /**
    * The editor's language-model catalogue or access permissions changed.
    *
-   * Extension-only by construction: the sole emitter is the language-model
-   * port's `onDidChange`. Desktop and CLI have no editor-provided model
-   * catalogue to change, so there is nothing to react to — not a missing
-   * subscription.
+   * Extension-only by construction: the sole emitter follows the editor's
+   * native catalogue and access events. Desktop and CLI have no
+   * editor-provided model catalogue to change, so there is nothing to react
+   * to — not a missing subscription.
    */
   languageModelsChanged: undefined;
 

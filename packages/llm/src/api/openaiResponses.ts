@@ -14,7 +14,6 @@ import {
   FILE_UPLOAD_LIFETIME_SECONDS,
   ModelConfigurationSchema,
   ObservationPolicySchema,
-  TurnResultSchema,
   type BackgroundEvent,
   type BackgroundSubmission,
   type Model,
@@ -38,7 +37,7 @@ import { openaiFailure } from './openaiError.js';
 import { admittedFingerprint, canChain } from './prefixFingerprint.js';
 import {
   RESPONSES_PREFIX_DOMAIN,
-  openaiResponsesContinuation,
+  withResponsesContinuation,
 } from './openaiResponsesLower.js';
 import {
   ResponseEventSchema,
@@ -170,13 +169,7 @@ export function openaiResponsesModel(
           fillModelError(error, { requestId });
         const chunks = yield* sdkEvents(opened.data, enrich);
         return responseEvents(chunks, origin, (result) =>
-          Effect.map(
-            openaiResponsesContinuation(config, turn, result),
-            (continuation) =>
-              continuation
-                ? TurnResultSchema.parse({ ...result, continuation })
-                : result,
-          ),
+          withResponsesContinuation(config, turn, result),
         ).pipe(Stream.mapError(enrich));
       }).pipe(
         Effect.mapError((error) =>
@@ -280,16 +273,13 @@ export function openaiResponsesModel(
             assembleTurn(Stream.make(yield* terminalParts(response, type)), {
               origin,
               provider: 'The model',
+              finalize: (completed) =>
+                withResponsesContinuation(config, turn, completed),
             }),
-          );
-          const continuation = yield* openaiResponsesContinuation(
-            config,
-            turn,
-            result,
           );
           return BackgroundSubmissionSchema.parse({
             kind: 'completed',
-            result: continuation ? { ...result, continuation } : result,
+            result,
           });
         }
         if (
@@ -447,13 +437,12 @@ export function openaiResponsesModel(
               const result = yield* assembly.complete;
               // The same anchor the foreground completion builds: an
               // observed turn chains on `previous_response_id` too.
-              const continuation = chains
-                ? yield* openaiResponsesContinuation(config, turn, result)
-                : undefined;
               return {
                 kind: 'completed',
                 afterSequence: sequence,
-                result: continuation ? { ...result, continuation } : result,
+                result: chains
+                  ? yield* withResponsesContinuation(config, turn, result)
+                  : result,
               };
             });
             return Stream.concat(progress, Stream.fromEffect(completion)).pipe(

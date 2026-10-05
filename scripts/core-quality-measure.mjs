@@ -775,42 +775,64 @@ function valueImportOf(statement) {
 }
 
 /** A core package, which a test may name directly. */
-const CORE_PACKAGE = /^@texra-ai\/(?:llm|agent)(?:\/|$)/;
+const CORE_PACKAGE = /^@texra-ai\/(?:llm|harness)(?:\/|$)/;
 
 /**
- * Study rule 12: `vi.mock` of a core module, per test file. A target is
- * core when it resolves (alias or relative path) to a measured core file,
- * so the app-path exclusions apply here too.
+ * Study rule 12: literal module mocks of a core module, including shared
+ * test support. A target is core when it resolves (alias or relative path)
+ * to a measured core file. Host-side @agent mocks also count, including
+ * app plugins, so consolidating the former host gate keeps its coverage.
  */
 function measureMocks(rootDir, files, options, byRule) {
   const core = new Set(files);
   const tests = walkFiles(path.join(rootDir, 'src/test-kernel'), {
-    include: (file) => /\.(?:vitest|test)\.tsx?$/.test(file),
+    include: (file) => SOURCE_FILE.test(file) && !file.endsWith('.d.ts'),
   });
   for (const { absolutePath } of tests) {
     const file = path.relative(rootDir, absolutePath).replaceAll('\\', '/');
-    const text = readFileSync(absolutePath, 'utf8');
-    for (const match of text.matchAll(
-      /\bvi\.(?:mock|doMock)\(\s*['"`]([^'"`]+)/g,
-    )) {
-      const target = match[1];
-      const resolved = ts.resolveModuleName(
-        target,
-        absolutePath,
-        options,
-        ts.sys,
-      ).resolvedModule?.resolvedFileName;
-      const resolvedFile =
-        resolved == null
-          ? null
-          : path
-              .relative(rootDir, realpathSync(resolved))
-              .replaceAll('\\', '/');
-      if (CORE_PACKAGE.test(target) || core.has(resolvedFile)) {
-        const line = text.slice(0, match.index).split('\n').length;
-        addSite(byRule, 'core-module-mocks', file, line, target);
+    const source = ts.createSourceFile(
+      absolutePath,
+      readFileSync(absolutePath, 'utf8'),
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    const visit = (node) => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        ts.isIdentifier(node.expression.expression) &&
+        ['mock', 'doMock'].includes(node.expression.name.text) &&
+        node.arguments[0] != null &&
+        ts.isStringLiteralLike(node.arguments[0])
+      ) {
+        const target = node.arguments[0].text;
+        const resolved = ts.resolveModuleName(
+          target,
+          absolutePath,
+          options,
+          ts.sys,
+        ).resolvedModule?.resolvedFileName;
+        const resolvedFile =
+          resolved == null
+            ? null
+            : path
+                .relative(rootDir, realpathSync(resolved))
+                .replaceAll('\\', '/');
+        if (
+          CORE_PACKAGE.test(target) ||
+          core.has(resolvedFile) ||
+          (/^src\/test-kernel\/(?:cli|desktop|support)\//.test(file) &&
+            /^@agent(?:\/|$)/.test(target))
+        ) {
+          const { line } = source.getLineAndCharacterOfPosition(
+            node.getStart(),
+          );
+          addSite(byRule, 'core-module-mocks', file, line + 1, target);
+        }
       }
-    }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
   }
 }
 
@@ -868,7 +890,8 @@ function measureInvariants(rootDir, byRule) {
   for (const { absolutePath } of walkFiles(
     path.join(rootDir, 'src/test-kernel'),
     {
-      include: (file) => file.endsWith('.vitest.ts'),
+      include: (file) =>
+        file.endsWith('.vitest.ts') || file === 'support/crashConformance.ts',
     },
   )) {
     for (const match of readFileSync(absolutePath, 'utf8').matchAll(
