@@ -1,13 +1,15 @@
 /**
- * `texra serve`: the service's lifetime over its socket. It refuses to start
- * beside a live service, takes over a dead one's socket, listens, writes its
- * record, and then lives until one of three things ends it:
+ * `texra serve`: the service's lifetime over its own socket. It refuses to
+ * start beside a live service, listens on a socket only it uses, writes its
+ * record, and then lives until one of four things ends it:
  *
  * - a stop: `service.stop` without a drain, or the host's own shutdown;
- * - a drain (`service.stop` with `drain`, the upgrade path): the record and
- *   the socket path are released at once, so a newer service can start
- *   while this one finishes the tasks at work, and it exits when they end
- *   (a conversation parked here stops with it, resumable);
+ * - a drain (`service.stop` with `drain`, the upgrade path): the record is
+ *   released at once, so a newer service can start and be found while this
+ *   one finishes the tasks at work, and it exits when they end (a
+ *   conversation parked here stops with it, resumable);
+ * - replacement: another service's record took this one's place (two
+ *   started at once), and nothing works here;
  * - idleness: no client connected and no task running for `idleAfter`.
  *
  * It never starts at login: a client starts it detached when none answers.
@@ -23,7 +25,6 @@ import {
   Effect,
   FileSystem,
   Layer,
-  Option,
   Ref,
   Schedule,
   type Scope,
@@ -33,15 +34,16 @@ import { RpcSerialization, RpcServer } from 'effect/rpc';
 import type { ProcessServices } from '@platform/processRuntime';
 
 import {
-  probeService,
+  probeRecordedService,
   WINDOWS_UNSUPPORTED,
   type ServiceUnavailable,
 } from './client';
 import {
   prepareServiceDirectories,
+  readServiceRecord,
+  removeDeadSockets,
   removeServiceFiles,
   servicePaths,
-  type ServiceOwnership,
   writeServiceRecord,
 } from './discovery';
 import {
@@ -117,90 +119,66 @@ export const serve = Effect.fn('server.serve')(function* (
   const fs = yield* FileSystem.FileSystem;
   const projects = yield* ServiceProjects;
   const paths = servicePaths(projects.storageRoot);
+  // This service's own socket: a retired one that exits later can only
+  // remove its own file, never this one's.
+  const socket = paths.socketFor(process.pid);
   yield* prepareServiceDirectories(paths).pipe(
-    Effect.mapError(
-      (cause) => new ServiceListenFailed({ socket: paths.socket, cause }),
-    ),
+    Effect.mapError((cause) => new ServiceListenFailed({ socket, cause })),
   );
-  const existing = yield* probeService(paths.socket);
+  const existing = yield* probeRecordedService(projects.storageRoot);
   if (existing !== null)
     return yield* Effect.fail(new ServiceAlreadyRunning({ info: existing }));
+  yield* removeDeadSockets(paths);
+  // A socket of this pid is a dead process's whose pid this one reuses: no
+  // other live process can have it.
+  yield* fs
+    .remove(socket, { force: true })
+    .pipe(
+      Effect.mapError((cause) => new ServiceListenFailed({ socket, cause })),
+    );
 
   const startedAt = yield* Clock.currentTimeMillis;
   const ended = yield* Deferred.make<ServeExit>();
   const draining = yield* Ref.make(false);
   let clients: Effect.Effect<number> = Effect.succeed(0);
-  // Known once the socket is bound; until then there is nothing to remove.
-  let own: ServiceOwnership | null = null;
-  // Once: a drain releases the name early, and the exit after it must not
-  // release again, since a newer service's socket can reuse the inode this
-  // one's had and would be removed in its place.
+  // Once: a drain releases the record early, and the exit releases what is
+  // left.
+  let released = false;
   const release = Effect.suspend(() => {
-    const mine = own;
-    own = null;
-    return mine === null ? Effect.void : removeServiceFiles(paths, mine);
+    if (released) return Effect.void;
+    released = true;
+    return removeServiceFiles(paths, process.pid);
   }).pipe(Effect.provideService(FileSystem.FileSystem, fs));
   const control: Context.Service.Shape<typeof ServiceControl> = {
     version: BUILD_VERSION,
-    socket: paths.socket,
+    socket,
     startedAt,
     clients: Effect.suspend(() => clients),
     draining: Ref.get(draining),
     stop: (drain) =>
       drain
         ? Ref.set(draining, true).pipe(
-            // Release the name first: a newer service can listen while this
-            // one finishes its tasks on the connections it already holds.
+            // Release the record first: a newer service can start and be
+            // found while this one finishes its tasks on the connections
+            // it already holds.
             Effect.andThen(release),
           )
         : Deferred.succeed(ended, 'stopped').pipe(Effect.asVoid),
   };
-
-  // The socket file's identity: a service that took the path over made a
-  // new one.
-  const socketIno = fs.stat(paths.socket).pipe(
-    Effect.map((info) => Option.getOrUndefined(info.ino)),
-    Effect.orElseSucceed(() => undefined),
-  );
-  const listen = Layer.build(
+  const protocol = yield* Layer.build(
     RpcServer.layerProtocolSocketServer.pipe(
       Layer.provide(RpcSerialization.layerNdjson),
-      Layer.provide(NodeSocketServer.layer({ path: paths.socket })),
+      Layer.provide(NodeSocketServer.layer({ path: socket })),
     ),
   ).pipe(
     Effect.map((context) => Context.get(context, RpcServer.Protocol)),
-    Effect.mapError(
-      (cause) => new ServiceListenFailed({ socket: paths.socket, cause }),
-    ),
-  );
-  // Bind without unlinking first: a live service's socket makes the bind
-  // fail. Only a socket that refuses connections, and is still the same
-  // file after that probe, is a dead service's and is removed; a service
-  // that took the path meanwhile keeps it, and this one stops.
-  const protocol = yield* listen.pipe(
-    Effect.catch((failed) =>
-      Effect.gen(function* () {
-        const stale = yield* socketIno;
-        const answer = yield* probeService(paths.socket);
-        if (answer !== null)
-          return yield* Effect.fail(
-            new ServiceAlreadyRunning({ info: answer }),
-          );
-        if (stale === undefined || (yield* socketIno) !== stale)
-          return yield* Effect.fail(failed);
-        // A removal that fails leaves the file, and the bind below reports it.
-        yield* fs.remove(paths.socket).pipe(Effect.ignore);
-        return yield* listen;
-      }),
-    ),
+    Effect.mapError((cause) => new ServiceListenFailed({ socket, cause })),
   );
   clients = protocol.clientIds.pipe(Effect.map((ids) => ids.size));
   yield* fs
-    .chmod(paths.socket, 0o600)
+    .chmod(socket, 0o600)
     .pipe(
-      Effect.mapError(
-        (cause) => new ServiceListenFailed({ socket: paths.socket, cause }),
-      ),
+      Effect.mapError((cause) => new ServiceListenFailed({ socket, cause })),
     );
   yield* Effect.forkScoped(
     RpcServer.make(TexraRpcs).pipe(
@@ -212,22 +190,18 @@ export const serve = Effect.fn('server.serve')(function* (
       Effect.provideService(RpcServer.Protocol, protocol),
     ),
   );
-  const listening = yield* socketIno;
-  own = { pid: process.pid, socketIno: listening };
   yield* writeServiceRecord(paths, {
     pid: process.pid,
     protocol: PROTOCOL_VERSION,
     version: BUILD_VERSION,
-    socket: paths.socket,
+    socket,
     startedAt,
   }).pipe(
-    Effect.mapError(
-      (cause) => new ServiceListenFailed({ socket: paths.socket, cause }),
-    ),
+    Effect.mapError((cause) => new ServiceListenFailed({ socket, cause })),
   );
   yield* Effect.addFinalizer(() => release);
   yield* Effect.logInfo(
-    `TeXRA service ${BUILD_VERSION} listening on ${paths.socket}`,
+    `TeXRA service ${BUILD_VERSION} listening on ${socket}`,
   );
 
   const idleAfter = Duration.toMillis(options.idleAfter);
@@ -242,14 +216,19 @@ export const serve = Effect.fn('server.serve')(function* (
       if (working === 0) yield* Deferred.succeed(ended, 'drained');
       return;
     }
-    // Another service took the socket path over (two started at once):
-    // this one can no longer be reached, so it leaves.
-    if (listening !== undefined) {
-      const current = yield* socketIno;
-      if (current !== listening && working === 0) {
-        yield* Deferred.succeed(ended, 'replaced');
-        return;
-      }
+    // Another service's record replaced this one's (two started at once):
+    // no new client finds this one, so it leaves once nothing works here
+    // and no client it already answered is connected. A record it cannot
+    // read is not a replacement.
+    const record = yield* readServiceRecord(paths);
+    if (
+      record !== null &&
+      record.pid !== process.pid &&
+      working === 0 &&
+      (yield* control.clients) === 0
+    ) {
+      yield* Deferred.succeed(ended, 'replaced');
+      return;
     }
     const busy = running > 0 || (yield* control.clients) > 0;
     idleSince = busy ? null : (idleSince ?? now);

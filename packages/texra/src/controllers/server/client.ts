@@ -16,7 +16,11 @@ import { RpcClient, RpcSerialization, type RpcClientError } from 'effect/rpc';
 
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { ensureError } from '@utils/errors/errorMessage';
-import { prepareServiceDirectories, servicePaths } from './discovery';
+import {
+  prepareServiceDirectories,
+  readServiceRecord,
+  servicePaths,
+} from './discovery';
 
 import {
   BUILD_VERSION,
@@ -97,7 +101,7 @@ function connectService(
  * hello: that fails, so no caller mistakes it for a dead one and takes its
  * socket over.
  */
-export function probeService(
+function probeService(
   socket: string,
 ): Effect.Effect<ServiceInfo | null, ServiceUnavailable> {
   return Effect.scoped(
@@ -116,6 +120,21 @@ export function probeService(
               reason: `The TeXRA service on ${socket} accepts connections but did not answer (${error.message}). Stop it with \`texra service stop\`, or end its process.`,
             }),
           ),
+    ),
+  );
+}
+
+/**
+ * The hello of the service `storageRoot`'s record names, or null when there
+ * is none: no record, or a socket nobody accepts on (a service that died).
+ */
+export function probeRecordedService(
+  storageRoot: string,
+): Effect.Effect<ServiceInfo | null, ServiceUnavailable> {
+  return readServiceRecord(servicePaths(storageRoot)).pipe(
+    Effect.provide(nodeFileServices),
+    Effect.flatMap((record) =>
+      record === null ? Effect.succeed(null) : probeService(record.socket),
     ),
   );
 }
@@ -198,8 +217,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     return yield* Effect.fail(
       new ServiceUnavailable({ reason: WINDOWS_UNSUPPORTED }),
     );
-  const { socket } = servicePaths(storageRoot);
-  let info = yield* probeService(socket);
+  let info = yield* probeRecordedService(storageRoot);
   if (info !== null && info.protocol > PROTOCOL_VERSION)
     return yield* Effect.fail(
       new ServiceUnavailable({
@@ -213,7 +231,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     yield* Effect.logInfo(
       `Retiring the TeXRA service ${info.version} (protocol ${info.protocol}): it finishes its running tasks and exits.`,
     );
-    yield* askServiceToStop(socket, true).pipe(
+    yield* askServiceToStop(retiring.socket, true).pipe(
       Effect.mapError(
         (error) =>
           new ServiceUnavailable({
@@ -234,7 +252,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     );
     // Not listening yet, listening but still starting, or still the
     // retiring service: all wait for this protocol's own service.
-    info = yield* probeService(socket).pipe(
+    info = yield* probeRecordedService(storageRoot).pipe(
       Effect.flatMap((answer) =>
         answer?.protocol === PROTOCOL_VERSION && answer.pid !== retired
           ? Effect.succeed(answer)
@@ -248,9 +266,10 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
   if (info === null)
     return yield* Effect.fail(
       new ServiceUnavailable({
-        reason: `The TeXRA service did not answer on ${socket} within ${START_TIMEOUT}.`,
+        reason: `The TeXRA service did not answer within ${START_TIMEOUT} (its log: ${servicePaths(storageRoot).log}).`,
       }),
     );
+  const { socket } = info;
   const client = yield* connectService(socket).pipe(
     Effect.mapError(
       (error) =>

@@ -1581,15 +1581,38 @@ async function validateServiceChatsSeeEachOther() {
 
 /**
  * The service's build identity (D1-D4): clients of one build share its
- * service; a client of a newer build retires it and starts its own; a client
- * of the older build then leaves the newer service alone. Every host stamps
+ * service; a client of a newer build retires it and starts its own while
+ * the old one finishes the task it holds; the newer service stays
+ * reachable once the old one exits; a client of the older build then
+ * leaves the newer service alone. Every host stamps
  * the same workspace version, so this holds across the CLI, the extension
  * and the desktop app. The statuses each client saw are the artifact.
  */
 async function validateServiceBuildIdentity() {
   const cwd = makeScratch('texra-cli-service-builds-');
   const project = echoProject(cwd);
-  const env = { ...project.ptyEnv, TEXRA_NO_TELEMETRY: '1' };
+  writeFileSync(
+    path.join(
+      cwd,
+      'home',
+      '.texra',
+      'v1',
+      'global-storage',
+      'custom_agents',
+      'park-validation.yaml',
+    ),
+    `name: park_validation
+description: Hold its model call until released.
+
+prompt: |
+  GOLDEN-PARK
+`,
+  );
+  const env = {
+    ...project.ptyEnv,
+    TEXRA_NO_TELEMETRY: '1',
+    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+  };
   const texraWith = (binary, args, label) => {
     const result = run(
       process.execPath,
@@ -1616,8 +1639,28 @@ async function validateServiceBuildIdentity() {
       return false;
     }
   };
+  const until = async (label, check) => {
+    const deadline = Date.now() + 30_000;
+    while (!check()) {
+      assert(Date.now() < deadline, `timed out waiting for ${label}`);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  };
   try {
-    texraWith(binaryPath, ['tasks', 'list'], 'texra tasks list (this build)');
+    // A task at work in this build's service: its model call is held.
+    texraWith(
+      binaryPath,
+      [
+        'tasks',
+        'start',
+        'park_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        'Hold',
+      ],
+      'texra tasks start (this build)',
+    );
     const first = status(binaryPath, 'service status (this build)');
     texraWith(
       binaryPath,
@@ -1625,27 +1668,32 @@ async function validateServiceBuildIdentity() {
       'texra tasks list (this build, again)',
     );
     const same = status(binaryPath, 'service status (this build, again)');
+    // A newer build retires it; it drains, finishing that task, while the
+    // newer service serves.
     texraWith(
       nextBuildPath,
       ['tasks', 'list'],
       'texra tasks list (next build)',
     );
     const next = status(nextBuildPath, 'service status (next build)');
+    const drainingKept = alive(first.pid);
+    // The retired service now exits: the newer one must still be found.
+    process.kill(first.pid, 'SIGTERM');
+    await until('the retired service to exit', () => !alive(first.pid));
+    const reachable = status(nextBuildPath, 'service status (next, after)');
     texraWith(
       binaryPath,
       ['tasks', 'list'],
       'texra tasks list (this build, after)',
     );
     const after = status(binaryPath, 'service status (this build, after)');
-    const deadline = Date.now() + 30_000;
-    while (alive(first.pid) && Date.now() < deadline)
-      await new Promise((resolve) => setTimeout(resolve, 250));
     const artifactPath = writeArtifact('service-builds.json', {
       first,
       same,
       next,
+      drainingKept,
+      reachable,
       after,
-      retiredGone: !alive(first.pid),
     });
     assert(
       same.pid === first.pid,
@@ -1656,12 +1704,16 @@ async function validateServiceBuildIdentity() {
       `a newer build should retire the older service and start its own (artifact: ${artifactPath})`,
     );
     assert(
-      after.pid === next.pid && after.version === NEXT_BUILD,
-      `an older build should leave a newer service running (artifact: ${artifactPath})`,
+      drainingKept,
+      `a retired service should keep running while its task works (artifact: ${artifactPath})`,
     );
     assert(
-      !alive(first.pid),
-      `the retired service should exit (artifact: ${artifactPath})`,
+      reachable.pid === next.pid,
+      `the newer service should stay reachable once the retired one exits (artifact: ${artifactPath})`,
+    );
+    assert(
+      after.pid === next.pid && after.version === NEXT_BUILD,
+      `an older build should leave a newer service running (artifact: ${artifactPath})`,
     );
   } finally {
     removeScratch(cwd);

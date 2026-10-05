@@ -802,7 +802,10 @@ show` print the same notice, and the new `texra agents customize`,
   service by it, so a preview extension, whose Marketplace number differs
   from the CLI's, no longer retires a service of its own build. A service
   that retired an older one no longer disappears a moment later: the old
-  service's exit could remove the new one's socket.
+  service's exit could remove the new one's socket. Each service now
+  listens on a socket of its own, which its record names, so an older
+  service that finishes its last task after a newer one started never
+  takes the newer one's socket with it.
 - **Desktop header controls and menus take clicks again.** The "+" menu of
   a side or bottom panel (Files, Terminal, Browser, Logs), a tab's menu, and
   the task header's controls (the "More" button and its menu, renaming, the

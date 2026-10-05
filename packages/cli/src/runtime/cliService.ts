@@ -43,10 +43,9 @@ import type {
 import { ownerIdentity, type OwnerId } from '@shared/schemas';
 import type { ServiceInfo } from '@texra/controllers/server/protocol';
 import type { ServiceProjects } from '@texra/controllers/server/handlers';
-import { servicePaths } from '@texra/controllers/server/discovery';
 import {
   ensureService,
-  probeService,
+  probeRecordedService,
   spawnService,
   type ServiceConnection,
   type ServiceUnavailable,
@@ -174,9 +173,7 @@ const quietClient = Effect.sync(() =>
 export function probeCliService(
   storageRoot: string,
 ): Effect.Effect<ServiceInfo | null, ServiceUnavailable> {
-  return quietClient.pipe(
-    Effect.andThen(probeService(servicePaths(storageRoot).socket)),
-  );
+  return quietClient.pipe(Effect.andThen(probeRecordedService(storageRoot)));
 }
 
 /** `TEXRA_NO_SERVICE=1`: this process uses no background service, so a
