@@ -61,10 +61,12 @@ export type PartEvent =
   | { readonly kind: 'usage'; readonly usage: HttpTurnResult['usage'] }
   | {
       readonly kind: 'finish';
+      /** A `null` reason leaves it to the settled content: a tool-call
+       *  finish when it holds calls, else a plain stop. */
       readonly finish: Pick<
         HttpTurnResult,
-        'finishReason' | 'stopSequence' | 'finishEvidence' | 'refusalEvidence'
-      >;
+        'stopSequence' | 'finishEvidence' | 'refusalEvidence'
+      > & { readonly finishReason: HttpTurnResult['finishReason'] | null };
       /** The provider's terminal statement of the content. */
       readonly snapshot?: readonly Part[];
     };
