@@ -8,6 +8,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
+import { AgentDirectories, type WorkspaceRoots } from '@texra-ai/harness';
 import {
   agentSourceRoots,
   changedBuiltInOf,
@@ -18,9 +19,7 @@ import {
   keepCustomAgent,
   refresh,
 } from '@agent/index';
-import { AgentDirectories } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { agentKey } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createSettingsAgentActions } from '@texra/controllers/settingsView/backend/SettingsAgentActions';

@@ -24,6 +24,7 @@
 // Third-party imports
 import { Effect, Stream, type FileSystem } from 'effect';
 import { z } from 'zod';
+import { ToolContext, type ToolContextShape, Secrets } from '@texra-ai/harness';
 import type { RunCall } from '@agent/runtime/RunCall';
 
 // Local imports
@@ -36,12 +37,7 @@ import {
 } from '@agent/trace';
 import type { Runs } from '@agent/runtime/runRegistry';
 import type { ChildRunPort } from '@agent/runtime/childRunLoop';
-import {
-  ToolContext,
-  type ToolContextShape,
-} from '@agent/core/tools/ToolTypes';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
-import { Secrets } from '@platform/secrets';
 import {
   AgentCliEffortSchema,
   ClaudeAgentModelSchema,

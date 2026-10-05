@@ -29,10 +29,8 @@ import {
   discoverCopilotRoutes,
   setCopilotRoutePreference,
 } from '@model/copilotRouting';
-import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { StorageFs } from '@platform/rootedFs';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
@@ -53,6 +51,7 @@ import {
   latexEditorStatus,
   vscodeLatexSettingsHandlers,
 } from './handlers/latexSettingsHandlers';
+import type { PlatformSecrets, StateStore } from '@texra-ai/harness';
 
 /** The webview shapes SettingsView dispatches for. */
 type SettingsWebview = vscode.WebviewView | vscode.WebviewPanel;

@@ -19,7 +19,6 @@ import * as ChildProcess from 'effect/process/ChildProcess';
 import type { ApiKeyRouteCredential } from '@agent/runtime/modelRoutes';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   resolveOptionalCommand,
   type ResolvedBinaryCommand,
@@ -27,6 +26,7 @@ import {
 import { withExtendedPath } from '@utils/system/platformPaths';
 import { ensureError } from '@utils/errors/errorMessage';
 import { absentReason } from '@utils/files/fsEntryExists';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type {
   ChildProcessHandle,
   ChildProcessSpawner,

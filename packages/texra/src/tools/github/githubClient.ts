@@ -9,7 +9,7 @@
 
 import { Data, Duration, Effect } from 'effect';
 import { StatusCodes } from 'http-status-codes';
-import { Secrets } from '@platform/secrets';
+import { Secrets } from '@texra-ai/harness';
 import { scopedClient } from '@tools/timeouts';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';

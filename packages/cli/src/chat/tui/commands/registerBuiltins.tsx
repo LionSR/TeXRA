@@ -3,22 +3,21 @@
 
 import { Effect, Result, type Scope } from 'effect';
 
+import { type RunId } from '@texra-ai/harness/schemas';
 import type { SessionHandle } from '@agent/runtime';
-import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
-import { parseCliHistoryId } from '@cli/runtime/history';
-import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import type {
   CliLogoutTarget,
   LoginFormValue,
 } from '@cli/runtime/loginOptions';
+import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
+import { parseCliHistoryId } from '@cli/runtime/history';
+import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
 import {
   installPlugins,
   parsePluginOrigin,
 } from '@common/plugins/installedPlugins';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import { type RunId } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   localSessionBackend,
@@ -86,6 +85,7 @@ import {
   type FormActionHandler,
   modelAccessContribution,
 } from './modelAccessContribution';
+import type { PlatformSecrets } from '@texra-ai/harness';
 
 type SelectHandler<T> = (value: T) => SlashCommandEffect;
 

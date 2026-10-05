@@ -11,6 +11,13 @@
  */
 import { Effect, Option, Stream, SubscriptionRef } from 'effect';
 
+import {
+  Unavailable,
+  type RequestError,
+  type RequestRefusal,
+  Outcome,
+  RuntimeRequest,
+} from '@texra-ai/harness';
 import { resumeOnSession } from '@agent/followUp/ToolUseFollowUp';
 import {
   buildTerminalRunEndResult,
@@ -28,12 +35,6 @@ import {
   type TranscriptSubscription,
 } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
-import {
-  Unavailable,
-  type RequestError,
-  type RequestRefusal,
-} from '@shared/session/requestErrors';
-import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
 import { isLiveRun, type SessionView } from '@shared/session/sessionView';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';

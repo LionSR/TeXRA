@@ -2,7 +2,7 @@ import { Deferred, Effect } from 'effect';
 
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import type { RunRegistry } from '@agent/runtime/runRegistry';
-import type { RunId } from '@shared/schemas';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /**
  * What the registry tracks about one live agent-CLI session: its follow-up

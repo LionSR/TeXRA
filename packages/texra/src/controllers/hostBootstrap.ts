@@ -36,9 +36,9 @@ import {
   type NodeRuntimeSkillOptions,
 } from '@platform/defaults/nodeHost';
 import { installProcessHttpDispatcher } from '@platform/defaults/longRunningModelTransport';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { ToolRegistry } from '@tools/toolTable';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 
 export interface HostBootstrapInit {
   /**

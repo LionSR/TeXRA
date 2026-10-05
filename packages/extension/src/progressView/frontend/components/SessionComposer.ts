@@ -24,7 +24,6 @@ import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
-import type { RunId } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import {
@@ -48,6 +47,7 @@ import { filterNotNullish } from '@utils/core';
 import { generatePastedImageName } from '@utils/files/pastedImageName';
 import './QueuedFollowUps';
 import { launcherChipMenus, type ChipMenu } from './composerChipMenus';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 function selectedValue(event: Event): string {
   const item = (event as CustomEvent<{ item?: { value?: unknown } }>).detail

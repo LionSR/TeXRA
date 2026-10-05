@@ -23,7 +23,6 @@ import {
   type RunId,
   type HistoryRunStatus,
 } from '@shared/schemas';
-import type { SessionOpenError } from '@shared/session/database';
 import type { RunView } from '@shared/session/sessionView';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import { loadChatExportInput, type ChatExportInput } from '@texra/agent/export';
@@ -51,6 +50,7 @@ import {
   formatConversationPreview,
   formatConversationTranscript,
 } from './history/conversationFormat';
+import type { SessionOpenError } from '@texra-ai/harness';
 
 /** A run's generated files and its edited workspace files render alike.
  *  First group wins on a path collision; generated output precedes workspace. */

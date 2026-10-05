@@ -1,24 +1,29 @@
 // Local imports - run requests
 import { Effect } from 'effect';
+
+// Local imports - team launch
+
+// Local imports - main-view run
+
+// Local imports - shared types and errors
+import {
+  Rejected,
+  type StateReadFailed,
+  type StateStore,
+} from '@texra-ai/harness';
+import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 import {
   validateRunRequest,
   type ValidatedRunRequest,
 } from '@agent/core/state/runRequests';
-import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
-
-// Local imports - team launch
 import {
   formatTeamLaunchBlockedMessage,
   formatUnknownTeamMessage,
   resolveTeamLaunch,
   TEAM_SELECTION_REQUIRED_MESSAGE,
 } from '@common/teams/TeamPlan';
-
-// Local imports - main-view run
-
-// Local imports - shared types and errors
-import type { StateReadFailed, StateStore } from '@platform/interfaces';
 import type { AgentCatalogServices } from '@platform/processRuntime';
+import type { HostRequest } from '@shared/session/hostRequest';
 import {
   DEFAULT_TOOL_CONFIG,
   ToolConfigSchema,
@@ -26,8 +31,6 @@ import {
   type RunId,
   type SessionType,
 } from '@shared/schemas';
-import type { HostRequest } from '@shared/session/hostRequest';
-import { Rejected } from '@shared/session/requestErrors';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { pastedImageFullPath } from '@texra/utils/files/pastedImageUtils';

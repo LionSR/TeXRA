@@ -27,6 +27,7 @@ const runScoped = { runId: RunIdSchema };
  * operation for a resume to observe.
  */
 const RunStopReasonSchema = z.enum(['user', 'shutdown']);
+/** Why a run stops: a `user` stop or this process's `shutdown`. */
 export type RunStopReason = z.infer<typeof RunStopReasonSchema>;
 
 export const RuntimeRequestSchema = z.discriminatedUnion('kind', [

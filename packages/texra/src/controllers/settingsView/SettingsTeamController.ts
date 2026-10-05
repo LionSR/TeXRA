@@ -4,11 +4,11 @@ import {
   formatUnknownTeamMessage,
   missingMemberNames,
 } from '@common/teams/TeamPlan';
-import type { StateReadFailed } from '@platform/interfaces';
 import type { MessageHost } from '@texra/hosts/uiHosts';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
+import type { StateReadFailed } from '@texra-ai/harness';
 
 interface SettingsTeamCatalog {
   getPresetRoot(

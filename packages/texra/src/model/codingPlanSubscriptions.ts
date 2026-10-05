@@ -3,7 +3,6 @@ import {
   type CodingPlanSubscription,
 } from '@texra-ai/llm';
 
-import type { ConfigWriteFailed, StateReadFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { providerRegionSetting } from '@shared/state/providerSettings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -13,6 +12,7 @@ import {
   setGLMCodingPlan,
 } from '@utils/config/providerConfig';
 import { writeSettingTo } from '@utils/config/platformSettings';
+import type { ConfigWriteFailed, StateReadFailed } from '@texra-ai/harness';
 import type { Effect } from 'effect';
 
 export interface CodingPlanSubscriptionRuntime {

@@ -11,7 +11,6 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Box, Static, Text } from 'ink';
 
 import { COLOR_HINT } from '@cli/tui/ui/colors';
-import type { RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import type { TranscriptRow } from '@shared/transcript';
 import { safeHomedir } from '@utils/system/platformPaths';
@@ -45,6 +44,7 @@ import {
 } from './staticTranscriptRing';
 import { TranscriptEntry } from './TranscriptEntry';
 import { transcriptColumns } from './transcriptEntryLayout';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 function shortenCwd(cwd: string): string {
   const home = safeHomedir();

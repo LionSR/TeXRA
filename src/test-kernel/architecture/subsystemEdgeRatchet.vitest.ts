@@ -70,7 +70,9 @@ function loadAliasTargets(): Map<string, string> {
 
   for (const [key, values] of Object.entries(paths ?? {})) {
     const alias = key.replace(/\/\*$/, '');
-    if (!alias.startsWith('@')) continue;
+    // The harness's package entries are its public surface, not a subsystem:
+    // an import through them is no edge between top-level directories.
+    if (!alias.startsWith('@') || alias.startsWith('@texra-ai/')) continue;
     const target = values[0]
       ?.replace(/\/\*$/, '')
       .replace(/^\.\//, '')

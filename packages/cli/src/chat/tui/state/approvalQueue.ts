@@ -26,7 +26,6 @@ import {
 } from '@shared/session/approvalDecision';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { attentionOf, type SessionView } from '@shared/session/sessionView';
-import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { assertNever } from '@utils/core';
 
@@ -37,6 +36,7 @@ import {
   appendLocalRequestRefusal,
   reportRequestDefect,
 } from './transcript';
+import type { RuntimeRequest } from '@texra-ai/harness';
 
 interface TuiApprovalAdornments {
   readonly toolEdit: {

@@ -5,7 +5,7 @@ import { Effect, FileSystem, Path } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { ToolContext } from '@texra-ai/harness';
 import { ArxivProcessor, type ArxivSourceError } from '@latex/arxivProcessor';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { WorkspaceFs } from '@platform/rootedFs';

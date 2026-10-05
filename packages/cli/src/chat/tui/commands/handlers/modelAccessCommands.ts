@@ -7,13 +7,13 @@ import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import { type CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import { updateCliModelAccess } from '@cli/runtime/modelAccessSelection';
 
-import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   type SlashCommandOutput,
   type SlashCommandContext,
   transcriptSlashCommandOutput,
 } from './slashContext';
+import type { PlatformSecrets } from '@texra-ai/harness';
 
 /**
  * Save a provider key through the shared key controller and answer the extra

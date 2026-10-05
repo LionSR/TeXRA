@@ -1,16 +1,14 @@
 import { Data, Effect } from 'effect';
-import type { ProcessServices } from '@platform/processRuntime';
-import type {
-  StateStore,
-  StateWriteFailed,
-  StateReadFailed,
-} from '@platform/interfaces';
-import type { LanguageModel } from '@platform/languageModel';
-import type { OnboardingFunnelState } from '@shared/schemas';
 import {
   isRequestRefusal,
   type RequestRefusal,
-} from '@shared/session/requestErrors';
+  LanguageModel,
+  StateStore,
+  StateWriteFailed,
+  StateReadFailed,
+} from '@texra-ai/harness';
+import type { ProcessServices } from '@platform/processRuntime';
+import type { OnboardingFunnelState } from '@shared/schemas';
 import {
   setFirstRunDone,
   setOnboardingDeclined,

@@ -11,7 +11,6 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { withLogChannel } from '@logger/effectLog';
-import type { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
 import {
@@ -22,6 +21,7 @@ import {
   type SubscriptionSignInPresenter,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { ensureError } from '@utils/errors/errorMessage';
+import type { Secrets } from '@texra-ai/harness';
 import type { HttpClient } from 'effect/http';
 
 const OPEN_DEFAULT_BROWSER = 'Open in Default Browser';

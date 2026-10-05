@@ -15,7 +15,6 @@ import {
   withProcessServices,
 } from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
 import { ExternalOpenFailed, type MessageHost } from '@texra/hosts/uiHosts';
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
@@ -30,6 +29,7 @@ import {
   tryShowInRenderer,
   type DesktopOverlayPostOptions,
 } from './desktopIpcTypes.js';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 interface DesktopShellAdapter {

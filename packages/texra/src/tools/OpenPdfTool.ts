@@ -3,7 +3,7 @@
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
-import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { ToolContext } from '@texra-ai/harness';
 import { callerRun } from '@agent/runtime/RunCall';
 
 // Local imports

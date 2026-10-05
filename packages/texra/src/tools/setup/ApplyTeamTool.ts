@@ -13,7 +13,7 @@
 
 import { Effect } from 'effect';
 import { z } from 'zod';
-import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { ToolContext } from '@texra-ai/harness';
 
 import { createWorkspaceAgentsController } from '@agent/index/agentRegistry';
 import { teamPresets } from '@common/teams/TeamPresets';

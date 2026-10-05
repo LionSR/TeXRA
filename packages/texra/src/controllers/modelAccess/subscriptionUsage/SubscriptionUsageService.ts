@@ -15,7 +15,6 @@ import {
   type SecretsFailed,
 } from '@texra-ai/llm';
 import { withLogChannel } from '@logger/effectLog';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type {
   SubscriptionUsageProvider,
@@ -33,6 +32,7 @@ import {
   GLM_CODING_PLAN_USAGE_URL,
 } from './glmCodingPlanUsageAdapter';
 import { fetchKimiCodeUsage } from './kimiCodeUsageAdapter';
+import type { PlatformSecrets } from '@texra-ai/harness';
 import type { ParsedSubscriptionUsage } from './subscriptionUsageParsing';
 import type { HttpClient } from 'effect/http';
 

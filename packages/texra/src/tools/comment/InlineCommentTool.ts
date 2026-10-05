@@ -1,10 +1,10 @@
 // Third-party imports
 import { Context, Effect, Option } from 'effect';
 import { z } from 'zod';
+import { ToolContext } from '@texra-ai/harness';
 import type { RunCall } from '@agent/runtime/RunCall';
 
 // Internal imports
-import { ToolContext } from '@agent/core/tools/ToolTypes';
 import { withLogChannel } from '@logger/effectLog';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { resolveToolPath } from '@tools/pathResolution';

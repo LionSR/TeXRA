@@ -28,7 +28,6 @@ import {
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import { goalStateOf } from '@shared/plugins/goal';
 import { isLiveRun } from '@shared/session/sessionView';
-import type { RunId } from '@shared/schemas';
 import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { interruptedTasks } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
@@ -43,6 +42,7 @@ import {
   type SlashCommandContext,
   type SlashCommandEffect,
 } from './slashContext';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 export function showCliSlashCommandHelp(): void {
   openInfoPane(

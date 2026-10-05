@@ -4,13 +4,10 @@ import path from 'node:path';
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
 import type { AcceptCopyMeta, RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
-import type { HostRequestFailure } from '@shared/session/requestErrors';
 import {
   ensureRunDirUnder,
   findRunDirUnder,
@@ -18,6 +15,8 @@ import {
 } from '@utils/files/runStorageFs';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { HostRequestFailure } from '@texra-ai/harness';
+import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { RunOutputsSource } from './runOutputs';
 
 const CHANNEL = 'ProgressWorkflowFileActions';

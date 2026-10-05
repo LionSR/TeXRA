@@ -81,5 +81,61 @@ export type {
   SessionCloseReport,
   TranscriptSubscription,
 } from '@shared/schemas';
-export type { RequestError } from '@shared/session/requestErrors';
-export type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+// A request's refusals, as `Session.request` fails with them.
+export {
+  Cancelled,
+  HostRequestFailure,
+  Internal,
+  isRequestRefusal,
+  NotOwner,
+  Rejected,
+  Unavailable,
+} from '@shared/session/requestErrors';
+export type {
+  RequestError,
+  RequestRefusal,
+} from '@shared/session/requestErrors';
+export type {
+  Outcome,
+  RunStopReason,
+  RuntimeRequest,
+} from '@shared/session/runtimeRequest';
+
+// The platform's ports: what an `AgentPlatform` implements, the failures its
+// stores answer with, and the services a plugin's code reads them as.
+export type {
+  AgentDirectoriesPort,
+  ConfigProvider,
+  Disposable,
+  StateStore,
+  ToolMissingHandler,
+} from '@platform/interfaces';
+export {
+  AgentDirectories,
+  AgentDirectoriesFailed,
+  AppState,
+  ConfigWriteFailed,
+  StateReadFailed,
+  StateWriteFailed,
+  ToolMissingReporter,
+} from '@platform/interfaces';
+export type { PlatformSecrets } from '@platform/secrets';
+export { Secrets } from '@platform/secrets';
+export type {
+  LanguageModelAccessState,
+  LanguageModelInfo,
+  LanguageModelPort,
+} from '@platform/languageModel';
+export {
+  LanguageModel,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+} from '@platform/languageModel';
+export type { WorkspaceRoots } from '@platform/workspaceRoots';
+
+// What a plugin's `availability` answers with, and reads.
+export type {
+  ToolAvailabilityChecks,
+  ToolProbeError,
+  ToolProbeInputs,
+  ToolProbeServices,
+} from '@tools/toolProbes';

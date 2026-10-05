@@ -1,8 +1,8 @@
 // Shared utility functions for the progress view frontend.
 
-import type { RunId } from '@shared/schemas';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { isOwnDetailsToggle } from '@texra/shared/litControllers/detailsToggle';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /**
  * Find the first matching element in a composed event path.

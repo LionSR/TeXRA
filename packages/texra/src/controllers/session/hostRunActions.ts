@@ -16,32 +16,31 @@ import {
   lookupApiKey,
   type SecretsFailed,
 } from '@texra-ai/llm';
-import { FOLLOW_UP_WAKE_FAILED_MESSAGE } from '@agent/followUp/ToolUseFollowUp';
-import { getRunRecords } from '@agent/storage';
+import {
+  Secrets,
+  isRequestRefusal,
+  Rejected,
+  Unavailable,
+  type RequestRefusal,
+  DatabaseReadFailed,
+  AppState,
+  StateReadFailed,
+} from '@texra-ai/harness';
+import { presentRunFailure } from '@agent/runtime/terminalResultToast';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   validateRunRequest,
   type RunRequest,
   type ValidatedRunRequest,
 } from '@agent/core/state/runRequests';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { RunEndResult } from '@agent/runtime/RunEndResult';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { presentRunFailure } from '@agent/runtime/terminalResultToast';
+import { getRunRecords } from '@agent/storage';
+import { FOLLOW_UP_WAKE_FAILED_MESSAGE } from '@agent/followUp/ToolUseFollowUp';
 import { withLogChannel } from '@logger/effectLog';
-import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
 import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
-import type { AppState, StateReadFailed } from '@platform/interfaces';
-import { Secrets } from '@platform/secrets';
-import { documentsOf } from '@shared/plugins/documents';
-import { isDocumentTaskConfig, type RunId } from '@shared/schemas';
-import type { DatabaseReadFailed } from '@shared/session/database';
+import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
 import type { HostRequest } from '@shared/session/hostRequest';
-import {
-  isRequestRefusal,
-  Rejected,
-  Unavailable,
-  type RequestRefusal,
-} from '@shared/session/requestErrors';
+import { isDocumentTaskConfig, type RunId } from '@shared/schemas';
+import { documentsOf } from '@shared/plugins/documents';
 import type { MessageHost, NotificationFailed } from '@texra/hosts/uiHosts';
 import { runActionGuard } from '@texra/controllers/session/runActionGuard';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
@@ -62,6 +61,7 @@ import {
   type ProgressFollowUpModelOption,
   type ProgressFollowUpState,
 } from '../progressView/ProgressFollowUpController';
+import type { RunEndResult, AgentConfig } from '@texra-ai/harness/schemas';
 import type { SessionBackend } from './sessionBackend';
 
 const CHANNEL = 'HostRunActions';

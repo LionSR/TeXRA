@@ -24,8 +24,6 @@ import {
 import { fillRows, safeTerminalText } from '@cli/runtime/terminalText';
 
 // Local imports - shared schemas and model
-import type { RunId } from '@shared/schemas';
-import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import {
   SCRIPT_CALL_STATUS_LABEL,
   scriptStages,
@@ -43,6 +41,8 @@ import {
 } from '../state/sessionView';
 import { useSignal } from '../state/useSignal';
 import { RowSegment } from './SubagentList';
+import type { RuntimeRequest } from '@texra-ai/harness';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /** Rows the popup paints besides its list: the focused call's facts. */
 const POPUP_EXTRA_ROWS = 1;

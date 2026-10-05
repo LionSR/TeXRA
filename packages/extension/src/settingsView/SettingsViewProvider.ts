@@ -9,8 +9,6 @@ import {
   getSharedLocalResourceRoots,
 } from '@common/webview';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import type { StateStore } from '@platform/interfaces';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { DisposableStore } from '@texra/platform/disposable';
@@ -22,6 +20,7 @@ import {
   postToWebview,
   SettingsViewMessageHandler,
 } from './SettingsViewMessageHandler';
+import type { PlatformSecrets, StateStore } from '@texra-ai/harness';
 
 function isReadyMessage(message: unknown): boolean {
   return (

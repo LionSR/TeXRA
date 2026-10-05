@@ -16,10 +16,12 @@ import {
   SUPPORTED_LATEX_COMPILERS,
   type ProbedLatexTool,
 } from '@texra/shared/constants/latexToolchain';
-import { checkToolInstalled } from '@texra/utils/system/toolChecks';
+import {
+  checkToolInstalled,
+  detectPackageManager,
+} from '@texra/utils/system/toolChecks';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { findToolInCommonPaths } from '@utils/system/binaryResolver';
-import { detectPackageManager } from '@utils/system/toolUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'LatexToolingController';

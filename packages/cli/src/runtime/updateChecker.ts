@@ -3,8 +3,8 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
 import { Cause, Effect, Exit, Result } from 'effect';
+import { canonicalizeWorkspacePath } from '@texra-ai/harness/node';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
-import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import type { ProcessServices } from '@platform/processRuntime';
 import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
 import { UPDATE_CHECK_SKIP_ENV } from '@texra/utils/system/semverUpdateCheck';

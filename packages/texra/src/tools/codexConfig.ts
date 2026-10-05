@@ -5,7 +5,6 @@ import { z } from 'zod';
 // Local imports - agent config
 import { codexBackendModelId } from '@texra-ai/llm';
 import { withLogChannel } from '@logger/effectLog';
-import type { StateReadFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   isCodexModel,
@@ -22,6 +21,7 @@ import {
   selectAgentCliModel,
   type AgentCliModelRule,
 } from './agentCliModel';
+import type { StateReadFailed } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // Type-only imports

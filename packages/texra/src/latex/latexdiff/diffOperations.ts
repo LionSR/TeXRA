@@ -20,7 +20,6 @@ import { Effect, type FileSystem, type Path } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   getEffectiveDiffBase,
   roundIndexedEntries,
@@ -36,6 +35,7 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 // Local file imports
 import { LaTeXdiffService } from '../latexdiff';
 import { buildBetweenRoundDiffSuffix } from './diffFileNameManager';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { LatexRunDiscoveryPort } from './runDiscovery';
 import type {
   DiffProgressReporter,

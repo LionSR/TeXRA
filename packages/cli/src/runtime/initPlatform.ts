@@ -3,6 +3,20 @@ import { Cause, Effect, Exit, Scope } from 'effect';
 
 // Local imports
 import {
+  AppState,
+  type StateStore,
+  type StateWriteFailed,
+  Secrets,
+  type PlatformSecrets,
+  type WorkspaceRoots,
+  type SessionOpenError,
+} from '@texra-ai/harness';
+import {
+  createNodeWorkspaceRoots,
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@texra-ai/harness/node';
+import {
   closeAllSessions,
   initializeDefaultSession,
   teardownDefaultSession,
@@ -15,24 +29,11 @@ import {
 } from '@controllers/session/appStateStore';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { setLogSink, silentLogSink } from '@logger/logSink';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import {
-  AppState,
-  type StateStore,
-  type StateWriteFailed,
-} from '@platform/interfaces';
-import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import {
   withProcessServices,
   type ProcessRuntime,
 } from '@platform/processRuntime';
-import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
-import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { DisposableStore } from '@texra/platform/disposable';

@@ -14,12 +14,9 @@ import { z } from 'zod';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports
+import { ToolContext, type ToolContextShape } from '@texra-ai/harness';
 import { getRunRecords } from '@agent/storage';
 import type { ToolServices } from '@agent/runtime/ToolServices';
-import {
-  ToolContext,
-  type ToolContextShape,
-} from '@agent/core/tools/ToolTypes';
 import { requireToolRun, type RunCall } from '@agent/runtime/RunCall';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
@@ -30,8 +27,10 @@ import {
   ToolError,
   type EditRecord,
   type ToolResult,
+  RequestRefusal,
+  RunId,
+  FileLocation,
 } from '@shared/schemas';
-import type { RequestRefusal, RunId, FileLocation } from '@shared/schemas';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import {

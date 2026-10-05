@@ -9,7 +9,6 @@ import { join } from 'node:path';
 import { app, shell } from 'electron';
 import { Effect, Exit, FileSystem, Scope, SubscriptionRef } from 'effect';
 
-import type { PlatformSecrets } from '@platform/secrets';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages.js';
 import {
@@ -20,6 +19,7 @@ import {
 import { desktopSignInPresenters } from './desktopSignInPresenters.js';
 import { installDesktopWindowTitle } from './desktopWindowTitle.js';
 import { desktopSpawner } from './desktopWindows.js';
+import type { PlatformSecrets } from '@texra-ai/harness';
 import type { ProjectBindings } from './desktopProjectBindings.js';
 import type { DesktopPromptController } from './desktopPromptController.js';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';

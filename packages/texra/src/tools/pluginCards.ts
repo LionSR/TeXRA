@@ -22,7 +22,7 @@ import {
   MAX_CONCURRENT_REPO_SUBSCRIPTIONS,
 } from '@texra/tools/github/prSubscriptionConstants';
 import { LEAN4_EXTENSION_ID } from '@texra/tools/lean/leanTypes';
-import { preferredInstallCommand } from '@tools/toolProbes';
+import { preferredInstallCommand } from '@texra/tools/availabilityProbes';
 
 /** How a user gets a probed plugin's dependency installed and signed in. */
 export interface ToolPluginSetup {

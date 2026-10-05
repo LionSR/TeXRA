@@ -65,10 +65,13 @@ function workspaceStorageId(workspacePath: string | undefined): string {
  * live under these paths (the session database, `JsonStore`) create their own
  * directory when they first write.
  */
+/** The process-wide storage directory under a storage root. */
 export function resolveGlobalStoragePath(storageRoot: string): string {
   return join(storageRoot, 'v1', STORAGE_LAYOUT.global);
 }
 
+/** One workspace's storage directory under a storage root, keyed by the
+ *  workspace's identity (`no-workspace` for none). */
 export function resolveWorkspaceStoragePath(
   storageRoot: string,
   workspacePath: string | undefined,

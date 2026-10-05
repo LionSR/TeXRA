@@ -1,6 +1,5 @@
 import { Effect } from 'effect';
 
-import type { ConfigWriteFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   subscriptionProvider,
@@ -8,6 +7,7 @@ import {
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 
 import { bumpCodexPreferenceVersion } from './cliState';
+import type { ConfigWriteFailed } from '@texra-ai/harness';
 
 /**
  * Flip an OAuth subscription preference (ChatGPT, Grok) on `/login` and

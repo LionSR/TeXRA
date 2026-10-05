@@ -3,9 +3,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
-import type { ConfigProvider } from '@platform/interfaces';
 import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
@@ -41,6 +39,8 @@ import {
   normalizeDocumentName,
 } from './extraction/filenameHeaders';
 import { reportMissingOutputs, type OutputState } from './outputState';
+import type { ConfigProvider } from '@texra-ai/harness';
+import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 /** Delete any pre-staged symlink before writing so the write never follows the link into the immutable snapshot. */
 const writeRoundOutput = Effect.fn('XmlOutputManager.writeRoundOutput')(

@@ -8,8 +8,8 @@ import { Effect } from 'effect';
 
 // Local imports
 import { apiKeyEnvName, exposeApiKey, lookupApiKey } from '@texra-ai/llm';
+import { Secrets } from '@texra-ai/harness';
 import { withLogChannel } from '@logger/effectLog';
-import { Secrets } from '@platform/secrets';
 import { inheritedEnv } from '@utils/system/envFlags';
 import { executeCommand } from '@utils/system/execUtils';
 import { safeHomedir } from '@utils/system/platformPaths';

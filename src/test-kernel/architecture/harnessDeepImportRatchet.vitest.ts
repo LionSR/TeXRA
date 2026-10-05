@@ -46,7 +46,9 @@ const BASELINE_PATH = resolve(REPO_ROOT, BASELINE_FILE);
 const TSCONFIG_PATH = resolve(REPO_ROOT, 'tsconfig.json');
 
 /** Each tsconfig alias (`@agent`, `@transcript`, `@common/webview`, …) and
- *  whether it names a harness path, read from the one source of truth. */
+ *  whether it names a harness-internal path, read from the one source of
+ *  truth. The package's own entries (`@texra-ai/harness`, `/node`, …) are
+ *  its public surface, not deep imports. */
 function loadAliases(): ReadonlyMap<string, boolean> {
   const parsed = ts.parseConfigFileTextToJson(
     TSCONFIG_PATH,
@@ -60,7 +62,8 @@ function loadAliases(): ReadonlyMap<string, boolean> {
   return new Map(
     Object.entries(paths ?? {}).map(([key, targets]) => [
       key.replace(/\/\*$/, ''),
-      targets[0]?.startsWith('./packages/harness/src/') === true,
+      !key.startsWith('@texra-ai/') &&
+        targets[0]?.startsWith('./packages/harness/src/') === true,
     ]),
   );
 }

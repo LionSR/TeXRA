@@ -16,6 +16,8 @@ import type { SettingHost } from '@shared/state/stateSettings';
 
 import type { ConfigProvider, StateStore } from './interfaces';
 
+/** One workspace's host services: its folder, storage, configuration and
+ *  state stores, as the session opened over it holds them. */
 export interface WorkspaceRoots {
   /**
    * The product host this process is, named by its composition root. The

@@ -26,7 +26,6 @@ import type { ChatExportInput } from '@agent/export/schemas';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { StorageFs, type WorkspaceFs } from '@platform/rootedFs';
-import type { RunId } from '@shared/schemas';
 import {
   formatChatAsMarkdown,
   formatChatAsLatex,
@@ -47,6 +46,7 @@ import { readNormalizedFile } from '@utils/files/fsDurability';
 import { absentReason } from '@utils/files/fsEntryExists';
 
 import { TranscriptExportFailed } from './transcriptExportFailure';
+import type { RunId } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** Outcome of loading run data for export. */

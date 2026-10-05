@@ -21,17 +21,17 @@
 
 import { Effect, Semaphore } from 'effect';
 
-import type {
-  StateStore,
-  StateReadFailed,
-  StateWriteFailed,
-} from '@platform/interfaces';
-import type { LanguageModel } from '@platform/languageModel';
 import type { OnboardingFunnelState } from '@shared/schemas';
 import {
   readOnboardingFlags,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
+import type {
+  StateStore,
+  StateReadFailed,
+  StateWriteFailed,
+  LanguageModel,
+} from '@texra-ai/harness';
 
 interface OnboardingFunnelInputs {
   /** A usable credential exists (a subscription or any provider API key). */

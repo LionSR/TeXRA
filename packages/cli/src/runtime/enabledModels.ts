@@ -18,9 +18,12 @@ import {
   modelConfig,
   modelRefOf,
 } from '@texra-ai/llm';
+import {
+  StateWriteFailed,
+  type StateReadFailed,
+  type StateStore,
+} from '@texra-ai/harness';
 import { getEnabledModels, setModelEnabled } from '@model/computeModelOptions';
-import type { StateReadFailed, StateStore } from '@platform/interfaces';
-import { StateWriteFailed } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getModelLabel } from '@shared/model/modelLabel';
 

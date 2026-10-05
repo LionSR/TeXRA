@@ -16,7 +16,6 @@
 
 import { Effect } from 'effect';
 
-import type { Disposable } from '@platform/interfaces';
 import {
   formatIssueClosed,
   formatIssueComment,
@@ -44,6 +43,7 @@ import {
   type GhIssue,
   type GhIssueComment,
 } from './prTypes';
+import type { Disposable } from '@texra-ai/harness';
 
 export interface IssueKey {
   owner: string;

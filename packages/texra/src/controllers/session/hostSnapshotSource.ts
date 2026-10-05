@@ -10,6 +10,11 @@
  * its missing tools; the desktop keeps both in Settings).
  */
 import { Cause, Data, Effect, Exit, type FileSystem } from 'effect';
+import {
+  AgentDirectories,
+  type LanguageModel,
+  type PlatformSecrets,
+} from '@texra-ai/harness';
 import { computeAgentOptionsData } from '@agent/index';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import {
@@ -17,10 +22,7 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
-import { AgentDirectories } from '@platform/interfaces';
-import type { LanguageModel } from '@platform/languageModel';
 import type { AgentCatalogServices } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { type FileOptions } from '@shared/schemas';
 import type {

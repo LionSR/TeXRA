@@ -36,15 +36,8 @@ import { createAgentPresentationHost } from '@frontend/events/agentEventListener
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { withLogChannel } from '@logger/effectLog';
-import type {
-  StateStore,
-  StateReadFailed,
-  StateWriteFailed,
-} from '@platform/interfaces';
-import type { LanguageModel } from '@platform/languageModel';
 import { withProcessServices } from '@platform/processRuntime';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
 import { DOCUMENTS_OUTPUT_KEY } from '@shared/plugins/documents';
 import { agentKeyOf, type FileLocation, type RunId } from '@shared/schemas';
 import { isLiveRun } from '@shared/session/sessionView';
@@ -84,6 +77,13 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createExtensionHostRequests } from './extensionHostRequests';
 import { RequestAttention } from './requestAttention';
+import type {
+  PlatformSecrets,
+  LanguageModel,
+  StateStore,
+  StateReadFailed,
+  StateWriteFailed,
+} from '@texra-ai/harness';
 
 const CHANNEL = 'ProgressViewProvider';
 const CATALOG_RESCAN_FAILED =

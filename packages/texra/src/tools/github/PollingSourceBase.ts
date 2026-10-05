@@ -26,7 +26,6 @@ import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionGraph';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
 
-import type { Disposable } from '@platform/interfaces';
 import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';
 import { jitteredExponentialBackoffMs } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -38,6 +37,7 @@ import {
   type GitHubServices,
 } from './githubClient';
 import { shouldDropBotEvent } from './botFilter';
+import type { Disposable } from '@texra-ai/harness';
 import type { DedupedResource } from './pollingDedup';
 import type { GhUser } from './prTypes';
 import type { ZodType } from 'zod';

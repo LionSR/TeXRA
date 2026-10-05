@@ -4,7 +4,6 @@
  */
 import { Effect } from 'effect';
 
-import type { PlatformSecrets } from '@platform/secrets';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
 import {
@@ -20,6 +19,7 @@ import {
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
 } from '@texra/tools/github/githubAuth';
+import type { PlatformSecrets } from '@texra-ai/harness';
 
 import type {
   SettingsHostBindings,

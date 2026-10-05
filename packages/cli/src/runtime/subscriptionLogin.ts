@@ -7,7 +7,7 @@
 import { Effect } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import { Secrets } from '@platform/secrets';
+import { Secrets } from '@texra-ai/harness';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
 import {

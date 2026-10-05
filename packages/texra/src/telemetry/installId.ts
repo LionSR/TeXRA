@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { Effect, Result } from 'effect';
 
-import { AppState } from '@platform/interfaces';
+import { AppState } from '@texra-ai/harness';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 
 const INSTALL_ID_PATTERN =

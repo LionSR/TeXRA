@@ -8,7 +8,6 @@ import { z } from 'zod';
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
 import { WorkspaceFs } from '@platform/rootedFs';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ExecResult, FileLocation } from '@shared/schemas';
 import { SUPPORTED_LATEX_COMPILERS } from '@texra/shared/constants/latexToolchain';
 import { runToolWithCheck } from '@texra/utils/system/toolChecks';
@@ -17,6 +16,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { splitContentLines } from '@utils/text/stringUtils';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // Raw tail, no TeX-log parsing -- a deliberate choice (see compileCheck.ts):

@@ -13,9 +13,8 @@ import { Context, Data, Effect, Layer } from 'effect';
 
 // Local imports
 import { getCodexStatus } from '@texra-ai/llm/node';
+import { Secrets, type LanguageModel } from '@texra-ai/harness';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
-import type { LanguageModel } from '@platform/languageModel';
-import { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError } from '@shared/schemas';
 import type {

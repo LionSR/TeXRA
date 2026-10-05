@@ -5,7 +5,6 @@ import { Effect, FileSystem, PlatformError } from 'effect';
 import { formatError } from '@common/errors';
 import { withLogChannel } from '@logger/effectLog';
 import { redactSecrets } from '@logger/redaction';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { readNormalizedFile } from '@utils/files/fsDurability';
@@ -14,6 +13,7 @@ import { executeCommand } from '@utils/system/execUtils';
 import { generateDiffFileName } from './latexdiff/diffFileNameManager';
 import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
 import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** `missing-document-environment` is an input with no `\begin{document}`,

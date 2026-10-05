@@ -16,12 +16,12 @@ import { basename, dirname, join } from 'node:path';
 
 import { Clock, Effect, FileSystem, Option } from 'effect';
 
-import { storeOpenElsewhere } from '@controllers/session/Database';
-import { oldAsides } from '@controllers/session/storeAside';
 import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
+} from '@texra-ai/harness/node';
+import { storeOpenElsewhere } from '@controllers/session/Database';
+import { oldAsides } from '@controllers/session/storeAside';
 import { GlobalDatabase } from '@shared/session/database';
 import { WORKSPACE_STORES } from '@shared/session/valueFamily';
 import { formatBytes, formatResultCount } from '@utils/text/stringUtils';

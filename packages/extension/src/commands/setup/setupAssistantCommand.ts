@@ -13,9 +13,7 @@ import {
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { withLogChannel } from '@logger/effectLog';
-import type { StateReadFailed, StateWriteFailed } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
 import { isLiveRun } from '@shared/session/sessionView';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { agentName, type RunId } from '@shared/schemas';
@@ -29,6 +27,11 @@ import {
 } from '@texra/model/setupCredentialAccess';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type {
+  PlatformSecrets,
+  StateReadFailed,
+  StateWriteFailed,
+} from '@texra-ai/harness';
 
 const CHANNEL = 'SetupAssistant';
 /**

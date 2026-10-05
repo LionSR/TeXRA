@@ -1,8 +1,8 @@
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
+import { ToolContext } from '@texra-ai/harness';
 import type { RunCall } from '@agent/runtime/RunCall';
-import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - tools
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';

@@ -15,7 +15,6 @@ import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared contracts
-import type { RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import type { Surface, SurfaceRefusal } from '@shared/session/surface';
 import {
@@ -29,6 +28,7 @@ import { designTokens } from '@ui/styles';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { assertNever } from '@utils/core';
+import type { RunId } from '@texra-ai/harness/schemas';
 import type WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 

@@ -31,13 +31,16 @@ import {
   xaiLoginWithLoopback,
 } from '@texra-ai/llm/node';
 import { codexAccountLabel, xaiAccountLabel } from '@texra-ai/llm';
+import {
+  Secrets,
+  type PlatformSecrets,
+  ConfigWriteFailed,
+} from '@texra-ai/harness';
 import { withLogChannel } from '@logger/effectLog';
 import {
   isPreferSubscription,
   setPreferSubscription,
 } from '@model/subscriptionAccess';
-import type { ConfigWriteFailed } from '@platform/interfaces';
-import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type {
   SUBSCRIPTION_AUTH_PROVIDERS,

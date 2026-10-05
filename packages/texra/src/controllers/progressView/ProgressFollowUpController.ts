@@ -2,12 +2,10 @@
 import { Data, Effect, PlatformError } from 'effect';
 
 // Local imports
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RunRequest } from '@agent/core/state/runRequests';
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
 import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
-import type { StateReadFailed } from '@platform/interfaces';
 import {
   isDocumentTaskConfig,
   fileLocationAddressPath,
@@ -21,6 +19,8 @@ import {
 import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pluralize } from '@utils/text/stringUtils';
+import type { StateReadFailed } from '@texra-ai/harness';
+import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { RunOutputsSource } from './runOutputs';
 
 export interface ProgressFollowUpModelOption {

@@ -32,7 +32,7 @@ import { Rpc, RpcGroup } from 'effect/rpc';
 import * as SchemaIssue from 'effect/SchemaIssue';
 import { z } from 'zod';
 
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { AgentConfigSchema } from '@texra-ai/harness/schemas';
 import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import { RunEndSchema, RunIdSchema } from '@shared/schemas';
 

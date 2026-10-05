@@ -12,7 +12,7 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 
-import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { ToolContext } from '@texra-ai/harness';
 import { ToolError } from '@shared/schemas';
 import {
   settingSchemaWithoutPrefault,

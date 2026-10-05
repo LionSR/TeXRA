@@ -7,6 +7,19 @@ import { Cause, Data, Effect, Exit, Layer, Result, Scope } from 'effect';
 
 // Local imports
 import {
+  AppState,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+  type LanguageModelPort,
+  WorkspaceRoots,
+  ToolMissingHandler,
+} from '@texra-ai/harness';
+import {
+  createNodeWorkspaceRoots,
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+  canonicalizeWorkspacePath,
+} from '@texra-ai/harness/node';
+import {
   closeAllSessions,
   initializeDefaultSession,
   teardownDefaultSession,
@@ -60,27 +73,14 @@ import { withLogChannel } from '@logger/effectLog';
 import { setLogSink } from '@logger/logSink';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
-import { AppState } from '@platform/interfaces';
-import type { ToolMissingHandler } from '@platform/interfaces';
 import {
   withProcessServices,
   type ProcessRuntime,
 } from '@platform/processRuntime';
-import {
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
-  type LanguageModelPort,
-} from '@platform/languageModel';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
-import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
-import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { StorageFs, withSessionFs } from '@platform/rootedFs';
 import {
   formatTexraApprovalPolicy,

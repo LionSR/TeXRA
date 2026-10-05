@@ -4,17 +4,20 @@ import { Buffer } from 'node:buffer';
 import { Deferred, Effect, Fiber, FileSystem } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { resolveRouteCredential } from '@agent/runtime/modelRoutes';
+import {
+  AppState,
+  Secrets,
+  Cancelled,
+  Rejected,
+  type LanguageModel,
+} from '@texra-ai/harness';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { resolveRouteCredential } from '@agent/runtime/modelRoutes';
 import { withLogChannel } from '@logger/effectLog';
 import { readProviderEndpoints } from '@model/modelRoute';
-import { AppState } from '@platform/interfaces';
-import type { LanguageModel } from '@platform/languageModel';
 import type { StorageFs } from '@platform/rootedFs';
-import { Secrets } from '@platform/secrets';
-import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
-import { Cancelled, Rejected } from '@shared/session/requestErrors';
+import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostOutcome } from '@shared/session/sessionFrames';
 import type { UsageLog } from '@shared/usageLog';
 import { polishTextWithAI } from '@texra/agent/runtime/textEnhancement';

@@ -1,6 +1,6 @@
 /** Pure row allocation and visibility policy for the root CLI TUI layout. */
 
-import { type RunId } from '@shared/schemas';
+import { type RunId } from '@texra-ai/harness/schemas';
 import { clamp } from '@utils/core';
 import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
 import { REVERSE_SEARCH_ROWS } from './input/ReverseSearch';

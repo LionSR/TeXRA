@@ -7,7 +7,6 @@
 import { app, Notification, type BrowserWindow } from 'electron';
 import { Context, Effect, Queue, Stream, SubscriptionRef } from 'effect';
 
-import type { RunId } from '@shared/schemas';
 import {
   attentionOf,
   type RunView,
@@ -15,6 +14,7 @@ import {
 } from '@shared/session/sessionView';
 
 import { DesktopProjects, type DesktopProject } from './desktopProjects.js';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The host's attention surfaces, served by the Electron composition root. */
 interface DesktopAttentionPortShape {

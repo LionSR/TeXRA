@@ -33,13 +33,13 @@ import {
 
 import { ChildProcessSpawner } from 'effect/process';
 import { withLogChannel } from '@logger/effectLog';
-import type { RunId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathExists } from '@utils/files/fsDurability';
 
 import { runLakeCommand } from './lakeCommands';
 import { LeanServer, type LeanStartError } from './leanServer';
 import { createLeanServerRoster } from '../leanServerRegistry';
+import type { RunId } from '@texra-ai/harness/schemas';
 import type { LeanServerInfo } from '../leanServerRegistry';
 import type {
   LeanFileCommand,

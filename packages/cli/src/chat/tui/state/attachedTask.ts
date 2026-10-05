@@ -5,9 +5,12 @@
 
 import { Effect, type Scope, Stream } from 'effect';
 
+import {
+  aggregateId,
+  type Outcome,
+  type RuntimeRequest,
+} from '@texra-ai/harness';
 import { describeWireRefusal, watchTask } from '@cli/runtime/taskAttach';
-import { aggregateId } from '@shared/schemas';
-import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import {
   attentionOf,
   type RunView,

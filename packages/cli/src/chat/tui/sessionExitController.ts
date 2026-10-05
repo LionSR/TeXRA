@@ -25,8 +25,6 @@ import {
   type ProcessRuntime,
 } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import type { RunId } from '@shared/schemas';
-import type { RunStopReason } from '@shared/session/runtimeRequest';
 import type { SessionView } from '@shared/session/sessionView';
 import { DisposableStore } from '@texra/platform/disposable';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -49,6 +47,8 @@ import {
   formatResumeHint,
 } from './state/resumeHint';
 import { chatTuiRunPending, type TuiSession } from './state/sessionRunState';
+import type { RunStopReason } from '@texra-ai/harness';
+import type { RunId } from '@texra-ai/harness/schemas';
 import type { Instance as InkInstance } from 'ink';
 
 const EXIT_CONFIRMATION_TTL_MS = 800;

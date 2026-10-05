@@ -10,7 +10,7 @@ import {
   hasUsableApiKey,
   isApiProvider,
 } from '@texra-ai/llm';
-import { Secrets } from '@platform/secrets';
+import { Secrets } from '@texra-ai/harness';
 import { ToolError } from '@shared/schemas';
 
 // Local file imports

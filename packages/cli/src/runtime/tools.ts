@@ -1,16 +1,15 @@
 import { Effect } from 'effect';
 
 // Local imports
-import type { StateStore } from '@platform/interfaces';
 import {
   buildToolDashboardItems,
   visibleToolPlugins,
 } from '@texra/controllers/settingsView/ToolDashboardData';
 import type { ToolDashboardItem } from '@texra/shared/settingsView/settingsViewMessages';
 import type { ToolPluginSetup } from '@texra/tools/pluginCards';
-import type { ToolProbeInputs } from '@tools/toolProbes';
 import { setToolEnabled } from '@tools/toolAvailability';
 import { ToolRegistry } from '@tools/toolTable';
+import type { ToolProbeInputs, StateStore } from '@texra-ai/harness';
 
 type CliToolGuideKind = 'install' | 'auth';
 

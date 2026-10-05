@@ -27,7 +27,6 @@ import { onAppSignal } from '@eventBus/AppSignals';
 // Local imports - model
 // Local imports - platform
 import type { ProcessRuntime } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
 // Local imports - shared
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { PromptFailed, type PromptHost } from '@texra/hosts/uiHosts';
@@ -44,6 +43,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { bumpCodexPreferenceVersion } from '../state/cliState';
 import { tuiUi } from './tuiUiHost';
+import type { PlatformSecrets } from '@texra-ai/harness';
 
 /** Write through the calling surface; failures stay in the Effect channel. */
 const commitProviderApiKeyVia = Effect.fn('commitProviderApiKeyVia')(function* (

@@ -7,7 +7,6 @@
 import { Effect, Stream, SubscriptionRef } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   detectLatexSettingsStatus,
@@ -24,6 +23,7 @@ import {
   SETTINGS_LOG_CHANNEL,
   type SettingsHostBindings,
 } from './settingsHostBindings';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 
 /** The Plugins and LaTeX pages: their arms, repaints and opening data. */
 export function settingsToolCommands(ports: {

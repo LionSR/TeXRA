@@ -3,11 +3,11 @@ import { Effect } from 'effect';
 import { getCatalogAgent } from '@agent/index';
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset } from '@common/teams/TeamPresets';
-import type { StateStore } from '@platform/interfaces';
 
 import { missingTeamMessage } from './agents';
 import { CliUsageError } from './cliContext';
 import { readCliTeams } from './cliTeams';
+import type { StateStore } from '@texra-ai/harness';
 
 interface TeamRunPlanInit {
   readonly team: string;
