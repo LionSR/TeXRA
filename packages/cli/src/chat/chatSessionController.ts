@@ -426,8 +426,10 @@ export function createChatSessionController(
 
   // Shared tail of the run/resume failure recovery: surface the error to
   // the local transcript unless the run was stopped intentionally, and set
-  // the exit code accordingly.
-  const reportRunFailure = (error: unknown): void => {
+  // the exit code accordingly. A run whose claim the slot no longer holds
+  // (a fork or a new task replaced it) says nothing to the chat.
+  const reportRunFailure = (error: unknown, claim: RootRunSettled): void => {
+    if (!session.holdsClaim(claim)) return;
     if (session.stopRequested) {
       session.runExitCode = CliExitCode.Success;
       return;
@@ -530,7 +532,7 @@ export function createChatSessionController(
           );
           session.settleExitCode(claim, runOutcomeExitCode(result.outcome));
         }),
-        reportRunFailure,
+        (error) => reportRunFailure(error, claim),
       ).pipe(
         Effect.ensuring(Effect.sync(() => session.markRunCompleted(claim))),
         // The claim settles with the run's own exit, so a waiter reads what
@@ -675,7 +677,9 @@ export function createChatSessionController(
               session.settleExitCode(claim, CliExitCode.Usage);
             }
           }).pipe(
-            Effect.catch((error) => Effect.sync(() => reportRunFailure(error))),
+            Effect.catch((error) =>
+              Effect.sync(() => reportRunFailure(error, claim)),
+            ),
             Effect.ensuring(
               Effect.sync(() => {
                 restoreSuperseded();
@@ -692,7 +696,7 @@ export function createChatSessionController(
         );
       });
       return recoverRun(attemptResume, (error) => {
-        endResumeUnstarted(() => reportRunFailure(error));
+        endResumeUnstarted(() => reportRunFailure(error, claim));
       });
     });
 
@@ -892,7 +896,7 @@ export function createChatSessionController(
           if (!session.stopRequested) {
             appendLocalUserTranscript(displayInstruction ?? instruction);
           }
-          reportRunFailure(error);
+          reportRunFailure(error, claim);
           session.markRunCompleted(claim);
         },
       ).pipe(
