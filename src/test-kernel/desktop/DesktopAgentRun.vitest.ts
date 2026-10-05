@@ -3,7 +3,7 @@ import '@test/support/sessionGraphTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect, Fiber, Stream } from 'effect';
 import { describe, expect, onTestFinished, vi } from 'vitest';
 
 // Local imports
@@ -66,6 +66,7 @@ describe('desktop agent run completion hook', () => {
         },
         session,
         backend: localSessionBackend(session),
+        focused: Stream.empty,
         service: undefined,
         root: undefined,
         runtime: testRuntime(),

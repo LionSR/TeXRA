@@ -8,7 +8,7 @@
 // here: a surface answers an approval with `runtime.request`, and the
 // session settles the pending request itself.
 
-import { Effect, Scope } from 'effect';
+import { Effect, Scope, type Stream } from 'effect';
 
 import {
   type RunEndResult,
@@ -54,6 +54,9 @@ export interface DesktopAgentRunOptions {
   service: ServiceClient | undefined;
   /** The project folder; none for the no-workspace session. */
   root: string | undefined;
+  /** Emits when this window gains focus (and once at once when it has it),
+   *  so the service sends the project's host calls here first. */
+  focused: Stream.Stream<void>;
   /** A launch could not find its agent: the New-task state's
    *  agent-config banner (`HostSnapshot.banners`). */
   showAgentConfigBanner(data: { agentName: string }): Effect.Effect<void>;
@@ -175,23 +178,31 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
     // A project of the service: the window serves its runs there with the
     // same notices and tool-edit previews.
     if (options.service !== undefined && options.root !== undefined)
-      yield* attachWindowHost(options.service, options.root, {
-        emit: handlePresentationEvent,
-        toolEdits: {
-          stage: (staging) =>
-            withProcessServices(
-              runtime,
-              toolEditApprovals.present({ ...staging, roots: session.roots }),
-            ).pipe(Effect.mapError((failure) => new Error(failure.message))),
-          release: (requestId) =>
-            withProcessServices(runtime, toolEditApprovals.release(requestId)),
-          approve: (requestId) =>
-            withProcessServices(
-              runtime,
-              toolEditApprovals.approveStaged(requestId),
-            ),
+      yield* attachWindowHost(
+        options.service,
+        options.root,
+        {
+          emit: handlePresentationEvent,
+          toolEdits: {
+            stage: (staging) =>
+              withProcessServices(
+                runtime,
+                toolEditApprovals.present({ ...staging, roots: session.roots }),
+              ).pipe(Effect.mapError((failure) => new Error(failure.message))),
+            release: (requestId) =>
+              withProcessServices(
+                runtime,
+                toolEditApprovals.release(requestId),
+              ),
+            approve: (requestId) =>
+              withProcessServices(
+                runtime,
+                toolEditApprovals.approveStaged(requestId),
+              ),
+          },
         },
-      });
+        options.focused,
+      );
 
     /**
      * The launch, settling with the run. `onRunCompleted` fires on every

@@ -65,7 +65,7 @@ export const BUILD_VERSION: string =
 
 /** Bumped whenever a procedure or a payload changes shape. A client newer
  *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 8;
+export const PROTOCOL_VERSION = 9;
 
 /** `value` as JSON carries it: an absent field (`undefined`) is left out,
  *  which the wire's JSON check otherwise refuses. */
@@ -203,10 +203,13 @@ export const TexraRpcs = RpcGroup.make(
   }),
   Rpc.make('task.resume', {
     payload: { workspace, runId: zodWire(RunIdSchema) },
-    /** The run that resumed: the asked one, or the parent that owns it;
-     *  null when something it needs (its agent, a plugin) is missing, so it
-     *  stays interrupted. */
-    success: zodWire(RunIdSchema.nullable()),
+    /** The run that resumed: the asked one, or the parent that owns it,
+     *  and whether it is a workflow, which settles with its whole run (what
+     *  `task.ended` answers); null when something it needs (its agent, a
+     *  plugin) is missing, so it stays interrupted. */
+    success: zodWire(
+      z.object({ runId: RunIdSchema, workflow: z.boolean() }).nullable(),
+    ),
     error: zodWire(TaskFailedSchema),
   }),
   /** What a task's current activation ends with, once it ends: its

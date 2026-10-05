@@ -24,8 +24,9 @@ import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { runAgent } from '@agent/runtime/runAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { getRunRecords } from '@agent/storage';
 import type { ProcessServices } from '@platform/processRuntime';
-import { RUN_PHASE, type RunId } from '@shared/schemas';
+import { isDocumentTaskConfig, RUN_PHASE, type RunId } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import {
   RequestErrorWireSchema,
@@ -343,36 +344,47 @@ export const serviceHandlers = TexraRpcs.toLayer(
             session,
             runId,
           );
-          if (live !== null) return live;
-          return yield* admit<RunId | null>(runs, (admitted) =>
-            Effect.gen(function* () {
-              let resolved: RunId = runId;
-              const result = yield* resumeRun(runId, {
-                session,
-                // Admitted once the resumed generation is registered (the
-                // parent, for an owned child), so a `task.ended` that
-                // follows the answer waits for it.
-                onRun: (registered) =>
-                  Deferred.succeed(admitted, registered).pipe(Effect.asVoid),
-                onResumeResolved: (resumed) =>
-                  Effect.sync(() => {
-                    resolved = resumed;
-                  }),
-              });
-              // A resume that joined one already in flight registers no
-              // generation of its own: the run is registered by now.
-              if ('started' in result)
-                yield* Deferred.succeed(admitted, resolved);
-              // Blocked, not failed: it stays interrupted until what it needs is back.
-              if ('failed' in result && result.failed === 'blocked')
-                return yield* Deferred.succeed(admitted, null);
-              if ('failed' in result)
-                return yield* Effect.fail(
-                  new Error(describeFollowUpFailure(result.failed)),
-                );
-              if (result.completion) yield* result.completion;
-            }).pipe(Effect.mapError(ensureError)),
-          );
+          const resumed =
+            live ??
+            (yield* admit<RunId | null>(runs, (admitted) =>
+              Effect.gen(function* () {
+                let resolved: RunId = runId;
+                const result = yield* resumeRun(runId, {
+                  session,
+                  // Admitted once the resumed generation is registered (the
+                  // parent, for an owned child), so a `task.ended` that
+                  // follows the answer waits for it.
+                  onRun: (registered) =>
+                    Deferred.succeed(admitted, registered).pipe(Effect.asVoid),
+                  onResumeResolved: (resumed) =>
+                    Effect.sync(() => {
+                      resolved = resumed;
+                    }),
+                });
+                // A resume that joined one already in flight registers no
+                // generation of its own: the run is registered by now.
+                if ('started' in result)
+                  yield* Deferred.succeed(admitted, resolved);
+                // Blocked, not failed: it stays interrupted until what it needs is back.
+                if ('failed' in result && result.failed === 'blocked')
+                  return yield* Deferred.succeed(admitted, null);
+                if ('failed' in result)
+                  return yield* Effect.fail(
+                    new Error(describeFollowUpFailure(result.failed)),
+                  );
+                if (result.completion) yield* result.completion;
+              }).pipe(Effect.mapError(ensureError)),
+            ));
+          if (resumed === null) return null;
+          // A workflow settles with its whole run, whose output the window
+          // opens then; it tells which by the run's own config.
+          const config = yield* getRunRecords(session, resumed)
+            .readConfig()
+            .pipe(Effect.mapError((error) => failed(toErrorMessage(error))));
+          return {
+            runId: resumed,
+            workflow: config !== null && isDocumentTaskConfig(config),
+          };
         }),
     };
   }),

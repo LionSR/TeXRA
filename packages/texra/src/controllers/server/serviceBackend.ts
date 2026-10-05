@@ -235,9 +235,21 @@ export const serviceSessionBackend = Effect.fn('serviceSessionBackend')(
           Effect.mapError(
             (error) => new Unavailable({ runId, reason: error.message }),
           ),
-          Effect.map((resumed) =>
-            resumed === null ? null : { runId: resumed, result: null },
-          ),
+          // A workflow answers with its whole run, as a window's own session
+          // does; any other run answers once it is resumed.
+          Effect.flatMap((resumed) => {
+            if (resumed === null) return Effect.succeed(null);
+            const { runId: resumedId } = resumed;
+            if (!resumed.workflow)
+              return Effect.succeed({ runId: resumedId, result: null });
+            return Effect.map(
+              ended(resumedId),
+              (result): { runId: RunId; result: RunEndResult | null } => ({
+                runId: resumedId,
+                result,
+              }),
+            );
+          }),
         ),
       controls: (runId) => {
         const run = SubscriptionRef.getUnsafe(graph.view.ref).runs.get(runId);

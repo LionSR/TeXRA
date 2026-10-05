@@ -10,6 +10,7 @@ import {
   mkdtempSync,
   readFileSync,
   symlinkSync,
+  writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -99,6 +100,7 @@ test('the desktop app starts the service, shares it with a CLI of its build, and
   buildCli(thisBuild);
   buildCli(nextBuild, NEXT_BUILD);
   let servicePid: number | undefined;
+  let sharedView: Record<string, unknown> = {};
   try {
     const launched = await launchTexraApp({
       userDataPath: dataRoot,
@@ -119,11 +121,24 @@ test('the desktop app starts the service, shares it with a CLI of its build, and
       expect(shared.pid).toBe(started.pid);
       expect(shared.version).toBe(started.version);
       expect(shared.clients).toBeGreaterThan(0);
+      // What each client sees of the one service: the CLI's task list and
+      // status beside the app it shares the service with.
+      sharedView = {
+        record: started,
+        cliStatus: shared,
+        cliTasks: JSON.parse(
+          cli(thisBuild, home, ['tasks', 'list', '--output-format', 'json']),
+        ) as unknown,
+      };
+      await launched.page.screenshot({
+        path: test.info().outputPath('desktop-service-client.png'),
+      });
     } finally {
       await closeTexraApp(launched);
     }
     // The app quit; the service it started still runs.
-    expect(alive(servicePid)).toBe(true);
+    const survivedQuit = alive(servicePid);
+    expect(survivedQuit).toBe(true);
     // A CLI of a newer build retires it and starts its own.
     cli(nextBuild, home, ['tasks', 'list']);
     const next = status(nextBuild, home);
@@ -133,6 +148,24 @@ test('the desktop app starts the service, shares it with a CLI of its build, and
     servicePid = next.pid;
     for (let i = 0; i < 120 && alive(retired); i += 1) await sleep(250);
     expect(alive(retired)).toBe(false);
+    // The run's facts, pid-free so a rerun diffs clean, then the raw views.
+    writeFileSync(
+      test.info().outputPath('service-handoff.json'),
+      `${JSON.stringify(
+        {
+          facts: {
+            appAndCliShareOneService: true,
+            survivedAppQuit: survivedQuit,
+            retiredByNewerBuild: !alive(retired),
+            newerBuildVersion: next.version,
+          },
+          shared: sharedView,
+          next,
+        },
+        null,
+        2,
+      )}\n`,
+    );
   } finally {
     if (servicePid !== undefined && alive(servicePid))
       process.kill(servicePid, 'SIGTERM');

@@ -5,7 +5,7 @@
 // their own views. A binding is a scope: everything it holds is a finalizer
 // of it, and releasing a project closes that scope, awaited.
 
-import { Effect, Exit, Scope } from 'effect';
+import { Effect, Exit, Queue, Scope, Stream } from 'effect';
 
 import {
   withProcessServices,
@@ -234,6 +234,22 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       const initialSnapshot = funnel
         ? snapshot.setOnboarding(funnel).pipe(Effect.andThen(snapshot.refresh))
         : snapshot.refresh;
+      // The window's focus, told to the service as a VS Code window's is:
+      // the project's host calls go to the window the user last worked in.
+      const focused = Stream.callback<void>((queue) =>
+        Effect.acquireRelease(
+          Effect.sync(() => {
+            const onFocus = () => Queue.offerUnsafe(queue, undefined);
+            host.window.on('focus', onFocus);
+            if (host.window.isFocused()) onFocus();
+            return onFocus;
+          }),
+          (onFocus) =>
+            Effect.sync(() => {
+              if (!host.window.isDestroyed()) host.window.off('focus', onFocus);
+            }),
+        ),
+      );
       const run = yield* createDesktopAgentRun({
         runtime,
         host: hosts.run,
@@ -242,6 +258,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         backend: project.backend,
         service: project.service,
         root: project.root,
+        focused,
         showAgentConfigBanner: ({ agentName }) =>
           withProcessServices(
             runtime,

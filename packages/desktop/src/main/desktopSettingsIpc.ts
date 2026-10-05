@@ -56,10 +56,10 @@ export interface DesktopSettingsIpcOptions {
       productName: string,
     ): Effect.Effect<void, Error>;
   };
-  /** The session of the paper this settings surface serves. The desktop has
+  /** The session of the project this settings surface serves. The desktop has
    *  no process-default session, so it must be passed. */
   readonly session: SessionHandle;
-  /** Where the paper's runs run: an approval policy set here applies
+  /** Where the project's runs run: an approval policy set here applies
    *  there too. */
   readonly backend: SessionBackend;
   readonly secrets: PlatformSecrets;
@@ -177,7 +177,7 @@ export function createDesktopSettingsIpc(
     host: 'desktop',
     session: {
       roots: options.session.roots,
-      // The policy holds here and in the service that runs the paper's tasks.
+      // The policy holds here and in the service that runs the project's tasks.
       setApprovalPolicy: (policy) => {
         options.session.setApprovalPolicy(policy);
         spawn(options.backend.setApprovalPolicy(policy));
