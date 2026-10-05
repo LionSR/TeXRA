@@ -17,7 +17,7 @@ import { Sessions } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
 
-const workspace = await mkdtemp(join(tmpdir(), 'texra-agent-example-'));
+const workspace = await mkdtemp(join(tmpdir(), 'texra-harness-example-'));
 const agentsDir = join(workspace, 'agents');
 await mkdir(agentsDir, { recursive: true });
 
