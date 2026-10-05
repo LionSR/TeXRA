@@ -34,7 +34,7 @@ import {
  * a second owner of the ordinals, which is the dual system the cutover
  * exists to remove.
  */
-const PRODUCTION_ROOTS = [...ALL_HOST_PRODUCTION_ROOTS, 'packages/agent/src'];
+const PRODUCTION_ROOTS = [...ALL_HOST_PRODUCTION_ROOTS, 'packages/harness/src'];
 
 const DATABASE_MODULE = 'src/controllers/session/Database.ts';
 /** The history query store's process opens SQLite on its own `:memory:`

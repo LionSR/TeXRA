@@ -1,14 +1,14 @@
 {
-  "name": "texra-agent-effect-example",
+  "name": "texra-harness-effect-example",
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Runs @texra-ai/agent from a packed tarball, as a consumer would",
+  "description": "Runs @texra-ai/harness from a packed tarball, as a consumer would",
   "scripts": {
     "start": "node effectSession.mjs"
   },
   "dependencies": {
-    "@texra-ai/agent": "file:agent.tgz",
+    "@texra-ai/harness": "file:harness.tgz",
     "effect": "4.0.0",
     "zod": "^4.4.3"
   }

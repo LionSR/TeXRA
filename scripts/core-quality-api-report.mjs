@@ -8,7 +8,7 @@ import path from 'node:path';
 
 import ts from 'typescript';
 
-const PACKAGES = ['packages/agent', 'packages/llm'];
+const PACKAGES = ['packages/harness', 'packages/llm'];
 
 /**
  * `{ name, subpath, file, report }` for every entry the core packages export;

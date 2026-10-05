@@ -1,6 +1,6 @@
 # Packed-tarball example
 
-Runs [`@texra-ai/agent`](../README.md) the way a consumer off the
+Runs [`@texra-ai/harness`](../README.md) the way a consumer off the
 registry would: the package is packed, installed into this folder, and imported
 by package name. No repository path alias appears in `effectSession.mjs`, so a
 resolution the published artifact could not satisfy fails here.
@@ -8,20 +8,20 @@ resolution the published artifact could not satisfy fails here.
 It needs no provider key.
 
 ```bash
-corepack pnpm --filter @texra-ai/agent run example:packed
+corepack pnpm --filter @texra-ai/harness run example:packed
 ```
 
 which is, step by step:
 
 ```bash
 # from the repository root
-corepack pnpm --filter @texra-ai/agent build
-cd packages/agent && rm -f example/*.tgz && corepack pnpm pack --pack-destination example
-mv example/texra-ai-agent-*.tgz example/agent.tgz
-cd example && npm install ./agent.tgz && npm start
+corepack pnpm --filter @texra-ai/harness build
+cd packages/harness && rm -f example/*.tgz && corepack pnpm pack --pack-destination example
+mv example/texra-ai-harness-*.tgz example/harness.tgz
+cd example && npm install ./harness.tgz && npm start
 ```
 
-The pack is renamed to a fixed `agent.tgz` so this folder's `package.json`
+The pack is renamed to a fixed `harness.tgz` so this folder's `package.json`
 pins one filename rather than a second copy of the package version, which a
 release would silently move.
 

@@ -42,7 +42,7 @@ const VSCODE_FREE_ZONES = [
   'src/common',
   'src/utils',
   'src/logger',
-  'packages/agent/src',
+  'packages/harness/src',
   'packages/llm/src',
   'packages/desktop/src',
   'packages/extension/src/progressView/frontend',
@@ -96,7 +96,7 @@ const HOST_LAYER_IMPORT_PREFIXES = [
  */
 const EFFECT_RUN_ROOTS = [
   ...ALL_HOST_PRODUCTION_ROOTS,
-  'packages/agent/src',
+  'packages/harness/src',
   'packages/trace-viewer/src',
 ] as const;
 const EFFECT_RUN_CALL =

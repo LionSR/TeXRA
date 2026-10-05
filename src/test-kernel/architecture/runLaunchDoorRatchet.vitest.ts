@@ -23,7 +23,11 @@ import {
  * only shrink. A new one either launches through `Runs.launch` or joins this
  * list with its reason in the same PR.
  */
-const LAUNCH_ROOTS = ['src/agent', 'src/tools', 'packages/agent/src'] as const;
+const LAUNCH_ROOTS = [
+  'src/agent',
+  'src/tools',
+  'packages/harness/src',
+] as const;
 
 const DETACHED_FORK = /\b(?:forkDetach|FiberMap\.run|FiberSet\.run)\s*\(/g;
 
@@ -41,7 +45,7 @@ const DETACHED_FORK_ALLOWLIST: Readonly<Record<string, number>> = {
   'src/tools/github/PollingSourceBase.ts': 1,
   // The package boundary: the awaiter of `runAgent` (whose run starts at
   // the door) and the view drain a `Run` owns.
-  'packages/agent/src/effect/sessionPrograms.ts': 2,
+  'packages/harness/src/effect/sessionPrograms.ts': 2,
 };
 
 /**

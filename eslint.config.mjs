@@ -44,7 +44,7 @@ const COMPOSITION_ROOT_FILES = new Set([
   path.join(__dirname, 'packages/cli/src/runtime/cliProcessRuntime.ts'),
   // The package's composition root is `composeProcess`, which the Promise
   // entry and the Effect subpath's `Sessions.layer` both call.
-  path.join(__dirname, 'packages/agent/src/effect/runtime.ts'),
+  path.join(__dirname, 'packages/harness/src/effect/runtime.ts'),
   // The test suite's composition root: the one harness file that installs
   // the process runtime the session graph runs on, over the plugin list its
   // setup module passes (`sessionGraphTestSetup`, `builtinSessionGraphTestSetup`).
@@ -116,7 +116,7 @@ const VSCODE_FREE_ZONE_DIRS = [
   'src/common',
   'src/utils',
   'src/logger',
-  'packages/agent/src',
+  'packages/harness/src',
   'packages/llm/src',
   'packages/desktop/src',
   'packages/extension/src/progressView/frontend',
@@ -147,7 +147,7 @@ export const CORE_QUALITY_DIRS = [
   'src/tools',
   'src/controllers/session',
   'src/platform',
-  'packages/agent/src',
+  'packages/harness/src',
   'packages/llm/src',
 ];
 // The app plugins inside src/tools (split doc §3): they leave for
@@ -636,7 +636,7 @@ export default tseslint.config(
   js.configs.recommended,
 
   {
-    files: ['packages/agent/scripts/**/*.mjs'],
+    files: ['packages/harness/scripts/**/*.mjs'],
     languageOptions: {
       globals: globals.node,
     },
@@ -646,7 +646,7 @@ export default tseslint.config(
   {
     files: [
       'src/**/*.{ts,mts}',
-      'packages/agent/src/**/*.{ts,mts}',
+      'packages/harness/src/**/*.{ts,mts}',
       'packages/llm/src/**/*.{ts,mts}',
       'packages/llm/test-live/**/*.{ts,mts}',
       'packages/extension/src/**/*.{ts,mts}',
@@ -816,7 +816,7 @@ export default tseslint.config(
   {
     files: [
       'src/**/*.{ts,tsx,mts}',
-      'packages/agent/src/**/*.{ts,tsx,mts}',
+      'packages/harness/src/**/*.{ts,tsx,mts}',
       'packages/llm/src/**/*.{ts,tsx,mts}',
     ],
     ignores: ['src/test-kernel/**'],
@@ -1025,7 +1025,7 @@ export default tseslint.config(
     },
   },
 
-  // Effect runs belong at a host entry (packages/{extension,desktop,cli,agent}/src)
+  // Effect runs belong at a host entry (packages/{extension,desktop,cli,harness}/src)
   // or at a webview/runtime composition root that owns its runtime (owner
   // ruling 2026-09-06, Effect 4 migration R1; 2026-09-14 for the named
   // entries, which are exempt whole-file: that the run is on the entry's own
@@ -1042,7 +1042,7 @@ export default tseslint.config(
         'Build <wa-icon> markup via waIcon() from @ui/wa/webAwesomeIcons instead of a hand-rolled template.',
     };
     const runMessage =
-      'Effect runs belong at a host entry (packages/{extension,desktop,cli,agent}/src) or a named runtime entry in eslint.config.mjs. Convert this file and its callers so the run moves there.';
+      'Effect runs belong at a host entry (packages/{extension,desktop,cli,harness}/src) or a named runtime entry in eslint.config.mjs. Convert this file and its callers so the run moves there.';
     // `runMain` is `NodeRuntime.runMain`, the run of a process or worker entry.
     const runNames = '/^run(Promise|PromiseExit|Sync|Fork|Callback|Main)$/';
     const run = [
@@ -1078,7 +1078,7 @@ export default tseslint.config(
           'packages/extension/src/**/*.{ts,tsx,mts}',
           'packages/desktop/src/**/*.{ts,tsx,mts}',
           'packages/cli/src/**/*.{ts,tsx,mts}',
-          'packages/agent/src/**/*.{ts,tsx,mts}',
+          'packages/harness/src/**/*.{ts,tsx,mts}',
         ],
         ['**/*.vitest.ts', iconFile, ...entries],
         waIcon,

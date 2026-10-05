@@ -9,7 +9,7 @@ import { readJson } from './extension-package-utils.mjs';
 
 const MANIFEST_PATHS = [
   'package.json',
-  'packages/agent/package.json',
+  'packages/harness/package.json',
   'packages/cli/package.json',
   'packages/desktop/package.json',
   'packages/extension/package.json',

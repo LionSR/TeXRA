@@ -1,5 +1,5 @@
 {
-  "name": "@texra-ai/agent",
+  "name": "@texra-ai/harness",
   "version": "0.41.0",
   "description": "Embeddable TeXRA agent runtime",
   "license": "Apache-2.0",
@@ -26,25 +26,25 @@
   ],
   "exports": {
     ".": {
-      "types": "./dist/types/packages/agent/src/index.d.ts",
+      "types": "./dist/types/packages/harness/src/index.d.ts",
       "import": "./dist/index.js"
     },
     "./schemas": {
-      "types": "./dist/types/packages/agent/src/schemas.d.ts",
+      "types": "./dist/types/packages/harness/src/schemas.d.ts",
       "import": "./dist/schemas.js"
     },
     "./plugins": {
-      "types": "./dist/types/packages/agent/src/plugins.d.ts",
+      "types": "./dist/types/packages/harness/src/plugins.d.ts",
       "import": "./dist/plugins.js"
     },
     "./node": {
-      "types": "./dist/types/packages/agent/src/node.d.ts",
+      "types": "./dist/types/packages/harness/src/node.d.ts",
       "import": "./dist/node.js"
     }
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "example:packed": "npm run build && rm -f example/*.tgz && corepack pnpm pack --pack-destination example && mv example/texra-ai-agent-*.tgz example/agent.tgz && cd example && npm install ./agent.tgz && npm start",
+    "example:packed": "npm run build && rm -f example/*.tgz && corepack pnpm pack --pack-destination example && mv example/texra-ai-harness-*.tgz example/harness.tgz && cd example && npm install ./harness.tgz && npm start",
     "prepack": "npm run build"
   },
   "dependencies": {

@@ -1,5 +1,5 @@
 {
-  "packages/agent/README.md": 1,
+  "packages/harness/README.md": 1,
   "packages/llm/README.md": 1,
   "src/agent/README.md": 1,
   "src/controllers/session/README.md": 1,

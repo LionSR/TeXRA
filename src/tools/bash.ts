@@ -368,7 +368,7 @@ function executeBashTool(input: BashInput) {
       // refuses, native subagents degrade to the parent trace, a script runs in
       // the foreground — and a background shell cannot degrade, because the follow-up
       // IS its delivery. The approval the loop already took is spent by the
-      // time this refuses: in the SDK path (`packages/agent/src/effect/sessionPrograms.ts`)
+      // time this refuses: in the SDK path (`packages/harness/src/effect/sessionPrograms.ts`)
       // the `finally` kills the process group, so launching here would run the
       // user's command and then discard its result with nothing reported.
       if (run.toolPolicy.stopAfterCycle)

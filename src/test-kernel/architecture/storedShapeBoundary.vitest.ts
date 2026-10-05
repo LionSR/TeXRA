@@ -32,7 +32,7 @@ import {
  * `json_extract` views are the query contract offered to the model, not
  * reads of the session store. The write ratchet exempts it the same way.
  */
-const PRODUCTION_ROOTS = [...ALL_HOST_PRODUCTION_ROOTS, 'packages/agent/src'];
+const PRODUCTION_ROOTS = [...ALL_HOST_PRODUCTION_ROOTS, 'packages/harness/src'];
 const HISTORY_QUERY_STORE = 'src/agent/runtime/historyQuery/';
 const ROW_CODEC = 'src/controllers/session/rowCodec.ts';
 const ROW_VERSIONS = 'src/shared/schemas/rowVersions.ts';

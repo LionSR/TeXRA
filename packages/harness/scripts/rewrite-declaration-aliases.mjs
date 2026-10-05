@@ -28,7 +28,7 @@ const workspacePackages = await Promise.all(
     .map((pattern) => /^(?<directory>packages\/[^/*]+)\/src\//u.exec(pattern))
     .filter((match) => match !== null)
     .map((match) => match.groups.directory)
-    .filter((directory) => directory !== 'packages/agent')
+    .filter((directory) => directory !== 'packages/harness')
     .map(async (directory) => {
       const root = path.join(repositoryRoot, directory);
       const manifest = JSON.parse(

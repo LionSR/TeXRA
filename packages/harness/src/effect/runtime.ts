@@ -1,5 +1,5 @@
 /**
- * The process `@texra-ai/agent` composes, as an Effect service.
+ * The process `@texra-ai/harness` composes, as an Effect service.
  *
  * {@link acquireProcess} is the package's composition root: the process
  * workspace roots, the node agent runtime, and the one Effect runtime that
@@ -13,7 +13,7 @@
  *
  * `Sessions.layer` is the embedder's entry: it composes the process once
  * per scope and provides `Sessions` over it, with the scope as the lifetime
- * of its hold. The root entry (`packages/agent/src/index.ts`) re-exports
+ * of its hold. The root entry (`packages/harness/src/index.ts`) re-exports
  * these services as the package's surface.
  */
 import { Effect, Layer, Semaphore, type Context, type Scope } from 'effect';

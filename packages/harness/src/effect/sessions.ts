@@ -140,11 +140,11 @@ export class Sessions extends Context.Service<
     ) => Effect.Effect<SessionCloseReport>;
     readonly list: Effect.Effect<readonly Session[]>;
   }
->()('@texra-ai/agent/Sessions') {
+>()('@texra-ai/harness/Sessions') {
   /**
    * The Effect embedder's entry: compose the process once, from its
    * platform and its plugins (`harnessBuiltins.all` from
-   * `@texra-ai/agent/plugins`, or a list of the embedder's own beside
+   * `@texra-ai/harness/plugins`, or a list of the embedder's own beside
    * them), and serve its session owner, with this scope as the lifetime of
    * the hold it takes on that composition. A second, different platform or
    * plugin list while this package holds a composition, or a process

@@ -1,5 +1,5 @@
 /**
- * The sessions of `@texra-ai/agent` and the runs on them.
+ * The sessions of `@texra-ai/harness` and the runs on them.
  *
  * `Sessions` is the process's one session owner as an Effect service: it
  * opens, lists and closes through `@agent/runtime`'s owner port, so a root
@@ -11,7 +11,7 @@
  *
  * Every decision a run makes is stated once, here, in Effect: which level
  * is the run's first, when its transcript interest changes, when the drain
- * ends, and which failure wins. The root entry (`packages/agent/src/index.ts`)
+ * ends, and which failure wins. The root entry (`packages/harness/src/index.ts`)
  * re-exports these services as the package's surface.
  */
 import {

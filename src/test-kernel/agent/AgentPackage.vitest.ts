@@ -187,8 +187,8 @@ import {
   type AgentPlatform,
   PlatformConflict,
   Sessions,
-} from '../../../packages/agent/src/index';
-import { nodePlatform } from '../../../packages/agent/src/node';
+} from '../../../packages/harness/src/index';
+import { nodePlatform } from '../../../packages/harness/src/node';
 
 /** The plugin list every composition below is made with. */
 const PLUGINS: readonly Plugin[] = [];
