@@ -151,15 +151,19 @@ export type PromptMessageItem<T extends string = string> =
       isCloseAffordance?: boolean;
     };
 
-export interface PromptMessageOptions<T extends string = string> {
+/** What a message box and a confirmation both take. */
+interface BaseDialogOptions {
   detail?: string;
   modal?: boolean;
+}
+
+export interface PromptMessageOptions<
+  T extends string = string,
+> extends BaseDialogOptions {
   items?: readonly PromptMessageItem<T>[];
 }
 
-export interface PromptConfirmOptions {
-  detail?: string;
-  modal?: boolean;
+export interface PromptConfirmOptions extends BaseDialogOptions {
   /**
    * Required so no confirmation ships with a content-free "OK"/"Yes" button:
    * every caller must name the action being confirmed.

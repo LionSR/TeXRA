@@ -11,6 +11,7 @@ import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
   ToolError,
+  type ToolDefinition,
   type ToolResult,
 } from '@shared/schemas';
 import { findStorageRefusal } from '@shared/session/runHistory';
@@ -39,38 +40,34 @@ export type DefinedTool<T, R = never> = Omit<ITool<Error, R>, 'call'> & {
   readonly describe: ITool['describe'];
 };
 
-export type DefineToolOptions<T, R = never> = {
-  name: string;
-  description: string;
-  schema: ZodType<T, unknown>;
-  /** See {@link ToolDefinition.scriptReturns}. */
-  scriptReturns?: string;
-  /** Product hosts this tool definition statically excludes itself from. */
-  unavailableHosts?: readonly SettingHost[];
-  /** See {@link ITool.hostCapability}. */
-  hostCapability?: HostToolCapability;
-  /**
-   * What the run loop checks before this tool's body runs: the paths the call
-   * writes and the command it must get approved. Declared here, applied once
-   * in `agent/runtime/loop/toolGuard.ts`.
-   *
-   * `NoInfer<R>`: the guard is checked against the requirement channel the
-   * tool already has, it never sets it.
-   */
-  guard?: ToolGuard<T, NoInfer<R>>;
-  execute: ToolExecute<T, R>;
-  parallelSafe?: boolean;
-  /** See {@link ITool.ownsConcurrency}. */
-  ownsConcurrency?: boolean;
-  /** See {@link ITool.scriptGlobal}. */
-  scriptGlobal?: ITool['scriptGlobal'];
-  /** See {@link ITool.replay}; omitted is `'unsafe'`. */
-  replay?: ITool['replay'];
-  requiresApproval?: ITool['requiresApproval'];
-  slow?: boolean;
-  /** See {@link ITool.describe}. */
-  describe?: ITool['describe'];
-};
+export type DefineToolOptions<T, R = never> = Required<
+  Pick<ToolDefinition, 'name' | 'description'>
+> &
+  Pick<ToolDefinition, 'scriptReturns'> &
+  Pick<
+    ITool,
+    | 'unavailableHosts'
+    | 'hostCapability'
+    | 'parallelSafe'
+    | 'ownsConcurrency'
+    | 'scriptGlobal'
+    | 'replay'
+    | 'requiresApproval'
+    | 'slow'
+    | 'describe'
+  > & {
+    schema: ZodType<T, unknown>;
+    /**
+     * What the run loop checks before this tool's body runs: the paths the
+     * call writes and the command it must get approved. Declared here,
+     * applied once in `agent/runtime/loop/toolGuard.ts`.
+     *
+     * `NoInfer<R>`: the guard is checked against the requirement channel the
+     * tool already has, it never sets it.
+     */
+    guard?: ToolGuard<T, NoInfer<R>>;
+    execute: ToolExecute<T, R>;
+  };
 
 /**
  * Define a tool: validate the model's input against `schema`, run `execute`,

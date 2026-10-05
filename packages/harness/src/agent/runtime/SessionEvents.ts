@@ -60,6 +60,24 @@ import {
 
 const CHANNEL = 'sessionEvents';
 
+/** What the publisher keeps per aggregate. `open`: its open work, so closing
+ *  it at a park, an end or a host exit reads no rows; streams close at a phase
+ *  move that rests or ends the run, stages only on their own rows. An earlier
+ *  process's work is not here: its streams close at that same move, and a
+ *  stage it left open reads as settled once the run is durably final
+ *  (`taskGroupDisplayStatus`). `followUps`: kept by the one reducer
+ *  (`applyRunRow`); an earlier owner's rows enter where a claim moves here
+ *  (`hydrateFollowUps`, which sets `hydrated`), and while this process holds
+ *  the claim no other commits. `lifecycle` (closed is its input): lifecycle
+ *  rows folded by commit from every source, so a lagging one never rolls a
+ *  newer standing back; it outlives `run.removed`. */
+interface AggregateState {
+  open?: Map<string, OpenWork>;
+  followUps?: RunRows;
+  hydrated?: true;
+  lifecycle?: ReturnType<typeof lifecycleOf> & { commit: CommitOrdinal };
+}
+
 /** One unit of the publisher's work: a job over the log's append that
  *  settles the deferred its enqueuer waits on with the job's own exit. */
 type PublicationJob = (append: Append) => Effect.Effect<void>;
@@ -165,56 +183,38 @@ export const sessionEventsLayer = Layer.effect(
   SessionEvents,
   Effect.gen(function* () {
     const log = yield* Database;
-    // What each aggregate has open, kept as this publisher commits it, so
-    // closing it at a park, an end or a host exit reads no rows. The fold
-    // closes every stream at a phase move that rests or ends the run, and so
-    // does this; stages close only on their own rows, there and here. Work
-    // some earlier process opened is not here: its streams close at that
-    // same phase move, and a stage it left open reads as its run's settled
-    // outcome once the run is durably final (`taskGroupDisplayStatus`).
-    const open = new Map<AggregateId, Map<string, OpenWork>>();
-    // Each run's follow-ups, kept the same way by the one reducer
-    // (`applyRunRow`). Rows an earlier owner committed enter where a claim
-    // moves here (`hydrateFollowUps`); while this process holds the claim,
-    // no other process commits to the run, so what it tracks stays whole.
-    const followUps = new Map<AggregateId, RunRows>();
-    const hydrated = new Set<AggregateId>();
-    // Each run's input standing, one fold of its lifecycle rows by commit:
-    // this publisher's commits, reads where a claim moves here, and the
-    // fold-gated tail's rows from every process. A row at or below the
-    // commit already applied changes nothing, so a lagging source never
-    // rolls a newer standing back.
-    const lifecycles = new Map<
-      AggregateId,
-      ReturnType<typeof lifecycleOf> & { readonly commit: CommitOrdinal }
-    >();
+    const aggregates = new Map<AggregateId, AggregateState>();
+    const stateOf = (aggregateId: AggregateId): AggregateState => {
+      const state = aggregates.get(aggregateId) ?? {};
+      return (aggregates.set(aggregateId, state), state);
+    };
     const foldLifecycle = (rows: readonly SessionEvent[]) => {
       for (const row of rows) {
         if (!(RUN_LIFECYCLE_TYPES as readonly string[]).includes(row.type))
           continue;
-        const at = lifecycles.get(row.aggregateId);
+        const state = stateOf(row.aggregateId);
+        const at = state.lifecycle;
         if (at && row.commit <= at.commit) continue;
-        const next = lifecycleOf([row], at);
-        lifecycles.set(row.aggregateId, { ...next, commit: row.commit });
+        state.lifecycle = { ...lifecycleOf([row], at), commit: row.commit };
       }
     };
     const track = (rows: readonly SessionEvent[]) => {
       foldLifecycle(rows);
       for (const row of rows) {
+        const known = aggregates.get(row.aggregateId);
         if (row.type === 'run.removed') {
-          open.delete(row.aggregateId);
-          followUps.delete(row.aggregateId);
-          hydrated.delete(row.aggregateId);
+          if (known) known.open = known.followUps = known.hydrated = undefined;
           continue;
         }
         if (isFollowUpRow(row)) {
-          const slice = followUps.get(row.aggregateId) ?? freshRunRows();
+          const state = stateOf(row.aggregateId);
+          const slice = state.followUps ?? freshRunRows();
           const verdict = applyRunRow(slice, row);
           if (verdict.kind === 'applied')
-            followUps.set(row.aggregateId, { ...slice, ...verdict.rows });
+            state.followUps = { ...slice, ...verdict.rows };
           continue;
         }
-        const work = open.get(row.aggregateId) ?? new Map<string, OpenWork>();
+        const work = known?.open ?? new Map<string, OpenWork>();
         const close = (kind: OpenWork['kind'], id: string) => {
           if (work.get(id)?.kind === kind) work.delete(id);
         };
@@ -232,8 +232,8 @@ export const sessionEventsLayer = Layer.effect(
         } else {
           continue;
         }
-        if (work.size === 0) open.delete(row.aggregateId);
-        else open.set(row.aggregateId, work);
+        if (work.size > 0) stateOf(row.aggregateId).open = work;
+        else if (known) known.open = undefined;
       }
     };
     // Both of `appendAll`'s refusals pass through typed (D6 b): a lost
@@ -378,30 +378,29 @@ export const sessionEventsLayer = Layer.effect(
       detach,
       removeRun,
       settle,
-      openWork: (aggregateId) => [...(open.get(aggregateId)?.values() ?? [])],
-      pendingFollowUps: (aggregateId) =>
-        followUps.get(aggregateId)?.followUps ?? [],
-      followUpNamed: (aggregateId, followUpId) =>
-        followUps.get(aggregateId)?.followUpIds.has(followUpId) ?? false,
-      inputClosed: (aggregateId) =>
-        lifecycles.get(aggregateId)?.closed === true,
+      openWork: (id) => [...(aggregates.get(id)?.open?.values() ?? [])],
+      pendingFollowUps: (id) => aggregates.get(id)?.followUps?.followUps ?? [],
+      followUpNamed: (id, followUpId) =>
+        aggregates.get(id)?.followUps?.followUpIds.has(followUpId) ?? false,
+      inputClosed: (id) => aggregates.get(id)?.lifecycle?.closed === true,
       foldLifecycle: (row) => foldLifecycle([row]),
       hydrateFollowUps: (aggregateId, claimMoved, rows) =>
         Effect.gen(function* () {
           if (aggregateTarget(aggregateId).kind !== 'run') return;
-          if (!claimMoved && hydrated.has(aggregateId)) return;
+          if (!claimMoved && aggregates.get(aggregateId)?.hydrated) return;
           const read = foldRunRows(
             (
               rows ??
               (yield* log.readAggregate(aggregateId, 1, FOLLOW_UP_TYPES))
             ).filter(isFollowUpRow),
           );
-          const live = followUps.get(aggregateId) ?? freshRunRows();
+          const state = stateOf(aggregateId);
+          const live = state.followUps ?? freshRunRows();
           const livePending = new Set(live.followUps.map((f) => f.followUpId));
           // A row the read holds keeps its place unless this publisher
           // consumed it since; one it tracked that the read does not name
           // committed after the read, and follows it.
-          followUps.set(aggregateId, {
+          state.followUps = {
             ...read,
             followUps: [
               ...read.followUps.filter(
@@ -413,12 +412,12 @@ export const sessionEventsLayer = Layer.effect(
               ),
             ],
             followUpIds: new Set([...read.followUpIds, ...live.followUpIds]),
-          });
+          };
           // The run's own input standing, from its committed rows.
           foldLifecycle(
             yield* log.readAggregate(aggregateId, 1, [...RUN_LIFECYCLE_TYPES]),
           );
-          hydrated.add(aggregateId);
+          state.hydrated = true;
         }),
       listing: () =>
         Stream.fromIterableEffect(log.readListing()).pipe(

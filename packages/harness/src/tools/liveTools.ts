@@ -6,10 +6,9 @@
  *   `pinSwitched` reads the switches, reconciles the contributions with them
  *   and pins the generation that produces, with the plugins it leaves on
  *   (whose continuation and prompt section the step reads off their value),
- *   as one serialized step. A run's
- *   step opens through it (`@agent/runtime/loop/step`), so a switch flipped
- *   by any host, or by `texra tools` from another shell, reaches every open
- *   run at its next step.
+ *   as one serialized step. A run's step opens through it
+ *   (`@agent/runtime/loop/step`), so a switch flipped by any host, or by
+ *   `texra tools` from another shell, reaches every open run at its next step.
  * - **Loaded plugins** (MCP servers, `@tools/toolTable`) contribute the tools
  *   their server listed while some run holds them (`hold`), counted per spec
  *   and keyed env revision: runs naming the same server share one process,
@@ -69,21 +68,17 @@ export class LiveTools extends Context.Service<
   LiveTools,
   {
     readonly registry: Registry<string, ToolEntry, void>;
-    /**
-     * Read the switches (the ids the user holds off; only a probed plugin's
-     * switch counts), contribute exactly the built-in plugins they leave
-     * on, and pin the tool generation that produces and those plugins, as
-     * one serialized step: a concurrent step's older read never reverts the
-     * catalog under it, and no step pins a generation built from switches
-     * it did not read.
-     */
+    /** Read the switches (the ids the user holds off; only a probed plugin's
+     *  switch counts), contribute exactly the built-in plugins they leave on,
+     *  and pin the tool generation that produces and those plugins, as one
+     *  serialized step: a concurrent step's older read never reverts the
+     *  catalog under it, and no step pins a generation built from switches it
+     *  did not read. */
     readonly pinSwitched: <E>(
       off: Effect.Effect<ReadonlySet<string>, E>,
-      /**
-       * Also read the installed plugins: `true` loads them as they stand (a
-       * run's step); `'withdraw'` only withdraws those disabled, removed or
-       * changed since they loaded, starting nothing (a switch follower).
-       */
+      /** Also read the installed plugins: `true` loads them as they stand (a
+       *  run's step); `'withdraw'` only withdraws those disabled, removed or
+       *  changed since they loaded, starting nothing (a switch follower). */
       options?: { readonly installed: true | 'withdraw' },
     ) => Effect.Effect<
       Pinned<string, ToolEntry, void> & {
@@ -146,13 +141,12 @@ const liveToolsLayer = (
       // Each plugin's process layer, in its map entry's scope: its switch and
       // each generation that includes it hold a reference. It may read this
       // catalog (Copilot's tools follow it), built by then.
-      const self: { service?: LiveTools['Service'] } = {};
       // The plugins whose process layer is up, however it is held.
       const up = new Set<string>();
       const layers = yield* RcMap.make({
         lookup: (id: string) =>
           buildPluginLayer(id, table.entries.get(id)!.processLayer!.layer).pipe(
-            Effect.provideService(LiveTools, self.service!),
+            Effect.provideService(LiveTools, service),
             Effect.provide(process),
             Effect.tap(() =>
               Effect.acquireRelease(
@@ -380,9 +374,14 @@ const liveToolsLayer = (
             ? Effect.map(RcMap.get(layers, id), Option.some)
             : Effect.succeed(Option.none()),
         );
-      self.service = { registry, pinSwitched, hold, processServices };
+      const service: LiveTools['Service'] = {
+        registry,
+        pinSwitched,
+        hold,
+        processServices,
+      };
       yield* locked(reconcile(closed));
-      return self.service;
+      return service;
     }),
   );
 

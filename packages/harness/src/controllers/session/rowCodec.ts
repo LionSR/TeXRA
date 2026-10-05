@@ -47,6 +47,9 @@ import type { SqlError } from 'effect/sql/SqlError';
 
 const CHANNEL = 'sessionDatabase';
 
+/** One selected store row, its columns by name, decoded where it is read. */
+export type SqlRow = Readonly<Record<string, unknown>>;
+
 // zstd: Node 22.15+ (the CLI needs 22.19; Electron and VS Code ship 24).
 if (typeof zstdCompressSync !== 'function')
   throw new Error('The session store needs zstd: Node 22.19 or later.');
@@ -247,9 +250,7 @@ function parseData({ data, blobs }: z.infer<typeof RowSchema>): unknown {
   });
 }
 
-export function decodeRow(
-  input: Readonly<Record<string, unknown>>,
-): RowVerdict {
+export function decodeRow(input: SqlRow): RowVerdict {
   const row = RowSchema.parse(input);
   const aggregateId = aggregateOf(row.kind, row.logicalId);
   const blocked = (
@@ -359,7 +360,7 @@ function cardResult(
 /** The stored kinds a later build wrote, with the version above which their
  *  rows are newer: every row of an unknown type, or those above this build's. */
 export function unreadableKinds(
-  stored: readonly Readonly<Record<string, unknown>>[],
+  stored: readonly SqlRow[],
 ): readonly { readonly type: string; readonly above: number }[] {
   return stored.flatMap((input) => {
     const { type, version } = z
@@ -371,18 +372,17 @@ export function unreadableKinds(
   });
 }
 
-/**
- * One connection's record of what its reads could not decode: the aggregates
- * blocked (warned once each) and the plugin kinds left out (once per kind).
- * `decodeAll` answers a read's events and records the rest; `refresh` adds
- * what `stored_kind` names; `retain` drops the verdicts of collected ones.
- */
+/** One connection's record of what its reads could not decode: the
+ *  aggregates blocked (warned once each) and the plugin kinds left out (once
+ *  per kind). `decodeAll` answers a read's events and records the rest;
+ *  `refresh` adds what `stored_kind` names; `retain` drops the verdicts of
+ *  collected ones. */
 export function verdictBook(
   path: string,
   exec: (
     statement: string,
     params?: readonly unknown[],
-  ) => Effect.Effect<readonly Readonly<Record<string, unknown>>[], SqlError>,
+  ) => Effect.Effect<readonly SqlRow[], SqlError>,
 ) {
   const leftOut = new Set<string>();
   const blocked = new Map<AggregateId, BlockedAggregate>();
@@ -411,7 +411,7 @@ export function verdictBook(
         );
   /** A read's events, and whether it skipped a newer row (a later build
    *  can read it; an older or corrupt one no build can). */
-  const decodeAll = (rows: readonly Readonly<Record<string, unknown>>[]) =>
+  const decodeAll = (rows: readonly SqlRow[]) =>
     Effect.gen(function* () {
       const fresh: string[] = [];
       const events: SessionEvent[] = [];
