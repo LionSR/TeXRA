@@ -778,7 +778,9 @@ describe('the batch a parked run consumes', () => {
         yield* Fiber.interrupt(fiber);
 
         expect(warn).toHaveBeenCalledWith(
-          expect.stringContaining('has no vision support'),
+          expect.stringMatching(
+            /^Skipping .*texra-figure\.png: the model does not accept images\.$/,
+          ),
         );
         expect(info).toHaveBeenCalledWith(
           'please inspect this figure',

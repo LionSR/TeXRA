@@ -10,6 +10,8 @@ import { withLogChannel } from '@logger/effectLog';
 import {
   AgentDirectoriesFailed,
   type AgentDirectoriesPort,
+  type AppState,
+  type StateReadFailed,
   type StateStore,
 } from '@platform/interfaces';
 import { GlobalStorageFs } from '@platform/rootedFs';
@@ -20,7 +22,7 @@ import { entryExists } from '@utils/files/fsEntryExists';
 import {
   BUILTIN_WORKFLOW_AGENTS_DIR,
   BUILTIN_TOOL_USE_AGENTS_DIR,
-  builtInToolUseRoots,
+  enabledToolUseRoots,
 } from './BundledAgentDirectories';
 
 type AgentDirectoryDocsId = 'custom-agents';
@@ -245,26 +247,33 @@ export class AgentDirectoryService {
 
 /**
  * The one `AgentSource` to local-directories mapping, read off the port so
- * every holder of an `AgentDirectoriesPort` answers a source the same way:
- * the custom directory, or the bundled directories (the workflow and tool-use
- * ones, then each enabled tool plugin's). A plugin agent has none: it lives
- * in its own plugin's.
+ * every holder of an `AgentDirectoriesPort` answers a source the same way,
+ * the catalog's scan included: the custom directory, or the bundled
+ * directories (the workflow and tool-use ones, then each tool plugin's that
+ * is on; an off plugin contributes nothing). A plugin agent has none: it
+ * lives in its own plugin's.
  */
 export function agentSourceRoots(
   directories: AgentDirectoriesPort,
   source: AgentSource,
 ): Effect.Effect<
   readonly string[],
-  AgentDirectoriesFailed,
-  GlobalStorageFs | FileSystem.FileSystem
+  AgentDirectoriesFailed | StateReadFailed,
+  GlobalStorageFs | FileSystem.FileSystem | AppState
 > {
   switch (source) {
     case 'custom':
       return Effect.map(directories.custom(), (dir) => [dir]);
     case 'builtIn':
       return Effect.map(
-        Effect.all([directories.builtIn(), directories.builtInToolUse()]),
-        ([workflow, toolUse]) => [workflow, ...builtInToolUseRoots(toolUse)],
+        Effect.all(
+          [
+            directories.builtIn(),
+            Effect.flatMap(directories.builtInToolUse(), enabledToolUseRoots),
+          ],
+          { concurrency: 'unbounded' },
+        ),
+        ([workflow, toolUse]) => [workflow, ...toolUse],
       );
     case 'plugin':
       return Effect.succeed([]);
