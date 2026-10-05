@@ -2,6 +2,7 @@ import { strict as assert } from 'node:assert';
 
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
+import { TestClock } from 'effect/testing';
 
 import { describe, expect } from 'vitest';
 
@@ -66,7 +67,6 @@ function createController(options?: {
   agents?: SettingsAgentCatalogEntry[];
   visible?: SettingsAgentCatalogEntry[];
   customPresets?: unknown;
-  now?: number;
 }) {
   const getAgents = () => options?.agents ?? AGENTS;
   const workspaceState = new FakeStateStore({
@@ -106,7 +106,6 @@ function createController(options?: {
       workspaceAgents,
       getAgents,
       newerBuiltInOf: () => undefined,
-      now: () => options?.now ?? 123,
     }),
     workspaceState,
     customPresets: workspaceState
@@ -268,10 +267,8 @@ describe('SettingsAgentCatalogController', () => {
 
   it.effect('saves the currently visible agents as a custom preset', () =>
     Effect.gen(function* () {
-      const state = createController({
-        now: 456,
-        visible: [AGENTS[1], AGENTS[2]],
-      });
+      const state = createController({ visible: [AGENTS[1], AGENTS[2]] });
+      yield* TestClock.setTime(456);
 
       assert.deepEqual(
         yield* state.controller.saveCurrentPreset('  My Team  '),
@@ -303,7 +300,7 @@ describe('SettingsAgentCatalogController', () => {
         ]);
         assert.equal(
           ((yield* state.customPresets)[2] as AgentModePreset | undefined)?.id,
-          'custom-123',
+          'custom-0',
         );
       }),
   );

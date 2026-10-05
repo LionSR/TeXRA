@@ -19,7 +19,7 @@ export function renderElement(template: TemplateResult): HTMLElement {
 
 /**
  * Small icon-only close button shared by the desktop's imperative dialog
- * overlays (PDF, prompt) — each wires it to its own `dialog.open = false`
+ * overlays (settings, prompt) — each wires it to its own `dialog.open = false`
  * handler.
  */
 function createDialogCloseButton(
@@ -40,7 +40,7 @@ function createDialogCloseButton(
 
 /**
  * Shared scaffolding for the desktop's imperative `wa-dialog` overlays
- * (PDF, prompt): one shell — `withoutHeader` / `lightDismiss` / `aria-label`,
+ * (settings, prompt): one shell — `withoutHeader` / `lightDismiss` / `aria-label`,
  * a titled header, an absolutely-positioned close button, and the
  * `appRoot.append` — so each overlay owns only its content and behavior and
  * the near-identical shells (and their `desktop-*` class families) cannot
@@ -50,12 +50,12 @@ interface OverlayDialogOptions {
   appRoot: HTMLElement;
   /**
    * CSS class family. Derives `${prefix}-overlay`, `${prefix}-close`,
-   * `${prefix}-body` / `-header` / `-title` / `-subtitle`.
+   * `${prefix}-body` / `-header` / `-title`.
    */
   prefix: string;
   ariaLabel: string;
   closeLabel: string;
-  /** The overlay's content element (PDF iframe, prompt form). */
+  /** The overlay's content element (settings view, prompt form). */
   content: HTMLElement;
   /** Wraps `content` in a titled `<section>` header shell. */
   title: string;
@@ -64,7 +64,6 @@ interface OverlayDialogOptions {
 interface OverlayDialogHandle {
   dialog: WaDialog;
   titleEl: HTMLElement;
-  subtitleEl: HTMLElement;
 }
 
 /** Build a closed wa-dialog shell with shared chrome and append it to `appRoot`. */
@@ -85,9 +84,7 @@ export function createOverlayDialog(
   const titleEl = document.createElement('h2');
   titleEl.classList.add(`${prefix}-title`);
   titleEl.textContent = options.title;
-  const subtitleEl = document.createElement('p');
-  subtitleEl.classList.add(`${prefix}-subtitle`);
-  header.append(titleEl, subtitleEl);
+  header.append(titleEl);
   body.append(header, options.content);
   dialog.append(body);
 
@@ -97,5 +94,5 @@ export function createOverlayDialog(
     }),
   );
   options.appRoot.append(dialog);
-  return { dialog, titleEl, subtitleEl };
+  return { dialog, titleEl };
 }

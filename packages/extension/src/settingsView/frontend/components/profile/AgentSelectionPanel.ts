@@ -313,7 +313,7 @@ export class AgentSelectionPanel extends LitElement {
       readonly button: LabeledActionButtonOptions;
     }> = [
       {
-        when: agent.hasPath,
+        when: agent.filePath !== undefined,
         button: {
           icon: 'file-lines',
           // A packaged definition ships inside the app and cannot be edited
@@ -335,7 +335,7 @@ export class AgentSelectionPanel extends LitElement {
         },
       },
       {
-        when: agent.hasPath,
+        when: agent.filePath !== undefined,
         button: {
           icon: 'folder-open',
           text: 'Reveal in file explorer',
