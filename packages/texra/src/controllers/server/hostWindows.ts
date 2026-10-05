@@ -77,13 +77,27 @@ interface Window {
   readonly pending: Map<string, Deferred.Deferred<unknown, WindowCallFailed>>;
 }
 
-/** A staged tool edit's preview, and the window that staged it. `seen`
- *  marks one whose request the session has listed. */
+type PresentedToolEdit = Extract<
+  HostCall,
+  { kind: 'presentToolEdit' }
+>['request'];
+
+/** A staged tool edit, and the window that staged it: a window of the
+ *  project that attaches while none holds it stages it there. `seen` marks
+ *  one whose request the session has listed. */
 interface Staged {
-  readonly preview: ToolEditPreview;
-  readonly window: Window | undefined;
+  readonly request: PresentedToolEdit;
+  window: Window | undefined;
   seen: boolean;
 }
+
+const previewOf = (entry: Staged | undefined): ToolEditPreview | null =>
+  entry === undefined
+    ? null
+    : {
+        originalContent: entry.request.originalContent,
+        proposedContent: entry.request.proposedContent,
+      };
 
 /** The project folder a session holds, or its store for a session with
  *  no folder. */
@@ -290,31 +304,20 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
       // that stages it as well is the one asked to release or approve it.
       presentToolEdit: (request) => {
         const { requestId } = request.permission;
-        const window = target(key, 'toolEdits');
-        stagedIn(key).set(requestId, {
-          preview: {
+        const entry: Staged = {
+          request: {
+            path: request.path,
             originalContent: request.originalContent,
             proposedContent: request.proposedContent,
+            sourceTool: request.sourceTool,
+            runId: request.runId ?? null,
+            permission: request.permission,
           },
-          window,
+          window: undefined,
           seen: false,
-        });
-        if (window !== undefined)
-          Queue.offerUnsafe(window.frames, {
-            kind: 'call',
-            id: randomUUID(),
-            call: {
-              kind: 'presentToolEdit',
-              request: {
-                path: request.path,
-                originalContent: request.originalContent,
-                proposedContent: request.proposedContent,
-                sourceTool: request.sourceTool,
-                runId: request.runId ?? null,
-                permission: request.permission,
-              },
-            },
-          });
+        };
+        stagedIn(key).set(requestId, entry);
+        stage(entry, target(key, 'toolEdits'));
       },
       releaseToolEdit: (requestId) =>
         Effect.suspend(() => {
@@ -346,6 +349,16 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
         }),
     };
   };
+  /** Stage `entry` in `window`, which then holds it. */
+  const stage = (entry: Staged, window: Window | undefined) => {
+    entry.window = window;
+    if (window !== undefined)
+      Queue.offerUnsafe(window.frames, {
+        kind: 'call',
+        id: randomUUID(),
+        call: { kind: 'presentToolEdit', request: entry.request },
+      });
+  };
   /** The window that staged `entry`, while it is attached. */
   const liveWindow = (entry: Staged | undefined) =>
     entry?.window !== undefined && windows.has(entry.window)
@@ -366,6 +379,12 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
             pending: new Map(),
           };
           windows.add(window);
+          // The project's tool edits no attached window holds (staged while
+          // none was, or by one that went) are staged here, so this
+          // window's Approve reads the edit it shows.
+          if (window.capabilities.has('toolEdits'))
+            for (const entry of stagedIn(window.key).values())
+              if (liveWindow(entry) === undefined) stage(entry, window);
           return Stream.concat(
             Stream.succeed<HostFrame>({
               kind: 'attached',
@@ -427,7 +446,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
     preview: (session, requestId) =>
       Effect.map(SubscriptionRef.get(session.view), (view) =>
         view.requests.some((request) => request.requestId === requestId)
-          ? (stagedIn(session.roots.storage).get(requestId)?.preview ?? null)
+          ? previewOf(stagedIn(session.roots.storage).get(requestId))
           : null,
       ),
   };
