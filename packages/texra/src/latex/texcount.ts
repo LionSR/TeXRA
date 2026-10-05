@@ -54,7 +54,6 @@ export type TexcountMode = 'separate' | 'include' | 'sum';
 
 export interface TexcountOptions {
   mode?: TexcountMode;
-  channel?: string;
   /**
    * Setting slots of the counted workspace, held as data by the caller that
    * asked (a tool call's roots, a run's session roots, the host command's),
@@ -95,16 +94,12 @@ const rejectionReason = Effect.fn('texcount.rejectionReason')(function* (
  * Invoke `texcount`. The subprocess is cancelled by the fiber's own
  * interruption, which `runToolWithCheck` carries into the spawn, so no caller
  * threads a signal in.
- *
- * `channel` is still a parameter because `runToolWithCheck` logs the command
- * itself through the Promise-shaped writers; this function's own entries take
- * the channel the whole count was annotated with.
+
  */
 const runTexcount = Effect.fn('texcount.runTexcount')(function* (
   workspaceRoot: string | undefined,
   settings: SettingsStores,
   args: string[],
-  channel: string,
   context: string,
 ): Effect.fn.Return<
   { stdout: string | null; error?: string },
@@ -112,12 +107,11 @@ const runTexcount = Effect.fn('texcount.runTexcount')(function* (
   ChildProcessSpawner
 > {
   const result = yield* runToolWithCheck('texcount', args, {
-    channel,
+    channel: CHANNEL,
     // The file arguments are workspace-relative, so the root the caller
     // counted for is also the directory texcount resolves them against.
     cwd: workspaceRoot,
     settings,
-    truncate: false,
     showError: true,
   });
 
@@ -154,7 +148,6 @@ const getIndividualCounts = Effect.fn('texcount.getIndividualCounts')(
     workspaceRoot: string | undefined,
     settings: SettingsStores,
     paths: readonly string[],
-    channel: string,
     includeReferenced: boolean,
   ) {
     const results = yield* Effect.forEach(
@@ -183,7 +176,6 @@ const getIndividualCounts = Effect.fn('texcount.getIndividualCounts')(
             workspaceRoot,
             settings,
             args,
-            channel,
             filePath,
           );
           return {
@@ -207,7 +199,6 @@ const getSummedCount = Effect.fn('texcount.getSummedCount')(function* (
   workspaceRoot: string | undefined,
   settings: SettingsStores,
   paths: readonly string[],
-  channel: string,
 ) {
   const errors: string[] = [];
 
@@ -268,7 +259,6 @@ const getSummedCount = Effect.fn('texcount.getSummedCount')(function* (
     workspaceRoot,
     settings,
     args,
-    channel,
     `sum for ${validPaths.join(', ')}`,
   );
   if (!stdout) {
@@ -287,14 +277,12 @@ const getSummedCount = Effect.fn('texcount.getSummedCount')(function* (
 export const getTeXCount = Effect.fn('texcount.getTeXCount')(function* (
   workspaceRoot: string | undefined,
   filePaths: string | string[],
-  { mode = 'separate', channel, settings }: TexcountOptions,
+  { mode = 'separate', settings }: TexcountOptions,
 ): Effect.fn.Return<
   TexcountResult,
   never,
   FileSystem.FileSystem | ChildProcessSpawner
 > {
-  const resolvedChannel = channel ?? CHANNEL;
-
   const counted = Effect.gen(function* () {
     const trimmedPaths = ensureArray(filePaths)
       .map((filePath) => filePath.trim())
@@ -311,7 +299,6 @@ export const getTeXCount = Effect.fn('texcount.getTeXCount')(function* (
         workspaceRoot,
         settings,
         trimmedPaths,
-        resolvedChannel,
       );
       if (output) {
         yield* Effect.logInfo(`Combined TeX Count Results:\n${output}`);
@@ -323,7 +310,6 @@ export const getTeXCount = Effect.fn('texcount.getTeXCount')(function* (
       workspaceRoot,
       settings,
       trimmedPaths,
-      resolvedChannel,
       mode === 'include',
     );
     if (outputs.length === 0) {
@@ -352,7 +338,7 @@ export const getTeXCount = Effect.fn('texcount.getTeXCount')(function* (
     ),
     // One channel for the whole count: every helper below logs into it
     // instead of taking the channel as a parameter of its own.
-    withLogChannel(resolvedChannel),
+    withLogChannel(CHANNEL),
   );
 });
 
@@ -382,10 +368,8 @@ export const getTeXCountStats = Effect.fn('texcount.getTeXCountStats')(
     workspaceRoot: string | undefined,
     settings: SettingsStores,
     filePaths: string | string[],
-    channel: string = CHANNEL,
   ) {
     const { output } = yield* getTeXCount(workspaceRoot, filePaths, {
-      channel,
       settings,
     });
     return output
