@@ -13,58 +13,21 @@ import type { TeXRAIconName } from '@shared/iconNames';
  * "other" fallback) gets a neutral glyph from the same set instead of a forced,
  * unrelated metaphor.
  */
-export interface ProviderDecorator {
+interface ProviderDecorator {
   icon: TeXRAIconName;
   label: string;
-  hint: string;
 }
 
 const MODEL_PROVIDER_DECORATORS: Record<string, ProviderDecorator> = {
-  anthropic: {
-    icon: 'brain',
-    label: 'Anthropic',
-    hint: 'Anthropic Claude models',
-  },
-  openai: {
-    icon: 'hexagon',
-    label: 'OpenAI',
-    hint: 'OpenAI GPT models',
-  },
-  google: {
-    icon: 'gem',
-    label: 'Google',
-    hint: 'Google Gemini models',
-  },
-  xai: {
-    icon: 'satellite',
-    label: 'xAI',
-    hint: 'xAI Grok models',
-  },
-  deepseek: {
-    icon: 'fish',
-    label: 'DeepSeek',
-    hint: 'DeepSeek models',
-  },
-  moonshot: {
-    icon: 'moon',
-    label: 'Moonshot',
-    hint: 'Moonshot AI Kimi models',
-  },
-  dashscope: {
-    icon: 'meteor',
-    label: 'Qwen',
-    hint: 'Alibaba Cloud Qwen models',
-  },
-  copilot: {
-    icon: 'plane',
-    label: 'Copilot',
-    hint: 'GitHub Copilot models',
-  },
-  others: {
-    icon: 'robot',
-    label: 'Other',
-    hint: 'Other model providers',
-  },
+  anthropic: { icon: 'brain', label: 'Anthropic' },
+  openai: { icon: 'hexagon', label: 'OpenAI' },
+  google: { icon: 'gem', label: 'Google' },
+  xai: { icon: 'satellite', label: 'xAI' },
+  deepseek: { icon: 'fish', label: 'DeepSeek' },
+  moonshot: { icon: 'moon', label: 'Moonshot' },
+  dashscope: { icon: 'meteor', label: 'Qwen' },
+  copilot: { icon: 'plane', label: 'Copilot' },
+  others: { icon: 'robot', label: 'Other' },
 };
 
 export function getModelProviderDecorator(provider: string): ProviderDecorator {
@@ -98,9 +61,6 @@ export const AGENT_DECORATORS = {
     process: { icon: 'terminal', label: 'Process' },
     script: { icon: 'code', label: 'Script' },
   },
-  /** Classification not known yet (or absent): neutral chrome, never a
-   *  fabricated category default. */
-  pending: { icon: 'circle', label: 'Stream' },
 } as const;
 
 export interface RunDecorator {

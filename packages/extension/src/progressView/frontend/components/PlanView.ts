@@ -4,18 +4,29 @@
  */
 
 // Third-party imports
-import { html, css, nothing, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import type { Plan } from '@shared/schemas';
+import type { Surface } from '@shared/session/surface';
 import { designTokens, commonViewStyles } from '@ui/styles';
+import { dispatchGroupToggle } from '../utils';
+import type { RunId } from '@texra-ai/harness/schemas';
 
-// Local imports - base class
-import { CollapsiblePanel } from './CollapsiblePanel';
+// Web Awesome native components
+import '@awesome.me/webawesome/dist/components/details/details.js';
 
+/** The panel's key in `Surface.groups` for its run. */
+const GROUP_KEY = 'plan';
+
+/**
+ * The panel's open state is the surface's (`Surface.groups`, under the run
+ * and `GROUP_KEY`), like the dispatch card's: it survives a run switch and a
+ * reload, and a toggle is dispatched, never kept here.
+ */
 @customElement('plan-view')
-export class PlanView extends CollapsiblePanel {
+export class PlanView extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -41,20 +52,33 @@ export class PlanView extends CollapsiblePanel {
     `,
   ];
 
+  @property({ attribute: false }) runId: RunId | null = null;
+  @property({ attribute: false }) surface: Surface | null = null;
   @property({ attribute: false }) plan: Plan | null = null;
 
-  protected readonly groupKey = 'plan';
+  private readonly handleToggle = (event: Event): void => {
+    dispatchGroupToggle(this, event, this.runId, GROUP_KEY);
+  };
 
   override render(): TemplateResult | typeof nothing {
     if (!this.plan) {
       return nothing;
     }
+    const open =
+      this.runId !== null &&
+      this.surface?.groups.get(this.runId)?.get(GROUP_KEY) === true;
 
-    return this.renderCollapsibleDetails({
-      summary: 'Plan',
-      // Kept to one line so the pre-wrap document gets no template whitespace.
-      // prettier-ignore
-      body: html`<div class="plan-body"><div class="plan-document">${this.plan.objective}</div></div>`,
-    });
+    // The body is kept to one line so the pre-wrap document gets no
+    // template whitespace.
+    // prettier-ignore
+    return html`
+      <wa-details
+        class="panel-collapsible is-boxed"
+        summary="Plan"
+        ?open=${open}
+        @wa-show=${this.handleToggle}
+        @wa-hide=${this.handleToggle}
+      ><div class="plan-body"><div class="plan-document">${this.plan.objective}</div></div></wa-details>
+    `;
   }
 }
