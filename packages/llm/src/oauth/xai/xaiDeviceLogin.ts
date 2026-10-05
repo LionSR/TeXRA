@@ -17,7 +17,7 @@ import { Effect } from 'effect';
 import {
   completeDeviceSession,
   pollDeviceAuthorization,
-  type SubscriptionDeviceCodePrompt,
+  type DeviceLoginOptions,
 } from '../deviceAuthorization.js';
 
 // Local imports - xai
@@ -28,13 +28,6 @@ import {
 } from './xaiConstants.js';
 import { pollDeviceToken, requestDeviceCode } from './xaiOAuthClient.js';
 import type { XaiSession } from './xaiSessionTypes.js';
-import type { SubscriptionOAuthCoordinator } from '../SubscriptionOAuthCoordinator.js';
-
-export interface XaiDeviceLoginOptions {
-  coordinator: SubscriptionOAuthCoordinator<XaiSession>;
-  /** Show the user the verification URL + one-time code. */
-  onPrompt: (prompt: SubscriptionDeviceCodePrompt) => Effect.Effect<void>;
-}
 
 /**
  * Run the device-code flow end to end and persist the session. Succeeds with
@@ -43,7 +36,7 @@ export interface XaiDeviceLoginOptions {
  */
 export const xaiLoginWithDeviceCode = Effect.fn(
   'xaiDeviceLogin.loginWithDeviceCode',
-)(function* (options: XaiDeviceLoginOptions) {
+)(function* (options: DeviceLoginOptions<XaiSession>) {
   const device = yield* requestDeviceCode();
   // Floor to 1s so a misbehaving endpoint cannot busy-loop us.
   const intervalMs = Math.max(

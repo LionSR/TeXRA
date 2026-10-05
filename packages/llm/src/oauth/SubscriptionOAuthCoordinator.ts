@@ -108,7 +108,7 @@ export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
     pkce: { verifier: string; challenge: string; method: 'S256' },
     state: string,
   ): SubscriptionAuthorizeRequest;
-  /** Map a token response (and the refresh token it renews) into the session. */
+  /** Token response to session. Must not throw: it runs in `Effect.succeed`. */
   buildSession(
     tokens: SubscriptionTokenResponse,
     refreshToken: string,

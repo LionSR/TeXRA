@@ -224,10 +224,13 @@ export type { SubscriptionSessionStatus } from './oauth/SubscriptionOAuthCoordin
 export { CODEX_BACKEND_BASE_URL } from './oauth/codex/codexConstants.js';
 export {
   codexCoordinator,
+  codexLoginWithLoopback,
   getCodexStatus,
 } from './oauth/codex/codexAuthAccess.js';
-export { codexLoginWithLoopback } from './oauth/codex/codexLoopbackLogin.js';
 export { codexLoginWithDeviceCode } from './oauth/codex/codexDeviceLogin.js';
-export { xaiCoordinator, getXaiStatus } from './oauth/xai/xaiAuthAccess.js';
-export { xaiLoginWithLoopback } from './oauth/xai/xaiLoopbackLogin.js';
+export {
+  getXaiStatus,
+  xaiCoordinator,
+  xaiLoginWithLoopback,
+} from './oauth/xai/xaiAuthAccess.js';
 export { xaiLoginWithDeviceCode } from './oauth/xai/xaiDeviceLogin.js';

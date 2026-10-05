@@ -12,7 +12,13 @@ import {
   SubscriptionOAuthCoordinator,
   type SubscriptionSessionStatus,
 } from '../SubscriptionOAuthCoordinator.js';
-import { CODEX_SESSION_SECRET_KEY } from './codexConstants.js';
+import { defineLoopbackLogin } from '../loopbackLogin.js';
+import {
+  CODEX_CALLBACK_FALLBACK_PORT,
+  CODEX_CALLBACK_PATH,
+  CODEX_CALLBACK_PORT,
+  CODEX_SESSION_SECRET_KEY,
+} from './codexConstants.js';
 import { CODEX_POLICY } from './codexSessionPolicy.js';
 import type { CredentialStore } from '../../providers/credentials.js';
 import type { CodexSession } from './codexSessionTypes.js';
@@ -41,3 +47,10 @@ export function getCodexStatus(
     'ChatGPT',
   );
 }
+
+/** The browser sign-in, bound to the registered ChatGPT callback. */
+export const codexLoginWithLoopback = defineLoopbackLogin<CodexSession>({
+  ports: [CODEX_CALLBACK_PORT, CODEX_CALLBACK_FALLBACK_PORT],
+  callbackPath: CODEX_CALLBACK_PATH,
+  displayName: 'ChatGPT',
+});

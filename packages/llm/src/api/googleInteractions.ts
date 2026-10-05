@@ -42,7 +42,7 @@ import {
   pullStream,
   readerAbortSignal,
 } from './transport.js';
-import type { Part, PartEvent } from './parts.js';
+import type { InputPart, Part, PartEvent } from './parts.js';
 import type { ModelOrigin } from '../protocol.js';
 
 export const GOOGLE_PREFIX_DOMAIN = 'texra-google-interactions-prefix-v1';
@@ -153,10 +153,7 @@ const WireEventSchema = z.discriminatedUnion('event_type', [
 ]);
 
 const lowerInputPart = Effect.fn('llm.google.lowerInputPart')(function* (
-  part: Extract<
-    ResolvedTurn['messages'][number],
-    { role: 'user' }
-  >['content'][number],
+  part: InputPart,
 ) {
   if (part.kind === 'text') {
     return { type: 'text', text: part.text } satisfies Interactions.TextContent;
@@ -223,14 +220,8 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
       else steps.push({ type: 'user_input', content });
     } else if (message.role === 'tool') {
       for (const result of message.results) {
+        // The canonical grammar guarantees adjacent, complete ordinals.
         const call = calls[result.callOrdinal];
-        if (call === undefined) {
-          return yield* new ModelError({
-            kind: 'unsupported',
-            message:
-              'A Google tool result requires its original provider call ID.',
-          });
-        }
         const content: Array<
           Interactions.TextContent | Interactions.ImageContent
         > = [];
