@@ -697,9 +697,9 @@ export const readProspectiveUsageRoute = Effect.fn('readProspectiveUsageRoute')(
 
 /**
  * A human-readable reason why a model is unavailable, or `null` if available.
- * Pure — including the two Copilot kinds, whose sentence was worded when the
- * model was routed. `inputs` must have been read for a list containing `model`
- * (a single `[model]` list is the usual one).
+ * Pure — including the two Copilot kinds, whose sentence is worded from the
+ * route the model was decided onto. `inputs` must have been read for a list
+ * containing `model` (a single `[model]` list is the usual one).
  */
 export function modelUnavailableReasonFrom(
   inputs: ModelAvailabilityInputs,
