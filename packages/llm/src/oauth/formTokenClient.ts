@@ -10,16 +10,13 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { oauthHttpError, parseOAuthJson, postOAuth } from './oauthRequest.js';
+import {
+  oauthHttpError,
+  parseOAuthJson,
+  postOAuthForm,
+} from './oauthRequest.js';
 import type { z } from 'zod';
 import type { SubscriptionTokenResponse } from './SubscriptionOAuthCoordinator.js';
-
-const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
-
-const DEFAULT_FORM_HEADERS = {
-  'Content-Type': 'application/x-www-form-urlencoded',
-  Accept: 'application/json',
-} as const;
 
 /**
  * Provider-declared form OAuth endpoint. Data only — no methods.
@@ -31,20 +28,13 @@ export interface OAuthFormEndpoint<
   readonly tokenUrl: string;
   readonly clientId: string;
   readonly tokenResponseSchema: z.ZodType<TTokens>;
-  readonly requestTimeoutMs?: number;
 }
 
 /** One token grant: form POST, ok-status check, schema parse. */
 const tokenGrant = Effect.fn('formTokenClient.tokenGrant')(function* <
   TTokens extends SubscriptionTokenResponse,
 >(endpoint: OAuthFormEndpoint<TTokens>, body: URLSearchParams, label: string) {
-  const response = yield* postOAuth({
-    url: endpoint.tokenUrl,
-    headers: DEFAULT_FORM_HEADERS,
-    body,
-    timeoutMs: endpoint.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
-    networkErrorMessage: `Network error contacting ${endpoint.tokenUrl}`,
-  });
+  const response = yield* postOAuthForm(endpoint.tokenUrl, body);
   if (!response.ok) return yield* oauthHttpError(response, label);
   return yield* parseOAuthJson(
     response,

@@ -57,17 +57,6 @@ export class SerializedWrites {
     });
   }
 
-  /**
-   * Whether a write is queued behind the one holding the permit. Read from
-   * inside that write, once its own port call has returned, it says the value
-   * just written is about to be replaced — what a p-queue caller could see in
-   * the version counter because the next job started synchronously on the
-   * previous one's return, and a fiber that bumps under the permit cannot.
-   */
-  get hasWaiters(): boolean {
-    return this.queued > 1;
-  }
-
   private dequeue(): void {
     this.queued -= 1;
     if (this.queued === 0 && this.idle) {

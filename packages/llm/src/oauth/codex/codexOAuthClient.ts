@@ -29,8 +29,6 @@ import {
   CodexDeviceUserCodeSchema,
 } from './codexSessionTypes.js';
 
-const REQUEST_TIMEOUT_MS = 30_000;
-
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
   Accept: 'application/json',
@@ -41,7 +39,6 @@ function postJson(url: string, body: unknown, networkErrorMessage: string) {
     url,
     headers: JSON_HEADERS,
     body: JSON.stringify(body),
-    timeoutMs: REQUEST_TIMEOUT_MS,
     networkErrorMessage,
   });
 }

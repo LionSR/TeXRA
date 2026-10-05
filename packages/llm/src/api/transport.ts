@@ -5,9 +5,6 @@ import { z } from 'zod';
 // Local imports - canonical protocol binding
 import { JsonObjectSchema } from '../protocol.js';
 
-// Local imports - canonical messages
-import { MessageSchema } from '../message.js';
-
 // Local imports - canonical model errors
 import { ModelError } from '../errors.js';
 
@@ -115,43 +112,6 @@ export const parseInboundToolArguments = (
         cause,
       }),
   });
-
-/**
- * A tool-result row translated to OpenRouter's Chat wire shape: the text
- * parts materialized, an error status prefixing them. `callIds` is the
- * calling assistant turn's provider call ids, in `callOrdinal` order.
- */
-export const chatToolResultMessages = Effect.fn('llm.chatToolResultMessages')(
-  function* (
-    results: Extract<
-      z.infer<typeof MessageSchema>,
-      { role: 'tool' }
-    >['results'],
-    callIds: readonly string[],
-    unsupportedMessage: string,
-  ) {
-    const messages: { tool_call_id: string; content: string }[] = [];
-    for (const result of results) {
-      const text: string[] = [];
-      for (const part of result.content) {
-        if (part.kind !== 'text') {
-          return yield* new ModelError({
-            kind: 'unsupported',
-            message: unsupportedMessage,
-          });
-        }
-        text.push(part.text);
-      }
-      messages.push({
-        // The canonical grammar already guarantees adjacent, complete ordinals.
-        tool_call_id: callIds[result.callOrdinal],
-        content:
-          result.status === 'error' ? `Error: ${text.join('')}` : text.join(''),
-      });
-    }
-    return messages;
-  },
-);
 
 /**
  * Waits out `pending` at scope close. A rejection is dropped only when it

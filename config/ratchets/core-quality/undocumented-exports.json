@@ -10,7 +10,6 @@
   "packages/llm/src/oauth/codex/codexConstants.ts": 4,
   "packages/llm/src/oauth/codex/codexDeviceLogin.ts": 1,
   "packages/llm/src/oauth/codex/codexLoopbackLogin.ts": 1,
-  "packages/llm/src/oauth/codex/CodexSessionCoordinator.ts": 3,
   "packages/llm/src/oauth/codex/codexSessionTypes.ts": 1,
   "packages/llm/src/oauth/loopbackLogin.ts": 1,
   "packages/llm/src/oauth/pkce.ts": 1,

@@ -7,7 +7,6 @@
   "packages/llm/src/errors.ts": 1,
   "packages/llm/src/oauth/deviceAuthorization.ts": 1,
   "packages/llm/src/oauth/loopbackLogin.ts": 1,
-  "packages/llm/src/oauth/sessionAccess.ts": 1,
   "packages/llm/src/oauth/SubscriptionOAuthCoordinator.ts": 1,
   "packages/llm/src/providers/apiProviders.ts": 2,
   "packages/llm/src/providers/providers.ts": 1,

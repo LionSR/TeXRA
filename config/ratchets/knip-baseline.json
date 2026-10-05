@@ -149,12 +149,6 @@
       "file": "packages/llm/src/oauth/oauthRequest.ts",
       "category": "unused",
       "kind": "exports",
-      "name": "OAuthNetworkError"
-    },
-    {
-      "file": "packages/llm/src/oauth/oauthRequest.ts",
-      "category": "unused",
-      "kind": "exports",
       "name": "OAuthUnexpectedResponse"
     },
     {

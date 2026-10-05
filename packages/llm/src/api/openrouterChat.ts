@@ -33,11 +33,7 @@ import {
   parseJsonOrModelError,
   sdkModelError,
 } from '../errors.js';
-import {
-  chatToolResultMessages,
-  pullStream,
-  readerAbortSignal,
-} from './transport.js';
+import { pullStream, readerAbortSignal } from './transport.js';
 import type { PartEvent } from './parts.js';
 import type {
   ChatContentItems,
@@ -353,16 +349,20 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
   let calls: Extract<Part, { kind: 'local-call' }>[] = [];
   for (const message of replayableHistory(turn.messages, turn)) {
     if (message.role === 'tool') {
-      const toolResults = yield* chatToolResultMessages(
-        message.results,
-        calls.map((call) => call.providerCallId),
-        'OpenRouter tool results require materialized text.',
-      );
-      for (const result of toolResults) {
+      for (const result of message.results) {
+        if (result.content.some((part) => part.kind !== 'text'))
+          return yield* new ModelError({
+            kind: 'unsupported',
+            message: 'OpenRouter tool results require materialized text.',
+          });
+        const text = result.content
+          .flatMap((part) => (part.kind === 'text' ? [part.text] : []))
+          .join('');
         messages.push({
           role: 'tool',
-          toolCallId: result.tool_call_id,
-          content: result.content,
+          // The canonical grammar guarantees adjacent, complete ordinals.
+          toolCallId: calls[result.callOrdinal].providerCallId,
+          content: result.status === 'error' ? `Error: ${text}` : text,
         });
       }
       continue;

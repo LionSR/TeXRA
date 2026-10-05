@@ -21,9 +21,13 @@ import {
 } from '../deviceAuthorization.js';
 
 // Local imports - codex
-import { CODEX_DEVICE_VERIFICATION_URL } from './codexConstants.js';
-import { type CodexSessionCoordinator } from './CodexSessionCoordinator.js';
+import {
+  CODEX_DEVICE_REDIRECT_URI,
+  CODEX_DEVICE_VERIFICATION_URL,
+} from './codexConstants.js';
 import { pollDeviceToken, requestDeviceUserCode } from './codexOAuthClient.js';
+import type { SubscriptionOAuthCoordinator } from '../SubscriptionOAuthCoordinator.js';
+import type { CodexSession } from './codexSessionTypes.js';
 
 /**
  * Fallback lifetime for the user code when the endpoint omits `expires_in`.
@@ -37,7 +41,7 @@ class DeviceCodeMissing extends Data.TaggedError('DeviceCodeMissing')<{
 }> {}
 
 export interface CodexDeviceLoginOptions {
-  coordinator: CodexSessionCoordinator;
+  coordinator: SubscriptionOAuthCoordinator<CodexSession>;
   /** Show the user the verification URL + one-time code. */
   onPrompt: (prompt: SubscriptionDeviceCodePrompt) => Effect.Effect<void>;
 }
@@ -76,9 +80,10 @@ export const codexLoginWithDeviceCode = Effect.fn(
   });
 
   return yield* completeDeviceSession(() =>
-    options.coordinator.completeDeviceLogin({
-      authorizationCode: token.authorization_code,
-      codeVerifier: token.code_verifier,
+    options.coordinator.loginWithCode({
+      code: token.authorization_code,
+      verifier: token.code_verifier,
+      redirectUri: CODEX_DEVICE_REDIRECT_URI,
     }),
   );
 });

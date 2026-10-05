@@ -161,15 +161,12 @@ const SUBSCRIPTION_ROUTES: {
     provider: 'openai',
     readSession: (secrets) =>
       Effect.gen(function* () {
-        const coordinator = codexCoordinator(secrets);
-        const accessToken = yield* coordinator.getFreshAccessToken();
-        const accountId = (yield* coordinator.getAccountId()) ?? null;
-        const plan = yield* coordinator.getPlanType();
+        const session = yield* codexCoordinator(secrets).getFreshSession();
         return {
           route: 'chatgpt-subscription',
-          accessToken,
-          accountId,
-          plan,
+          accessToken: session.accessToken,
+          accountId: session.accountId ?? null,
+          plan: session.planType,
           endpoint: CODEX_BACKEND_BASE_URL,
           usageRoute: 'chatgpt-subscription',
         } as const;

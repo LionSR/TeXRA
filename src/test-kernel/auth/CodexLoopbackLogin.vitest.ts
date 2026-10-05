@@ -7,9 +7,11 @@ import { describe, expect, vi } from 'vitest';
 // Local imports
 import { codexLoginWithLoopback as loginWithLoopback } from '@texra-ai/llm/node';
 import { CODEX_CALLBACK_PATH } from '../../../packages/llm/src/oauth/codex/codexConstants.js';
-import type { CodexSessionCoordinator } from '../../../packages/llm/src/oauth/codex/CodexSessionCoordinator.js';
 import type { CodexSession } from '../../../packages/llm/src/oauth/codex/codexSessionTypes.js';
-import type { SubscriptionAuthorizeRequest } from '../../../packages/llm/src/oauth/SubscriptionOAuthCoordinator.js';
+import type {
+  SubscriptionAuthorizeRequest,
+  SubscriptionOAuthCoordinator,
+} from '../../../packages/llm/src/oauth/SubscriptionOAuthCoordinator.js';
 
 function testSession(): CodexSession {
   return {
@@ -30,11 +32,11 @@ function loopbackRequest(port: number): SubscriptionAuthorizeRequest {
 
 function coordinatorStub(
   overrides: Record<string, unknown> = {},
-): CodexSessionCoordinator {
+): SubscriptionOAuthCoordinator<CodexSession> {
   return {
     buildAuthorizeRequest: loopbackRequest,
     ...overrides,
-  } as unknown as CodexSessionCoordinator;
+  } as unknown as SubscriptionOAuthCoordinator<CodexSession>;
 }
 
 /** The login program with the HTTP client a host provides. */
