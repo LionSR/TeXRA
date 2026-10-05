@@ -1,20 +1,17 @@
-import { z } from 'zod';
+import type {
+  NonAgentRunRecordSchema,
+  RunRecordFieldsSchema,
+} from '@shared/schemas';
+import type { z } from 'zod';
 
-import { NonAgentRunRecordSchema } from '@shared/schemas';
-import { AgentConfigSchema, type AgentConfig } from './AgentConfig';
+import type { AgentConfig } from './AgentConfig';
 
 /**
- * The canonical run configuration: a real
- * `AgentConfig` for agent runs, the honest minimal record for everything
- * else. The strict non-agent arm parses first — `AgentConfigSchema`'s
- * prefaults would otherwise fabricate an agent config out of any object.
+ * The canonical run configuration (`RunRecordFieldsSchema`, the `run.config`
+ * row's field): a real `AgentConfig` for agent runs, the honest minimal
+ * record for everything else.
  */
-export const RunRecordSchema = z.union([
-  NonAgentRunRecordSchema,
-  AgentConfigSchema,
-]);
-
-export type RunRecord = z.infer<typeof RunRecordSchema>;
+export type RunRecord = z.output<typeof RunRecordFieldsSchema>;
 
 /** The key only an agent config carries (`agent` is prefaulted, so every
  *  parsed agent config has it; the strict non-agent arm cannot). Typed so a

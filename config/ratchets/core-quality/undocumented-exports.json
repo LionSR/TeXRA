@@ -29,7 +29,6 @@
   "src/agent/codeSandbox/protocol.ts": 3,
   "src/agent/core/definition/AgentConfig.ts": 1,
   "src/agent/core/definition/AgentDataclass.ts": 3,
-  "src/agent/core/definition/RunRecord.ts": 1,
   "src/agent/core/state/AgentWorkspaceState.ts": 3,
   "src/agent/core/state/runRequests.ts": 2,
   "src/agent/export/chatExport/escapeUtils.ts": 1,

@@ -252,13 +252,12 @@ export const modelInvokerLayer = (): Layer.Layer<
         maybeSaveDebugObject({
           object,
           objectType,
-          context: {
-            logger,
-            runId,
-            modelName: bound.modelId,
-            roots: session.roots,
-          },
-          fileOptions: { continuationCount: round, baseName },
+          baseName,
+          continuationCount: round,
+          logger,
+          modelName: bound.modelId,
+          runId,
+          roots: session.roots,
         });
 
       /** Recheck the binding's background policy against live session settings. */

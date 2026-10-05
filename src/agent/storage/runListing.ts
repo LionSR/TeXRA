@@ -7,7 +7,6 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { type AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   isAgentRunRecord,
-  RunRecordSchema,
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
 import { withLogChannel } from '@logger/effectLog';
@@ -21,7 +20,7 @@ import {
   type RunLifecycleStatus,
 } from '@shared/schemas';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { deriveResumability } from './resumability';
 const CHANNEL = 'RunListing';
@@ -125,7 +124,7 @@ function recordRows(
 /**
  * Every run the session's fold lists, with its private record: the view
  * folded cold from the log (one run model, R1) beside the same listing's
- * `run.config` rows, parsed into the runtime's record.
+ * `run.config` rows, already decoded by the database read.
  */
 export const listRuns = Effect.fn('listRuns')(function* (
   session: SessionHandle,
@@ -140,13 +139,7 @@ export const listRuns = Effect.fn('listRuns')(function* (
     (run) =>
       Effect.gen(function* (): Effect.fn.Return<RunListingEntry | null, Error> {
         const id = run.id;
-        const record = yield* Effect.try({
-          try: () => {
-            const row = records.get(id);
-            return row === undefined ? null : RunRecordSchema.parse(row.config);
-          },
-          catch: ensureError,
-        });
+        const record = records.get(id)?.config ?? null;
         const resumeFrom = yield* deriveResumability(id, session);
 
         const base: RunListingBase = {

@@ -36,7 +36,6 @@ import {
   type ResultMeta,
   type RunEnd,
   type SessionEvent,
-  type SessionEventDraft,
   type RunId,
 } from '@shared/schemas';
 import { deriveRunId } from '@utils/core/idHash';
@@ -309,10 +308,6 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
     select: (rows: readonly SessionEvent[]) => A,
   ): Effect.Effect<A, DatabaseReadFailed> =>
     session.readRunRecords(runId).pipe(Effect.map(select));
-  const write = (
-    draft: SessionEventDraft,
-  ): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> =>
-    session.commit([draft]).pipe(Effect.asVoid);
   /** The latest `run.config` row; the database reads a closed run as absent. */
   const readRecord = (): Effect.Effect<RunRecord | null, DatabaseReadFailed> =>
     read((rows) => latestOfType(rows, id, 'run.config')?.config ?? null);
@@ -323,21 +318,6 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
       read((rows) =>
         rows.some((row) => row.aggregateId === id && row.type === 'run.start'),
       ),
-    /** The run is closed by its tombstone, which {@link exists} cannot
-     *  tell from never started (the listing drops a closed run). The final
-     *  `run.removed` row means the id never starts again; read from the
-     *  aggregate, since a closed run's records are no longer listed. */
-    isRemoved: (): Effect.Effect<boolean, DatabaseReadFailed> =>
-      session
-        .readAggregate(id, ['run.removed'])
-        .pipe(Effect.map((rows) => rows.length > 0)),
-    /** How many times this run has been activated (registration, then each
-     *  resume): a lifecycle's identity, which a terminal row of the same
-     *  outcome cannot give. Reads every `run.activate` row. */
-    countActivations: (): Effect.Effect<number, DatabaseReadFailed> =>
-      session
-        .readAggregate(id, ['run.activate'])
-        .pipe(Effect.map((rows) => rows.length)),
     readRunRecord: readRecord,
     readConfig: (): Effect.Effect<AgentConfig | null, DatabaseReadFailed> =>
       readRecord().pipe(
@@ -386,15 +366,17 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
           output: deliveredOutput(meta, end?.output ?? emptyRunEndOutput()),
         };
       }),
-    clearReport: () =>
-      write({ type: 'run.report', aggregateId: id, report: null }),
-    writeResultMeta: (result: DeliveredResult) =>
+    writeResultMeta: (
+      result: DeliveredResult,
+    ): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> =>
       Effect.suspend(() =>
-        write({
-          type: 'run.result',
-          aggregateId: id,
-          result: ResultMetaSchema.parse(storedResultMeta(result)),
-        }),
-      ),
+        session.commit([
+          {
+            type: 'run.result',
+            aggregateId: id,
+            result: ResultMetaSchema.parse(storedResultMeta(result)),
+          },
+        ]),
+      ).pipe(Effect.asVoid),
   };
 }

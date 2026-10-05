@@ -38,20 +38,17 @@ const canPresent = (session: SessionHandle): boolean =>
   !session.interactions.approvalPromptsUnavailable;
 
 /**
- * Whether a run launched or resumed now is offered no approval-gated tool:
- * the policy applied to what the attached host can answer. One reading for
+ * The policy's answer for an executable request (a plan, or any
+ * approval-gated tool) under what the host can answer. One reading for
  * every run of the session, whoever triggers it.
  */
-function withholdsApprovalTools(session: SessionHandle): boolean {
-  return isTexraApprovalDenied(
-    decideTexraApproval({
-      policy: session.approvalPolicy,
-      promptRequired: true,
-      scopedBypass: false,
-      canPresent: canPresent(session),
-    }),
-  );
-}
+const executableDecision = (session: SessionHandle) =>
+  decideTexraApproval({
+    policy: session.approvalPolicy,
+    promptRequired: true,
+    scopedBypass: false,
+    canPresent: canPresent(session),
+  });
 
 /** The policy's answer for one request: a plan follows the executable rule
  *  (`never` denies, `yolo` approves, `ask` presents or, with nobody to ask,
@@ -69,12 +66,7 @@ function answerFor(
   const policy = session.approvalPolicy;
   switch (payload.kind) {
     case 'planApproval': {
-      const decision = decideTexraApproval({
-        policy,
-        promptRequired: true,
-        scopedBypass: false,
-        canPresent: canPresent(session),
-      });
+      const decision = executableDecision(session);
       if (decision === 'present') return undefined;
       if (decision === 'allow') return { decision: { action: 'approve' } };
       return {
@@ -154,7 +146,9 @@ export function liveToolGates(
   session: SessionHandle,
 ): Pick<StepToolInputs, 'approvalPromptsUnavailable' | 'hostCapabilities'> {
   return {
-    approvalPromptsUnavailable: withholdsApprovalTools(session),
+    approvalPromptsUnavailable: isTexraApprovalDenied(
+      executableDecision(session),
+    ),
     hostCapabilities: new Set(
       session.interactions.readDiagnostics ? ['diagnostics'] : [],
     ),
