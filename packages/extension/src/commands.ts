@@ -7,6 +7,7 @@ import {
   createExtensionCommandActions,
   registerExtensionCommandRegistry,
 } from '@commands/extensionCommandSurface';
+import type { SessionBackend } from '@controllers/session/sessionBackend';
 
 // Local imports - components
 import type { StateStore } from '@platform/interfaces';
@@ -22,6 +23,7 @@ export function registerCommands(
   secrets: PlatformSecrets,
   runtime: ProcessRuntime,
   session: SessionHandle,
+  backend: SessionBackend,
 ): void {
   const settingsViewProvider = new SettingsViewProvider(
     context,
@@ -41,6 +43,7 @@ export function registerCommands(
       progressViewProvider,
       secrets,
       session,
+      backend,
     ),
     runtime,
     session,

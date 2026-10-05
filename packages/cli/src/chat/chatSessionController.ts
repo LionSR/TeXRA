@@ -12,7 +12,6 @@ import {
   Option,
   Scope,
   Stream,
-  SubscriptionRef,
 } from 'effect';
 
 import { getRunRecords } from '@agent/storage';
@@ -259,7 +258,10 @@ export interface ChatSessionControllerInit {
   /** Where run requests land, edit previews come from and run state is
    *  read, when the chat is a client of the background service; its own
    *  session otherwise. */
-  readonly backend?: Pick<SessionBackend, 'request' | 'preview' | 'view'>;
+  readonly backend?: Pick<
+    SessionBackend,
+    'request' | 'preview' | 'view' | 'viewChanges'
+  >;
   /** Offer the service what this chat shows for its project's tasks. */
   readonly attachWindow?: (host: WindowHost) => void;
 }
@@ -336,10 +338,7 @@ export function createChatSessionController(
   };
   const requests: SessionRequests = init.backend ?? runtimeSession.requests;
   // The fold the chat's runs appear in: the service's, or this session's.
-  const viewChanges =
-    init.backend === undefined
-      ? runtimeSession.viewChanges
-      : SubscriptionRef.changes(init.backend.view);
+  const viewChanges = (init.backend ?? runtimeSession).viewChanges;
   // Said in the transcript the controller writes to, not on stderr before
   // Ink mounts, where it would be left above the header.
   if (runtimeSession.storeMovedAside) {

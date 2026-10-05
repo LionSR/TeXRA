@@ -37,21 +37,11 @@ export interface ChatAgentRuns {
 /** The chat's run boundary over the service's `backend`. */
 export function serviceAgentRuns(backend: SessionBackend): ChatAgentRuns {
   return {
-    launch: (request, options) => {
-      // The chat mints its run's id, so the service runs it under that id.
-      const runId = request.runId;
-      if (runId === undefined)
-        return Effect.fail(new Error('A chat launch names the run it starts.'));
-      return backend
-        .launch(request, {
-          continues: options.continues,
-          onRunResolved: options.onRunResolved,
-        })
-        .pipe(
-          Effect.andThen(backend.ended(runId)),
-          Effect.map((outcome) => ({ outcome })),
-        );
-    },
+    launch: (request, options) =>
+      backend.launch(request, {
+        continues: options.continues,
+        onRunResolved: options.onRunResolved,
+      }),
     resumeBeside: (runId) =>
       backend
         .resume(runId)
@@ -78,7 +68,9 @@ export function serviceAgentRuns(backend: SessionBackend): ChatAgentRuns {
             Effect.as<ResumeRunResult>({
               started: true,
               delivered: true,
-              completion: backend.ended(resumed.runId),
+              completion: backend
+                .ended(resumed.runId)
+                .pipe(Effect.map((end) => end.outcome)),
             }),
           );
         }),

@@ -1,7 +1,7 @@
 import { Cause, Effect, Stream, type Scope } from 'effect';
 import * as vscode from 'vscode';
 
-import type { SessionHandle } from '@agent/runtime';
+import type { SessionBackend } from '@controllers/session/sessionBackend';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { outputFilesProduced } from '@frontend/events/runFactSubscriptions';
 
@@ -52,7 +52,7 @@ class TeXRAFileDecorationProvider implements vscode.FileDecorationProvider {
  *  both listeners are fibers of it (activation's, in the extension). */
 export function registerFileDecorations(
   context: vscode.ExtensionContext,
-  session: Pick<SessionHandle, 'events' | 'now'>,
+  session: Pick<SessionBackend, 'viewChanges'>,
 ): Effect.Effect<void, never, Scope.Scope> {
   return Effect.gen(function* () {
     const provider = new TeXRAFileDecorationProvider();

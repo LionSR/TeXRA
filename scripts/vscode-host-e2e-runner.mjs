@@ -41,6 +41,10 @@ const root = mkdtempSync(
 );
 const workspace = path.join(root, 'w');
 mkdirSync(workspace);
+// The extension host's home: the TeXRA store and the background service the
+// window starts live here, never in the developer's ~/.texra.
+const home = path.join(root, 'h');
+mkdirSync(home);
 writeFileSync(
   path.join(workspace, 'main.tex'),
   '\\documentclass{article}\n\\begin{document}\nSmoke\n\\end{document}\n',
@@ -54,6 +58,7 @@ try {
       repoRoot,
       'scripts/vscode-host-e2e-suite.cjs',
     ),
+    extensionTestsEnv: { HOME: home, TEXRA_NO_TELEMETRY: '1' },
     launchArgs: [
       workspace,
       '--user-data-dir',
@@ -63,7 +68,27 @@ try {
       '--disable-extensions',
     ],
   });
+  // The service the window started outlives it: its tasks keep running.
+  const record = path.join(home, '.texra', 'run', 'serve.json');
+  if (process.platform !== 'win32') {
+    const { pid } = JSON.parse(readFileSync(record, 'utf8'));
+    try {
+      process.kill(pid, 0);
+    } catch {
+      throw new Error(`the service (pid ${pid}) did not outlive the window`);
+    }
+  }
   console.log(`VS Code host e2e passed on ${version}`);
 } finally {
+  stopService(path.join(home, '.texra', 'run', 'serve.json'));
   rmSync(root, { recursive: true, force: true });
+}
+
+/** Stop the service a run started, when one wrote its record. */
+function stopService(record) {
+  try {
+    process.kill(JSON.parse(readFileSync(record, 'utf8')).pid, 'SIGTERM');
+  } catch {
+    // No service was started, or it is gone already.
+  }
 }

@@ -34,7 +34,7 @@ import { z } from 'zod';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
-import { RunIdSchema, RunOutcomeSchema } from '@shared/schemas';
+import { RunEndSchema, RunIdSchema } from '@shared/schemas';
 
 import {
   OutcomeSchema,
@@ -53,7 +53,7 @@ import {
 
 /** Bumped whenever a procedure or a payload changes shape. A client newer
  *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 7;
 
 /** `value` as JSON carries it: an absent field (`undefined`) is left out,
  *  which the wire's JSON check otherwise refuses. */
@@ -197,10 +197,11 @@ export const TexraRpcs = RpcGroup.make(
     success: zodWire(RunIdSchema.nullable()),
     error: zodWire(TaskFailedSchema),
   }),
-  /** The outcome a task's current activation ends with, once it ends. */
+  /** What a task's current activation ends with, once it ends: its
+   *  outcome and output. */
   Rpc.make('task.ended', {
     payload: { workspace, runId: zodWire(RunIdSchema) },
-    success: zodWire(RunOutcomeSchema),
+    success: zodWire(RunEndSchema.pick({ outcome: true, output: true })),
     error: zodWire(TaskFailedSchema),
   }),
   Rpc.make('request.preview', {

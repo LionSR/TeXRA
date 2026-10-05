@@ -5,15 +5,7 @@
 // Run start/resume/stop orchestration lives in ../chatSessionController;
 // this module keeps only composition, rendering glue, and the Ink lifecycle.
 
-import {
-  Cause,
-  Effect,
-  Exit,
-  Fiber,
-  Result,
-  Scope,
-  SubscriptionRef,
-} from 'effect';
+import { Cause, Effect, Exit, Fiber, Result, Scope } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
 import { getVisibleAgents } from '@agent/index';
@@ -367,9 +359,7 @@ export async function runChat(
   // composer closes on the reason, Ctrl-C still exits, and the exit is a
   // failure on every exit path, since they all read `session.runExitCode`.
   const unbindSessionView = bindSessionView(runtime, backend.view, {
-    changes: runsElsewhere
-      ? SubscriptionRef.changes(backend.view)
-      : runtimeSession.viewChanges,
+    changes: backend.viewChanges,
     onFailure: (error) => {
       sessionViewFailureSignal.set(
         `The session view stopped updating: ${toErrorMessage(error)} Press Ctrl-C to exit and restart texra. If it repeats, run the same texra version that last opened this project; an older build cannot read a newer session store.`,

@@ -17,6 +17,10 @@ import {
   SubscriptionRef,
 } from 'effect';
 
+import {
+  buildTerminalRunEndResult,
+  type RunEndResult,
+} from '@agent/runtime/RunEndResult';
 import { WebviewSessions } from '@controllers/session/webviewSessionLayer';
 import type { SessionBackend } from '@controllers/session/sessionBackend';
 import {
@@ -27,7 +31,11 @@ import {
   Unavailable,
   type RequestError,
 } from '@shared/session/requestErrors';
-import { RUN_OUTCOME, type TranscriptSubscription } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  type RunId,
+  type TranscriptSubscription,
+} from '@shared/schemas';
 import { isLiveRun } from '@shared/session/sessionView';
 import type {
   EventsFrame,
@@ -129,9 +137,24 @@ export const serviceSessionBackend = Effect.fn('serviceSessionBackend')(
       }),
     );
     yield* resubscribe;
+    /** What a task the service runs ends with; a service that goes first
+     *  ends it, cancelled, for this window. */
+    const ended = (runId: RunId): Effect.Effect<RunEndResult> =>
+      client['task.ended']({ workspace, runId }).pipe(
+        Effect.map((end): RunEndResult => ({ ...end, runId })),
+        Effect.catch((error) =>
+          Effect.logWarning(
+            `The TeXRA service stopped before task ${runId} ended`,
+          ).pipe(
+            Effect.annotateLogs({ data: error }),
+            Effect.as(buildTerminalRunEndResult(RUN_OUTCOME.CANCELLED, runId)),
+          ),
+        ),
+      );
     return {
       key,
       view: graph.view.ref,
+      viewChanges: SubscriptionRef.changes(graph.view.ref),
       frames: (port, host, subscribe) =>
         Stream.unwrap(
           Effect.gen(function* () {
@@ -205,7 +228,7 @@ export const serviceSessionBackend = Effect.fn('serviceSessionBackend')(
           Effect.tap((runId) =>
             Effect.sync(() => options.onRunResolved?.(runId)),
           ),
-          Effect.as(null),
+          Effect.flatMap(ended),
         ),
       resume: (runId) =>
         client['task.resume']({ workspace, runId }).pipe(
@@ -228,18 +251,7 @@ export const serviceSessionBackend = Effect.fn('serviceSessionBackend')(
             ),
         };
       },
-      ended: (runId) =>
-        client['task.ended']({ workspace, runId }).pipe(
-          // The service went before the run ended: the chat holds it no more.
-          Effect.catch((error) =>
-            Effect.logWarning(
-              `The TeXRA service stopped before task ${runId} ended`,
-            ).pipe(
-              Effect.annotateLogs({ data: error }),
-              Effect.as(RUN_OUTCOME.CANCELLED),
-            ),
-          ),
-        ),
+      ended,
       preview: (requestId) =>
         client['request.preview']({ workspace, requestId }).pipe(
           Effect.mapError((error) => new Error(error.message)),

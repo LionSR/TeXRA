@@ -244,7 +244,12 @@ export const serviceHandlers = TexraRpcs.toLayer(
           }),
         ),
       'task.ended': ({ workspace, runId }) =>
-        Effect.flatMap(open(workspace), (session) => runEnded(session, runId)),
+        Effect.flatMap(open(workspace), (session) =>
+          Effect.map(runEnded(session, runId), ({ outcome, output }) => ({
+            outcome,
+            output,
+          })),
+        ),
       'request.preview': ({ workspace, requestId }) =>
         open(workspace).pipe(
           Effect.flatMap((session) => hosts.preview(session, requestId)),

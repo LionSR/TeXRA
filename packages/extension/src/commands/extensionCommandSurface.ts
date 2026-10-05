@@ -24,6 +24,7 @@ import {
 } from '@commands/latex/figCommands';
 import { cloneOverleafProject as gitCloneOverleafProject } from '@commands/git/gitCommands';
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
+import type { SessionBackend } from '@controllers/session/sessionBackend';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -47,6 +48,8 @@ export function createExtensionCommandActions(
   progressViewProvider: ProgressViewProvider,
   secrets: PlatformSecrets,
   session: SessionHandle,
+  /** Where this window's runs run. */
+  backend: SessionBackend,
 ): ExtensionCommandActions {
   return {
     showSettings: (tab) => settingsViewProvider.showSettingsView(tab),
@@ -60,6 +63,7 @@ export function createExtensionCommandActions(
         launchSetupAssistant(
           secrets,
           session,
+          backend,
           (runId) => progressViewProvider.presentLaunchedRun(runId),
           progressViewProvider.showConnectModel(),
         ),
@@ -88,7 +92,7 @@ export function createExtensionCommandActions(
     execute: (input) =>
       input === undefined
         ? progressViewProvider.submit()
-        : agentRunExecuteCommand(input, session, (runId) =>
+        : agentRunExecuteCommand(input, session, backend, (runId) =>
             progressViewProvider.presentLaunchedRun(runId),
           ),
   };

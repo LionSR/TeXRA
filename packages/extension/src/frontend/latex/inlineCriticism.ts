@@ -22,7 +22,8 @@ import { Cause, Effect, Fiber, FileSystem, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { type ManualCriticismEntry, type SessionHandle } from '@agent/runtime';
+import type { ManualCriticismEntry } from '@agent/runtime';
+import type { SessionBackend } from '@controllers/session/sessionBackend';
 import { outputFilesProduced } from '@frontend/events/runFactSubscriptions';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
@@ -46,7 +47,7 @@ const CODE_TOOL = 'criticize:tool';
 /** What {@link registerInlineCriticism} attached the feature to. */
 interface CriticismRegistration {
   readonly context: vscode.ExtensionContext;
-  readonly session: Pick<SessionHandle, 'events' | 'now'>;
+  readonly session: Pick<SessionBackend, 'viewChanges'>;
   readonly runtime: ProcessRuntime;
   readonly stores: SettingsStores;
 }
@@ -232,7 +233,7 @@ export function pushManualCriticism(entry: ManualCriticismEntry): boolean {
 export function registerInlineCriticism(
   context: vscode.ExtensionContext,
   runtime: ProcessRuntime,
-  session: Pick<SessionHandle, 'events' | 'now'>,
+  session: Pick<SessionBackend, 'viewChanges'>,
   stores: SettingsStores,
 ): Effect.Effect<void, StateReadFailed> {
   return Effect.suspend(() => {

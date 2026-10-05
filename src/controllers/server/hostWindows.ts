@@ -419,10 +419,6 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
             }),
           ),
         );
-        if (![...windows].some((window) => window.key === key))
-          yield* Effect.logWarning(
-            `No TeXRA window of ${projectOf(session)} is attached: its tasks run without diagnostics, inline criticism, PDF opening or editable tool-edit previews until one attaches.`,
-          );
         yield* Effect.acquireRelease(
           session.interactions.use(interactionsOf(session)),
           (release) => Effect.sync(release),

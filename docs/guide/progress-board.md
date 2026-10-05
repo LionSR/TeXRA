@@ -16,6 +16,15 @@ tasks are shared across surfaces. Browse them with `texra history list` in the t
 button of the TeXRA view in VS Code.
 :::
 
+::: info Background service
+On macOS and Linux, a VS Code window runs its tasks in the background TeXRA
+service, the same one `texra chat` uses. A task keeps running when its window
+closes, and another window, or `/tasks` in a terminal, can follow it. The
+window's editor still serves those tasks: diagnostics, inline criticism,
+opening a PDF and the editable diff of a proposed edit. If the service cannot
+start, the window runs its tasks itself and says so once.
+:::
+
 <CliHistoryHero />
 
 <p class="hero-caption">The board's tasks, from a terminal: one tab-separated row each. <code>texra resume</code> picks a stored task back up.</p>
