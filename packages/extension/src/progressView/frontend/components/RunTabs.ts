@@ -78,7 +78,8 @@ export class RunTabs extends LitElement {
   private unseen: ReadonlySet<RunId> = new Set();
   @property({ attribute: false }) view: SessionView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
-  /** Only top-level rows, no tree: the Active-now strip. */
+  /** Only top-level rows, no tree: the Active-now strip and the desktop
+   *  rail. */
   @property({ type: Boolean }) topLevelOnly = false;
   /** Streams that need the user or are still running; `recent` is left
    *  out. */
