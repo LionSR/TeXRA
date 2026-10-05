@@ -105,6 +105,7 @@ import {
   unreadableKinds,
   verdictBook,
   type EncodedRow,
+  type SqlRow,
 } from './rowCodec';
 import { isBusy, isDamaged, retryBusy } from './storeAside';
 import { assertStoreFormat, openStore, reclaimFreePages } from './storeSchema';
@@ -187,9 +188,7 @@ export const databaseLayer = (
       const observe = (commit: number) =>
         SubscriptionRef.update(observedCommit, (c) => Math.max(c, commit));
       const highWater = "SELECT seq FROM sqlite_sequence WHERE name = 'event'";
-      const commitFromRows = (
-        rows: readonly Readonly<Record<string, unknown>>[],
-      ) => {
+      const commitFromRows = (rows: readonly SqlRow[]) => {
         const row = rows[0];
         return row === undefined ? 0 : z.int().nonnegative().parse(row.seq);
       };
