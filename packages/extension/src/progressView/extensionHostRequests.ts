@@ -35,35 +35,6 @@ import {
   handleRunLatexdiff,
 } from '@commands/latex/latexdiffCommands';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
-import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
-import { normalizeMainViewFileExtension } from '@texra/controllers/mainView/MainViewDroppedFilesController';
-import { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
-import {
-  exportRunTranscript,
-  TRANSCRIPT_EXPORT_FORMAT_CHOICES,
-  type TranscriptExportOpenKind,
-} from '@texra/controllers/progressView/exportTranscript';
-import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
-import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
-import { ApiKeyPromptFailed } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
-import {
-  fromHost,
-  hostFailure,
-  type HostCallFailed,
-} from '@texra/controllers/session/hostCallFailure';
-import {
-  createHostRunActions,
-  type HostRunActionPorts,
-} from '@texra/controllers/session/hostRunActions';
-import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
-import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
-import {
-  handleSharedHostRequest,
-  isSharedHostRequest,
-  type SharedHostRequestBindings,
-  type SharedHostRequestPorts,
-} from '@texra/controllers/session/sharedHostRequests';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
@@ -108,7 +79,6 @@ import {
 } from '@shared/state/onboardingState';
 
 import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
-import { launchOnRun } from '@texra/controllers/mainView/backend/MainViewRunLaunchController';
 import { normalizeMainViewFileExtension } from '@texra/controllers/mainView/MainViewDroppedFilesController';
 import { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
 import {
@@ -130,7 +100,7 @@ import {
   type HostRunActionPorts,
 } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
-import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import {
   handleSharedHostRequest,
   isSharedHostRequest,

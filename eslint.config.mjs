@@ -3,6 +3,7 @@ import tseslint from 'typescript-eslint';
 import importPlugin from 'eslint-plugin-import-x';
 import globals from 'globals';
 import unicorn from 'eslint-plugin-unicorn';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -120,6 +121,13 @@ const VSCODE_FREE_ZONE_DIRS = [
   'packages/extension/src/progressView/frontend',
   'packages/extension/src/settingsView/frontend',
 ].map((dir) => path.join(__dirname, dir));
+// A zone that names a missing directory would hold nothing: fail loudly, so
+// a move cannot leave the rule silently green.
+for (const dir of VSCODE_FREE_ZONE_DIRS) {
+  if (!existsSync(dir)) {
+    throw new Error(`VSCODE_FREE_ZONE_DIRS names a missing directory: ${dir}`);
+  }
+}
 
 // The named runtime entries that may call `Effect.run*` outside a host
 // package (the no-restricted-syntax block below); the core-quality ratchet

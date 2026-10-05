@@ -52,8 +52,6 @@ export function toRepoPath(path: string): string {
 export function sourceFilesUnder(
   dir: string,
   opts?: {
-    /** Return [] instead of throwing when `dir` doesn't exist. */
-    readonly missingDirReturnsEmpty?: boolean;
     /** Return repo-relative paths instead of absolute ones. */
     readonly repoRelative?: boolean;
     /** Drop files under src/test-kernel/. */
@@ -62,13 +60,8 @@ export function sourceFilesUnder(
     readonly includeJs?: boolean;
   },
 ): string[] {
-  let entries: string[];
-  try {
-    entries = readdirSync(dir, { recursive: true }) as string[];
-  } catch (error) {
-    if (opts?.missingDirReturnsEmpty) return [];
-    throw error;
-  }
+  // A missing directory throws: a scan never passes by reading nothing.
+  const entries = readdirSync(dir, { recursive: true }) as string[];
 
   return entries
     .filter(
@@ -89,7 +82,6 @@ export function sourceFilesUnder(
 /** repo-relative, test-kernel-excluded source files under `root`, missing dir -> []. */
 export function productionFilesUnder(root: string): string[] {
   return sourceFilesUnder(resolve(REPO_ROOT, root), {
-    missingDirReturnsEmpty: true,
     repoRelative: true,
     excludeTestKernel: true,
   });

@@ -24,7 +24,6 @@ import {
 } from '@commands/latex/figCommands';
 import { cloneOverleafProject as gitCloneOverleafProject } from '@commands/git/gitCommands';
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -32,6 +31,7 @@ import { withSessionFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { dispatchCommandFromRegistry } from '@texra/shared/commands/registry';
 
 // Local file imports

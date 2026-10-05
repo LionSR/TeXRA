@@ -21,8 +21,6 @@ import {
   buildTerminalRunEndResult,
   type RunEndResult,
 } from '@agent/runtime/RunEndResult';
-import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import {
   Cancelled,
   Internal,

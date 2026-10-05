@@ -293,9 +293,7 @@ function collectSubsystemEdges(): SubsystemEdge[] {
   const edges = new Map<string, EdgeKind>();
 
   const files = SUBSYSTEM_ROOTS.flatMap((root) =>
-    sourceFilesUnder(resolve(REPO_ROOT, root), {
-      missingDirReturnsEmpty: true,
-    }),
+    sourceFilesUnder(resolve(REPO_ROOT, root), {}),
   );
   for (const file of files) {
     const from = subsystemFromRepoRelative(repoRelative(file));

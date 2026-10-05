@@ -71,12 +71,14 @@ function scanRoots(): string[] {
     .map((entry) => entry.name)
     .toSorted((a, b) => a.localeCompare(b));
 
+  // Derived from the tree: a package without a src/ or scripts/ has none to
+  // scan, which is not a renamed zone.
   return [
     'src',
     'scripts',
     ...packageDirs.map((name) => `packages/${name}/src`),
     ...packageDirs.map((name) => `packages/${name}/scripts`),
-  ];
+  ].filter((root) => existsSync(resolve(REPO_ROOT, root)));
 }
 
 function isScriptRoot(root: string): boolean {
@@ -97,7 +99,6 @@ function scanForDeepImports(): Scan {
   for (const root of scanRoots()) {
     for (const file of sourceFilesUnder(resolve(REPO_ROOT, root), {
       excludeTestKernel: false,
-      missingDirReturnsEmpty: true,
       includeJs: isScriptRoot(root),
     })) {
       const repoPath = toRepoPath(file);

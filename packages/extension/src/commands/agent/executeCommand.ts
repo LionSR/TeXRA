@@ -4,11 +4,11 @@ import { z, ZodError } from 'zod';
 
 // Local imports
 import { AgentConfigSchema, type SessionHandle } from '@agent/runtime';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { ensureError } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'ExecuteCommand';

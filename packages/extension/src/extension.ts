@@ -22,8 +22,6 @@ import {
   disposeProcessRuntime,
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
-import { serviceSessionBackend } from '@texra/controllers/server/serviceBackend';
-import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import {
   appStateStoreFromDatabase,
@@ -94,6 +92,8 @@ import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { GlobalDatabase } from '@shared/session/database';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { usageLogLayer } from '@telemetry/UsageLogService';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
+import { serviceSessionBackend } from '@texra/controllers/server/serviceBackend';
 import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
 import type { CommandId } from '@texra/shared/commands/catalog';
 import { fromHost } from '@texra/controllers/session/hostCallFailure';

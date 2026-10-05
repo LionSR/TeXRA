@@ -166,10 +166,8 @@ function sourceFilesUnder(
   zone: string,
   opts?: { readonly excludeTestKernel?: boolean },
 ): string[] {
-  // A renamed/removed zone surfaces as the file-count guard below failing,
-  // not as a silently green ratchet.
+  // A renamed or removed zone throws here (ENOENT), never scans as empty.
   return sharedSourceFilesUnder(resolve(REPO_ROOT, zone), {
-    missingDirReturnsEmpty: true,
     excludeTestKernel: opts?.excludeTestKernel,
   });
 }

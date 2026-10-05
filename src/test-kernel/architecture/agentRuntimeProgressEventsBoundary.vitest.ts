@@ -31,7 +31,6 @@ const SOURCE_OR_OUTPUT_EXTENSION = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
 
 const ALL_SOURCE_FILES = ALL_HOST_PRODUCTION_ROOTS.flatMap((root) =>
   sourceFilesUnder(resolve(REPO_ROOT, root), {
-    missingDirReturnsEmpty: true,
     repoRelative: true,
     excludeTestKernel: false,
   }),
