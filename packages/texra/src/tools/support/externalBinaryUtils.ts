@@ -27,7 +27,7 @@ import which from 'which';
 
 import { isModuleNotFoundError } from '@common/errors';
 import { withLogChannel } from '@logger/effectLog';
-import { nodeHostEnvironment } from '@platform/defaults/nodeHostEnvironment';
+import { nodeHostEnvironment } from '@texra/platform/defaults/nodeHostEnvironment';
 import { ensureError } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';

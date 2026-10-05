@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { API_KEY_PROVIDER_IDS, lookupApiKeyOrigin } from '@texra-ai/llm';
 import { ToolContext, Secrets } from '@texra-ai/harness';
 import { withLogChannel } from '@logger/effectLog';
-import { nodeHostEnvironment } from '@platform/defaults/nodeHostEnvironment';
+import { nodeHostEnvironment } from '@texra/platform/defaults/nodeHostEnvironment';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import {
   IMAGE_TOOL_LABEL,

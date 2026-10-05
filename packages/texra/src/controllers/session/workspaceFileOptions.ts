@@ -11,7 +11,7 @@ import {
   getEditedFileListConfig,
   getFileListConfig,
   type ListableFileType,
-} from '@common/files/fileListingRules';
+} from '@texra/common/files/fileListingRules';
 import { listWorkspaceFiles } from '@texra/common/files/workspaceFileListing';
 
 /**

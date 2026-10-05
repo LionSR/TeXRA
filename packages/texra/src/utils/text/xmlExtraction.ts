@@ -11,7 +11,7 @@
 import { OUTPUT_DOCUMENT_TAG } from '@shared/schemas';
 
 // Local imports
-import { removeCDATA } from './xmlCdata';
+import { removeCDATA } from '@utils/text/xmlCdata';
 
 /** A single extracted document: its LaTeX/text content and its `name` attribute. */
 export interface NamedDocument {

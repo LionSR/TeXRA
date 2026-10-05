@@ -6,7 +6,7 @@
  * response.
  *
  * Note: this module is about the *agent output pipeline*, not general XML
- * parsing. Low-level XML text utilities live in @utils/text/xmlExtraction.
+ * parsing. Low-level XML text utilities live in @texra/utils/text/xmlExtraction.
  */
 
 import { Effect, FileSystem } from 'effect';

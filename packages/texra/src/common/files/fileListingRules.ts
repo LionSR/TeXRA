@@ -1,7 +1,9 @@
+import { FILE_HANDLING_RULES } from '@common/files/fileHandlingRules';
+import {
+  getIncludedExtensions,
+  type ExtensionCategory,
+} from '@common/files/fileTypeUtils';
 import { getBasename, normalizeFilePath } from '@utils/core';
-
-import { FILE_HANDLING_RULES } from './fileHandlingRules';
-import { getIncludedExtensions, type ExtensionCategory } from './fileTypeUtils';
 
 // Edited files have their own entry point (getEditedFileListConfig), so they
 // are not listable through getFileListConfig. The surviving vocabulary matches

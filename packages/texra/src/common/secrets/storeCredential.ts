@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
 // Local imports - utilities
-import { looksLikeCredentialPlaceholder } from '@utils/text/credentialPlaceholder';
+import { looksLikeCredentialPlaceholder } from '@texra/utils/text/credentialPlaceholder';
 
 /**
  * The one member of the credential store this needs, generic over whatever

@@ -10,6 +10,11 @@ import replacementEngine, {
 import type { FileLocation, OutputFileInfo } from '@shared/schemas';
 import { OUTPUT_DOCUMENT_TAG, OUTPUT_DOCUMENTS_TAG } from '@shared/schemas';
 import { getExtractedDocOutputFileName } from '@texra/utils/files/outputFileUtils';
+import {
+  DOCUMENT_NAME_REGEX,
+  extractDocuments,
+  type NamedDocument,
+} from '@texra/utils/text/xmlExtraction';
 import { entryTypeAt } from '@utils/files/fsDurability';
 import {
   createExternalLocation,
@@ -22,11 +27,6 @@ import {
   normalizeLineEndings,
 } from '@utils/text/stringUtils';
 import { addCdataToTagsMultiple } from '@utils/text/xmlCdata';
-import {
-  DOCUMENT_NAME_REGEX,
-  extractDocuments,
-  type NamedDocument,
-} from '@utils/text/xmlExtraction';
 import { absentReason } from '@utils/files/fsEntryExists';
 
 import {

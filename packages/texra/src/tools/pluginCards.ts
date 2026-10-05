@@ -11,7 +11,7 @@ import type {
   PluginSettingRow,
   SettingHost,
 } from '@shared/state/stateSettings';
-import type { ToolCategory } from '@shared/tools/toolPlugin';
+import type { ToolCategory } from '@texra/shared/tools/toolPlugin';
 import {
   CLAUDE_AGENT_SETTINGS,
   CODEX_SETTINGS,

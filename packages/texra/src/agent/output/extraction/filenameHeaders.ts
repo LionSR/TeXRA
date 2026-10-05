@@ -14,8 +14,8 @@ import {
   getExtractedDocOutputFileName,
   getSafeDocumentRelativePath,
 } from '@texra/utils/files/outputFileUtils';
+import type { NamedDocument } from '@texra/utils/text/xmlExtraction';
 import { getBasename, normalizeFilePath } from '@utils/core';
-import type { NamedDocument } from '@utils/text/xmlExtraction';
 
 import {
   isClosingMarkdownFence,

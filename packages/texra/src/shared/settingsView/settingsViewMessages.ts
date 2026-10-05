@@ -34,7 +34,7 @@ import {
 import {
   ToolCategorySchema,
   ToolDependencyStatusSchema,
-} from '@shared/tools/toolPlugin';
+} from '@texra/shared/tools/toolPlugin';
 import {
   createDispatcher,
   type HandlerRegistry,

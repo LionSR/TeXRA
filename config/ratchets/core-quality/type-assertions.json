@@ -19,7 +19,6 @@
   "packages/harness/src/platform/defaults/jsonStore.ts": 5,
   "packages/harness/src/platform/defaults/longRunningModelTransport.ts": 4,
   "packages/harness/src/platform/defaults/memoryConfigProvider.ts": 1,
-  "packages/harness/src/platform/defaults/nodeHostEnvironment.ts": 1,
   "packages/harness/src/platform/defaults/nodePlatform.ts": 1,
   "packages/harness/src/platform/defaults/nodeWorkspace.ts": 1,
   "packages/harness/src/platform/defaults/workspaceStorage.ts": 1,
