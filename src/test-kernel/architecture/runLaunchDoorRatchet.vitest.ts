@@ -24,25 +24,23 @@ import {
  * list with its reason in the same PR.
  */
 const LAUNCH_ROOTS = [
-  'src/agent',
-  'src/tools',
+  'packages/harness/src',
   'packages/texra/src/agent',
   'packages/texra/src/tools',
-  'packages/harness/src',
 ] as const;
 
 const DETACHED_FORK = /\b(?:forkDetach|FiberMap\.run|FiberSet\.run)\s*\(/g;
 
 const DETACHED_FORK_ALLOWLIST: Readonly<Record<string, number>> = {
   // A host presentation notice, reported rather than awaited.
-  'src/agent/runtime/HostInteractions.ts': 1,
+  'packages/harness/src/agent/runtime/HostInteractions.ts': 1,
   // The host's `onRun` observer, which may last as long as the run.
-  'src/agent/runtime/AgentRunLifecycle.ts': 1,
+  'packages/harness/src/agent/runtime/AgentRunLifecycle.ts': 1,
   // A late child-loop failure's diagnosis, joined on the launched fiber.
-  'src/tools/delegation/detachedChildRun.ts': 1,
+  'packages/harness/src/tools/delegation/detachedChildRun.ts': 1,
   // A guest script's issued calls, in the script's own scoped set: each runs
   // the caller's handler, which launches any run through the door itself.
-  'src/agent/codeSandbox/codeSandbox.ts': 1,
+  'packages/harness/src/agent/codeSandbox/codeSandbox.ts': 1,
   // A GitHub delivery into its poller's own set.
   'packages/texra/src/tools/github/PollingSourceBase.ts': 1,
   // The package boundary: the awaiter of `runAgent` (whose run starts at

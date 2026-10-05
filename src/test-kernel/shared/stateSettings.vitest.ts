@@ -372,7 +372,7 @@ describe('settingsAccess', () => {
   // #12710: the five Models-tab provider toggles declare `configTarget:
   // 'global'`, so `readSetting` resolves them on the global scope alone. The
   // run now reads them through the same catalog reader (`readSettingFrom` in
-  // `src/agent/runtime/run/modelBinding.ts`), where it used to read the
+  // `packages/harness/src/agent/runtime/run/modelBinding.ts`), where it used to read the
   // merged config and could therefore honor a workspace override the tab had
   // no way to show. One scope, one answer, both sides.
   it.effect(

@@ -44,7 +44,7 @@ const TSCONFIG_PATH = resolve(REPO_ROOT, 'tsconfig.json');
 /**
  * The roots a subsystem directory sits under: `src/` before the package
  * split, and the harness and app packages after it (split design §7). A
- * subsystem keeps its name across the move (`src/tools/x` and
+ * subsystem keeps its name across the move (`packages/harness/src/tools/x` and
  * `packages/texra/src/tools/y` are both `tools`), so the baseline is keyed
  * the same on either side of it.
  */
@@ -465,7 +465,7 @@ describe('LAY-1 subsystem edge ratchet', () => {
 
   it('does not bucket @common/webview imports into the already-whitelisted common edge', () => {
     // tsconfig.json carves this alias out to
-    // packages/extension/src/common/webview (VS Code-coupled), not src/common/*.
+    // packages/extension/src/common/webview (VS Code-coupled), not packages/harness/src/common/*.
     // A src/-side import of it must not resolve to the generic `common`
     // subsystem, because `agent -> common` (etc.) is already whitelisted in
     // the baseline and would silently absorb the violating import.
@@ -476,7 +476,7 @@ describe('LAY-1 subsystem edge ratchet', () => {
     expect(resolveImportedSubsystem(file, '@common/webview/foo')).toBe(
       webviewSubsystem,
     );
-    // The generic `@common` alias (src/common/*) is unaffected.
+    // The generic `@common` alias (packages/harness/src/common/*) is unaffected.
     expect(resolveImportedSubsystem(file, '@common/foo')).toBe('common');
 
     // A hypothetical future `agent -> @common/webview` import must surface as

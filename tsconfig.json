@@ -14,9 +14,9 @@
     "useDefineForClassFields": false,
     "paths": {
       "@shared/*": [
-        "./src/shared/*",
-        "./src/shared/*.ts",
-        "./src/shared/*/index.ts"
+        "./packages/harness/src/shared/*",
+        "./packages/harness/src/shared/*.ts",
+        "./packages/harness/src/shared/*/index.ts"
       ],
       "@ui/*": [
         "./packages/texra/src/ui/*",
@@ -30,14 +30,14 @@
       ],
       "@common/webview": ["./packages/extension/src/common/webview/index.ts"],
       "@common/*": [
-        "./src/common/*",
-        "./src/common/*.ts",
-        "./src/common/*/index.ts"
+        "./packages/harness/src/common/*",
+        "./packages/harness/src/common/*.ts",
+        "./packages/harness/src/common/*/index.ts"
       ],
       "@agent/*": [
-        "./src/agent/*",
-        "./src/agent/*.ts",
-        "./src/agent/*/index.ts"
+        "./packages/harness/src/agent/*",
+        "./packages/harness/src/agent/*.ts",
+        "./packages/harness/src/agent/*/index.ts"
       ],
       "@frontend/*": [
         "./packages/extension/src/frontend/*",
@@ -45,30 +45,30 @@
         "./packages/extension/src/frontend/*/index.ts"
       ],
       "@hosts/*": [
-        "./src/hosts/*",
-        "./src/hosts/*.ts",
-        "./src/hosts/*/index.ts"
+        "./packages/harness/src/hosts/*",
+        "./packages/harness/src/hosts/*.ts",
+        "./packages/harness/src/hosts/*/index.ts"
       ],
       "@utils/*": [
-        "./src/utils/*",
-        "./src/utils/*.ts",
-        "./src/utils/*/index.ts"
+        "./packages/harness/src/utils/*",
+        "./packages/harness/src/utils/*.ts",
+        "./packages/harness/src/utils/*/index.ts"
       ],
       "@logger/*": [
-        "./src/logger/*",
-        "./src/logger/*.ts",
-        "./src/logger/*/index.ts"
+        "./packages/harness/src/logger/*",
+        "./packages/harness/src/logger/*.ts",
+        "./packages/harness/src/logger/*/index.ts"
       ],
       "@telemetry/*": [
         "./packages/texra/src/telemetry/*",
         "./packages/texra/src/telemetry/*.ts",
         "./packages/texra/src/telemetry/*/index.ts"
       ],
-      "@transcript": ["./src/transcript/index.ts"],
+      "@transcript": ["./packages/harness/src/transcript/index.ts"],
       "@transcript/*": [
-        "./src/transcript/*",
-        "./src/transcript/*.ts",
-        "./src/transcript/*/index.ts"
+        "./packages/harness/src/transcript/*",
+        "./packages/harness/src/transcript/*.ts",
+        "./packages/harness/src/transcript/*/index.ts"
       ],
       "@latex/*": [
         "./packages/texra/src/latex/*",
@@ -86,14 +86,14 @@
         "./packages/extension/resources/*/index.ts"
       ],
       "@model/*": [
-        "./src/model/*",
-        "./src/model/*.ts",
-        "./src/model/*/index.ts"
+        "./packages/harness/src/model/*",
+        "./packages/harness/src/model/*.ts",
+        "./packages/harness/src/model/*/index.ts"
       ],
       "@skills/*": [
-        "./src/skills/*",
-        "./src/skills/*.ts",
-        "./src/skills/*/index.ts"
+        "./packages/harness/src/skills/*",
+        "./packages/harness/src/skills/*.ts",
+        "./packages/harness/src/skills/*/index.ts"
       ],
       "@housekeeping/*": [
         "./packages/texra/src/housekeeping/*",
@@ -116,24 +116,24 @@
         "./packages/texra/src/replacement/*/index.ts"
       ],
       "@tools/*": [
-        "./src/tools/*",
-        "./src/tools/*.ts",
-        "./src/tools/*/index.ts"
+        "./packages/harness/src/tools/*",
+        "./packages/harness/src/tools/*.ts",
+        "./packages/harness/src/tools/*/index.ts"
       ],
       "@eventBus/*": [
-        "./src/eventBus/*",
-        "./src/eventBus/*.ts",
-        "./src/eventBus/*/index.ts"
+        "./packages/harness/src/eventBus/*",
+        "./packages/harness/src/eventBus/*.ts",
+        "./packages/harness/src/eventBus/*/index.ts"
       ],
       "@platform/*": [
-        "./src/platform/*",
-        "./src/platform/*.ts",
-        "./src/platform/*/index.ts"
+        "./packages/harness/src/platform/*",
+        "./packages/harness/src/platform/*.ts",
+        "./packages/harness/src/platform/*/index.ts"
       ],
       "@controllers/*": [
-        "./src/controllers/*",
-        "./src/controllers/*.ts",
-        "./src/controllers/*/index.ts"
+        "./packages/harness/src/controllers/*",
+        "./packages/harness/src/controllers/*.ts",
+        "./packages/harness/src/controllers/*/index.ts"
       ],
       "@test/*": [
         "./src/test-kernel/*",
@@ -158,8 +158,8 @@
     "types": ["node", "vscode"]
   },
   "include": [
-    "src/**/*.ts",
-    "src/**/*.tsx",
+    "packages/harness/src/**/*.ts",
+    "packages/harness/src/**/*.tsx",
     "packages/texra/src/**/*.ts",
     "packages/texra/src/**/*.tsx",
     "packages/extension/src/**/*.ts",

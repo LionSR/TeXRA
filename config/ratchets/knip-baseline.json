@@ -206,7 +206,7 @@
       "name": "packageCommandContributions"
     },
     {
-      "file": "src/tools/approval/toolEditApproval.ts",
+      "file": "packages/harness/src/tools/approval/toolEditApproval.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "prepareToolEditApprovalPrompt"
@@ -230,7 +230,7 @@
       "name": "resolveWorkspaceRoot"
     },
     {
-      "file": "src/tools/memory/memoryFileSystem.ts",
+      "file": "packages/harness/src/tools/memory/memoryFileSystem.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "countPinnedMemories"

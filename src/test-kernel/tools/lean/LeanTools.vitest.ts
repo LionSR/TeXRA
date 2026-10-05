@@ -1,4 +1,4 @@
-// Suites for src/tools/lean helper modules (hover text, workspace-root
+// Suites for packages/harness/src/tools/lean helper modules (hover text, workspace-root
 // resolution, external-tool status, lake command mutex). The LSP adapter,
 // server registry, and JSON-RPC connection keep their own suites.
 

@@ -14,7 +14,7 @@ import {
 } from '../support/repoScan';
 
 /** Only the shared module may define the three-value TeXRA policy vocabulary. */
-const VOCABULARY_OWNER = 'src/shared/approvalPolicy.ts';
+const VOCABULARY_OWNER = 'packages/harness/src/shared/approvalPolicy.ts';
 
 /**
  * Sites allowed to call `decideTexraApproval` / `decideRetryApproval` /
@@ -24,11 +24,11 @@ const VOCABULARY_OWNER = 'src/shared/approvalPolicy.ts';
  * this allowlist in the same PR if a new core surface is intentional.
  */
 const EVALUATOR_CALL_ALLOWLIST = new Set([
-  'src/shared/approvalPolicy.ts',
-  'src/agent/runtime/requestPolicy.ts',
-  'src/tools/approval/bashApproval.ts',
-  'src/tools/approval/toolEditApproval.ts',
-  'src/tools/delegation/proposalFlow.ts',
+  'packages/harness/src/shared/approvalPolicy.ts',
+  'packages/harness/src/agent/runtime/requestPolicy.ts',
+  'packages/harness/src/tools/approval/bashApproval.ts',
+  'packages/harness/src/tools/approval/toolEditApproval.ts',
+  'packages/harness/src/tools/delegation/proposalFlow.ts',
 ]);
 
 /**
@@ -36,7 +36,7 @@ const EVALUATOR_CALL_ALLOWLIST = new Set([
  * same PR when a new composition root is intentional.
  */
 const SEED_CALL_ALLOWLIST = new Set([
-  'src/agent/runtime/SessionHandle.ts',
+  'packages/harness/src/agent/runtime/SessionHandle.ts',
   'packages/cli/src/runtime/executeCli.ts',
   'packages/texra/src/controllers/settingsView/sharedSettingsCommands.ts',
   'packages/cli/src/runtime/approvalAdapter.ts',
@@ -61,13 +61,13 @@ const SEED_CALL_ALLOWLIST = new Set([
  * core path is intentional; a host site never joins.
  */
 const BYPASS_WRITE_ALLOWLIST = new Set([
-  'src/agent/runtime/runApprovalQueue.ts',
-  'src/agent/runtime/loop/step.ts',
+  'packages/harness/src/agent/runtime/runApprovalQueue.ts',
+  'packages/harness/src/agent/runtime/loop/step.ts',
   'packages/texra/src/controllers/mainView/backend/MainViewRunLaunchController.ts',
   // `policy.set`, the one host door, applied with its durable row.
-  'src/controllers/session/pendingUnderBypass.ts',
-  'src/tools/approval/index.ts',
-  'src/tools/goal/goalAutoApproval.ts',
+  'packages/harness/src/controllers/session/pendingUnderBypass.ts',
+  'packages/harness/src/tools/approval/index.ts',
+  'packages/harness/src/tools/goal/goalAutoApproval.ts',
 ]);
 
 const EVALUATOR_CALL =

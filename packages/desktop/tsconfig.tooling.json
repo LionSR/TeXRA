@@ -8,6 +8,6 @@
     "design-harness/**/*.ts",
     "tests/e2e/**/*.ts",
     "src/renderer/**/*.d.ts",
-    "../../src/types/**/*.d.ts"
+    "../harness/src/types/**/*.d.ts"
   ]
 }

@@ -116,10 +116,12 @@ const NOT_SOURCE = /\.d\.ts$|\.(?:test|vitest|spec)\.tsx?$/;
 /** The repo-relative core source files, sorted. */
 function coreFiles(rootDir) {
   return CORE_QUALITY_DIRS.flatMap((dir) =>
-    walkFiles(path.join(rootDir, dir), {
-      include: (file) => SOURCE_FILE.test(file) && !NOT_SOURCE.test(file),
-      prune: (dir) => dir.endsWith('node_modules'),
-    }).map(({ relativePath }) => `${dir}/${relativePath}`),
+    dir.endsWith('.ts')
+      ? [dir]
+      : walkFiles(path.join(rootDir, dir), {
+          include: (file) => SOURCE_FILE.test(file) && !NOT_SOURCE.test(file),
+          prune: (dir) => dir.endsWith('node_modules'),
+        }).map(({ relativePath }) => `${dir}/${relativePath}`),
   ).toSorted();
 }
 
@@ -652,8 +654,13 @@ async function measureCycles(rootDir, files, byRule) {
 }
 
 function measureReadmes(rootDir, byRule) {
-  for (const dir of CORE_QUALITY_DIRS) {
-    const root = dir.endsWith('/src') ? dir.slice(0, -'/src'.length) : dir;
+  // A package's src, its entry files and its SDK boundary (`effect/`) are
+  // described by the package README.
+  const packageRoot = /^(packages\/[^/]+)\/src(?:$|\/effect$|\/[^/]+\.ts$)/;
+  const roots = new Set(
+    CORE_QUALITY_DIRS.map((dir) => packageRoot.exec(dir)?.[1] ?? dir),
+  );
+  for (const root of roots) {
     const readme = path.join(rootDir, root, 'README.md');
     const text = existsSync(readme) ? readFileSync(readme, 'utf8') : '';
     if (!/```mermaid/.test(text)) {

@@ -145,7 +145,7 @@ root `tsconfig.json` already includes `packages/extension/src/**`. Use
 
 ## Coding style
 
-- TypeScript code in repo-root `src/` and `packages/*/src/` targets ES2022.
+- TypeScript code in `packages/*/src/` and the test suite targets ES2022.
 - Use the provided ESLint configuration (`eslint.config.mjs`) and Prettier settings (`.prettierrc`). Run `npm run format` before committing. `import/order` and `no-nested-ternary` are enforced at error level.
 - Prefer `const` and `let` over `var`.
 - Group imports by source and prefix each block with a descriptive comment (e.g., `// Third-party imports`, `// Local imports - component`).
@@ -153,7 +153,7 @@ root `tsconfig.json` already includes `packages/extension/src/**`. Use
 - Document functions with concise comments. Use JSDoc style for public APIs.
 - Keep functions small and focused; extract helpers or modules when logic becomes complex.
 - Keep webview directory structure aligned where views share a concern (`components/`, `styles/`); beyond that `progressView` and `settingsView` intentionally diverge (see "Webview Consistency Patterns").
-- Place a host's own request handling beside the view it serves (e.g. `packages/extension/src/progressView/extensionHostRequests.ts`, `packages/desktop/src/main/desktopHostRequests.ts`); host-neutral session bridging lives under `src/controllers/session/`.
+- Place a host's own request handling beside the view it serves (e.g. `packages/extension/src/progressView/extensionHostRequests.ts`, `packages/desktop/src/main/desktopHostRequests.ts`); host-neutral session bridging lives under `packages/harness/src/controllers/session/`.
 
 ### Naming conventions
 
@@ -173,15 +173,15 @@ One of those baselines budgets the code itself rather than an import edge, and i
 Another code budget reached zero and is now a hardcoded rule: `unknownErrorChannelRatchet.vitest.ts` fails on any production `Effect.Effect<A, unknown, R>` or `Effect.fn.Return<A, unknown, R>`. Type the channel with the tagged error the path already raises; a port whose hosts each fail with their own surface's error takes `Error`; a foreign rejection becomes an `Error` at its boundary with `ensureError` (`@utils/errors/errorMessage`), never a `catch: (e) => e` / `onError: (e) => e` pass-through (the same test fails one, outside its `IDENTITY_CATCH_JOINS` list of late-rejection joins that compare the raw value by identity), and never the thunk form `Effect.try(() => …)` / `Effect.tryPromise(() => …)`, whose `UnknownError` hides the real message behind a fixed one; a combinator that absorbs any failure is generic in it.
 
 - `packages/extension/src/frontend/` contains extension-host utilities that power shared UI flows (agent directories, file listers, instruction banners, tool workflows; subfolders `system/`, `ui/`, `editor/`, `agents/`, `latex/`, `media/`). Prefer these helpers over duplicating logic in commands or webviews.
-- `src/common/` holds host-neutral, cross-cutting logic with domain meaning (errors, files, parsing, storage, constants), not a backend-only zone. Some browser-adjacent shared code imports dependency-light modules such as `@common/parsing/safeParseJson`; import through the `@common/*` alias and check the target's dependencies before using it from browser code.
+- `packages/harness/src/common/` holds host-neutral, cross-cutting logic with domain meaning (errors, files, parsing, storage, constants), not a backend-only zone. Some browser-adjacent shared code imports dependency-light modules such as `@common/parsing/safeParseJson`; import through the `@common/*` alias and check the target's dependencies before using it from browser code.
 - `packages/extension/src/common/` holds extension-only helpers (webview base classes, shared styles):
   - `packages/extension/src/common/webview/` - Webview content provider (`BundledViewContentProvider`), webview HTML builder (`buildWebviewHtml`), command constants
-- `src/utils/` is host-agnostic; only the four `BROWSER_SAFE_UTILS` modules in `eslint.config.mjs` are browser-reachable (CLAUDE.md "Layout"). Helpers specific to one side belong in `frontend/` or `common/`; an import added to one of the four must stay browser-safe.
+- `packages/harness/src/utils/` is host-agnostic; only the four `BROWSER_SAFE_UTILS` modules in `eslint.config.mjs` are browser-reachable (CLAUDE.md "Layout"). Helpers specific to one side belong in `frontend/` or `common/`; an import added to one of the four must stay browser-safe.
   - `utils/core/` - Async, type-guard, math, comparator, and path-basics primitives (`debounce`, `filterNotNull`, `clamp`, `byName`, `normalizeFilePath`, `getBasename`, `getFileStem`)
     - `utils/core/perKeyQueue.ts` - `withPerKeyLane`, the one per-key serialization lane (Effect-based; `KeyedMutex` and `async-mutex` were retired by #12696)
 
-- `src/platform/` - Platform abstraction layer: the host ports and the process runtime types. Each host's composition root calls `installProcessRuntime()` once at startup; agnostic code reads the ports from the Effect context that runtime serves.
-- `packages/texra/src/ui/` (`@ui/*`) - The host-neutral UI toolkit all three hosts render from (`ui/wa/`, `ui/styles/`, `ui/markdown/`, `ui/copy/`); see CLAUDE.md "Layout" for its boundaries, including the `litControllers/`, `monaco/`, `highlighting/` trio in `packages/texra/src/shared/`. The transcript row model is the harness's, in `src/shared/transcript/` (`@shared/transcript`). `src/transcript/` (`@transcript`) is the unrelated run-transcript persistence layer.
+- `packages/harness/src/platform/` - Platform abstraction layer: the host ports and the process runtime types. Each host's composition root calls `installProcessRuntime()` once at startup; agnostic code reads the ports from the Effect context that runtime serves.
+- `packages/texra/src/ui/` (`@ui/*`) - The host-neutral UI toolkit all three hosts render from (`ui/wa/`, `ui/styles/`, `ui/markdown/`, `ui/copy/`); see CLAUDE.md "Layout" for its boundaries, including the `litControllers/`, `monaco/`, `highlighting/` trio in `packages/texra/src/shared/`. The transcript row model is the harness's, in `packages/harness/src/shared/transcript/` (`@shared/transcript`). `packages/harness/src/transcript/` (`@transcript`) is the unrelated run-transcript persistence layer.
 
 ### Pragmatic implementations
 
@@ -330,7 +330,7 @@ Use `.nullish()` instead of `.optional()` for optional fields in tool input sche
 
 **Discriminated-union branches use `.looseObject()`, not `.strictObject()`.** Provider conversion flattens a top-level union into ONE object schema whose properties are the union of every branch's, and it emits no `additionalProperties` key - so the model is never told the flattened object is closed. OpenAI-compatible providers (DeepSeek, Kimi, etc.) then fill every advertised property, including ones that belong to a different command, with `null` rather than omitting it. A `strictObject` branch rejects that as an unrecognized key regardless of nullability; `looseObject` tolerates the cross-branch leakage while still enforcing each branch's own required fields.
 
-A union-branch field with a default needs `nullishWithDefault` (`src/tools/core/inputSchema.ts`) rather than `.prefault()`: `.prefault()` substitutes only for `undefined`, so an explicit `null` fails validation inside the correctly-selected branch, where `looseObject` gives no help.
+A union-branch field with a default needs `nullishWithDefault` (`packages/harness/src/tools/core/inputSchema.ts`) rather than `.prefault()`: `.prefault()` substitutes only for `undefined`, so an explicit `null` fails validation inside the correctly-selected branch, where `looseObject` gives no help.
 
 **Design for the model's first call**
 
@@ -349,10 +349,10 @@ unsupported state with a clear error. `trace.json` is **not** such an exception:
 the owner ruled that 1.0's exports start fresh, so a document from an older
 build fails loudly at the parse boundary (#12359). The session database is
 the same stance made mechanical: `storeSchema.ts`
-(`src/controllers/session/`) stamps every `texra.db` with its schema version
+(`packages/harness/src/controllers/session/`) stamps every `texra.db` with its schema version
 and moves a store written before 1.0 aside whole at open (`texra.db.pre1`,
 never read again, settings included) and refuses one of a newer schema. Row
-kinds carry their own versions (`src/shared/schemas/rowVersions.ts`), read by
+kinds carry their own versions (`packages/harness/src/shared/schemas/rowVersions.ts`), read by
 the row codec (`rowCodec.ts`) alone; until the 1.0 release freezes them, every
 kind is unreleased and changes with no upcaster and no bump.
 
@@ -380,7 +380,7 @@ which changes persisted hash output).
 
 For good separation of concerns and platform independence, core business logic should stay free of host-specific imports. This improves testability and keeps the door open for future reuse outside VS Code.
 
-1. **Never import `vscode` in VS Code-free zones.** See CLAUDE.md "Separation of concerns: VS Code coupling" for the full list. The key ones: `src/agent/`, `src/model/`, `src/tools/`, `src/controllers/`, `src/shared/`, and the whole app, `packages/texra/src/`. Do not add new `@agent/*` imports under `src/shared/` or `packages/texra/src/ui/`; host-neutral orchestration belongs under `src/controllers/`.
+1. **Never import `vscode` in VS Code-free zones.** See CLAUDE.md "Separation of concerns: VS Code coupling" for the full list. The key ones: `packages/harness/src/agent/`, `packages/harness/src/model/`, `packages/harness/src/tools/`, `packages/harness/src/controllers/`, `packages/harness/src/shared/`, and the whole app, `packages/texra/src/`. Do not add new `@agent/*` imports under `packages/harness/src/shared/` or `packages/texra/src/ui/`; host-neutral orchestration belongs under `packages/harness/src/controllers/`.
 
 2. **Use platform-agnostic helpers instead of VS Code types:**
    - `isFile(type)` / `isDirectory(type)` from `@utils/files/fsEntryType` — not `vscode.FileType.File` / `vscode.FileType.Directory`
@@ -397,7 +397,7 @@ For good separation of concerns and platform independence, core business logic s
 
 **Configuration, storage, and workspace files**
 
-- For a raw config path, read with `config.get(path)` on the `ConfigProvider` the caller holds (a tool call's `call.roots.config`, a run's `session.roots.config`, a host command's `session.roots.config`) and write with that provider's `update(...)`; there is no standalone `updateConfig`/`watchConfig` helper and no change-notification API. Nearly every `texra.*` path is modeled in the Zod catalog, declared by owner: the harness's rows in `src/shared/state/stateSettings.ts` (schemas in `src/shared/schemas/coreSettings.ts`), TeXRA's own in `packages/texra/src/shared/settingsView/texraSettings.ts`, and a plugin's on its `Plugin` value's `settings`; hosts pass TeXRA's rows to `installProcessRuntime`, which installs the one catalog; for those, prefer the catalog helpers in `src/utils/config/platformSettings.ts` (`readSettingFrom(stores, key)`, `writeSettingTo(stores, key, value)`) over a raw cast, since they route through the shared validation/`onWrite` path. The `stores` are the settings slots the caller holds (a `WorkspaceRoots` is a `SettingsStores`); there is no ambient reader, so a caller that cannot name its slots has an owner to fix, not a fallback to reach for. Exceptions: the `configTarget: 'global'` rows (the five Models-tab provider toggles, `texra.telemetry.enabled`) keep merged-config semantics on runtime reads and do not go through the catalog reader, which answers a global-target row from global scope only (telemetry's project-file rule, opt out but never in, is the store's `projectValueIgnored` in `jsonConfigProvider.ts`, driven by the row's `projectMayOptOut`); and the CLI's git-author keys (`GIT_MARK_COMMITS`, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_WORKTREE_SUPPORT`) go through the CLI's own `readGitAuthorSettingsFromState`, since the catalog helpers default to the `'vscode'` storage slot. For a write reachable from a settings UI (extension/desktop `UPDATE_STATE_SETTING`, CLI `/config`), call `applyStateSettingUpdate` (`packages/texra/src/shared/settingsView/handlers/stateSettingWrite.ts`) rather than `writeSettingTo` directly: it adds the open-workspace guard and the approval-policy side effect a bare catalog write skips.
+- For a raw config path, read with `config.get(path)` on the `ConfigProvider` the caller holds (a tool call's `call.roots.config`, a run's `session.roots.config`, a host command's `session.roots.config`) and write with that provider's `update(...)`; there is no standalone `updateConfig`/`watchConfig` helper and no change-notification API. Nearly every `texra.*` path is modeled in the Zod catalog, declared by owner: the harness's rows in `packages/harness/src/shared/state/stateSettings.ts` (schemas in `packages/harness/src/shared/schemas/coreSettings.ts`), TeXRA's own in `packages/texra/src/shared/settingsView/texraSettings.ts`, and a plugin's on its `Plugin` value's `settings`; hosts pass TeXRA's rows to `installProcessRuntime`, which installs the one catalog; for those, prefer the catalog helpers in `packages/harness/src/utils/config/platformSettings.ts` (`readSettingFrom(stores, key)`, `writeSettingTo(stores, key, value)`) over a raw cast, since they route through the shared validation/`onWrite` path. The `stores` are the settings slots the caller holds (a `WorkspaceRoots` is a `SettingsStores`); there is no ambient reader, so a caller that cannot name its slots has an owner to fix, not a fallback to reach for. Exceptions: the `configTarget: 'global'` rows (the five Models-tab provider toggles, `texra.telemetry.enabled`) keep merged-config semantics on runtime reads and do not go through the catalog reader, which answers a global-target row from global scope only (telemetry's project-file rule, opt out but never in, is the store's `projectValueIgnored` in `jsonConfigProvider.ts`, driven by the row's `projectMayOptOut`); and the CLI's git-author keys (`GIT_MARK_COMMITS`, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_WORKTREE_SUPPORT`) go through the CLI's own `readGitAuthorSettingsFromState`, since the catalog helpers default to the `'vscode'` storage slot. For a write reachable from a settings UI (extension/desktop `UPDATE_STATE_SETTING`, CLI `/config`), call `applyStateSettingUpdate` (`packages/texra/src/shared/settingsView/handlers/stateSettingWrite.ts`) rather than `writeSettingTo` directly: it adds the open-workspace guard and the approval-policy side effect a bare catalog write skips.
 - Inside Effect, reach a session's files through the rooted services (`WorkspaceFs`, `StorageFs`, `GlobalStorageFs` in `@platform/rootedFs`): each captures its root when its layer is built and refuses a path that escapes it. Workspace path math is a pure function of the root (`workspaceAbsolutePath`/`workspaceRelativePath`/`locateInWorkspace` in `@utils/files/workspaceFS`). Outside Effect, a helper takes the root as data: every run-storage path helper in `@utils/files/runStorageFs` has the root as its first parameter. Nothing in `@utils/files` resolves a root on its own.
 - Generate and identify pasted-image filenames with `@utils/files/pastedImageName` and resolve, validate, and persist their paths with `@utils/files/pastedImageUtils` (keeps Node filesystem code out of browser bundles).
 - Surface files through the shared listing (`listWorkspaceFilesOfType` in `packages/texra/src/controllers/session/workspaceFileOptions.ts`) and agents through the process catalog (`@agent/index`) instead of duplicating discovery logic.
@@ -410,16 +410,16 @@ For good separation of concerns and platform independence, core business logic s
 
 **Agent execution and tool-use**
 
-- Define agents using `AgentDataclass` and `AgentConfig` (`src/agent/core/`) and compose them via the factories in `src/agent/runtime`.
-- Launch executions via `runAgent` and resume via `resumeRun` (see CLAUDE.md "Agent system"); use the lower-level `executeAgent` only when you already own the `runId` (e.g. subagent dispatch in `src/tools/delegation/inBandSubagentRun.ts`). Attach presentation and approval behavior to the run's `SessionHandle.interactions`.
-- A new provider is a protocol arm in `packages/llm` plus a route row in `src/agent/runtime/modelRoutes.ts` and `src/agent/runtime/run/modelBinding.ts`; there is no per-provider handler class. Register capabilities/pricing in `src/model/computeModelOptions.ts`.
+- Define agents using `AgentDataclass` and `AgentConfig` (`packages/harness/src/agent/core/`) and compose them via the factories in `packages/harness/src/agent/runtime`.
+- Launch executions via `runAgent` and resume via `resumeRun` (see CLAUDE.md "Agent system"); use the lower-level `executeAgent` only when you already own the `runId` (e.g. subagent dispatch in `packages/harness/src/tools/delegation/inBandSubagentRun.ts`). Attach presentation and approval behavior to the run's `SessionHandle.interactions`.
+- A new provider is a protocol arm in `packages/llm` plus a route row in `packages/harness/src/agent/runtime/modelRoutes.ts` and `packages/harness/src/agent/runtime/run/modelBinding.ts`; there is no per-provider handler class. Register capabilities/pricing in `packages/harness/src/model/computeModelOptions.ts`.
 
 **Run loop architecture**
 
-A run is one Effect program in `src/agent/runtime/loop/`, no cursor and no graph:
+A run is one Effect program in `packages/harness/src/agent/runtime/loop/`, no cursor and no graph:
 
 - **One program**: `runToolUse` (`loop/toolUse.ts`, with `loop/toolUseDispatch.ts`). A document task runs it on the documents plugin's recipe script (`packages/texra/src/agent/output/documentRecipe.ts`), which calls the agent once per revision and handles its output with the document tools (`packages/texra/src/tools/documents/`). `loop/rows.ts` builds every run history draft the loop appends. `core/tools/toolCallParsing.ts` parses the response's tool calls.
-- **State is row data.** The loop never holds its own copy of the conversation: it continues from the folded `RunState` (`src/shared/session/runStateFold.ts`) that `RunHistory.appendBatch` returns, so the live path and the resume path are one function. Resume reads only the fold; `flow_<id>.json` is never read.
+- **State is row data.** The loop never holds its own copy of the conversation: it continues from the folded `RunState` (`packages/harness/src/shared/session/runStateFold.ts`) that `RunHistory.appendBatch` returns, so the live path and the resume path are one function. Resume reads only the fold; `flow_<id>.json` is never read.
 - **Services come from context**, provided once at the `executeAgent` boundary: `AgentRun` (`runtime/run/AgentRun.ts`, everything one run owns), `ModelInvoker` (the only service that calls the `packages/llm` `Model`), and the session-root `RunHistory` and `Runs` (`runtime/runRegistry.ts`: admission, lanes, live handles, waiting termination; built by the session layer). No services bag, no node fields.
 - **A run's input queue is its own, never context.** A conversation run claims its lease over the follow-up queue in its own scope (`claimFollowUps` in `runtime/FollowUps.ts`, from `runToolUse`); a round-mode run takes no input and claims none. A child launched from a parent's tool call runs in that call's fiber, so a context-provided queue would hand it the parent's: never read another run's input from context.
 - **Write points are the contract**: a `model.message attempt` before a billed request leaves the process; the `response` row before any tool dispatches; `tool.intent` before every barrier call; `tool.result` before the loop continues; a `run.position` for every wait and every halt; a `run.snapshot` authored only from the state the run history returned (reconcile-never-overwrite).
@@ -435,12 +435,12 @@ A run is one Effect program in `src/agent/runtime/loop/`, no cursor and no graph
 **Error handling and types**
 
 - Format and surface errors through `showLoggedErrorMessage` and `showLoggedMessageWithDocs` in `packages/extension/src/frontend/ui/errorHandlingUtils.ts` for consistent telemetry and documentation links.
-- Derive runtime-safe interfaces with `zod` plus `z.infer`, colocated with their domains (e.g., `src/agent/core/state`).
+- Derive runtime-safe interfaces with `zod` plus `z.infer`, colocated with their domains (e.g., `packages/harness/src/agent/core/state`).
 
 **Miscellaneous**
 
-- Execute VS Code commands with `safeExecuteCommand` from `packages/extension/src/frontend/system/commandUtils.ts` and shell commands with `executeCommand` from `src/utils/system/execUtils.ts` so logging and error handling stay uniform.
-- Retrieve included file extensions via `getIncludedExtensions` in `src/common/files/fileTypeUtils.ts`.
+- Execute VS Code commands with `safeExecuteCommand` from `packages/extension/src/frontend/system/commandUtils.ts` and shell commands with `executeCommand` from `packages/harness/src/utils/system/execUtils.ts` so logging and error handling stay uniform.
+- Retrieve included file extensions via `getIncludedExtensions` in `packages/harness/src/common/files/fileTypeUtils.ts`.
 - Use `packages/extension/src/frontend/ui/dialogs.ts` and `instruction.ts` for notification primitives shared across the extension.
 
 ### Webview Consistency Patterns
@@ -453,7 +453,7 @@ one the view you're touching already uses:
   over the shared settings body
   (`packages/texra/src/controllers/settingsView/sharedSettingsCommands.ts`) and its page
   modules; only the VS Code-specific LaTeX arms live in
-  `settingsView/handlers/latexSettingsHandlers.ts`. Commands are named constants in `src/shared/ipc.ts` (`COMMON_COMMANDS`,
+  `settingsView/handlers/latexSettingsHandlers.ts`. Commands are named constants in `packages/harness/src/shared/ipc.ts` (`COMMON_COMMANDS`,
   `SETTINGS_VIEW_COMMANDS`), not string literals. Frontend state lives in
   module-level reactive signals in `settingsView/frontend/settingsState.ts`
   (`trackedSignal`); `settingsView/frontend/messageDispatcher.ts` holds the one
@@ -466,7 +466,7 @@ one the view you're touching already uses:
   `host.request` calls (see
   `.agents/docs/implemented/architecture/2026-09-03-one-view-state-three-renderers.md`).
   Its Lit components (`progressView/frontend/components/`) read the
-  `SessionView` fold (`src/shared/session/sessionView.ts`) and `Surface`
+  `SessionView` fold (`packages/harness/src/shared/session/sessionView.ts`) and `Surface`
   records as properties.
 - **Naming Convention**: within whichever pattern applies, follow
   `[Domain]View[Component]` (e.g. `SettingsViewMessageHandler`,
@@ -523,7 +523,7 @@ These rules were learned from a 2026-07 whole-repo simplification campaign. They
 
 - **No bare module-level mutable singletons in tested code.** State that tests need to isolate belongs behind an injectable, resettable handle.
 
-- **Serialize asynchronous work through Effect.** Use Effect concurrency primitives or `withPerKeyLane` (`src/utils/core/perKeyQueue.ts`) when operations must run one at a time per key. Resource ownership must be released on success, failure, and interruption. Do not hand-write Promise chains for it; follow the TeXRA 1.0 direction above.
+- **Serialize asynchronous work through Effect.** Use Effect concurrency primitives or `withPerKeyLane` (`packages/harness/src/utils/core/perKeyQueue.ts`) when operations must run one at a time per key. Resource ownership must be released on success, failure, and interruption. Do not hand-write Promise chains for it; follow the TeXRA 1.0 direction above.
 
 ### Test fixtures and fakes
 

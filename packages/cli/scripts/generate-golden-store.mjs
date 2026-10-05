@@ -11,7 +11,7 @@
  * bundle `validate-run.mjs` builds), against a temporary HOME and project
  * from `mkdtemp`, set only in each child's environment: no live model, no API
  * key, and never the developer's `~/.texra`. The scripted conversation is
- * `goldenTurn` in `src/agent/runtime/run/validationModel.ts`, over the agents
+ * `goldenTurn` in `packages/harness/src/agent/runtime/run/validationModel.ts`, over the agents
  * in `src/test-kernel/fixtures/storage/agents/`; this script orders the runs,
  * each in its own process:
  *

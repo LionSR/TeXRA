@@ -1,6 +1,6 @@
 # Manual Verification Matrix
 
-Use this checklist after touching shared frontend code (`src/shared/`,
+Use this checklist after touching shared frontend code (`packages/harness/src/shared/`,
 `packages/extension/src/common/webview/`,
 `packages/extension/src/{progressView,settingsView}/frontend/`,
 `packages/desktop/src/renderer/`) to confirm each major surface still mounts
@@ -92,6 +92,6 @@ re-implementing one of these per host, push the new code into
 - WA color scheme observer: `packages/texra/src/ui/wa/waColorScheme.ts`
 - Action button helper: `packages/texra/src/ui/wa/actionButtons.ts`
 - Empty state helper: `packages/texra/src/ui/wa/emptyState.ts`
-- Persisted state: `src/shared/state/PersistedState.ts`
-- Host bridge: `src/shared/hostBridge.ts`
+- Persisted state: `packages/harness/src/shared/state/PersistedState.ts`
+- Host bridge: `packages/harness/src/shared/hostBridge.ts`
 - Settings tabs: `packages/texra/src/shared/settingsView/settingsViewMessages.ts` (`SETTINGS_TAB_ORDER`)

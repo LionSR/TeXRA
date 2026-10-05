@@ -24,7 +24,7 @@ interface TestSourceModules {
 }
 
 const ALIAS_ROOTS: Record<string, string | undefined> = {
-  '@platform': repoPath('src', 'platform'),
+  '@platform': repoPath('packages', 'harness', 'src', 'platform'),
   '@desktop': desktopSourcePath(),
 };
 

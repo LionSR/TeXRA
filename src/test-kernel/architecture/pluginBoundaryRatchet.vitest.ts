@@ -25,7 +25,7 @@ import {
  * own row kinds (`PLUGIN_EVENT_ARMS`) and its services (a `Plugin`'s
  * `processLayer` and `sessionLayer`). Failure modes guarded:
  *
- * - core (`src/shared`, `src/agent`) imports a plugin's arm, so a plugin's
+ * - core (the harness's `shared/`, `agent/`) imports a plugin's arm, so a plugin's
  *   row kind is hard-coded in core again and a new stateful plugin edits
  *   core;
  * - a plugin row is drafted anywhere but its plugin's arm module, or a
@@ -38,9 +38,9 @@ import {
  *   plugin with its services erased (`PluginContext` in `processRuntime.ts`),
  *   so no `ProcessServices` arm names one.
  */
-const PLUGIN_ARM_MODULES = /^src\/shared\/plugins\//;
+const PLUGIN_ARM_MODULES = /^packages\/harness\/src\/shared\/plugins\//;
 const PLUGIN_ARM_IMPORT = /^@shared\/plugins\/|^@tools\/pluginArms$/;
-const CORE = /^src\/(?:shared|agent)\//;
+const CORE = /^packages\/harness\/src\/(?:shared|agent)\//;
 const APPEND_PORTS =
   /^@(?:controllers\/session\/Database|shared\/session\/database|agent\/runtime\/SessionEvents)$/;
 const PLUGIN_ROW = /type:\s*'plugin\.fact'/;
@@ -75,7 +75,7 @@ const SERVICE_HOMES = new Set([
   'packages/texra/src/tools/agentCliSessionStores.ts',
   'packages/texra/src/tools/integrationPlugins.ts',
   'packages/texra/src/tools/registry.ts',
-  'src/platform/processRuntime.ts',
+  'packages/harness/src/platform/processRuntime.ts',
 ]);
 
 const files = () => ALL_HOST_PRODUCTION_ROOTS.flatMap(productionFilesUnder);

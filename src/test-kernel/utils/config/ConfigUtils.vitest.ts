@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import { it } from '@effect/vitest';
-// Suites for src/utils/config (platformSettings + providerConfig).
+// Suites for packages/harness/src/utils/config (platformSettings + providerConfig).
 
 import { afterEach, describe, expect, vi } from 'vitest';
 import { GlobalStateKey } from '@shared/state/stateKeys';
