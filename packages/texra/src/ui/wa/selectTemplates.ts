@@ -79,8 +79,7 @@ function renderModelOption(opt: ModelOptionData): TemplateResult {
   const availabilityLabel = status?.label;
   const disabled = status !== undefined && !status.available;
 
-  const hints: string[] = [];
-  if (decorator.label) hints.push(decorator.label);
+  const hints = [decorator.label];
   if (opt.hint) hints.push(opt.hint);
   if (availabilityLabel) hints.push(availabilityLabel);
   const tooltip = hints.join(' | ');

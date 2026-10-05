@@ -79,7 +79,7 @@ export class RunTabs extends LitElement {
   @property({ attribute: false }) view: SessionView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
   /** Only top-level rows, no tree: the Active-now strip and the desktop
-   *  rail whose workbench Subagents tab owns the tree. */
+   *  rail. */
   @property({ type: Boolean }) topLevelOnly = false;
   /** Streams that need the user or are still running; `recent` is left
    *  out. */
@@ -88,8 +88,6 @@ export class RunTabs extends LitElement {
   @property({ type: Boolean }) sections = false;
   /** Rows offer an immediate Delete: the desktop rail. */
   @property({ type: Boolean }) removable = false;
-  /** The subtree to show instead of `view.order`: the Subagents pane. */
-  @property({ attribute: false }) root: RunId | null = null;
 
   /** Deletes sent from a row's ×, still in flight: another click on the
    *  same row sends nothing. An id leaves once its row is gone from the
@@ -150,8 +148,8 @@ export class RunTabs extends LitElement {
   }
 
   /** The tree under a row, at any depth. The rail (`topLevelOnly`) shows
-   *  none and carries the rollup alone (W2); the drawer and the Subagents
-   *  pane show every child, a workflow run's calls included, so a call's
+   *  none and carries the rollup alone (W2); the drawer and the docked
+   *  list show every child, a workflow run's calls included, so a call's
    *  own subagents stay reachable under their parent (issue decision). */
   private childrenOf(run: RunView): RunView[] {
     if (this.topLevelOnly) return [];
@@ -205,8 +203,7 @@ export class RunTabs extends LitElement {
     const selected = surface?.selected ?? null;
     this.unseen = view && surface ? unseenRuns(surface, view) : new Set();
     const needle = (surface?.search ?? '').trim().toLowerCase();
-    const rootRun = this.root === null ? undefined : this.runOfEvent(this.root);
-    const top = (rootRun ? [rootRun.id] : (view?.order ?? []))
+    const top = (view?.order ?? [])
       .map((id) => this.runOfEvent(id))
       .filter((run): run is RunView => run !== undefined)
       .filter((run) => !this.activeOnly || run.group !== 'recent')
