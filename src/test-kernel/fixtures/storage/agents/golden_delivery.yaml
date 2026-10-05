@@ -1,0 +1,9 @@
+name: golden_delivery
+description: The crash suite's delivery run, a detached child, a background script and a background command, each reporting back.
+tools:
+  - agent
+  - script
+  - bash
+
+prompt: |-
+  GOLDEN-DELIVERY: send three children off, then read what they report.

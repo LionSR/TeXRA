@@ -158,6 +158,7 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
         }),
     stage: options.stage,
     stopped: options.stopped,
+    settle: () => Effect.succeed(options.settlement ?? []),
   });
   closeTrace();
 
@@ -197,7 +198,9 @@ const pauseChildRun = (
     });
     options.stage?.end(RUN_OUTCOME.CANCELLED);
     const target = aggregateId('run', runId);
+    // The last turn's settlement first: the pause notice is the newer report.
     yield* session.commit([
+      ...(options.settlement ?? []),
       { type: 'run.report', aggregateId: target, report: text },
       { type: 'child.park', aggregateId: target, phase: 'paused', resumeId },
     ]);

@@ -262,14 +262,8 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
 export interface FinalizeRunInput {
   readonly runId: RunId;
   readonly outcome: RunOutcome;
-  /**
-   * Keep the outcome this lifecycle already wrote instead of replacing it.
-   * For a backstop finalizer that does not own the run's result — the
-   * host-exit drain, which can race the run's own driver across the same
-   * per-run meta lock — the driver's outcome is the authoritative one. Read
-   * and write happen in the same locked cycle, so "already settled" cannot go
-   * stale between them.
-   */
+  /** Keep the outcome already written: a backstop (the host-exit drain)
+   *  does not own the run's result. Read and write share one locked cycle. */
   readonly keepExistingOutcome?: boolean;
   /** The classified error behind a FAILED outcome, when the run has one. */
   readonly error?: RunEnd['error'];
@@ -282,6 +276,9 @@ export interface FinalizeRunInput {
    * product is its per-turn delivery to its parent, not a flow output.
    */
   readonly output?: RunEndOutput;
+  /** A child's last-turn settlement, committed with the run's end (alone
+   *  when that end was already written). */
+  readonly settlement?: readonly SessionEventDraft[];
   /**
    * Where a persistence failure is reported, wrapped in one worded Error.
    * `finalizeRun` never throws; a caller with its own logging reads the
@@ -390,9 +387,12 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
         const ended = runEndFromEvents(rows, runId)?.outcome;
         const persisted =
           keepExistingOutcome === true && ended !== undefined ? ended : outcome;
-        if (ended === persisted) return { events: [], value: persisted };
+        const settlement = input.settlement ?? [];
+        if (ended === persisted)
+          return { events: settlement, value: persisted };
         return {
           events: [
+            ...settlement,
             // The loop's halt, never apart from its end.
             ...rows.flatMap((row) =>
               row.type === 'run.position'

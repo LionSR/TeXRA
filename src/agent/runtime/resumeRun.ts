@@ -36,6 +36,7 @@ import {
   type ResumeToolUseFromResumeDataOptions,
 } from './executeAgent';
 import { classifyRun } from './runClassification';
+import { relayChildDeliveries } from './childSettlement';
 import { startChildRunLoop } from './childRunLoop';
 import { Runs } from './runRegistry';
 import { RunLive } from './runRegistry';
@@ -288,6 +289,14 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   const admitted = new Set<string>();
   const isAdmitted = (input: { readonly followUpId: string }): boolean =>
     admitted.has(input.followUpId);
+  // What its children settled and a crash kept from its inbox comes first.
+  yield* relayChildDeliveries(session, runId).pipe(
+    Effect.catch((error) =>
+      Effect.logWarning(
+        `Run ${runId}: its children's settled results could not be relayed`,
+      ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
+    ),
+  );
   const queuedInput = queuedFollowUps(session, runId);
   const resumed = yield* Effect.result(
     Effect.gen(function* () {

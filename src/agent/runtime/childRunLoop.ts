@@ -1,12 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { Cause, Clock, Deferred, Effect, Exit, Fiber, Queue } from 'effect';
+import { Cause, Clock, Effect, Exit, type Fiber } from 'effect';
 
 // Shared child accounting and durable delivery for native runs and processes.
 
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
-import type { RunParent } from '@agent/runtime/RunHandle';
 import {
   Runs,
   type AgentRunServices,
@@ -14,12 +13,13 @@ import {
 } from '@agent/runtime/runRegistry';
 import { endRunOutsideLifecycle } from '@agent/runtime/runLaunchGuard';
 import type { RunInput } from '@agent/followUp/RunInput';
-import type { InboxItem } from '@agent/followUp/Inbox';
 import {
-  startFollowUpWake,
-  submitFollowUp,
-} from '@agent/followUp/ToolUseFollowUp';
-import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
+  relayDelivery,
+  settledRow,
+  settlementOf,
+  type ChildSettlement,
+  type SettlementRow,
+} from '@agent/runtime/childSettlement';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -80,6 +80,8 @@ export interface ChildRunPort {
    * untracked.
    */
   finalize(options: {
+    /** The last turn's settlement, committed with the child's `run.end`. */
+    settlement?: readonly SettlementRow[];
     /** The child's report of its own exit, not a verdict: a stop that
      *  already landed CANCELLED outranks a FAILED this reports. */
     outcome: RunOutcome;
@@ -96,14 +98,29 @@ export interface ChildRunPort {
 
 /**
  * A native run's child policy: each turn runs under `turnPermit` (so a WAITING
- * child holds no slot); each completed turn is offered to the loop, delivered
- * on the loop's fiber, and a failed delivery is the run's failure.
+ * child holds no slot), and each turn settles in the batch that ends it: a
+ * boundary's rows commit with its `waiting` step, and `settled` runs once
+ * they are durable; the last turn's rows commit with the run's `run.end`.
  */
-export interface ChildRunTurns<TTurn> {
+export interface ChildRunTurns<TTurn> extends ChildRunBoundary<TTurn> {
+  /** Settle the run's last turn: rows for its `run.end`. A failure here is
+   *  the loop's, raised once the run is joined, never the ending's. */
+  settleEnd(turn: TTurn): Effect.Effect<readonly SettlementRow[]>;
+}
+
+/** What a native run's loop takes of its child policy. */
+export interface ChildRunBoundary<TTurn> {
   turnPermit<A, E, R>(
     turn: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, E | Error, R>;
-  onTurnBoundary(turn: TTurn): Effect.Effect<void, Error>;
+  /** Settle a turn the run goes on from: rows for its boundary batch. */
+  settleBoundary(turn: TTurn): Effect.Effect<
+    {
+      readonly rows: readonly SettlementRow[];
+      readonly settled: Effect.Effect<void, Error>;
+    },
+    Error
+  >;
 }
 
 export interface ChildRunStrategy<TTurn, R = never> {
@@ -422,28 +439,19 @@ function turnDeliveryId(
 type ChildLoopTerminationCause = 'interrupted' | 'turn_failed' | 'terminal';
 
 /**
- * Commit one turn's `child.turn` row (#9531), the fact the report/result
- * slots are attributed from. Not best-effort: a refused append is the turn's
- * failure, and `not-owner` stops the loop rather than deliver under a lost
- * claim (R7). An agent-CLI turn's settlement also consumes the follow-ups
- * that were its prompt (C3); the parent delivery is admitted first, so a
- * crash either way leaves the parent exactly one result. A turn whose own
- * persistence failed consumes nothing, so its prompt stays queued.
+ * Commit one turn's `child.turn accepted` row (#9531), the fact the
+ * report/result slots are attributed from. Not best-effort: a refused append
+ * is the turn's failure, and `not-owner` stops the loop rather than run under
+ * a lost claim (R7).
  */
 function commitChildTurn(
   session: SessionHandle,
   runId: RunId,
   turn: AttemptKey,
-  phase: 'accepted' | 'settled',
-  consumed: readonly QueuedFollowUp[] = [],
+  phase: 'accepted',
 ): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> {
   return session
     .commit([
-      ...consumed.map((followUp) => ({
-        type: 'followup.consumed' as const,
-        aggregateId: aggregateId('run', runId),
-        followUpId: followUp.followUpId,
-      })),
       {
         type: 'child.turn',
         aggregateId: aggregateId('run', runId),
@@ -454,6 +462,34 @@ function commitChildTurn(
     ])
     .pipe(Effect.asVoid);
 }
+
+/**
+ * Commit a process child's interim settlement in one batch. When that batch
+ * is refused the turn still settles, with no report and nothing consumed, so
+ * a recovering caller's re-execution gate reads it and the prompt stays
+ * queued; the refusal is then the turn's failure.
+ */
+const commitSettlement = (
+  session: SessionHandle,
+  runId: RunId,
+  { rows }: ChildSettlement,
+): Effect.Effect<void, Error> =>
+  session.commit(rows).pipe(
+    Effect.asVoid,
+    Effect.catch((error) => {
+      const settled = rows.findLast((row) => row.type === 'child.turn');
+      return (
+        settled === undefined
+          ? Effect.void
+          : session.commit([
+              settledRow(runId, {
+                key: settled.attemptId,
+                index: settled.turnIndex,
+              }),
+            ])
+      ).pipe(Effect.andThen(Effect.fail(error)));
+    }),
+  );
 
 /**
  * Move an agent-CLI child's phase across its park (one run model, 3.3):
@@ -473,217 +509,6 @@ function commitPark(
     ])
     .pipe(Effect.asVoid);
 }
-
-/**
- * A turn's parent-follow-up enqueue, still pending its wake step. Waking can
- * await the resumed parent's entire turn (`resumeOnSession` → …
- * → `resumeToolUseFromResumeData`), so callers that are about to finalize this
- * child (terminal/failed turns) must resolve the wake only AFTER that
- * finalize completes; otherwise a resumed parent that immediately waits on
- * this still-RUNNING run self-stalls (#8093). Callers that continue to
- * another turn (no finalize pending) may wake immediately.
- */
-interface PendingChildDelivery {
-  readonly parent: RunParent;
-  readonly followUp: InboxItem;
-  /**
-   * The parent follow-up row is already durable. `wake` means this process
-   * still has to wake the parent after this child's finalize; a parent live
-   * here reads the held row once this child's terminal row folds.
-   */
-  readonly wake?: true;
-}
-
-/**
- * A turn result with nowhere to go: the child detached from its orchestrator,
- * so the report slot is the only place the outcome survives. Shared by the
- * enqueue site and the deferred wake site, which resolve the target at
- * different times.
- */
-const warnDetachedChildDelivery = (
-  trace: AgentTrace | undefined,
-  runId: RunId,
-): Effect.Effect<void> =>
-  loopLog(
-    trace,
-    'warn',
-    'Turn result not delivered: child was detached from its orchestrator. The result remains in the run report.',
-    { runId },
-  );
-
-/**
- * Format, persist, and enqueue one turn's outcome on the parent's follow-up
- * queue; the loop's single delivery site, shared by every interim and
- * terminal turn, every strategy. Returns the pending delivery for the caller
- * to wake via {@link submitPendingDelivery} once its own ordering allows it;
- * `undefined` when there is nothing to wake (detached child, or delivery
- * skipped by `prepareParentDelivery`).
- */
-const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
-  TTurn,
-  R,
->(params: {
-  session: SessionHandle;
-  strategy: ChildRunStrategy<TTurn, R>;
-  runId: RunId;
-  trace: AgentTrace | undefined;
-  turn: TTurn | null;
-  turnKey: AttemptKey;
-  /** The queued follow-ups this turn ran as its prompt. */
-  consumed: readonly QueuedFollowUp[];
-  err: unknown;
-  wallTimeMs: number;
-  isError: boolean;
-  finalizing: boolean;
-  prepareParentDelivery?: () => boolean;
-  parent: RunParent;
-  onTurnSettled?: ChildRunLoopParams<TTurn>['onTurnSettled'];
-}): Effect.fn.Return<PendingChildDelivery | undefined, Error, R> {
-  const {
-    strategy,
-    runId,
-    trace,
-    turn,
-    turnKey,
-    err,
-    wallTimeMs,
-    isError,
-    prepareParentDelivery,
-    parent,
-  } = params;
-  const delivered = turn != null && !isError;
-  const msg = delivered
-    ? yield* strategy.formatDelivery(turn, wallTimeMs)
-    : yield* Effect.try({
-        try: () => strategy.formatError(turn, err),
-        catch: ensureError,
-      });
-  const resultMeta = strategy.buildResultMeta
-    ? yield* strategy.buildResultMeta(
-        turn,
-        isError,
-        wallTimeMs,
-        err ?? undefined,
-      )
-    : undefined;
-  // The settled facts reach the caller whether or not they persisted: a
-  // durable caller decides from them what a missing manifest means. The
-  // persistence failure is then this turn's failure, thrown once the turn
-  // is settled, and the delivery never reaches the parent.
-  const persisted = yield* Effect.exit(
-    persistChildRunDelivery(params.session, runId, msg, resultMeta),
-  );
-  const followUp: InboxItem = {
-    text: msg,
-    from: { kind: 'run', runId },
-    deliveryId:
-      strategy.deliveryId ?? turnDeliveryId(runId, turnKey, params.consumed),
-  };
-  let pending: PendingChildDelivery | undefined;
-  if (Exit.isSuccess(persisted) && strategy.deliveryMode !== 'persistOnly') {
-    const targetRunId = parent.current ?? undefined;
-    if (!targetRunId) {
-      yield* warnDetachedChildDelivery(trace, runId);
-    } else if (prepareParentDelivery?.() !== false) {
-      // Admit the parent row before consuming the prompt: a crash after
-      // settlement then still leaves the result on the parent, and a crash
-      // before it re-executes the prompt under the same delivery id, which
-      // admission judges a replay. A turn this loop finalizes after
-      // (failed, terminal, or a strategy with no next turn) holds the row
-      // until this child has ended, so a live parent cannot take it and
-      // wait on a child that still reports RUNNING (#8093); the wake
-      // waits for that finalize too (submitPendingDelivery).
-      const submitted = yield* params.session.followUps.send(
-        targetRunId,
-        followUp,
-        { wake: true, ...(params.finalizing ? { hold: 'senderEnd' } : {}) },
-      );
-      if (submitted.kind === 'refused') {
-        yield* loopLog(
-          trace,
-          'warn',
-          `Turn result not delivered: parent run is unavailable (${submitted.reason ?? 'not_resumable'}). The result remains in the run report.`,
-          { runId, parentRunId: targetRunId, reason: submitted.reason },
-        );
-      } else {
-        pending = {
-          parent,
-          followUp,
-          ...(submitted.kind === 'queued' && submitted.wake
-            ? { wake: submitted.wake }
-            : {}),
-        };
-      }
-    }
-  }
-  // The turn settled whatever persistence did, and a recovering caller's
-  // re-execution gate reads that settled row, so it lands before the
-  // failure is raised. The prompt is consumed only when its result is
-  // durable; otherwise it stays queued for the relaunched loop.
-  yield* commitChildTurn(
-    params.session,
-    runId,
-    turnKey,
-    'settled',
-    Exit.isSuccess(persisted) ? params.consumed : [],
-  );
-
-  params.onTurnSettled?.({
-    message: msg,
-    ...(resultMeta !== undefined && { resultMeta }),
-    isError,
-    ...(err != null && { error: err }),
-  });
-  if (Exit.isFailure(persisted))
-    return yield* Effect.failCause(persisted.cause);
-  return pending;
-});
-
-/**
- * Resolve a pending delivery's wake step (no-op when there is nothing to
- * wake, or the enqueue itself found no session; already logged above).
- */
-const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
-  pending: PendingChildDelivery | undefined,
-  session: SessionHandle,
-  runId: RunId,
-  trace: AgentTrace | undefined,
-): Effect.fn.Return<void, Error> {
-  if (!pending) return;
-  const targetRunId = pending.parent.current ?? undefined;
-  if (!targetRunId) {
-    yield* warnDetachedChildDelivery(trace, runId);
-    return;
-  }
-  /** The parent could not be resumed; its result still awaits an explicit resume. */
-  const warnParentNotResumed = loopLog(
-    trace,
-    'warn',
-    'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
-    { runId, parentRunId: targetRunId },
-  );
-  if (pending.wake) {
-    const resumed = yield* startFollowUpWake(targetRunId, session);
-    if (!resumed) yield* warnParentNotResumed;
-  }
-  // Duplicate-safe: the parent row was admitted before the child prompt
-  // was consumed. This wake still goes through submitFollowUp so a mocked
-  // delivery site (and a live parent that needs no wake) still sees it at
-  // the original post-finalize point.
-  const delivery = yield* submitFollowUp(targetRunId, pending.followUp, {
-    session,
-  });
-  if (delivery.status === 'failed') {
-    yield* loopLog(
-      trace,
-      'warn',
-      `Turn result not delivered: parent run is unavailable (${delivery.reason}). The result remains in the run report.`,
-      { runId, parentRunId: targetRunId, reason: delivery.reason },
-    );
-  } else if (delivery.status === 'queued' && delivery.wake === 'failed') {
-    yield* warnParentNotResumed;
-  }
-});
 
 /** The child loop's abort as an Effect: settles with `outcome()`, built
  *  only when `signal` aborts, and never otherwise. */
@@ -829,9 +654,12 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
 
     let sawTurnFailure = false;
     let lastTurnErr: unknown;
-    // Terminal delivery wakes only after the child's finalization and claim
-    // release. Interim delivery wakes immediately, while the child stays live.
-    let pendingDelivery: PendingChildDelivery | undefined;
+    // The last turn's settlement: committed with the child's `run.end`
+    // (by its lifecycle, `ended`, or by the finalize below), and relayed
+    // only after the child's finalization and claim release.
+    let ending: ChildSettlement | undefined;
+    let ended = false;
+    let endReport: Effect.Effect<void> = Effect.void;
     // Hold the slot only while a turn runs, unmasked. A stop races the slot
     // wait alone; an admitted turn observes the loop's signal itself.
     const gateTurn = (
@@ -890,57 +718,100 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
             const turnKey = { key: attemptId, index: turnIndex };
             yield* commitChildTurn(runSession, runId, turnKey, 'accepted');
           });
-          const settleTurn = (
+          // One turn's settlement and the report an awaiting caller reads.
+          const settle = (
             turn: TTurn | null,
             err: unknown,
             turnIsError: boolean,
-            finalizing: boolean,
           ) =>
             Effect.gen(function* () {
+              if (turnIndex === 0) yield* beginTurn;
               const turnKey = { key: attemptId, index: turnIndex };
               const wallTimeMs = (yield* Clock.currentTimeMillis) - turnStart;
-              const turnFailed = err != null || turnIsError;
-
-              if (turn != null) {
-                strategy.publishUsage?.(turn);
-              }
-
-              return yield* deliverTurn({
-                session: runSession,
-                strategy,
+              const isError = err != null || turnIsError;
+              if (turn != null) strategy.publishUsage?.(turn);
+              const message =
+                turn != null && !isError
+                  ? yield* strategy.formatDelivery(turn, wallTimeMs)
+                  : yield* Effect.try({
+                      try: () => strategy.formatError(turn, err),
+                      catch: ensureError,
+                    });
+              const resultMeta = strategy.buildResultMeta
+                ? yield* strategy.buildResultMeta(
+                    turn,
+                    isError,
+                    wallTimeMs,
+                    err ?? undefined,
+                  )
+                : undefined;
+              const settlement = settlementOf({
                 runId,
-                parent,
-                trace,
-                turn,
-                turnKey,
+                turn: turnKey,
+                message,
+                resultMeta,
                 consumed,
-                err,
-                wallTimeMs,
-                isError: turnFailed,
-                finalizing,
-                onTurnSettled: params.onTurnSettled,
-                prepareParentDelivery: () => {
-                  if (!childRun && parent.current === null) return false;
-                  if (loop.isInterrupted()) {
-                    releaseSessionOwnershipOnce();
-                    return strategy.deliverAfterInterrupt === true;
-                  }
-                  if (turnFailed) {
-                    releaseSessionOwnershipOnce();
-                  } else if (turn != null) {
-                    strategy.onTurnSuccess?.(turn, runSession);
-                  }
-                  return true;
-                },
+                deliveryId:
+                  strategy.deliveryId ??
+                  turnDeliveryId(runId, turnKey, consumed),
+                to: yield* deliveryTarget(turn, isError),
               });
+              // The settled facts reach the caller once the rows commit,
+              // or once the commit failed (then the turn's failure).
+              const report = Effect.sync(() =>
+                params.onTurnSettled?.({
+                  message,
+                  ...(resultMeta !== undefined && { resultMeta }),
+                  isError,
+                  ...(err != null && { error: err }),
+                }),
+              );
+              return { settlement, report };
             });
-          // A native run offers each completed turn here, and the loop settles
-          // the offer with its delivery. The queue ends with the fiber that
-          // feeds it: no wait on a boundary that can no longer come.
-          const boundaries = yield* Queue.unbounded<
-            { turn: TTurn; delivered: Deferred.Deferred<void, Error> },
-            Cause.Done
-          >();
+          /** Who reads this turn's result: its parent, unless the child is
+           *  persist-only, detached, or stopped with nothing to deliver. */
+          const deliveryTarget = (turn: TTurn | null, isError: boolean) =>
+            Effect.gen(function* () {
+              if (strategy.deliveryMode === 'persistOnly') return null;
+              const target = parent.current ?? null;
+              if (target === null) {
+                yield* loopLog(
+                  trace,
+                  'warn',
+                  'Turn result not delivered: child was detached from its orchestrator. The result remains in the run report.',
+                  { runId },
+                );
+                return null;
+              }
+              if (loop.isInterrupted()) {
+                releaseSessionOwnershipOnce();
+                return strategy.deliverAfterInterrupt === true ? target : null;
+              }
+              if (isError) releaseSessionOwnershipOnce();
+              else if (turn != null) strategy.onTurnSuccess?.(turn, runSession);
+              return target;
+            });
+          let endFailure: Error | undefined;
+          const settleEnd = (
+            turn: TTurn | null,
+            err: unknown,
+            isError: boolean,
+          ) =>
+            settle(turn, err, isError).pipe(
+              Effect.map(({ settlement, report }) => {
+                ending = settlement;
+                endReport = report;
+                return settlement.rows;
+              }),
+              Effect.catch((error) =>
+                Effect.sync(() => {
+                  endFailure = error;
+                  return [];
+                }),
+              ),
+            );
+          // The native run settles on its own fiber, under these services.
+          const services = yield* Effect.context<R>();
           const turns: ChildRunTurns<TTurn> = {
             turnPermit: (turn) =>
               Effect.gen(function* () {
@@ -948,38 +819,33 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
                 yield* beginTurn;
                 return yield* budget ? budget.withPermit(turn) : turn;
               }),
-            onTurnBoundary: (turn) =>
-              Effect.gen(function* () {
-                const delivered = yield* Deferred.make<void, Error>();
-                yield* Queue.offer(boundaries, { turn, delivered });
-                yield* Deferred.await(delivered);
-              }),
-          };
-          // Forked into this scope, which awaits it on every exit: its own
-          // `run.end` precedes the loop's terminal; its exit is its last turn.
-          const launchNative = Effect.gen(function* () {
-            const runFiber = yield* Effect.forkScoped(
-              strategy.launch(ports, loop.signal, turns),
-              { startImmediately: true },
-            );
-            runFiber.addObserver(() => Queue.endUnsafe(boundaries));
-            for (;;) {
-              const next = yield* Queue.take(boundaries).pipe(
-                Effect.catchTag('Done', () => Effect.succeed(null)),
-              );
-              if (next === null) return yield* Fiber.join(runFiber);
-              const delivered = yield* Effect.exit(
-                Effect.uninterruptible(
-                  Effect.flatMap(
-                    settleTurn(next.turn, null, false, false),
-                    (delivery) =>
-                      submitPendingDelivery(delivery, runSession, runId, trace),
+            settleBoundary: (turn) =>
+              Effect.map(
+                settle(turn, null, false),
+                ({ settlement, report }) => ({
+                  rows: settlement.rows,
+                  settled: report.pipe(
+                    Effect.andThen(
+                      settlement.delivery === undefined
+                        ? Effect.void
+                        : relayDelivery(runSession, settlement.delivery, trace),
+                    ),
                   ),
-                ),
-              );
-              yield* Deferred.done(next.delivered, delivered);
-            }
-          });
+                }),
+              ).pipe(Effect.provide(services)),
+            // The native run's own `run.end` commits these rows.
+            settleEnd: (turn) =>
+              strategy.isTurnInterrupted?.(turn) === true
+                ? Effect.succeed([])
+                : settleEnd(
+                    turn,
+                    null,
+                    strategy.isTurnError?.(turn) === true,
+                  ).pipe(
+                    Effect.tap(() => Effect.sync(() => (ended = true))),
+                    Effect.provide(services),
+                  ),
+          };
           let runner: (
             signal: AbortSignal,
           ) => Effect.Effect<TTurn, Error, R> = (signal) =>
@@ -988,7 +854,8 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
             if (!strategy.continuous) yield* beginTurn;
             const attempt = yield* attemptTurn(
               strategy,
-              strategy.continuous ? () => launchNative : gateTurn(runner),
+              // A native run takes its permit per turn (`turnPermit`).
+              strategy.continuous ? runner : gateTurn(runner),
               loop,
               trace,
               turnStart,
@@ -1004,24 +871,18 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
             const turnIsError =
               attempt.kind === 'completed' && attempt.turnIsError;
             const turnFailed = err != null || turnIsError;
-            const finalizing =
+            const last =
               turnFailed ||
               turn == null ||
               strategy.isTerminal(turn) ||
               !strategy.runTurn;
             // A launch failure can terminate before its first model cycle.
-            if (turnIndex === 0) {
-              if (err != null && !(yield* runSession.ownsRun(runId)))
-                return yield* Effect.fail(ensureError(err));
-              yield* beginTurn;
-            }
-            const delivery = yield* settleTurn(
-              turn,
-              err,
-              turnIsError,
-              finalizing,
-            );
-
+            if (
+              turnIndex === 0 &&
+              err != null &&
+              !(yield* runSession.ownsRun(runId))
+            )
+              return yield* Effect.fail(ensureError(err));
             if (turnFailed) {
               sawTurnFailure = true;
               lastTurnErr =
@@ -1029,18 +890,26 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
                 new Error(
                   `${strategy.stageLabel} reported a failed turn without throwing.`,
                 );
-              pendingDelivery = delivery;
+            }
+            if (last) {
+              // A native run's own `run.end` already carried it.
+              if (ending === undefined && endFailure === undefined)
+                yield* settleEnd(turn, err, turnIsError);
+              if (endFailure !== undefined)
+                return yield* Effect.fail(endFailure);
               break;
             }
-
-            const isTerminal = turn != null && strategy.isTerminal(turn);
-            if (isTerminal || !strategy.runTurn) {
-              pendingDelivery = delivery;
-              break;
-            }
-
-            // Process strategies wake the parent before waiting for input.
-            yield* submitPendingDelivery(delivery, runSession, runId, trace);
+            // A process child's interim turn: its rows, then its relay,
+            // before it waits for its next input.
+            const { settlement, report } = yield* settle(
+              turn,
+              err,
+              turnIsError,
+            );
+            yield* commitSettlement(runSession, runId, settlement);
+            yield* report;
+            if (settlement.delivery !== undefined)
+              yield* relayDelivery(runSession, settlement.delivery, trace);
             if (loop.isInterrupted()) break;
 
             // The park is durable before the block, so a follow-up arriving
@@ -1048,6 +917,7 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
             // being refused against a run that only looks busy.
             yield* commitPark(runSession, runId, 'parked');
             const nextRunTurn = strategy.runTurn;
+            if (nextRunTurn === undefined) break;
             // The queue wait, raced against the loop's stop; null when stopped.
             const batch = yield* Effect.raceFirst(
               input.take,
@@ -1093,6 +963,9 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
               if (error instanceof DatabaseNotOwner) loop.interrupt();
             }
 
+            // The last turn's facts reach an awaiting caller before the
+            // child ends, as every earlier turn's did.
+            yield* endReport;
             const terminal = yield* Effect.exit(
               Effect.gen(function* () {
                 let terminationCause: ChildLoopTerminationCause = 'terminal';
@@ -1110,8 +983,10 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
                   failed: sawTurnFailure,
                   cancelled: stoppedAtExit,
                 });
+                const settlement = ended ? [] : (ending?.rows ?? []);
                 if (childRun) {
                   yield* childRun.finalize({
+                    settlement,
                     outcome,
                     error: lastTurnErr,
                     stopped: stoppedAtExit,
@@ -1123,22 +998,21 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
                     }),
                   });
                 } else {
-                  if (
-                    (stoppedAtExit || sawTurnFailure) &&
-                    (yield* runSession.ownsRun(runId))
-                  ) {
-                    // A native run's lifecycle is its one terminal writer,
-                    // and its fiber has exited by now (this loop's scope
-                    // awaited it). A failure or stop can precede that
-                    // lifecycle; one that ran has already ended the run,
-                    // which this keeps.
+                  // A native run's lifecycle is its one terminal writer, and
+                  // its fiber has exited by now. A failure or stop can precede
+                  // that lifecycle (an end it wrote stands); a last turn no
+                  // `run.end` carried settles alone.
+                  const abnormal = stoppedAtExit || sawTurnFailure;
+                  if (abnormal && (yield* runSession.ownsRun(runId)))
                     yield* endRunOutsideLifecycle(
                       runSession,
                       runId,
                       outcome,
                       lastTurnErr,
+                      settlement,
                     );
-                  }
+                  else if (!abnormal && settlement.length > 0)
+                    yield* runSession.commit(settlement);
                   // A user's stop, not a shutdown: what the child left for
                   // its parent to resume, read with the parent's next input.
                   const target = parent.current;
@@ -1192,7 +1066,9 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
             // The parent may immediately read this child; release its claim first.
             yield* releaseClaim;
             const delivery = yield* Effect.exit(
-              submitPendingDelivery(pendingDelivery, runSession, runId, trace),
+              ending?.delivery === undefined
+                ? Effect.void
+                : relayDelivery(runSession, ending.delivery, trace),
             );
             const activation = yield* Effect.exit(
               Effect.sync(releaseChildActivation),

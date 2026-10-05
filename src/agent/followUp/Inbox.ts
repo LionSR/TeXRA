@@ -37,8 +37,6 @@ export interface InboxPort {
   readonly detach: (job: (append: Append) => Effect.Effect<unknown>) => void;
   /** The run's pending follow-ups, in commit order. */
   readonly pending: (runId: RunId) => readonly QueuedFollowUp[];
-  /** Whether the run's latest lifecycle has a committed terminal row. */
-  readonly ended: (runId: RunId) => boolean;
   /** Whether the run's input is closed (`followup.closed`, `run.removed`). */
   readonly inputClosed: (runId: RunId) => boolean;
   /** The run's parent as the session view folds it; `null` at top level. */
@@ -75,8 +73,7 @@ export type Sent =
 
 /** What a send asks of the row and of the run. */
 export interface SendOptions {
-  /** When the row may be read: once its sending run has ended (a child's
-   *  final result, #8093), or only beside an instruction (a pause notice,
+  /** When the row may be read: only beside an instruction (a pause notice,
    *  which never wakes a run). Absent: at once. */
   readonly hold?: QueuedFollowUp['holdUntil'];
   /** Owe the run a resume when no generation here will read the row. */
@@ -150,10 +147,7 @@ export class Inbox {
       Effect.suspend(() => {
         if (this.readers.has(runId))
           return Effect.die(new Error(`Run ${runId} already has a reader`));
-        const input = new RunInput(
-          () => this.port.pending(runId),
-          (sender) => this.port.ended(sender),
-        );
+        const input = new RunInput(() => this.port.pending(runId));
         if (this.disposed) input.end();
         else this.readers.set(runId, input);
         return Effect.succeed(input);
@@ -212,12 +206,6 @@ export class Inbox {
     if (this.disposed) return;
     this.endReader(runId);
     this.notify({ kind: 'run', runId });
-  }
-
-  /** A run's terminal row folded (any process): a held row may be readable
-   *  now, so every waiting take looks again. */
-  wakeReaders(): void {
-    for (const input of this.readers.values()) input.notify();
   }
 
   /** One resume of `runId` at a time: a second caller joins the first and

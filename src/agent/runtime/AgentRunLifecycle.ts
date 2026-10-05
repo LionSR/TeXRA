@@ -20,6 +20,7 @@ import type {
   RunEndOutput,
   RunId,
   RunOutcome,
+  SessionEventDraft,
 } from '@shared/schemas';
 import {
   agentName as baseAgentName,
@@ -49,6 +50,8 @@ const logLifecycleWarning = (message: string, data: unknown) =>
     withLogChannel(CHANNEL),
   );
 
+type Settlement = Effect.Effect<readonly SessionEventDraft[]>;
+
 export interface RunLifecycleOptions {
   /** The launching run: the parent edge on the live handle. */
   parentRunId?: RunId;
@@ -58,6 +61,8 @@ export interface RunLifecycleOptions {
    * the run, so the run forks it detached and logs whatever it ends on.
    */
   onRun?: (runId: RunId) => Effect.Effect<void, Error>;
+  /** A child's last-turn settlement, from the result its run ends with. */
+  settleEnd?: (result: RunEndResult) => Settlement;
 }
 
 interface FinalizeRunTerminalParams {
@@ -90,6 +95,9 @@ interface FinalizeRunTerminalParams {
   readonly output?: RunEndOutput;
   /** Transcript stage closed with the resolved outcome (guarded). */
   readonly stage?: Pick<StageHandle, 'end'>;
+  /** A child's last-turn settlement under the resolved outcome: its rows
+   *  commit with the `run.end` row (`childSettlement.ts`). */
+  readonly settle?: (outcome: RunOutcome) => Settlement;
   /**
    * Stop precedence: a stop that reached the run before this finalizer —
    * `Cause.hasInterrupts` on the cause that brought the run here, or the
@@ -101,52 +109,34 @@ interface FinalizeRunTerminalParams {
 
 interface FinalizeRunTerminalResult {
   readonly event: ResultEvent;
-  /** The `run.end` row write's failure, when it failed — a report on the
-   *  result, not a thrown fact: the terminal still drained, settled and
-   *  untracked.
-   *  Callers whose own exit must attest the persistence (the child loop's
-   *  cleanup aggregation) read it here. */
+  /** The `run.end` row write's failure, reported rather than thrown: the
+   *  terminal still drained, settled and untracked. A caller whose exit must
+   *  attest the persistence (the child loop's cleanup) reads it here. */
   readonly persistFailure?: unknown;
 }
 
 /**
  * The single owner of terminal run choreography, shared by the run lifecycle
- * below and agent-CLI child runs (`finalizeChildRun`): the transcript stage
- * end, the artifact drain, the `run.end` row (through `finalizeRun`, its one
- * writer), then registry untrack + terminal run phase — in
- * that order. The row is the post-drain fact, so a reader that can read it
- * can trust everything behind it; that is why the stage closes first, as the
- * last fact the run queues, inside the drain that attests it. Each run has
- * exactly one caller of this, by structure: the lifecycle's one masked
- * terminal, or the child loop's exit for a run with no lifecycle.
+ * below and agent-CLI child runs (`finalizeChildRun`), in this order: the
+ * transcript stage end, the artifact drain, the `run.end` row (through
+ * `finalizeRun`, its one writer), then registry untrack. The row is the
+ * post-drain fact, so the stage closes first, inside the drain that attests
+ * it. Each run has one caller of this: the lifecycle's masked terminal, or
+ * the child loop's exit for a run with no lifecycle.
  */
 export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
-  (
-    params: FinalizeRunTerminalParams,
-  ): Effect.Effect<FinalizeRunTerminalResult, Error, Runs> =>
-    // The run's terminal is atomic: the run's stop is its fiber's
-    // interruption, and one landing mid-drain must not strand the run with
-    // no `run.end` row. A stop then lands either before this finalizer or
-    // after its row, never inside it.
-    Effect.uninterruptible(finalizeRunTerminalBody(params)),
-);
-const finalizeRunTerminalBody = Effect.fn('finalizeRunTerminal.body')(
   function* (
     params: FinalizeRunTerminalParams,
   ): Effect.fn.Return<FinalizeRunTerminalResult, Error, Runs> {
     const { session, handle } = params;
     const runs = yield* Runs;
-    // Stop precedence, read once: a stop that reached the run before its own
-    // exit outranks the report the flow makes of that exit, on the stage here
-    // as on the row below, so no caller cross-checks the stop itself.
+    // Stop precedence, read once: a stop that reached the run before its exit
+    // outranks the flow's report, on the stage here as on the row below.
     const stopped = params.stopped === true;
-    // Close the transcript stage before the drain, not after it: `stage.end`
-    // queues one more publication, and a terminal row that called itself the
-    // post-drain fact while the run's last queued fact was still unsettled
-    // would say COMPLETED over a transcript closure that rolled back. What the
-    // stage carries is the run's own report, since the drain's verdict is not
-    // knowable until the publication this queues has settled; the `run.end` row
-    // is where that verdict lands.
+    // Close the transcript stage before the drain: `stage.end` queues one
+    // more publication, which the drain must attest. The stage carries the
+    // run's own report, since the drain's verdict is not knowable until that
+    // publication settles; the `run.end` row is where the verdict lands.
     if (params.stage) {
       const stage = params.stage;
       const stageOutcome = stopped ? RUN_OUTCOME.CANCELLED : params.outcome;
@@ -182,14 +172,11 @@ const finalizeRunTerminalBody = Effect.fn('finalizeRunTerminal.body')(
           error: drainFailure,
         },
       );
-    // The exiting run's own report: `params.outcome` unless the drain rolled
-    // its facts back, which outranks however the flow itself ended.
+    // The run's own report, unless the drain rolled its facts back.
     const reported =
       drainFailure === undefined ? params.outcome : RUN_OUTCOME.FAILED;
-    // A lost drain is marked as one on the row it decided: the in-process
-    // `RunArtifactDrainError` reaches only whoever awaits this run, so the
-    // marker is what tells every reader of the row that the run's queued facts
-    // are gone rather than that the model run failed.
+    // A lost drain is marked on the row it decided, so every reader sees the
+    // run's queued facts are gone, not that the model run failed.
     const reportedError =
       drainFailure === undefined
         ? params.error
@@ -200,19 +187,15 @@ const finalizeRunTerminalBody = Effect.fn('finalizeRunTerminal.body')(
     // The `run.end` row written below is the run's terminal fact: the report
     // is only the verdict for a run no stop reached.
     const outcome = stopped ? RUN_OUTCOME.CANCELLED : reported;
-    // Error facts the run classified for an outcome that did not happen are not
-    // facts about this run. A lost drain is the exception: the queued facts are
-    // gone whichever outcome the row carries, so the marker rides a cancelled
-    // row too and its readers still see an attempt nothing may repeat.
+    // Error facts for an outcome that did not happen are not this run's,
+    // except a lost drain's marker, which rides a cancelled row too.
     const error =
       drainFailure !== undefined || outcome === reported
         ? reportedError
         : undefined;
     const output = params.output ?? emptyRunEndOutput();
-    // Write the terminal row BEFORE untrack so the registry's terminal listener
-    // event never precedes it. The row carries the classified error `kind`
-    // (when any) and the flow's output; `finalizeRun` adds the usage totals
-    // from the run's history, their one authority.
+    // Write the terminal row BEFORE untrack, so the registry's terminal event
+    // never precedes it; `finalizeRun` adds the usage totals from history.
     const event: ResultEvent = {
       type: 'run.end',
       outcome,
@@ -220,11 +203,13 @@ const finalizeRunTerminalBody = Effect.fn('finalizeRunTerminal.body')(
       ...(error ? { error } : {}),
       output,
     };
+    const settlement = params.settle ? yield* params.settle(outcome) : [];
     const finalization = yield* finalizeRun(session, {
       runId: handle.runId,
       outcome,
       error,
       output,
+      ...(settlement.length > 0 ? { settlement } : {}),
     });
     if (!finalization.ok) {
       yield* logLifecycleWarning('Failed to finalize durable run state', {
@@ -258,6 +243,10 @@ const finalizeRunTerminalBody = Effect.fn('finalizeRunTerminal.body')(
       ...(finalization.ok ? {} : { persistFailure: finalization.error }),
     };
   },
+  // The run's terminal is atomic: the run's stop is its fiber's interruption,
+  // and one landing mid-drain must not strand the run with no `run.end` row.
+  // A stop lands either before this finalizer or after its row, never inside.
+  Effect.uninterruptible,
 );
 
 /**
@@ -341,18 +330,27 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
     options?.parentRunId ?? null,
     ctx.logger,
   );
-  // The terminal finalizer; outcome and error facts vary per exit.
-  const finalizeTerminal = (arm: {
+  const settleEnd = options?.settleEnd;
+  // The terminal finalizer; outcome and error facts vary per exit, and a
+  // child's last turn (`settledBy`) settles under the resolved outcome.
+  const finalizeTerminal = ({
+    settledBy,
+    ...arm
+  }: {
     outcome: RunOutcome;
     error?: ResultEvent['error'];
     output?: RunEndOutput;
     stopped?: boolean;
+    settledBy?: RunEndResult;
   }) =>
     finalizeRunTerminal({
       session,
       handle,
       stage: ctx.parentStage,
       ...arm,
+      ...(settledBy && settleEnd
+        ? { settle: (o) => settleEnd(withResolvedOutcome(settledBy, o)) }
+        : {}),
     });
   /**
    * The single owner of provider/runtime failure exits: a flow carrying
@@ -431,6 +429,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
       error,
       output: carried?.output,
       stopped,
+      settledBy: subagentResult,
     });
     // The exits below report the terminal fact the finalizer published.
     const resolvedOutcome = finalized.event.outcome;
@@ -483,6 +482,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
       return finalizeTerminal({
         outcome: result.outcome,
         output: result.output,
+        settledBy: result,
       }).pipe(
         Effect.map((finalized) =>
           withResolvedOutcome(result, finalized.event.outcome),

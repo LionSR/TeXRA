@@ -372,24 +372,18 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   }),
   PluginFactDraftSchema,
   /**
-   * Input a run has not taken yet (one run model, section 3.7): the whole
-   * follow-up, so a resume seeds the run's queue from its rows and a crash
-   * loses nothing. `followUpId` is the unique key: the producer's logical
-   * delivery id when it has one (a child's accepted turn, an inquiry
-   * continuation), otherwise minted once at admission. Pending is the fold,
-   * queued without consumed, and it is the view's `queuedFollowUps`.
+   * Input a run has not taken yet (one run model, section 3.7), whole, so a
+   * crash loses nothing. `followUpId` is the producer's delivery id when it
+   * has one, else minted at admission. Pending is queued without consumed.
    */
   durable('followup.queued', {
     followUpId: z.string().min(1),
     content: FollowUpContentSchema,
-    /** Held until the sender's terminal row (#8093) or an instruction. */
-    holdUntil: z.enum(['senderEnd', 'instruction']).optional(),
+    /** Held until a take also carries an instruction (a pause notice). */
+    holdUntil: z.enum(['instruction']).optional(),
   }),
-  /**
-   * The follow-up became the message a turn carries (C3): committed in the
-   * same batch as that message, so a crash between the two re-delivers the
-   * follow-up and never delivers it twice.
-   */
+  /** The follow-up became the message a turn carries (C3), in that
+   *  message's batch: never delivered twice. */
   durable('followup.consumed', { followUpId: z.string().min(1) }),
   /**
    * A run asking a person (one run model, section 3.7): what the UI shows
@@ -464,12 +458,17 @@ const RunHistoryEventDraftSchema = z.discriminatedUnion('type', [
    * The key is structural, (run, attempt, turn index), so an accepted turn
    * always folds to one identity and a later attempt reusing the run id
    * never collides with it. `accepted` without `settled` is the active
-   * turn; the latest `settled` is the last turn whose delivery ran.
+   * turn; the latest `settled` is the last turn whose delivery ran. Its
+   * `delivery` names the parent and follow-up id of the `run.report` just
+   * before it in its batch: the parent's row is that report's relay.
    */
   durable('child.turn', {
     attemptId: z.string().min(1),
     turnIndex: z.int().positive(),
     phase: z.enum(['accepted', 'settled']),
+    delivery: z
+      .object({ to: RunIdSchema, followUpId: z.string().min(1) })
+      .optional(),
   }),
 ]);
 export const SessionEventDraftSchema = z.discriminatedUnion('type', [
