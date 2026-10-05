@@ -22,26 +22,26 @@
  * is unknown is retried.
  *
  * Failure modes, each checked at every point:
- * - the conversation comes to another end than the clean one: the root's
+ * - invariant I1: the conversation comes to another end than the clean one: the root's
  *   answers, its view edits, what each executed call returned, its owned
  *   children and their answers, its fork;
- * - a call settled before the crash settles again, or any call twice; a
- *   command runs before its approval, or an unfinished one again without a
- *   person's retry;
+ * - invariant I2: a call settled before the crash settles again, or any call twice;
+ * - invariant I4: a command runs before its approval, or an unfinished one again
+ *   without a person's retry;
  * - a command's side effect (the line it appends) happens during the resume
  *   with no newly executed command to account for it, or one is missing;
- * - one model invocation is answered twice (a turn paid twice);
- * - an owned child launches again for its call without a person choosing
+ * - invariant I3: one model invocation has two committed responses;
+ * - invariant I5: an owned child launches again for its call without a person choosing
  *   to retry it, or a child is left without a terminal row;
- * - a fork is left without the history it was registered with;
+ * - invariant I7: a fork is left without the history it was registered with;
  * - a text answer any run committed is never finalized for display;
- * - a run's halt commits apart from its end (a stopped run that reads as
+ * - invariant I8: a run's halt commits apart from its end (a stopped run that reads as
  *   interrupted, which an automatic resume carries on);
  * - a person is asked whether to run again an awaited child that had
  *   ended cleanly before the crash;
  * - a person is asked whether a command ran that the crash stopped before
  *   its body started (before its approval);
- * - a bypass turned off is acknowledged before its row is durable (a
+ * - invariant I9: a bypass turned off is acknowledged before its row is durable (a
  *   resume would restore it on).
  */
 import {
@@ -948,7 +948,7 @@ export function crashConformanceSuite(plugins: string): void {
       600_000,
     );
     /**
-     * A child's result is never lost or read twice across a crash: a
+     * Checks invariant I6: a child's result is never lost or read twice across a crash: a
      * detached child's turn, a background script's and a background
      * command's last turn each settle in the batch that ends them, and a
      * resumed parent relays every settled result it has not read. Every

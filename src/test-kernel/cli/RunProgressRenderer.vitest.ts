@@ -1,6 +1,7 @@
 import { it } from '@effect/vitest';
-import { Effect, Exit, Scope, SubscriptionRef } from 'effect';
-import { describe, expect } from 'vitest';
+import { Clock, Effect, Exit, Queue, Scope, SubscriptionRef } from 'effect';
+import { TestClock } from 'effect/testing';
+import { afterEach, describe, expect } from 'vitest';
 import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
@@ -128,6 +129,14 @@ type TestRunProgressRenderer = RunProgressRenderer & {
   ): Promise<void>;
 };
 let createdAt = 0;
+const rendererScopes: Scope.Closeable[] = [];
+afterEach(() =>
+  Effect.runPromise(
+    Effect.all(
+      rendererScopes.splice(0).map((scope) => Scope.close(scope, Exit.void)),
+    ),
+  ),
+);
 /** Let the renderer's fiber observe the latest view before a case reads
  *  the output: a few turns of the event loop cover the stream pipeline. */
 async function settle(): Promise<void> {
@@ -138,10 +147,12 @@ async function settle(): Promise<void> {
 function attached(renderer: RunProgressRenderer): TestRunProgressRenderer {
   const runs = new Map<RunId, RunView>();
   const ref = Effect.runSync(SubscriptionRef.make<SessionView>(viewWith([])));
+  const scope = Scope.makeUnsafe();
+  rendererScopes.push(scope);
   Effect.runSync(
     renderer
       .attach({ view: ref, viewChanges: SubscriptionRef.changes(ref) })
-      .pipe(Scope.provide(Scope.makeUnsafe())),
+      .pipe(Scope.provide(scope)),
   );
   const setMany = async (
     entries: ReadonlyArray<readonly [string, Partial<RunView>]>,
@@ -382,21 +393,6 @@ function ansiRenderer(
   );
 }
 
-function fakeTimers() {
-  const timers = {
-    heartbeat: undefined as (() => void) | undefined,
-    clearCount: 0,
-    setInterval: ((callback: () => void) => {
-      timers.heartbeat = callback;
-      return { unref() {} } as unknown as ReturnType<typeof setInterval>;
-    }) as unknown as typeof setInterval,
-    clearInterval: (() => {
-      timers.clearCount += 1;
-    }) as typeof clearInterval,
-  };
-  return timers;
-}
-
 function captureStreamWrites<E, R>(
   stream: NodeJS.WriteStream,
   action: Effect.Effect<unknown, E, R>,
@@ -459,26 +455,72 @@ describe('CLI run progress renderer', () => {
     expect(output.text.endsWith('\r\x1b[2K')).toBe(true);
   });
 
-  it('ticks the ANSI status line while a root workflow is quiet', async () => {
-    let now = 0;
-    const output = outputBuffer();
-    const timers = fakeTimers();
-    const renderer = ansiRenderer(output, { nowMs: () => now, ...timers });
+  it.effect('ticks the ANSI status line while a root workflow is quiet', () =>
+    Effect.gen(function* () {
+      const root = {
+        id: 'stream-1' as RunId,
+        label: 'polish',
+        inputFiles: ['paper.tex'],
+      };
+      const clock = yield* Clock.Clock;
+      const writes = yield* Queue.unbounded<string>();
+      const output = outputBuffer();
+      const renderer = createRunProgressRenderer(context(), {
+        colorEnabled: true,
+        nowMs: () => clock.currentTimeMillisUnsafe(),
+        minIntervalMs: 0,
+        write: (text) => {
+          output.write(text);
+          Queue.offerUnsafe(writes, text);
+        },
+      })!;
+      const view = yield* SubscriptionRef.make(viewWith([makeRunView(root)]));
+      const scope = yield* Scope.make();
+      yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
+      yield* renderer
+        .attach(
+          { view, viewChanges: SubscriptionRef.changes(view) },
+          { runId: root.id },
+        )
+        .pipe(Scope.provide(scope));
+      yield* Queue.take(writes);
+      const initial = '\r\x1b[2Kpolish paper.tex · 0s';
+      expect(output.text).toBe(initial);
+      yield* TestClock.adjust('999 millis');
+      expect(output.text).toBe(initial);
+      yield* TestClock.adjust('1 millis');
+      expect(yield* Queue.take(writes)).toBe('\r\x1b[2Kpolish paper.tex · 1s');
+      yield* TestClock.adjust('1300 millis');
+      expect(yield* Queue.take(writes)).toBe('\r\x1b[2Kpolish paper.tex · 2s');
 
-    await handleRunConfig(renderer);
-
-    expect(timers.heartbeat).toBeDefined();
-    now = 1000;
-    timers.heartbeat?.();
-    now = 2300;
-    timers.heartbeat?.();
-
-    expect(output.text).toContain('\r\x1b[2Kpolish paper.tex · 1s');
-    expect(output.text).toContain('\r\x1b[2Kpolish paper.tex · 2s');
-
-    await handleRunStatus(renderer, 'stream-1', RUN_PHASE.CANCELLED);
-    expect(timers.clearCount).toBe(1);
-  });
+      renderer.preserve();
+      expect(yield* Queue.take(writes)).toBe('\n');
+      const preserved = output.text;
+      yield* TestClock.adjust('1 second');
+      expect(output.text).toBe(preserved);
+      yield* SubscriptionRef.set(
+        view,
+        viewWith([makeRunView({ ...root, turn: 2 })]),
+      );
+      expect(yield* Queue.take(writes)).toContain('[t2]');
+      yield* TestClock.adjust('1 second');
+      expect(yield* Queue.take(writes)).toContain('4s');
+      renderer.clear();
+      expect(yield* Queue.take(writes)).toBe('\r\x1b[2K');
+      const cleared = output.text;
+      yield* TestClock.adjust('1 second');
+      expect(output.text).toBe(cleared);
+      yield* SubscriptionRef.set(
+        view,
+        viewWith([makeRunView({ ...root, turn: 3 })]),
+      );
+      expect(yield* Queue.take(writes)).toContain('[t3]');
+      yield* Scope.close(scope, Exit.void);
+      const closed = output.text;
+      yield* TestClock.adjust('1 second');
+      expect(output.text).toBe(closed);
+    }),
+  );
 
   it('renders the live line from direct session and run facts', async () => {
     const output = outputBuffer();
@@ -539,20 +581,6 @@ describe('CLI run progress renderer', () => {
       'coordinator main.tex · 0s\n' +
         'coordinator main.tex · subagents: proofreader +2 · 0s\n',
     );
-  });
-
-  it('stops active-child heartbeat when preserving the live line', async () => {
-    const output = outputBuffer();
-    const timers = fakeTimers();
-    const renderer = ansiRenderer(output, timers);
-
-    await handleOrchestratorRootRun(renderer);
-    await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-
-    renderer.preserve();
-
-    expect(timers.clearCount).toBe(1);
-    expect(output.text.endsWith('\n')).toBe(true);
   });
 
   it('keeps the claimed root stream when a child run.config arrives later', async () => {
