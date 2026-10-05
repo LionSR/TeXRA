@@ -14,6 +14,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Option, PlatformError } from 'effect';
 import { z } from 'zod';
 
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { absentReason } from '@utils/files/fsEntryExists';
 
 /** The longest Unix socket path every platform accepts (macOS: 104 bytes). */
@@ -115,7 +116,7 @@ function ownDirectory(
       PlatformError.badArgument({
         module: 'TexraService',
         method: 'prepareServiceDirectories',
-        description: cause instanceof Error ? cause.message : String(cause),
+        description: toErrorMessage(cause),
         cause,
       }),
   });

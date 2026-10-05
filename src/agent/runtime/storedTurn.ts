@@ -34,6 +34,7 @@ import {
   type RunHistoryDraft,
 } from '@shared/session/runStateFold';
 import { isObject } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { z } from 'zod';
 
 /** The keys whose value is provider evidence, wherever a turn or a history
@@ -171,9 +172,7 @@ export function runHistoryRows(
     catch: (cause) =>
       new RunHistoryInconsistent({
         reason: 'unreadable-turn',
-        detail: `${at?.type} at commit ${at?.commit}: ${
-          cause instanceof Error ? cause.message : String(cause)
-        }`,
+        detail: `${at?.type} at commit ${at?.commit}: ${toErrorMessage(cause)}`,
         commit: at?.commit ?? null,
       }),
   });
