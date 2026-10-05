@@ -1,12 +1,12 @@
 {
   "packages/harness/src/agent/codeSandbox/protocol.ts": 1,
   "packages/harness/src/agent/core/definition/agentDefinitionInheritance.ts": 2,
+  "packages/harness/src/agent/core/tools/toolSchema.ts": 3,
   "packages/harness/src/agent/prompt/templateInputs.ts": 3,
   "packages/harness/src/agent/runtime/FollowUps.ts": 1,
   "packages/harness/src/agent/runtime/loop/hooks.ts": 2,
   "packages/harness/src/agent/runtime/loop/toolGuard.ts": 1,
   "packages/harness/src/agent/runtime/loop/toolUseDispatch.ts": 2,
-  "packages/harness/src/agent/runtime/run/toolSchema.ts": 3,
   "packages/harness/src/agent/runtime/RunHandle.ts": 1,
   "packages/harness/src/agent/runtime/SessionEvents.ts": 1,
   "packages/harness/src/agent/runtime/storedTurn.ts": 2,

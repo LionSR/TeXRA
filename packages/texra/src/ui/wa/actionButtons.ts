@@ -72,10 +72,6 @@ export interface IconActionButtonOptions {
    * falls back to the native `title` attribute so the hint is still visible.
    */
   readonly tooltip?: string;
-  /** Explicit `aria-hidden="true"|"false"` on the button host — for toolbars
-   * that keep an inert button in the layout (e.g. CSS-faded) but still want it
-   * out of the accessibility tree. */
-  readonly ariaHidden?: boolean;
   readonly onClick?: (event: MouseEvent) => void;
 }
 
@@ -128,7 +124,6 @@ function renderActionButtonParts({
   expanded,
   busy,
   tooltip,
-  ariaHidden,
   nativeChrome,
   onClick,
 }: ActionButtonBaseOptions): ActionButtonParts {
@@ -182,9 +177,6 @@ function renderActionButtonParts({
       title=${ifDefined(useWebAwesomeTooltip ? undefined : nativeTitle)}
       data-action=${ifDefined(action)}
       ?disabled=${disabled || busy}
-      aria-hidden=${ifDefined(
-        ariaHidden === undefined ? undefined : String(ariaHidden),
-      )}
       @click=${onClick}
       >${content}</wa-button
     >

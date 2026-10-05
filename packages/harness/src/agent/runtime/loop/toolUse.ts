@@ -2,8 +2,7 @@
  * The tool-use program: one plain Effect loop over the run history, no cursor
  * and no graph. Durable phases are row data; the loop never holds its own
  * copy of the conversation, it continues from the state every `appendBatch`
- * returns, which is what makes the live path and the resume path the same
- * function.
+ * returns, which makes the live path and the resume path the same function.
  *
  * The write points, in order (manifest section 1.2): the opening batch of a
  * fresh run (initial message, `run.snapshot`); `turn.begin`; per round the
@@ -42,13 +41,13 @@ import {
 } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runStateFold';
+import { toolDefinitionsFor } from '@tools/catalogEntries';
 import { sha256 } from '@utils/core/idHash';
 
 import { AgentRun } from '../run/AgentRun';
 import { backgroundCompaction } from '../run/compaction';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { stored } from '../run/requestContext';
-import { toolDefinitionsFor } from '../run/tools';
 import { claimFollowUps, type ConsumedFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
 import { Runs } from '../runRegistry';

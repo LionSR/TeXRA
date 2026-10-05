@@ -44,20 +44,6 @@ wa-button[hidden] {
   display: none !important;
 }
 
-/* The one spinner keyframe the light-DOM shell uses. */
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.spin {
-  animation: spin 2s linear infinite;
-}
-
 /* Every imperative dialog receives this shared close control from
    overlayDialog.ts. The route-specific class stays only as a testing/ownership
    hook; position and skin no longer depend on which overlay created it. */
@@ -110,12 +96,6 @@ wa-dialog.desktop-prompt-overlay .desktop-prompt-title {
   font-size: var(--font-size-h2);
   font-weight: var(--wa-font-weight-semibold);
   line-height: var(--line-height-heading);
-}
-
-wa-dialog.desktop-prompt-overlay .desktop-prompt-subtitle {
-  margin: var(--wa-space-xs) 0 0;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-sm);
 }
 
 .desktop-prompt-form {

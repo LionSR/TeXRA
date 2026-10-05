@@ -14,7 +14,6 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { providerEndpointKey } from '@shared/state/providerSettings';
 import type { SubscriptionUsageSnapshots } from '@shared/schemas';
 import { postMessage } from '@texra/shared/hostBridge';
-import { createEvent } from '@texra/shared/utils/events';
 import { TickerController } from '@texra/shared/litControllers/TickerController';
 import type {
   ProviderKeyStatus,
@@ -90,10 +89,8 @@ export class ProviderKeyList extends LitElement {
           icon: 'key',
           label: `Set ${displayName} API key`,
           tooltip: 'Set API key',
-          // Bubbles to SettingsApp, which owns the desktop-vs-VS Code
-          // provider-key entry flow (modal on desktop, host prompt otherwise).
           onClick: () =>
-            this.dispatchEvent(createEvent('provider-key-set', { provider })),
+            postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY, { provider }),
         })}
         ${renderIconActionButton({
           id: `provider-key-get-${provider}`,

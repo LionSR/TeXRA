@@ -1,9 +1,10 @@
 import { defineCommand, type CommandDef } from 'citty';
-import { Effect } from 'effect';
+import { Cause, Effect } from 'effect';
 
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
+import { writeErrorStderr } from '@cli/runtime/logSinks';
 import {
   shouldUseSubscriptionDeviceCode,
   signInCliSubscription,
@@ -17,10 +18,26 @@ import {
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 
-import { withCliAuthError } from './cliAuthError';
 import { defineCliCommand } from './defineCliCommand';
 import { booleanArg, GLOBAL_ARGS } from './globalArgs';
 import { cliProgressWriter, emitCliResult } from './output';
+
+/**
+ * Fold one network/auth call into a result the caller narrows with one
+ * `if (!result.ok) return CliExitCode.ModelOrNetworkError;` line; a failure
+ * (typed or defect) is already written to stderr. Scoped to just the call, so
+ * success-path code such as payload emission still runs.
+ */
+const withCliAuthError = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  effect.pipe(
+    Effect.matchCause({
+      onFailure: (cause) => {
+        writeErrorStderr(Cause.squash(cause));
+        return { ok: false as const };
+      },
+      onSuccess: (value) => ({ ok: true as const, value }),
+    }),
+  );
 
 interface DefineSubscriptionAuthCommandOptions {
   readonly providerId: SubscriptionProviderId;

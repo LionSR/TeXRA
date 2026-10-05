@@ -25,7 +25,7 @@ const taskAgent: AgentSelectionItem = {
   name: 'summarize',
   hasTask: true,
   source: AGENT_SOURCE.BUILT_IN,
-  hasPath: true,
+  filePath: '/agents/summarize.yaml',
   enabled: true,
 };
 

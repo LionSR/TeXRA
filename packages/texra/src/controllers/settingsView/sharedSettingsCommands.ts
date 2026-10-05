@@ -363,8 +363,6 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
       bindings.externalOpener.openExternal(message.url),
     openGitHubTokenUrl: () =>
       bindings.externalOpener.openExternal(GITHUB_TOKEN_CREATE_URL),
-    openToolInstallUrl: (message) =>
-      bindings.externalOpener.openExternal(message.url),
     setModelEnabled: (message) =>
       modelSelection
         .setModelEnabled({

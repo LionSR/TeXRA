@@ -230,34 +230,13 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
 }
 
 .shell-sidebar-scroll {
-  --divider-width: 1px;
-  --divider-hit-area: 12px;
-  --min: 120px;
-  --max: calc(100% - 120px);
   display: grid;
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
-}
-
-.shell-sidebar-scroll::part(panel) {
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.shell-sidebar-scroll::part(divider) {
-  min-height: 0;
-  overflow: visible;
-  background: var(--wa-color-surface-border);
-  transition: background-color var(--transition-fast);
-}
-
-.shell-sidebar-scroll::part(divider):hover,
-.shell-sidebar-scroll::part(divider):focus-visible {
-  background: var(--wa-color-focus);
+  overflow: auto;
+  scrollbar-width: thin;
 }
 
 .shell-sidebar-section {
@@ -809,13 +788,6 @@ body[data-desktop-platform='darwin']
 /* ---------------------------------------------------------------------------
  * Projects as rail sections
  * ------------------------------------------------------------------------- */
-
-.shell-sidebar-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  scrollbar-width: thin;
-}
 
 /* The rail is one line per task, the way a page tree is: agent, branch,
    time and model live in the row's tooltip, not a second line that appears

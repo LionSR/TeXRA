@@ -21,7 +21,6 @@ import {
   type DesktopCommandActions,
   type DesktopCommandMenuEntry,
 } from '../shared/desktopCommandSurface';
-import { getRendererPlatform } from './rendererPlatform';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
@@ -48,7 +47,7 @@ interface DesktopCommandPaletteOptions {
   document: Document;
   actions: DesktopCommandActions;
   getShortcuts?: () => readonly DesktopShortcutEntry[];
-  platform?: DesktopPlatform;
+  platform: DesktopPlatform;
 }
 
 // Combobox wiring lives on the wa-input HOST, not its shadow input: ARIA
@@ -111,7 +110,7 @@ export function createDesktopCommandPalette({
   document,
   actions,
   getShortcuts,
-  platform = getRendererPlatform(document.defaultView),
+  platform,
 }: DesktopCommandPaletteOptions): CommandPaletteController {
   const getEntries = (): CommandPaletteEntry[] => {
     const shortcutsById = new Map(

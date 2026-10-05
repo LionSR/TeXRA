@@ -134,17 +134,12 @@ export class ProgressWorkflowFileActionsController {
     ).pipe(Effect.asVoid);
   }
 
-  comparePrevious(
-    file: string,
-    base?: string,
-    previous?: string,
-  ): FileAction<void> {
-    const previousFile = previous ?? base;
-    if (!previousFile) {
+  comparePrevious(file: string, previous?: string): FileAction<void> {
+    if (!previous) {
       return this.deps.host.showInfo('Compare previous needs a base file.');
     }
 
-    return this.deps.host.compareFiles(previousFile, file);
+    return this.deps.host.compareFiles(previous, file);
   }
 
   acceptFile(

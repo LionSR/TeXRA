@@ -46,7 +46,6 @@ import { ToolRegistry } from '@tools/toolTable';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { declaredToolNames } from './agentToolResolution';
-import { mediaNeedsVisionWarning } from './mediaVisionWarning';
 import type { AgentRunShape, ToolPolicy } from './run/AgentRun';
 import type { SessionHandle } from './SessionHandle';
 import type { SessionHostInteractions } from './HostInteractions';
@@ -413,15 +412,6 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
           ? Effect.void
           : Effect.sync(() => stage.end(RUN_OUTCOME.FAILED)),
     );
-
-    // Attached images the chosen model cannot see are dropped: say so.
-    const visionWarning = mediaNeedsVisionWarning(
-      config.mediaFiles,
-      modelConfig.capabilities,
-      'attached',
-      config.model,
-    );
-    if (visionWarning) agentLogger.warn(visionWarning);
 
     const agentPath = path.dirname(agentEntry.path);
     // Only a run opened on the recipe is a document task; its persona chats.

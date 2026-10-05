@@ -51,7 +51,6 @@ export const SETTINGS_VIEW_COMMANDS = {
   // refreshes the row's owning snapshot.
   UPDATE_STATE_SETTING: 'updateStateSetting',
   // Tool dashboard commands
-  OPEN_TOOL_INSTALL_URL: 'openToolInstallUrl',
   INSTALL_TOOL_EXTENSION: 'installToolExtension',
   RECHECK_TOOL_STATUS: 'recheckToolStatus',
   TOGGLE_TOOL: 'toggleTool',
