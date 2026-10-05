@@ -58,15 +58,11 @@ export const progressAppStyles = css`
   }
 
   /* The desktop has no title bar: this row is the window's drag handle,
-     taller to sit level with the traffic lights, and its controls, the
-     host's slotted ones included, stay clickable. */
+     taller to sit level with the traffic lights. Its controls stay
+     clickable through the no-drag rule in the shared token sheet. */
   :host([placement='desktop']) .shell-header {
     min-height: 48px;
     -webkit-app-region: drag;
-  }
-  :host([placement='desktop']) .shell-header :is(wa-button, wa-dropdown),
-  :host([placement='desktop']) ::slotted(*) {
-    -webkit-app-region: no-drag;
   }
   /* The desktop rail lists each project's tasks, so the sessions button
      and drawer would be a second list there. */
