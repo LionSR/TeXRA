@@ -743,11 +743,8 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
-- **The desktop installers build again, and the macOS app can be signed and
-  notarized.** The packaging check failed because voice transcription loaded
-  the OpenAI SDK at app startup; it now loads it on first use. Signing the
-  macOS app failed while setting up its temporary keychain, an
-  electron-builder bug fixed by moving to 26.17.
+- **The desktop installers build again, and the macOS app is signed and
+  notarized,** so macOS opens it without a Gatekeeper warning.
 - **Document tasks run on a VS Code editor model (Copilot) again.** Since
   document tasks became a recipe, a task launched with an editor model
   failed at its first step; its revisions now run on that model as before.
