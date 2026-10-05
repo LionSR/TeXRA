@@ -260,7 +260,6 @@ function providerStatus(provider, displayName, status) {
     provider,
     displayName,
     status,
-    keyUrl: `https://example.com/${provider}/keys`,
     streaming: true,
     customEndpoint: '',
     supportsCustomEndpoint: provider === 'openai',

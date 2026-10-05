@@ -47,19 +47,9 @@ export class ToolTimer extends LitElement {
   override render(): TemplateResult | typeof nothing {
     if (this.startTime <= 0) return nothing;
     const elapsed = formatDuration(this._ticker.now - this.startTime);
-    if (this.timeoutMs > 0) {
-      const limit = formatDuration(this.timeoutMs);
-      // prettier-ignore
-      return html`<span class="timer" role="timer" aria-live="off" aria-label=${`Elapsed time: ${elapsed} of ${limit}`} dir="ltr">${elapsed}<span class="timer-limit"> / ${limit}</span></span>`;
-    }
-    return html`<span
-      class="timer"
-      role="timer"
-      aria-live="off"
-      aria-label=${`Elapsed time: ${elapsed}`}
-      dir="ltr"
-      >${elapsed}</span
-    >`;
+    const limit = this.timeoutMs > 0 ? formatDuration(this.timeoutMs) : null;
+    // prettier-ignore
+    return html`<span class="timer" role="timer" aria-live="off" aria-label=${`Elapsed time: ${elapsed}${limit === null ? '' : ` of ${limit}`}`} dir="ltr">${elapsed}${limit === null ? nothing : html`<span class="timer-limit"> / ${limit}</span>`}</span>`;
   }
 }
 

@@ -55,8 +55,8 @@ wa-button.desktop-overlay-close {
 }
 
 /* OverlayDialog applies the canonical large icon-button skin. These controls
-   float over content, so this local rule adds only the raised backing needed
-   for legibility over a diff or PDF. */
+   float over the dialog's content, so this local rule adds only the raised
+   backing they need to stay legible over it. */
 wa-button.desktop-overlay-close::part(base) {
   background: var(--wa-color-surface-raised);
 }

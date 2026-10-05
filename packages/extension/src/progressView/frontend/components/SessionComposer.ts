@@ -42,18 +42,14 @@ import {
 } from '@texra/shared/utils/clipboardImages';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
+import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { filterNotNullish } from '@utils/core';
 import { generatePastedImageName } from '@utils/files/pastedImageName';
 import './QueuedFollowUps';
 import { launcherChipMenus, type ChipMenu } from './composerChipMenus';
 import type { RunId } from '@texra-ai/harness/schemas';
-
-function selectedValue(event: Event): string {
-  const item = (event as CustomEvent<{ item?: { value?: unknown } }>).detail
-    ?.item;
-  return typeof item?.value === 'string' ? item.value : '';
-}
+import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 @customElement('session-composer')
 export class SessionComposer extends LitElement {
@@ -444,7 +440,8 @@ export class SessionComposer extends LitElement {
   private renderChip(menu: ChipMenu): TemplateResult {
     return html`<wa-dropdown
         placement="top-start"
-        @wa-select=${(event: Event) => menu.onSelect(selectedValue(event))}
+        @wa-select=${(event: WaSelectEvent) =>
+          menu.onSelect(selectedItemValue(event))}
       >
         <wa-button
           slot="trigger"

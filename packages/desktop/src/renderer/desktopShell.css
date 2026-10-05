@@ -17,9 +17,12 @@
   --macos-titlebar-safe-inset: 92px;
 }
 
-.shell-frame {
+:is(.shell-frame, .shell-main-split, .shell-bottom-split) {
   --divider-width: 1px;
   --divider-hit-area: 12px;
+}
+
+.shell-frame {
   --min: 220px;
   --max: min(480px, 42vw);
   position: relative;
@@ -71,8 +74,6 @@
 }
 
 .shell-main-split {
-  --divider-width: 1px;
-  --divider-hit-area: 12px;
   --min: 380px;
   --max: min(960px, calc(100% - 380px));
   display: grid;
@@ -81,8 +82,6 @@
 }
 
 .shell-bottom-split {
-  --divider-width: 1px;
-  --divider-hit-area: 12px;
   --min: 180px;
   --max: min(560px, 62%);
   display: grid;
@@ -92,26 +91,23 @@
   min-height: 0;
 }
 
-.shell-split-handle {
-  display: block;
+:is(.shell-split-handle, .shell-bottom-split-handle) {
   width: 18px;
   height: 18px;
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-xs);
   line-height: 1;
   pointer-events: none;
+}
+
+.shell-split-handle {
+  display: block;
   transform: rotate(90deg);
 }
 
 .shell-bottom-split-handle {
   display: grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-xs);
-  line-height: 1;
-  pointer-events: none;
 }
 
 /* A closed pane's split panel is disabled with a zero-width divider; its

@@ -17,6 +17,7 @@ import { RUN_GRANT_LABEL } from '@ui/copy/delegationApproval';
 
 // Local imports - shared helpers
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { pluralize } from '@utils/text/stringUtils';
 
@@ -174,8 +175,7 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
   // ===========================================================================
 
   private handleMenuSelect = (event: WaSelectEvent): void => {
-    const { item } = event.detail;
-    const action = 'value' in item ? item.value : undefined;
+    const action = selectedItemValue(event);
     switch (action) {
       case 'showLatexdiff':
       case 'previewProposed':

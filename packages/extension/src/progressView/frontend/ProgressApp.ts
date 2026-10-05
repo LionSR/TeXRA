@@ -50,8 +50,8 @@ import {
   renderIconActionButton,
   renderIconActionButtonParts,
 } from '@ui/wa/actionButtons';
-import { registerTeXRAWebAwesomeIcons } from '@ui/wa/webAwesomeIcons';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { selectedItemValue } from '@ui/wa/selectTemplates';
+import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 import { ONBOARDING_SETUP_HANDOFF } from '@ui/copy/onboarding';
 import { getBasename } from '@utils/core';
 
@@ -86,6 +86,7 @@ import './components/GettingStartedBanner';
 import './components/OnboardingWelcomeCard';
 import './components/RunHeader';
 import type { HeaderMenuItem } from './components/RunHeader';
+import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 registerTeXRAWebAwesomeIcons();
 
@@ -328,9 +329,8 @@ export class ProgressApp extends LitElement {
     return html`
       <wa-dropdown
         placement="bottom-end"
-        @wa-select=${(event: Event) => {
-          const value = (event as CustomEvent<{ item?: { value?: unknown } }>)
-            .detail?.item?.value;
+        @wa-select=${(event: WaSelectEvent) => {
+          const value = selectedItemValue(event);
           items.find((item) => item.value === value)?.activate();
         }}
       >
