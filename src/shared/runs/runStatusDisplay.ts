@@ -25,7 +25,13 @@ type RunStatusDisplayKey =
  * only the label and tone change.
  */
 const RUN_DISPLAY_INTERRUPTED = 'interrupted';
-type RunStatusCopyKey = RunStatusDisplayKey | typeof RUN_DISPLAY_INTERRUPTED;
+/** The fold's waiting reading: a held run parked on the user's answer, such
+ *  as a failed model request asking to retry or stop. */
+const RUN_DISPLAY_WAITING_ON_USER = 'waitingOnUser';
+type RunStatusCopyKey =
+  | RunStatusDisplayKey
+  | typeof RUN_DISPLAY_INTERRUPTED
+  | typeof RUN_DISPLAY_WAITING_ON_USER;
 
 /**
  * Display key for a `RunLifecycleStatus` (a `RunPhase`, or the `ready`
@@ -56,6 +62,7 @@ const RUN_STATUS_LABELS: Record<RunStatusCopyKey, string> = {
   [RUN_SUBSTATE.RESUMING]: 'Resuming',
   [RUN_SUBSTATE.PAUSED]: 'Paused',
   [RUN_DISPLAY_INTERRUPTED]: 'Interrupted',
+  [RUN_DISPLAY_WAITING_ON_USER]: 'Waiting on you',
 };
 
 /**
@@ -84,6 +91,7 @@ const RUN_STATUS_TONES: Record<RunStatusCopyKey, RunStatusTone> = {
   [RUN_SUBSTATE.RESUMING]: RUN_STATUS_TONE.RUNNING,
   [RUN_SUBSTATE.PAUSED]: RUN_STATUS_TONE.WARNING,
   [RUN_DISPLAY_INTERRUPTED]: RUN_STATUS_TONE.WARNING,
+  [RUN_DISPLAY_WAITING_ON_USER]: RUN_STATUS_TONE.WARNING,
 };
 
 /**
@@ -96,11 +104,12 @@ export function runStatusCopy(
   options: {
     readonly substate?: RunSubstate;
     readonly interrupted?: boolean;
+    readonly waiting?: boolean;
   } = {},
 ): { readonly statusLabel: string; readonly tone: RunStatusTone } {
-  const key = options.interrupted
-    ? RUN_DISPLAY_INTERRUPTED
-    : runStatusDisplayKey(status, options.substate);
+  let key: RunStatusCopyKey = runStatusDisplayKey(status, options.substate);
+  if (options.interrupted) key = RUN_DISPLAY_INTERRUPTED;
+  else if (options.waiting) key = RUN_DISPLAY_WAITING_ON_USER;
   return {
     statusLabel: RUN_STATUS_LABELS[key],
     tone: RUN_STATUS_TONES[key],

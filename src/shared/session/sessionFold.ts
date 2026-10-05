@@ -577,6 +577,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   const copy = runStatusCopy(run.status, {
     substate: run.substate ?? undefined,
     interrupted,
+    waiting,
   });
   const readOnly = heldElsewhere || unreadable !== undefined;
   const actions = runActions({ ...run, readOnly, group });
