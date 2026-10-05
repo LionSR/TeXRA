@@ -22,8 +22,8 @@ import {
   formatUnknownTeamMessage,
   resolveTeamLaunch,
 } from '@common/teams/TeamPlan';
-import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import { agentName as bareAgentName } from '@shared/schemas';
+import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,

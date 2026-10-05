@@ -41,14 +41,12 @@ import {
   type Database,
   type DatabaseOpenFailed,
 } from '@shared/session/database';
-import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
-import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { UsageLog } from '@shared/usageLog';
 import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
-} from '@tools/lean/leanLanguageServices';
-import type { SetupPlatformShape } from '@tools/setup/platform';
+} from '@texra/tools/lean/leanLanguageServices';
+import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import { goalContinuation } from '@tools/goal/goalContinuation';
 import { toolTableLayer } from '@tools/liveTools';
 import { toolTable } from '@tools/toolTable';
@@ -175,9 +173,9 @@ function installedSetup(): SetupPlatformShape {
 }
 
 /**
- * The `SetupPlatform` service of every test runtime: each member reads the
- * installed host's `setup` when called, so a suite that swaps hosts per test
- * swaps setup platforms with them.
+ * The setup platform of every test's TeXRA plugin list: each member reads
+ * the installed host's `setup` when called, so a suite that swaps hosts per
+ * test swaps setup platforms with them.
  */
 export const fakeSetupPlatform: SetupPlatformShape = {
   get commands() {
@@ -287,7 +285,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { Secrets },
     { AgentDirectories, AppState },
     { LanguageModel },
-    { SetupPlatform },
     { unprobedToolAvailability },
   ] = await Promise.all([
     import('@test/support/testWorkspaceRoots'),
@@ -297,7 +294,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     import('@platform/secrets'),
     import('@platform/interfaces'),
     import('@platform/languageModel'),
-    import('@tools/setup/platform'),
     import('./toolAvailabilityTestLayer'),
   ]);
   current = host;
@@ -320,7 +316,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // The process environment, hermetic: the installed host's `env`, never
     // the developer's shell.
     ConfigProvider.layer(ConfigProvider.fromEnvRecord(harnessEnv)),
-    Layer.mock(UpdateCheckRecords, {}),
     // A wake resumes as in production. The module is read per call, so a
     // suite's own mock or spy of it is the resume the wake reaches.
     Layer.mock(AgentEngine, {
@@ -337,10 +332,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
       toolTable([
         {
           id: 'goal',
-          name: 'Goal Mode',
-          category: 'workflow',
-          description: '',
-          toggleable: true,
+          toggle: 'off',
           availability: { check: () => Effect.succeed(true) },
           continuation: goalContinuation,
         },
@@ -373,7 +365,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
           ),
       }),
     ),
-    Layer.mock(InquiryRecords, {}),
     // The Lean plugin's port, which a step serves its tools; a suite that
     // exercises a Lean tool provides its own innermost.
     // The run-end stop is absent, as on a host whose Lean integration owns
@@ -383,7 +374,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     AppState.layer(fakeHostAppState),
     LanguageModel.layer(fakeHostLanguageModel),
     AgentDirectories.layer(fakeHostAgentDirectories),
-    SetupPlatform.layer(fakeSetupPlatform),
     unprobedToolAvailability,
     // The cross-workspace storage view the process runtime serves, over the
     // installed host's global root. A suite that exercises it directly

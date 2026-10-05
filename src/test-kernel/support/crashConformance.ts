@@ -39,6 +39,8 @@
  *   interrupted, which an automatic resume carries on);
  * - a person is asked whether to run again an awaited child that had
  *   ended cleanly before the crash;
+ * - a person is asked whether a command ran that the crash stopped before
+ *   its body started (before its approval);
  * - a bypass turned off is acknowledged before its row is durable (a
  *   resume would restore it on).
  */
@@ -69,7 +71,6 @@ import { afterEach, beforeEach, describe, expect } from 'vitest';
 import { apiKeySecretName } from '@texra-ai/llm';
 import { refresh } from '@agent/index';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { documentTaskConfig } from '@agent/output/documentRecipe';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { runAgent } from '@agent/runtime/runAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -103,6 +104,7 @@ import {
 } from '@test/support/tempDirPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { generateRunId } from '@utils/core';
 
 const AGENTS = resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/agents');
@@ -208,6 +210,24 @@ function outcome(rows: readonly Row[], root: string) {
       return `${first} (+${rest.length})`;
     }),
     edits: of(root, 'context.edit').map((row) => payload(row).cause),
+    // Each request the user made, queued once and consumed once; and the
+    // model the run ends on.
+    requests: of(root, 'followup.queued').flatMap((row) => {
+      const { followUpId, control } = json(row) as {
+        readonly followUpId: string;
+        readonly control?: { readonly kind: string };
+      };
+      if (control === undefined) return [];
+      const consumed = of(root, 'followup.consumed').filter(
+        (done) => json(done).followUpId === followUpId,
+      );
+      return [`${control.kind} consumed ${consumed.length}`];
+    }),
+    model: of(root, 'run.snapshot')
+      .flatMap((row) => [
+        (payload(row).runtime as { readonly modelId: string }).modelId,
+      ])
+      .at(-1),
     // What each executed call returned, by call: a retried call returns
     // what its first attempt would have.
     settled: [
@@ -341,10 +361,22 @@ const parkedAfter = (rows: readonly Row[], root: string, count: number) => {
   );
 };
 
+/** The model the user switches the run to. */
+const SWITCH_TO = 'gpt55';
+
+/** Whether the root holds a queued request of `kind`. */
+const requested = (rows: readonly Row[], root: string, kind: string) =>
+  rows.some(
+    (row) =>
+      row.run === root &&
+      row.type === 'followup.queued' &&
+      (json(row).control as { kind?: string } | undefined)?.kind === kind,
+  );
+
 /**
  * The user's part, each step issued only if its rows are not committed: a
- * handoff once the run parks, a compaction once it has answered the
- * handoff, then, once it has answered from the summary, a fork of the
+ * handoff once the run parks, a model switch and a compaction once it has
+ * answered the handoff, then, once it has answered from the summary, a fork of the
  * conversation.
  */
 const userSteps = (session: SessionHandle, storage: string, root: RunId) =>
@@ -357,7 +389,16 @@ const userSteps = (session: SessionHandle, storage: string, root: RunId) =>
         handoff: HANDOFF,
       });
     }
-    if (!editsOf(rowsOf(storage), root).includes('compaction')) {
+    // A switch, then a compaction, each asked for once: a request whose
+    // row is committed is the resumed run's to apply.
+    if (!requested(rowsOf(storage), root, 'model')) {
+      yield* until(storage, (rows) => parkedAfter(rows, root, 2));
+      const controls = session.runs.getHandle(root)?.controls;
+      if (controls === undefined)
+        return yield* Effect.die('the parked run has no live controls');
+      yield* controls.switchModel(SWITCH_TO);
+    }
+    if (!requested(rowsOf(storage), root, 'compact')) {
       yield* until(storage, (rows) => parkedAfter(rows, root, 2));
       yield* session.requests.request({ kind: 'run.compact', runId: root });
     }
@@ -502,6 +543,22 @@ function violations(
       ? [{ callId: boundTo.get(decided.requestId), commit: row.commit }]
       : [];
   });
+  // A command's body runs only once approved, so a command the prefix never
+  // approved cannot have started: asking whether it ran is a false question.
+  const isCommand = (callId: unknown) =>
+    /validation-(bash-\d+|script-\d+\/1)$/.test(String(callId));
+  const askedAboutUnstarted = final.some((row) => {
+    if (row.commit <= n || row.type !== 'request.opened') return false;
+    const { requestId } = json(row) as { readonly requestId: string };
+    const callId = boundTo.get(requestId);
+    return (
+      questions.has(requestId) &&
+      isCommand(callId) &&
+      !approvals.some(
+        (approval) => approval.callId === callId && approval.commit <= n,
+      )
+    );
+  });
   const unapproved = resumed.filter(
     (row) =>
       payload(row).disposition === 'executed' &&
@@ -608,6 +665,9 @@ function violations(
       ? null
       : 'an unfinished command ran again with no one asked',
     unapproved.length === 0 ? null : 'a command ran before its approval',
+    askedAboutUnstarted
+      ? 'a person was asked whether a command that never started ran'
+      : null,
     unaskedRelaunches.length === 0
       ? null
       : 'a child launched again with no one asked',
@@ -832,7 +892,9 @@ export function crashConformanceSuite(plugins: string): void {
               `Model saw: ${HANDOFF} (+0)`,
               'Model saw: [Previous conversation summary]\n\nThe golden chat so far. (+0)',
             ],
-            edits: ['handoff', 'compaction'],
+            edits: ['handoff', 'compaction', 'compaction'],
+            requests: ['model consumed 1', 'compact consumed 1'],
+            model: SWITCH_TO,
             children: 1,
             childAnswers: ['Child result.'],
             forks: [
@@ -878,6 +940,119 @@ export function crashConformanceSuite(plugins: string): void {
               ...(refused === null ? [] : [refused]),
               ...violations(prefix, final, n, root, expected, effects),
             ];
+            if (found.length > 0)
+              broken.push(`after commit ${n}: ${found.join('; ')}`);
+          }
+          expect(broken).toEqual([]);
+        }),
+      600_000,
+    );
+    /**
+     * A child's result is never lost or read twice across a crash: a
+     * detached child's turn, a background script's and a background
+     * command's last turn each settle in the batch that ends them, and a
+     * resumed parent relays every settled result it has not read. Every
+     * crash point after the first settlement resumes the parent until it
+     * has read each result its children settled, once.
+     */
+    it.live(
+      'reads every child result settled before the crash, exactly once',
+      () =>
+        Effect.gen(function* () {
+          const roots = testWorkspaceRoots();
+          const root = generateRunId();
+          /** The deliveries the children settled, by follow-up id. */
+          const settled = (rows: readonly Row[]) =>
+            rows.flatMap((row) => {
+              if (row.type !== 'child.turn') return [];
+              const delivery = json(row).delivery as
+                | { readonly to: string; readonly followUpId: string }
+                | undefined;
+              return delivery?.to === root ? [delivery.followUpId] : [];
+            });
+          const ids = (rows: readonly Row[], type: string) =>
+            rows
+              .filter((row) => row.run === root && row.type === type)
+              .map((row) => String(json(row).followUpId));
+          const allRead = (rows: readonly Row[]) => {
+            const consumed = new Set(ids(rows, 'followup.consumed'));
+            return settled(rows).every((id) => consumed.has(id));
+          };
+          /** Every result read, and every child the resume launched (a
+           *  command it re-ran after its outcome was unknown) settled. */
+          const quiet = (rows: readonly Row[], n: number) =>
+            allRead(rows) &&
+            rows
+              .filter(
+                (row) =>
+                  row.commit > n &&
+                  row.type === 'run.start' &&
+                  row.parent === root,
+              )
+              .every((child) =>
+                rows.some(
+                  (row) =>
+                    row.run === child.run &&
+                    (row.type === 'run.end' ||
+                      (row.type === 'child.turn' &&
+                        json(row).phase === 'settled')),
+                ),
+              );
+          const { points, clean } = yield* cleanPass(
+            roots,
+            (session) =>
+              withProcessServices(
+                testRuntime(),
+                runAgent(
+                  {
+                    config: AgentConfigSchema.parse({
+                      agent: 'golden_delivery',
+                      model: 'gpt56',
+                      instruction: 'Send the children off.',
+                    }),
+                    runId: root,
+                  },
+                  { session },
+                ),
+              ),
+            () =>
+              until(
+                roots.storage,
+                (rows) => settled(rows).length === 3 && allRead(rows),
+              ),
+          );
+          const cleanRows = rowsOf(roots.storage);
+          // The child's turn, the script and the command each reported.
+          expect(settled(cleanRows)).toHaveLength(3);
+
+          const first = Math.min(
+            ...cleanRows
+              .filter((row) => settled([row]).length > 0)
+              .map((row) => row.commit),
+          );
+          const broken: string[] = [];
+          for (const n of points.filter((point) => point >= first)) {
+            const { final, refused } = yield* resumeFrom(
+              roots,
+              clean,
+              n,
+              root,
+              (_, storage) => until(storage, (rows) => quiet(rows, n)),
+            );
+            const twice = (type: string) =>
+              ids(final, type).filter(
+                (id, index, all) => all.indexOf(id) !== index,
+              );
+            const found = [
+              ...(refused === null ? [] : [refused]),
+              allRead(final) ? null : 'a settled child result was never read',
+              twice('followup.queued').length === 0
+                ? null
+                : 'a child result was queued twice',
+              twice('followup.consumed').length === 0
+                ? null
+                : 'a child result was read twice',
+            ].filter((violation) => violation !== null);
             if (found.length > 0)
               broken.push(`after commit ${n}: ${found.join('; ')}`);
           }

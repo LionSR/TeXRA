@@ -7,20 +7,20 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
 // Local imports
 import {
-  ToolEditApprovalController,
-  type ToolEditPreview,
-  type ToolEditPreviewContext,
-} from '@controllers/approval/ToolEditApprovalController';
-import {
   aggregateId as qualifyAggregateId,
   RunIdSchema,
   type SessionEvent,
 } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
+import {
+  ToolEditApprovalController,
+  type ToolEditPreview,
+  type ToolEditPreviewContext,
+} from '@texra/controllers/approval/ToolEditApprovalController';
 import type {
   BuildDisplayFn,
   LatexPreviewEntry,
-} from '@tools/latex/latexPreview';
+} from '@texra/tools/latex/latexPreview';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toolEditApprovalRequest } from '../agent/progressTestUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -51,9 +51,9 @@ const latexPreview = vi.hoisted(() => ({
   injectedOptions: [] as Array<{ openBuildDisplay: BuildDisplayFn }>,
 }));
 
-vi.mock('@tools/latex/latexPreview', async (importOriginal) => {
+vi.mock('@texra/tools/latex/latexPreview', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('@tools/latex/latexPreview')>();
+    await importOriginal<typeof import('@texra/tools/latex/latexPreview')>();
   return { ...actual, previewProposedLatex: latexPreview.previewProposedLatex };
 });
 

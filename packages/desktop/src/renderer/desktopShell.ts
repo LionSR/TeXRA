@@ -14,10 +14,10 @@ import { html, nothing, type TemplateResult } from 'lit';
 
 import type { ProjectDisplay } from '@shared/session/hostSnapshot';
 import type { SessionView } from '@shared/session/sessionView';
-import type { Shell } from '@shared/session/shell';
 import type { Surface } from '@shared/session/surface';
 import { unseenRuns } from '@shared/session/unseenRuns';
 import type { TeXRAIconName } from '@shared/iconNames';
+import type { Shell } from '@texra/shared/session/shell';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { nextTablistIndex } from '@ui/wa/tablistKeyboardNav';
 import { waIcon } from '@ui/wa/webAwesomeIcons';

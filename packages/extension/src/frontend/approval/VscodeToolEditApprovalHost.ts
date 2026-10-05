@@ -11,12 +11,6 @@ import { Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 import type { SessionHandle } from '@agent/runtime';
-import type {
-  ToolEditApprovalHost,
-  ToolEditPreview,
-  ToolEditPreviewContext,
-} from '@controllers/approval/ToolEditApprovalController';
-import { fromHost, hostFailure } from '@controllers/session/hostCallFailure';
 import {
   VscodeDiffViewHost,
   type DiffSession,
@@ -24,16 +18,25 @@ import {
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import type { HostRequestFailure } from '@shared/session/requestErrors';
-import type { BuildDisplayFn } from '@tools/latex/latexPreview';
-import type { ApprovalTempFiles } from '@tools/approval/tempFileManager';
-import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
+import {
+  fromHost,
+  hostFailure,
+} from '@texra/controllers/session/hostCallFailure';
+import type {
+  ToolEditApprovalHost,
+  ToolEditPreview,
+  ToolEditPreviewContext,
+} from '@texra/controllers/approval/ToolEditApprovalController';
+import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
+import type { ApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
+import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
 import {
   computeLineChangeSummary,
   firstChangedLine,
   type ToolEditApprovalRequest,
 } from '@tools/approval/toolEditApproval';
 import { pluralize } from '@utils/text/stringUtils';
+import type { HostRequestFailure } from '@texra-ai/harness';
 
 const CHANNEL = 'ToolEditApproval';
 

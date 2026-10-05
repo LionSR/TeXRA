@@ -8,35 +8,49 @@ import {
   createSecretBackedCoordinator,
   getSubscriptionSessionStatus,
 } from '../sessionAccess.js';
-import { CODEX_SESSION_SECRET_KEY } from './codexConstants.js';
 import {
-  CodexSessionCoordinator,
-  type CodexSessionStatus,
-} from './CodexSessionCoordinator.js';
+  SubscriptionOAuthCoordinator,
+  type SubscriptionSessionStatus,
+} from '../SubscriptionOAuthCoordinator.js';
+import { defineLoopbackLogin } from '../loopbackLogin.js';
+import {
+  CODEX_CALLBACK_FALLBACK_PORT,
+  CODEX_CALLBACK_PATH,
+  CODEX_CALLBACK_PORT,
+  CODEX_SESSION_SECRET_KEY,
+} from './codexConstants.js';
+import { CODEX_POLICY } from './codexSessionPolicy.js';
 import type { CredentialStore } from '../../providers/credentials.js';
+import type { CodexSession } from './codexSessionTypes.js';
 import type { Effect } from 'effect';
 
 const CHANNEL = 'codexAuth';
 
-const coordinatorFor = createSecretBackedCoordinator({
-  secretKey: CODEX_SESSION_SECRET_KEY,
-  makeCoordinator: (storage) => new CodexSessionCoordinator({ storage }),
-});
-
 /** The coordinator for the caller's secret store. */
-export function codexCoordinator(
+export const codexCoordinator: (
   secrets: CredentialStore,
-): CodexSessionCoordinator {
-  return coordinatorFor(secrets);
-}
+) => SubscriptionOAuthCoordinator<CodexSession> = createSecretBackedCoordinator(
+  {
+    secretKey: CODEX_SESSION_SECRET_KEY,
+    makeCoordinator: (storage) =>
+      new SubscriptionOAuthCoordinator({ storage, policy: CODEX_POLICY }),
+  },
+);
 
 /** Signed-in status, read from the caller's secret store. */
 export function getCodexStatus(
   secrets: CredentialStore,
-): Effect.Effect<CodexSessionStatus> {
+): Effect.Effect<SubscriptionSessionStatus> {
   return getSubscriptionSessionStatus(
     () => codexCoordinator(secrets),
     CHANNEL,
     'ChatGPT',
   );
 }
+
+/** The browser sign-in, bound to the registered ChatGPT callback. */
+export const codexLoginWithLoopback = defineLoopbackLogin<CodexSession>({
+  ports: [CODEX_CALLBACK_PORT, CODEX_CALLBACK_FALLBACK_PORT],
+  callbackPath: CODEX_CALLBACK_PATH,
+  displayName: 'ChatGPT',
+});

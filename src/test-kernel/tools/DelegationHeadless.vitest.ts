@@ -6,13 +6,17 @@ import { Deferred, Effect, Exit, Fiber, Stream } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { documentTaskConfig } from '@agent/output/documentRecipe';
 import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { RUN_OUTCOME, agentMatchesIdentifier } from '@shared/schemas';
-import type { ModelOptionData, RequestDecision, RunId } from '@shared/schemas';
+import type {
+  ModelOptionData,
+  RequestDecision,
+  RunId,
+  SessionEventDraft,
+} from '@shared/schemas';
 import { untrackRun, closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
@@ -23,6 +27,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { agentTool } from '@tools/delegation/AgentTool';
 import {
   executeSubagentInBand as executeSubagentInBandEffect,
@@ -95,31 +100,46 @@ vi.mock('@agent/storage', () => ({
 }));
 
 // The launch sites register through `registerRun`; route the spy through it.
+// A child's last-turn settlement rides the row that ends it: the suite's
+// record store takes its report and manifest, as the run's own rows would.
 vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@agent/storage/runLifecycle')>();
   return {
     ...actual,
     registerRun: mocks.registerRun,
+    finalizeRun: (
+      session: SessionHandle,
+      input: Parameters<typeof actual.finalizeRun>[1],
+    ) =>
+      Effect.tryPromise({
+        try: () => persistSettlement(input.runId, input.settlement ?? []),
+        catch: ensureError,
+      }).pipe(
+        Effect.matchEffect({
+          onFailure: (error) =>
+            Effect.succeed({
+              ok: false as const,
+              error,
+            }),
+          onSuccess: () => actual.finalizeRun(session, input),
+        }),
+      ),
   };
 });
 
-vi.mock('@agent/storage/childRunDeliveryPersistence', () => ({
-  persistChildRunDelivery: (
-    _session: unknown,
-    runId: RunId,
-    message: string,
-    resultMeta: unknown,
-  ) =>
-    Effect.tryPromise({
-      try: async () => {
-        await mocks.childRecords(runId).writeReport(message);
-        if (resultMeta !== undefined)
-          await mocks.childRecords(runId).writeResultMeta(resultMeta);
-      },
-      catch: ensureError,
-    }),
-}));
+/** Write a settlement's report and manifest to the suite's record store. */
+async function persistSettlement(
+  runId: RunId,
+  rows: readonly SessionEventDraft[],
+): Promise<void> {
+  for (const row of rows) {
+    if (row.type === 'run.report' && row.report !== null)
+      await mocks.childRecords(runId).writeReport(row.report);
+    if (row.type === 'run.result')
+      await mocks.childRecords(runId).writeResultMeta(row.result);
+  }
+}
 
 vi.mock('@model/computeModelOptions', () => ({
   readModelAvailabilityInputs: mocks.readModelAvailabilityInputs,
@@ -150,7 +170,7 @@ function parentRunContext(
   const stopAfterCycle = overrides.stopAfterCycle ?? false;
   return {
     ...(overrides.userInstruction !== undefined && {
-      userInstruction: overrides.userInstruction,
+      origin: { instruction: overrides.userInstruction },
     }),
     run: {
       runId: overrides.runId ?? PARENT_RUN_ID,
@@ -184,7 +204,7 @@ function callDelegateReview(call = parentRunContext()) {
       Effect.provide(
         nativeToolTestLayer({
           ...call,
-          toolCallId: `call-${generateShortId()}`,
+          callId: `call-${generateShortId()}`,
         }),
       ),
     );
@@ -454,6 +474,13 @@ describe('headless delegation', () => {
               ...options,
               turnSignal: signal,
             });
+            // Production's lifecycle settles the child's last turn with its
+            // `run.end`; a refused write leaves the run without them.
+            if (options.turns)
+              await persistSettlement(
+                runId,
+                await Effect.runPromise(options.turns.settleEnd(turn)),
+              ).catch(() => undefined);
             // Production's lifecycle drains the facts this run queued before
             // it writes the terminal row, and the row is the post-drain fact
             // (`finalizeRunTerminal`); the drain runs here too, so a

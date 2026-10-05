@@ -18,15 +18,15 @@ import {
   PersistedSurfaceSchema,
 } from '@shared/session/surface';
 import {
-  createWebviewStorage,
-  type KeyValueStore,
-} from '@shared/state/PersistedState';
-import {
   buildScenario,
   CHILD,
   foldAll,
   ROOT,
 } from '@test/shared/session/fanOutScenario';
+import {
+  createWebviewStorage,
+  type KeyValueStore,
+} from '@texra/shared/state/PersistedState';
 
 const transport = vi.hoisted(() => ({
   receive: vi.fn(),

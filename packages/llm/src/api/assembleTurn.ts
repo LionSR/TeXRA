@@ -297,9 +297,13 @@ const complete = Effect.fn('llm.completeTurn')(function* (turn: Assembly) {
     return yield* fail(turn, 'ended without an identified terminal result');
   const content = yield* settle(turn, turn.finish.snapshot);
   const calls = content.some((part) => part.kind === 'local-call');
-  const reason = turn.finish.finish.finishReason;
+  const reason =
+    turn.finish.finish.finishReason ?? (calls ? 'tool-calls' : 'stop');
   // A tool-call finish names calls, and a plain stop leaves none.
-  if ((reason === 'tool-calls' && !calls) || (reason === 'stop' && calls))
+  if (
+    (reason === 'tool-calls' || reason === 'stop') &&
+    calls !== (reason === 'tool-calls')
+  )
     return yield* fail(turn, 'returned inconsistent tool calls and finish');
   const result = TurnResultSchema.safeParse({
     kind: 'http',
@@ -309,6 +313,7 @@ const complete = Effect.fn('llm.completeTurn')(function* (turn: Assembly) {
     modelFingerprint: turn.fingerprint ?? null,
     content,
     ...turn.finish.finish,
+    finishReason: reason,
     usage: turn.usage,
   });
   if (!result.success || result.data.providerResponseId === null)

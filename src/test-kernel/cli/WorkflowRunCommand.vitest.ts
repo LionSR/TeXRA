@@ -14,7 +14,7 @@ import { it } from '@effect/vitest';
 import { Cause, Effect, Exit, Result } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
 import { getRunRecords } from '@agent/storage';
-import { documentTaskConfig } from '@agent/output/documentRecipe';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { runHeadlessAgent } from '@cli/commands/workflow';

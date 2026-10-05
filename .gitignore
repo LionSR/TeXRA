@@ -64,3 +64,6 @@ out/
 errorLogs/
 # Playwright MCP debug artifacts
 .playwright-mcp/
+
+# The headless service bundle the extension ships (packages/extension/scripts/build-serve.mjs).
+packages/extension/serve/

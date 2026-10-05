@@ -21,7 +21,7 @@ import {
 import type { RunCell } from '@agent/runtime/loop/runProgram';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
-import { dispatchFactsFor } from '@agent/runtime/run/tools';
+import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter } from '@agent/trace';
@@ -225,7 +225,7 @@ export function scriptedInvokerLayer(
                   invocation,
                   turn,
                   calls: dispatchFactsFor(
-                    turn,
+                    turn.kind === 'http' ? localCallsOf(turn.content) : [],
                     (yield* SynchronizedRef.get(run.steps))?.tools.registry,
                     run.logger,
                     generateShortId,
@@ -281,7 +281,6 @@ export function testAgentRun(
         Effect.scoped(next(current)),
       ),
     declinedRoutes: [],
-    pendingModelSwitch: { value: null },
     callbacks: {},
     ...base,
     ...over,

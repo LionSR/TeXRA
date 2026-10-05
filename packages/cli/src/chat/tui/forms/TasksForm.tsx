@@ -15,11 +15,6 @@ import {
 import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
-import type {
-  TaskSummary,
-  ToolEditPreview,
-} from '@controllers/server/protocol';
-import type { ServiceConnection } from '@controllers/server/client';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RunId, ToolEditPermission } from '@shared/schemas';
 import {
@@ -27,6 +22,11 @@ import {
   type SurfaceDecision,
 } from '@shared/session/approvalDecision';
 import { acceptsFollowUp } from '@shared/session/sessionView';
+import type { ServiceConnection } from '@texra/controllers/server/client';
+import type {
+  TaskSummary,
+  ToolEditPreview,
+} from '@texra/controllers/server/protocol';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { BaseTextInput } from '../input/BaseTextInput';

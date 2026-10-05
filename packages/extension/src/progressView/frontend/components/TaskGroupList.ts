@@ -31,12 +31,12 @@ import {
   scriptStages,
   type ScriptStageView,
   type TranscriptRow,
-} from '@ui/transcript';
-import { designTokens } from '@ui/styles';
+} from '@shared/transcript';
 import {
   formatWorkflowPhaseHeading,
   workflowPhaseHeadingOfGroup,
-} from '@ui/transcript/workflowCall';
+} from '@shared/transcript/workflowCall';
+import { designTokens } from '@ui/styles';
 
 // Side-effect imports - register Web Awesome components
 import '@awesome.me/webawesome/dist/components/button/button.js';

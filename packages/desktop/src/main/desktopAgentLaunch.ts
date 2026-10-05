@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
 
+import { Cancelled, type PlatformSecrets } from '@texra-ai/harness';
 import {
   presentRunFailure,
   selectAutoOpenFinalOutput,
@@ -12,9 +13,7 @@ import {
   type ProcessRuntime,
   withProcessServices,
 } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { RequestOpenFilePayload } from '@shared/schemas';
-import { Cancelled } from '@shared/session/requestErrors';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   createExternalLocation,
@@ -121,7 +120,7 @@ export const kickoffDesktopSetup = (options: {
         );
       }
       const { buildDesktopSetupRunRequest } = yield* Effect.tryPromise({
-        try: () => import('@controllers/onboarding/setupLaunch'),
+        try: () => import('@texra/controllers/onboarding/setupLaunch'),
         catch: ensureError,
       });
       const request = yield* buildDesktopSetupRunRequest(

@@ -1,10 +1,10 @@
 // Embeds the code sandbox worker in the bundle that imports it. The import
 // `virtual:code-sandbox-worker` resolves to the worker entry
-// (src/agent/codeSandbox/worker.ts) bundled on its own as CommonJS source
+// (packages/harness/src/agent/codeSandbox/worker.ts) bundled on its own as CommonJS source
 // text, which the host starts with `new Worker(source, { eval: true })`.
 //
 // Embedding the text rather than emitting a second file is what the QuickJS
-// WASM bytes already do (src/agent/codeSandbox/codeSandbox.ts): no host
+// WASM bytes already do (packages/harness/src/agent/codeSandbox/codeSandbox.ts): no host
 // resolves a worker path at run time, so the extension's CJS bundle, the
 // CLI's single ESM file, the desktop's split ESM chunks and the desktop's
 // app.asar all start the same worker without a per-host lookup table.
@@ -23,7 +23,7 @@ export const CODE_SANDBOX_WORKER_ID = 'virtual:code-sandbox-worker';
 export async function bundleCodeSandboxWorker({ minify = false } = {}) {
   const result = await build({
     absWorkingDir: repoRoot,
-    entryPoints: ['src/agent/codeSandbox/worker.ts'],
+    entryPoints: ['packages/harness/src/agent/codeSandbox/worker.ts'],
     bundle: true,
     write: false,
     metafile: true,

@@ -14,92 +14,58 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Effect, FileSystem } from 'effect';
 
-import { runAgent, type SessionHandle } from '@agent/runtime';
-import { handleMerge } from '@commands/agent/mergeCommands';
-import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
-import {
-  createFileSelectionPickers,
-  getCurrentFile,
-} from '@commands/files/fileSelectionCommands';
-import { openFile, openLabel } from '@commands/files/openFileCommands';
-import { findCommitInHistory } from '@commands/git/gitCommands';
-import { handleClean } from '@commands/housekeeping/cleanCommands';
-import { handlePack } from '@commands/housekeeping/packCommands';
-import {
-  handleAcceptEdited,
-  handleCompare,
-} from '@commands/latex/compareCommands';
-import {
-  handleLatexdiff,
-  handleLatexdiffCommitAction,
-  handleRunLatexdiff,
-} from '@commands/latex/latexdiffCommands';
-import { getIncludedExtensions } from '@common/files/fileTypeUtils';
-import { launchOnRun } from '@controllers/mainView/backend/MainViewRunLaunchController';
-import { localSessionBackend } from '@controllers/session/sessionBackend';
-import type { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
-import { normalizeMainViewFileExtension } from '@controllers/mainView/MainViewDroppedFilesController';
-import { ChatExportController } from '@controllers/progressView/ChatExportController';
-import {
-  exportRunTranscript,
-  TRANSCRIPT_EXPORT_FORMAT_CHOICES,
-  type TranscriptExportOpenKind,
-} from '@controllers/progressView/exportTranscript';
-import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
-import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
-import { ApiKeyPromptFailed } from '@controllers/progressView/ProgressApiKeyRetryController';
-import {
-  fromHost,
-  hostFailure,
-  type HostCallFailed,
-} from '@controllers/session/hostCallFailure';
-import {
-  createHostRunActions,
-  type HostRunActionPorts,
-} from '@controllers/session/hostRunActions';
-import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
-import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
-import {
-  handleSharedHostRequest,
-  isSharedHostRequest,
-  type SharedHostRequestBindings,
-  type SharedHostRequestPorts,
-} from '@controllers/session/sharedHostRequests';
-import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
-import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
-import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
-import { ExternalOpenFailed } from '@hosts/uiHosts';
-import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
-import { withLogChannel } from '@logger/effectLog';
-import { loadModelOptions } from '@model/setupCredentialAccess';
 import {
   AgentDirectories,
   type StateStore,
   type StateReadFailed,
   type StateWriteFailed,
-} from '@platform/interfaces';
-import type { LanguageModel } from '@platform/languageModel';
+  Cancelled,
+  Rejected,
+  type HostRequestFailure,
+  type RequestRefusal,
+  PlatformSecrets,
+  LanguageModel,
+} from '@texra-ai/harness';
+import type { SessionHandle } from '@agent/runtime';
+import {
+  handleLatexdiff,
+  handleLatexdiffCommitAction,
+  handleRunLatexdiff,
+} from '@commands/latex/latexdiffCommands';
+import {
+  handleAcceptEdited,
+  handleCompare,
+} from '@commands/latex/compareCommands';
+import { handlePack } from '@commands/housekeeping/packCommands';
+import { handleClean } from '@commands/housekeeping/cleanCommands';
+import { findCommitInHistory } from '@commands/git/gitCommands';
+import { openFile, openLabel } from '@commands/files/openFileCommands';
+import {
+  createFileSelectionPickers,
+  getCurrentFile,
+} from '@commands/files/fileSelectionCommands';
+import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
+import { handleMerge } from '@commands/agent/mergeCommands';
+import { getIncludedExtensions } from '@common/files/fileTypeUtils';
+import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
+import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
+import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
+import { withLogChannel } from '@logger/effectLog';
+import { withSessionFs, WorkspaceFs, type StorageFs } from '@platform/rootedFs';
 import {
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
 } from '@platform/processRuntime';
-import { withSessionFs, WorkspaceFs, type StorageFs } from '@platform/rootedFs';
-import type { PlatformSecrets } from '@platform/secrets';
 import latexPreamble from '@resources/templates/chatExport.tex';
+import type { HostRequest } from '@shared/session/hostRequest';
 import {
   GETTING_STARTED_COMMANDS,
   isMultipleDocumentFileType,
   type RunId,
 } from '@shared/schemas';
-import type { HostRequest } from '@shared/session/hostRequest';
-import {
-  Cancelled,
-  Rejected,
-  type HostRequestFailure,
-  type RequestRefusal,
-} from '@shared/session/requestErrors';
 import type {
   HostOutcome,
   SurfaceActionMessage,
@@ -108,21 +74,54 @@ import {
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
+import { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import { pathToLocationIn } from '@utils/files/fileLocation';
+import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
+import { normalizeMainViewFileExtension } from '@texra/controllers/mainView/MainViewDroppedFilesController';
+import { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
+import {
+  exportRunTranscript,
+  TRANSCRIPT_EXPORT_FORMAT_CHOICES,
+  type TranscriptExportOpenKind,
+} from '@texra/controllers/progressView/exportTranscript';
+import { ApiKeyPromptFailed } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
+import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
+import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
+import {
+  fromHost,
+  hostFailure,
+  type HostCallFailed,
+} from '@texra/controllers/session/hostCallFailure';
+import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
+import {
+  createHostRunActions,
+  type HostRunActionPorts,
+} from '@texra/controllers/session/hostRunActions';
+import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
+import {
+  handleSharedHostRequest,
+  isSharedHostRequest,
+  type SharedHostRequestBindings,
+  type SharedHostRequestPorts,
+} from '@texra/controllers/session/sharedHostRequests';
+import { loadModelOptions } from '@texra/model/setupCredentialAccess';
+import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies';
+import { getToolDocsCommand } from '@texra/utils/system/toolChecks';
 import {
   locateInWorkspace,
   workspaceRelativePath,
 } from '@utils/files/workspaceFS';
-import { checkCoreDependencies } from '@utils/system/checkCoreDependencies';
-import { getToolDocsCommand } from '@utils/system/toolUtils';
+import { pathToLocationIn } from '@utils/files/fileLocation';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const CHANNEL = 'ExtensionHostRequests';
 
 interface ExtensionHostRequestsOptions {
   readonly session: SessionHandle;
+  /** Where this window's runs run: the session here, or the service's. */
+  readonly backend: SessionBackend;
   readonly extensionPath: string;
   readonly globalState: StateStore;
   /** The process secret store the extension root holds (model availability). */
@@ -209,6 +208,7 @@ export function createExtensionHostRequests(
 ): ExtensionHostRequests {
   const {
     session,
+    backend,
     snapshot,
     toolEditApprovals,
     secrets,
@@ -224,29 +224,32 @@ export function createExtensionHostRequests(
   const multipleFilePickers = createFileSelectionPickers(session);
 
   /**
-   * Launch a validated fresh request directly, as the desktop's
-   * `runValidated` does: the surface's launch and the shared run actions
-   * both reach `runAgent` here. The launch program takes its process services from this
-   * runtime's context on the fiber that runs it.
+   * Launch a validated fresh request through the window's backend, here or
+   * in the service, and open its final output once it ends: the surface's
+   * launch and the shared run actions both reach it. The launch program
+   * takes its process services from this runtime's context on the fiber
+   * that runs it.
    */
   const runValidated: HostRunActionPorts['runValidated'] = (
     request,
     runOptions = {},
   ) => {
-    const launch = runAgent(request, {
-      session,
-      preferHelperModel: runOptions.preferHelperModel ?? false,
-      ownApiKeyFallback: runOptions.ownApiKeyFallback,
-      onRun: launchOnRun(session.approvals, runOptions),
-      onRunResolved: options.presentLaunchedRun,
-    }).pipe(Effect.flatMap(openFinalOutputIfAvailable(session.roots)));
+    const launch = backend
+      .launch(request, {
+        preferHelperModel: runOptions.preferHelperModel ?? false,
+        ownApiKeyFallback: runOptions.ownApiKeyFallback,
+        approveDelegatedWork: runOptions.approveDelegatedWork,
+        onRun: runOptions.onRun,
+        onRunResolved: options.presentLaunchedRun,
+      })
+      .pipe(Effect.flatMap(openFinalOutputIfAvailable(session.roots)));
     return withProcessServices(runtime, launch);
   };
 
   const runActions = runtime.runSync(
     createHostRunActions({
       session,
-      backend: localSessionBackend(session),
+      backend,
       runValidated,
       openWorkflowOutput: (result) =>
         withProcessServices(

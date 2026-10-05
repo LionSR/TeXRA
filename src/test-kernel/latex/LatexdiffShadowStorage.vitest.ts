@@ -11,11 +11,11 @@ import {
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import type { RunId, OutputFileInfo } from '@shared/schemas';
-import { DocumentsStateKey } from '@shared/settingsView/documentsSettings';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import {
   createExternalLocation,
   createRunStorageLocation,

@@ -22,10 +22,6 @@ import { describe, expect, vi } from 'vitest';
 
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import {
-  frameSubscription,
-  type FramerSource,
-} from '@controllers/session/SessionFramer';
-import {
   LocalRuntimeSource,
   TextChunkSource,
   TranscriptSubscriptions,
@@ -34,10 +30,7 @@ import {
 import { databaseLayer } from '@controllers/session/Database';
 import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
-import { WebviewSessions } from '@controllers/session/webviewSessionLayer';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-import { SessionBridge } from '@controllers/session/SessionBridge';
-import { localSessionBackend } from '@controllers/session/sessionBackend';
 import {
   aggregateId as qualifyAggregateId,
   DEBUG_MODE_KEY,
@@ -68,6 +61,13 @@ import {
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import {
+  frameSubscription,
+  type FramerSource,
+} from '@texra/controllers/session/SessionFramer';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
+import { SessionBridge } from '@texra/controllers/session/SessionBridge';
+import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer';
 
 function textTail(
   text: string,
@@ -220,13 +220,16 @@ const framerSource = Effect.gen(function* () {
 });
 
 describe('session framer', () => {
-  it('rejects a run event carried by an inquiry aggregate at the wire boundary', () => {
+  it('rejects a run event carried by a plugin aggregate at the wire boundary', () => {
     const input = {
       _tag: 'event',
       read: 'listing',
       event: {
         ...runStart,
-        aggregateId: qualifyAggregateId('inquiry', 'ei_012345abcdef'),
+        aggregateId: qualifyAggregateId(
+          'plugin',
+          'external-inquiry:ei_012345abcdef',
+        ),
         seq: 1,
         commit: 1,
         origin: SELF,

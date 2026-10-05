@@ -6,11 +6,12 @@
 import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { RunRecord } from '@agent/core/definition/RunRecord';
 import {
-  RunRecordSchema,
-  type RunRecord,
-} from '@agent/core/definition/RunRecord';
-import { aggregateId, type RunId } from '@shared/schemas';
+  aggregateId,
+  RunRecordFieldsSchema,
+  type RunId,
+} from '@shared/schemas';
 
 export const seedRunRecord = (
   session: SessionHandle,
@@ -22,7 +23,7 @@ export const seedRunRecord = (
       {
         type: 'run.config',
         aggregateId: aggregateId('run', runId),
-        config: RunRecordSchema.parse(record),
+        config: RunRecordFieldsSchema.parse(record),
       },
     ]),
   ).pipe(Effect.asVoid);

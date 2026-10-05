@@ -2,7 +2,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import { html, LitElement, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
-import { SessionUiEvents } from '@shared/session/uiEvents';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { designTokens, commonViewStyles, bannerStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderWarningBanner } from '@ui/wa/bannerFrame';

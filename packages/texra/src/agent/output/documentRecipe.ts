@@ -1,0 +1,82 @@
+/**
+ * The document task recipe: the one script a document task runs, shipped by
+ * the documents plugin as inline source. A document task is a run of its
+ * persona opened on this script (`AgentConfig.script`) instead of a model
+ * turn; the script calls the persona once per revision through `agent()`
+ * and does everything else with the document tools (`./documentTools`).
+ * A task launched with `toolConfig.reflect` also has the bundled `critic`
+ * review each revision but the last, and the next revision reads its
+ * critique; the revision count stays the task's. The persona's name is the
+ * one value the source takes; a run records the source it ran, so a resume
+ * replays the same program.
+ */
+import { agentKey } from '@shared/schemas';
+import type { AgentConfig } from '@texra-ai/harness/schemas';
+
+/** The tools the recipe calls: what a document task's run offers it. */
+const DOCUMENT_TASK_TOOLS = [
+  'agent',
+  'document_context',
+  'document_extract',
+  'document_compile',
+  'document_diff',
+  'document_review',
+  'document_propose',
+] as const;
+
+/** The recipe for the persona `agentName`. */
+function recipeSource(agentName: string): string {
+  return `const agentName = ${JSON.stringify(agentName)};
+let revisions = 1;
+let critique = null;
+for (let revision = 0; revision < revisions; revision += 1) {
+  phase(\`Revision \${revision + 1}\`);
+  const context = await tools.document_context({ revision, critique });
+  revisions = context.revisions;
+  const reply = await agent(context.prompt, {
+    agentName,
+    mediaFiles: context.mediaFiles,
+    memories: context.memories,
+    label: \`Revision \${revision + 1}\`,
+  });
+  await tools.document_extract({ revision, run: reply.runId });
+  const compiled = await tools.document_compile({ revision });
+  await tools.document_diff({ revision });
+  if (context.reflect && revision + 1 < revisions) {
+    const review = await tools.document_review({
+      revision,
+      checked: compiled.checked,
+    });
+    const critic = await agent(review.prompt, {
+      agentName: 'builtIn:critic',
+      label: \`Critique \${revision + 1}\`,
+    });
+    critique = critic.response;
+  }
+}
+return (await tools.document_propose({})).documents;`;
+}
+
+/**
+ * The launch of `config`'s agent as a document task: its run opens on the
+ * recipe, offers the recipe's tools, and its revisions' agent calls were
+ * approved with the launch.
+ */
+export function documentTaskConfig<
+  C extends Pick<AgentConfig, 'agent'> & Partial<AgentConfig>,
+>(config: C): C & { readonly script: NonNullable<AgentConfig['script']> } {
+  return {
+    ...config,
+    script: {
+      // The exact entry: a bare name would re-resolve to whatever shadows it.
+      code: recipeSource(
+        config.agentSource
+          ? agentKey(config.agentSource, config.agent)
+          : config.agent,
+      ),
+      title: config.agent,
+      tools: [...DOCUMENT_TASK_TOOLS],
+      kind: 'recipe',
+    },
+  };
+}

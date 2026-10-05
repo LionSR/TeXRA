@@ -384,28 +384,10 @@ function verifyMacSigning(requireSigning) {
   const label = 'macOS desktop signing check';
   const certificateNames = ['CSC_LINK', 'CSC_KEY_PASSWORD'];
   const apiKeyNames = ['APPLE_API_KEY', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER'];
-  const appleIdNames = [
-    'APPLE_ID',
-    'APPLE_APP_SPECIFIC_PASSWORD',
-    'APPLE_TEAM_ID',
-  ];
-  const keychainNames = ['APPLE_KEYCHAIN', 'APPLE_KEYCHAIN_PROFILE'];
-  const allNames = [
-    ...certificateNames,
-    ...apiKeyNames,
-    ...appleIdNames,
-    ...keychainNames,
-  ];
+  const allNames = [...certificateNames, ...apiKeyNames];
 
-  const certificateMissing = collectMissing(certificateNames);
-  const apiKeyMissing = collectMissing(apiKeyNames);
-  const appleIdMissing = collectMissing(appleIdNames);
-  const keychainMissing = collectMissing(keychainNames);
-  const hasCompleteNotarization =
-    apiKeyMissing.length === 0 ||
-    appleIdMissing.length === 0 ||
-    keychainMissing.length === 0;
-  const configured = certificateMissing.length === 0 && hasCompleteNotarization;
+  const missingNames = collectMissing(allNames);
+  const configured = missingNames.length === 0;
   const partial = hasAny(allNames) && !configured;
 
   if (configured) {
@@ -426,30 +408,11 @@ function verifyMacSigning(requireSigning) {
   writeOutput('signed', 'false');
 
   if (partial || requireSigning) {
-    const missing = [
-      ...certificateMissing,
-      ...(apiKeyMissing.length === apiKeyNames.length
-        ? []
-        : apiKeyMissing.map((name) => `${name} (API key notarization set)`)),
-      ...(appleIdMissing.length === appleIdNames.length
-        ? []
-        : appleIdMissing.map((name) => `${name} (Apple ID notarization set)`)),
-      ...(keychainMissing.length === keychainNames.length
-        ? []
-        : keychainMissing.map((name) => `${name} (keychain notarization set)`)),
-    ];
-
-    if (!hasCompleteNotarization) {
-      missing.push(
-        'one complete notarization set: APPLE_API_KEY/APPLE_API_KEY_ID/APPLE_API_ISSUER, APPLE_ID/APPLE_APP_SPECIFIC_PASSWORD/APPLE_TEAM_ID, or APPLE_KEYCHAIN/APPLE_KEYCHAIN_PROFILE',
-      );
-    }
-
     return {
       label,
       failures: [
         'macOS desktop signing is incomplete.',
-        ...missing.map((name) => `missing ${name}`),
+        ...missingNames.map((name) => `missing ${name}`),
       ],
     };
   }
@@ -544,7 +507,7 @@ const bundledRuntimeResourceDirs = [
 ];
 // The Codex and Claude Code SDKs each pull a per-platform package carrying a
 // 250-410 MiB native CLI binary. The desktop app resolves a user-installed CLI
-// at runtime (src/tools/codexImport.ts, src/tools/claudeAgentImport.ts), so
+// at runtime (packages/texra/src/tools/codexImport.ts, packages/texra/src/tools/claudeAgentImport.ts), so
 // none of these packages may ship inside the app — keeping the SDKs in
 // devDependencies is what stops electron-builder from copying them.
 const forbiddenNativeCliPackages = [

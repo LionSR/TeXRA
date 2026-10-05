@@ -6,7 +6,6 @@
         "src/test-kernel/**/*.vitest.ts",
         "src/test-kernel/support/setupFakePlatform.ts",
         "src/test-kernel/desktop/electronTestStub.ts",
-        "src/agent/codeSandbox/worker.ts!",
         "scripts/**/*.mjs!"
       ],
       "project": ["src/**/*.{ts,mts}!", "!src/**/*.js", "!src/test-kernel/**!"]
@@ -15,12 +14,13 @@
       "entry": ["src/**/frontend/index.ts!"],
       "project": ["src/**/*.{ts,tsx,mts}!"]
     },
-    "packages/agent": {
+    "packages/harness": {
       "entry": [
         "src/index.ts!",
         "src/node.ts!",
         "src/plugins.ts!",
         "src/schemas.ts!",
+        "src/agent/codeSandbox/worker.ts!",
         "scripts/*.mjs!"
       ],
       "project": ["src/**/*.{ts,mts}!", "scripts/*.mjs!"]

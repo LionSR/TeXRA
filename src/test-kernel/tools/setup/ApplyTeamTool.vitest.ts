@@ -25,7 +25,7 @@ import {
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import { ApplyTeamTool } from '@tools/setup/ApplyTeamTool';
+import { ApplyTeamTool } from '@texra/tools/setup/ApplyTeamTool';
 
 // Local file imports
 import { createFakeSetupPlatform } from './fixtures';

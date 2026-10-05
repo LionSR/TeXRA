@@ -5,19 +5,12 @@
 // Run start/resume/stop orchestration lives in ../chatSessionController;
 // this module keeps only composition, rendering glue, and the Ink lifecycle.
 
-import {
-  Cause,
-  Effect,
-  Exit,
-  Fiber,
-  Result,
-  Scope,
-  SubscriptionRef,
-} from 'effect';
+import { Cause, Effect, Exit, Fiber, Result, Scope } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
-import { getVisibleAgents } from '@agent/index';
+import { aggregateId } from '@texra-ai/harness';
 import type { AgentConfig } from '@agent/runtime';
+import { getVisibleAgents } from '@agent/index';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { reachCliService } from '@cli/runtime/cliService';
 
@@ -39,24 +32,22 @@ import {
   clearTerminalScrollback,
 } from '@cli/tui/terminalCleanup';
 import { cliSecrets } from '@cli/runtime/cliSecrets';
-import { localSessionBackend } from '@controllers/session/sessionBackend';
-import { serviceSessionBackend } from '@controllers/server/serviceBackend';
-import { attachWindowHost } from '@controllers/server/windowHost';
-import { DisposableStore } from '@platform/disposable';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
-import { aggregateId } from '@shared/schemas';
 import {
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import type { RunId } from '@shared/schemas';
 import { RUN_PHASE } from '@shared/schemas';
-import { subscribeToSignalChanges } from '@shared/signals';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import {
   isActivePhase,
   isTranscriptSettlementPhase,
 } from '@shared/runs/runStatus';
+import { DisposableStore } from '@texra/platform/disposable';
+import { subscribeToSignalChanges } from '@texra/shared/signals';
+import { attachWindowHost } from '@texra/controllers/server/windowHost';
+import { serviceSessionBackend } from '@texra/controllers/server/serviceBackend';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { serviceAgentRuns } from '../serviceAgentRuns';
 
@@ -119,6 +110,7 @@ import {
   TuiSession,
 } from './state/sessionRunState';
 import { createSessionExitController } from './sessionExitController';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 interface ChatResult {
   exitCode: number;
@@ -171,10 +163,10 @@ export async function runChat(
       // Every chat is a client of the one service, so other terminals and
       // windows see its task; one that cannot reach it runs here, and says
       // so once.
-      const service = yield* reachCliService(
-        context.storageRoot,
-        context.version,
-      ).pipe(Scope.provide(chatScope), Effect.result);
+      const service = yield* reachCliService(context.storageRoot).pipe(
+        Scope.provide(chatScope),
+        Effect.result,
+      );
       const services = yield* initCliPlatform({
         ...context,
         presentsStoreMovedAside: true,
@@ -367,9 +359,7 @@ export async function runChat(
   // composer closes on the reason, Ctrl-C still exits, and the exit is a
   // failure on every exit path, since they all read `session.runExitCode`.
   const unbindSessionView = bindSessionView(runtime, backend.view, {
-    changes: runsElsewhere
-      ? SubscriptionRef.changes(backend.view)
-      : runtimeSession.viewChanges,
+    changes: backend.viewChanges,
     onFailure: (error) => {
       sessionViewFailureSignal.set(
         `The session view stopped updating: ${toErrorMessage(error)} Press Ctrl-C to exit and restart texra. If it repeats, run the same texra version that last opened this project; an older build cannot read a newer session store.`,
@@ -490,7 +480,7 @@ export async function runChat(
   // Pre-register the slash commands the input palette uses.
   registerBuiltinSlashCommands({
     backend,
-    connectService: () => reachCliService(context.storageRoot, context.version),
+    connectService: () => reachCliService(context.storageRoot),
     onAccountChanged: () =>
       connectChatModel(
         slashCommandContext(),

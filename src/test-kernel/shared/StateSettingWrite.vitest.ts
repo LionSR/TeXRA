@@ -4,15 +4,15 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { DocumentsStateKey } from '@shared/settingsView/documentsSettings';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
-import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { applyStateSettingUpdate } from '@shared/settingsView/handlers/stateSettingWrite';
 import {
   isStored,
   makeFakeSettingsStores,
 } from '@test/support/settingsStoresFake';
+import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
+import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
+import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
 
 describe('applyStateSettingUpdate', () => {
   it.effect(

@@ -106,6 +106,13 @@ texra run polish --input Draft0.tex --input appendices.tex --output-dir polished
 texra run correct --input 'sections/**/*.tex' --output-dir corrected
 ```
 
+Add `--reflect` to have the bundled `critic` agent review each revision but the
+last; the next revision reads its critique. The revision count is unchanged:
+
+```bash
+texra run polish --input paper.tex --output paper.polished.tex --reflect
+```
+
 Document tasks always write generated files into the run's run-storage
 directory first. In text mode, TeXRA prints a filesystem path: the copied path
 when `--output` or `--output-dir` is used, otherwise the final generated file in
@@ -479,10 +486,11 @@ with no window of the project open, the task runs as a headless run does.
 
 `texra chat` (and a bare `texra`) is a client of the service: the
 conversation's runs run there, so `/tasks` in another terminal lists it and
-can attach to it while it works. When the service cannot start, the chat
-runs in its own process and says so once; other terminals then do not see
-it. `texra run`, `-p` and `--output-format ndjson` always run in their own
-process.
+can attach to it while it works. `texra resume <id>` of a conversation the
+service is running continues it there. When the service cannot start, or
+`TEXRA_NO_SERVICE=1` is set, the chat runs in its own process and says so
+once; other terminals then do not see it. `texra run`, `-p` and
+`--output-format ndjson` always run in their own process.
 
 ```bash
 texra tasks list                                   # every project's tasks, newest first

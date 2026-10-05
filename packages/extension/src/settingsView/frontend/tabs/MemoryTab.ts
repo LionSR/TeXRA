@@ -4,9 +4,9 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { postMessage } from '@shared/hostBridge';
 import type { MemoryViewItem } from '@shared/tools/memoryView';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { postMessage } from '@texra/shared/hostBridge';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 

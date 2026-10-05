@@ -6,9 +6,8 @@ import { type SessionHandle } from '@agent/runtime';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { ReaderPanel, readerLayout } from '@cli/tui/ui/BorderedPanel';
 import { CLOSE_HINTS, READER_SCROLL_HINTS } from '@cli/tui/ui/KeyHints';
-import type { RunId } from '@shared/schemas';
-
 import { ScrollableModalText } from '../modals/ScrollableModalText';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 export function WorkPlanReader({
   availableRows,

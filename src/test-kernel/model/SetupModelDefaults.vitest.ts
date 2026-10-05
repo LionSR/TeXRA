@@ -11,7 +11,7 @@ import {
 import {
   CHATGPT_SETUP_MODEL,
   SETUP_MODEL_BY_PROVIDER,
-} from '@model/setupModelDefaults';
+} from '@texra/model/setupModelDefaults';
 
 /**
  * The setup pins are literal data. An llm-zoo bump that retires or deprecates

@@ -6,8 +6,8 @@ import {
   InvalidAgentTeamError,
 } from '@agent/index';
 import { agentKeyOf } from '@shared/schemas';
-import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
 import { readSetting } from '@shared/config/settingsAccess';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { unique } from '@utils/core';
 
 import {

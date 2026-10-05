@@ -17,8 +17,8 @@ import { repeat } from 'lit/directives/repeat.js';
 // Local imports - main view
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { SurfaceAction } from '@shared/session/surface';
-import { SessionUiEvents } from '@shared/session/uiEvents';
 import type { TeXRAIconName } from '@shared/iconNames';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { buttonStyles } from '@ui/styles/controlStyles';
 import { compactFormControlStyles, designTokens } from '@ui/styles';
 import { readSelectValue } from '@ui/wa/selectTemplates';

@@ -8,6 +8,6 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "../../src/**/*.d.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "../harness/src/**/*.d.ts"],
   "exclude": []
 }

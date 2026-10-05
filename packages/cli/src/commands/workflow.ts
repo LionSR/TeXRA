@@ -3,9 +3,8 @@ import { Effect, FileSystem, Result } from 'effect';
 
 import { deriveResumability, getRunRecords } from '@agent/storage';
 import { type AgentConfigPayload, type SessionHandle } from '@agent/runtime';
-import { documentTaskConfig } from '@agent/runtime';
-import { RUN_OUTCOME, type RunId } from '@shared/schemas';
-import type { SessionOpenError } from '@shared/session/database';
+import { DEFAULT_TOOL_CONFIG, RUN_OUTCOME, type RunId } from '@shared/schemas';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 
 import {
   failUsage,
@@ -69,6 +68,7 @@ import {
   resumeWorkflowOutputDirectory,
   resumeWorkflowOutputFile,
 } from '../runtime/workflowOutput';
+import type { SessionOpenError } from '@texra-ai/harness';
 
 const MULTI_INPUT_OUTPUT_MESSAGE =
   'Use --output-dir for multi-input document tasks; --output is only for a single final artifact.';
@@ -90,6 +90,7 @@ interface HeadlessRunInit {
   readonly model?: string;
   readonly instruction: string;
   readonly instructionFile?: string;
+  readonly reflect?: boolean;
 }
 
 /**
@@ -181,6 +182,9 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
           inputFiles,
           contextFiles,
           outputFiles: [],
+          ...(init.reflect && {
+            toolConfig: { ...DEFAULT_TOOL_CONFIG, reflect: true },
+          }),
           ...(cliOutputFile !== undefined || cliOutputDirectory !== undefined
             ? {
                 cli: {
@@ -219,9 +223,10 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
 ): Effect.fn.Return<number, Error, CliRunServices> {
   // `--output` and `--output-dir` are rejected as a pair before this point, so
   // at most one of them is set here.
-  const workflowOnlyFlag = init.output
-    ? '--output'
-    : init.outputDir && '--output-dir';
+  const workflowOnlyFlag =
+    (init.output && '--output') ||
+    (init.outputDir && '--output-dir') ||
+    (init.reflect && '--reflect');
   if (workflowOnlyFlag) {
     return yield* failUsage(
       `${workflowOnlyFlag} is only available for document tasks; "${init.agent}" has no task.`,
@@ -489,6 +494,11 @@ export const headlessRunCommand = defineCliCommand({
       description:
         'File whose contents are passed before --instruction when both are set',
     },
+    reflect: {
+      type: 'boolean',
+      description:
+        'Document tasks only: have the critic agent review each revision but the last',
+    },
   },
   run: (context, ctx) =>
     runHeadlessAgent(context, {
@@ -497,5 +507,6 @@ export const headlessRunCommand = defineCliCommand({
       output: optionalStringFlagValue(ctx.rawArgs, 'output'),
       outputDir: optionalStringFlagValue(ctx.rawArgs, 'output-dir'),
       model: optString(ctx.args.model),
+      reflect: ctx.args.reflect === true,
     }),
 });

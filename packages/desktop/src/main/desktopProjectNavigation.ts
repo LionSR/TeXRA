@@ -6,7 +6,7 @@
 import { app } from 'electron';
 import { Effect } from 'effect';
 
-import type { RunId } from '@shared/schemas';
+import type { RunId } from '@texra-ai/harness/schemas';
 import type { ProjectBindings } from './desktopProjectBindings.js';
 import type { DesktopProjectRegistry } from './desktopProjects.js';
 import type { DesktopWindowHost } from './desktopWindowHost.js';

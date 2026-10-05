@@ -644,21 +644,22 @@
     "@vscode/vsce": "^4.0.0",
     "concurrently": "^10.0.5",
     "esbuild": "^0.28.2",
-    "vite": "^8.3.1"
+    "vite": "^8.3.2"
   },
   "scripts": {
     "clean:dist": "node ../../scripts/clean-extension-dist.mjs",
     "prepare:docs": "node ../../scripts/copy-extension-docs.mjs",
     "prepare:trace-viewer-assets": "corepack pnpm --filter @texra/trace-viewer run build",
+    "bundle:serve": "node scripts/build-serve.mjs",
     "esbuild:ext": "node esbuild.config.mjs",
     "esbuild:ext:watch": "node esbuild.config.mjs --watch",
     "esbuild:ext:prod": "node esbuild.config.mjs --production",
     "vite:webviews": "for v in progressView settingsView; do VITE_WEBVIEW=$v vite build; done",
     "vite:webviews:dev": "for v in progressView settingsView; do VITE_WEBVIEW=$v vite build --mode development; done",
     "vite:webviews:watch": "concurrently \"VITE_WEBVIEW=progressView vite build --watch --mode development\" \"VITE_WEBVIEW=settingsView vite build --watch --mode development\"",
-    "compile:fast": "corepack pnpm run clean:dist && concurrently \"corepack pnpm run prepare:trace-viewer-assets\" \"corepack pnpm run esbuild:ext\" \"corepack pnpm run vite:webviews:dev\"",
+    "compile:fast": "corepack pnpm run clean:dist && concurrently \"corepack pnpm run prepare:trace-viewer-assets\" \"corepack pnpm run esbuild:ext\" \"corepack pnpm run bundle:serve\" \"corepack pnpm run vite:webviews:dev\"",
     "watch:fast": "echo \"[texra-watch] starting\" && corepack pnpm run compile:fast && echo \"[texra-watch] initial build complete\" && concurrently \"corepack pnpm run esbuild:ext:watch\" \"corepack pnpm run vite:webviews:watch\"",
-    "package:fast": "corepack pnpm run clean:dist && concurrently \"corepack pnpm run prepare:trace-viewer-assets\" \"corepack pnpm run esbuild:ext:prod\" \"corepack pnpm run vite:webviews\"",
+    "package:fast": "corepack pnpm run clean:dist && concurrently \"corepack pnpm run prepare:trace-viewer-assets\" \"corepack pnpm run esbuild:ext:prod\" \"corepack pnpm run bundle:serve\" \"corepack pnpm run vite:webviews\"",
     "build:fast": "corepack pnpm run package:fast && corepack pnpm run prepare:docs && mkdir -p ../../releases && vsce package --no-dependencies $VSCE_PACKAGE_FLAGS --out ../../releases/texra-$npm_package_version.vsix"
   }
 }

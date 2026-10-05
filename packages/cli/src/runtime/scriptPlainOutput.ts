@@ -15,7 +15,7 @@ import {
   type RunView,
   type SessionView,
 } from '@shared/session/sessionView';
-import { scriptStages } from '@ui/transcript';
+import { scriptStages } from '@shared/transcript';
 import { formatCostUsd } from '@utils/text/stringUtils';
 
 import { claimRootRun } from './sessionViewFollow';

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ postMessage: vi.fn() }));
-vi.mock('@shared/hostBridge', () => ({ postMessage: mocks.postMessage }));
+vi.mock('@texra/shared/hostBridge', () => ({ postMessage: mocks.postMessage }));
 
 import type {
   SubscriptionUsageSnapshot,

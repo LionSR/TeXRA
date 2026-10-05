@@ -4,16 +4,15 @@ import { Cause, Effect, FileSystem, type PlatformError } from 'effect';
 import { nanoid } from 'nanoid';
 
 import {
-  ExternalOpenFailed,
-  type DiffSource,
-  type DiffViewHost,
-} from '@hosts/uiHosts';
-import {
   type ProcessRuntime,
   withProcessServices,
 } from '@platform/processRuntime';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { monacoLanguageForPath } from '@shared/monaco/monacoLanguage';
+import {
+  ExternalOpenFailed,
+  type DiffSource,
+  type DiffViewHost,
+} from '@texra/hosts/uiHosts';
+import { monacoLanguageForPath } from '@texra/shared/monaco/monacoLanguage';
 import { countLineChanges } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -31,6 +30,7 @@ import {
   tryShowInRenderer,
   type DesktopOverlayPostOptions,
 } from './desktopIpcTypes.js';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 
 /**
  * The temp directories holding the external-editor patch files of every

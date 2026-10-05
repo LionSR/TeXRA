@@ -41,7 +41,7 @@ specific layout is required.
 ## Cross-package imports
 
 Playwright's ESM loader cannot resolve a relative `.js` import of a TS file
-from `src/shared/...` (it sees the `.js` suffix and treats the resolved
+from `packages/harness/src/shared/...` (it sees the `.js` suffix and treats the resolved
 module as CommonJS, then fails on named exports). The shared fixture loader in
 `scripts/desktop-package-smoke-environment.mjs` bundles the production database
 and project-record operations with esbuild. Both E2E launches and the packaged

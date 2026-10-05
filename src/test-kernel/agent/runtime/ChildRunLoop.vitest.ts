@@ -16,7 +16,6 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   finalizeRun: vi.fn(),
   submitFollowUp: vi.fn(),
-  persistChildRunDelivery: vi.fn(),
   commitRunEndAfterArtifacts: vi.fn(
     async (_session: unknown, _runId: RunId) => {},
   ),
@@ -39,28 +38,15 @@ vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
   submitFollowUp: mocks.submitFollowUp,
 }));
 
-vi.mock(
-  '@agent/storage/childRunDeliveryPersistence',
-  async (importOriginal) => ({
-    ...(await importOriginal<
-      typeof import('@agent/storage/childRunDeliveryPersistence')
-    >()),
-    persistChildRunDelivery: mocks.persistChildRunDelivery,
-  }),
-);
-
 import { getRunRecords } from '@agent/storage';
 import { readChildTurnState } from '@agent/storage/runRecords';
+import type { FinalizeRunInput } from '@agent/storage/runLifecycle';
 const { finalizeRun: realFinalizeRun } = await vi.importActual<
   typeof import('@agent/storage/runLifecycle')
 >('@agent/storage/runLifecycle');
 const { submitFollowUp: realSubmitFollowUp } = await vi.importActual<
   typeof import('@agent/followUp/ToolUseFollowUp')
 >('@agent/followUp/ToolUseFollowUp');
-const { persistChildRunDelivery: realPersistChildRunDelivery } =
-  await vi.importActual<
-    typeof import('@agent/storage/childRunDeliveryPersistence')
-  >('@agent/storage/childRunDeliveryPersistence');
 import {
   startChildRunLoop,
   type ChildRunLoopParams,
@@ -304,9 +290,16 @@ beforeEach(async () => {
   vi.spyOn(session, 'commitRunEnd').mockImplementation((runId) =>
     Effect.promise(() => mocks.commitRunEndAfterArtifacts(session, runId)),
   );
-  mocks.finalizeRun.mockReturnValue(Effect.succeed({ ok: true }));
+  // The fake end commits what a real one carries with its row: the last
+  // turn's settlement.
+  mocks.finalizeRun.mockImplementation(
+    (target: SessionHandle, input: FinalizeRunInput) =>
+      (input.settlement?.length
+        ? target.commit(input.settlement)
+        : Effect.void
+      ).pipe(Effect.as({ ok: true })),
+  );
   mocks.submitFollowUp.mockReturnValue(Effect.succeed({ status: 'sent' }));
-  mocks.persistChildRunDelivery.mockImplementation(realPersistChildRunDelivery);
 });
 
 afterEach(() => {
@@ -916,10 +909,9 @@ describe('childRunLoop E2E fixtures', () => {
     'keeps a consumed prompt queued when the turn result fails to persist',
     () =>
       Effect.gen(function* () {
-        // The settle row still commits (it is the re-execution gate), but the
-        // prompt's `followup.consumed` rows must not: with no report and no
-        // parent row durable, consuming them would lose the completed turn,
-        // so the relaunched loop seeds the prompt and runs it again.
+        // The prompt's `followup.consumed` rows commit with the turn's
+        // settlement, so a refused batch consumes nothing: the relaunched
+        // loop seeds the prompt and runs it again.
         const runId = loopRunId();
         const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
@@ -935,8 +927,13 @@ describe('childRunLoop E2E fixtures', () => {
         });
         yield* turnStarted(2);
 
-        mocks.persistChildRunDelivery.mockImplementation(() =>
-          Effect.fail(new Error('disk full')),
+        // The last turn's settlement rides the child's `run.end`, which
+        // the store refuses.
+        mocks.finalizeRun.mockReturnValue(
+          Effect.succeed({
+            ok: false,
+            error: new Error('disk full'),
+          }),
         );
         yield* resolveTurn(2, { kind: 'terminal', value: 'final' });
 
@@ -1037,7 +1034,6 @@ describe('childRunLoop E2E fixtures', () => {
           Effect.succeed({
             ok: false,
             error: new Error('metadata disk full'),
-            outcomePersisted: false,
           }),
         );
 

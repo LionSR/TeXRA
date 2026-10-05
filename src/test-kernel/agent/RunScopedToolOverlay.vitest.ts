@@ -38,9 +38,9 @@ import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { resolveTestStep } from '@test/support/stepToolsTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { texraPlugins } from '@texra/tools/registry';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
-import { texraPlugins } from '@tools/registry';
 import { toolTableLayer } from '@tools/liveTools';
 import { toolTable } from '@tools/toolTable';
 import { generateRunId } from '@utils/core';
@@ -415,9 +415,6 @@ describe('run-scoped tool resolution', () => {
             toolTable([
               {
                 id: 'test',
-                name: 'Test',
-                category: 'file',
-                description: '',
                 tools: {
                   bash: approvalGatedTool('bash'),
                   grep: tool('grep'),

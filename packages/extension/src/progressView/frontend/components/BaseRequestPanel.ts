@@ -33,10 +33,9 @@ import {
   approvalDecisionArms,
   type SurfaceDecision,
 } from '@shared/session/approvalDecision';
-import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { RequestAnswerability } from '@shared/session/sessionView';
-import { SessionUiEvents } from '@shared/session/uiEvents';
 import type { TeXRAIconName } from '@shared/iconNames';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import {
   commonViewStyles,
   designTokens,
@@ -50,6 +49,7 @@ import {
   renderSplitButtonMenuParts,
   splitButtonTriggerStyles,
 } from '@ui/wa/splitButton';
+import type { RuntimeRequest } from '@texra-ai/harness';
 
 /** The three ways a card declines, each with its one word. */
 const DECLINE_LABEL = {

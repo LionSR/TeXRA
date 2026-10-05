@@ -15,7 +15,7 @@ import {
   installPlatform,
   setupPlatform,
 } from '@test/support/setupPlatform';
-import { ListApiKeysTool } from '@tools/setup/ListApiKeysTool';
+import { ListApiKeysTool } from '@texra/tools/setup/ListApiKeysTool';
 
 const tool = ListApiKeysTool;
 

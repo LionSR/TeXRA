@@ -1,9 +1,9 @@
 import { computed, signal } from '@lit-labs/signals';
 
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import type { SessionBackend } from '@controllers/session/sessionBackend';
 import { RUN_PHASE, type RunPhase, type RunId } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 
 import { registerCliStateResetHook } from './cliState';
 import { runPhaseOf, runViewOf, sessionView } from './sessionView';
@@ -105,7 +105,23 @@ export class TuiSession {
     this.stopRequested = false;
   }
 
-  markRunCompleted(): void {
+  /** The exit code a claim's run ends with, while the slot still holds that
+   *  claim: a run it replaced does not set the chat's exit. */
+  settleExitCode(runSettled: RootRunSettled, code: CliExitCode): void {
+    if (this.holdsClaim(runSettled)) this.runExitCode = code;
+  }
+
+  /** Whether the slot still holds the claim `runSettled` belongs to. */
+  holdsClaim(runSettled: RootRunSettled): boolean {
+    return rootRunClaim.get().runSettled === runSettled;
+  }
+
+  /** The claim `runSettled` belongs to is over. A claim the slot no longer
+   *  holds is left alone: a chain that settles after the slot moved on (a
+   *  resume taken up before the run it replaced finished settling) must not
+   *  free the claim that replaced it. */
+  markRunCompleted(runSettled: RootRunSettled): void {
+    if (!this.holdsClaim(runSettled)) return;
     rootRunClaim.set({ ...rootRunClaim.get(), runCompleted: true });
   }
 

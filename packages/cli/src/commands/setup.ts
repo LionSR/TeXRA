@@ -1,8 +1,8 @@
 import { Effect } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';

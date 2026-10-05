@@ -10,7 +10,6 @@ import { beforeEach, afterEach, describe, vi } from 'vitest';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
-import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 
 import { formatToolResultAsText } from '@agent/runtime/run/toolResultText';
@@ -166,7 +165,6 @@ function backgroundBashCall(parentRunId: RunId) {
   }).pipe(
     Effect.provide(
       nativeToolTestLayer({
-        tracker: new FileInteractionState(),
         run: {
           session: testDefaultSession(),
           runId: parentRunId,
@@ -206,7 +204,6 @@ describe('BashTool', () => {
       const result = yield* BashTool.call({ command: 'echo long' }).pipe(
         Effect.provide(
           nativeToolTestLayer({
-            tracker: new FileInteractionState(),
             run: {
               session: testDefaultSession(),
               runId: 'bash-tool' as RunId,
@@ -703,7 +700,7 @@ describe('BashTool', () => {
   );
 
   it.live(
-    'fails background run when its result metadata cannot be persisted',
+    'never ends a background run completed without its result manifest',
     () =>
       Effect.gen(function* () {
         const resolveCommand = holdCommand();
@@ -715,24 +712,41 @@ describe('BashTool', () => {
         const { runId } = launchedIds(launchResult);
         assert.ok(runId, JSON.stringify(launchResult));
         const session = testDefaultSession();
-        const commit = session.commit.bind(session);
-        vi.spyOn(session, 'commit').mockImplementation((events) =>
-          events.some((event) => event.type === 'run.result')
-            ? Effect.die(new Error('result metadata disk full'))
-            : commit(events),
+        // The manifest rides the batch that ends the run: refuse that batch.
+        const update = session.updateRecordFacts.bind(session);
+        vi.spyOn(session, 'updateRecordFacts').mockImplementation(
+          (id, change) =>
+            update(id, (rows) =>
+              Effect.flatMap(change(rows), (next) =>
+                next.events.some((event) => event.type === 'run.result')
+                  ? Effect.die(new Error('result metadata disk full'))
+                  : Effect.succeed(next),
+              ),
+            ),
         );
         const records = getRunRecords(session, runId);
 
         resolveCommand(DONE_EXEC_RESULT);
 
-        // The manifest is what `/result` reads, so its loss is the run's failure
-        // rather than a completed run with a silently missing result.
-        yield* records.readRunEnd().pipe(
-          Effect.repeat({
-            while: (end) => end?.outcome !== RUN_OUTCOME.FAILED,
-            schedule: Schedule.spaced('10 millis'),
-          }),
-          Effect.timeout('1 second'),
+        // The manifest is what `/result` reads, and it rides the run's end:
+        // with that batch refused, the run has neither, never an end
+        // without its result.
+        yield* Effect.promise(() =>
+          vi.waitFor(() =>
+            assert.equal(session.runs.getHandle(runId), undefined),
+          ),
+        );
+        assert.equal(yield* records.readRunEnd(), null);
+        assert.equal(yield* records.readResultMeta(), null);
+        // Nor does the parent read a result the child never ended with.
+        assert.deepEqual(
+          session.events
+            .pendingFollowUps(aggregateId('run', parentRunId))
+            .filter(
+              ({ content: { from } }) =>
+                from.kind === 'run' && from.runId === runId,
+            ),
+          [],
         );
         detachBackgroundRun(recorded, parentRunId);
       }).pipe(
@@ -913,10 +927,7 @@ describe('BashTool', () => {
           BashTool.call({ command: 'echo long' }).pipe(
             Effect.provide(
               nativeToolTestLayer({
-                tracker: new FileInteractionState(),
-                hooks: {
-                  onToolOutput: (chunk) => hookCalls.push(`output:${chunk}`),
-                },
+                emit: (chunk) => hookCalls.push(`output:${chunk}`),
                 run: {
                   session: testDefaultSession(),
                   runId: 'bash-tool' as RunId,

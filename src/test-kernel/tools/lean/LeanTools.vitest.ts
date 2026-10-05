@@ -1,4 +1,4 @@
-// Suites for src/tools/lean helper modules (hover text, workspace-root
+// Suites for packages/texra/src/tools/lean helper modules (hover text, workspace-root
 // resolution, external-tool status, lake command mutex). The LSP adapter,
 // server registry, and JSON-RPC connection keep their own suites.
 
@@ -11,9 +11,9 @@ import { Effect, Fiber, FileSystem } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { resolveWorkspaceRoot } from '@tools/lean/direct/leanServerPool';
-import { extractHoverText } from '@tools/lean/leanTypes';
-import { runLakeCommand } from '@tools/lean/direct/lakeCommands';
+import { resolveWorkspaceRoot } from '@texra/tools/lean/direct/leanServerPool';
+import { extractHoverText } from '@texra/tools/lean/leanTypes';
+import { runLakeCommand } from '@texra/tools/lean/direct/lakeCommands';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // ---------------------------------------------------------------------------

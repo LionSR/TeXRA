@@ -1,10 +1,10 @@
 {
-  "packages/agent/README.md": 1,
-  "packages/llm/README.md": 1,
-  "src/agent/README.md": 1,
-  "src/controllers/session/README.md": 1,
-  "src/platform/README.md": 1,
-  "src/shared/schemas/README.md": 1,
-  "src/shared/session/README.md": 1,
-  "src/tools/README.md": 1
+  "packages/harness/README.md": 1,
+  "packages/harness/src/agent/README.md": 1,
+  "packages/harness/src/controllers/session/README.md": 1,
+  "packages/harness/src/platform/README.md": 1,
+  "packages/harness/src/shared/schemas/README.md": 1,
+  "packages/harness/src/shared/session/README.md": 1,
+  "packages/harness/src/tools/README.md": 1,
+  "packages/llm/README.md": 1
 }

@@ -1,8 +1,13 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, SynchronizedRef } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 import { finalizeRun, getRunRecords } from '@agent/storage';
-import { appendRow, rowAggregate, snapshotRow } from '@agent/runtime/loop/rows';
+import {
+  appendRow,
+  handedDown,
+  rowAggregate,
+  snapshotRow,
+} from '@agent/runtime/loop/rows';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { aggregateId, type RunId } from '@shared/schemas';
 import { freshRunState } from '@shared/session/runStateFold';
@@ -48,6 +53,21 @@ describe('run metadata updates', () => {
           status: 'completed',
         });
       }),
+  );
+  // A model switch that cannot apply fails the run: its end consumes the
+  // request, so no resume meets it again.
+  it.effect('settles a request the run never applied with its end', () =>
+    Effect.gen(function* () {
+      yield* session.followUps.send(id, {
+        text: '/model gone',
+        from: { kind: 'user' },
+        control: { kind: 'model', model: 'gone' },
+      });
+      const run = aggregateId('run', id);
+      expect(session.events.pendingFollowUps(run)).toHaveLength(1);
+      yield* finalizeRun(session, { runId: id, outcome: 'failed' });
+      expect(session.events.pendingFollowUps(run)).toEqual([]);
+    }),
   );
   it.effect('keeps a driver outcome when host-exit finalization follows', () =>
     Effect.gen(function* () {
@@ -156,6 +176,52 @@ describe('run metadata updates', () => {
             totalCost: 0.25,
           },
         });
+      }),
+  );
+  // A document task's recipe is a script's run of the user's model. Its
+  // call is handed down by the app, not made by a model, so it commits on
+  // any binding (an editor's included) and records no model origin.
+  it.effect(
+    "commits a script run's handed-down call with no model origin",
+    () =>
+      Effect.gen(function* () {
+        yield* session.runHistory.acquire(id);
+        const opened = yield* session.runHistory.appendBatch(id, null, [
+          appendRow(id, [
+            { role: 'user', content: [{ kind: 'text', text: 'polish' }] },
+          ]),
+          ...snapshotRow(
+            id,
+            {
+              ...freshRunState(0),
+              family: 'toolUse',
+              modelId: 'copilot/gpt-test',
+              backend: 'copilot',
+            },
+            { state: { stateSlices: null } },
+          ),
+        ]);
+        const run = {
+          runId: id,
+          steps: yield* SynchronizedRef.make(null),
+          logger: {},
+        };
+        const rows = yield* handedDown(
+          // The only fields `handedDown` reads: no step, so no registry.
+          run as unknown as Parameters<typeof handedDown>[0],
+          opened,
+          { code: 'return 1;', title: 'polish', tools: [], kind: 'recipe' },
+        );
+        expect(
+          rows.map((row) =>
+            row.type === 'model.message' ? row.payload.kind : row.type,
+          ),
+        ).toEqual(['handed-down', 'run.position']);
+        const state = yield* session.runHistory.appendBatch(id, opened, rows);
+        expect(state.pendingResponse?.calls.map((c) => c.toolName)).toEqual([
+          'script',
+        ]);
+        expect(state.pendingResponse?.assistant.origin).toBeNull();
       }),
   );
 });

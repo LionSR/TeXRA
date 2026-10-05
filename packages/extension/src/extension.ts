@@ -3,9 +3,22 @@ import * as path from 'node:path';
 
 // Third-party imports
 import * as vscode from 'vscode';
-import { Cause, Data, Effect, Exit, Layer, Scope } from 'effect';
+import { Cause, Data, Effect, Exit, Layer, Result, Scope } from 'effect';
 
 // Local imports
+import {
+  AppState,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+  type LanguageModelPort,
+  WorkspaceRoots,
+  ToolMissingHandler,
+} from '@texra-ai/harness';
+import {
+  createNodeWorkspaceRoots,
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+  canonicalizeWorkspacePath,
+} from '@texra-ai/harness/node';
 import {
   closeAllSessions,
   initializeDefaultSession,
@@ -28,8 +41,6 @@ import {
   openProjectStateStore,
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
-import { bootstrapHost } from '@controllers/hostBootstrap';
-import { fromHost } from '@controllers/session/hostCallFailure';
 import { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
@@ -62,27 +73,14 @@ import { withLogChannel } from '@logger/effectLog';
 import { setLogSink } from '@logger/logSink';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
-import { AppState } from '@platform/interfaces';
-import type { ToolMissingHandler } from '@platform/interfaces';
 import {
   withProcessServices,
   type ProcessRuntime,
 } from '@platform/processRuntime';
-import {
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
-  type LanguageModelPort,
-} from '@platform/languageModel';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
-import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
-import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { StorageFs, withSessionFs } from '@platform/rootedFs';
 import {
   formatTexraApprovalPolicy,
@@ -90,21 +88,26 @@ import {
   texraApprovalPolicyLabel,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import type { CommandId } from '@shared/commands/catalog';
 import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { GlobalDatabase } from '@shared/session/database';
-import { TEXRA_SETTING_ROWS } from '@shared/settingsView/texraSettings';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { usageLogLayer } from '@telemetry/UsageLogService';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
+import { serviceSessionBackend } from '@texra/controllers/server/serviceBackend';
+import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
+import type { CommandId } from '@texra/shared/commands/catalog';
+import { fromHost } from '@texra/controllers/session/hostCallFailure';
+import { bootstrapHost } from '@texra/controllers/hostBootstrap';
+import { texraPlugins } from '@texra/tools/registry';
+import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
+import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
-import { texraPlugins } from '@tools/registry';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
-import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
-import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { reachExtensionService } from './common/extensionService';
 
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -184,6 +187,9 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         LeanLanguageServices,
         Effect.map(AppState, createVscodeLeanLanguageServices),
       ),
+      // The editor's commands, extensions and terminal, for the setup tools
+      // and the Lean 4 probe.
+      setup: vscodeSetupPlatform,
     }),
     settings: TEXRA_SETTING_ROWS,
     mcpConfigPath: USER_MCP_CONFIG_PATH,
@@ -194,7 +200,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     languageModel: extras.languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
     agentDirectories: agentDirectoriesLayer(context.extensionPath),
     toolMissingReporter: extras.toolMissingHandler,
-    setup: vscodeSetupPlatform,
     usageLog: usageLogLayer({
       version: extensionVersion,
       editorType: vscode.env.appName || undefined,
@@ -465,11 +470,37 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
       emitAppSignal('languageModelsChanged', undefined),
     ),
   );
+  // Every window is a client of the one background service, so its tasks
+  // keep running when it closes and other windows and terminals see them.
+  // A window that cannot reach it runs them here, and says so once.
+  const service = yield* reachExtensionService(context.extensionPath).pipe(
+    Effect.result,
+  );
   const runtimeSession = yield* initializeDefaultSession({
     roots,
     responseTextProcessing: createTexraResponseTextProcessing(),
-    interruptedTasks: 'offer',
+    // The service follows the interrupted tasks of a window that is its
+    // client.
+    ...(Result.isFailure(service) && { interruptedTasks: 'offer' }),
   });
+  const backend = Result.isSuccess(service)
+    ? yield* serviceSessionBackend(
+        service.success.client,
+        roots.workspace ?? '',
+        runtimeSession.roots.storage,
+      )
+    : localSessionBackend(runtimeSession);
+  if (Result.isFailure(service)) {
+    const reason = `TeXRA runs this window's tasks here only, so other windows and terminals will not see them: ${service.failure.message}`;
+    yield* Effect.logWarning(reason).pipe(withLogChannel(EXTENSION_CHANNEL));
+    yield* Effect.forkDetach(
+      announce(
+        EXTENSION_CHANNEL,
+        vscodeUi.showWarningMessage(reason),
+        undefined,
+      ),
+    );
+  }
   if (runtimeSession.storeMovedAside) {
     yield* Effect.forkDetach(
       announce(
@@ -487,6 +518,19 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
       TEXRA_APPROVAL_POLICY_CONFIG_KEY,
     ),
   );
+  // The service's session of this project takes the window's policy, and
+  // every change of it the settings view makes.
+  if (Result.isSuccess(service)) {
+    yield* backend.setApprovalPolicy(runtimeSession.approvalPolicy);
+    yield* Effect.forkScoped(
+      onAppSignal('approvalPolicyChanged', () =>
+        runtime.runFork(
+          backend.setApprovalPolicy(runtimeSession.approvalPolicy),
+        ),
+      ),
+      { startImmediately: true },
+    );
+  }
   // The run-storage directory of the session just initialized, through that
   // session's own storage view rather than a static that re-reads the root.
   yield* withSessionFs(
@@ -519,6 +563,8 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     secrets,
     runtime,
     runtimeSession,
+    backend,
+    Result.isSuccess(service) ? service.success.client : undefined,
     (usable) => (usable ? setupPill.hide() : setupPill.show()),
   );
   yield* Effect.andThen(
@@ -537,13 +583,14 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     secrets,
     runtime,
     runtimeSession,
+    backend,
   );
   registerWalkthroughWorkspaceAction(context, true, runtime);
   // Keys another window or the service writes reach this one's surfaces.
   yield* Effect.forkScoped(
     secrets.watch().pipe(Effect.provide(nodeFileServices)),
   );
-  yield* registerFileDecorations(context, runtimeSession);
+  yield* registerFileDecorations(context, backend);
 
   // VS Code's event emitters don't await async listeners, so we funnel
   // fire-and-forget async work through this program, which logs a failed
@@ -587,7 +634,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     }),
     { startImmediately: true },
   );
-  yield* registerInlineCriticism(context, runtime, runtimeSession, roots);
+  yield* registerInlineCriticism(context, runtime, backend, roots);
   registerInlineComments(context);
 
   statusBarItem = vscode.window.createStatusBarItem(
@@ -598,7 +645,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   statusBarItem.command = 'texra.showProgressView';
   // Shown only while a run is active (`updateStatusBarText`).
 
-  const statusBarUsageTracker = new StatusBarUsageTracker(runtimeSession);
+  const statusBarUsageTracker = new StatusBarUsageTracker(backend);
   const updateStatusBarTooltip = () => {
     if (!statusBarItem) return;
     const policy = runtimeSession.approvalPolicy;
@@ -653,7 +700,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
 
   yield* Effect.forkScoped(
     refreshStatusBarOnViewChanges({
-      session: runtimeSession,
+      session: backend,
       tracker: statusBarUsageTracker,
       onStatusChanged: () => {
         updateStatusBarTooltip();

@@ -50,10 +50,56 @@ export interface UploadCache {
 
 const digestOf = (base64: string): string => hash('sha256', base64, 'hex');
 
-function uploadCache(provider: {
-  readonly send: (file: FileUpload) => Effect.Effect<Uploaded, ModelError>;
-  readonly remove: (fileId: string) => Effect.Effect<void, ModelError>;
+/**
+ * The upload cache over a provider whose Files API follows the shape the
+ * supported providers share: create a file from the bytes, read an id and an
+ * expiry off the response, and treat a 404 on delete as the deletion this
+ * asked for. Only the SDK calls, how a response states its expiry, and the
+ * provider's name differ, so those are what a binding supplies; the
+ * malformed-response ruling and the 404 tolerance are stated once here.
+ */
+export function filesApiUploads(provider: {
+  /** Names the provider in the malformed-response message. */
+  readonly providerName: string;
+  readonly model: string;
+  /** Maps an SDK rejection to this binding's enriched `ModelError`. */
+  readonly failure: (cause: unknown) => ModelError;
+  /**
+   * The create response's id and expiry, in canonical form. Each provider
+   * states its expiry differently (RFC 3339 against whole Unix seconds), so
+   * the schema that reads it is the binding's, not this helper's.
+   */
+  readonly parseUploaded: (raw: unknown) => z.ZodSafeParseResult<Uploaded>;
+  readonly create: (file: FileUpload, signal: AbortSignal) => Promise<unknown>;
+  readonly remove: (fileId: string, signal: AbortSignal) => Promise<unknown>;
 }): UploadCache {
+  const send = (upload: FileUpload) =>
+    Effect.gen(function* () {
+      const created = yield* Effect.tryPromise({
+        try: (signal) => provider.create(upload, signal),
+        catch: provider.failure,
+      });
+      const parsed = provider.parseUploaded(created);
+      if (!parsed.success)
+        return yield* new ModelError({
+          kind: 'malformed-output',
+          message: `${provider.providerName} returned an upload without a usable file id.`,
+          model: provider.model,
+          cause: parsed.error,
+        });
+      return parsed.data;
+    });
+  const remove = (fileId: string) =>
+    Effect.tryPromise({
+      try: (signal) => provider.remove(fileId, signal),
+      catch: provider.failure,
+    }).pipe(
+      Effect.asVoid,
+      Effect.catchTag('ModelError', (error) =>
+        error.status === 404 ? Effect.void : Effect.fail(error),
+      ),
+    );
+
   const live = new Map<string, Uploaded>();
   const inFlight = new Set<string>();
   // Every id this binding created, including one a repeated upload replaced
@@ -83,14 +129,14 @@ function uploadCache(provider: {
     const digest = digestOf(parsed.data.base64);
     if (released || live.has(digest) || inFlight.has(digest)) return;
     inFlight.add(digest);
-    const uploaded = yield* provider
-      .send(parsed.data)
-      .pipe(Effect.ensuring(Effect.sync(() => inFlight.delete(digest))));
+    const uploaded = yield* send(parsed.data).pipe(
+      Effect.ensuring(Effect.sync(() => inFlight.delete(digest))),
+    );
     // `send` can outlive a concurrent release. The check and the cache
     // writes are one synchronous stretch, so a release either already ran
     // (delete this id, do not cache it) or still sees it in `owned`.
     if (released) {
-      yield* provider.remove(uploaded.fileId).pipe(
+      yield* remove(uploaded.fileId).pipe(
         // The release that would have reported this id already finished, so
         // a refused delete is warned here rather than silently dropped.
         Effect.catchTag('ModelError', (error) =>
@@ -112,18 +158,12 @@ function uploadCache(provider: {
     // provider error. An interrupt or deadline then leaves the rest for a
     // later release (the run-scope finalizer) instead of dropping them.
     const fileIds = [...owned];
-    const confirmed = new Set<string>();
     const failed: UnreleasedUpload[] = [];
     const settled = yield* Effect.forEach(
       fileIds,
       (fileId) =>
-        provider.remove(fileId).pipe(
-          Effect.tap(() =>
-            Effect.sync(() => {
-              confirmed.add(fileId);
-              owned.delete(fileId);
-            }),
-          ),
+        remove(fileId).pipe(
+          Effect.tap(() => Effect.sync(() => owned.delete(fileId))),
           Effect.catchTag('ModelError', (error) =>
             Effect.sync(() => {
               failed.push({ fileId, reason: error.message });
@@ -146,14 +186,11 @@ function uploadCache(provider: {
       }),
     );
     if (settled) return failed;
+    // An id still owned got neither a confirmed delete nor a provider error.
     return [
       ...failed,
       ...fileIds
-        .filter(
-          (fileId) =>
-            !confirmed.has(fileId) &&
-            !failed.some((entry) => entry.fileId === fileId),
-        )
+        .filter((fileId) => owned.has(fileId))
         .map((fileId) => ({
           fileId,
           reason: `no answer within ${RELEASE_DEADLINE}`,
@@ -162,57 +199,4 @@ function uploadCache(provider: {
   });
 
   return { fileIdFor, uploadFile, releaseUploads };
-}
-
-/**
- * The `{ send, remove }` pair for a provider whose Files API follows the shape
- * the supported providers share: create a file from the bytes, read an id and
- * an expiry off the response, and treat a 404 on delete as the deletion this
- * asked for. Only the SDK calls, how a response states its expiry, and the
- * provider's name differ, so those are what a binding supplies; the
- * malformed-response ruling and the 404 tolerance are stated once here.
- */
-export function filesApiUploads(provider: {
-  /** Names the provider in the malformed-response message. */
-  readonly providerName: string;
-  readonly model: string;
-  /** Maps an SDK rejection to this binding's enriched `ModelError`. */
-  readonly failure: (cause: unknown) => ModelError;
-  /**
-   * The create response's id and expiry, in canonical form. Each provider
-   * states its expiry differently (RFC 3339 against whole Unix seconds), so
-   * the schema that reads it is the binding's, not this helper's.
-   */
-  readonly parseUploaded: (raw: unknown) => z.ZodSafeParseResult<Uploaded>;
-  readonly create: (file: FileUpload, signal: AbortSignal) => Promise<unknown>;
-  readonly remove: (fileId: string, signal: AbortSignal) => Promise<unknown>;
-}): UploadCache {
-  return uploadCache({
-    send: (upload) =>
-      Effect.gen(function* () {
-        const created = yield* Effect.tryPromise({
-          try: (signal) => provider.create(upload, signal),
-          catch: provider.failure,
-        });
-        const parsed = provider.parseUploaded(created);
-        if (!parsed.success)
-          return yield* new ModelError({
-            kind: 'malformed-output',
-            message: `${provider.providerName} returned an upload without a usable file id.`,
-            model: provider.model,
-            cause: parsed.error,
-          });
-        return parsed.data;
-      }),
-    remove: (fileId) =>
-      Effect.tryPromise({
-        try: (signal) => provider.remove(fileId, signal),
-        catch: provider.failure,
-      }).pipe(
-        Effect.asVoid,
-        Effect.catchTag('ModelError', (error) =>
-          error.status === 404 ? Effect.void : Effect.fail(error),
-        ),
-      ),
-  });
 }

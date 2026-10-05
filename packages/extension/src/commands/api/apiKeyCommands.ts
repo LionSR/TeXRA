@@ -10,17 +10,17 @@ import {
   PROVIDER_DISPLAY_NAMES,
 } from '@texra-ai/llm';
 import { settleQuickInput } from '@commands/_shared/quickInputUtils';
-import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
 import {
   getProviderDisplayName,
   getProviderKeyUrl,
 } from '@utils/config/providerConfig';
+import type { PlatformSecrets } from '@texra-ai/harness';
 
 const CHANNEL = 'ApiKeyCommands';
 

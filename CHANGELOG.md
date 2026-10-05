@@ -349,8 +349,48 @@ All notable changes to this project will be documented in this file.
   within one second now reports an error instead of merging into the first
   snapshot.
 
+- **Agent SDK: a `Plugin` says what it contributes, not how an app shows
+  it.** `Plugin` keeps `id`, `tools`, `availability`, `toggle`,
+  `injectedWhen`, `continuation`, `prompt`, `processLayer` and
+  `sessionLayer`. Dashboard copy (`name`, `category`, `description`,
+  `setup`, `hidden`, `unavailableHosts`) and inline `settings` rows are the
+  app's own record keyed by plugin id; an app passes its plugins' setting
+  rows with its own. `toggleable` and `onByDefault` become one
+  `toggle: 'on' | 'off'` (the switch's position on a fresh install), and
+  `skills`/`agents` are gone: a plugin's bundled skills and agents are
+  whatever its `resources/plugins/<id>/` directory holds. So a plugin id
+  must be lowercase letters, digits and dashes (`acme-search`, not
+  `acme_search`); `Sessions.layer` refuses any other list with a typed
+  `PluginsRefused`. An embedder passes its plugins' setting rows as
+  `Composition.settings`.
+
+- **Agent SDK: a tool reads its own call through `ToolContext`.** The
+  public `ToolContext` service (exported from `@texra-ai/agent`) has four
+  fields: `callId`, `env` (the workspace roots, working directory and the
+  step's read-only roots), `requests` (ask a person; absent outside a run)
+  and `emit` (transient card output). The run, its workspace state, and
+  which response and attempt the call belongs to are no longer copied onto
+  every call; the harness's built-in tools read them from its internal
+  `RunCall` service.
+
 ### Features
 
+- **VS Code windows run their tasks in the background service.** On macOS
+  and Linux the extension starts the TeXRA service (or uses the one already
+  running) and launches, resumes and steers its tasks there, so a task
+  keeps running when its window closes and other windows and terminals see
+  it live. The window still serves those tasks with its editor
+  (diagnostics, inline criticism, opening a PDF, the editable diff of a
+  proposed edit) and its notifications, and the approval policy set in the
+  window applies there. A newer extension retires an older service. If the
+  service cannot start, the window runs its tasks itself and says so once.
+
+- **Document tasks can reflect with a critic.** Opt in with
+  `texra run <agent> --reflect` or `reflect: true` on `document_task`: after
+  each revision but the last, the bundled `critic` agent reads the diff and
+  compile result and returns grounded corrections plus one optional
+  improvement, which the next revision's prompt carries. The revision count
+  is unchanged.
 - **A chat shows its project's background-task notices (CLI).** A task the
   TeXRA service runs now tells a window of its own project what it would
   show on screen (a refused resume, an error with its guide link), and a
@@ -361,6 +401,13 @@ All notable changes to this project will be documented in this file.
   service clients. A task never waits on a window that closed: the tool
   says the window went or did not answer in time, and with no window of
   the project open the task runs as a headless run does.
+
+- **`texra resume` continues a conversation the service is running
+  (CLI).** Resuming a chat's task that the background service still holds
+  (left waiting when its terminal closed) continues it there, with
+  `--handoff` and `--reset` applied by the service, instead of refusing it
+  as held by another process. `TEXRA_NO_SERVICE=1` runs a chat in its own
+  process, as on Windows.
 
 - **Every chat is a task of the background service (CLI).** `texra chat`
   and a bare `texra` run their conversation's runs in the TeXRA service, so
@@ -737,6 +784,56 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A resumed task no longer asks whether a command ran that never
+  started.** A task stopped while a command waited for your approval, or
+  just before it asked, used to come back asking "did this run?" about a
+  command that never ran. A command now counts as started only once its
+  approval is given and it begins, so the resume asks for the approval
+  again, or runs the command under the answer you already gave. A task
+  whose tool calls run side by side also no longer stops with an internal
+  error when you answer such a question while another call finishes.
+- **A task saved by an older TeXRA no longer reads as corrupt.** A task
+  whose stored shape this version no longer reads now says it was made by
+  an older TeXRA and can't be opened here, instead of calling it corrupt,
+  and the log names the field that did not match.
+- **The background service is retired by build, not by product version.**
+  Every TeXRA bundle (the CLI, the VS Code extension, the desktop app) now
+  carries the same build identity, and a newer build retires an older
+  service by it, so a preview extension, whose Marketplace number differs
+  from the CLI's, no longer retires a service of its own build. A service
+  that retired an older one no longer disappears a moment later: the old
+  service's exit could remove the new one's socket. Each service now
+  listens on a socket of its own, which its record names, so an older
+  service that finishes its last task after a newer one started never
+  takes the newer one's socket with it.
+- **Desktop header controls and menus take clicks again.** The "+" menu of
+  a side or bottom panel (Files, Terminal, Browser, Logs), a tab's menu, and
+  the task header's controls (the "More" button and its menu, renaming, the
+  parent-task links) ignored the mouse: they sit in or over the window's
+  drag areas, which macOS treated as a place to move the window.
+- **A `/compact` or a `/model` switch asked for mid-turn now survives TeXRA
+  being killed.** Both are saved the moment you ask, and the resumed task
+  compacts, or switches models, at its next step. A switch that cannot be
+  applied fails that task once, not every resume after it. A message you type
+  while a turn runs is picked up in the same step that ends the turn. Two
+  breaks: an older TeXRA reading a session saved by this version sends
+  `/compact` or `/model …` to the model as plain text, and a session an
+  earlier version paused in the middle of a `/compact` resumes without
+  compacting.
+- **The desktop installers build again, and the macOS app is signed and
+  notarized,** so macOS opens it without a Gatekeeper warning.
+- **An agent's or a background job's result is no longer lost when TeXRA is
+  killed at the wrong moment.** A result from an agent left running in the
+  background, a background script or a background command is saved together
+  with the step that finishes it, and the task that started it picks it up
+  when it resumes. Before, a crash just after the agent finished could drop
+  the result, or leave a background command's result waiting forever.
+- **Document tasks run on a VS Code editor model (Copilot) again.** Since
+  document tasks became a recipe, a task launched with an editor model
+  failed at its first step; its revisions now run on that model as before.
+  A script can also run in the background on an editor model. The terminal's
+  progress line names the agent as the progress cards do (`polish`, not
+  `builtIn:polish`).
 - **Gemini calls work again.** After a change on Google's side, every
   Gemini request failed with a validation error before any output arrived.
 - **Gemini agents can call tools again, and background Gemini runs
@@ -1550,6 +1647,16 @@ show` print the same notice, and the new `texra agents customize`,
   `--input` is no longer a required flag, because a tool-use run may take none.
   A name carried by both categories is refused rather than resolved to one of
   them: the error names both candidates and their source-qualified spellings.
+- **`@texra-ai/harness` exports the platform's ports and a request's
+  refusals.** The root entry now exports the port types an `AgentPlatform`
+  implements, the failures its stores answer with, the services a plugin's
+  code reads them as, the request errors `Session.request` fails with, and
+  the availability contract; `@texra-ai/harness/node` exports the Node
+  building blocks `nodePlatform` is made of.
+- **A plugin can own one request kind's decisions (`Plugin.decision`).** The
+  harness runs the owning plugin's hook before a decision on a pending request
+  of that kind commits. `installProcessRuntime` has no `setup` option: a host
+  passes its setup capabilities with its plugin list.
 
 #### Bug Fixes
 

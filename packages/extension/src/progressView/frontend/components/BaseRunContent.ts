@@ -15,7 +15,7 @@ import {
   type RunView,
 } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
-import { SessionUiEvents } from '@shared/session/uiEvents';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { interruptedTasks, resumeBlockerFix } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { waIcon } from '@ui/wa/webAwesomeIcons';

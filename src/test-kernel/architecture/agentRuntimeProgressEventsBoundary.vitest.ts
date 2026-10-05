@@ -29,9 +29,13 @@ const ALLOWED_CLI_PROJECTION_IMPORTERS = [
 
 const SOURCE_OR_OUTPUT_EXTENSION = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
 
-const ALL_SOURCE_FILES = ALL_HOST_PRODUCTION_ROOTS.flatMap((root) =>
+// The test suite reads the projection too, so it is scanned beside the
+// production roots.
+const ALL_SOURCE_FILES = [
+  ...ALL_HOST_PRODUCTION_ROOTS,
+  'src/test-kernel',
+].flatMap((root) =>
   sourceFilesUnder(resolve(REPO_ROOT, root), {
-    missingDirReturnsEmpty: true,
     repoRelative: true,
     excludeTestKernel: false,
   }),

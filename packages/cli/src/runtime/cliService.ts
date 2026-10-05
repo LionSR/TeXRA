@@ -4,6 +4,7 @@
  * as the desktop opens its folders), the detached start a client asks for
  * when no service answers, and the connection the chat TUI holds.
  */
+import { hostname } from 'node:os';
 import * as path from 'node:path';
 
 import {
@@ -14,34 +15,23 @@ import {
   type Path,
 } from 'effect';
 
+import { AppState } from '@texra-ai/harness';
+import {
+  createNodeWorkspaceRoots,
+  canonicalizeWorkspacePath,
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@texra-ai/harness/node';
 import { openSessionEffect, type SessionHandle } from '@agent/runtime';
-import { bootstrapHost } from '@controllers/hostBootstrap';
 import {
   openProjectStateStore,
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
-import {
-  ensureService,
-  probeService,
-  spawnService,
-  type ServiceConnection,
-  type ServiceUnavailable,
-} from '@controllers/server/client';
-import { servicePaths } from '@controllers/server/discovery';
-import type { ServiceProjects } from '@controllers/server/handlers';
-import type { ServiceInfo } from '@controllers/server/protocol';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { setLogSink, silentLogSink, writeLogLine } from '@logger/logSink';
 import { JsonStore } from '@platform/defaults/jsonStore';
-import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@platform/defaults/nodeStores';
-import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
-import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
-import { AppState } from '@platform/interfaces';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
@@ -50,7 +40,19 @@ import type {
   GlobalDatabase,
   ProjectDatabases,
 } from '@shared/session/database';
+import { ownerIdentity, type OwnerId } from '@shared/schemas';
+import type { ServiceInfo } from '@texra/controllers/server/protocol';
+import type { ServiceProjects } from '@texra/controllers/server/handlers';
+import {
+  ensureService,
+  probeRecordedService,
+  spawnService,
+  type ServiceConnection,
+  type ServiceUnavailable,
+} from '@texra/controllers/server/client';
+import { bootstrapHost } from '@texra/controllers/hostBootstrap';
 import { readSettingFrom } from '@utils/config/platformSettings';
+import { envFlag } from '@utils/system/envFlags';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -171,37 +173,62 @@ const quietClient = Effect.sync(() =>
 export function probeCliService(
   storageRoot: string,
 ): Effect.Effect<ServiceInfo | null, ServiceUnavailable> {
-  return quietClient.pipe(
-    Effect.andThen(probeService(servicePaths(storageRoot).socket)),
+  return quietClient.pipe(Effect.andThen(probeRecordedService(storageRoot)));
+}
+
+/** `TEXRA_NO_SERVICE=1`: this process uses no background service, so a
+ *  chat runs here, as where the service cannot run. */
+const NO_SERVICE = 'TEXRA_NO_SERVICE';
+
+/** Connect to the storage root's service, starting it when none answers
+ *  and retiring one older than this build. Leaves the process's log sink as
+ *  it is: what the chat uses. */
+export function reachCliService(
+  storageRoot: string,
+): Effect.Effect<ServiceConnection, Error, Scope.Scope> {
+  return Effect.flatMap(envFlag(NO_SERVICE), (off) =>
+    off
+      ? Effect.fail(new Error(`${NO_SERVICE} is set`))
+      : ensureService(
+          storageRoot,
+          // The same Node and entry as this process.
+          spawnService(storageRoot, process.execPath, [
+            ...process.execArgv,
+            readCliEntrypointPath(),
+            'serve',
+          ]),
+        ),
   );
 }
 
-/** Connect to the storage root's service, starting it when none answers
- *  and retiring one older than this build (`version`). Leaves the process's
- *  log sink as it is: what the chat uses. */
-export function reachCliService(
+/**
+ * Whether `owner`, the holder of a run's claim, is the storage root's
+ * running service: a chat continues such a run through the service rather
+ * than refusing it as held by another process.
+ */
+export function heldByService(
   storageRoot: string,
-  version: string,
-): Effect.Effect<ServiceConnection, Error, Scope.Scope> {
-  return ensureService(
-    storageRoot,
-    version,
-    // The same Node and entry as this process.
-    spawnService(storageRoot, process.execPath, [
-      ...process.execArgv,
-      readCliEntrypointPath(),
-      'serve',
-    ]),
-  );
+  owner: OwnerId,
+): Effect.Effect<boolean> {
+  return Effect.gen(function* () {
+    if (yield* envFlag(NO_SERVICE)) return false;
+    const info = yield* probeCliService(storageRoot).pipe(
+      Effect.catch((error) =>
+        Effect.logWarning(
+          `The TeXRA service did not answer (${error.message}); a task it holds is treated as another process's`,
+        ).pipe(Effect.as(null)),
+      ),
+    );
+    if (info === null) return false;
+    const { hostname: host, pid } = ownerIdentity(owner);
+    return pid === info.pid && host.toLowerCase() === hostname().toLowerCase();
+  });
 }
 
 /** {@link reachCliService} for a client command, whose process prints only
  *  its own result. */
 export function connectCliService(
   storageRoot: string,
-  version: string,
 ): Effect.Effect<ServiceConnection, Error, Scope.Scope> {
-  return quietClient.pipe(
-    Effect.andThen(reachCliService(storageRoot, version)),
-  );
+  return quietClient.pipe(Effect.andThen(reachCliService(storageRoot)));
 }

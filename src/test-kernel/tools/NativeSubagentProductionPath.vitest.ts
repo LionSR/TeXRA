@@ -43,11 +43,10 @@ import { refresh } from '@agent/index';
 import { getRunRecords, registerRun } from '@agent/storage';
 import { readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { documentTaskConfig } from '@agent/output/documentRecipe';
-import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import type { ITool } from '@agent/core/tools/ToolTypes';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { requireToolRun } from '@agent/runtime/RunCall';
 import { offeredBy } from '@agent/runtime/loop/step';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import type { Message } from '@agent/runtime/loop/rows';
@@ -62,6 +61,7 @@ import {
 
 // Local imports - shared/runtime boundaries
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import type { RunToolCall } from '@agent/runtime/RunCall';
 import { launchDesktopAgent } from '@desktop/main/desktopAgentLaunch';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
@@ -99,10 +99,9 @@ import {
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
-import { requireToolRun } from '@tools/core/toolRun';
 import { configureDelegatedChildApprovals } from '@tools/approval';
-import type { RunToolCall } from '@tools/core/toolRun';
 import { launchDetachedSubagent } from '@tools/delegation/subagentRun';
 import { readCompletedRunConversation } from '@transcript';
 import { generateRunId } from '@utils/core';
@@ -498,7 +497,6 @@ async function queueSecondAssertionFollowUp(
     }).pipe(
       Effect.provide(
         nativeToolTestLayer({
-          tracker: new FileInteractionState(),
           run: {
             runId: parentContext.runId,
             session: parentContext.session,
@@ -581,9 +579,14 @@ async function launchWaitingChild(options: {
     model: PARENT_MODEL,
   };
   const parentCall = {
-    roots: session.roots,
-    tracker: new FileInteractionState(),
-    workingDirectory: process.cwd(),
+    callId: 'parent-call',
+    env: { roots: session.roots, workingDirectory: process.cwd() },
+    emit: () => undefined,
+    workspace: AgentWorkspaceState.create(),
+    responseId: 'parent-response',
+    instruction: undefined,
+    attempt: 1,
+    logId: 'parent-card',
     requests: {
       nextId: (prefix: string) => prefix,
       open: () => Effect.die(new Error('This fixture opens no request.')),
@@ -1288,10 +1291,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           },
           call: () =>
             Effect.gen(function* () {
-              const parent = yield* requireToolRun(
-                'launch_workflow_child',
-                yield* ToolCall,
-              );
+              const parent = yield* requireToolRun('launch_workflow_child');
               const launched = yield* launchChild(
                 parent,
                 documentTaskConfig({

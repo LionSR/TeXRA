@@ -3,9 +3,9 @@
 // lands off screen.
 
 import type { createSessionSurfaces } from '@progressView/frontend/sessionSurfaces';
-import { postMessage } from '@shared/hostBridge';
 import { attentionOf } from '@shared/session/sessionView';
-import type { Shell } from '@shared/session/shell';
+import { postMessage } from '@texra/shared/hostBridge';
+import type { Shell } from '@texra/shared/session/shell';
 
 import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages';
 import { toggleSidebar } from '../shared/desktopShellState';

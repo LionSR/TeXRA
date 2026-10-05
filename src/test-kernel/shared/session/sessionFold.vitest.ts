@@ -831,6 +831,7 @@ describe('sessionFold', () => {
       kind: DOCUMENTS_OUTPUT_ARM.kind,
       version: DOCUMENTS_OUTPUT_ARM.version,
       value: { rounds },
+      parent: null,
     });
     const firstRound = [log.emit(CHILD, 3010, documentsRow([roundOutput(0)]))];
     const secondRound = [
@@ -1283,7 +1284,6 @@ const CALLS = [
     ordinal: 0,
     parallelSafe: false,
     replay: 'unsafe',
-    partition: 0,
     duplicateOf: null,
     logId: 'card-0',
     stageId: null,
@@ -1294,7 +1294,6 @@ const CALLS = [
     ordinal: 1,
     parallelSafe: false,
     replay: 'unsafe',
-    partition: 0,
     duplicateOf: 'call-a',
     logId: 'card-1',
     stageId: null,
@@ -1325,6 +1324,15 @@ const toolUseSnapshot = (runtime: Record<string, unknown> = {}) => ({
   },
 });
 
+/** The row a call's body starts with. */
+const intent = (callId: string, attempt = 1) => ({
+  type: 'tool.intent',
+  payload: {
+    origin: { kind: 'response', responseId: RESPONSE_ID },
+    callId,
+    attempt,
+  },
+});
 /** The binding row an approval commits beside its `request.opened`. */
 const toolBinding = (callId: string, requestId: string, attempt = 1) => ({
   type: 'tool.binding',
@@ -1427,14 +1435,7 @@ const TURN_ROWS: readonly RunHistoryRow[] = [
     calls: CALLS,
     usage: TURN_USAGE,
   }),
-  {
-    type: 'tool.intent',
-    payload: {
-      origin: { kind: 'response', responseId: RESPONSE_ID },
-      callIds: ['call-a'],
-      attempt: 1,
-    },
-  },
+  intent('call-a'),
   settlement('call-a'),
   settlement('call-b', { disposition: 'duplicate', duplicateOf: 'call-a' }),
   message({
@@ -1465,15 +1466,17 @@ const reasonOf = <A>(result: Result.Result<A, { reason: string }>): string =>
 describe('foldRunState', () => {
   it.each([
     [
-      'between tool.intent and the adapter call: outcome unknown, never fabricated',
+      'after the body started, before its result: outcome unknown, never fabricated',
       () => {
         const state = stateOf(through(6));
-        expect(state?.pendingIntents['call-a']).toEqual({
+        expect(state?.pendingResponse?.records['call-a']?.status).toEqual({
+          kind: 'started',
           attempt: 1,
-          responseId: RESPONSE_ID,
           binding: null,
         });
-        expect(state?.pendingResponse?.settled).toEqual({});
+        expect(state?.pendingResponse?.records['call-b']?.status).toEqual({
+          kind: 'issued',
+        });
       },
     ],
     [
@@ -1495,31 +1498,38 @@ describe('foldRunState', () => {
       },
     ],
     [
-      'approval requested, never resolved: the binding rides its own row',
+      'approval requested before the body, never resolved: the binding rides its own row',
       () => {
-        const state = stateOf(
-          through(
-            6,
-            {
-              type: 'request.opened',
-              requestId: 'req-1',
-              payload: {
-                kind: 'bash',
-                data: {
-                  requestId: 'req-1',
-                  command: 'ls',
-                  allowBypass: true,
-                  runId: RUN_HISTORY_RUN,
-                },
+        const approval = [
+          {
+            type: 'request.opened',
+            requestId: 'req-1',
+            payload: {
+              kind: 'bash',
+              data: {
+                requestId: 'req-1',
+                command: 'ls',
+                allowBypass: true,
+                runId: RUN_HISTORY_RUN,
               },
             },
-            toolBinding('call-a', 'req-1'),
-          ),
-        );
-        expect(state?.requests['req-1']?.resolved).toBe(false);
-        expect(state?.pendingIntents['call-a']?.binding).toEqual({
+          },
+          toolBinding('call-a', 'req-1'),
+        ];
+        // Asked before its body started: nothing ran, whatever the answer.
+        const asking = stateOf(through(5, ...approval));
+        expect(asking?.requests['req-1']?.resolved).toBe(false);
+        expect(asking?.pendingResponse?.records['call-a']?.status).toEqual({
+          kind: 'asking',
+          attempt: 1,
           requestId: 'req-1',
-          role: 'call',
+        });
+        // The body starts under it: the request is the attempt's binding.
+        const started = stateOf(through(5, ...approval, intent('call-a')));
+        expect(started?.pendingResponse?.records['call-a']?.status).toEqual({
+          kind: 'started',
+          attempt: 1,
+          binding: { requestId: 'req-1', role: 'call' },
         });
       },
     ],
@@ -1776,7 +1786,7 @@ describe('foldRunState', () => {
               type: 'tool.intent',
               payload: {
                 origin: { kind: 'response', responseId: RESPONSE_ID },
-                callIds: ['__proto__'],
+                callId: '__proto__',
                 attempt: 1,
               },
             },
@@ -1784,8 +1794,14 @@ describe('foldRunState', () => {
         );
         // On a plain object the assignment would call the inherited setter and
         // the barrier would vanish from the state the resume rule reads.
-        expect(Object.keys(state?.pendingIntents ?? {})).toEqual(['__proto__']);
-        expect(state?.pendingIntents['__proto__']?.attempt).toBe(1);
+        expect(Object.keys(state?.pendingResponse?.records ?? {})).toEqual([
+          '__proto__',
+        ]);
+        expect(state?.pendingResponse?.records['__proto__']?.status).toEqual({
+          kind: 'started',
+          attempt: 1,
+          binding: null,
+        });
       },
     ],
     [
@@ -1851,7 +1867,6 @@ describe('foldRunState', () => {
       'tool',
     ]);
     expect(state?.pendingResponse).toBeNull();
-    expect(state?.pendingIntents).toEqual({});
     expect(state?.usage.totalInputTokens).toBe(10);
     expect(state?.usage.totalCacheReadInputTokens).toBe(4);
     // The turn's stamped price: a settlement adds nothing to it.
@@ -1867,16 +1882,30 @@ describe('foldRunState', () => {
     ['out-of-order', () => foldRunState(null, [TURN_ROWS[1], TURN_ROWS[0]])],
     ['orphan-settlement', () => through(2, settlement('call-a'))],
     [
-      // The intent admitted attempt 1; attempt 2 is another dispatch, and
-      // accepting it here would retire attempt 1's uncertainty silently.
+      // A call's attempt never goes back: attempt 2's body started, so
+      // attempt 1 settling now would retire attempt 2's uncertainty silently.
       'out-of-order',
-      () => through(6, settlement('call-a', { attempt: 2 })),
+      () => through(6, intent('call-a', 2), settlement('call-a')),
     ],
     [
-      // A binding names the intent the rows hold, at the attempt the
-      // approval admits; anything else is a row out of order.
+      // The outcome question asks whether a body ran: one that never
+      // started is a row out of order.
       'out-of-order',
-      () => through(6, toolBinding('call-a', 'req-9', 2)),
+      () =>
+        through(5, {
+          type: 'tool.binding',
+          payload: {
+            callId: 'call-a',
+            attempt: 1,
+            requestId: 'req-9',
+            role: 'outcome',
+          },
+        }),
+    ],
+    [
+      // A call settles once.
+      'orphan-settlement',
+      () => through(7, settlement('call-a', { attempt: 2 })),
     ],
     [
       'mismatched-delivery',

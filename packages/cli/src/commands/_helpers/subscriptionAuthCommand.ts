@@ -10,12 +10,12 @@ import {
   signOutCliSubscription,
   subscriptionSignOutOutcomeMessage,
 } from '@cli/runtime/subscriptionLogin';
+import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
 import {
   subscriptionProvider,
   type SubscriptionAccount,
   type SubscriptionProviderId,
-} from '@controllers/modelAccess/subscriptionProviders';
-import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
+} from '@texra/controllers/modelAccess/subscriptionProviders';
 
 import { withCliAuthError } from './cliAuthError';
 import { defineCliCommand } from './defineCliCommand';

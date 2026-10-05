@@ -8,7 +8,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   PluginRow,
   SettingsTarget,
-} from '@shared/settingsView/settingsViewMessages';
+} from '@texra/shared/settingsView/settingsViewMessages';
 
 const ROWS: PluginRow[] = [
   {

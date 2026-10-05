@@ -9,7 +9,7 @@ import {
   commandCatalog,
   commandKeybindings,
   type CommandCatalogEntry,
-} from '@shared/commands/catalog';
+} from '@texra/shared/commands/catalog';
 
 describe('commandCatalog', () => {
   // package.json contributes.commands/keybindings are code-generated from the

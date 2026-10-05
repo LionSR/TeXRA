@@ -1,4 +1,4 @@
 {
-  "packages/agent/package.json": 36,
+  "packages/harness/package.json": 36,
   "packages/llm/package.json": 1
 }

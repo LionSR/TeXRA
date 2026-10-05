@@ -3,14 +3,13 @@ import { Effect } from 'effect';
 // Local imports
 import {
   buildToolDashboardItems,
-  isToolPluginVisible,
-} from '@controllers/settingsView/ToolDashboardData';
-import type { StateStore } from '@platform/interfaces';
-import type { ToolDashboardItem } from '@shared/settingsView/settingsViewMessages';
-import type { ToolPluginSetup } from '@tools/plugins';
-import type { ToolProbeInputs } from '@tools/toolProbes';
+  visibleToolPlugins,
+} from '@texra/controllers/settingsView/ToolDashboardData';
+import type { ToolDashboardItem } from '@texra/shared/settingsView/settingsViewMessages';
+import type { ToolPluginSetup } from '@texra/tools/pluginCards';
 import { setToolEnabled } from '@tools/toolAvailability';
 import { ToolRegistry } from '@tools/toolTable';
+import type { ToolProbeInputs, StateStore } from '@texra-ai/harness';
 
 type CliToolGuideKind = 'install' | 'auth';
 
@@ -41,19 +40,18 @@ export function readCliToolStatus(probeInputs: ToolProbeInputs, id: string) {
   );
 }
 
-/** A probed plugin the CLI's dashboard lists, from the process's plugins;
- *  built-in plugins need no setup. */
+/** A probed plugin the CLI's dashboard lists, with its card; built-in
+ *  plugins need no setup. */
 const findCliToolDef = (id: string) =>
-  Effect.map(ToolRegistry, ({ entries }) => {
-    const def = entries.get(id);
-    return def?.availability && isToolPluginVisible(def, 'cli')
-      ? def
-      : undefined;
-  });
+  Effect.map(ToolRegistry, ({ entries }) =>
+    visibleToolPlugins(entries, 'cli').find(
+      ({ card, plugin }) => card.id === id && plugin.availability !== undefined,
+    ),
+  );
 
 export const readCliToolGuide = (id: string, kind: CliToolGuideKind) =>
   Effect.map(findCliToolDef(id), (def) =>
-    def === undefined ? undefined : cliToolGuide(def.setup ?? {}, kind),
+    def === undefined ? undefined : cliToolGuide(def.card.setup ?? {}, kind),
   );
 
 function cliToolGuide(
@@ -86,7 +84,7 @@ export function setCliToolEnabled(
   enabled: boolean,
 ) {
   return Effect.flatMap(findCliToolDef(id), (def) =>
-    def?.toggleable
+    def?.plugin.toggle !== undefined
       ? // A plugin's bundled agents follow its switch (`pluginCatalogLayer`).
         setToolEnabled(id, enabled, state).pipe(Effect.as(true))
       : Effect.succeed(false),

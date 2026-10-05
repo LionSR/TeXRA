@@ -1,7 +1,7 @@
 import {
   HOST_BRIDGE_API_KEY,
   type HostBridgeApi,
-} from '@shared/hostBridgeTypes.js';
+} from '@texra/shared/hostBridgeTypes.js';
 
 import {
   ELECTRON_SESSION_MESSAGE_CHANNEL,

@@ -6,8 +6,8 @@
 // silently rots — and a confidently wrong path costs more than a missing one,
 // because the reader trusts it. The 2026-07 context-engineering pass found six
 // such references pointing at files and symbols that no longer existed
-// (`src/common/webview/`, `src/shared/ipc/commonCommands.ts`,
-// `src/logger/index.ts`, ...), plus a checklist rule banning a command the same
+// (`packages/harness/src/common/webview/`, `packages/harness/src/shared/ipc/commonCommands.ts`,
+// `packages/harness/src/logger/index.ts`, ...), plus a checklist rule banning a command the same
 // docs instructed running. This gate turns that class of drift into a failed
 // commit instead of a wrong answer months later.
 //
@@ -42,10 +42,10 @@ const GUIDANCE_FILES = [
   'CLAUDE.md',
   'AGENTS.md',
   'src/README.md',
-  'src/agent/core/README.md',
-  'src/agent/runtime/README.md',
-  'src/replacement/README.md',
-  'src/latex/README.md',
+  'packages/harness/src/agent/core/README.md',
+  'packages/harness/src/agent/runtime/README.md',
+  'packages/texra/src/replacement/README.md',
+  'packages/texra/src/latex/README.md',
   'docs/README.md',
 ];
 // Standing docs: architecture notes and the published guide. Dated proposals
@@ -69,7 +69,7 @@ const GUIDANCE_DIRS = [
 ];
 
 // Escape hatch for prose that names a path precisely because it is gone —
-// e.g. CLAUDE.md's "`src/common/webview/` does not exist". Put
+// e.g. CLAUDE.md's "`packages/harness/src/common/webview/` does not exist". Put
 // `<!-- guidance-refs-ignore -->` anywhere in the paragraph. It scopes to the
 // whole block (contiguous non-blank lines), not one line, because Prettier
 // reflows this prose and would otherwise strand the marker.
@@ -127,11 +127,11 @@ const BUILD_OUTPUT =
 // path: CLAUDE.md and AGENTS.md both cited an `approval.requested` row that has
 // never existed — the row is `request.opened`.
 const EVENT_VOCABULARY_SOURCES = [
-  'src/shared/schemas/sessionEvent.ts',
-  'src/shared/schemas/traceEvent.ts',
+  'packages/harness/src/shared/schemas/sessionEvent.ts',
+  'packages/harness/src/shared/schemas/traceEvent.ts',
   // `stream.chunk` is transient, so it has no session arm and is declared only
   // on the trace union.
-  'src/agent/trace/events.ts',
+  'packages/harness/src/agent/trace/events.ts',
 ];
 
 /**

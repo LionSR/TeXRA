@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   postMessage: vi.fn(),
 }));
 
-vi.mock('@shared/hostBridge', () => ({
+vi.mock('@texra/shared/hostBridge', () => ({
   postMessage: mocks.postMessage,
 }));
 

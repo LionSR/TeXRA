@@ -5,13 +5,13 @@ import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import * as codexAuth from '@texra-ai/llm/node';
-import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import {
   fakeProcessServices,
   hostStores,
   setupPlatform,
 } from '@test/support/setupPlatform';
-import { getChatGptSubscriptionStatus } from '@tools/setup/platform';
+import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
+import { getChatGptSubscriptionStatus } from '@texra/tools/setup/platform';
 
 setupPlatform(
   {

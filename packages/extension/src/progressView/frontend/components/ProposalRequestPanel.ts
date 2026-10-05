@@ -20,9 +20,9 @@ import type {
   PermissionPayload,
 } from '@shared/schemas';
 import { getProposalFileGroups } from '@shared/schemas';
-import { SessionUiEvents } from '@shared/session/uiEvents';
 import { getModelLabel } from '@shared/model/modelLabel';
 import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '@shared/session/approvalDecision';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { selectStyles } from '@ui/styles';
 import {
   DELEGATION_APPROVAL_COPY,
@@ -291,6 +291,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     const flags: string[] = [];
     if (data.toolConfig.autoExtractFigure) flags.push('Extract figures');
     if (data.toolConfig.autoExtractTikzFigure) flags.push('Extract TikZ');
+    if (data.toolConfig.reflect) flags.push('Critic review');
     if (flags.length === 0) return nothing;
     return html`<div class="workflow-proposal__extract-flags">
       ${repeat(

@@ -38,6 +38,10 @@ const hostHarnessPath = path.join(
   path.dirname(binaryPath),
   'service-host-harness.js',
 );
+// The same CLI stamped as a newer build: what a client of a later release
+// finds when an older build's service runs.
+const NEXT_BUILD = '999.0.0';
+const nextBuildPath = path.join(path.dirname(binaryPath), 'texra-next.js');
 const validationResourcesPath = path.join(validationRoot, 'resources');
 const validationEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL';
 const validationFlagEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_FLAG';
@@ -294,8 +298,8 @@ function validateBinarySmoke() {
 }
 
 function validateTeamListAvailability() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-list-cwd-'));
-  const home = mkdtempSync(path.join(tmpdir(), 'texra-cli-list-home-'));
+  const cwd = makeScratch('texra-cli-list-cwd-');
+  const home = makeScratch('texra-cli-list-home-');
   try {
     const listEnv = isolatedCliHomeEnv(home);
     const runList = (args = []) =>
@@ -355,8 +359,8 @@ function validateTeamListAvailability() {
       `team list NDJSON should include planned availability\nstdout:\n${ndjson.stdout}`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
-    rmSync(home, { recursive: true, force: true });
+    removeScratch(cwd);
+    removeScratch(home);
   }
 }
 
@@ -365,8 +369,8 @@ function findToolRecord(records, id) {
 }
 
 function validateToolsCommand() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-tools-cwd-'));
-  const home = mkdtempSync(path.join(tmpdir(), 'texra-cli-tools-home-'));
+  const cwd = makeScratch('texra-cli-tools-cwd-');
+  const home = makeScratch('texra-cli-tools-home-');
   try {
     const env = isolatedCliHomeEnv(home);
     const runTools = (args) =>
@@ -431,8 +435,8 @@ function validateToolsCommand() {
       'tools list NDJSON records should have kind=tool-status',
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
-    rmSync(home, { recursive: true, force: true });
+    removeScratch(cwd);
+    removeScratch(home);
   }
 }
 
@@ -549,6 +553,7 @@ async function runTexraPty(args, options = {}) {
       cwd: options.cwd ?? cliRoot,
       env,
     });
+    liveChildren.add(child);
 
     const rejectWithKill = (err) => {
       if (settled) return;
@@ -595,6 +600,7 @@ async function runTexraPty(args, options = {}) {
 
     child.onExit((exit) => {
       exited = true;
+      liveChildren.delete(child);
       settle(() => resolve({ output, exit }));
     });
 
@@ -607,7 +613,7 @@ async function runTexraPty(args, options = {}) {
 }
 
 async function validateChatOnboardingPicker(options) {
-  const root = mkdtempSync(path.join(tmpdir(), 'texra-cli-onboarding-'));
+  const root = makeScratch('texra-cli-onboarding-');
   try {
     const home = path.join(root, 'home');
     let exitScheduled = false;
@@ -666,7 +672,7 @@ async function validateChatOnboardingPicker(options) {
       );
     }
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeScratch(root);
   }
 }
 
@@ -704,7 +710,7 @@ async function validateChatOnboardingPickers() {
 }
 
 function validateRunCommand() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-run-'));
+  const cwd = makeScratch('texra-cli-run-');
   try {
     const inputPath = path.join(cwd, 'paper.tex');
     const validationFlagPath = path.join(cwd, validationFlagName);
@@ -739,7 +745,7 @@ function validateRunCommand() {
       'text run output should print the filesystem copy path when --output is used',
     );
     // The progress line prints the fold's status label from the one table in
-    // src/shared/runs/runStatusDisplay.ts (RUN_STATUS_LABELS).
+    // packages/harness/src/shared/runs/runStatusDisplay.ts (RUN_STATUS_LABELS).
     assert(
       text.stderr.includes(' · Completed ·'),
       `text run progress should end with the shared completed label\nstderr:\n${text.stderr}`,
@@ -747,6 +753,19 @@ function validateRunCommand() {
     assert(
       !text.stderr.includes(' · Stopped ·'),
       `a successful text run should not report the cancelled stopped label\nstderr:\n${text.stderr}`,
+    );
+
+    // Opt-in reflection: the bundled critic reviews revision 1, and revision
+    // 2 reads its critique.
+    const reflected = run(process.execPath, [...baseArgs, '--reflect'], {
+      cwd: repoRoot,
+      validationModel: true,
+      validationFlagPath,
+    });
+    assertSuccess(reflected, 'texra run --reflect');
+    assert(
+      reflected.stderr.includes('Critique 1 · critic'),
+      `a --reflect run should call the critic between revisions\nstderr:\n${reflected.stderr}`,
     );
 
     const json = run(
@@ -798,12 +817,12 @@ function validateRunCommand() {
       'run NDJSON should include a result record',
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
 function validateToolUseAgentRunCommand() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-agent-run-'));
+  const cwd = makeScratch('texra-cli-agent-run-');
   try {
     const promptPath = path.join(cwd, 'review-prompt.md');
     const contextPath = path.join(cwd, 'pr.diff');
@@ -854,7 +873,7 @@ function validateToolUseAgentRunCommand() {
       'agent run should return the validation model response',
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -865,7 +884,7 @@ function validateToolUseAgentRunCommand() {
  * binary. The NDJSON the run printed is kept as the artifact.
  */
 function validateHistoryQueryRunCommand() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-history-query-'));
+  const cwd = makeScratch('texra-cli-history-query-');
   try {
     const home = path.join(cwd, 'home');
     const customAgents = path.join(
@@ -934,7 +953,7 @@ prompt: |
       `history query run should return the query page for its own run (artifact: ${artifactPath})\nresponse:\n${response}`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1013,7 +1032,10 @@ prompt: |
     },
     /** One read of the project's store, closed again for the next writer. */
     readStore: (sql) => {
-      const [project] = readdirSync(storage);
+      // The project's store: a service also keeps a no-workspace one.
+      const project = readdirSync(storage).find((name) =>
+        name.startsWith('work-'),
+      );
       const db = new DatabaseSync(path.join(storage, project, 'texra.db'), {
         readOnly: true,
       });
@@ -1034,6 +1056,7 @@ prompt: |
       let typed = false;
       let from = 0;
       let exiting = false;
+      let exitSent = false;
       const result = await runTexraPty(['resume', ...args], {
         label: `texra resume ${args.join(' ')}`,
         cwd: work,
@@ -1061,11 +1084,18 @@ prompt: |
             from += plain.indexOf(exchange.reply) + exchange.reply.length;
             at += 1;
             typed = false;
-            if (at === exchanges.length) {
-              exiting = true;
-              pty.setTimer(() => pty.write(ETX), 800);
-              pty.setTimer(() => pty.write(ETX), 2_000);
-            }
+            if (at === exchanges.length) exiting = true;
+          }
+          // Exit once the last turn is over: a reply can show before its
+          // turn ends, and a Ctrl-C then stops the turn instead.
+          if (
+            exiting &&
+            !exitSent &&
+            stripVTControlCharacters(pty.output).slice(from).includes('Idle')
+          ) {
+            exitSent = true;
+            pty.setTimer(() => pty.write(ETX), 800);
+            pty.setTimer(() => pty.write(ETX), 2_000);
           }
         },
       });
@@ -1089,6 +1119,66 @@ const VIEW_ROWS = `SELECT s.logical_id AS run, e.seq, e.type,
    FROM event e JOIN event_sequence s ON s.id = e.aggregate
    WHERE e.type IN ('run.start', 'context.edit') ORDER BY e."commit"`;
 
+/**
+ * Remove a scratch directory, first stopping any TeXRA service a chat in it
+ * started: its record names its pid, and a conversation parked there would
+ * otherwise keep it running after its home is gone.
+ */
+/** The scratch directories made and not yet removed: what an exit or a
+ *  signal before a scenario's own cleanup still has to remove. */
+const liveScratch = new Set();
+
+/** A scratch directory under the system temp folder, removed (with any
+ *  service started in it) by its scenario or, failing that, at exit. */
+function makeScratch(prefix) {
+  const dir = mkdtempSync(path.join(tmpdir(), prefix));
+  liveScratch.add(dir);
+  return dir;
+}
+
+/** The PTY clients running now: killed before an exit removes the
+ *  scratch they write to. */
+const liveChildren = new Set();
+
+process.on('exit', () => {
+  for (const child of liveChildren) {
+    try {
+      child.kill('SIGKILL');
+    } catch {
+      // Exited already.
+    }
+  }
+  for (const dir of liveScratch) removeScratch(dir);
+});
+for (const [signal, code] of [
+  ['SIGINT', 130],
+  ['SIGTERM', 143],
+]) {
+  process.on(signal, () => process.exit(code));
+}
+
+function removeScratch(dir) {
+  liveScratch.delete(dir);
+  // Every service home under `dir`; one still starting has its run
+  // directory before its record, so its record is waited for briefly.
+  const runDirs = spawnSync(
+    'find',
+    [dir, '-type', 'd', '-path', '*/.texra/run'],
+    { encoding: 'utf8' },
+  );
+  for (const runDir of runDirs.stdout.split('\n').filter(Boolean)) {
+    const record = path.join(runDir, 'serve.json');
+    for (let waited = 0; !existsSync(record) && waited < 3_000; waited += 100)
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    try {
+      process.kill(JSON.parse(readFileSync(record, 'utf8')).pid, 'SIGTERM');
+    } catch {
+      // Gone already, or never started: nothing left to stop.
+    }
+  }
+  rmSync(dir, { recursive: true, force: true });
+}
+
 function writeArtifact(name, value) {
   const artifactDir = path.join(validationRoot, 'artifacts');
   mkdirSync(artifactDir, { recursive: true });
@@ -1105,7 +1195,7 @@ function writeArtifact(name, value) {
  * are kept as the artifact.
  */
 async function validateForkResetHandoff() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-fork-'));
+  const cwd = makeScratch('texra-cli-fork-');
   try {
     const project = echoProject(cwd);
     const source = project.firstRun('First message');
@@ -1172,7 +1262,7 @@ async function validateForkResetHandoff() {
       `the fork should record its seed, the handoff and the reset as context.edit rows, got ${causes.join()} (artifact: ${artifactPath})`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1184,7 +1274,7 @@ async function validateForkResetHandoff() {
  * `context.edit` rows and the replies are the artifact.
  */
 async function validateTuiForkHandoffReset() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-tui-fork-'));
+  const cwd = makeScratch('texra-cli-tui-fork-');
   try {
     const project = echoProject(cwd);
     const source = project.firstRun('First message');
@@ -1231,7 +1321,7 @@ async function validateTuiForkHandoffReset() {
       `the fork should record its seed, the handoff and the reset, got ${causes.join()} (artifact: ${artifactPath})`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1245,7 +1335,7 @@ async function validateTuiForkHandoffReset() {
  * only). The store's `context.edit` rows are kept as the artifact.
  */
 async function validateBackgroundCompaction() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-compaction-'));
+  const cwd = makeScratch('texra-cli-compaction-');
   try {
     const project = echoProject(cwd, {
       'texra.model.compactionThresholdPercent': 1,
@@ -1277,7 +1367,7 @@ async function validateBackgroundCompaction() {
       `the summary should land as one edit of the three messages before the second turn's request (artifact: ${artifactPath})`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1289,9 +1379,12 @@ async function validateBackgroundCompaction() {
  * resumes it by itself. The task's `run.activate` counts are the artifact.
  */
 async function validateInterruptedTasks() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-interrupted-'));
+  const cwd = makeScratch('texra-cli-interrupted-');
   try {
     const project = echoProject(cwd);
+    // The chat is its task's writer here, so killing it is the crash this
+    // recovers from: a service would keep the task running past the kill.
+    project.ptyEnv.TEXRA_NO_SERVICE = '1';
     const globalStorage = path.join(
       cwd,
       'home',
@@ -1377,7 +1470,7 @@ async function validateInterruptedTasks() {
       `the chat should leave the task blocked while its agent is missing and resume it once the agent is back (artifact: ${artifactPath})\noutput:\n${stripVTControlCharacters(chat.output).slice(-3000)}`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1387,7 +1480,7 @@ async function validateInterruptedTasks() {
  * to it live. The second chat's attached view is the artifact.
  */
 async function validateServiceChatsSeeEachOther() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-service-chats-'));
+  const cwd = makeScratch('texra-cli-service-chats-');
   const project = echoProject(cwd);
   const env = { ...project.ptyEnv, TEXRA_NO_TELEMETRY: '1' };
   const chatArgs = [
@@ -1482,7 +1575,148 @@ async function validateServiceChatsSeeEachOther() {
       cwd: project.work,
       env,
     });
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
+  }
+}
+
+/**
+ * The service's build identity (D1-D4): clients of one build share its
+ * service; a client of a newer build retires it and starts its own while
+ * the old one finishes the task it holds; the newer service stays
+ * reachable once the old one exits; a client of the older build then
+ * leaves the newer service alone. Every host stamps
+ * the same workspace version, so this holds across the CLI, the extension
+ * and the desktop app. The statuses each client saw are the artifact.
+ */
+async function validateServiceBuildIdentity() {
+  const cwd = makeScratch('texra-cli-service-builds-');
+  const project = echoProject(cwd);
+  writeFileSync(
+    path.join(
+      cwd,
+      'home',
+      '.texra',
+      'v1',
+      'global-storage',
+      'custom_agents',
+      'park-validation.yaml',
+    ),
+    `name: park_validation
+description: Hold its model call until released.
+
+prompt: |
+  GOLDEN-PARK
+`,
+  );
+  const env = {
+    ...project.ptyEnv,
+    TEXRA_NO_TELEMETRY: '1',
+    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+  };
+  const texraWith = (binary, args, label) => {
+    const result = run(
+      process.execPath,
+      [binary, ...args, '--cwd', project.work],
+      { cwd: project.work, env },
+    );
+    assertSuccess(result, label);
+    return result.stdout.trim();
+  };
+  const status = (binary, label) =>
+    parseJson(
+      texraWith(
+        binary,
+        ['service', 'status', '--output-format', 'json'],
+        label,
+      ),
+      label,
+    );
+  const alive = (pid) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const until = async (label, check) => {
+    const deadline = Date.now() + 30_000;
+    while (!check()) {
+      assert(Date.now() < deadline, `timed out waiting for ${label}`);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  };
+  try {
+    // A task at work in this build's service: its model call is held.
+    texraWith(
+      binaryPath,
+      [
+        'tasks',
+        'start',
+        'park_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        'Hold',
+      ],
+      'texra tasks start (this build)',
+    );
+    const first = status(binaryPath, 'service status (this build)');
+    texraWith(
+      binaryPath,
+      ['tasks', 'list'],
+      'texra tasks list (this build, again)',
+    );
+    const same = status(binaryPath, 'service status (this build, again)');
+    // A newer build retires it; it drains, finishing that task, while the
+    // newer service serves.
+    texraWith(
+      nextBuildPath,
+      ['tasks', 'list'],
+      'texra tasks list (next build)',
+    );
+    const next = status(nextBuildPath, 'service status (next build)');
+    const drainingKept = alive(first.pid);
+    // The retired service now exits: the newer one must still be found.
+    process.kill(first.pid, 'SIGTERM');
+    await until('the retired service to exit', () => !alive(first.pid));
+    const reachable = status(nextBuildPath, 'service status (next, after)');
+    texraWith(
+      binaryPath,
+      ['tasks', 'list'],
+      'texra tasks list (this build, after)',
+    );
+    const after = status(binaryPath, 'service status (this build, after)');
+    const artifactPath = writeArtifact('service-builds.json', {
+      first,
+      same,
+      next,
+      drainingKept,
+      reachable,
+      after,
+    });
+    assert(
+      same.pid === first.pid,
+      `two clients of one build should share its service (artifact: ${artifactPath})`,
+    );
+    assert(
+      next.version === NEXT_BUILD && next.pid !== first.pid,
+      `a newer build should retire the older service and start its own (artifact: ${artifactPath})`,
+    );
+    assert(
+      drainingKept,
+      `a retired service should keep running while its task works (artifact: ${artifactPath})`,
+    );
+    assert(
+      reachable.pid === next.pid,
+      `the newer service should stay reachable once the retired one exits (artifact: ${artifactPath})`,
+    );
+    assert(
+      after.pid === next.pid && after.version === NEXT_BUILD,
+      `an older build should leave a newer service running (artifact: ${artifactPath})`,
+    );
+  } finally {
+    removeScratch(cwd);
   }
 }
 
@@ -1495,7 +1729,7 @@ async function validateServiceChatsSeeEachOther() {
  * artifact.
  */
 async function validateServiceHostCalls() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-service-host-'));
+  const cwd = makeScratch('texra-cli-service-host-');
   const project = echoProject(cwd);
   const storageRoot = path.join(cwd, 'home', '.texra');
   writeFileSync(
@@ -1627,7 +1861,7 @@ prompt: |
       cwd: project.work,
       env,
     });
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1639,7 +1873,7 @@ prompt: |
  * the command wrote and the attached view's last lines are the artifact.
  */
 async function validateServiceTasksInTui() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-service-tui-'));
+  const cwd = makeScratch('texra-cli-service-tui-');
   const project = echoProject(cwd);
   writeFileSync(
     path.join(
@@ -1781,7 +2015,7 @@ prompt: |
       cwd: project.work,
       env,
     });
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1793,7 +2027,7 @@ prompt: |
  * those two transcripts are the artifact.
  */
 async function validateServiceSharedTask() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-service-'));
+  const cwd = makeScratch('texra-cli-service-');
   const project = echoProject(cwd);
   const env = { ...project.ptyEnv, TEXRA_NO_TELEMETRY: '1' };
   const texra = (args, label, extraEnv = {}) => {
@@ -1905,7 +2139,7 @@ async function validateServiceSharedTask() {
       cwd: project.work,
       env,
     });
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -1918,9 +2152,12 @@ async function validateServiceSharedTask() {
  * activation counts and the task's `run.description` rows are the artifact.
  */
 async function validateOpenTimePrompt() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-open-prompt-'));
+  const cwd = makeScratch('texra-cli-open-prompt-');
   try {
     const project = echoProject(cwd);
+    // The chat is its task's writer here, so killing it is the crash this
+    // recovers from: a service would keep the task running past the kill.
+    project.ptyEnv.TEXRA_NO_SERVICE = '1';
     const source = project.firstRun('First message');
     const activations = () =>
       project.readStore(
@@ -2032,12 +2269,12 @@ async function validateOpenTimePrompt() {
       `/rename should write the user's title (artifact: ${artifactPath})`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
 function validateScriptFanoutRunCommand() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-script-fanout-run-'));
+  const cwd = makeScratch('texra-cli-script-fanout-run-');
   try {
     const home = path.join(cwd, 'home');
     const globalStorage = path.join(home, '.texra', 'v1', 'global-storage');
@@ -2135,12 +2372,12 @@ prompt: |
       `the script result should carry all structured mathematical results\nresponse:\n${response}`,
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
 function validateTeamRunCommand() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-team-run-'));
+  const cwd = makeScratch('texra-cli-team-run-');
   // A preset whose members are all chat agents keeps this check cheap.
   const validationPreset = 'software-engineer';
   try {
@@ -2247,7 +2484,7 @@ function validateTeamRunCommand() {
       'team run NDJSON should include a preset result record with the selected root agent',
     );
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeScratch(cwd);
   }
 }
 
@@ -2274,6 +2511,7 @@ async function validateCliRunArtifacts(options = {}) {
   await validateServiceTasksInTui();
   await validateServiceChatsSeeEachOther();
   await validateServiceHostCalls();
+  await validateServiceBuildIdentity();
   validateScriptFanoutRunCommand();
   validateTeamRunCommand();
   console.log('CLI run validation passed');
@@ -2297,6 +2535,16 @@ function buildValidationBundle() {
   runCliPackageScript('copy:resources', {
     env: { TEXRA_CLI_RESOURCES_OUTDIR: validationResourcesPath },
   });
+  assertSuccess(
+    run(process.execPath, ['scripts/build-bundle.mjs'], {
+      cwd: cliRoot,
+      env: {
+        TEXRA_CLI_BUNDLE_OUTFILE: nextBuildPath,
+        TEXRA_BUILD_VERSION: NEXT_BUILD,
+      },
+    }),
+    'build the next-build CLI',
+  );
   assertSuccess(
     run(process.execPath, ['scripts/build-bundle.mjs', '--host-harness'], {
       cwd: cliRoot,
