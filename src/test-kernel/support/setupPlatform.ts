@@ -220,8 +220,6 @@ export const fakeHostAppState: StateStore = {
 export const fakeHostLanguageModel: LanguageModelPort = {
   selectModels: (selector) =>
     installedHost().languageModel.selectModels(selector),
-  onDidChange: (listener) =>
-    installedHost().languageModel.onDidChange(listener),
   acquire: (configuration) =>
     installedHost().languageModel.acquire(configuration),
 };

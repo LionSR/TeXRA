@@ -66,7 +66,7 @@ Things the tree won't tell you:
   `config/ratchets/` freeze the remaining edges — `harness-deep-import-baseline`
   (no NEW distinct harness-internal specifier, `@agent/*`, `@shared/*`,
   `@platform/*` …, from the app or a host, type-only included; reach the
-  harness through `@texra-ai/harness` instead), `host-agent-mock`,
+  harness through `@texra-ai/harness` instead), `core-quality/core-module-mocks`,
   `architecture-edges`, plus `refuted-candidates` (the costed-and-refused
   refactors, with their ruling anchors). ESLint's `no-restricted-syntax` fails
   an `Effect.run*` call outside `packages/{extension,desktop,cli}/src/` and the

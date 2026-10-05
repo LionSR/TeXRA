@@ -160,6 +160,43 @@ before composing the next runtime. Acquisition is interruption-safe:
 cancellation while waiting aborts without taking a hold, while the retiring
 runtime completes disposal through its own scope.
 
+## Durable invariants
+
+A run's next step comes from its committed history. The session publishes a
+whole batch through one inbox, and the run fold checks the batch before the
+store commits it. Live trace chunks are transient; they are not recovery input.
+
+The existing [crash-conformance suite](../../src/test-kernel/support/crashConformance.ts)
+checks the following contracts by reopening a real SQLite store at every commit
+point, under both the harness built-ins and TeXRA's plugins:
+
+- **I1** Recovery reaches the clean run's outcome: its committed answers,
+  tool results, owned children, and context edits are preserved.
+- **I2** A tool call has one settlement. A result committed before a crash
+  is reused, and a settled call is not executed again.
+- **I3** A model invocation has at most one committed response. Recovery
+  does not append another answer for an invocation already answered.
+- **I4** A command subject to approval runs only after approval. An unfinished
+  command whose outcome is unknown is retried only after a person chooses to retry
+  that call. Recovery does not assume that an absent result means no effect
+  occurred.
+- **I5** An owned child that ended cleanly answers its awaiting call on
+  recovery. Relaunching a child for the same call requires a retry decision,
+  and owned children are left with terminal rows.
+- **I6** A child's result delivery settles with the turn that produced it.
+  Recovery queues and consumes that delivery once, including results from
+  detached agents, scripts, and commands.
+- **I7** Handoff, compaction, and fork preserve the context they committed.
+  A fork is recovered with the history it was registered with.
+- **I8** A stopped run's halt and terminal outcome commit together.
+  Recovery cannot treat an acknowledged stop as an interrupted run to continue.
+- **I9** Turning off a run's shell approval bypass is acknowledged only
+  after the policy row is durable, so recovery cannot restore the old bypass.
+
+These are committed-state contracts. An external effect that finished before
+its result was committed can remain uncertain; **I4** governs that uncertainty,
+without promising exactly-once execution of arbitrary external effects.
+
 ## Run results
 
 There is exactly one result shape: `RunEndResult`, the run's `run.end`
