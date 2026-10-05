@@ -166,6 +166,7 @@ const CORE_SKILL_CONTRIBUTIONS: readonly SkillSourceContribution[] = [
 
 /**
  * A tool plugin's bundled skills, shipped at `resources/plugins/<id>/skills`
+ * (a plugin that ships none has no such directory, which reads as no skills)
  * and tagged with the plugin. A plugin is one on/off unit, so its switch
  * (`texra.tools.disabled`) gates them (`readDisabledSkills`), and a run's
  * step lists them while it pins the plugin. Only the switch hides them, not
@@ -189,16 +190,16 @@ function pluginSkillContribution(pluginId: string): SkillSourceContribution {
 
 /**
  * The contributions a host installs: the core sources, then the bundled
- * skills of each tool plugin that ships them. The ids come in as strings from
- * the host bootstrap, which reads the tool plugin manifest, so `@skills` keeps
- * no edge to `@tools`.
+ * skills of each tool plugin. The ids come in as strings from the host
+ * bootstrap, which reads the process's plugin list, so `@skills` keeps no
+ * edge to `@tools`.
  */
 export function hostSkillContributions(
-  skillPluginIds: readonly string[],
+  pluginIds: readonly string[],
 ): readonly SkillSourceContribution[] {
   return [
     ...CORE_SKILL_CONTRIBUTIONS,
-    ...skillPluginIds.map(pluginSkillContribution),
+    ...pluginIds.map(pluginSkillContribution),
   ];
 }
 

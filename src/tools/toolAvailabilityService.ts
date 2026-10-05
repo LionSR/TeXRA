@@ -16,7 +16,6 @@ import type { ToolProbeInputs } from './toolProbes';
 export interface ExternalToolCheckResult {
   readonly id: string;
   readonly tools: readonly string[];
-  readonly name: string;
   readonly status: 'available' | 'not-found' | 'unknown';
   /** Short status label for the dashboard badge, when the default is too generic. */
   readonly statusLabel?: string;

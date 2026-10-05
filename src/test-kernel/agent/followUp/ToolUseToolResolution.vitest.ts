@@ -199,16 +199,13 @@ describe('tool-use tool resolution', () => {
       const table = toolTable([
         {
           id: 'zotero',
-          name: 'Zotero',
-          category: 'ai-agents',
-          description: '',
           tools: {
             zotero_search: {
               definition: { name: 'zotero_search' },
               call: () => Effect.die('not called'),
             },
           },
-          toggleable: true,
+          toggle: 'off',
           availability: ALWAYS_AVAILABLE,
           processLayer: {
             layer: Layer.effectDiscard(

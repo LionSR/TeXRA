@@ -177,7 +177,7 @@ export type PromptSection = (ctx: {
 /** The process's plugins by plugin id: what each contributes (its tools,
  *  continuation, prompt section and layers) is read off its value. */
 export interface ToolTable {
-  /** Every plugin, in the order the app listed them (dashboard order). */
+  /** Every plugin, in the order the app listed them. */
   readonly entries: ReadonlyMap<string, Plugin>;
   /** The tool registered under `name` in any plugin. */
   readonly get: (name: string) => ITool | undefined;
@@ -185,9 +185,10 @@ export interface ToolTable {
 
 /**
  * The table over `plugins`, which the app lists in order. A list that
- * repeats a plugin id or a tool name, claims the parked runs'
- * continuation twice, or gives a toggle or setup copy to a plugin with no
- * availability probe is a defect of the list, refused when it is built.
+ * spells an id other than lowercase letters, digits and dashes, repeats a
+ * plugin id or a tool name, claims the parked runs'
+ * continuation twice, or gives a switch to a plugin with no availability
+ * probe is a defect of the list, refused when it is built.
  */
 export function toolTable(plugins: readonly Plugin[]): ToolTable {
   const entries = new Map<string, Plugin>();
@@ -197,6 +198,12 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
     throw new Error(`The plugin list is not valid: ${reason}`);
   };
   for (const plugin of plugins) {
+    // The id names its resources directory and its switch: one plain path
+    // segment, so it can neither escape nor alias another plugin's.
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(plugin.id))
+      refuse(
+        `plugin id ${JSON.stringify(plugin.id)} is not lowercase letters, digits and dashes.`,
+      );
     if (entries.has(plugin.id)) refuse(`plugin ${plugin.id} is listed twice.`);
     entries.set(plugin.id, plugin);
     for (const [name, tool] of Object.entries(plugin.tools ?? {})) {
@@ -211,13 +218,8 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
         );
       continued = plugin.id;
     }
-    if (
-      plugin.availability === undefined &&
-      (plugin.toggleable === true || plugin.setup !== undefined)
-    )
-      refuse(
-        `plugin ${plugin.id} has a toggle or setup copy but no availability probe.`,
-      );
+    if (plugin.availability === undefined && plugin.toggle !== undefined)
+      refuse(`plugin ${plugin.id} has a switch but no availability probe.`);
   }
   return { entries, get: (name) => byName.get(name) };
 }

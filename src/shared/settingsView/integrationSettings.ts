@@ -1,8 +1,8 @@
 /**
  * The setting rows of the two external coding-agent plugins, `codex` and
- * `claude-agent`, which their `Plugin` values declare (`@tools/integrationPlugins`).
- * They live here, in a browser-safe module, because the settings view's
- * webview renders them and cannot import a plugin value.
+ * `claude-agent`: TeXRA's catalog lists them (`./texraSettings`) and their
+ * dashboard cards render them inline (`@tools/pluginCards`). They live here,
+ * in a browser-safe module, because the settings view's webview renders them.
  */
 
 // Local imports

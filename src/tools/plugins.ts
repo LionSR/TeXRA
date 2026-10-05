@@ -1,16 +1,14 @@
 /**
- * A plugin: one value that is both its manifest row (a stable id plus
- * dashboard copy, the opt-in toggle, the availability probe and the
- * install/auth actions) and what it contributes (its tools, continuation,
- * prompt section and layers). The harness's built-ins are
- * `@tools/builtinPlugins`; an app passes its list, built-ins included, to
- * `installProcessRuntime`, and the process's `ToolRegistry` holds it in
- * order (`@tools/toolTable`), which every reader takes it from: the Tools
- * dashboard (in list order) and each card's inline settings rows,
- * availability probes, the first-install toggle seed, the switches, a run's
- * injected tools (`@agent/runtime/agentToolResolution`), install/auth
- * actions, `texra tools` guides, and the bundled skills and agents, which a
- * switched-off plugin withholds with its tools.
+ * A plugin: what one unit of the harness contributes (its tools, the probe
+ * of its dependency, its switch, its continuation, prompt section and
+ * layers). The harness's built-ins are `@tools/builtinPlugins`; an app
+ * passes its list, built-ins included, to `installProcessRuntime`, and the
+ * process's `ToolRegistry` holds it (`@tools/toolTable`), which every
+ * reader takes it from: availability probes, the first-install switch seed,
+ * the switches, a run's injected tools
+ * (`@agent/runtime/agentToolResolution`), and the bundled skills and agents
+ * at `resources/plugins/<id>/`, which a switched-off plugin withholds with
+ * its tools. How the app shows a plugin is its own record, keyed by id.
  *
  * Rules: an id is persisted (the disabled-tools key, and the plugin a run's
  * offered tool records), so it never changes and is never reused; every
@@ -28,12 +26,7 @@ import { z } from 'zod';
 import type { Runs } from '@agent/runtime/runRegistry';
 import type { RuntimeTool, ToolServices } from '@agent/runtime/ToolServices';
 import { StateReadFailed, type StateStore } from '@platform/interfaces';
-import type { ToolCategory } from '@shared/tools/toolPlugin';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import type {
-  PluginSettingRow,
-  SettingHost,
-} from '@shared/state/stateSettings';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
 import type {
   Continuation,
@@ -43,42 +36,34 @@ import type {
   SessionPluginLayer,
 } from '@tools/toolTable';
 
-/** One plugin. */
+/**
+ * One plugin: what it contributes to a run. How an app shows it (a
+ * dashboard card's copy, its setup guide, its settings rows) is the app's
+ * own record, keyed by `id` (TeXRA's is `@tools/pluginCards`).
+ */
 export interface Plugin {
-  /** Stable, persisted identifier (the dashboard item id and toggle key). */
+  /** Stable, persisted identifier (the switch key, and the plugin a run's
+   *  offered tool records). */
   readonly id: string;
-  readonly name: string;
-  readonly category: ToolCategory;
-  readonly description: string;
   /** Its tools, by registered name. */
   readonly tools?: Readonly<Record<string, RuntimeTool>>;
   /**
-   * Present when the plugin has an external dependency: it is probed, its
-   * tools are withheld while the dependency is missing, and the dashboard
-   * shows its status and install actions. Without it the plugin is built in
-   * and always available.
+   * Present when the plugin has an external dependency: it is probed, and
+   * its tools are withheld while the dependency is missing. Without it the
+   * plugin is built in and always available.
    */
   readonly availability?: ToolAvailabilityChecks;
-  /** Checked for availability but listed on no Tools dashboard. */
-  readonly hidden?: boolean;
-  /** Product hosts whose Tools dashboard does not list the plugin. */
-  readonly unavailableHosts?: readonly SettingHost[];
-  /** The plugin's own catalog rows, which its dashboard card renders inline,
-   *  in order; `installProcessRuntime` adds them to the settings catalog. */
-  readonly settings?: readonly PluginSettingRow[];
+  /** The plugin has a user switch, which a fresh install sets to this
+   *  position; while off, its tools are withheld from every agent. It must
+   *  be probed (`availability`, `ALWAYS_AVAILABLE` when it needs nothing
+   *  installed). Without one the plugin is always on. */
+  readonly toggle?: 'on' | 'off';
   /** Tools of this plugin offered to every agent with tools, declared or not,
    *  while the plugin is on and a boolean catalog setting is on: tool name to
    *  setting key, or `true` for no setting but the plugin's own switch. An
    *  injected tool still passes the host and approval gates; a script's
    *  run (a document task's) and a text-only persona get none. */
   readonly injectedWhen?: Readonly<Record<string, string | true>>;
-  /** Opt-in: the dashboard shows an enable/disable toggle, a fresh install
-   *  seeds the plugin disabled (unless `onByDefault`), and while disabled its
-   *  tools are withheld from every agent. It must be probed
-   *  (`availability`, `ALWAYS_AVAILABLE` when it needs nothing installed). */
-  readonly toggleable?: boolean;
-  /** A toggleable plugin a fresh install seeds on rather than off. */
-  readonly onByDefault?: true;
   /** Decides what a parked run of its category does next; a run's step pins
    *  it while the plugin is switched on. */
   readonly continuation?: Continuation;
@@ -92,12 +77,6 @@ export interface Plugin {
   /** Session-lifetime services, one per open session, up while the plugin
    *  is switched on or a step of that session pins it. */
   readonly sessionLayer?: SessionPluginLayer;
-  /** Ships skills / `builtInToolUse` agents in `resources/plugins/<id>/`. */
-  readonly skills?: true;
-  readonly agents?: true;
-  /** Install and sign-in copy and actions for the dashboard and
-   *  `texra tools`; only a probed plugin (one with `availability`) has any. */
-  readonly setup?: ToolPluginSetup;
 }
 
 /**
@@ -128,21 +107,6 @@ export interface PluginDefinition<ROut> extends Omit<
 export const definePlugin = <ROut = never>(
   plugin: PluginDefinition<ROut>,
 ): Plugin => plugin as unknown as Plugin;
-
-/** How a user gets a probed plugin's dependency installed and signed in. */
-export interface ToolPluginSetup {
-  readonly installGuide?: string;
-  readonly installUrl?: string;
-  /** VS Code extension ID — when present, the dashboard offers a direct "Install" button. */
-  readonly installExtensionId?: string;
-  /** Shell command the dashboard can run in an integrated terminal to install the tool. */
-  readonly installCommand?: string;
-  /** Shell command the dashboard can run to sign the user in (e.g. `codex login`). */
-  readonly authCommand?: string;
-  readonly configNotes?: string;
-  /** Short auth/billing note shown as a badge (e.g. "Uses ChatGPT subscription"). */
-  readonly authNote?: string;
-}
 
 const DisabledToolIdsSchema = z.array(z.string());
 

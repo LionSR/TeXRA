@@ -117,9 +117,6 @@ describe('tool availability service', () => {
           {
             id: 'token-tool',
             tools: named('token'),
-            name: 'Token tool',
-            category: 'ai-agents',
-            description: '',
             availability: {
               reprobeOnSecrets: ['token.key'],
               probe: vi.fn(({ workspace }: ToolProbeInputs) =>
@@ -171,9 +168,6 @@ describe('tool availability service', () => {
           {
             id: 'probed-tool',
             tools: named('probed'),
-            name: 'Probed tool',
-            category: 'ai-agents',
-            description: '',
             availability: { check },
           },
         ];
@@ -202,9 +196,6 @@ describe('tool availability service', () => {
           {
             id: 'present-tool',
             tools: named('present'),
-            name: 'Present tool',
-            category: 'ai-agents',
-            description: '',
             availability: {
               check: vi.fn(() => Effect.succeed(true)),
             },
@@ -212,10 +203,7 @@ describe('tool availability service', () => {
           {
             id: 'missing-tool',
             tools: named('missing'),
-            name: 'Missing tool',
-            category: 'ai-agents',
-            description: '',
-            toggleable: true,
+            toggle: 'off',
             availability: {
               check: vi.fn(() => Effect.succeed(false)),
             },
@@ -257,9 +245,6 @@ describe('tool availability service', () => {
           {
             id: 'broken-probe',
             tools: named('broken'),
-            name: 'Broken probe',
-            category: 'ai-agents',
-            description: '',
             availability: {
               probe: vi.fn(() =>
                 Effect.fail(new Error('invalid local configuration') as never),
@@ -271,9 +256,6 @@ describe('tool availability service', () => {
           {
             id: 'broken-detail',
             tools: named('present'),
-            name: 'Broken detail',
-            category: 'ai-agents',
-            description: '',
             availability: {
               check: vi.fn(() => Effect.succeed(true)),
               detailCheck: vi.fn(() =>
@@ -285,9 +267,6 @@ describe('tool availability service', () => {
             // A callback that throws, as an eager configuration read can.
             id: 'throwing-probe',
             tools: named('throwing'),
-            name: 'Throwing probe',
-            category: 'ai-agents',
-            description: '',
             availability: {
               probe: vi.fn(() => {
                 throw new Error('config read threw');

@@ -199,12 +199,10 @@ export const agentCatalogFollower = Layer.effectDiscard(
         ],
         { discard: true },
       );
-      installPluginAgentDirectories(
-        resourcesRoot,
-        [...(yield* ToolRegistry).entries.values()].flatMap((plugin) =>
-          plugin.agents === true ? [plugin.id] : [],
-        ),
-      );
+      // Each plugin's directory, which holds agents when it ships any.
+      installPluginAgentDirectories(resourcesRoot, [
+        ...(yield* ToolRegistry).entries.keys(),
+      ]);
     }
     const reload = reloadAgentCatalog.pipe(
       // A transient read failure is tried again: 200 ms doubling, six times.

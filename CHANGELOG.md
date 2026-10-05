@@ -349,6 +349,17 @@ All notable changes to this project will be documented in this file.
   within one second now reports an error instead of merging into the first
   snapshot.
 
+- **Agent SDK: a `Plugin` says what it contributes, not how an app shows
+  it.** `Plugin` keeps `id`, `tools`, `availability`, `toggle`,
+  `injectedWhen`, `continuation`, `prompt`, `processLayer` and
+  `sessionLayer`. Dashboard copy (`name`, `category`, `description`,
+  `setup`, `hidden`, `unavailableHosts`) and inline `settings` rows are the
+  app's own record keyed by plugin id; an app passes its plugins' setting
+  rows with its own. `toggleable` and `onByDefault` become one
+  `toggle: 'on' | 'off'` (the switch's position on a fresh install), and
+  `skills`/`agents` are gone: a plugin's bundled skills and agents are
+  whatever its `resources/plugins/<id>/` directory holds.
+
 ### Features
 
 - **Document tasks can reflect with a critic.** Opt in with

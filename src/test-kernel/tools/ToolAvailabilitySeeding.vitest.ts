@@ -25,7 +25,7 @@ const started = Effect.promise(
 const PLUGINS = texraPlugins();
 
 const EXPECTED_DEFAULTS = PLUGINS.filter(
-  (plugin) => plugin.toggleable && !plugin.onByDefault,
+  (plugin) => plugin.toggle === 'off',
 ).map((plugin) => plugin.id);
 
 describe('seedDisabledToolDefaults', () => {

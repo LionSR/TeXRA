@@ -179,9 +179,7 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
           import.meta.dirname,
           '../../../packages/extension/resources',
         );
-        const skillPluginIds = texraPlugins().flatMap((plugin) =>
-          plugin.skills === true ? [plugin.id] : [],
-        );
+        const pluginIds = texraPlugins().map(({ id }) => id);
         const pluginSkillDirs = (dir: string) =>
           Effect.promise(() =>
             fs.readdir(path.join(resources, dir), { withFileTypes: true }),
@@ -192,26 +190,22 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
                 .map((entry) => entry.name),
             ),
           );
-        // Both ways: a manifest `skills: true` has a skills root, and a
-        // plugin skills root belongs to a manifest entry that claims it.
+        // Every plugin resources directory belongs to a listed plugin.
         const pluginRoots = yield* pluginSkillDirs('plugins');
-        expect(pluginRoots.toSorted()).toEqual(skillPluginIds.toSorted());
-        expect(skillPluginIds).toContain('lean4');
+        expect(pluginIds).toEqual(expect.arrayContaining(pluginRoots));
+        expect(pluginRoots).toContain('lean4');
 
         const workspace = yield* Effect.promise(() =>
           makeTempDir('texra-cli-skills-', tempRoots),
         );
-        initializeNodeRuntimeSkills(
-          { resourcesPath: resources },
-          skillPluginIds,
-        );
+        initializeNodeRuntimeSkills({ resourcesPath: resources }, pluginIds);
         const result = yield* readCliSkillsEffect(workspace, settings, {});
         const bundled = result.skills.filter(
           (entry) => entry.source.scope === 'bundled',
         );
         const shipped = [
           ...(yield* pluginSkillDirs('skills')),
-          ...(yield* Effect.forEach(skillPluginIds, (id) =>
+          ...(yield* Effect.forEach(pluginRoots, (id) =>
             pluginSkillDirs(path.join('plugins', id, 'skills')),
           )).flat(),
         ].toSorted((a, b) => a.localeCompare(b));

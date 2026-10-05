@@ -2,10 +2,9 @@
  * TeXRA's own setting rows and keys, and the static catalog its settings
  * surfaces read: the harness's rows (`@shared/state/stateSettings`), these,
  * and the rows its plugins declare (`./documentsSettings`,
- * `./integrationSettings`). The hosts pass
- * {@link TEXRA_SETTING_ROWS} to `installProcessRuntime`, which adds the rows
- * on their plugin values; the webview and the CLI, which render the catalog
- * before or without a runtime, read {@link TEXRA_SETTINGS}.
+ * `./integrationSettings`). The hosts pass {@link TEXRA_SETTING_ROWS} to
+ * `installProcessRuntime`; the webview and the CLI, which render the
+ * catalog before or without a runtime, read {@link TEXRA_SETTINGS}.
  *
  * Owner by key: the CLI's startup rows (`agent`, `model`, `chat`, `run`,
  * `outputFormat`), `agentOutputs.autoOpenFinal`, the bibliography
@@ -215,7 +214,7 @@ const TEXRA_CONFIG_ROWS: Record<
   },
 };
 
-/** TeXRA's own rows (its plugins' are on their `Plugin` values), in catalog order. */
+/** TeXRA's rows, its plugins' last, in catalog order. */
 export const TEXRA_SETTING_ROWS: readonly StateSettingEntry[] = [
   ...configTreeRows(TEXRA_CONFIG_ROWS),
   // --- LaTeX formatter -------------------------------------------------------
@@ -251,14 +250,13 @@ export const TEXRA_SETTING_ROWS: readonly StateSettingEntry[] = [
     slot: 'globalState',
     surfaces: { settingsView: 'latex' },
   }),
+
+  // --- Plugins' rows ----------------------------------------------------------
+  ...[...DOCUMENTS_SETTINGS, ...CODEX_SETTINGS, ...CLAUDE_AGENT_SETTINGS].map(
+    ({ row }) => row,
+  ),
 ];
 
-/** The whole catalog TeXRA's settings surfaces render: the harness's rows, TeXRA's and its plugins'. */
-export const TEXRA_SETTINGS: SettingsCatalog = settingsCatalog(
-  TEXRA_SETTING_ROWS,
-  [
-    { settings: DOCUMENTS_SETTINGS },
-    { settings: CODEX_SETTINGS },
-    { settings: CLAUDE_AGENT_SETTINGS },
-  ],
-);
+/** The whole catalog TeXRA's settings surfaces render: the harness's rows and TeXRA's. */
+export const TEXRA_SETTINGS: SettingsCatalog =
+  settingsCatalog(TEXRA_SETTING_ROWS);

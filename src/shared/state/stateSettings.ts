@@ -52,8 +52,8 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
 /**
  * The settings catalog, by owner. This module declares the row shape and the
  * harness's own rows (model, approvals, retries, compaction, concurrency,
- * skills, logging). An app declares its rows beside its code and each plugin
- * on its `Plugin` value; `settingsCatalog` concatenates them after these, and
+ * skills, logging). An app declares its rows (its plugins' among them)
+ * beside its code; `settingsCatalog` concatenates them after these, and
  * `installProcessRuntime` installs that catalog for the harness's own readers.
  *
  * One row carries the catalog facts:
@@ -847,18 +847,13 @@ export interface SettingsCatalog {
 }
 
 /**
- * The catalog of the harness's rows, then `appRows` (an app's own), then the
- * rows each of `plugins` declares. A key declared twice is a defect and throws.
+ * The catalog of the harness's rows, then `appRows` (an app's own, its
+ * plugins' included). A key declared twice is a defect and throws.
  */
 export function settingsCatalog(
   appRows: readonly StateSettingEntry[],
-  plugins: readonly { readonly settings?: readonly PluginSettingRow[] }[] = [],
 ): SettingsCatalog {
-  const rows = [
-    ...HARNESS_SETTINGS,
-    ...appRows,
-    ...plugins.flatMap(({ settings = [] }) => settings.map(({ row }) => row)),
-  ];
+  const rows = [...HARNESS_SETTINGS, ...appRows];
   const byKey = new Map<string, StateSettingEntry>();
   for (const row of rows) {
     if (byKey.has(row.key)) {
@@ -914,7 +909,7 @@ export function settingsCatalog(
 
 /**
  * The process's catalog: the harness's rows until `installProcessRuntime`
- * installs the app's rows and its plugins' beside them, once per process, as
+ * installs the app's rows beside them, once per process, as
  * it installs the session owner. The harness reads a setting by key through
  * it, so it never imports an app's rows.
  */

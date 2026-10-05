@@ -983,7 +983,7 @@ interface ProcessRuntimeOptions {
    * pass `texraPlugins` (`@tools/registry`).
    */
   readonly plugins: readonly Plugin[];
-  /** The app's own setting rows, installed with the harness's and the plugins'. */
+  /** The app's setting rows (its plugins' among them), installed with the harness's. */
   readonly settings?: readonly StateSettingEntry[];
   /** The MCP config file (`.mcp.json` shape) the catalog reads. */
   readonly mcpConfigPath: string;
@@ -1072,7 +1072,7 @@ export function installProcessRuntime({
   globalDatabase: globalDatabaseOption,
   minimumLogLevel,
 }: ProcessRuntimeOptions): ProcessRuntime {
-  installSettingsCatalog(settingsCatalog(settings, plugins));
+  installSettingsCatalog(settingsCatalog(settings));
   const catalog = pluginCatalogLayer(plugins, mcpConfigPath);
   // Non-failing: `selfIdentity()` reads an unreadable identity as undefined.
   const identity = Layer.effect(
@@ -1089,7 +1089,7 @@ export function installProcessRuntime({
     updateCheckRecordsLayer,
     Secrets.layer(secrets),
     LanguageModel.layer(languageModel),
-    // The follower reads which plugins ship agents off the catalog.
+    // The follower registers each plugin's agent directory off the catalog.
     Layer.provideMerge(
       agentCatalogFollower,
       Layer.merge(agentDirectories, catalog),

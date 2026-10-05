@@ -102,9 +102,8 @@ export function setToolEnabled(
  * Seed the disabled-tool list for first-time users only, on every host and
  * in the agent package.
  *
- * Every plugin of `plugins` flagged `toggleable: true` is treated as
- * opt-in and seeded as disabled on a fresh install, unless it is
- * `onByDefault`. Callers pass
+ * Every plugin of `plugins` whose switch starts `off` is seeded as disabled
+ * on a fresh install. Callers pass
  * the global state store they already hold. DISABLED_TOOLS is its own
  * fresh-install signal, because this seed is the only thing that writes it
  * before the user does: an absent value means neither the seed nor the user
@@ -121,11 +120,11 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
     if (recorded !== undefined) return;
 
     const defaults = plugins
-      .filter((plugin) => plugin.toggleable && !plugin.onByDefault)
+      .filter((plugin) => plugin.toggle === 'off')
       .map((plugin) => plugin.id);
     yield* state.update(GlobalStateKey.DISABLED_TOOLS, defaults);
     yield* Effect.logInfo(
-      `First install: default-disabled toggleable tools: ${defaults.join(', ')}`,
+      `First install: plugins switched off by default: ${defaults.join(', ')}`,
     ).pipe(withLogChannel(CHANNEL));
   },
 );
@@ -348,7 +347,6 @@ const checkToolGroup = Effect.fn('checkToolGroup')(function* (
   {
     id,
     tools,
-    name,
     availability: { probe, check, statusLabel: getStatusLabel, detailCheck },
   }: ProbedToolPlugin,
   inputs: ToolProbeInputs,
@@ -362,19 +360,18 @@ const checkToolGroup = Effect.fn('checkToolGroup')(function* (
   const statusDetail = yield* resolveOptionalStatus(
     detailCheck,
     probeResult,
-    name,
+    id,
     'status detail',
   );
   const statusLabel = yield* resolveOptionalStatus(
     getStatusLabel,
     probeResult,
-    name,
+    id,
     'status label',
   );
   return {
     id,
     tools: Object.keys(tools ?? {}),
-    name,
     status: available ? 'available' : 'not-found',
     statusLabel,
     statusDetail,
@@ -391,13 +388,12 @@ const probeToolGroup = (
   inputs: ToolProbeInputs,
 ): Effect.Effect<ExternalToolCheckResult, never, ToolProbeServices> => {
   const unknown = (error: unknown) =>
-    Effect.logWarning(`Availability probe failed for ${plugin.name}`).pipe(
+    Effect.logWarning(`Availability probe failed for plugin ${plugin.id}`).pipe(
       Effect.annotateLogs({ data: error }),
       withLogChannel(CHANNEL),
       Effect.as({
         id: plugin.id,
         tools: Object.keys(plugin.tools ?? {}),
-        name: plugin.name,
         status: 'unknown' as const,
         statusLabel: undefined,
         statusDetail: `Availability check failed: ${toErrorMessage(error)}`,
@@ -425,13 +421,13 @@ function resolveOptionalStatus(
       ) => Effect.Effect<string | undefined, ToolProbeError, ToolProbeServices>)
     | undefined,
   probeResult: unknown,
-  toolName: string,
+  pluginId: string,
   field: string,
 ): Effect.Effect<string | undefined, never, ToolProbeServices> {
   if (!getStatus) return Effect.succeed(undefined);
   return getStatus(probeResult).pipe(
     Effect.catch((error) =>
-      Effect.logWarning(`Failed to resolve ${field} for ${toolName}`).pipe(
+      Effect.logWarning(`Failed to resolve ${field} for ${pluginId}`).pipe(
         Effect.annotateLogs({ data: error }),
         withLogChannel(CHANNEL),
         Effect.as(undefined),

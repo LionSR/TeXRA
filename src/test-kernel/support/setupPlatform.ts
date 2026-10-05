@@ -337,10 +337,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
       toolTable([
         {
           id: 'goal',
-          name: 'Goal Mode',
-          category: 'workflow',
-          description: '',
-          toggleable: true,
+          toggle: 'off',
           availability: { check: () => Effect.succeed(true) },
           continuation: goalContinuation,
         },

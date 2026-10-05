@@ -19,7 +19,6 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { setToolEnabled } from '@tools/toolAvailability';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
-import { ToolRegistry } from '@tools/toolTable';
 
 import {
   SETTINGS_LOG_CHANNEL,
@@ -133,22 +132,18 @@ export function settingsToolCommands(ports: {
         Effect.andThen(bindings.refreshCatalogs()),
         Effect.andThen(postPlugins),
       ),
-    // The command is looked up from the plugin manifest, never taken from
+    // The command is looked up from the plugin's card, never taken from
     // the webview.
-    runToolCommand: ({ toolId, kind }) =>
-      Effect.flatMap(ToolRegistry, ({ entries }) => {
-        const action = planToolTerminalAction(
-          { toolId, commandKind: kind },
-          entries,
-        );
-        return action.kind === 'none'
-          ? Effect.fail(
-              new Error(
-                `No ${kind} command for tool "${toolId}" (${action.reason})`,
-              ),
-            )
-          : bindings.runInTerminal(action.name, action.command);
-      }),
+    runToolCommand: ({ toolId, kind }) => {
+      const action = planToolTerminalAction({ toolId, commandKind: kind });
+      return action.kind === 'none'
+        ? Effect.fail(
+            new Error(
+              `No ${kind} command for tool "${toolId}" (${action.reason})`,
+            ),
+          )
+        : bindings.runInTerminal(action.name, action.command);
+    },
     runInstallCommand: ({ installCommand }) =>
       isAllowedLatexInstallCommand(installCommand)
         ? bindings.runInTerminal('TeXRA Install', installCommand)

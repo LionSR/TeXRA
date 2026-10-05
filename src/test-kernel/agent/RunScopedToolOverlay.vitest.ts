@@ -415,9 +415,6 @@ describe('run-scoped tool resolution', () => {
             toolTable([
               {
                 id: 'test',
-                name: 'Test',
-                category: 'file',
-                description: '',
                 tools: {
                   bash: approvalGatedTool('bash'),
                   grep: tool('grep'),
