@@ -5,7 +5,7 @@
 // their own views. A binding is a scope: everything it holds is a finalizer
 // of it, and releasing a project closes that scope, awaited.
 
-import { Effect, Exit, Queue, Scope, Stream } from 'effect';
+import { Effect, Exit, Queue, Scope, Stream, SubscriptionRef } from 'effect';
 
 import {
   withProcessServices,
@@ -221,6 +221,15 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         onError: host.reportBackgroundError,
         publish: (next) => bridge.setHost(next),
       });
+      // The service link's state: offline while it reaches the service
+      // again, so the window never sits frozen without saying why.
+      const service = project.service;
+      if (service !== undefined)
+        yield* Effect.forkScoped(
+          Stream.runForEach(SubscriptionRef.changes(service.client), (client) =>
+            snapshot.setServiceOffline(client === null),
+          ),
+        );
       // The funnel is host state every open project's snapshot carries (8.1).
       yield* Effect.acquireRelease(
         Effect.sync(() =>

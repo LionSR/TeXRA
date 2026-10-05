@@ -383,6 +383,13 @@ All notable changes to this project will be documented in this file.
   and its proposed edits, and its approval policy applies there. If the
   service cannot start, the app runs its tasks itself.
 
+- **Windows reconnect to the background service, and it reads settings
+  fresh.** When a newer TeXRA build retires the service, or it stops, the
+  desktop app, VS Code windows and `texra chat` say they are offline and
+  reconnect to the next service (starting one if none comes), then list
+  their tasks again. A setting changed in any of them reaches the service's
+  next task and next turn, without a restart.
+
 - **VS Code windows run their tasks in the background service.** On macOS
   and Linux the extension starts the TeXRA service (or uses the one already
   running) and launches, resumes and steers its tasks there, so a task

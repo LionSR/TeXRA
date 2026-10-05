@@ -135,6 +135,8 @@ export interface HostSnapshotSource {
   /** The user dismissed a notice for the rest of this session. */
   dismissBanner(banner: 'gettingStarted' | 'dependency'): Effect.Effect<void>;
   setOnboarding(state: HostSnapshot['onboarding']): Effect.Effect<void>;
+  /** The service link lost the service, or reached it again. */
+  setServiceOffline(offline: boolean): Effect.Effect<void>;
 }
 
 /** The project's display record and the catalogs, assembled per session. */
@@ -164,6 +166,7 @@ export function createHostSnapshotSource(
   let recording: HostSnapshot['recording'] = null;
   let agentConfig: Banners['agentConfig'] = { visible: false };
   let onboarding: HostSnapshot['onboarding'] = 'done';
+  let serviceOffline = false;
   // A dismissal lasts the session.
   const dismissed = new Set<'gettingStarted' | 'dependency'>();
 
@@ -183,6 +186,7 @@ export function createHostSnapshotSource(
           visible: dependency.visible && !dismissed.has('dependency'),
         },
         gettingStarted: !hasInputFiles && !dismissed.has('gettingStarted'),
+        serviceOffline,
       },
       onboarding,
     }),
@@ -312,6 +316,12 @@ export function createHostSnapshotSource(
       Effect.suspend(() => {
         if (state === onboarding) return Effect.void;
         onboarding = state;
+        return publish;
+      }),
+    setServiceOffline: (offline) =>
+      Effect.suspend(() => {
+        if (offline === serviceOffline) return Effect.void;
+        serviceOffline = offline;
         return publish;
       }),
   };

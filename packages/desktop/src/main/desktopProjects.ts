@@ -50,7 +50,7 @@ import {
   type SessionBackend,
 } from '@texra/controllers/session/sessionBackend';
 import { serviceSessionBackend } from '@texra/controllers/server/serviceBackend';
-import type { ServiceClient } from '@texra/controllers/server/client';
+import type { ServiceLink } from '@texra/controllers/server/client';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -75,7 +75,7 @@ export interface DesktopProject {
    *  while the app is its client, or this session. */
   readonly backend: SessionBackend;
   /** The service the backend reaches, when it is the service's. */
-  readonly service: ServiceClient | undefined;
+  readonly service: ServiceLink | undefined;
   /** Release the session from its owner; settles once its entry has unwound. */
   dispose(): Effect.Effect<void>;
 }
@@ -111,7 +111,7 @@ interface DesktopProjectRegistryOptions {
   readonly stores: ModelOptionStores;
   /** The background service, when the app is its client: a folder's
    *  runs run there. */
-  readonly service: ServiceClient | undefined;
+  readonly service: ServiceLink | undefined;
 }
 
 export interface DesktopProjectRegistry {
@@ -224,7 +224,7 @@ function openProjectSession(
   roots: WorkspaceRoots,
   // The closeable scope the caller provides; `dispose` closes it.
   scope: Scope.Closeable,
-  service: ServiceClient | undefined,
+  service: ServiceLink | undefined,
 ): Effect.Effect<DesktopProject, Error, Scope.Scope> {
   return Effect.gen(function* () {
     // A folder's runs run in the service, which follows its interrupted

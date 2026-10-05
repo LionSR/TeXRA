@@ -26,7 +26,7 @@ import {
 import type { RequestOpenFilePayload, RunId } from '@shared/schemas';
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
-import type { ServiceClient } from '@texra/controllers/server/client';
+import type { ServiceLink } from '@texra/controllers/server/client';
 import { attachWindowHost } from '@texra/controllers/server/windowHost';
 import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 
@@ -51,7 +51,7 @@ export interface DesktopAgentRunOptions {
   backend: SessionBackend;
   /** The service, when the backend is the service's: this window serves
    *  its project's runs there with its notices and tool-edit previews. */
-  service: ServiceClient | undefined;
+  service: ServiceLink | undefined;
   /** The project folder; none for the no-workspace session. */
   root: string | undefined;
   /** Emits when this window gains focus (and once at once when it has it),

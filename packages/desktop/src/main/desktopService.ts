@@ -12,9 +12,9 @@ import { Effect, type Scope } from 'effect';
 
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import {
-  ensureService,
+  linkService,
   spawnService,
-  type ServiceConnection,
+  type ServiceLink,
 } from '@texra/controllers/server/client';
 
 /** The service bundle: the packaged app's, or the extension build's in a
@@ -27,14 +27,14 @@ function serviceBundle(mainDir: string): string | undefined {
 }
 
 /**
- * Connect to the service of `dataRoot`, starting it when none answers, for
- * the caller's scope. Only the user's own `~/.texra` has one: a profile kept
+ * Hold the service of `dataRoot`, starting it when none answers, for the
+ * caller's scope; the link reaches it again when it goes away. Only the user's own `~/.texra` has one: a profile kept
  * elsewhere (a test's) runs its tasks in the app.
  */
 export function reachDesktopService(
   dataRoot: string,
   mainDir: string,
-): Effect.Effect<ServiceConnection, Error, Scope.Scope> {
+): Effect.Effect<ServiceLink, Error, Scope.Scope> {
   return Effect.suspend(() => {
     if (dataRoot !== DEFAULT_NODE_STORAGE_ROOT)
       return Effect.fail(
@@ -45,7 +45,7 @@ export function reachDesktopService(
     const bundle = serviceBundle(mainDir);
     if (bundle === undefined)
       return Effect.fail(new Error('this build ships no service bundle'));
-    return ensureService(
+    return linkService(
       dataRoot,
       spawnService(dataRoot, process.execPath, [bundle, 'serve'], {
         ELECTRON_RUN_AS_NODE: '1',

@@ -1,14 +1,16 @@
 // The desktop app is a client of the background TeXRA service (D1-D4): it
-// starts the service from the bundle it ships, stays its client while it
-// runs, and leaves it running when it quits. A CLI of the same build shares
-// that service; a CLI of a newer build retires it. Every host stamps the
-// same build identity, so "newer" means the same thing to all of them.
+// starts the service from the bundle it ships and stays its client while it
+// runs. A CLI of the same build shares that service; a CLI of a newer build
+// retires it, and the open app reaches the newer one and lists its tasks
+// again. The service outlives the app. Every host stamps the same build
+// identity, so "newer" means the same thing to all of them.
 import { spawnSync } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -34,7 +36,8 @@ interface ServiceStatus {
   readonly online: boolean;
 }
 
-/** A CLI bundle of this tree, stamped as `build` when one is named. */
+/** A CLI bundle of this tree, stamped as `build` when one is named; a
+ *  newer build carries the scripted validation model. */
 function buildCli(outfile: string, build?: string): void {
   const result = spawnSync(
     process.execPath,
@@ -44,7 +47,10 @@ function buildCli(outfile: string, build?: string): void {
       env: {
         ...process.env,
         TEXRA_CLI_BUNDLE_OUTFILE: outfile,
-        ...(build && { TEXRA_BUILD_VERSION: build }),
+        ...(build && {
+          TEXRA_BUILD_VERSION: build,
+          TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1',
+        }),
       },
       encoding: 'utf8',
     },
@@ -53,9 +59,20 @@ function buildCli(outfile: string, build?: string): void {
     throw new Error(`CLI build failed:\n${result.stdout}\n${result.stderr}`);
 }
 
-function cli(binary: string, home: string, args: readonly string[]): string {
+function cli(
+  binary: string,
+  home: string,
+  args: readonly string[],
+  env: Record<string, string> = {},
+): string {
   const result = spawnSync(process.execPath, [binary, ...args], {
-    env: { ...process.env, HOME: home, CI: '1', TEXRA_NO_TELEMETRY: '1' },
+    env: {
+      ...process.env,
+      HOME: home,
+      CI: '1',
+      TEXRA_NO_TELEMETRY: '1',
+      ...env,
+    },
     encoding: 'utf8',
   });
   if (result.status !== 0)
@@ -81,15 +98,31 @@ function alive(pid: number): boolean {
 
 test.skip(process.platform === 'win32', 'no service runs on Windows yet');
 
-test('the desktop app starts the service, shares it with a CLI of its build, and leaves it to a newer one', async () => {
-  test.setTimeout(240_000);
+test('the desktop app shares the service with a CLI of its build, and reaches the one a newer build starts', async () => {
+  test.setTimeout(300_000);
   // The app's data root is the scratch home's ~/.texra, the one root a
   // service serves, so the app, the service and the CLIs share it.
-  const root = mkdtempSync(join(tmpdir(), 'texra-e2e-service-'));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'texra-e2e-service-')));
   const home = join(root, 'home');
   const dataRoot = join(home, '.texra');
-  mkdirSync(dataRoot, { recursive: true });
+  const work = join(root, 'work');
+  mkdirSync(work, { recursive: true });
   const record = join(dataRoot, 'run', 'serve.json');
+  // A task held at its model call, by the newer build's scripted model.
+  const agents = join(dataRoot, 'v1', 'global-storage', 'custom_agents');
+  mkdirSync(agents, { recursive: true });
+  writeFileSync(
+    join(agents, 'park-validation.yaml'),
+    'name: park_validation\ndescription: Hold its model call until released.\n\nprompt: |\n  GOLDEN-PARK\n',
+  );
+  const flag = join(work, 'texra-validation.flag');
+  writeFileSync(flag, 'texra-cli-run-validation\n');
+  const scripted = {
+    TEXRA_INTERNAL_VALIDATE_MODEL: '1',
+    TEXRA_INTERNAL_VALIDATE_MODEL_FLAG: flag,
+    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+    OPENAI_API_KEY: 'texra-validation-fake-key',
+  };
   // The CLI finds its resources beside its bin directory.
   const thisBuild = join(root, 'bin', 'texra.js');
   const nextBuild = join(root, 'bin', 'texra-next.js');
@@ -99,13 +132,14 @@ test('the desktop app starts the service, shares it with a CLI of its build, and
   );
   buildCli(thisBuild);
   buildCli(nextBuild, NEXT_BUILD);
-  let servicePid: number | undefined;
-  let sharedView: Record<string, unknown> = {};
+  const pids = new Set<number>();
   try {
     const launched = await launchTexraApp({
       userDataPath: dataRoot,
+      workspacePath: work,
       env: { HOME: home },
     });
+    let artifact: Record<string, unknown>;
     try {
       await expect
         .poll(() => existsSync(record), { timeout: 60_000 })
@@ -114,61 +148,98 @@ test('the desktop app starts the service, shares it with a CLI of its build, and
         readonly pid: number;
         readonly version: string;
       };
-      servicePid = started.pid;
+      pids.add(started.pid);
       // A CLI of the same build finds the app's service, which the app is
       // a client of, and does not retire it.
       const shared = status(thisBuild, home);
       expect(shared.pid).toBe(started.pid);
       expect(shared.version).toBe(started.version);
       expect(shared.clients).toBeGreaterThan(0);
-      // What each client sees of the one service: the CLI's task list and
-      // status beside the app it shares the service with.
-      sharedView = {
-        record: started,
-        cliStatus: shared,
-        cliTasks: JSON.parse(
-          cli(thisBuild, home, ['tasks', 'list', '--output-format', 'json']),
-        ) as unknown,
-      };
+      const sharedTasks = JSON.parse(
+        cli(thisBuild, home, ['tasks', 'list', '--output-format', 'json']),
+      ) as unknown;
+      // A newer build retires it while the app is open, and starts a task
+      // in the app's project on the service it starts.
+      const task = JSON.parse(
+        cli(
+          nextBuild,
+          home,
+          [
+            'tasks',
+            'start',
+            'park_validation',
+            '--model',
+            'openai/gpt-5.6-sol',
+            '--instruction',
+            'Hold',
+            '--output-format',
+            'json',
+            '--cwd',
+            work,
+          ],
+          scripted,
+        ),
+      ) as { readonly runId: string };
+      const next = status(nextBuild, home);
+      pids.add(next.pid);
+      expect(next.version).toBe(NEXT_BUILD);
+      expect(next.pid).not.toBe(started.pid);
+      for (let i = 0; i < 120 && alive(started.pid); i += 1) await sleep(250);
+      const retired = !alive(started.pid);
+      expect(retired).toBe(true);
+      // The app reaches the newer service (its link and this status call)
+      // and lists the task it runs.
+      await expect
+        .poll(() => status(nextBuild, home).clients, { timeout: 60_000 })
+        .toBeGreaterThanOrEqual(2);
+      const row = launched.page
+        .locator('.shell-project-runs run-tab')
+        .filter({ has: launched.page.locator(`[data-run="${task.runId}"]`) });
+      await expect(row).toHaveCount(1, { timeout: 60_000 });
       await launched.page.screenshot({
-        path: test.info().outputPath('desktop-service-client.png'),
+        path: test.info().outputPath('desktop-reconnected.png'),
       });
+      const reconnected = status(nextBuild, home);
+      const nextTasks = JSON.parse(
+        cli(nextBuild, home, ['tasks', 'list', '--output-format', 'json']),
+      ) as readonly { readonly runId: string }[];
+      artifact = {
+        // Pid-free, so a rerun diffs clean; the raw views follow.
+        facts: {
+          appAndCliShareOneService: shared.pid === started.pid,
+          retiredByNewerBuild: retired,
+          appReconnected: reconnected.clients >= 2,
+          appListsTheNewerServicesTask: true,
+          newerBuildVersion: next.version,
+          cliListsTheTask: nextTasks.some((t) => t.runId === task.runId),
+        },
+        shared: { record: started, cliStatus: shared, cliTasks: sharedTasks },
+        next: { status: reconnected, tasks: nextTasks },
+      };
     } finally {
       await closeTexraApp(launched);
     }
-    // The app quit; the service it started still runs.
-    const survivedQuit = alive(servicePid);
-    expect(survivedQuit).toBe(true);
-    // A CLI of a newer build retires it and starts its own.
-    cli(nextBuild, home, ['tasks', 'list']);
-    const next = status(nextBuild, home);
-    expect(next.version).toBe(NEXT_BUILD);
-    expect(next.pid).not.toBe(servicePid);
-    const retired = servicePid;
-    servicePid = next.pid;
-    for (let i = 0; i < 120 && alive(retired); i += 1) await sleep(250);
-    expect(alive(retired)).toBe(false);
-    // The run's facts, pid-free so a rerun diffs clean, then the raw views.
+    // The app quit; the service the newer build started still runs.
+    const survived = status(nextBuild, home);
+    expect(survived.online).toBe(true);
     writeFileSync(
       test.info().outputPath('service-handoff.json'),
       `${JSON.stringify(
         {
+          ...artifact,
           facts: {
-            appAndCliShareOneService: true,
-            survivedAppQuit: survivedQuit,
-            retiredByNewerBuild: !alive(retired),
-            newerBuildVersion: next.version,
+            ...(artifact.facts as object),
+            survivedAppQuit: survived.online,
           },
-          shared: sharedView,
-          next,
         },
         null,
         2,
       )}\n`,
     );
   } finally {
-    if (servicePid !== undefined && alive(servicePid))
-      process.kill(servicePid, 'SIGTERM');
+    // Release the held task, then stop every service this test started.
+    writeFileSync(join(work, 'golden-park.release'), '');
+    for (const pid of pids) if (alive(pid)) process.kill(pid, 'SIGTERM');
     cleanupDirectory(root);
   }
 });

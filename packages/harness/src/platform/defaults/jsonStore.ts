@@ -1,5 +1,6 @@
 // Node imports
 import { Buffer } from 'node:buffer';
+import { readFileSync, statSync } from 'node:fs';
 
 // Third-party imports
 import { Effect, FileSystem, Layer, Path, type PlatformError } from 'effect';
@@ -35,6 +36,41 @@ interface JsonStoreOptions {
    * overwrite what the reader could not parse.
    */
   onUnreadable?: (error: Error) => void;
+  /**
+   * Serve other writers' changes: every read first compares the file's
+   * inode, mtime and size with the version it holds (about a microsecond)
+   * and re-reads the file when they differ. A long-lived process that other
+   * processes configure (the TeXRA service) opens its stores this way. A
+   * changed file it cannot read keeps the last view and is reported here,
+   * once per version of the file.
+   */
+  follow?: (error: Error) => void;
+}
+
+function isJsonRecord(value: unknown): value is JsonRecord {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** The file's version as a read compares it: absent, or its identity. */
+function fileVersion(filePath: string): string {
+  const stat = statSync(filePath, { throwIfNoEntry: false });
+  return stat === undefined
+    ? 'absent'
+    : `${stat.ino}:${stat.mtimeMs}:${stat.size}`;
+}
+
+/** The file's record, read synchronously for {@link JsonStoreOptions.follow}. */
+function readJsonRecordSync(filePath: string): JsonRecord {
+  let content: string;
+  try {
+    content = readFileSync(filePath, 'utf8');
+  } catch (error) {
+    if (isFileNotFoundError(error)) return {};
+    throw error;
+  }
+  const parsed: unknown = JSON.parse(content);
+  if (isJsonRecord(parsed)) return parsed;
+  throw new TypeError(`Expected ${filePath} to contain a JSON object.`);
 }
 
 /**
@@ -133,11 +169,33 @@ const flush = Effect.fn('JsonStore.flush')(function* (
  * this store serves deliberate configuration files.
  */
 export class JsonStore {
+  /** The file version `data` was read from, when the store follows it. */
+  private version: string | undefined;
+  private readonly follow: ((error: Error) => void) | undefined;
+
   private constructor(
     /** The file this store reads and writes; warnings name it. */
     readonly filePath: string,
     private data: JsonRecord,
-  ) {}
+    follow: ((error: Error) => void) | undefined,
+  ) {
+    this.follow = follow;
+    if (follow !== undefined) this.version = fileVersion(filePath);
+  }
+
+  /** A following store's view, brought up to the file's current version. */
+  private current(): JsonRecord {
+    if (this.follow === undefined) return this.data;
+    const version = fileVersion(this.filePath);
+    if (version === this.version) return this.data;
+    this.version = version;
+    try {
+      this.data = readJsonRecordSync(this.filePath);
+    } catch (error) {
+      this.follow(ensureError(error));
+    }
+    return this.data;
+  }
 
   /**
    * Opening is read-only: a missing file reads as an empty store, and the
@@ -162,11 +220,11 @@ export class JsonStore {
           ),
         )
       : readJsonRecord(storePath);
-    return new JsonStore(storePath, data);
+    return new JsonStore(storePath, data, options.follow);
   });
 
   get<T>(key: string): T | undefined {
-    return this.data[key] as T | undefined;
+    return this.current()[key] as T | undefined;
   }
 
   /**
@@ -220,10 +278,10 @@ export class JsonStore {
   }
 
   snapshot(): JsonRecord {
-    return { ...this.data };
+    return { ...this.current() };
   }
 
   keys(): string[] {
-    return Object.keys(this.data);
+    return Object.keys(this.current());
   }
 }

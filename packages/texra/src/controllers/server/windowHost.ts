@@ -4,13 +4,21 @@
  * call by call. Every host (the extension, the desktop app, the terminal
  * chat) attaches through this one function with the capabilities it has.
  */
-import { Cause, Deferred, Effect, type Scope, Stream } from 'effect';
+import {
+  Cause,
+  Deferred,
+  Effect,
+  FiberHandle,
+  type Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { withLogChannel } from '@logger/effectLog';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import type { ServiceClient } from './client';
+import type { ServiceClient, ServiceLink } from './client';
 import type {
   HostAnswer,
   HostCall,
@@ -99,16 +107,44 @@ const unoffered = (call: HostCall) =>
 
 /**
  * Attach `host` to the service as a window of `workspace`, for the scope's
- * life; returns once the service holds the attachment. `focused` emits when the window gains focus, so the project's calls
- * come here first. The service ends the attachment when it stops, which is
- * logged; the window keeps working with its own process's capabilities.
+ * life; returns once the service holds the attachment. `focused` emits when
+ * the window gains focus, so the project's calls come here first. When the
+ * link loses the service, the window goes on with its own process's
+ * capabilities, and attaches again to the service the link reaches next.
  */
 export const attachWindowHost = Effect.fn('server.attachWindowHost')(function* (
-  client: ServiceClient,
+  link: ServiceLink,
   workspace: string,
   host: WindowHost,
   focused: Stream.Stream<void> = Stream.empty,
 ): Effect.fn.Return<void, never, Scope.Scope> {
+  // Settled once the first service holds the attachment, or once it
+  // refused or ended it: the caller goes on either way, and the logs say
+  // which.
+  const attached = yield* Deferred.make<void>();
+  const attachment = yield* FiberHandle.make<void, never>();
+  yield* Effect.forkScoped(
+    Stream.runForEach(SubscriptionRef.changes(link.client), (client) =>
+      client === null
+        ? FiberHandle.clear(attachment)
+        : FiberHandle.run(
+            attachment,
+            attachTo(client, workspace, host, focused, attached),
+          ),
+    ),
+  );
+  yield* Deferred.await(attached);
+});
+
+/** One attachment to the service `client` reaches, until it ends; what it
+ *  started ends with it. */
+function attachTo(
+  client: ServiceClient,
+  workspace: string,
+  host: WindowHost,
+  focused: Stream.Stream<void>,
+  attached: Deferred.Deferred<void>,
+): Effect.Effect<void> {
   const answer = (id: string, call: HostCall) =>
     perform(host, call).pipe(
       Effect.match({
@@ -129,49 +165,44 @@ export const attachWindowHost = Effect.fn('server.attachWindowHost')(function* (
         ),
       ),
     );
-  // Settled once the service holds the attachment, or once it refused or
-  // ended it: the caller goes on either way, and the logs say which.
-  const attached = yield* Deferred.make<void>();
-  yield* Effect.forkScoped(
-    client['host.attach']({
-      workspace,
-      capabilities: capabilitiesOf(host),
-    }).pipe(
-      Stream.runForEach((frame) =>
-        frame.kind === 'attached'
-          ? Deferred.succeed(attached, undefined).pipe(
-              Effect.andThen(
-                Effect.forkScoped(
-                  Stream.runForEach(focused, () =>
-                    client['host.focus']({
-                      attachment: frame.attachment,
-                    }).pipe(
-                      Effect.ignore({ log: 'Warn', message: 'Focus not told' }),
-                    ),
+  return client['host.attach']({
+    workspace,
+    capabilities: capabilitiesOf(host),
+  }).pipe(
+    Stream.runForEach((frame) =>
+      frame.kind === 'attached'
+        ? Deferred.succeed(attached, undefined).pipe(
+            Effect.andThen(
+              Effect.forkScoped(
+                Stream.runForEach(focused, () =>
+                  client['host.focus']({
+                    attachment: frame.attachment,
+                  }).pipe(
+                    Effect.ignore({ log: 'Warn', message: 'Focus not told' }),
                   ),
                 ),
               ),
-            )
-          : // Each call on its own fiber: a slow build never holds the next.
-            Effect.forkScoped(answer(frame.id, frame.call)),
-      ),
-      Effect.matchCauseEffect({
-        // The service stopped or restarted: the window goes on with its
-        // own process's capabilities.
-        onSuccess: () =>
-          Effect.logWarning(
-            `The TeXRA service ended this window's attachment to ${workspace}`,
-          ),
-        onFailure: (cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.void
-            : Effect.logWarning(
-                `The TeXRA service stopped asking this window of ${workspace}; tasks there run without its editor until it reconnects`,
-              ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
-      }),
-      Effect.ensuring(Deferred.succeed(attached, undefined)),
-      withLogChannel(CHANNEL),
+            ),
+          )
+        : // Each call on its own fiber: a slow build never holds the next.
+          Effect.forkScoped(answer(frame.id, frame.call)),
     ),
+    Effect.matchCauseEffect({
+      // The service stopped or restarted: the window goes on with its
+      // own process's capabilities.
+      onSuccess: () =>
+        Effect.logWarning(
+          `The TeXRA service ended this window's attachment to ${workspace}`,
+        ),
+      onFailure: (cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Effect.void
+          : Effect.logWarning(
+              `The TeXRA service stopped asking this window of ${workspace}; tasks there run without its editor until it reconnects`,
+            ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
+    }),
+    Effect.ensuring(Deferred.succeed(attached, undefined)),
+    Effect.scoped,
+    withLogChannel(CHANNEL),
   );
-  yield* Deferred.await(attached);
-});
+}

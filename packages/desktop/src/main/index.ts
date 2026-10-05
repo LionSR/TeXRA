@@ -185,9 +185,7 @@ if (ownsSingleInstanceLock) {
               `TeXRA runs this app's tasks here only, so other windows and terminals will not see them: ${service.failure.message}`,
             );
           const registry = yield* openDesktopProjectRegistry({
-            service: Result.isSuccess(service)
-              ? service.success.client
-              : undefined,
+            service: Result.isSuccess(service) ? service.success : undefined,
             dataRoot: platformInit.dataRoot,
             processRoots: platformInit.processRoots,
             processScope,

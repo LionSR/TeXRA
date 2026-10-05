@@ -99,6 +99,7 @@ vi.mock('@cli/runtime/cliProcessRuntime', () => ({
 // wherever the service cannot start.
 vi.mock('@cli/runtime/cliService', () => ({
   reachCliService: () => Effect.fail(new Error('no TeXRA service in tests')),
+  linkCliService: () => Effect.fail(new Error('no TeXRA service in tests')),
 }));
 
 vi.mock('@texra/model/setupCredentialAccess', () => ({

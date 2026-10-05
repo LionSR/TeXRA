@@ -5,14 +5,23 @@
 // Run start/resume/stop orchestration lives in ../chatSessionController;
 // this module keeps only composition, rendering glue, and the Ink lifecycle.
 
-import { Cause, Effect, Exit, Fiber, Result, Scope } from 'effect';
+import {
+  Cause,
+  Effect,
+  Exit,
+  Fiber,
+  Result,
+  Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
 import { aggregateId } from '@texra-ai/harness';
 import type { AgentConfig } from '@agent/runtime';
 import { getVisibleAgents } from '@agent/index';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
-import { reachCliService } from '@cli/runtime/cliService';
+import { linkCliService, reachCliService } from '@cli/runtime/cliService';
 
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
@@ -163,7 +172,7 @@ export async function runChat(
       // Every chat is a client of the one service, so other terminals and
       // windows see its task; one that cannot reach it runs here, and says
       // so once.
-      const service = yield* reachCliService(context.storageRoot).pipe(
+      const service = yield* linkCliService(context.storageRoot).pipe(
         Scope.provide(chatScope),
         Effect.result,
       );
@@ -182,7 +191,7 @@ export async function runChat(
       runtimeSession.setApprovalPolicy(context.approvalPolicy);
       const backend = Result.isSuccess(service)
         ? yield* serviceSessionBackend(
-            service.success.client,
+            service.success,
             context.cwd,
             runtimeSession.roots.storage,
           ).pipe(Scope.provide(chatScope))
@@ -281,7 +290,7 @@ export async function runChat(
         services,
         runtimeSession,
         backend,
-        client: Result.isSuccess(service) ? service.success.client : undefined,
+        link: Result.isSuccess(service) ? service.success : undefined,
         runsElsewhere: Result.isSuccess(service),
         defaults,
         firstRunSetupAgent,
@@ -301,7 +310,7 @@ export async function runChat(
     ),
   );
   if (startup.exitCode !== undefined) return { exitCode: startup.exitCode };
-  const { services, runtimeSession, backend, runsElsewhere, client } = startup;
+  const { services, runtimeSession, backend, runsElsewhere, link } = startup;
   const { defaults, model } = startup;
   const { inputHistory, followUpQueue, startupNotices } = startup;
   const { agent } = defaults;
@@ -368,6 +377,22 @@ export async function runChat(
     },
   });
   for (const notice of startupNotices) appendLocalNotice(notice);
+  // The service went away (retired by a newer build, or it died) and the
+  // link reaches it again: the chat says so, rather than going quiet.
+  if (link !== undefined)
+    runtime.runFork(
+      Stream.runForEach(
+        SubscriptionRef.changes(link.client).pipe(Stream.drop(1)),
+        (client) =>
+          Effect.sync(() =>
+            appendLocalNotice(
+              client === null
+                ? 'The TeXRA service is offline. Reconnecting…'
+                : 'Reconnected to the TeXRA service.',
+            ),
+          ),
+      ).pipe(Scope.provide(chatScope)),
+    );
   // Cosmetic, but "texra-local" or a bare shell prompt in every tab makes a
   // multi-session workflow hard to navigate: show project and attention state.
   // The terminal outlives session subscriptions: only the exit controller
@@ -432,12 +457,12 @@ export async function runChat(
     secrets: services.secrets,
     stores: services,
     runtime,
-    ...(client !== undefined && {
+    ...(link !== undefined && {
       backend,
       agentRuns: serviceAgentRuns(backend),
       attachWindow: (host) => {
         runtime.runFork(
-          attachWindowHost(client, context.cwd, host).pipe(
+          attachWindowHost(link, context.cwd, host).pipe(
             Scope.provide(chatScope),
           ),
         );

@@ -11,7 +11,7 @@ import path from 'node:path';
 
 import { Effect, Stream } from 'effect';
 
-import { ensureService } from '@texra/controllers/server/client';
+import { linkService } from '@texra/controllers/server/client';
 import { attachWindowHost } from '@texra/controllers/server/windowHost';
 
 const [storageRoot, workspace, mode] = process.argv.slice(2);
@@ -26,14 +26,14 @@ const say = (line: string) =>
 await Effect.runPromise(
   Effect.scoped(
     Effect.gen(function* () {
-      const { client } = yield* ensureService(
+      const link = yield* linkService(
         storageRoot,
         Effect.fail(
           new Error('The harness attaches to a running service only.'),
         ),
       );
       yield* attachWindowHost(
-        client,
+        link,
         workspace,
         {
           readDiagnostics: (file) =>
