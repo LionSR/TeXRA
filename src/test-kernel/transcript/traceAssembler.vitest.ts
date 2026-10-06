@@ -65,7 +65,7 @@ async function writeRun(
   runConfigRecord: AgentConfig = config(),
 ): Promise<void> {
   publishTestRunStart(session, runId);
-  await Effect.runPromise(session.settlePublications());
+  await Effect.runPromise(session.settled);
   await Effect.runPromise(seedRunRecord(session, runId, runConfigRecord));
   // The terminal fact is `run.end`; the view's outcome is folded from it.
   if (meta.outcome)

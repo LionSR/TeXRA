@@ -10,6 +10,7 @@ import { Runs } from '@agent/runtime/runRegistry';
 import type { RunToolCall } from '@agent/runtime/RunCall';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import type { RunId } from '@shared/schemas';
 import { noStep, testModelCell } from '@test/support/nativeToolTestLayer';
 import { noopTrace } from '@test/support/noopTrace';
@@ -53,10 +54,6 @@ vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
     registerRun: mocks.registerRun,
   };
 });
-
-vi.mock('@tools/approval', () => ({
-  configureDelegatedChildApprovals: vi.fn(),
-}));
 
 import { launchDetachedSubagent } from '@tools/delegation/subagentRun';
 import { RunFileService } from '@utils/files/runStorage';
@@ -107,7 +104,7 @@ describe('launchDetachedSubagent child run launch', () => {
       launchDetachedSubagent(parent, defaultPayload, {
         runId: 'child-run' as RunId,
         parentOffered: [],
-        inheritChildRunApprovals: () => undefined,
+        grants: NO_APPROVAL_GRANTS,
       }).pipe(Effect.provideService(Runs, testRunRegistry())),
       fakeProcessServices(),
     );

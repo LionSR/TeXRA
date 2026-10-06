@@ -19,6 +19,7 @@ import {
 import { createNativeSubagentStrategy } from '@agent/runtime/nativeSubagentStrategy';
 import type { RunToolCall } from '@agent/runtime/RunCall';
 import { withLogChannel } from '@logger/effectLog';
+import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
   USER_FOLLOW_UP_SUPPORT,
   type OfferedTool,
@@ -77,11 +78,12 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
       readonly runId: RunId;
       /** The most the child may be offered: its parent step's tools. */
       readonly parentOffered: readonly OfferedTool[];
-      readonly inheritChildRunApprovals: (resolvedRunId: RunId) => void;
+      /** The grants the child is registered with. */
+      readonly grants: ApprovalGrants;
       readonly approvalMeta?: ApprovalMeta;
     },
   ) {
-    const { runId, parentOffered, inheritChildRunApprovals } = launch;
+    const { runId, parentOffered, grants } = launch;
     const { session: parentSession, runId: parentRunId } = parent.run;
     const workingDirectory = childConfigPayload.workingDirectory ?? undefined;
     const agentName = childConfigPayload.agent;
@@ -120,6 +122,7 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
           parentRunId,
           parentCard: parent.logId,
           parentCallId: parent.callId,
+          grants,
         });
 
         const strategyParams = {
@@ -130,7 +133,6 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
           startedAt,
           workingDirectory,
           parentOffered,
-          onRunResolved: inheritChildRunApprovals,
         };
 
         yield* startDetachedChildRunLoop({

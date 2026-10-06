@@ -26,6 +26,7 @@ import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
+import { runBypasses } from '@shared/approvalBypassKind';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import {
   formatTexraApprovalPolicy,
@@ -1098,10 +1099,12 @@ async function appendHarnessPlanDecision(
     // The same grant `PlanTool.startGoalForPlan` applies next: approving a
     // plan as a goal auto-approves commands, and nothing broader unless the
     // user explicitly widened the scope.
-    setGoalSessionAutoApproval(
-      session(),
-      HARNESS_RUN_ID,
-      result.autoApproveAll ? 'allAgentWork' : 'commands',
+    await harnessRuntime.runPromise(
+      setGoalSessionAutoApproval(
+        session(),
+        HARNESS_RUN_ID,
+        result.autoApproveAll ? 'allAgentWork' : 'commands',
+      ),
     );
     seedPhase(HARNESS_RUN_ID, RUN_PHASE.RUNNING);
     appendHarnessAssistantTranscript('PLAN-GOAL');
@@ -1523,7 +1526,7 @@ function appendHarnessStatus(): void {
       teamName: meta.teamName,
       modelAccess: run?.usage.usageRoute,
       approvalPolicy: harnessRuntimeSession.approvalPolicy,
-      approvalBypasses: view.policy.get(runId)?.bypasses,
+      approvalBypasses: runBypasses(view, runId),
       statusLabel: run?.statusLabel,
       activeChildSessions: runningChildCount(view, run),
       goal: ((goal) => (goal?.active ? goal : undefined))(

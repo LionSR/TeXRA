@@ -23,12 +23,12 @@ import {
   type Scope,
 } from 'effect';
 
-import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 import type {
   FinalizeRunInput,
   FinalizeRunResult,
 } from '@agent/storage/runLifecycle';
 import type { PluginContext, ProcessServices } from '@platform/processRuntime';
+import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
@@ -113,7 +113,8 @@ export interface RunRegistryInit {
   readonly commit: (
     events: readonly SessionEventDraft[],
   ) => Effect.Effect<void, Error>;
-  readonly approvals: SessionApprovals;
+  /** The grants a child keeps once its parent edge goes (its detach row). */
+  readonly grantsOnDetach: (runId: RunId) => ApprovalGrants;
   readonly finalizeRun: (
     input: FinalizeRunInput,
   ) => Effect.Effect<FinalizeRunResult, Error>;
@@ -897,23 +898,14 @@ export class RunRegistry {
   // ---------------------------------------------------------------- detach
 
   /**
-   * Detach all active subagents from a parent, promoting them to top-level.
-   * Subagents continue running independently and deliver results via the
-   * follow-up queue.
-   *
-   * The durable batch comes first and the local sever follows it, on the
-   * children that batch committed: a refused commit leaves both the durable
-   * parent edges and the local relationships standing, so a retry still finds
-   * the children to detach. It carries every severed child at once,
-   * activations included. The set taken here stays the parent's whole child
-   * run registry while the batch commits: the stop marked the parent before reading
-   * it, so no child is admitted under it in the window this covers.
-   *
-   * Each row lands on its own child's aggregate, which takes an append only
-   * from its claim holder, so every snapshotted child's claim is held here
-   * until the commit and the local sever are done: holds nest, so a child
-   * that ends meanwhile releases its own hold without releasing the claim
-   * out from under this batch.
+   * Detach all active subagents from a parent, promoting them to top-level:
+   * they keep running and deliver through the follow-up queue. One durable
+   * batch severs every child's edge and keeps the grants it inherited, then
+   * the local sever follows on the children it committed, so a refused
+   * commit leaves both standing for a retry. The stop marked the parent
+   * before reading its children, so none is admitted in between. Each row
+   * lands on its child's aggregate, so every child's claim is held (holds
+   * nest) until the commit and the sever are done.
    */
   private detachActiveChildren(parentRunId: RunId): Effect.Effect<void, Error> {
     return Effect.suspend(() => {
@@ -927,10 +919,14 @@ export class RunRegistry {
         ).pipe(
           Effect.andThen(
             this.init.commit(
-              detachedChildRunIds.map((childRunId) => ({
-                type: 'run.detach',
-                aggregateId: qualifyAggregateId('run', childRunId),
-              })),
+              detachedChildRunIds.flatMap((childRunId) => {
+                const aggregateId = qualifyAggregateId('run', childRunId);
+                const snapshot = this.init.grantsOnDetach(childRunId);
+                return [
+                  { type: 'run.detach', aggregateId },
+                  { type: 'approval.policy', aggregateId, snapshot },
+                ] as const;
+              }),
             ),
           ),
           Effect.andThen(
@@ -954,7 +950,6 @@ export class RunRegistry {
       const entry = this.entries.get(childRunId);
       const parent = entry?.activation?.parent ?? entry?.handle?.parentState;
       if (parent?.current === parentRunId) parent.current = null;
-      this.init.approvals.detachRunFromParent(childRunId);
     }
   }
 

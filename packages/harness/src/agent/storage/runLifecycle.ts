@@ -12,13 +12,16 @@ import stableStringify from 'safe-stable-stringify';
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { consumedRows, haltedPositionRow } from '@agent/runtime/loop/rows';
+import {
+  NO_APPROVAL_GRANTS,
+  type ApprovalGrants,
+} from '@shared/approvalBypassKind';
 
 import {
   RUN_OUTCOME,
   RunRecordFieldsSchema,
   aggregateId,
   storedRunOutput,
-  type ApprovalPolicySnapshot,
   type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
   emptyRunEndOutput,
@@ -30,7 +33,6 @@ import {
   type RunProvenance,
   type UserFollowUpSupport,
 } from '@shared/schemas';
-import type { DatabaseReadFailed } from '@shared/session/database';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   getRunRecords,
@@ -81,46 +83,19 @@ export const configChange = Effect.fn('configChange')(function* (
   } satisfies SessionEventDraft;
 });
 
-/**
- * The approval snapshot a run's re-activation stamps. Enforcement is the
- * session's in-memory state, so a process holding none of the run's grants
- * (a resume in a new process) first rebuilds them from the run's last
- * durable snapshot (`SessionApprovals.restoreRun`) rather than stamping an
- * empty snapshot over them. The durable snapshot is the run's own record,
- * the newer of its `approval.policy` and the one its `run.start` carried.
- */
-const reactivatedApprovalPolicy = (
-  session: SessionHandle,
-  runId: RunId,
-): Effect.Effect<ApprovalPolicySnapshot, DatabaseReadFailed> =>
-  session.readRunRecords(runId).pipe(
-    Effect.map((rows) => {
-      const latest = rows.findLast(
-        (row) => row.type === 'approval.policy' || row.type === 'run.start',
-      );
-      const durable =
-        latest?.type === 'approval.policy'
-          ? latest.snapshot
-          : latest?.approvalPolicy;
-      if (durable) session.approvals.restoreRun(runId, durable);
-      return session.approvalPolicySnapshotFor(runId);
-    }),
-  );
-
-/**
- * A resume's activation: its `run.activate` with the approval snapshot
- * enforcement holds, as one batch (no `run.start` re-stamps the snapshot).
- */
+/** A resume's activation: its `run.activate` and the grants it ends, as one
+ *  batch. */
 export const commitResumedActivation = (session: SessionHandle, runId: RunId) =>
-  reactivatedApprovalPolicy(session, runId).pipe(
-    Effect.flatMap((snapshot) => {
-      const target = aggregateId('run', runId);
-      return session.commit([
-        { type: 'run.activate', aggregateId: target },
-        { type: 'approval.policy', aggregateId: target, snapshot },
-      ]);
-    }),
-  );
+  session.approvals
+    .activationRows(runId)
+    .pipe(
+      Effect.flatMap((grants) =>
+        session.commit([
+          { type: 'run.activate', aggregateId: aggregateId('run', runId) },
+          ...grants,
+        ]),
+      ),
+    );
 
 interface RegisterRunOptions {
   /** The launching run: the whole parent edge, stamped on `run.start`. */
@@ -145,6 +120,8 @@ interface RegisterRunOptions {
   readonly descriptionBy?: 'model' | 'user';
   /** Where the run's history came from: a fork's source and cut. */
   readonly provenance?: RunProvenance;
+  /** The approval grants the run starts with, on its `run.start`. */
+  readonly grants?: ApprovalGrants;
 }
 
 /**
@@ -233,21 +210,12 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
         ...(options.parentCard !== undefined && {
           parentCard: options.parentCard,
         }),
-        approvalPolicy: session.approvalPolicySnapshotFor(runId),
+        approvalPolicy: options.grants ?? NO_APPROVAL_GRANTS,
       });
     }
     events.push(config);
     events.push({ type: 'run.activate', aggregateId: target });
-    // Enforcement is the session's in-memory policy; the row is its
-    // projection. A re-registration writes no `run.start`, so the
-    // activation re-stamps the snapshot enforcement now holds, rebuilt from
-    // the durable one when this process holds none of the run's grants.
-    if (prior)
-      events.push({
-        type: 'approval.policy',
-        aggregateId: target,
-        snapshot: yield* reactivatedApprovalPolicy(session, runId),
-      });
+    if (prior) events.push(...(yield* session.approvals.activationRows(runId)));
     if (options.description !== undefined)
       events.push({
         type: 'run.description',
@@ -368,6 +336,13 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
     input.report?.(error);
     return { ok: false, error };
   }
+  // Rows the run published and the store refused fail it, whoever ends it.
+  const lost = yield* session.lostRows(runId);
+  const requested =
+    lost !== undefined && outcome !== RUN_OUTCOME.CANCELLED
+      ? RUN_OUTCOME.FAILED
+      : outcome;
+  const error = input.error ?? lost;
   const status = yield* Effect.exit(
     session.updateRecordFacts(runId, (rows) =>
       Effect.gen(function* () {
@@ -382,10 +357,15 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
         // every `durableOutcome` reader keeps it RUNNING for want of the row.
         const ended = runEndFromEvents(rows, runId)?.outcome;
         const persisted =
-          keepExistingOutcome === true && ended !== undefined ? ended : outcome;
+          keepExistingOutcome === true && ended !== undefined
+            ? ended
+            : requested;
         const settlement = input.settlement ?? [];
-        if (ended === persisted)
+        if (ended === persisted) {
+          if (lost !== undefined)
+            yield* Effect.logWarning(`Run ${runId} had ended: ${lost.message}`);
           return { events: settlement, value: persisted };
+        }
         return {
           events: [
             ...settlement,
@@ -397,12 +377,13 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
                 ? [haltedPositionRow(row, persisted)]
                 : [],
             ),
-            ...session.streamClosureFacts(runId),
+            // What the run left open closes with its end.
+            ...session.closureFacts(runId, persisted),
             {
               type: 'run.end' as const,
               aggregateId: target,
               outcome: persisted,
-              ...(input.error !== undefined ? { error: input.error } : {}),
+              ...(error !== undefined ? { error } : {}),
               output: storedRunOutput(input.output ?? emptyRunEndOutput()),
             },
           ],

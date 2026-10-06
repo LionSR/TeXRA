@@ -682,10 +682,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         // A summary the turn started lands before the turn ends.
         state = yield* cell.adopt(yield* compaction.finish(state));
-        // The turn's trace rows publish fire-and-forget: settling this run's
-        // publications (by run id) orders them before `waiting`. A failure
-        // ends the run, the `artifact-drain` marker on its last row.
-        yield* session.settlePublications(runId, { consume: false });
+        // The turn's trace rows are queued ahead of the boundary: the
+        // barrier lets the open streams `waiting` closes count every one.
+        yield* session.settled;
         // The turn boundary, in one batch: Stop hooks, the snapshot, the
         // steps (`waiting` closes open streams), a child's settlement, and a
         // Stop hook's block or input already queued, under a fresh step.
@@ -700,7 +699,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             : null;
         const ending = [
           positionRow(runId, state, 'turn.end'),
-          ...session.streamClosureFacts(runId),
+          ...session.closureFacts(runId),
           positionRow(runId, state, 'waiting'),
           ...(settlement?.rows ?? []),
         ];

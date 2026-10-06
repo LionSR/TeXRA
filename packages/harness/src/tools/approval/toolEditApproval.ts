@@ -109,9 +109,8 @@ export function prepareToolEditApprovalPrompt(
 ): { permission: ToolEditPermission; diffTimeout: string | undefined } {
   const { requestId, request, relativePath } = params;
   const { runId } = request;
-  const isBypassed = runId
-    ? session.approvals.toolEdit.bypass.isBypassed(runId)
-    : false;
+  const isBypassed =
+    runId != null && session.approvals.bypass(runId, 'toolEdit') !== null;
   const { hunks, timeout } = diffEdit(
     request.originalContent,
     request.proposedContent,
@@ -226,9 +225,9 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     };
 
     const runId = preparedRequest.runId ?? undefined;
-    const isRunBypassed = Boolean(
-      runId && session.approvals.toolEdit.bypass.isBypassed(runId),
-    );
+    const isRunBypassed =
+      runId !== undefined &&
+      session.approvals.bypass(runId, 'toolEdit') !== null;
     const acceptProposedAsIs = (): Effect.Effect<ToolEditApprovalResult> =>
       finalizeApprovalResult(
         { action: 'apply', appliedContent: preparedRequest.proposedContent },
@@ -264,7 +263,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     });
     yield* reportDiffTimeout(diffTimeout);
     const staged: ToolEditApprovalRequest = { ...preparedRequest, permission };
-    return yield* session.approvals.toolEdit.enqueue(runId, {
+    return yield* session.approvals.enqueue('toolEdit', runId, {
       // The preview is staged before the request opens, and stays staged
       // until that request's `request.decided` releases it on every host:
       // a surface reading the committed row must never find the request

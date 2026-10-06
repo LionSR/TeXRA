@@ -68,10 +68,7 @@ const createRegisteredChildRun = Effect.fn('createRegisteredChildRun')(
     });
     const child = yield* createChildRun(session, runId, parentRunId, {
       run: options.run,
-    }).pipe(
-      Effect.provideService(Runs, session.runs),
-      Effect.onError(() => session.commitRunEnd(runId).pipe(Effect.orDie)),
-    );
+    }).pipe(Effect.provideService(Runs, session.runs));
     // What the child loop does once its stop target is reserved.
     child.track();
     return {
@@ -79,12 +76,7 @@ const createRegisteredChildRun = Effect.fn('createRegisteredChildRun')(
       finalize: (
         input: Parameters<ChildRunPort['finalize']>[0],
       ): Effect.Effect<void, Error> =>
-        child
-          .finalize(input)
-          .pipe(
-            Effect.provideService(Runs, session.runs),
-            Effect.ensuring(session.commitRunEnd(runId).pipe(Effect.orDie)),
-          ),
+        child.finalize(input).pipe(Effect.provideService(Runs, session.runs)),
     };
   },
 );
@@ -125,7 +117,7 @@ describe('child run progress events', () => {
   beforeEach(async () => {
     const session = await Effect.runPromise(createProcessSession());
     publishTestRunStart(session, parentRunId);
-    await Effect.runPromise(session.settlePublications());
+    await Effect.runPromise(session.settled);
   });
 
   it.effect(

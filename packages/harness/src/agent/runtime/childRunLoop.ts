@@ -1055,15 +1055,6 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
             const owned = yield* Effect.exit(
               Effect.sync(releaseSessionOwnershipOnce),
             );
-            const released = yield* Effect.exit(runSession.commitRunEnd(runId));
-            if (Exit.isFailure(released)) {
-              yield* loopLog(
-                trace,
-                'warn',
-                'Failed to persist final child-run artifacts',
-                { runId, error: Cause.squash(released.cause) },
-              );
-            }
             // The parent may immediately read this child; release its claim first.
             yield* releaseClaim;
             const delivery = yield* Effect.exit(
@@ -1074,14 +1065,9 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
             const activation = yield* Effect.exit(
               Effect.sync(releaseChildActivation),
             );
-            const failures = [
-              terminal,
-              owned,
-              released,
-              delivery,
-              activation,
-            ].flatMap((exit) =>
-              Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
+            const failures = [terminal, owned, delivery, activation].flatMap(
+              (exit) =>
+                Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
             );
             // The body's own failure or interruption propagates past this
             // finalizer as itself; only the cleanup's failures join it.

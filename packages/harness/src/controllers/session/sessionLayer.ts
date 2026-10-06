@@ -76,6 +76,7 @@ import {
   type ProcessProbe,
 } from '@platform/defaults/nodeProcesses';
 import { nodePlatformServices } from '@platform/defaults/nodePlatform';
+import { inheritedGrants } from '@shared/approvalBypassKind';
 import { RunHistory } from '@shared/session/runHistory';
 import {
   aggregateId as qualifyAggregateId,
@@ -85,7 +86,6 @@ import {
   type AggregateId,
   type CommitOrdinal,
   type RunId,
-  type RunOutcome,
   type SessionCloseReport,
   type SessionEvent,
 } from '@shared/schemas';
@@ -118,7 +118,6 @@ import { ToolRegistry } from '@tools/toolTable';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { followInterruptedTasks } from '@tools/interruptedTasks';
 import { processEnvConfigLayer } from '@utils/system/envFlags';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { databaseLayer, globalDatabaseLayer } from './Database';
 import { projectDatabaseLayer } from './projectDatabase';
 import { collectPendingDeletions } from './deletionCleanup';
@@ -185,7 +184,7 @@ class Session extends Context.Service<Session, SessionHandle>()(
 const sessionHandleLayer = (key: SessionKey, modelRetries: ModelRetryGate) =>
   Layer.effectContext(
     Effect.gen(function* () {
-      const { publish, exclusive, detach, settle, removeRun, ...reads } =
+      const { publish, exclusive, detach, removeRun, ...reads } =
         yield* SessionEvents;
       const eventLog = yield* Database;
       const identity = yield* ProcessIdentity;
@@ -285,10 +284,8 @@ const sessionHandleLayer = (key: SessionKey, modelRetries: ModelRetryGate) =>
       });
       const graph = (session: SessionHandle): SessionGraph => {
         // The session scope owns one approval state shared by its runs and
-        // request handler. Effective changes publish the full policy snapshot.
-        const approvals = createSessionApprovals((runId) =>
-          session.publishApprovalPolicy(runId),
-        );
+        // request handler, over the session's view and record door.
+        const approvals = createSessionApprovals(session);
         return {
           events: reads,
           runHistory,
@@ -369,10 +366,11 @@ const sessionHandleLayer = (key: SessionKey, modelRetries: ModelRetryGate) =>
               return value;
             }),
           detach,
-          settle: settle.pipe(
-            Effect.flatMap((committed) =>
-              committed === null ? Effect.void : settleTo(committed),
-            ),
+          // The publisher runs jobs in order, so an empty job is the barrier
+          // for every one enqueued before it; the view then folds to there.
+          settle: exclusive(() => eventLog.currentCommit).pipe(
+            Effect.orDie,
+            Effect.flatMap(settleTo),
           ),
           publishRegistration: (events) =>
             Effect.gen(function* () {
@@ -463,7 +461,13 @@ const sessionHandleLayer = (key: SessionKey, modelRetries: ModelRetryGate) =>
           runs: new RunRegistry({
             runView: (runId) => session.runView(runId),
             commit: (events) => session.commit(events).pipe(Effect.asVoid),
-            approvals,
+            grantsOnDetach: (runId) => {
+              const current = SubscriptionRef.getUnsafe(view.ref);
+              return {
+                ...inheritedGrants(current, runId),
+                goal: current.policy.get(runId)?.goal ?? [],
+              };
+            },
             finalizeRun: (input) => finalizeRun(session, input),
             holdRunClaim: (runId) => session.holdRunClaim(runId),
             borrowRunClaim: (runId) => session.borrowRunClaim(runId),
@@ -503,18 +507,11 @@ const sessionHandleLayer = (key: SessionKey, modelRetries: ModelRetryGate) =>
       const session = new SessionHandle({ ...key.open, graph, ...services });
       // The session's teardown is this scope's finalizers, run in the reverse
       // of their registration: the handle's own doors shut last, after every
-      // owner below has unwound, with the publications they left settled
-      // (logged, so the entry's release still finishes); then the follow-up
-      // queue, the approval state (bypasses dropped before the interaction
-      // slot settles pending approvals), the presentation hosts; and first of
-      // all the runs, so no run is admitted over a session that is unwinding.
+      // owner below has unwound, with the publications they left settled;
+      // then the follow-up queue, the presentation hosts; and first of all
+      // the runs, so no run is admitted over a session that is unwinding.
       yield* Effect.addFinalizer(() =>
-        session.settlePublications().pipe(
-          Effect.catch(
-            logFailure(
-              `Session ${key.storage} left a failed publication behind as it closed.`,
-            ),
-          ),
+        session.settled.pipe(
           // Bounded like the close that invalidates this entry: a
           // publisher too stuck to settle must not hold the release.
           Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
@@ -530,9 +527,6 @@ const sessionHandleLayer = (key: SessionKey, modelRetries: ModelRetryGate) =>
       );
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => session.followUps.dispose()),
-      );
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => session.approvals.clearAll()),
       );
       yield* Effect.addFinalizer(() => session.interactions.dispose());
       yield* Effect.addFinalizer(() =>
@@ -795,90 +789,24 @@ const heldSession = (root: string) =>
 
 /**
  * Settle one run from outside its driver: what a close does for a run still
- * live when its budget ran out. Under the run's claim, the transcript groups
- * it left open are closed and its outcome is recorded — CANCELLED unless its
- * driver already wrote one — with its checkpoint kept, since a cancelled run
- * is exactly the one a user resumes; then the claim is released. A driver
- * that writes a different outcome after this is a separate lifecycle race:
+ * live when its budget ran out. Its outcome is recorded — CANCELLED unless
+ * its driver already wrote one — in the one batch that also closes the
+ * transcript groups it left open, with its checkpoint kept, since a
+ * cancelled run is exactly the one a user resumes. A driver that writes a
+ * different outcome after this is a separate lifecycle race:
  * `keepExistingOutcome` only protects earlier writes. A failure is logged,
  * never raised: a later launch classifies the run from its checkpoint.
  */
 const settleRun = (session: SessionHandle, runId: RunId): Effect.Effect<void> =>
   Effect.gen(function* () {
     if (!(yield* session.ownsRun(runId))) return;
-    const tracked = session.runs.getHandle(runId) !== undefined;
-    // Read what the publisher holds open once queued publications settle, so
-    // every row they commit is counted.
-    const open = yield* Effect.exit(
-      session
-        .settlePublications()
-        .pipe(Effect.map(() => (tracked ? session.openWork(runId) : []))),
-    );
-    // The run's closure facts, queued and settled under the same lease
-    // *before* the terminal row: that row is the one place their loss is
-    // reported (the `artifact-drain` marker).
-    const closeTranscriptGroups = (
-      outcome: RunOutcome,
-    ): Effect.Effect<Error | undefined> =>
-      Effect.gen(function* () {
-        if (!tracked) {
-          yield* Effect.logWarning(
-            `Run ${runId} was untracked while its session closed; any transcript groups it left open stay open`,
-          ).pipe(withLogChannel(CHANNEL));
-          return undefined;
-        }
-        if (Exit.isFailure(open)) return undefined;
-        for (const work of open.value) {
-          if (work.kind === 'stage') {
-            session.publishRunEvent(runId, {
-              type: 'stage.end',
-              id: work.id,
-              status: outcome,
-            });
-          } else {
-            session.publishRunEvent(runId, { type: 'stream.end', id: work.id });
-          }
-        }
-        const settled = yield* Effect.exit(session.settlePublications(runId));
-        return Exit.isFailure(settled)
-          ? ensureError(Cause.squash(settled.cause))
-          : undefined;
-      });
-    yield* session.commitRunEnd(runId, (drainFailure) =>
-      Effect.gen(function* () {
-        const closureFailure = yield* closeTranscriptGroups(
-          session.runView(runId)?.durableOutcome ?? RUN_OUTCOME.CANCELLED,
-        );
-        const lostFacts = drainFailure ?? closureFailure;
-        const finalization = yield* finalizeRun(session, {
-          runId,
-          outcome: RUN_OUTCOME.CANCELLED,
-          keepExistingOutcome: true,
-          ...(lostFacts === undefined
-            ? {}
-            : {
-                error: {
-                  kind: 'artifact-drain' as const,
-                  message: toErrorMessage(lostFacts),
-                },
-              }),
-        });
-        if (!finalization.ok) {
-          return yield* Effect.die(
-            new Error(
-              `Failed to persist the CANCELLED outcome for run ${runId}`,
-              { cause: finalization.error },
-            ),
-          );
-        }
-        if (Exit.isFailure(open))
-          return yield* Effect.die(Cause.squash(open.cause));
-        if (closureFailure !== undefined)
-          return yield* Effect.die(closureFailure);
-      }),
-    );
+    const finalization = yield* finalizeRun(session, {
+      runId,
+      outcome: RUN_OUTCOME.CANCELLED,
+      keepExistingOutcome: true,
+    });
+    if (!finalization.ok) return yield* Effect.die(finalization.error);
   }).pipe(
-    Effect.scoped,
     Effect.catchCause((cause) =>
       Effect.logWarning(
         `Failed to settle run ${runId} as its session closed; a later launch classifies it from its checkpoint`,

@@ -336,7 +336,6 @@ export function executeCliRequest(
             outcome: RUN_OUTCOME.CANCELLED,
             report: reportShutdownFinalizationFailure,
           })).ok;
-          yield* session.commitRunEnd(runId);
           const resumability = terminalStatusPersisted
             ? yield* agentRuns.resumability(runId, session)
             : undefined;
@@ -500,7 +499,7 @@ export function executeCliRequest(
                 ),
         beforeRunEnd: () =>
           Effect.gen(function* () {
-            const handled = yield* finalizeShutdownStatus;
+            yield* finalizeShutdownStatus;
             if (
               launchVerdict.kind === 'interrupted' &&
               launchVerdict.artifactFailure !== undefined
@@ -509,7 +508,6 @@ export function executeCliRequest(
               launchVerdict.artifactFailure = undefined;
               return yield* Effect.fail(ensureError(error));
             }
-            return handled;
           }),
         onRunClaimed: (runId) => {
           ownedRunId = runId;
@@ -571,7 +569,7 @@ export function executeCliRequest(
     const finalization = yield* Effect.result(
       Effect.gen(function* () {
         yield* finalizeShutdownStatus;
-        yield* session.settlePublications();
+        yield* session.settled;
         if (runResult.ok) {
           return yield* readCliRunOutcomeState(
             session,

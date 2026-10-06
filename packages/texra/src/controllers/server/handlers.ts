@@ -34,7 +34,6 @@ import {
 import { isLiveRun, type SessionView } from '@shared/session/sessionView';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import { runEnded } from '@texra/controllers/session/sessionBackend';
-import { launchOnRun } from '@texra/controllers/mainView/backend/MainViewRunLaunchController';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -289,11 +288,9 @@ export const serviceHandlers = TexraRpcs.toLayer(
                 ownApiKeyFallback,
                 // Admitted once the run is registered, so a `task.ended`
                 // that follows the answer finds it.
-                onRun: launchOnRun(session.approvals, {
-                  approveDelegatedWork,
-                  onRun: (registered) =>
-                    Deferred.succeed(admitted, registered).pipe(Effect.asVoid),
-                }),
+                approveDelegatedWork,
+                onRun: (registered) =>
+                  Deferred.succeed(admitted, registered).pipe(Effect.asVoid),
                 ...(continues !== null && { continues }),
               },
             ),

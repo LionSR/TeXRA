@@ -5,6 +5,7 @@
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, SubscriptionRef } from 'effect';
 import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
+import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 const mocks = vi.hoisted(() => ({
   hasUsableApiKey: vi.fn(),
@@ -157,7 +158,7 @@ function ensureRun(runId: RunId): Effect.Effect<void> {
     started.add(runId);
     const session = testDefaultSession();
     publishTestRunStart(session, runId, { parent: root ?? null });
-    yield* session.settlePublications().pipe(Effect.orDie);
+    yield* session.settled.pipe(Effect.orDie);
   });
 }
 
@@ -340,8 +341,7 @@ afterEach(async () => {
         .pipe(Effect.ignore),
     );
   }
-  await Effect.runPromise(session.settlePublications());
-  session.approvals.clearAll();
+  await Effect.runPromise(session.settled);
   resetCliState();
   mocks.hasUsableApiKey.mockReset();
   mocks.notify.mockReset();
@@ -368,7 +368,7 @@ describe('TUI request decisions', () => {
       expect(yield* Fiber.join(pending)).toEqual({ action: 'approve' });
       yield* waitFor(() =>
         expect(
-          testDefaultSession().approvals.bash.bypass.isBypassed(runId),
+          testDefaultSession().approvals.bypass(runId, 'bash') !== null,
         ).toBe(true),
       );
     }),
@@ -384,20 +384,20 @@ describe('TUI request decisions', () => {
 
         const session = testDefaultSession();
         const { approvals } = session;
-        approvals.bash.bypass.setBypass(runId, false);
-        setGoalSessionAutoApproval(session, runId, 'commands');
-        expect(approvals.bash.bypass.isBypassed(runId)).toBe(true);
+        yield* approvals.change(runId, humanGrant(['bash'], false));
+        yield* setGoalSessionAutoApproval(session, runId, 'commands');
+        expect(approvals.bypass(runId, 'bash') !== null).toBe(true);
         // The human turns commands off, then on again, while the goal runs,
         // and approves edits for the session; ending the goal must write
         // none of the values from before it back.
-        approvals.bash.bypass.setBypass(runId, false);
-        expect(approvals.bash.bypass.isBypassed(runId)).toBe(false);
-        approvals.bash.bypass.setBypass(runId, true);
-        approvals.toolEdit.bypass.setBypass(runId, true);
+        yield* approvals.change(runId, humanGrant(['bash'], false));
+        expect(approvals.bypass(runId, 'bash') !== null).toBe(false);
+        yield* approvals.change(runId, humanGrant(['bash'], true));
+        yield* approvals.change(runId, humanGrant(['toolEdit'], true));
 
-        setGoalSessionAutoApproval(session, runId, false);
-        expect(approvals.bash.bypass.isBypassed(runId)).toBe(true);
-        expect(approvals.toolEdit.bypass.isBypassed(runId)).toBe(true);
+        yield* setGoalSessionAutoApproval(session, runId, false);
+        expect(approvals.bypass(runId, 'bash') !== null).toBe(true);
+        expect(approvals.bypass(runId, 'toolEdit') !== null).toBe(true);
       }),
   );
 
@@ -417,7 +417,7 @@ describe('TUI request decisions', () => {
       });
       yield* waitFor(() =>
         expect(
-          testDefaultSession().approvals.toolEdit.bypass.isBypassed(runId),
+          testDefaultSession().approvals.bypass(runId, 'toolEdit') !== null,
         ).toBe(true),
       );
     }),
@@ -444,13 +444,13 @@ describe('TUI request decisions', () => {
         });
         yield* waitFor(() => {
           expect(
-            testDefaultSession().approvals.proposal.isBypassed(runId),
+            testDefaultSession().approvals.bypass(runId, 'superYolo') !== null,
           ).toBe(true);
           expect(
-            testDefaultSession().approvals.toolEdit.bypass.isBypassed(runId),
+            testDefaultSession().approvals.bypass(runId, 'toolEdit') !== null,
           ).toBe(true);
           expect(
-            testDefaultSession().approvals.bash.bypass.isBypassed(runId),
+            testDefaultSession().approvals.bypass(runId, 'bash') !== null,
           ).toBe(true);
         });
       }),
@@ -522,14 +522,14 @@ describe('TUI request decisions', () => {
         decideCurrent({ action: 'approve' });
 
         expect(yield* Fiber.join(pending)).toEqual({ action: 'approve' });
-        expect(testDefaultSession().approvals.proposal.isBypassed(runId)).toBe(
-          false,
-        );
         expect(
-          testDefaultSession().approvals.toolEdit.bypass.isBypassed(runId),
+          testDefaultSession().approvals.bypass(runId, 'superYolo') !== null,
         ).toBe(false);
         expect(
-          testDefaultSession().approvals.bash.bypass.isBypassed(runId),
+          testDefaultSession().approvals.bypass(runId, 'toolEdit') !== null,
+        ).toBe(false);
+        expect(
+          testDefaultSession().approvals.bypass(runId, 'bash') !== null,
         ).toBe(false);
       }),
   );
@@ -590,7 +590,7 @@ describe('TUI request decisions', () => {
         attached.dispose();
         finishLookup?.();
         yield* settle();
-        yield* testDefaultSession().settlePublications();
+        yield* testDefaultSession().settled;
         expect(
           SubscriptionRef.getUnsafe(testDefaultSession().view).requests.some(
             (request) => request.requestId === permission.requestId,
@@ -614,7 +614,7 @@ describe('TUI request decisions', () => {
         // No key was entered: the request is neither denied nor decided, as
         // on the extension and the desktop, and the user chooses again.
         yield* waitForApproval('retry', { requestId: permission.requestId });
-        yield* testDefaultSession().settlePublications();
+        yield* testDefaultSession().settled;
         expect(
           SubscriptionRef.getUnsafe(testDefaultSession().view).requests.some(
             (request) => request.requestId === permission.requestId,

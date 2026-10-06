@@ -134,7 +134,7 @@ const createSession = Effect.fn('test.createSession')(function* () {
   const session = yield* createTestSession();
   publishTestRunStart(session, RUN);
   sessions.push(session);
-  yield* session.settlePublications();
+  yield* session.settled;
   return session;
 });
 
@@ -238,7 +238,7 @@ describe('resumeRun tool-use queue ownership', () => {
       ).toEqual({ kind: 'queued', read: false, wake: false });
 
       yield* Deferred.succeed(exists, false);
-      yield* session.settlePublications();
+      yield* session.settled;
       expect(yield* Fiber.join(resumed)).toEqual({ failed: 'not_resumable' });
       expect(yield* queuedTexts(session)).toEqual(['raced']);
     }),
@@ -324,7 +324,7 @@ describe('resumeRun tool-use queue ownership', () => {
       const resumed = yield* Effect.forkChild(resumeOne(RUN, { session }));
       yield* Deferred.await(configRead);
       session.followUps.closeInput(RUN);
-      yield* session.settlePublications();
+      yield* session.settled;
       yield* Deferred.succeed(config, snapshot().agentConfig);
 
       expect(yield* Fiber.join(resumed)).toEqual({ failed: 'not_resumable' });

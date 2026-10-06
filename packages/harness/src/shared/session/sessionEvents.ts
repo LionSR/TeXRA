@@ -93,12 +93,19 @@ export class SessionEvents extends Context.Service<
       job: (append: Append) => Effect.Effect<A, E>,
     ) => Effect.Effect<A, E>;
     /** Enqueue one job synchronously and return: the door for a producer
-     *  with no fiber to wait on (a trace subscriber, a status transition).
-     *  Its order is the moment of this call. The job settles its own
-     *  refusal, so it names no error (`SessionHandle` keeps a refused
-     *  publication for its run's drain); a defect is logged as itself, and
-     *  a job enqueued after the plane closed goes nowhere. */
-    readonly detach: (job: (append: Append) => Effect.Effect<unknown>) => void;
+     *  with no fiber to wait on (a trace sink, a follow-up's admission).
+     *  Its order is the moment of this call. A refused append is never
+     *  retried: the job hears it (a run's trace keeps it for the run's end,
+     *  `SessionHandle.lostRows`), and the publisher logs it as itself. A
+     *  job enqueued after the plane closed goes nowhere, and says so. */
+    readonly detach: (
+      job: (
+        append: Append,
+      ) => Effect.Effect<
+        unknown,
+        DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
+      >,
+    ) => void;
     /** Remove a run and its dependents (C9): the liveness proofs run on the
      *  caller's fiber, then the tombstone's transaction runs as the next
      *  job, so it commits in enqueue order and what this publisher tracks
@@ -111,13 +118,6 @@ export class SessionEvents extends Context.Service<
       readonly SessionEvent[],
       DatabaseReadFailed | DatabaseWriteFailed
     >;
-    /** Wait for every detached job enqueued before this call to run, and
-     *  answer with the highest commit those jobs appended, or null when none
-     *  appended. A barrier, never a reporter: a refused job is logged as
-     *  itself where it ran and is kept by whoever enqueued it, which is who
-     *  decides what its loss means (`SessionHandle` holds it for the drain
-     *  that stamps its run's terminal row). */
-    readonly settle: Effect.Effect<CommitOrdinal | null>;
     /** What this publisher committed open on one aggregate and nothing has
      *  closed since, in first-appearance order: a stream until its
      *  `stream.end` or a phase move that rests or ends its run, a stage

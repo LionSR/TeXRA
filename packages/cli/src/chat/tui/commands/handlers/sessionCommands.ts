@@ -26,6 +26,7 @@ import {
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
+import { runBypasses } from '@shared/approvalBypassKind';
 import { goalStateOf } from '@shared/plugins/goal';
 import { isLiveRun } from '@shared/session/sessionView';
 import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
@@ -115,7 +116,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
         approvalBypasses:
           activeRunId === undefined
             ? undefined
-            : view.policy.get(activeRunId)?.bypasses,
+            : runBypasses(view, activeRunId),
         statusLabel: run?.statusLabel,
         activeChildSessions,
         goal: goal?.active ? goal : undefined,

@@ -93,7 +93,6 @@ const persistTranscriptEntry = (runId: RunId) =>
   ]);
 
 /** The session's settle, run by each test that waits on its publications. */
-const settlePublications = Effect.suspend(() => session.settlePublications());
 
 describe('ChatExportController.exportAsHtml', () => {
   let controller: ChatExportController;
@@ -133,7 +132,7 @@ describe('ChatExportController.exportAsHtml', () => {
           model: 'anthropic/claude-sonnet-4-6',
         });
         publishTestRunStart(session, runId);
-        yield* settlePublications;
+        yield* session.settled;
         yield* seedRunRecord(session, runId, runConfigRecord);
         yield* persistTranscriptEntry(runId);
 
@@ -177,7 +176,7 @@ describe('ChatExportController.buildExportInput', () => {
       Effect.gen(function* () {
         const runId = 'eec003' as RunId;
         publishTestRunStart(session, runId);
-        yield* settlePublications;
+        yield* session.settled;
         yield* seedRunRecord(session, runId, config());
 
         expect(yield* controller.buildExportInput(runId)).toEqual({

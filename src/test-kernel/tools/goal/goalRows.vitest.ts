@@ -130,7 +130,7 @@ describe('the goal row is the goal', () => {
           aggregateId: qualifyAggregateId('run', RUN_A),
         },
       ]);
-      yield* session.settlePublications();
+      yield* session.settled;
 
       expect(goalOf(session, RUN_A)).toBeNull();
     }),

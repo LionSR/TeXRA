@@ -23,7 +23,7 @@ const id = 'bbb001' as RunId;
 beforeEach(async () => {
   session = await Effect.runPromise(createTestSession());
   publishTestRunStart(session, id);
-  await Effect.runPromise(session.settlePublications());
+  await Effect.runPromise(session.settled);
 });
 
 describe('run metadata updates', () => {

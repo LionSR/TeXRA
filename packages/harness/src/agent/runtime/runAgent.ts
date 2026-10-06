@@ -1,12 +1,18 @@
-import { Effect } from 'effect';
+import { Effect, SubscriptionRef } from 'effect';
 
 import { registerRun } from '@agent/storage';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ProcessServices } from '@platform/processRuntime';
 import { Secrets } from '@platform/secrets';
+import {
+  APPROVAL_BYPASS_KINDS,
+  NO_APPROVAL_GRANTS,
+} from '@shared/approvalBypassKind';
+import { inheritedGrants } from '@shared/approvalBypassKind';
 import { type RunId, USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
 import { generateRunId } from '@utils/core';
+import { humanGrant } from './runApprovalQueue';
 import { prepareAgentDefinition } from './AgentLaunchContext';
 import { runWithLaunchGuard, type RunTerminalOwner } from './runLaunchGuard';
 import { applyHelperModelPreference } from './helperModelPreference';
@@ -46,10 +52,13 @@ export interface RunAgentOptions
    */
   preferHelperModel?: boolean;
   /**
-   * The chat's previous root: this run's approval bypasses fall through to
-   * it, so a conversation keeps the grants its earlier rounds made.
+   * The chat's previous root: this run starts with the human grants that
+   * run held, so a conversation keeps the grants its earlier rounds made.
    */
   continues?: RunId;
+  /** An Auto-approve launch: the run starts with every bypass granted, in
+   *  its `run.start`, so no approval opens ahead of the grant. */
+  approveDelegatedWork?: boolean;
 }
 
 /** A fresh launch; a persisted run resumes through `resumeRun`. */
@@ -86,12 +95,11 @@ export const runAgent = Effect.fn('runAgent')(function* (
     preferHelperModel,
     suppressErrorNotification,
     continues,
+    approveDelegatedWork,
     ...executeAgentOptions
   } = options;
   const runSession = options.session;
   const runId = request.runId ?? generateRunId();
-  if (continues !== undefined && continues !== runId)
-    runSession.approvals.registerRunParent(runId, continues);
   return yield* runSession.runs.launchRun(
     runId,
     Effect.gen(function* () {
@@ -115,9 +123,19 @@ export const runAgent = Effect.fn('runAgent')(function* (
         executeAgentOptions.stopAfterCycle !== true
           ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
           : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
+      const launchGrants = approveDelegatedWork
+        ? humanGrant(APPROVAL_BYPASS_KINDS, true)(NO_APPROVAL_GRANTS)
+        : NO_APPROVAL_GRANTS;
       yield* registerRun(runSession, runId, definition.config, {
         identity: { kind: 'agent', agent: definition.config.agent },
         userFollowUpSupport,
+        grants:
+          continues !== undefined && continues !== runId
+            ? inheritedGrants(
+                SubscriptionRef.getUnsafe(runSession.view),
+                continues,
+              )
+            : launchGrants,
       });
       return yield* runWithLaunchGuard(
         runSession,

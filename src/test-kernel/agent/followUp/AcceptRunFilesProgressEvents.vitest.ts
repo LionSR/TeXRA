@@ -253,7 +253,6 @@ describe('accept_run_files progress events', () => {
     absoluteContents.clear();
     absoluteContentFallback = '';
     await installTestPlatform();
-    session.approvals.clearAll();
   });
 
   afterEach(async () => {
@@ -263,7 +262,6 @@ describe('accept_run_files progress events', () => {
     detachHostInteractions();
     detachHostInteractions = () => {};
     stagedToolEdits.clear();
-    session.approvals.clearAll();
     await Effect.runPromise(closeTestSession(session.roots.storage));
   });
 

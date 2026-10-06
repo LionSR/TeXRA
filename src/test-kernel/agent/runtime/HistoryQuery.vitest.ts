@@ -34,7 +34,7 @@ const run = (runId: RunId) => aggregateId('run', runId);
 
 const query = (session: SessionHandle, sql: string, params: string[] = []) =>
   Effect.gen(function* () {
-    yield* session.settlePublications().pipe(Effect.orDie);
+    yield* session.settled.pipe(Effect.orDie);
     return yield* session.history.query(sql, params);
   });
 

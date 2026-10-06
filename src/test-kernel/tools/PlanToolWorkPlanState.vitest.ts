@@ -4,9 +4,11 @@
 import { it } from '@effect/vitest';
 import { Effect, Fiber } from 'effect';
 import { afterEach, beforeEach, describe, expect } from 'vitest';
+import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
+import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
 import type { Goal } from '@shared/plugins/goal';
 import type { Plan, RequestDecision, RunId } from '@shared/schemas';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -166,8 +168,13 @@ describe('PlanTool — update (plan approval)', () => {
             Effect.sync(() => releaseRunResources(runId, session)),
           );
 
-          session.approvals.setDelegatedWorkBypasses(runId, true);
-          expect(session.approvals.proposal.isBypassed(runId)).toBe(true);
+          yield* session.approvals.change(
+            runId,
+            humanGrant(APPROVAL_BYPASS_KINDS, true),
+          );
+          expect(session.approvals.bypass(runId, 'superYolo') !== null).toBe(
+            true,
+          );
 
           const resultFiber = yield* Effect.forkScoped(
             PlanTool.call({ command: 'update', ...followUpPlan }).pipe(
@@ -260,8 +267,8 @@ describe('PlanTool — update (plan approval)', () => {
           expect(goal!.status).toBe('active');
           // The approved plan document seeds the goal verbatim.
           expect(goal!.objective).toBe(plan.objective);
-          expect(session.approvals.bash.bypass.isBypassed(runId)).toBe(true);
-          expect(session.approvals.toolEdit.bypass.isBypassed(runId)).toBe(
+          expect(session.approvals.bypass(runId, 'bash') !== null).toBe(true);
+          expect(session.approvals.bypass(runId, 'toolEdit') !== null).toBe(
             false,
           );
         }),
@@ -292,11 +299,13 @@ describe('PlanTool — update (plan approval)', () => {
           expect(yield* result).toMatchObject({
             status: 'executed',
           });
-          expect(session.approvals.bash.bypass.isBypassed(runId)).toBe(true);
-          expect(session.approvals.toolEdit.bypass.isBypassed(runId)).toBe(
+          expect(session.approvals.bypass(runId, 'bash') !== null).toBe(true);
+          expect(session.approvals.bypass(runId, 'toolEdit') !== null).toBe(
             true,
           );
-          expect(session.approvals.proposal.isBypassed(runId)).toBe(true);
+          expect(session.approvals.bypass(runId, 'superYolo') !== null).toBe(
+            true,
+          );
         }),
       ),
   );
@@ -337,8 +346,8 @@ describe('PlanTool — update (plan approval)', () => {
           expect(goal!.status).toBe('active');
           expect(goal!.objective).toBe(followUpPlan.objective);
           expect(goal!.objective).not.toContain('Old objective');
-          expect(session.approvals.bash.bypass.isBypassed(runId)).toBe(true);
-          expect(session.approvals.toolEdit.bypass.isBypassed(runId)).toBe(
+          expect(session.approvals.bypass(runId, 'bash') !== null).toBe(true);
+          expect(session.approvals.bypass(runId, 'toolEdit') !== null).toBe(
             false,
           );
         }),
@@ -355,7 +364,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
     await installFakePlatform();
     RUN_ID = generateRunId();
     publishTestRunStart(testDefaultSession(), RUN_ID);
-    await Effect.runPromise(testDefaultSession().settlePublications());
+    await Effect.runPromise(testDefaultSession().settled);
   });
 
   function callTool(input: unknown) {
@@ -386,7 +395,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
         reason: 'Need API credentials from the user.',
       });
       expect(result.status).toBe('executed');
-      yield* testDefaultSession().settlePublications();
+      yield* testDefaultSession().settled;
       expect(goalOf(testDefaultSession(), RUN_ID)?.status).toBe('paused');
     }),
   );
@@ -402,7 +411,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
       expect(result.output).toContain('all 142 tests pass');
       // A finished goal is not archived: the run's next row states that none
       // is in flight, so the wait-node loop has nothing to continue.
-      yield* testDefaultSession().settlePublications();
+      yield* testDefaultSession().settled;
       expect(goalOf(testDefaultSession(), RUN_ID)).toBeNull();
     }),
   );

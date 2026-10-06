@@ -165,7 +165,7 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
       return { result: { action: 'approve' }, childApproval: 'inherit' };
     const decision = decideProposalApproval({
       policy: session.approvalPolicy,
-      scopedBypass: session.approvals.proposal.isBypassed(runId),
+      scopedBypass: session.approvals.bypass(runId, 'superYolo') !== null,
       canPresent: parent.run.toolPolicy.approvalPromptsUnavailable !== true,
     });
     switch (decision) {
@@ -181,9 +181,10 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
       case 'bypass':
         return {
           result: { action: 'approve' },
-          childApproval: session.approvals.proposal.isAutonomous(runId)
-            ? 'goal-approved'
-            : 'auto-approved',
+          childApproval:
+            session.approvals.bypass(runId, 'superYolo') === 'goal'
+              ? 'goal-approved'
+              : 'auto-approved',
         };
       case 'unattended':
         // `inherit` keeps the child on inherited per-kind approval state,

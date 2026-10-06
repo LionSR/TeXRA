@@ -9,6 +9,7 @@ import * as path from 'node:path';
 import { it } from '@effect/vitest';
 import { Effect, Fiber, FileSystem } from 'effect';
 import { describe, beforeEach, afterEach, vi } from 'vitest';
+import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports
 import type { ToolServices } from '@agent/runtime/ToolServices';
@@ -172,9 +173,8 @@ describe('Tool edit approval gating', () => {
     workspaceWrites.mockReset();
     relativeFiles.clear();
     readFiles = new Set<string>();
-    testDefaultSession().approvals.clearAll();
     runId = publishTestRunStart(testDefaultSession(), generateRunId());
-    await Effect.runPromise(testDefaultSession().settlePublications());
+    await Effect.runPromise(testDefaultSession().settled);
     decisions = autoDecideRequests(testDefaultSession(), () => nextDecision());
   });
 
@@ -184,7 +184,6 @@ describe('Tool edit approval gating', () => {
     vi.restoreAllMocks();
     detachHostInteractions();
     detachHostInteractions = () => {};
-    testDefaultSession().approvals.clearAll();
   });
 
   it.effect('gates an edit to a dangling symlink as an existing file', () =>
@@ -388,9 +387,10 @@ describe('Tool edit approval gating', () => {
         content: '',
       });
 
-      testDefaultSession().approvals.toolEdit.bypass.setBypass(runId, true, {
-        silent: true,
-      });
+      yield* testDefaultSession().approvals.change(
+        runId,
+        humanGrant(['toolEdit'], true),
+      );
 
       // The bypass check requires a runId on the request; the approval layer
       // picks it up from the active run context.
@@ -514,7 +514,7 @@ describe('Tool edit approval gating', () => {
         );
 
         yield* Fiber.interrupt(request);
-        yield* session.settlePublications();
+        yield* session.settled;
 
         assert.deepStrictEqual(releasedPreviews, []);
       }),
@@ -543,9 +543,10 @@ describe('Tool edit approval gating', () => {
         }),
       );
 
-      testDefaultSession().approvals.toolEdit.bypass.setBypass(runId, true, {
-        silent: true,
-      });
+      yield* testDefaultSession().approvals.change(
+        runId,
+        humanGrant(['toolEdit'], true),
+      );
       decideRequest(
         testDefaultSession(),
         { runId, requestId: approvalRequests[0]!.permission.requestId },

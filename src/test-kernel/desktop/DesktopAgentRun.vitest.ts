@@ -88,7 +88,7 @@ describe('desktop agent run completion hook', () => {
       );
       const completedRun = publishTestRunStart(session, generateRunId());
       session.publish([completedRunEnd(completedRun)]);
-      yield* session.settlePublications();
+      yield* session.settled;
       expect(onRunCompleted).not.toHaveBeenCalled();
 
       yield* Deferred.succeed(launchSettled, undefined);

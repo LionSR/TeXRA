@@ -35,6 +35,16 @@ All notable changes to this project will be documented in this file.
   `PlatformConflict` is gone: the package keeps no process-wide session
   owner to conflict with, so build `Sessions.layer` once per process, as
   any memoized layer. Releasing the layer closes every session still open.
+- **A task's approval grants are saved before they take effect.** Turning
+  "approve edits" or "run commands" on or off for a task now records the
+  change first and only then applies it, so a crash can no longer bring
+  back a grant you turned off. A subagent follows its parent's human
+  grants while it is attached; a goal's auto-approval ends when the task
+  that holds it is resumed, for its subagents too. When a display row a
+  task published cannot be saved, the task ends as failed with the real
+  error instead of an "artifact drain" mark; a task an earlier build ended
+  with that mark is left out of the task list as unreadable. Grants a task
+  only inherited under an earlier build are not carried over.
 - **One credential store for every TeXRA app; enter your keys once more.**
   The VS Code extension and the desktop app no longer keep API keys and
   sign-ins in VS Code's secret storage or the system keychain. Every host,

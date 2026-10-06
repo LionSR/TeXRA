@@ -26,10 +26,10 @@
   "src/test-kernel/frontend/OpenBuildDisplay.vitest.ts": 1,
   "src/test-kernel/tools/ClaudeAgentResumeFallback.vitest.ts": 5,
   "src/test-kernel/tools/CodexResumeFallback.vitest.ts": 5,
-  "src/test-kernel/tools/DelegationHeadless.vitest.ts": 6,
+  "src/test-kernel/tools/DelegationHeadless.vitest.ts": 5,
   "src/test-kernel/tools/DelegationTools.vitest.ts": 1,
   "src/test-kernel/tools/ExecutionsToolWorkspaceFiles.vitest.ts": 1,
   "src/test-kernel/tools/NativeSubagentProductionPath.vitest.ts": 1,
-  "src/test-kernel/tools/SubagentRunChildRunId.vitest.ts": 6,
+  "src/test-kernel/tools/SubagentRunChildRunId.vitest.ts": 5,
   "src/test-kernel/transcript/completedRunArchive.vitest.ts": 1
 }

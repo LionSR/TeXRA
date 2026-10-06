@@ -16,9 +16,6 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   finalizeRun: vi.fn(),
   submitFollowUp: vi.fn(),
-  commitRunEndAfterArtifacts: vi.fn(
-    async (_session: unknown, _runId: RunId) => {},
-  ),
 }));
 
 // Turn attribution is committed as `child.turn` rows on the run aggregate,
@@ -123,7 +120,7 @@ const foldParentPhase = (active: boolean) =>
             output: emptyRunEndOutput(),
           },
     ]);
-    yield* session.settlePublications();
+    yield* session.settled;
   });
 
 /** The text of each follow-up a run's rows still queue. */
@@ -283,13 +280,8 @@ const stopChildRun = (runId: RunId): Effect.Effect<void, Error> =>
 beforeEach(async () => {
   session = await Effect.runPromise(createProcessSession());
   publishTestRunStart(session, PARENT_RUN_ID);
-  await Effect.runPromise(session.settlePublications());
+  await Effect.runPromise(session.settled);
   vi.clearAllMocks();
-  // The loop's terminal drain is the session's one exit choreography; the
-  // suite observes it through the same (session, runId) spy as before.
-  vi.spyOn(session, 'commitRunEnd').mockImplementation((runId) =>
-    Effect.promise(() => mocks.commitRunEndAfterArtifacts(session, runId)),
-  );
   // The fake end commits what a real one carries with its row: the last
   // turn's settlement.
   mocks.finalizeRun.mockImplementation(
@@ -315,7 +307,7 @@ describe('childRunLoop E2E fixtures', () => {
     (outcome) =>
       Effect.gen(function* () {
         const runId = loopRunId();
-        yield* session.settlePublications();
+        yield* session.settled;
         yield* session.acquireClaims(qualifyAggregateId('run', runId));
         mocks.finalizeRun.mockImplementation(realFinalizeRun);
         const launch = vi.fn(() =>
@@ -357,10 +349,6 @@ describe('childRunLoop E2E fixtures', () => {
         expect(rows.filter((row) => row.type === 'run.end')).toMatchObject([
           { outcome },
         ]);
-        expect(mocks.commitRunEndAfterArtifacts).toHaveBeenCalledWith(
-          session,
-          runId,
-        );
       }),
   );
 
@@ -516,7 +504,6 @@ describe('childRunLoop E2E fixtures', () => {
           active: { key: expect.any(String), index: 1 },
           lastCompleted: null,
         });
-        expect(mocks.commitRunEndAfterArtifacts).not.toHaveBeenCalled();
 
         // Interrupt the loop through its parent lineage: no turn handle is
         // tracked in this fixture, so the stop reaches the loop via its
@@ -538,10 +525,6 @@ describe('childRunLoop E2E fixtures', () => {
           active: { key: expect.any(String), index: 1 },
           lastCompleted: null,
         });
-        expect(mocks.commitRunEndAfterArtifacts).toHaveBeenCalledWith(
-          session,
-          runId,
-        );
       }),
   );
 
@@ -898,7 +881,7 @@ describe('childRunLoop E2E fixtures', () => {
           from: { kind: 'user' as const },
         });
         yield* turnStarted(2);
-        yield* session.settlePublications();
+        yield* session.settled;
         expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);
         yield* resolveTurn(2, { kind: 'terminal', value: 'final' });
         yield* Fiber.join(loop);
@@ -1127,7 +1110,6 @@ describe('childRunLoop E2E fixtures', () => {
         // — a resumed parent's wait would resolve immediately instead of racing
         // its own wake.
         const runId = loopRunId();
-        publishTestRunStart(session, runId);
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
         }).pipe(Effect.provideService(Runs, session.runs));

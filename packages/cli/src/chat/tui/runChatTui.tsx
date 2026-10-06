@@ -618,7 +618,7 @@ export async function runChat(
     runtime,
     followUpsIdle: followUpQueue.idle,
     getApprovalPolicy,
-    flushArtifacts: runtimeSession.settlePublications(),
+    flushArtifacts: runtimeSession.settled,
     repaintAfterTerminalResume: viewportController.repaintAfterTerminalResume,
     interruptActive: (reason) => chatController.stop(reason),
     quiet: context.quietLogs,

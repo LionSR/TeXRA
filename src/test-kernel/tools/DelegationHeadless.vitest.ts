@@ -2,8 +2,9 @@
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Stream } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Stream, SubscriptionRef } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
+import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentEngine } from '@agent/runtime/AgentEngine';
@@ -34,16 +35,14 @@ import {
   SubagentDurabilityError,
 } from '@tools/delegation/inBandSubagentRun';
 import { generateShortId } from '@utils/core';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const mocks = vi.hoisted(() => ({
-  configureDelegatedChildApprovals: vi.fn(),
   executeAgent: vi.fn(),
   prepareAgentDefinition: vi.fn(),
   resumeToolUseFromResumeData: vi.fn(),
   childRecords: vi.fn(),
   getVisibleAgents: vi.fn(),
-  isApprovalBypassedForRun: vi.fn(),
   registerRun: vi.fn(),
   writeReport: vi.fn(),
   writeResultMeta: vi.fn(),
@@ -146,11 +145,6 @@ vi.mock('@model/computeModelOptions', () => ({
   // Availability is read once and finished purely, so a case seeds the option
   // rows on the read and the pure finisher hands them straight back.
   modelOptionsFrom: (rows: readonly ModelOptionData[]) => rows,
-}));
-
-vi.mock('@tools/approval', () => ({
-  configureDelegatedChildApprovals: mocks.configureDelegatedChildApprovals,
-  isApprovalBypassedForRun: mocks.isApprovalBypassedForRun,
 }));
 
 const PARENT_RUN_ID = 'aaaaaa222222' as RunId;
@@ -258,7 +252,7 @@ function delegateWithProposalDecision(
       );
       // A request is a row on its run, so the parent run must exist first.
       publishTestRunStart(session, PARENT_RUN_ID);
-      yield* session.settlePublications();
+      yield* session.settled;
       const result = yield* callDelegateReview(parentRunContext({ session }));
       // A detached child commits its `child.turn` row before its first turn
       // runs, so the launch is not observable the moment the tool returns and
@@ -397,15 +391,9 @@ function memoryChildRecords() {
 /**
  * Write the `run.end` fact production's `executeAgent` commits through
  * `runWithLifecycle`: the flow's outcome, usage and output, plus the
- * classified error it reported. A drain that rolled
- * this run's queued facts back is the row's outcome and its `artifact-drain`
- * kind, whatever the flow reported.
+ * classified error it reported.
  */
-function recordTerminalFact(
-  runId: RunId,
-  turn: unknown,
-  drainFailure: Error | undefined,
-): void {
+function recordTerminalFact(runId: RunId, turn: unknown): void {
   const store = mocks.childRecords(runId) as {
     recordRunEnd?: (value: unknown) => void;
   };
@@ -416,15 +404,11 @@ function recordTerminalFact(
     error?: { message: string };
   } | null;
   if (!store.recordRunEnd || !flow?.outcome) return;
-  const outcome = drainFailure === undefined ? flow.outcome : 'failed';
-  const flowError =
+  const { outcome } = flow;
+  const error =
     outcome === 'failed' && flow.error !== undefined
       ? { kind: 'unexpected', message: flow.error.message }
       : undefined;
-  const error =
-    drainFailure === undefined
-      ? flowError
-      : { kind: 'artifact-drain', message: toErrorMessage(drainFailure) };
   store.recordRunEnd({
     outcome,
     ...(error ? { error } : {}),
@@ -451,7 +435,7 @@ describe('headless delegation', () => {
       ),
     );
     publishTestRunStart(inBandSession, IN_BAND_PARENT_RUN_ID);
-    await Effect.runPromise(inBandSession.settlePublications());
+    await Effect.runPromise(inBandSession.settled);
     mocks.prepareAgentDefinition.mockImplementation(
       ({ config }: { config: unknown }) =>
         Effect.succeed({ config, persona: { tools: [] }, task: null }),
@@ -463,7 +447,7 @@ describe('headless delegation', () => {
       (session: SessionHandle, runId: RunId) =>
         Effect.promise(async () => {
           publishTestRunStart(session, runId);
-          await Effect.runPromise(session.settlePublications());
+          await Effect.runPromise(session.settled);
         }),
     );
     testEngine = {
@@ -481,18 +465,7 @@ describe('headless delegation', () => {
                 runId,
                 await Effect.runPromise(options.turns.settleEnd(turn)),
               ).catch(() => undefined);
-            // Production's lifecycle drains the facts this run queued before
-            // it writes the terminal row, and the row is the post-drain fact
-            // (`finalizeRunTerminal`); the drain runs here too, so a
-            // publication that fails only once is marked on the row and gone
-            // by the time the lease-release drain runs.
-            const drainFailure = await Effect.runPromise(
-              options.session.settlePublications(runId).pipe(
-                Effect.as(undefined),
-                Effect.catch((cause) => Effect.succeed(cause)),
-              ),
-            );
-            recordTerminalFact(runId, turn, drainFailure);
+            recordTerminalFact(runId, turn);
             return turn;
           },
           catch: ensureError,
@@ -526,10 +499,15 @@ describe('headless delegation', () => {
     );
     // Every case delegates without a proposal unless it brings its own
     // session, whose proposal bypass starts off.
-    testDefaultSession().approvals.proposal.setBypass(PARENT_RUN_ID, true, {
-      silent: true,
-    });
-    mocks.isApprovalBypassedForRun.mockReturnValue(false);
+    const defaultSession = testDefaultSession();
+    if (!SubscriptionRef.getUnsafe(defaultSession.view).runs.has(PARENT_RUN_ID))
+      publishTestRunStart(defaultSession, PARENT_RUN_ID);
+    await Effect.runPromise(
+      defaultSession.approvals.change(
+        PARENT_RUN_ID,
+        humanGrant(['superYolo'], true),
+      ),
+    );
     const records = new Map<RunId, ReturnType<typeof memoryChildRecords>>();
     mocks.childRecords.mockImplementation((runId: RunId) => {
       let child = records.get(runId);
@@ -684,69 +662,6 @@ describe('headless delegation', () => {
         expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
           releaseClaim.mock.invocationCallOrder[0] ?? 0,
         );
-      }),
-  );
-
-  it.effect(
-    'does not return a typed result when the final artifact drain fails',
-    () =>
-      Effect.gen(function* () {
-        const drainFailure = new Error('artifact flush failed');
-        const settle = inBandSession.settlePublications.bind(inBandSession);
-        // Every drain of the child's own facts fails; a session-wide settle
-        // (the registration barrier) still runs.
-        const drain = vi
-          .spyOn(inBandSession, 'settlePublications')
-          .mockImplementation((runId, options) =>
-            runId === IN_BAND_RUN_ID
-              ? Effect.fail(drainFailure)
-              : settle(runId, options),
-          );
-
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => drain.mockRestore()),
-        );
-
-        expect(
-          yield* Effect.flip(runInBand(delegationOptions())),
-        ).toMatchObject({
-          name: 'SubagentDurabilityError',
-          message: expect.stringContaining(
-            'failed to commit its final artifacts',
-          ),
-          cause: expect.objectContaining({ name: 'RunArtifactDrainError' }),
-        });
-      }),
-  );
-
-  it.effect(
-    'does not return a typed result when only the pre-terminal drain fails',
-    () =>
-      Effect.gen(function* () {
-        const settle = inBandSession.settlePublications.bind(inBandSession);
-        let childDrains = 0;
-        // Only the child's first drain (the pre-terminal one) fails.
-        const drain = vi
-          .spyOn(inBandSession, 'settlePublications')
-          .mockImplementation((runId, options) =>
-            runId === IN_BAND_RUN_ID && childDrains++ === 0
-              ? Effect.fail(new Error('queued publication failed'))
-              : settle(runId, options),
-          );
-
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => drain.mockRestore()),
-        );
-
-        expect(
-          yield* Effect.flip(runInBand(delegationOptions())),
-        ).toMatchObject({
-          name: 'SubagentDurabilityError',
-          message: expect.stringContaining(
-            'failed to commit its final artifacts',
-          ),
-        });
-        expect(childDrains).toBe(3);
       }),
   );
 

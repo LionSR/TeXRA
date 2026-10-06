@@ -247,7 +247,7 @@ const enqueue = Effect.fn('test.enqueue')(function* (
   runId: RunId,
   items: readonly InboxItem[],
 ) {
-  yield* session.settlePublications();
+  yield* session.settled;
   for (const item of items) {
     yield* session.followUps.send(runId, item);
   }
@@ -316,7 +316,7 @@ describe('a parked child run', () => {
           content: { text: asked, from: { kind: 'user' as const } },
         };
         session.publish([queued]);
-        yield* session.settlePublications();
+        yield* session.settled;
 
         const resumed = yield* forkLoop({
           runId,
@@ -336,7 +336,7 @@ describe('a parked child run', () => {
         // A producer that replays the delivery after a restart writes the
         // same id again; it names a follow-up already consumed.
         session.publish([queued]);
-        yield* session.settlePublications();
+        yield* session.settled;
         const again = yield* forkLoop({
           runId,
           session,
@@ -899,7 +899,7 @@ describe('an active goal at the wait', () => {
         const runId = startedRun(session);
         yield* startGoal(session, runId, 'finish the refactor');
         // The grant an approved plan makes; pausing ends it.
-        setGoalSessionAutoApproval(session, runId, 'commands');
+        yield* setGoalSessionAutoApproval(session, runId, 'commands');
         const recorded = recordSessionEvents(session);
 
         try {
@@ -914,17 +914,13 @@ describe('an active goal at the wait', () => {
 
           expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
           expect(goalOf(session, runId)?.status).toBe('paused');
-          // The cleared bypasses travel as the run's policy snapshot, the
-          // one channel this state has.
+          // The goal's grant ends as the run's next grants row, the one
+          // record of it.
           const policies = eventsOfType(
             yield* Effect.promise(() => recorded.read()),
             'approval.policy',
           );
-          expect(policies.at(-1)?.snapshot.bypasses).toEqual({
-            bash: false,
-            toolEdit: false,
-            superYolo: false,
-          });
+          expect(policies.at(-1)?.snapshot).toEqual({ own: {}, goal: [] });
         } finally {
           yield* clearGoal(session, runId);
           releaseRunResources(runId, session);

@@ -1,6 +1,11 @@
+import {
+  goalGrant,
+  type GrantWriteError,
+} from '@agent/runtime/runApprovalQueue';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { RunId } from '@shared/schemas';
+import type { Effect } from 'effect';
 
 export type GoalAutoApprovalScope = 'commands' | 'allAgentWork';
 
@@ -13,9 +18,9 @@ const SCOPE_KINDS: Record<
 };
 
 /**
- * Apply one goal's selected approval scope, or end its grant, on the session
- * that owns the run. The grant is core approval state's (`setGoalGrant`):
- * it sits over the run's human values without replacing them, so ending it
+ * Apply one goal's selected approval scope, or end its grant, as the run's
+ * next grants. The goal's grant sits over the run's human values without
+ * replacing them, so ending it
  * leaves the latest human choice standing, and a human decision on a kind
  * during the goal ends that kind's grant. Commands-only remains the default:
  * an approved plan is not consent to edit files or launch delegated work
@@ -26,8 +31,8 @@ export const setGoalSessionAutoApproval = (
   session: SessionHandle,
   runId: RunId,
   scope: GoalAutoApprovalScope | false,
-): void =>
-  session.approvals.setGoalGrant(
+): Effect.Effect<void, GrantWriteError> =>
+  session.approvals.change(
     runId,
-    scope === false ? [] : SCOPE_KINDS[scope],
+    goalGrant(scope === false ? [] : SCOPE_KINDS[scope]),
   );

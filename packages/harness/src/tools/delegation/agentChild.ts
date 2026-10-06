@@ -27,7 +27,6 @@ import {
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
-import { configureDelegatedChildApprovals } from '@tools/approval';
 
 // Local file imports
 import { resumeSubagentInBand } from './inBandSubagentRun';
@@ -71,16 +70,6 @@ const standingOf = Effect.fn('agent.childStanding')(function* (
 ): Effect.fn.Return<ChildStanding, DatabaseReadFailed> {
   const records = getRunRecords(session, runId);
   const end = yield* records.readRunEnd();
-  // A drain that rolled back the facts the child had queued is a failure,
-  // whatever outcome rides its row: a stopped child whose turn ran (paid)
-  // and edited files would otherwise read as "stopped, so this call was
-  // skipped", and the model would re-issue it on a false premise. Nor is a
-  // run whose rows were rolled back resumed.
-  if (end?.error?.kind === 'artifact-drain')
-    return {
-      kind: 'answered',
-      result: { ...end, outcome: RUN_OUTCOME.FAILED },
-    };
   const turns = yield* readChildTurnState(session, runId);
   // `childRunLoop` commits a turn's acceptance just before the turn runs:
   // one that never settled was cut short, and continues where it stopped.
@@ -166,22 +155,12 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
     case 'fresh':
       return { kind: 'launch' };
     case 'resume': {
-      // Its approvals follow the parent's live ones, as at its launch.
-      const inherit = (runId: RunId): void =>
-        configureDelegatedChildApprovals(
-          runId,
-          parentRunId,
-          'inherit',
-          session,
-        );
-      inherit(earlier);
       const { result } = yield* recovery.running(
         resumeSubagentInBand({
           session,
           runId: earlier,
           parentRunId,
           notify: recovery.notify,
-          onRunResolved: inherit,
         }),
       );
       return { kind: 'ended', runId: earlier, result };

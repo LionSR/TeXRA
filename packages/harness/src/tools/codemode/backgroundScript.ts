@@ -16,7 +16,6 @@ import { registerRun } from '@agent/storage/runLifecycle';
 import type { RunToolCall } from '@agent/runtime/RunCall';
 import { withLogChannel } from '@logger/effectLog';
 import { USER_FOLLOW_UP_SUPPORT, type RunId } from '@shared/schemas';
-import { configureDelegatedChildApprovals } from '@tools/approval';
 import { executed } from '@tools/core/result';
 import { agentChildRunId, earlierChild } from '@tools/delegation/agentChild';
 import { childRunDescription } from '@tools/delegation/childRun';
@@ -89,14 +88,6 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
     session,
     suppressErrorNotification: true,
   });
-  // Its calls' approvals follow the parent's live ones.
-  const inherit = (childRunId: RunId): void =>
-    configureDelegatedChildApprovals(
-      childRunId,
-      parentRunId,
-      'inherit',
-      session,
-    );
   yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
       yield* registerRun(session, runId, definition.config, {
@@ -126,7 +117,6 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
                 startedAt: Date.now(),
                 ...(workingDirectory != null && { workingDirectory }),
                 parentOffered,
-                onRunResolved: inherit,
                 title,
               }),
               onLoopFailed: (error: unknown) =>

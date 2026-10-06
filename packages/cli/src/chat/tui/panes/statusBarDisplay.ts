@@ -7,12 +7,12 @@ import {
 import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
+import { runBypasses } from '@shared/approvalBypassKind';
 import {
   texraApprovalPolicyLabel,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
-  type ApprovalPolicySnapshot,
   codingPlanForUsageRoute,
   type ContextStateData,
   type RunId,
@@ -42,8 +42,8 @@ import { type TransientNotice } from '../state/cliState';
 import { runPhaseOf, runViewOf } from '../state/sessionView';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
-/** The approval bypass flags a run's policy snapshot carries. */
-export type BypassState = ApprovalPolicySnapshot['bypasses'];
+/** Which approval bypasses are on for a run, its own or inherited. */
+export type BypassState = ReturnType<typeof runBypasses>;
 
 /** What the pending-interaction count names: approvals, questions, or both. */
 export type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';
@@ -919,9 +919,9 @@ export function buildStatusBarDisplay(
       ] satisfies (StatusBarSegment | undefined)[]
     ).filter(filterNotNullish),
   );
-  const bypass = run === undefined ? undefined : view.policy.get(run.id);
+  const bypasses = run === undefined ? undefined : runBypasses(view, run.id);
   for (const badge of BYPASS_BADGES) {
-    if (bypass?.bypasses[badge.field]) {
+    if (bypasses?.[badge.field] === true) {
       left.push({
         text: badge.text,
         badge: true,

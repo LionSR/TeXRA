@@ -11,7 +11,6 @@ import {
   type StateReadFailed,
   type StateStore,
 } from '@texra-ai/harness';
-import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 import {
   validateRunRequest,
   type ValidatedRunRequest,
@@ -27,7 +26,6 @@ import {
   DEFAULT_TOOL_CONFIG,
   ToolConfigSchema,
   type AgentDelegationScope,
-  type RunId,
   type SessionType,
 } from '@shared/schemas';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
@@ -122,27 +120,6 @@ export function launchApprovalOptions({ launch }: LaunchRequest): {
   return launch.approval === 'autoApprove'
     ? { approveDelegatedWork: true }
     : {};
-}
-
-/**
- * The `onRun` a launcher hands `runAgent`: an Auto-approve launch's bypass,
- * then the caller's own. `onRun` runs before the run body
- * (AgentRunLifecycle forks it with `startImmediately`) and the bypass write
- * is synchronous, so no approval opens ahead of it.
- */
-export function launchOnRun<E>(
-  approvals: SessionApprovals,
-  options: {
-    readonly approveDelegatedWork?: boolean;
-    readonly onRun?: (runId: RunId) => Effect.Effect<void, E>;
-  },
-): ((runId: RunId) => Effect.Effect<void, E>) | undefined {
-  const { approveDelegatedWork, onRun } = options;
-  if (!approveDelegatedWork) return onRun;
-  return (runId) =>
-    Effect.sync(() => approvals.setDelegatedWorkBypasses(runId, true)).pipe(
-      Effect.andThen(onRun?.(runId) ?? Effect.void),
-    );
 }
 
 /** Both GUI hosts launch the selections carried by the requesting surface. */

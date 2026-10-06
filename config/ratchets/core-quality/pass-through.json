@@ -7,7 +7,6 @@
   "packages/harness/src/agent/runtime/index.ts": 1,
   "packages/harness/src/agent/runtime/nativeSubagentStrategy.ts": 1,
   "packages/harness/src/agent/runtime/responseTextProcessing.ts": 1,
-  "packages/harness/src/agent/runtime/runApprovalQueue.ts": 3,
   "packages/harness/src/agent/runtime/runRegistry.ts": 1,
   "packages/harness/src/agent/runtime/SessionHandle.ts": 10,
   "packages/harness/src/agent/storage/index.ts": 1,

@@ -154,7 +154,7 @@ async function emitOutputFiles(
       },
     ]),
   ]);
-  await Effect.runPromise(session.settlePublications());
+  await Effect.runPromise(session.settled);
 }
 
 /** Diagnostics currently recorded for `absolutePath` in the latest collection. */

@@ -29,7 +29,7 @@ const pauseActive = Effect.fn('goal.pause')(function* ({
 }) {
   if (goalOf(session, runId)?.status !== 'active') return;
   yield* pauseGoal(session, runId);
-  setGoalSessionAutoApproval(session, runId, false);
+  yield* setGoalSessionAutoApproval(session, runId, false);
 });
 
 export const goalContinuation: Continuation = {

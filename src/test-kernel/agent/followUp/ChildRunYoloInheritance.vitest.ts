@@ -1,400 +1,142 @@
-// Test composition imports
-
 // Third-party imports
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
+
+import { goalGrant, humanGrant } from '@agent/runtime/runApprovalQueue';
+import { RUN_PHASE, type RunId } from '@shared/schemas';
+import type { RunView, SessionView } from '@shared/session/sessionView';
 
 // Local imports
-
-import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
-import type { RunId } from '@shared/schemas';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import {
-  configureDelegatedChildApprovals,
-  releaseRunResources,
-} from '@tools/approval';
-import { generateRunId } from '@utils/core';
+  NO_APPROVAL_GRANTS,
+  type ApprovalGrants,
+} from '@shared/approvalBypassKind';
+import {
+  inheritedGrants,
+  resolveBypass,
+  runBypasses,
+} from '@shared/approvalBypassKind';
+import { delegatedChildGrants } from '@tools/approval';
 
-function runPair(): {
-  parent: RunId;
-  child: RunId;
-} {
-  return { parent: generateRunId(), child: generateRunId() };
+/** A session's grants as its rows fold them: parent edges, each run's
+ *  standing and its latest grants. Every run is live unless `interrupted`. */
+function rows(
+  runs: Record<
+    string,
+    { parent?: string; grants?: ApprovalGrants; interrupted?: true }
+  >,
+): Pick<SessionView, 'runs' | 'policy'> {
+  return {
+    runs: new Map(
+      Object.entries(runs).map(([id, run]) => [
+        id as RunId,
+        {
+          parentId: (run.parent ?? null) as RunId | null,
+          group: run.interrupted ? 'interrupted' : 'active',
+          status: RUN_PHASE.RUNNING,
+          substate: null,
+        } as RunView,
+      ]),
+    ),
+    policy: new Map(
+      Object.entries(runs).flatMap(([id, run]) =>
+        run.grants === undefined ? [] : [[id as RunId, run.grants] as const],
+      ),
+    ),
+  };
 }
 
+const edits = humanGrant(['toolEdit'], true)(NO_APPROVAL_GRANTS);
+const commands = humanGrant(['bash'], true)(NO_APPROVAL_GRANTS);
+
 describe('child subagent stream approval inheritance', () => {
-  afterEach(() => {
-    testDefaultSession().approvals.clearAll();
-  });
-
-  it('mirrors the parent tool-edit bypass onto the child stream', () => {
-    const { parent, child } = runPair();
-    testDefaultSession().approvals.toolEdit.bypass.setBypass(parent, true, {
-      silent: true,
+  it('reads the parent tool-edit bypass on the child, and only that kind', () => {
+    const view = rows({
+      parent: { grants: edits },
+      child: { parent: 'parent' },
     });
-
-    configureDelegatedChildApprovals(
-      child,
-      parent,
-      undefined,
-      testDefaultSession(),
-    );
-
-    expect(
-      testDefaultSession().approvals.toolEdit.bypass.isBypassed(child),
-    ).toBe(true);
-    // Edit-YOLO inheritance must not drag bash along — bypass values stay independent.
-    expect(testDefaultSession().approvals.bash.bypass.isBypassed(child)).toBe(
-      false,
-    );
+    expect(resolveBypass(view, 'child' as RunId, 'toolEdit')).toBe('human');
+    expect(resolveBypass(view, 'child' as RunId, 'bash')).toBeNull();
   });
 
   it('leaves the child gated when the parent still prompts', () => {
-    const { parent, child } = runPair();
-
-    configureDelegatedChildApprovals(
-      child,
-      parent,
-      undefined,
-      testDefaultSession(),
-    );
-
-    expect(testDefaultSession().approvals.bash.bypass.isBypassed(child)).toBe(
-      false,
-    );
-    expect(
-      testDefaultSession().approvals.toolEdit.bypass.isBypassed(child),
-    ).toBe(false);
-  });
-
-  it('mirrors bash independently of tool-edit YOLO (CLI AUTO-BASH, no AUTO-APPROVE)', () => {
-    // The bug this guards against: a parent with bash auto-approved but edits
-    // still gated must propagate bash to the child without also granting the
-    // child tool-edit YOLO.
-    const { parent, child } = runPair();
-    testDefaultSession().approvals.bash.bypass.setBypass(parent, true, {
-      silent: true,
-    });
-
-    configureDelegatedChildApprovals(
-      child,
-      parent,
-      undefined,
-      testDefaultSession(),
-    );
-
-    expect(testDefaultSession().approvals.bash.bypass.isBypassed(child)).toBe(
-      true,
-    );
-    // The parent's edits are gated, so the child's stay gated too.
-    expect(
-      testDefaultSession().approvals.toolEdit.bypass.isBypassed(child),
-    ).toBe(false);
-  });
-
-  it('picks up a parent bash bypass toggled after the child stream already started', () => {
-    // Regression for the "YOLO forgotten after one round" bug: inheritance
-    // used to be a one-shot copy taken at child-creation time, so a bypass
-    // enabled on the parent afterwards never reached an already-running
-    // child. It must now resolve live off the ancestry link.
-    const { parent, child } = runPair();
-
-    configureDelegatedChildApprovals(
-      child,
-      parent,
-      undefined,
-      testDefaultSession(),
-    );
-    expect(testDefaultSession().approvals.bash.bypass.isBypassed(child)).toBe(
-      false,
-    );
-
-    testDefaultSession().approvals.bash.bypass.setBypass(parent, true, {
-      silent: true,
-    });
-
-    expect(testDefaultSession().approvals.bash.bypass.isBypassed(child)).toBe(
-      true,
-    );
-  });
-
-  it('picks up a parent edit-YOLO toggled after the child stream already started', () => {
-    // The extension's one shield couples edit + bash bypass; flipping it on
-    // while delegated children are already running must reach their edits
-    // exactly like it reaches their bash. Tool-edit inheritance used to be a
-    // one-shot grant at delegation launch, so a mid-run toggle left children
-    // prompting for every edit.
-    const { parent, child } = runPair();
-
-    configureDelegatedChildApprovals(
-      child,
-      parent,
-      undefined,
-      testDefaultSession(),
-    );
-    expect(
-      testDefaultSession().approvals.toolEdit.bypass.isBypassed(child),
-    ).toBe(false);
-
-    testDefaultSession().approvals.toolEdit.bypass.setBypass(parent, true, {
-      silent: true,
-    });
-    expect(
-      testDefaultSession().approvals.toolEdit.bypass.isBypassed(child),
-    ).toBe(true);
-
-    // And back off: the child follows the parent's current state, not a
-    // snapshot taken at delegation time.
-    testDefaultSession().approvals.toolEdit.bypass.setBypass(parent, false, {
-      silent: true,
-    });
-    expect(
-      testDefaultSession().approvals.toolEdit.bypass.isBypassed(child),
-    ).toBe(false);
-  });
-
-  it('reports every visible descendant whose inherited edit bypass moved', () => {
-    // The one channel this state travels: `onPolicyChanged`, which the
-    // session layer binds to `publishApprovalPolicy`, so each reported run
-    // becomes that run's `approval.policy` row.
-    const changed: RunId[] = [];
-    const approvals = createSessionApprovals((runId) => changed.push(runId));
-    const { parent, child } = runPair();
-    const grandchild = generateRunId();
-    const pinnedChild = generateRunId();
-    approvals.toolEdit.bypass.setBypass(parent, true, { silent: true });
-    approvals.registerRunParent(child, parent);
-    approvals.registerRunParent(grandchild, child);
-    approvals.registerRunParent(pinnedChild, parent);
-    approvals.toolEdit.bypass.setBypass(pinnedChild, true, { silent: true });
-    changed.length = 0;
-
-    approvals.toolEdit.bypass.setBypass(parent, false);
-
-    expect(changed).toEqual([parent, child, grandchild]);
-    expect(approvals.toolEdit.bypass.isBypassed(pinnedChild)).toBe(true);
-  });
-
-  it('lets a conversation round inherit bypass from the previous round via the session-level ancestry link', () => {
-    // Mirrors the CLI: every chat round mints a brand-new root RunId,
-    // so bypass must be carried forward explicitly (see
-    // chatSessionController.ts's onRunResolved) rather than assumed to
-    // survive on the same stream id.
-    const roundOne = generateRunId();
-    const roundTwo = generateRunId();
-
-    testDefaultSession().approvals.setDelegatedWorkBypasses(roundOne, true);
-    testDefaultSession().approvals.registerRunParent(roundTwo, roundOne);
-
-    expect(testDefaultSession().approvals.proposal.isBypassed(roundTwo)).toBe(
-      true,
-    );
-    expect(
-      testDefaultSession().approvals.toolEdit.bypass.isBypassed(roundTwo),
-    ).toBe(true);
-    expect(
-      testDefaultSession().approvals.bash.bypass.isBypassed(roundTwo),
-    ).toBe(true);
-
-    // An explicit toggle on the later round still wins over the inherited one.
-    testDefaultSession().approvals.bash.bypass.setBypass(roundTwo, false, {
-      silent: true,
-    });
-    expect(
-      testDefaultSession().approvals.bash.bypass.isBypassed(roundTwo),
-    ).toBe(false);
-    expect(
-      testDefaultSession().approvals.bash.bypass.isBypassed(roundOne),
-    ).toBe(true);
-    expect(testDefaultSession().approvals.proposal.isBypassed(roundTwo)).toBe(
-      true,
-    );
-    expect(
-      testDefaultSession().approvals.toolEdit.bypass.isBypassed(roundTwo),
-    ).toBe(true);
-  });
-
-  it('an explicit child value overrides inherited bypass without touching the parent', () => {
-    const { parent, child } = runPair();
-    testDefaultSession().approvals.bash.bypass.setBypass(parent, true, {
-      silent: true,
-    });
-    configureDelegatedChildApprovals(
-      child,
-      parent,
-      undefined,
-      testDefaultSession(),
-    );
-    expect(testDefaultSession().approvals.bash.bypass.isBypassed(child)).toBe(
-      true,
-    );
-
-    testDefaultSession().approvals.bash.bypass.setBypass(child, false);
-    expect(testDefaultSession().approvals.bash.bypass.isBypassed(child)).toBe(
-      false,
-    );
-    // The parent's own bypass is untouched by the child's explicit value.
-    expect(testDefaultSession().approvals.bash.bypass.isBypassed(parent)).toBe(
-      true,
-    );
-  });
-
-  it('preserves a surviving child state when its parent is torn down', () => {
-    const { parent, child } = runPair();
-    testDefaultSession().approvals.bash.bypass.setBypass(parent, true, {
-      silent: true,
-    });
-    configureDelegatedChildApprovals(
-      child,
-      parent,
-      undefined,
-      testDefaultSession(),
-    );
-    expect(testDefaultSession().approvals.bash.bypass.isBypassed(child)).toBe(
-      true,
-    );
-
-    releaseRunResources(parent, testDefaultSession());
-
-    expect(testDefaultSession().approvals.bash.bypass.isBypassed(child)).toBe(
-      true,
-    );
-    testDefaultSession().approvals.bash.bypass.setBypass(parent, false, {
-      silent: true,
-    });
-    expect(testDefaultSession().approvals.bash.bypass.isBypassed(child)).toBe(
-      true,
-    );
-  });
-
-  it("restores a resumed child's own values only, so its inheritance still follows the parent", () => {
-    // Failure modes: an inherited grant is pinned as the child's own, so a
-    // later revocation on the parent misses it; an explicit child `false` is
-    // dropped; an ancestry edge registered before the restore skips it; a
-    // goal-approved delegation's child grant comes back as a human's.
-    const approvals = createSessionApprovals();
-    const { parent, child } = runPair();
-    const goalChild = generateRunId();
-    approvals.bash.bypass.setBypass(parent, true);
-    approvals.toolEdit.bypass.setBypass(parent, true);
-    approvals.registerRunParent(child, parent);
-    approvals.toolEdit.bypass.setBypass(child, false);
-    approvals.registerRunParent(goalChild, parent);
-    configureDelegatedChildApprovals(
-      goalChild,
-      parent,
-      'goal-approved',
-      testDefaultSession(),
-    );
-    const snapshot = (runId: RunId) => ({
-      policy: 'ask' as const,
-      ...approvals.grantsFor(runId),
-    });
-    const durable = {
-      parent: snapshot(parent),
-      child: snapshot(child),
-      goalChild: {
-        policy: 'ask' as const,
-        ...testDefaultSession().approvals.grantsFor(goalChild),
-      },
-    };
-    expect(durable.child.own).toEqual({ toolEdit: 'off' });
-    expect(durable.goalChild.own).toEqual({});
-    expect(durable.goalChild.goal).toEqual(['toolEdit']);
-
-    // A new process: the edges come back before the restore runs.
-    approvals.clearAll();
-    approvals.registerRunParent(child, parent);
-    approvals.registerRunParent(goalChild, parent);
-    approvals.restoreRun(parent, durable.parent);
-    approvals.restoreRun(child, durable.child);
-    approvals.restoreRun(goalChild, durable.goalChild);
-
-    expect(approvals.bypassesFor(child)).toMatchObject({
-      bash: true,
+    const view = rows({ parent: {}, child: { parent: 'parent' } });
+    expect(runBypasses(view, 'child' as RunId)).toEqual({
+      bash: false,
       toolEdit: false,
+      superYolo: false,
     });
-    expect(approvals.bash.bypass.ownBypass(child)).toBeUndefined();
-    expect(approvals.toolEdit.bypass.ownBypass(goalChild)).toBeUndefined();
-    approvals.bash.bypass.setBypass(parent, false);
-    expect(approvals.bash.bypass.isBypassed(child)).toBe(false);
   });
 
-  it('pins edit approval for an auto-approved delegation', () => {
-    const { parent, child } = runPair();
-
-    configureDelegatedChildApprovals(
-      child,
-      parent,
-      'auto-approved',
-      testDefaultSession(),
-    );
-
-    expect(
-      testDefaultSession().approvals.toolEdit.bypass.isBypassed(parent),
-    ).toBe(false);
-    expect(
-      testDefaultSession().approvals.toolEdit.bypass.isBypassed(child),
-    ).toBe(true);
+  it('follows a parent change made after the child started, with no row of its own', () => {
+    const before = rows({ parent: {}, child: { parent: 'parent' } });
+    expect(resolveBypass(before, 'child' as RunId, 'bash')).toBeNull();
+    const after = rows({
+      parent: { grants: commands },
+      child: { parent: 'parent' },
+    });
+    expect(resolveBypass(after, 'child' as RunId, 'bash')).toBe('human');
   });
 
-  it('super-YOLO on an inheriting child pins its own edit bypass', () => {
-    // `setDelegatedWorkBypasses` must write the child's own explicit
-    // tool-edit entry even when `isBypassed` already reports true via
-    // ancestry — otherwise the grant silently evaporates when the parent
-    // later re-gates its own edits while the child's proposal/bash stay on.
-    const { parent, child } = runPair();
-    testDefaultSession().approvals.toolEdit.bypass.setBypass(parent, true, {
-      silent: true,
+  it('lets an explicit child value override what it inherits', () => {
+    const view = rows({
+      parent: { grants: edits },
+      child: {
+        parent: 'parent',
+        grants: humanGrant(['toolEdit'], false)(NO_APPROVAL_GRANTS),
+      },
     });
-    configureDelegatedChildApprovals(
-      child,
-      parent,
-      undefined,
-      testDefaultSession(),
-    );
-    expect(
-      testDefaultSession().approvals.toolEdit.bypass.isBypassed(child),
-    ).toBe(true);
+    expect(resolveBypass(view, 'child' as RunId, 'toolEdit')).toBeNull();
+    expect(resolveBypass(view, 'parent' as RunId, 'toolEdit')).toBe('human');
+  });
 
-    testDefaultSession().approvals.setDelegatedWorkBypasses(child, true);
-    testDefaultSession().approvals.toolEdit.bypass.setBypass(parent, false, {
-      silent: true,
+  it("carries a goal's grant to descendants while the edge stands, never past it", () => {
+    const goal = goalGrant(['bash'])(NO_APPROVAL_GRANTS);
+    const view = rows({
+      parent: { grants: goal },
+      child: { parent: 'parent' },
     });
+    expect(resolveBypass(view, 'child' as RunId, 'bash')).toBe('goal');
+    expect(inheritedGrants(view, 'child' as RunId)).toEqual(NO_APPROVAL_GRANTS);
+  });
 
-    expect(
-      testDefaultSession().approvals.toolEdit.bypass.isBypassed(child),
-    ).toBe(true);
-    expect(
-      testDefaultSession().approvals.toolEdit.bypass.isBypassed(parent),
-    ).toBe(false);
+  it("keeps the human values a detached child or a conversation's next round inherited", () => {
+    const view = rows({
+      root: { grants: commands },
+      parent: { parent: 'root', grants: edits },
+      child: { parent: 'parent' },
+    });
+    expect(inheritedGrants(view, 'child' as RunId)).toEqual({
+      own: { toolEdit: 'on', bash: 'on' },
+      goal: [],
+    });
+  });
+
+  it("ends a goal's grant of a kind a human decides", () => {
+    const goal = goalGrant(['bash', 'toolEdit'])(NO_APPROVAL_GRANTS);
+    expect(humanGrant(['bash'], false)(goal)).toEqual({
+      own: { bash: 'off' },
+      goal: ['toolEdit'],
+    });
+  });
+
+  it('registers an approved delegation with its own grant', () => {
+    expect(delegatedChildGrants('inherit')).toEqual(NO_APPROVAL_GRANTS);
+    expect(delegatedChildGrants('auto-approved')).toEqual({
+      own: { toolEdit: 'on' },
+      goal: [],
+    });
+    expect(delegatedChildGrants('goal-approved')).toEqual({
+      own: {},
+      goal: ['toolEdit'],
+    });
   });
 
   it('propagates delegated-task approval through nested orchestrators', () => {
-    const { parent, child } = runPair();
-    const grandchild = generateRunId();
-    testDefaultSession().approvals.proposal.setBypass(parent, true);
-
-    configureDelegatedChildApprovals(
-      child,
-      parent,
-      undefined,
-      testDefaultSession(),
-    );
-    configureDelegatedChildApprovals(
-      grandchild,
-      child,
-      undefined,
-      testDefaultSession(),
-    );
-
-    expect(testDefaultSession().approvals.proposal.isBypassed(parent)).toBe(
-      true,
-    );
-    expect(testDefaultSession().approvals.proposal.isBypassed(child)).toBe(
-      true,
-    );
-    expect(testDefaultSession().approvals.proposal.isBypassed(grandchild)).toBe(
-      true,
-    );
+    const view = rows({
+      root: { grants: humanGrant(['superYolo'], true)(NO_APPROVAL_GRANTS) },
+      middle: { parent: 'root' },
+      leaf: { parent: 'middle' },
+    });
+    expect(resolveBypass(view, 'leaf' as RunId, 'superYolo')).toBe('human');
   });
 });

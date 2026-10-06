@@ -834,7 +834,7 @@ describe('CLI run progress renderer', () => {
             .attachRunProgressRenderer(session)
             .pipe(Scope.provide(scope));
           yield* publishRun(session, { runId: 'b2b2b2' });
-          yield* session.settlePublications();
+          yield* session.settled;
           // The terminal phase is the `run.end` row's fact and nothing else, so
           // exactly one line renders for the transition.
           session.publish([
@@ -845,7 +845,7 @@ describe('CLI run progress renderer', () => {
               output: { response: '', files: [] },
             },
           ]);
-          yield* session.settlePublications();
+          yield* session.settled;
 
           yield* Scope.close(scope, Exit.void);
           yield* host.close();

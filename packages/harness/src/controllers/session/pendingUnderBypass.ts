@@ -1,24 +1,20 @@
 /**
- * A bypass change and what it settles beside the flag itself: its durable
- * row, and when it turns a bypass on, the run's requests already waiting
- * under it, on every host.
+ * A bypass change and what it settles beside the grant itself: when it turns
+ * a bypass on, the run's requests already waiting under it, on every host.
  */
-import { isDeepStrictEqual } from 'node:util';
-
 import { Effect, SubscriptionRef } from 'effect';
 
-import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
+import {
+  humanGrant,
+  type SessionApprovals,
+} from '@agent/runtime/runApprovalQueue';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   APPROVAL_BYPASS_KINDS,
   type ApprovalBypassKind,
 } from '@shared/approvalBypassKind';
 import type { PermissionPayload } from '@shared/schemas';
-import {
-  Unavailable,
-  writeRefused,
-  type RequestError,
-} from '@shared/session/requestErrors';
+import { writeRefused, type RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 
 type BypassChange = Extract<RuntimeRequest, { kind: 'policy.set' }>['change'];
@@ -86,11 +82,9 @@ function approvePendingUnderBypass(
 
 /**
  * Apply a bypass change, acknowledged once its `approval.policy` row is
- * durable: a resume restores the bypass from that row, so an "off" lost to
- * a crash would come back on. The caller holds the run's claim; the row is
- * read back, since a claim lost meanwhile writes nothing. A change whose row
- * did not land is undone here too, so no bypass the person was told failed
- * stays live.
+ * durable: the row is the grant, so nothing is held to undo when it does
+ * not land. The caller holds the run's claim. Turning a bypass on then
+ * approves what already waits behind it, on a run this process drives.
  */
 export function setPolicy(
   session: SessionHandle,
@@ -99,46 +93,22 @@ export function setPolicy(
   heldHere: boolean,
 ): Effect.Effect<Outcome, RequestError> {
   const { runId } = change;
-  const bypassOf = (kind: ApprovalBypassKind) =>
-    kind === 'superYolo' ? approvals.proposal : approvals[kind].bypass;
-  return Effect.gen(function* () {
-    const before = approvals.grantsFor(runId);
-    if (change.bypass === 'superYolo')
-      approvals.setDelegatedWorkBypasses(runId, change.enabled);
-    else bypassOf(change.bypass).setBypass(runId, change.enabled);
-    // The change queued its row; the settle commits it, the read proves it.
-    const saved = yield* session
-      .settlePublications(runId, { consume: false })
-      .pipe(
-        Effect.andThen(session.readRunRecords(runId)),
-        Effect.map((rows) => {
-          const row = rows.findLast((r) => r.type === 'approval.policy');
-          return (
-            row?.type === 'approval.policy' &&
-            isDeepStrictEqual(row.snapshot.own, approvals.grantsFor(runId).own)
-          );
-        }),
-        Effect.catch((error) =>
-          Effect.logWarning('An approval change was not saved').pipe(
-            Effect.annotateLogs({ data: error }),
-            Effect.as(false),
-          ),
-        ),
-      );
-    if (!saved) {
-      for (const kind of APPROVAL_BYPASS_KINDS) {
-        const own = before.own[kind];
-        bypassOf(kind).setBypass(runId, own === undefined ? own : own === 'on');
-      }
-      approvals.setGoalGrant(runId, before.goal);
-      return yield* new Unavailable({
+  // The delegated-work grant covers the command and edit grants too.
+  const kinds =
+    change.bypass === 'superYolo' ? APPROVAL_BYPASS_KINDS : [change.bypass];
+  return approvals.change(runId, humanGrant(kinds, change.enabled)).pipe(
+    Effect.mapError(
+      writeRefused({
         runId,
         reason: 'The approval change could not be saved.',
-      });
-    }
+      }),
+    ),
     // A run held elsewhere has no fiber here to act on a decision.
-    if (change.enabled && heldHere)
-      yield* approvePendingUnderBypass(session, change);
-    return { kind: 'done' };
-  });
+    Effect.andThen(
+      change.enabled && heldHere
+        ? approvePendingUnderBypass(session, change)
+        : Effect.void,
+    ),
+    Effect.as({ kind: 'done' } as const),
+  );
 }

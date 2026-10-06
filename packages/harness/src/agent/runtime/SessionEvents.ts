@@ -10,7 +10,6 @@ import {
   Cause,
   Deferred,
   Effect,
-  Exit,
   Fiber,
   Layer,
   Queue,
@@ -33,12 +32,7 @@ import {
   type SessionEventDraft,
   type RunId,
 } from '@shared/schemas';
-import {
-  Database,
-  type DatabaseNotOwner,
-  type DatabaseReadFailed,
-  type DatabaseWriteFailed,
-} from '@shared/session/database';
+import { Database, type DatabaseReadFailed } from '@shared/session/database';
 import {
   applyRunRow,
   closesRunWindow,
@@ -78,41 +72,21 @@ interface AggregateState {
   lifecycle?: ReturnType<typeof lifecycleOf> & { commit: CommitOrdinal };
 }
 
-/** One unit of the publisher's work: a job over the log's append that
- *  settles the deferred its enqueuer waits on with the job's own exit. */
-type PublicationJob = (append: Append) => Effect.Effect<void>;
-
-/** What a detached job may refuse with: the log append's own failures. */
-type DetachedJobFailure =
-  DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed;
+/** One unit of the publisher's work, bound to its append and built when
+ *  the publisher runs it: an awaited one settles the deferred its enqueuer
+ *  waits on with the job's own exit. */
+type PublicationJob = Effect.Effect<void>;
 
 /** Run `job` and complete `done` with however it ended. */
 function settling<A, E>(
-  job: (append: Append) => Effect.Effect<A, E>,
+  job: Effect.Effect<A, E>,
   done: Deferred.Deferred<A, E>,
 ): PublicationJob {
-  return (append) =>
-    job(append).pipe(
-      Effect.exit,
-      Effect.flatMap((exit) => Deferred.done(done, exit)),
-      Effect.asVoid,
-    );
-}
-
-/** The log's append, reporting the last commit each call produced. */
-function trackingAppend(
-  append: Append,
-  onCommit: (commit: CommitOrdinal) => void,
-): Append {
-  return (events) =>
-    append(events).pipe(
-      Effect.tap((rows) =>
-        Effect.sync(() => {
-          const last = rows.at(-1);
-          if (last !== undefined) onCommit(last.commit);
-        }),
-      ),
-    );
+  return job.pipe(
+    Effect.exit,
+    Effect.flatMap((exit) => Deferred.done(done, exit)),
+    Effect.asVoid,
+  );
 }
 
 /** The tail drain (C7): read forward from the caller's position on each
@@ -245,7 +219,7 @@ export const sessionEventsLayer = Layer.effect(
     const inbox = yield* Queue.unbounded<PublicationJob, Cause.Done>();
     const consumer = yield* Effect.forkScoped(
       Stream.fromQueue(inbox).pipe(
-        Stream.runForEach((job) => Effect.uninterruptible(job(append))),
+        Stream.runForEach((job) => Effect.uninterruptible(job)),
       ),
     );
     // Registered after the fork, so it runs before the fork's own finalizer:
@@ -253,8 +227,8 @@ export const sessionEventsLayer = Layer.effect(
     yield* Effect.addFinalizer(() =>
       Queue.end(inbox).pipe(
         Effect.andThen(Fiber.join(consumer)),
-        // Every job's refusal is kept on its own Exit, so the consumer ends
-        // abnormally only on a defect; closing still proceeds, and says so.
+        // Every job settles its own refusal, so the consumer ends abnormally
+        // only on a defect; closing still proceeds, and says so.
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
             ? Effect.void
@@ -274,7 +248,12 @@ export const sessionEventsLayer = Layer.effect(
     ): Effect.Effect<A, E> =>
       Effect.gen(function* () {
         const done = yield* Deferred.make<A, E>();
-        const admitted = enqueue(settling(job, done));
+        const admitted = enqueue(
+          settling(
+            Effect.suspend(() => job(append)),
+            done,
+          ),
+        );
         if (!admitted) {
           return yield* Effect.die(
             new Error('Session publication after the plane closed'),
@@ -299,65 +278,26 @@ export const sessionEventsLayer = Layer.effect(
         removal.pipe(Effect.tap((rows) => Effect.sync(() => track(rows)))),
       );
     });
-    /** Detached jobs still running or queued: what `settle` waits for. Each
-     *  completes with the last commit its job appended, so a settler waits
-     *  for exactly its cohort. A job's own refusal is logged where it
-     *  happened and belongs to whoever enqueued it (`SessionHandle` keeps it
-     *  for the drain that decides its run's terminal row), so this cohort
-     *  reports position and never failure. */
-    const pending = new Set<
-      Deferred.Deferred<CommitOrdinal | null, DetachedJobFailure>
-    >();
     const detach: SessionEventsShape['detach'] = (job) => {
-      const done = Deferred.makeUnsafe<
-        CommitOrdinal | null,
-        DetachedJobFailure
-      >();
-      pending.add(done);
-      let committed: CommitOrdinal | null = null;
       const admitted = enqueue(
-        settling(
-          (append) =>
-            job(
-              trackingAppend(append, (commit) => {
-                committed = commit;
-              }),
-            ).pipe(
-              Effect.map(() => committed),
-              Effect.tapCause((cause) =>
-                Effect.logError('Session publication failed').pipe(
-                  Effect.annotateLogs({ data: cause }),
-                  withLogChannel(CHANNEL),
-                ),
-              ),
-              Effect.onExit(() => Effect.sync(() => pending.delete(done))),
+        Effect.suspend(() => job(append)).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logError('Session publication failed').pipe(
+              Effect.annotateLogs({ data: Cause.squash(cause) }),
+              withLogChannel(CHANNEL),
             ),
-          done,
+          ),
         ),
       );
-      if (!admitted) {
-        pending.delete(done);
-        // Direct sink write: `detach` is the synchronous door for producers
-        // with no fiber, and the refusing plane's publisher fiber has ended.
+      // Direct sink write: `detach` is the synchronous door for producers
+      // with no fiber, and the refusing plane's publisher fiber has ended.
+      if (!admitted)
         writeLogLine(
           'WARN',
           CHANNEL,
           'Session publication dropped: the plane has closed',
         );
-      }
     };
-    const settle: Effect.Effect<CommitOrdinal | null> = Effect.suspend(() =>
-      Effect.forEach([...pending], (done) => Effect.exit(Deferred.await(done))),
-    ).pipe(
-      Effect.map((exits) => {
-        const commits = exits.flatMap((exit) =>
-          Exit.isSuccess(exit) && exit.value !== null ? [exit.value] : [],
-        );
-        return commits.length === 0
-          ? null
-          : commits.reduce((a, b) => Math.max(a, b));
-      }),
-    );
     // THE tail (C7): the drain woken by the log's level.
     const all = (
       fromCommit: SessionCursor,
@@ -377,7 +317,6 @@ export const sessionEventsLayer = Layer.effect(
       exclusive,
       detach,
       removeRun,
-      settle,
       openWork: (id) => [...(aggregates.get(id)?.open?.values() ?? [])],
       pendingFollowUps: (id) => aggregates.get(id)?.followUps?.followUps ?? [],
       followUpNamed: (id, followUpId) =>

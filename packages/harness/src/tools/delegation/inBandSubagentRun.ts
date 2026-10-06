@@ -28,13 +28,13 @@ import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { RunArtifactDrainError } from '@agent/runtime/SessionHandle';
 import { Runs, type AgentRunServices } from '@agent/runtime/runRegistry';
 import {
   createNativeSubagentStrategy,
   type ChildRunLaunchOptions,
 } from '@agent/runtime/nativeSubagentStrategy';
 import { withLogChannel } from '@logger/effectLog';
+import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
@@ -75,6 +75,8 @@ interface InBandSubagentRunBaseOptions extends ChildRunLaunchOptions {
   readonly parentCallId?: string;
   /** What the parent's step offered, which the child can only narrow. */
   readonly parentOffered: readonly OfferedTool[];
+  /** The grants a fresh child is registered with. */
+  readonly grants?: ApprovalGrants;
   /**
    * Live progress sink for the in-band child. An in-band parent is mid-cycle,
    * so follow-up delivery cannot reach it; the caller projects progress onto
@@ -133,12 +135,7 @@ const defectsAsErrors = <A, R>(
  *
  * A loop failure after the turn settled does not rewrite the outcome when the
  * child's rows were already committed: the committed rows are the fact, and a
- * claim release or ending that threw afterwards leaves them whole. A
- * failed artifact drain is the exception: it rolled back facts the run had
- * queued, so the caller must not answer the call from it.
- * It is read from either place it can be seen — the loop's own
- * `RunArtifactDrainError`, and the `artifact-drain` marker the run's lifecycle
- * left on the terminal row.
+ * claim release or ending that threw afterwards leaves them whole.
  */
 const executeInBand = Effect.fn('executeInBand')(
   function* (
@@ -172,6 +169,7 @@ const executeInBand = Effect.fn('executeInBand')(
         ...(options.parentCallId !== undefined && {
           parentCallId: options.parentCallId,
         }),
+        ...(options.grants !== undefined && { grants: options.grants }),
       }).pipe(
         Effect.mapError(
           (cause) =>
@@ -317,32 +315,6 @@ const executeInBand = Effect.fn('executeInBand')(
           }),
         );
       }
-    }
-
-    // A drain rolled back facts this run had queued, so the call is not
-    // durably answered: the caller answers from those rows.
-    // It outranks how the child itself ended, which the terminal row is
-    // reporting as failed for this very reason (the row is the post-drain
-    // fact). Two drains can lose it, and only one of them reaches here as an
-    // error: the pre-terminal drain the run's own lifecycle ran is only
-    // legible on the row it marked (a publication that fails once is settled
-    // and gone by the time the ending's drain runs), while the ending's
-    // drain fails this loop, alone or wrapped with its other cleanup
-    // failures.
-    if (
-      runEnd?.error?.kind === 'artifact-drain' ||
-      loopFailure instanceof RunArtifactDrainError ||
-      (loopFailure instanceof AggregateError &&
-        loopFailure.errors.some(
-          (error: unknown) => error instanceof RunArtifactDrainError,
-        ))
-    ) {
-      return yield* Effect.fail(
-        new SubagentDurabilityError({
-          message: `Subagent ${runId} failed to commit its final artifacts.`,
-          cause: loopFailure,
-        }),
-      );
     }
 
     if (childFailed) return yield* Effect.fail(ensureError(childError()));

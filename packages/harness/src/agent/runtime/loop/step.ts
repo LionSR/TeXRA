@@ -67,6 +67,7 @@ import type { StepRoot } from '@utils/files/externalRoots';
 
 import { declaredToolNames, resolveStepTools } from '../agentToolResolution';
 import { liveToolGates } from '../requestPolicy';
+import { goalGrant } from '../runApprovalQueue';
 import { blobRows, contextAt, stored } from '../run/requestContext';
 import { appendRow, rowAggregate } from './rows';
 import { stepHooks, type StepHook } from './hooks';
@@ -387,10 +388,9 @@ const openStep = Effect.fn('Step.open')(function* (
   });
   if (previous !== null) yield* Scope.close(previous.scope, Exit.void);
   const continuation = step.continuing?.id ?? null;
-  // A goal grant is autonomy the run's continuation drives: a step with no
-  // continuation (its plugin switched off) ends it, as the plugin's tools
-  // leave: from the run's next step.
-  if (continuation === null) run.session.approvals.setGoalGrant(run.runId, []);
+  // A goal grant ends with a step that has no continuation (plugin off).
+  if (continuation === null)
+    yield* run.session.approvals.change(run.runId, goalGrant([]));
   // The model-dependent text follows the step's model and settings.
   const model = yield* SynchronizedRef.get(run.model);
   const delegation = yield* readDelegationTargets(

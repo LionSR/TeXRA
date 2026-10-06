@@ -401,23 +401,13 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
   // Two run grants on: the header's read-only chips, each revocable.
   'ext-auto-approve': () => {
     const view = fanOutView();
-    view.policy.set(CHILD, {
-      policy: 'ask',
-      bypasses: { toolEdit: true, bash: true, superYolo: false },
-      own: {},
-      goal: [],
-    });
+    view.policy.set(CHILD, { own: { toolEdit: 'on', bash: 'on' }, goal: [] });
     return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
   },
   // The same grants in the desktop's wide column.
   'desktop-auto-approve': () => {
     const view = fanOutView();
-    view.policy.set(CHILD, {
-      policy: 'ask',
-      bypasses: { toolEdit: true, bash: true, superYolo: false },
-      own: {},
-      goal: [],
-    });
+    view.policy.set(CHILD, { own: { toolEdit: 'on', bash: 'on' }, goal: [] });
     return desktopColumn(view, surface(view, { kind: 'select', runId: CHILD }));
   },
   // Real-ExtensionSession: inside the child, with the ancestor path (its

@@ -28,7 +28,7 @@ describe('persisted parent edge', () => {
     () =>
       Effect.gen(function* () {
         publishTestRunStart(session, 'aaa0ff' as RunId);
-        yield* session.settlePublications();
+        yield* session.settled;
         const rows = yield* session.commit([
           {
             type: 'run.start',

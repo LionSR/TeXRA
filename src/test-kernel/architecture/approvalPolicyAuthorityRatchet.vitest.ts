@@ -66,17 +66,19 @@ const SEED_CALL_ALLOWLIST = new Set([
 const BYPASS_WRITE_ALLOWLIST = new Set([
   'packages/harness/src/agent/runtime/runApprovalQueue.ts',
   'packages/harness/src/agent/runtime/loop/step.ts',
-  'packages/texra/src/controllers/mainView/backend/MainViewRunLaunchController.ts',
-  // `policy.set`, the one host door, applied with its durable row.
+  // An Auto-approve launch's grants, on its `run.start`.
+  'packages/harness/src/agent/runtime/runAgent.ts',
+  // `policy.set`, the one host door, committed as its row.
   'packages/harness/src/controllers/session/pendingUnderBypass.ts',
   'packages/harness/src/tools/approval/index.ts',
+  'packages/harness/src/tools/delegation/AgentTool.ts',
   'packages/harness/src/tools/goal/goalAutoApproval.ts',
 ]);
 
 const EVALUATOR_CALL =
   /\b(?:decideTexraApproval|decideRetryApproval|decideHumanInputRequest|decideProposalApproval)\s*\(/;
 const BYPASS_WRITE_CALL =
-  /\b(?:setBypass|setDelegatedWorkBypasses|setGoalGrant)\s*\(/;
+  /\b(?:humanGrant|goalGrant|delegatedChildGrants)\s*\(|\.approvals\.change\s*\(/;
 const SET_APPROVAL_POLICY_CALL = /\bsetApprovalPolicy\s*\(/;
 const POLICY_VOCABULARY_DEFINITION =
   /\b(?:const|type)\s+(?:TEXRA_APPROVAL_POLICIES|TexraApprovalPolicySchema)\b/;

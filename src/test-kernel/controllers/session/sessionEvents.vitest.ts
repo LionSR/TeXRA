@@ -375,7 +375,6 @@ describe('session events and view', () => {
             result: { toolName: 'bash', output: { output: '' } },
           },
         ]);
-        yield* events.settle;
         const rows = yield* Stream.runCollect(events.aggregate(aggregateId, 2));
         expect([...rows].map((row) => [row.type, row.seq])).toEqual([
           ['tool.start', 2],
@@ -775,7 +774,7 @@ describe('Sessions owner', () => {
         } as unknown as SessionHandle;
         const requests = sessionRequests(
           session,
-          createSessionApprovals(),
+          createSessionApprovals(session),
           { ...db, removeRun: (yield* SessionEvents).removeRun },
           local,
           toolTable([]),
@@ -830,9 +829,10 @@ describe('Sessions owner', () => {
         const db = yield* Database;
         const view = yield* SessionViewService;
         const removeRun = vi.fn((yield* SessionEvents).removeRun);
+        const session = { view: view.ref } as unknown as SessionHandle;
         const requests = sessionRequests(
-          { view: view.ref } as unknown as SessionHandle,
-          createSessionApprovals(),
+          session,
+          createSessionApprovals(session),
           { ...db, removeRun },
           yield* SubscriptionRef.make(
             LocalRuntimeStateSchema.parse({
@@ -1016,7 +1016,7 @@ describe('Sessions owner', () => {
               aggregateId: qualifyAggregateId('run', RUN),
             },
           ]);
-          yield* session.settlePublications();
+          yield* session.settled;
           expect(session.now()).toBe(3);
           session.publish([
             {
@@ -1068,7 +1068,7 @@ describe('Sessions owner', () => {
           session.publish([
             { ...runEnd, aggregateId: qualifyAggregateId('run', OLDER) },
           ]);
-          yield* session.settlePublications();
+          yield* session.settled;
           const committed = yield* Stream.runCollect(
             session.events.aggregate(qualifyAggregateId('run', OLDER), 0),
           );
@@ -1091,50 +1091,38 @@ describe('Sessions owner', () => {
       }),
   );
 
-  // A fire-and-forget publication settles on its own schedule, and the drain
-  // that decides a run's terminal row can arrive after it already rejected. A
-  // failure dropped at that moment would let the row call itself the
-  // post-drain fact of facts that rolled back, with no `artifact-drain`
-  // marker: the failure is kept until the drain that answers for that run
-  // reports it, and cleared by the one that does.
-  it.live(
-    "a failed publication outlives every barrier until its run's drain takes it, once",
-    () =>
-      Effect.gen(function* () {
-        const session = yield* open('/workspace/owner/retained-failure');
-        try {
-          session.publish([runStart]);
-          yield* session.settlePublications(RUN);
-          // A second `run.start` on the live aggregate violates its sequence:
-          // the batch rolls back whole and the publication fails.
-          session.publish([runStart]);
-          // A sibling run's drain awaits every publication — so this one has
-          // settled by the time it returns — and reports no fact of this run's.
-          yield* session.settlePublications(OLDER);
-          // A session-wide settle is a barrier (host exit takes one before it
-          // releases each live run's lease; so does a child launch): it awaits
-          // every publication and answers for the session's own facts, so this
-          // run's stays tracked for the drain that marks the row it decides.
-          yield* session.settlePublications();
-          // A mid-run barrier (the loop's park) observes without answering:
-          // it reports the run's rollback so the run ends on it, and leaves
-          // the failure for the drain that decides the terminal row, which is
-          // the only place the `artifact-drain` marker can still be stamped.
-          expect(
-            yield* Effect.flip(
-              session.settlePublications(RUN, { consume: false }),
-            ),
-          ).toMatchObject({ _tag: 'DatabaseWriteFailed' });
-          expect(
-            yield* Effect.flip(session.settlePublications(RUN)),
-          ).toMatchObject({ _tag: 'DatabaseWriteFailed' });
-          // Once: the drain that told the run cleared it, so the next drain
-          // does not fail a run whose remaining facts are whole.
-          yield* session.settlePublications(RUN);
-        } finally {
-          yield* closeSessionOf(session);
-        }
-      }),
+  // A trace row has no fiber to fail: its refusal is its run's, heard once
+  // at the run's end, and no other writer's commit pays for it.
+  it.live("a refused trace row is its run's to hear at its end, once", () =>
+    Effect.gen(function* () {
+      const session = yield* open('/workspace/owner/retained-failure');
+      try {
+        session.publish([runStart]);
+        yield* session.settled;
+        // A trace row on a run with no `run.start` is refused whole.
+        const unborn = RunIdSchema.parse('fe12dc');
+        session.publishRunEvent(unborn, {
+          type: 'log',
+          level: 'info',
+          message: 'lost',
+        });
+        expect((yield* session.lostRows(unborn))?.message).toContain(
+          'were not written',
+        );
+        // No other writer is failed over it, and it is heard once.
+        yield* session.commit([
+          {
+            type: 'run.description',
+            aggregateId: runStart.aggregateId,
+            description: 'after the loss',
+            by: 'user',
+          },
+        ]);
+        expect(yield* session.lostRows(unborn)).toBeUndefined();
+      } finally {
+        yield* closeSessionOf(session);
+      }
+    }),
   );
 
   // The request opened below commits from this fiber, so the session's own
@@ -1145,7 +1133,7 @@ describe('Sessions owner', () => {
       Effect.gen(function* () {
         const session = yield* open('/workspace/owner/settled');
         session.publish([runStart]);
-        yield* session.settlePublications();
+        yield* session.settled;
         // A request nobody answers: the fold lists it while the fiber that
         // opened it waits on the decision.
         const pending = yield* Effect.forkScoped(

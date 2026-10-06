@@ -69,7 +69,7 @@ describe('retrieveSessionResumeData', () => {
     payload: RunSnapshotPayload,
   ) {
     publishTestRunStart(session, runId);
-    yield* session.settlePublications();
+    yield* session.settled;
     yield* session.runHistory.acquire(runId);
     yield* session.runHistory.appendBatch(runId, null, [
       {
@@ -120,7 +120,7 @@ describe('retrieveSessionResumeData', () => {
     Effect.gen(function* () {
       const runId = 'ab0005' as RunId;
       publishTestRunStart(session, runId);
-      yield* session.settlePublications();
+      yield* session.settled;
       vi.spyOn(session.runHistory, 'latestSnapshot').mockReturnValue(
         Effect.fail(
           new DatabaseReadFailed({

@@ -37,7 +37,6 @@ import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
 import { isLiveRun, type SessionView } from '@shared/session/sessionView';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
-import { launchOnRun } from '@texra/controllers/mainView/backend/MainViewRunLaunchController';
 import type { ToolEditPreview } from '@texra/controllers/server/protocol';
 import type { ProcessServices } from '@texra-ai/harness';
 
@@ -182,7 +181,8 @@ export function localSessionBackend(session: SessionHandle): SessionBackend {
         session,
         preferHelperModel: options.preferHelperModel ?? false,
         ownApiKeyFallback: options.ownApiKeyFallback,
-        onRun: launchOnRun(session.approvals, options),
+        approveDelegatedWork: options.approveDelegatedWork,
+        onRun: options.onRun,
         continues: options.continues,
         onRunResolved: options.onRunResolved,
         suppressErrorNotification: options.suppressErrorNotification,
