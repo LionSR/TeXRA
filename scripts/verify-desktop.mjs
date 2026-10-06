@@ -40,6 +40,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, posix, relative, resolve } from 'node:path';
 import process from 'node:process';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // Local imports - shared packaging invariants
@@ -53,7 +54,6 @@ import { walkFiles } from './walkFiles.mjs';
 // Local imports - smoke process helpers
 import {
   appendBoundedLog,
-  delay,
   formatExit,
   hasExited,
   stopChild,
@@ -1348,7 +1348,7 @@ async function closeApplication(application, exitPromise) {
       () => null,
       (error) => error,
     ),
-    delay(SHUTDOWN_GRACE_MS).then(
+    sleep(SHUTDOWN_GRACE_MS, undefined, { ref: false }).then(
       () => new Error('ElectronApplication.close() timed out.'),
     ),
   ]);
@@ -1356,7 +1356,7 @@ async function closeApplication(application, exitPromise) {
     if (hasExited(child)) return;
     const exitObserved = await Promise.race([
       exitPromise.then(() => true),
-      delay(SHUTDOWN_GRACE_MS).then(() => false),
+      sleep(SHUTDOWN_GRACE_MS, false, { ref: false }),
     ]);
     if (exitObserved && hasExited(child)) return;
     closeFailure = new Error(
@@ -1422,7 +1422,7 @@ async function smokePackagedLaunch(args) {
       ),
       exitPromise.then((exit) => ({ kind: 'exit', exit })),
       runtimeFailure.promise.then((error) => ({ kind: 'failure', error })),
-      delay(READINESS_TIMEOUT_MS).then(() => ({ kind: 'timeout' })),
+      sleep(READINESS_TIMEOUT_MS, { kind: 'timeout' }, { ref: false }),
     ]);
     if (outcome.kind === 'failure') throw outcome.error;
     if (outcome.kind === 'exit') {

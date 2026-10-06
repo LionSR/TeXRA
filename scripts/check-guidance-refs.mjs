@@ -19,7 +19,7 @@
 //
 // Dependency-free (bare Node) so it runs without installing anything.
 
-import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import { existsSync, globSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -239,44 +239,11 @@ function expandBraces(path) {
     );
 }
 
-/** Resolve a path that may contain a single `*` segment; true if anything matches. */
+/** Resolve a path that may contain glob wildcards; true if anything matches. */
 function resolvesWithGlob(path) {
   const trimmed = path.replace(/\/$/, '');
   if (!trimmed.includes('*')) return existsSync(join(repoRoot, trimmed));
-
-  const segments = trimmed.split('/');
-  let candidates = [''];
-  for (const segment of segments) {
-    const next = [];
-    for (const base of candidates) {
-      const baseAbs = join(repoRoot, base);
-      if (!existsSync(baseAbs)) continue;
-      if (!segment.includes('*')) {
-        next.push(base ? `${base}/${segment}` : segment);
-        continue;
-      }
-      const pattern = new RegExp(
-        `^${segment.split('*').map(escapeRegex).join('.*')}$`,
-      );
-      let entries;
-      try {
-        entries = readdirSync(baseAbs, { withFileTypes: true });
-      } catch {
-        continue;
-      }
-      for (const entry of entries) {
-        if (pattern.test(entry.name))
-          next.push(base ? `${base}/${entry.name}` : entry.name);
-      }
-    }
-    candidates = next;
-    if (candidates.length === 0) return false;
-  }
-  return candidates.some((candidate) => existsSync(join(repoRoot, candidate)));
-}
-
-function escapeRegex(value) {
-  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return globSync(trimmed, { cwd: repoRoot }).length > 0;
 }
 
 function localMarkdownDestination(rawDestination) {
