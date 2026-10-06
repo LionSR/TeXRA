@@ -17,14 +17,24 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: './tests/e2e',
   outputDir: './tests/e2e/test-results',
-  // Single Electron app at a time keeps macOS keychain prompts predictable.
+  // Offscreen apps use isolated profiles. Serialize resource-heavy integration
+  // journeys; visual matrices are a separate, explicitly requested project.
   workers: 1,
   fullyParallel: false,
+  projects: [
+    {
+      name: 'desktop',
+      testIgnore: ['**/screenshots.spec.ts', '**/devStartup.spec.ts'],
+    },
+    { name: 'appearance', testMatch: '**/screenshots.spec.ts' },
+    { name: 'development', testMatch: '**/devStartup.spec.ts' },
+  ],
   // Generous timeout: cold Electron launch + IPC bring-up can take a while.
   timeout: 60_000,
   expect: { timeout: 10_000 },
   reporter: 'list',
   use: {
+    headless: true,
     // Baseline viewport for committed screenshots. Individual tests may
     // override via `page.setViewportSize()`.
     viewport: { width: 1280, height: 800 },

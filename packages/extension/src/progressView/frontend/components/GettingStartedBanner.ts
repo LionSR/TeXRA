@@ -1,7 +1,6 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import { html, css, LitElement, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
-import { ifDefined } from 'lit/directives/if-defined.js';
 
 import {
   GETTING_STARTED_ACTION_PRESENTATION,
@@ -36,7 +35,7 @@ export class GettingStartedBanner extends LitElement {
         display: flex;
         flex-direction: column;
         min-width: 0;
-        gap: var(--wa-space-2xs);
+        gap: var(--wa-space-xs);
       }
 
       .getting-started-title {
@@ -60,7 +59,7 @@ export class GettingStartedBanner extends LitElement {
       .getting-started-actions {
         display: flex;
         flex-wrap: wrap;
-        gap: var(--wa-space-3xs);
+        gap: var(--wa-space-xs);
       }
 
       .dismiss-button {
@@ -84,12 +83,12 @@ export class GettingStartedBanner extends LitElement {
   private renderAction(
     action: GettingStartedAction,
     appearance: 'filled' | 'outlined',
-    variant?: 'brand',
   ): TemplateResult {
     const { icon, label } = GETTING_STARTED_ACTION_PRESENTATION[action];
     return html`
       <wa-button
-        variant=${ifDefined(variant)}
+        class=${appearance === 'filled' ? 'btn-secondary' : 'btn-ghost'}
+        variant="neutral"
         appearance=${appearance}
         size="s"
         @click=${() => this.handleAction(action)}
@@ -102,7 +101,8 @@ export class GettingStartedBanner extends LitElement {
   override render(): TemplateResult {
     return renderBannerFrame({
       id: 'gettingStartedBanner',
-      variant: 'brand',
+      variant: 'neutral',
+      appearance: 'outlined',
       calloutClassName: 'getting-started-banner',
       body: html`
         <div class="getting-started-row">
@@ -118,7 +118,7 @@ export class GettingStartedBanner extends LitElement {
               role="group"
               aria-label="Getting started actions"
             >
-              ${this.renderAction('createSampleProject', 'filled', 'brand')}
+              ${this.renderAction('createSampleProject', 'filled')}
               ${this.renderAction('cloneOverleaf', 'outlined')}
               ${this.renderAction('downloadArxiv', 'outlined')}
             </div>

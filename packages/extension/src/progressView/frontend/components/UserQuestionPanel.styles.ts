@@ -5,10 +5,6 @@ import { css, type CSSResult } from 'lit';
 import { sp, visuallyHiddenDeclarations } from '@ui/styles';
 
 export const userQuestionPanelStyles: CSSResult = css`
-  :host {
-    --request-accent: var(--wa-color-focus);
-  }
-
   /* The questions are the card; the dock scrolls rather than this body. */
   .request-card__details {
     max-height: none;

@@ -3,15 +3,14 @@ import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared modules
 import { DESKTOP_THEME_KIND, type Theme } from '@shared/schemas';
-import {
-  loadMonaco,
-  monacoThemeForHostTheme,
-  type MonacoModule,
-} from '@shared/monaco/monacoLoader';
+import { loadMonaco, type MonacoModule } from '@shared/monaco/monacoLoader';
 import { commonViewStyles, designTokens } from '@ui/styles';
 
 // Local imports - shared Web Awesome helpers
 import { renderLoadingState } from '@ui/wa/loadingState';
+import { applyMonacoTheme } from '@ui/wa/monacoTheme';
+import { monacoPresentationOptions } from '@ui/wa/monacoOptions';
+import { monacoStyles } from '@ui/styles/monacoStyles';
 
 // Local imports - errors
 import { extractErrorMessage } from '@utils/errors/errorMessage';
@@ -24,6 +23,7 @@ export class TexraDiffView extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    monacoStyles,
     css`
       :host {
         display: block;
@@ -153,13 +153,13 @@ export class TexraDiffView extends LitElement {
       this.monaco = monaco;
       this.applyTheme();
       this.editor = monaco.editor.createDiffEditor(container, {
+        ...monacoPresentationOptions(this),
         automaticLayout: false,
         enableSplitViewResizing: true,
         originalEditable: false,
         readOnly: true,
         renderOverviewRuler: true,
         renderSideBySide: true,
-        scrollBeyondLastLine: false,
       });
       this.syncModels();
       this.observeResize(container);
@@ -201,7 +201,7 @@ export class TexraDiffView extends LitElement {
   }
 
   private applyTheme(): void {
-    this.monaco?.editor.setTheme(monacoThemeForHostTheme(this.hostTheme));
+    if (this.monaco) applyMonacoTheme(this.monaco, this.hostTheme, this);
   }
 
   private disposeMonacoObjects(): void {

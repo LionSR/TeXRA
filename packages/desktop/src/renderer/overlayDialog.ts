@@ -19,7 +19,7 @@ export function renderElement(template: TemplateResult): HTMLElement {
 
 /**
  * Small icon-only close button shared by the desktop's imperative dialog
- * overlays (PDF, prompt) — each wires it to its own `dialog.open = false`
+ * overlays — each wires it to its own `dialog.open = false`
  * handler.
  */
 function createDialogCloseButton(
@@ -31,7 +31,7 @@ function createDialogCloseButton(
     renderIconActionButton({
       icon: 'xmark',
       label,
-      size: 'l',
+      size: 's',
       className: `${className} desktop-overlay-close icon-button focus-ring-inset`,
       onClick: onClose,
     }),
@@ -40,8 +40,8 @@ function createDialogCloseButton(
 
 /**
  * Shared scaffolding for the desktop's imperative `wa-dialog` overlays
- * (PDF, prompt): one shell — `withoutHeader` / `lightDismiss` / `aria-label`,
- * a titled header, an absolutely-positioned close button, and the
+ * (Settings, prompt): one shell — `withoutHeader` / `lightDismiss` / `aria-label`,
+ * a titled header with an aligned close button, and the
  * `appRoot.append` — so each overlay owns only its content and behavior and
  * the near-identical shells (and their `desktop-*` class families) cannot
  * drift.
@@ -55,7 +55,7 @@ interface OverlayDialogOptions {
   prefix: string;
   ariaLabel: string;
   closeLabel: string;
-  /** The overlay's content element (PDF iframe, prompt form). */
+  /** The overlay's content element (settings view, prompt form). */
   content: HTMLElement;
   /** Wraps `content` in a titled `<section>` header shell. */
   title: string;
@@ -81,21 +81,22 @@ export function createOverlayDialog(
   const body = document.createElement('section');
   body.classList.add(`${prefix}-body`);
   const header = document.createElement('header');
-  header.classList.add(`${prefix}-header`);
+  header.classList.add(`${prefix}-header`, 'desktop-overlay-header');
   const titleEl = document.createElement('h2');
-  titleEl.classList.add(`${prefix}-title`);
+  titleEl.classList.add(`${prefix}-title`, 'desktop-overlay-title');
   titleEl.textContent = options.title;
   const subtitleEl = document.createElement('p');
-  subtitleEl.classList.add(`${prefix}-subtitle`);
-  header.append(titleEl, subtitleEl);
-  body.append(header, options.content);
-  dialog.append(body);
-
-  dialog.append(
+  subtitleEl.classList.add(`${prefix}-subtitle`, 'desktop-overlay-subtitle');
+  header.append(
+    titleEl,
     createDialogCloseButton(`${prefix}-close`, options.closeLabel, () => {
       dialog.open = false;
     }),
+    subtitleEl,
   );
+  body.append(header, options.content);
+  dialog.append(body);
+
   options.appRoot.append(dialog);
   return { dialog, titleEl, subtitleEl };
 }

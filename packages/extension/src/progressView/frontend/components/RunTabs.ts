@@ -230,7 +230,16 @@ export class RunTabs extends LitElement {
     return html`
       <div class="tabs">
         <div class="tabs-content">
-          <div @click=${this.handleTabClick}>${body}</div>
+          <div
+            @click=${this.handleTabClick}
+            @run-row-delete=${(event: Event) => {
+              const tab = getComposedPathElement<RunTab>(event, 'run-tab');
+              if (tab && this.removable && tab.run.actions.includes('delete'))
+                this.deleteRun(tab, tab.run.id);
+            }}
+          >
+            ${body}
+          </div>
           ${when((view?.order.length ?? 0) === 0, () =>
             renderEmptyState({
               icon: 'list-ul',

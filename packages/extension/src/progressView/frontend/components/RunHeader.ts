@@ -61,6 +61,7 @@ const RENAME_TASK = 'renameTask';
 /** The menu values of Fork and Hand off, and the prefix of a fork's link. */
 const FORK_TASK = 'forkTask';
 const HAND_OFF = 'handOff';
+const END_TASK = 'endTask';
 const OPEN_FORK = 'openFork:';
 
 /** The status dot's hue per tone (G4: the fold spells the tone). */
@@ -124,13 +125,6 @@ export class RunHeader extends LitElement {
         flex: 1;
         min-width: 6ch;
         margin: 0;
-        padding: var(--wa-space-3xs) var(--wa-space-2xs);
-        border: 1px solid var(--wa-color-brand-border-normal);
-        border-radius: var(--border-radius-small);
-        background: var(--wa-color-surface-default);
-        color: var(--wa-color-text-normal);
-        font: inherit;
-        font-size: var(--font-size);
         font-weight: var(--font-weight-semibold);
       }
 
@@ -336,7 +330,7 @@ export class RunHeader extends LitElement {
   private renderTitle(run: RunView): TemplateResult {
     if (this.renaming)
       return html`<input
-        class="rename-input"
+        class="rename-input inline-rename"
         aria-label="Task title"
         .value=${run.description || run.label}
         @keydown=${(event: KeyboardEvent) => {
@@ -443,6 +437,10 @@ export class RunHeader extends LitElement {
     const goal = goalStateOf(run);
     // The header offers exactly what the fold's `actions` licenses.
     const canStop = run.actions.includes('stop');
+    const idle =
+      run.status === 'waiting' &&
+      run.group === 'running' &&
+      run.approval === 'none';
     const canGrant = run.actions.includes('grant');
     const passLabel = progressBadgeLabel(run, this.plannedPasses);
 
@@ -475,7 +473,7 @@ export class RunHeader extends LitElement {
             : nothing
         }
         ${
-          canStop
+          canStop && !idle
             ? renderIconActionButton({
                 id: ELEMENT_IDS.STOP_STREAM_BTN,
                 icon: 'circle-stop',
@@ -519,6 +517,11 @@ export class RunHeader extends LitElement {
     const canRename = run.actions.includes('rename');
     const canFork = run.actions.includes('fork');
     const canHandOff = run.actions.includes('reset');
+    const canEnd =
+      run.actions.includes('stop') &&
+      run.status === 'waiting' &&
+      run.group === 'running' &&
+      run.approval === 'none';
     const forks = [...(this.view?.runs.values() ?? [])].filter(
       (candidate) => candidate.forkedFrom?.id === run.id,
     );
@@ -529,6 +532,16 @@ export class RunHeader extends LitElement {
           const { item } = event.detail;
           if (item.localName !== 'wa-dropdown-item') return;
           const { value } = item as WaDropdownItem;
+          if (value === END_TASK && canEnd) {
+            this.dispatchEvent(
+              SessionUiEvents.runtime({
+                kind: 'run.stop',
+                runId: run.id,
+                reason: 'user',
+              }),
+            );
+            return;
+          }
           if (value === RENAME_TASK) {
             this.startRename();
             return;
@@ -570,8 +583,10 @@ export class RunHeader extends LitElement {
           variant="neutral"
           size="s"
           type="button"
-          aria-label="More"
-          >${waIcon('ellipsis')}</wa-button
+          aria-label="Task actions"
+          >${waIcon('ellipsis')}<span class="action-button-label"
+            >Task actions</span
+          ></wa-button
         >
         <div class="menu-status">
           ${statusLabel}${passLabel ? ` · ${passLabel}` : ''}
@@ -628,6 +643,15 @@ export class RunHeader extends LitElement {
             >`,
         )}
         ${
+          canEnd
+            ? html`<wa-divider></wa-divider
+                ><wa-dropdown-item value=${END_TASK}
+                  >${waIcon('circle-stop', { slot: 'icon' })}End
+                  task</wa-dropdown-item
+                >`
+            : nothing
+        }
+        ${
           canDelete
             ? html`<wa-divider></wa-divider
                 ><wa-dropdown-item value=${DELETE_SESSION} variant="danger"
@@ -636,7 +660,7 @@ export class RunHeader extends LitElement {
             : nothing
         }
       </wa-dropdown>
-      <wa-tooltip for=${ELEMENT_IDS.HEADER_MORE_BTN}>More</wa-tooltip>
+      <wa-tooltip for=${ELEMENT_IDS.HEADER_MORE_BTN}>Task actions</wa-tooltip>
     `;
   }
 

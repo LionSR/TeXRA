@@ -15,6 +15,7 @@ import {
 } from '@shared/session/sessionView';
 
 import { DesktopProjects, type DesktopProject } from './desktopProjects.js';
+import { DESKTOP_HEADLESS } from './desktopPresentation.js';
 
 /** The host's attention surfaces, served by the Electron composition root. */
 interface DesktopAttentionPortShape {
@@ -59,10 +60,10 @@ export function electronAttentionPort(options: {
       return window !== null && !window.isDestroyed() && window.isFocused();
     },
     setBadgeCount: (count) => {
-      app.setBadgeCount(count);
+      if (!DESKTOP_HEADLESS) app.setBadgeCount(count);
     },
     notify: ({ title, body, key, runId }) => {
-      if (!Notification.isSupported()) return;
+      if (DESKTOP_HEADLESS || !Notification.isSupported()) return;
       const notification = new Notification({ title, body });
       const release = () => {
         if (liveNotifications.get(key) === notification)

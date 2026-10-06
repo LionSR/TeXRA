@@ -101,20 +101,19 @@ export const settingsViewStyles: CSSResult[] = [
     }
 
     .settings-panel {
+      container: settings / inline-size;
       flex: 1;
       box-sizing: border-box;
       min-width: 0;
       min-height: 0;
       max-width: 100%;
-      padding: var(--wa-space-s);
+      padding: var(--wa-space-m);
       overflow: auto;
       overscroll-behavior: contain;
     }
 
     .settings-page-header {
-      margin-bottom: var(--wa-space-s);
-      padding-bottom: var(--wa-space-s);
-      border-bottom: var(--border-thin) solid var(--border-hairline);
+      margin-bottom: var(--wa-space-m);
     }
 
     .settings-page-header-copy {
@@ -130,10 +129,65 @@ export const settingsViewStyles: CSSResult[] = [
     }
 
     .settings-page-header p {
-      margin: var(--wa-space-3xs) 0 0;
+      margin: var(--wa-space-2xs) 0 0;
       color: var(--wa-color-text-quiet);
       font-size: var(--font-size-sm);
       line-height: var(--line-height-normal);
+      max-width: 65ch;
+      text-wrap: pretty;
+    }
+
+    /* Desktop settings have enough room for a persistent section rail.
+       Keeping the categories in one column leaves a stable reading edge. */
+    :host([data-desktop-view]) .settings-container {
+      display: grid;
+      grid-template-columns: clamp(136px, 20%, 196px) minmax(0, 1fr);
+    }
+
+    :host([data-desktop-view]) .settings-navigation {
+      min-height: 0;
+      padding: var(--wa-space-xs);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      border-bottom: 0;
+      border-inline-end: var(--border-thin) solid var(--wa-color-surface-border);
+      background: var(--wa-color-surface-lowered);
+    }
+
+    :host([data-desktop-view]) .settings-page-nav {
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--wa-space-3xs);
+      padding: 0;
+      overflow: visible;
+    }
+
+    :host([data-desktop-view]) .settings-section-nav {
+      margin-top: var(--wa-space-m);
+      padding-top: var(--wa-space-m);
+      background: transparent;
+    }
+
+    :host([data-desktop-view]) .settings-page-button::part(base) {
+      justify-content: flex-start;
+      min-height: var(--height-button);
+      padding-inline: var(--wa-space-xs);
+      border-radius: var(--row-radius);
+      box-shadow: none;
+      white-space: normal;
+      text-align: start;
+    }
+
+    :host([data-desktop-view])
+      .settings-page-button[data-active='true']::part(base) {
+      background: var(--surface-selected);
+      color: var(--wa-color-brand-on-quiet);
+      font-weight: var(--font-weight-semibold);
+    }
+
+    :host([data-desktop-view]) .settings-section-button::part(base) {
+      min-height: var(--height-control-compact);
+      font-size: var(--font-size-xs);
     }
 
     @container settings (max-width: 520px) {

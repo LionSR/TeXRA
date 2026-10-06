@@ -75,10 +75,21 @@ test('first-run screenshot', async () => {
   expect(
     await launched.page.locator('wa-dialog.desktop-onboarding').count(),
   ).toBe(0);
-  await launched.page.screenshot({
-    path: getScreenshotPath(test.info(), 'startup.png'),
-    fullPage: false,
-  });
+  for (const theme of ['light', 'dark'] as const) {
+    await launched.page.emulateMedia({ colorScheme: theme });
+    await expect(launched.page.locator('body')).toHaveClass(
+      new RegExp(`vscode-${theme}`),
+    );
+    await launched.page.evaluate(() => document.fonts.ready);
+    await launched.page.screenshot({
+      path: getScreenshotPath(
+        test.info(),
+        theme === 'light' ? 'startup.png' : 'startup-dark.png',
+      ),
+      animations: 'disabled',
+      fullPage: false,
+    });
+  }
   await dismissOnboarding(launched.page);
 });
 
@@ -90,6 +101,66 @@ test('command palette opens and dismisses', async () => {
     .filter({ hasText: 'Commands' })
     .click();
   await expect.poll(commandPaletteEntryCount).toBeGreaterThan(0);
+  await launched.page.screenshot({
+    path: test.info().outputPath('command-palette-dark.png'),
+    animations: 'disabled',
+  });
   await launched.page.keyboard.press('Escape');
   await expect.poll(commandPaletteIsClosed).toBe(true);
+});
+
+// The vertical settings navigation must remain operable by keyboard, and
+// its controls must stay reachable when the native window shrinks.
+test('settings navigation and appearance across window sizes', async () => {
+  const { app, page } = launched;
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await expect(page.locator('body')).toHaveClass(
+      new RegExp(`vscode-${theme}`),
+    );
+    await page.screenshot({
+      path: test.info().outputPath(`launcher-${theme}.png`),
+      animations: 'disabled',
+    });
+    await page
+      .locator('.shell-sidebar-footer .shell-sidebar-action')
+      .filter({ hasText: 'Settings' })
+      .click();
+    const settings = page.locator('wa-dialog.desktop-settings-overlay');
+    await expect(settings).toHaveJSProperty('open', true);
+    const pages = settings.getByRole('tablist', { name: 'Settings pages' });
+    await expect(pages).toHaveAttribute('aria-orientation', 'vertical');
+    const tabs = pages.getByRole('tab');
+    for (const tab of await tabs.all()) {
+      await tab.click();
+      await expect(tab).toHaveAttribute('aria-selected', 'true');
+      const name = await tab.getAttribute('data-panel');
+      await page.screenshot({
+        path: test.info().outputPath(`settings-${name}-${theme}.png`),
+        animations: 'disabled',
+      });
+    }
+    await tabs.first().focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+    await page.keyboard.press('Home');
+    await expect(tabs.first()).toHaveAttribute('aria-selected', 'true');
+    await app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0].setContentSize(960, 640);
+    });
+    await expect(settings.getByRole('tabpanel')).toBeVisible();
+    await page.screenshot({
+      path: test.info().outputPath(`settings-compact-${theme}.png`),
+      animations: 'disabled',
+    });
+    await settings.locator('.desktop-settings-close').click();
+    await expect(settings).toHaveJSProperty('open', false);
+    await page.screenshot({
+      path: test.info().outputPath(`launcher-compact-${theme}.png`),
+      animations: 'disabled',
+    });
+    await app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0].setContentSize(1280, 800);
+    });
+  }
 });

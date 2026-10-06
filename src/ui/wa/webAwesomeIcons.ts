@@ -1,5 +1,6 @@
 // Third-party imports
 import { faArrowDown } from '@fortawesome/free-solid-svg-icons/faArrowDown';
+import { faTableColumns } from '@fortawesome/free-solid-svg-icons/faTableColumns';
 import { faArrowRight } from '@fortawesome/free-solid-svg-icons/faArrowRight';
 import { faArrowRotateLeft } from '@fortawesome/free-solid-svg-icons/faArrowRotateLeft';
 import { faArrowsRotate } from '@fortawesome/free-solid-svg-icons/faArrowsRotate';
@@ -260,6 +261,7 @@ const icons = {
   video: faVideo,
   'wand-magic-sparkles': faWandMagicSparkles,
   'window-maximize': faWindowMaximize,
+  'table-columns': faTableColumns,
   wrench: faWrench,
   xmark: faXmark,
 } as const satisfies Record<
@@ -312,7 +314,7 @@ export function waIcon(
     library=${TEXRA_ICON_LIBRARY}
     name=${name}
     variant="solid"
-    canvas="auto"
+    canvas="square"
     slot=${ifDefined(options.slot)}
     class=${ifDefined(options.className)}
     label=${ifDefined(options.label)}

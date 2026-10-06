@@ -104,7 +104,7 @@ export abstract class BaseRunContent extends LitElement {
           run.statusDetail ??
           (live
             ? `This ${run.parentId === null ? 'task' : 'agent'} takes no messages.`
-            : `This ${run.parentId === null ? 'task' : 'agent'} has ended.`)
+            : `${run.statusLabel}.`)
         }</span
       >
       ${

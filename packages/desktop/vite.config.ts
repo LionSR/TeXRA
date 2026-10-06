@@ -7,6 +7,17 @@ import { aliases } from '../../scripts/aliases.mjs';
 export default defineConfig({
   base: './',
   root: resolve(import.meta.dirname, 'src/renderer'),
+  // These entry points are loaded together by the shared Monaco loader.
+  // Discovering them only after Electron starts invalidates the optimizer's
+  // common chunks and forces a reload while the renderer is bootstrapping.
+  optimizeDeps: {
+    include: [
+      'monaco-editor/editor/editor.api.js',
+      'monaco-editor/features/register.all.js',
+      'monaco-editor/languages/register.all.js',
+      'monaco-editor/languages/features/register.all.js',
+    ],
+  },
   build: {
     outDir: resolve(import.meta.dirname, 'dist/renderer'),
     emptyOutDir: true,

@@ -375,6 +375,12 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **A more consistent desktop workspace.** Task history supports renaming and
+  compact action menus. Files stay visible beside the editor, the terminal
+  occupies its own panel, and shared controls, messages and settings use
+  consistent spacing. Editor menus follow the app theme, New task opens a
+  fresh draft, and idle tasks keep their end action in the task menu.
+
 - **VS Code windows run their tasks in the background service.** On macOS
   and Linux the extension starts the TeXRA service (or uses the one already
   running) and launches, resumes and steers its tasks there, so a task

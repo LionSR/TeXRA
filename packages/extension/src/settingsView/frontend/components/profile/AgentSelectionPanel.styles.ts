@@ -65,7 +65,6 @@ export const agentSelectionPanelStyles: CSSResult = css`
     min-height: var(--wa-height-option, 32px);
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-normal);
-    border-inline-start: var(--border-medium) solid transparent;
   }
 
   .agent-list-item:hover {
@@ -75,7 +74,6 @@ export const agentSelectionPanelStyles: CSSResult = css`
   .agent-list-item.selected {
     background: var(--wa-color-brand-fill-quiet);
     color: var(--wa-color-text-normal);
-    border-inline-start-color: var(--wa-color-brand-fill-loud);
   }
 
   .agent-list-item.selected .agent-list-item-name,

@@ -5,10 +5,6 @@ import { css, type CSSResult } from 'lit';
 import { sp } from '@ui/styles';
 
 export const proposalRequestPanelStyles: CSSResult = css`
-  :host {
-    --request-accent: var(--wa-color-text-link);
-  }
-
   /* The pickers open floating menus a scrolling body would clip, so the
      whole card scrolls in the dock instead; the rule keeps what scrolls
      under the sticky action row from running into it. */

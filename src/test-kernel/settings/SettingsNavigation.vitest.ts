@@ -78,7 +78,7 @@ describe('settings navigation', () => {
     setSelectedPanel('models');
   });
 
-  it('shows every page in one strip and a sub-tab row only for multi-section pages', async () => {
+  it('shows every page and section navigation only for multi-section pages', async () => {
     const app = await mountSettingsApp();
 
     expect(
@@ -139,7 +139,7 @@ describe('settings navigation', () => {
     ]);
     teams.dispatchEvent(
       new KeyboardEvent('keydown', {
-        key: 'ArrowRight',
+        key: 'ArrowDown',
         bubbles: true,
         composed: true,
       }),

@@ -1,10 +1,17 @@
 // Third-party imports
 import { css } from 'lit';
+import { messageHeaderStyles } from '@ui/styles/messageHeaderStyles';
+import {
+  panelFrameStyles,
+  panelHeaderStyles,
+  panelContentStyles,
+} from '@ui/styles/surfaceStyles';
 
 /**
  * Tool-use section styles for scratchpad, tool calls, diffs, etc.
  */
 export const toolUseStyles = css`
+  ${messageHeaderStyles}
   .tool-use-section {
     margin: var(--wa-space-2xs) 0;
   }
@@ -42,18 +49,68 @@ export const toolUseStyles = css`
     font-size: var(--font-size-sm);
   }
 
-  :is(.tool-use-error, .banner-details--error)
-    > .details-summary
-    :is(.tool-use-title, .label, wa-icon),
-  .banner-content--error {
+  :is(.tool-use-error, .banner-details--error) > .details-summary > wa-icon {
     color: var(--color-error);
+  }
+
+  .banner-details--error .label {
+    flex: 1;
+    min-width: 0;
+    color: var(--wa-color-text-normal);
+    font-weight: var(--font-weight-medium);
+    overflow-wrap: anywhere;
+  }
+
+  .banner-details--error::part(summary) {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .banner-details--error > .details-summary {
+    --message-actions-width: var(--control-size-s);
+    width: 100%;
+    padding: 0;
+  }
+
+  .banner-details--error .message-label > .icon {
+    color: var(--color-error);
+  }
+
+  wa-details.banner-details--error::part(base) {
+    ${panelFrameStyles}
+  }
+
+  wa-details.banner-details--error::part(header) {
+    ${panelHeaderStyles}
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--control-size-s);
+    gap: var(--wa-space-xs);
+  }
+
+  wa-details.banner-details--error::part(icon) {
+    display: grid;
+    place-items: center;
+    width: var(--control-size-s);
+    height: var(--control-size-s);
+    margin: 0;
+  }
+
+  wa-details.banner-details--error::part(content) {
+    ${panelContentStyles}
+  }
+
+  .banner-content--error {
+    padding: 0;
   }
 
   .banner-content--error .error-details {
     margin: 0;
-    padding: var(--wa-space-2xs);
-    background-color: var(--wa-color-danger-fill-quiet);
-    border-radius: var(--border-radius-small);
+    padding: 0;
+    background: transparent;
+    color: var(--wa-color-text-quiet);
+    font-family: var(--wa-font-family-mono);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-relaxed);
     white-space: pre-wrap;
     word-break: break-word;
   }
@@ -84,20 +141,8 @@ export const toolUseStyles = css`
   }
 
   :is(.tool-user-feedback, .tool-error-content) {
-    padding: var(--wa-space-2xs);
-    border-radius: var(--border-radius-small);
-    border-inline-start: var(--border-medium) solid;
-  }
-
-  .tool-user-feedback {
-    background-color: var(--wa-color-brand-fill-quiet, rgba(55, 148, 255, 0.1));
-    border-inline-start-color: var(--color-text-link);
-  }
-
-  .tool-error-content {
-    background-color: var(--wa-color-danger-fill-quiet);
-    border-inline-start-color: var(--color-error);
-    color: var(--color-error);
+    ${panelFrameStyles}
+    padding: var(--panel-padding-block) var(--panel-padding-inline);
   }
 
   .tool-output-full {
@@ -118,23 +163,15 @@ export const toolUseStyles = css`
   }
 
   wa-details.tool-use-details::part(base) {
-    border: var(--border-thin) solid
-      color-mix(in srgb, var(--wa-color-surface-border) 76%, transparent);
-    border-radius: var(--wa-border-radius-m, var(--border-radius));
-    background: color-mix(
-      in srgb,
-      var(--wa-color-neutral-fill-quiet) 44%,
-      transparent
-    );
+    ${panelFrameStyles}
   }
 
   wa-details.tool-use-details::part(header) {
-    min-height: 28px;
-    padding: var(--wa-space-3xs) var(--wa-space-xs);
+    ${panelHeaderStyles}
   }
 
   wa-details.tool-use-details::part(content) {
-    padding: 0 var(--wa-space-xs) var(--wa-space-xs);
+    ${panelContentStyles}
   }
 
   /* Diff styles */

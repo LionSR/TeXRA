@@ -172,15 +172,21 @@ export class SettingsApp extends SignalWatcher(LitElement) {
   }
 
   /**
-   * APG tabs keyboard contract for both nav rows: ArrowLeft/ArrowRight move
-   * (wrapping), Home/End jump to the ends, and moving selects the tab.
+   * Horizontal tabs use Left/Right; the desktop's vertical navigation uses
+   * Up/Down. Home/End jump to the ends, and moving selects the tab.
    */
   private async handleTablistKeydown(event: KeyboardEvent): Promise<void> {
     const tablist = event.currentTarget as HTMLElement;
     const tabs = [...tablist.querySelectorAll<HTMLElement>('[role="tab"]')];
     const current = tabs.indexOf(event.target as HTMLElement);
     if (current < 0) return;
-    const next = nextTablistIndex(event.key, current, tabs.length);
+    let key = event.key;
+    if (this.isDesktopHost) {
+      if (key === 'ArrowDown') key = 'ArrowRight';
+      else if (key === 'ArrowUp') key = 'ArrowLeft';
+      else if (key === 'ArrowLeft' || key === 'ArrowRight') return;
+    }
+    const next = nextTablistIndex(key, current, tabs.length);
     if (next === undefined) return;
     event.preventDefault();
     tabs[next].click();
@@ -224,6 +230,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
         <div
           class="settings-page-nav"
           role="tablist"
+          aria-orientation=${this.isDesktopHost ? 'vertical' : 'horizontal'}
           aria-label="Settings pages"
           @keydown=${this.handleTablistKeydown}
         >
@@ -260,6 +267,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
                 <div
                   class="settings-page-nav settings-section-nav"
                   role="tablist"
+                  aria-orientation=${this.isDesktopHost ? 'vertical' : 'horizontal'}
                   aria-label=${`${activeEntry.label} sections`}
                   @keydown=${this.handleTablistKeydown}
                 >

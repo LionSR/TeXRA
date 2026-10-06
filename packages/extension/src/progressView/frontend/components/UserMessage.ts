@@ -26,9 +26,11 @@ import { CopyButtonController } from '@shared/litControllers/CopyButtonControlle
 import { designTokens } from '@ui/styles';
 import { buttonStyles, focusRingStyles } from '@ui/styles/controlStyles';
 import { markdownStyles } from '@ui/styles/markdownStyles';
+import { panelFrameStyles } from '@ui/styles/surfaceStyles';
+import { messageHeaderStyles } from '@ui/styles/messageHeaderStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
-import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
 // Local imports - formatter helpers
 import { processMarkdownContent } from '../formatters/markdownRenderer';
@@ -64,6 +66,7 @@ export class UserMessage extends LitElement {
   static override styles = [
     designTokens,
     buttonStyles,
+    messageHeaderStyles,
     // The only markdownStyles consumer that does not compose commonViewStyles,
     // so it is also the only one that would not inherit the shared focus ring.
     // A user message can contain \ref{}/\cref{}, which render as focusable
@@ -77,42 +80,20 @@ export class UserMessage extends LitElement {
 
       .user-message-container {
         display: flex;
-        justify-content: flex-end;
-        margin: var(--wa-space-l) 0 var(--wa-space-m);
-      }
-
-      /* The log's own top padding already separates the first entry from the
-         prelude panels; the inter-turn gap is only needed between entries. */
-      :host(:first-child) .user-message-container {
-        margin-top: 0;
+        /* One trailing gap. Leading space belongs to the transcript, so
+           margins cannot double across a custom-element boundary. */
+        margin: 0 0 var(--message-gap);
       }
 
       .user-message {
+        ${panelFrameStyles}
         position: relative;
-        padding: var(--wa-space-xs) var(--wa-space-s);
-        max-width: min(78%, 38rem);
-        background-color: var(--wa-color-neutral-fill-quiet);
-        border: 0;
-        border-radius: var(--wa-border-radius-xl, 20px);
-        box-shadow: inset 0 0 0 1px
-          color-mix(in srgb, var(--wa-color-surface-border) 72%, transparent);
+        width: 100%;
+        padding: var(--panel-padding-block) var(--panel-padding-inline);
       }
 
       .user-message-header {
-        position: absolute;
-        top: calc(100% + var(--wa-space-3xs));
-        inset-inline-end: var(--wa-space-2xs);
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-3xs);
-        font-size: var(--font-size-xs);
-        color: var(--color-text-secondary);
-      }
-
-      .user-message-header-left {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--wa-space-3xs);
+        margin-bottom: var(--wa-space-2xs);
       }
 
       /* Off while the conversation it sits in cannot fork now: the
@@ -145,7 +126,7 @@ export class UserMessage extends LitElement {
         overflow-wrap: anywhere;
         unicode-bidi: plaintext;
         line-height: 1.55;
-        font-size: var(--font-size);
+        font-size: var(--font-size-reading);
       }
 
       .user-message--structured-delivery .user-message-content {
@@ -162,31 +143,15 @@ export class UserMessage extends LitElement {
         white-space: normal;
       }
 
-      .user-message-timestamp {
-        font-size: var(--font-size-xs);
-      }
-
-      @container (max-width: 520px) {
-        .user-message {
-          max-width: 88%;
-        }
-      }
-
-      /*
-       * High-contrast themes: the selection-background fill clashes with the
-       * editor-foreground text (rendering the bubble unreadable) and the panel
-       * border resolves to transparent. Fall back to the editor background plus
-       * a solid contrast border so the message stays visible and delineated.
-       * The bubble's outline is the inset box-shadow above, not a border, so
-       * the contrast color has to replace that shadow: the base rule sets
-       * border: 0, which zeroes border-style, so overriding border-color alone
-       * painted nothing and this fallback never rendered.
-       */
+      /* Host contrast colors keep the message frame visible in both
+         high-contrast themes. */
       :host-context(.vscode-high-contrast) .user-message,
       :host-context(.vscode-high-contrast-light) .user-message {
         background-color: var(--wa-color-surface-default);
-        box-shadow: inset 0 0 0 1px
-          var(--vscode-contrastBorder, var(--wa-color-surface-border));
+        border-color: var(
+          --vscode-contrastBorder,
+          var(--wa-color-surface-border)
+        );
       }
     `,
   ];
@@ -307,52 +272,54 @@ export class UserMessage extends LitElement {
             'user-message--structured-delivery': isStructuredDelivery,
           })}
         >
-          <div class="user-message-header">
-            <span class="user-message-header-left">
-              ${waIcon('comment', { className: 'user-message-icon' })}
-              <time
-                id="user-message-timestamp"
-                class="user-message-timestamp"
-                datetime=${messageDate.toISOString()}
-                >${timeDisplay}</time
-              >
-              <wa-tooltip for="user-message-timestamp"
-                >${tooltipTimestamp}</wa-tooltip
-              >
+          <div class="user-message-header message-header">
+            <span class="message-label"
+              >${waIcon('user')}<span class="message-author">You</span></span
+            >
+            <time
+              id="user-message-timestamp"
+              class="user-message-timestamp message-timestamp"
+              datetime=${messageDate.toISOString()}
+              >${timeDisplay}</time
+            >
+            <wa-tooltip for="user-message-timestamp"
+              >${tooltipTimestamp}</wa-tooltip
+            >
+            <span class="message-actions">
+              ${renderIconActionButton({
+                id: 'user-message-copy-button',
+                icon: 'copy',
+                label: copyState.ariaLabel,
+                tooltip: copyState.title,
+                className: `user-message-copy ${copyState.copied ? copyState.successClass : ''}`,
+                onClick: () => this.copyController.copy(copyText),
+              })}
+              ${
+                this.forkAt !== null && !isStructuredDelivery
+                  ? renderIconActionButton({
+                      id: 'user-message-fork-button',
+                      icon: 'code-branch',
+                      label: TASK_ACTIONS.forkFromHere,
+                      tooltip: TASK_ACTIONS.forkFromHere,
+                      className: 'user-message-copy user-message-fork',
+                      onClick: () => this.forkFromHere(),
+                    })
+                  : nothing
+              }
+              ${
+                hasRawMessage
+                  ? renderIconActionButton({
+                      id: 'user-message-raw-copy-button',
+                      icon: 'code',
+                      label: rawMessageCopyState.ariaLabel,
+                      tooltip: rawMessageCopyState.title,
+                      className: `user-message-copy ${rawMessageCopyState.copied ? rawMessageCopyState.successClass : ''}`,
+                      onClick: () =>
+                        this.rawMessageCopyController.copy(this.text),
+                    })
+                  : nothing
+              }
             </span>
-            ${renderIconActionButton({
-              id: 'user-message-copy-button',
-              icon: 'copy',
-              label: copyState.ariaLabel,
-              tooltip: copyState.title,
-              className: `user-message-copy ${copyState.copied ? copyState.successClass : ''}`,
-              onClick: () => this.copyController.copy(copyText),
-            })}
-            ${
-              this.forkAt !== null && !isStructuredDelivery
-                ? renderIconActionButton({
-                    id: 'user-message-fork-button',
-                    icon: 'code-branch',
-                    label: TASK_ACTIONS.forkFromHere,
-                    tooltip: TASK_ACTIONS.forkFromHere,
-                    className: 'user-message-copy user-message-fork',
-                    onClick: () => this.forkFromHere(),
-                  })
-                : nothing
-            }
-            ${
-              hasRawMessage
-                ? renderIconActionButton({
-                    id: 'user-message-raw-copy-button',
-                    icon: 'code',
-                    label: rawMessageCopyState.ariaLabel,
-                    tooltip: rawMessageCopyState.title,
-                    className: `user-message-copy ${rawMessageCopyState.copied ? rawMessageCopyState.successClass : ''}`,
-                    onClick: () =>
-                      this.rawMessageCopyController.copy(this.text),
-                  })
-                : nothing
-            }
           </div>
           ${
             isStructuredDelivery

@@ -18,11 +18,10 @@ import './ProcessRunContent';
 export class RunConversation extends LitElement {
   static override styles = css`
     :host {
-      /* The transcript spans the panel instead of a fixed reading column:
-         each consumer (.conversation-column, .log-container, .log-header)
-         applies its own inline gutter. Code blocks and diffs are free to
-         overflow the content box. */
-
+      /* One reading measure across the request dock, transcript and footer.
+         The log scroller stays full-width; its contents use the same gutter. */
+      --conversation-width: 760px;
+      --conversation-gutter: var(--wa-space-m);
       container-type: inline-size;
       display: flex;
       flex-direction: column;
@@ -32,6 +31,12 @@ export class RunConversation extends LitElement {
       overflow: hidden;
       background: var(--wa-color-surface-default);
       color: var(--wa-color-text-normal);
+    }
+
+    @container (max-width: 520px) {
+      :host {
+        --conversation-gutter: var(--wa-space-s);
+      }
     }
 
     tool-use-run-content,

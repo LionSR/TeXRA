@@ -12,19 +12,13 @@ import {
   keyboardEventToAccelerator,
   type DesktopShortcutEntry,
 } from '@shared/commands/shortcutPreferences';
-import {
-  commonViewStyles,
-  designTokens,
-  settingsBannerStyles,
-} from '@ui/styles';
+import { commonViewStyles, designTokens } from '@ui/styles';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
 import { renderEmptyState } from '@ui/wa/emptyState';
-import { renderSettingsBanner } from '@ui/wa/settingsBanner';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { pluralize } from '@utils/text/stringUtils';
 
 @customElement('shortcuts-tab')
@@ -32,37 +26,59 @@ export class ShortcutsTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    settingsBannerStyles,
     css`
       :host {
         display: block;
       }
 
+      .shortcuts-help,
       .shortcuts-feedback {
-        min-height: 1.4em;
-        margin: 0 0 var(--wa-space-xs);
+        margin: 0;
         color: var(--wa-color-text-quiet);
         font-size: var(--font-size-sm);
+        line-height: var(--line-height-normal);
+      }
+
+      .shortcuts-help {
+        max-width: 65ch;
+        margin-block-end: var(--wa-space-m);
+      }
+
+      .shortcuts-toolbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: end;
+        gap: var(--wa-space-m);
+        margin-block-end: var(--wa-space-m);
+      }
+
+      .shortcuts-feedback:empty {
+        margin: 0;
+      }
+
+      .shortcuts-feedback:not(:empty) {
+        margin-block: var(--wa-space-xs);
       }
 
       .shortcuts-search {
-        width: min(100%, 28rem);
-        margin-block-end: var(--wa-space-xs);
-      }
-
-      .shortcuts-command {
-        font-family: var(--wa-font-family-mono);
-        font-size: var(--font-size-xs);
-        color: var(--wa-color-text-quiet);
+        width: 100%;
       }
 
       .shortcuts-control {
-        flex-wrap: wrap;
+        display: grid;
+        grid-template-columns: minmax(7rem, 10rem) auto auto;
+        gap: var(--wa-space-xs);
         justify-content: flex-end;
       }
 
       .shortcut-recorder {
-        min-width: 9rem;
+        width: 100%;
+      }
+
+      .shortcut-recorder::part(base) {
+        width: 100%;
+        font-family: var(--wa-font-family-mono);
+        font-size: var(--font-size-sm);
       }
 
       .shortcut-recorder[data-recording='true']::part(base) {
@@ -76,6 +92,10 @@ export class ShortcutsTab extends LitElement {
       }
 
       @container settings (max-width: 520px) {
+        .shortcuts-toolbar {
+          gap: var(--wa-space-xs);
+        }
+
         .shortcuts-control {
           justify-content: flex-start;
         }
@@ -195,13 +215,9 @@ export class ShortcutsTab extends LitElement {
       ? `Recording shortcut for ${entry.label}. Press the new shortcut.`
       : `Change shortcut for ${entry.label}. Current shortcut: ${label}.`;
     return html`
-      <div class="settings-row">
+      <div class="settings-row is-compact">
         <div class="settings-row-text">
           <span class="settings-row-label">${entry.label}</span>
-          <span class="settings-row-help">
-            ${entry.category}
-            <bdi class="shortcuts-command" dir="ltr">${entry.id}</bdi>
-          </span>
         </div>
         <div class="settings-row-control shortcuts-control">
           <wa-button
@@ -214,16 +230,12 @@ export class ShortcutsTab extends LitElement {
             @keydown=${(event: KeyboardEvent) =>
               this.captureShortcut(event, entry)}
           >
-            ${waIcon('code', { slot: 'start' })}
             ${recording ? label : html`<bdi dir="ltr">${label}</bdi>`}
           </wa-button>
-          ${renderLabeledActionButton({
+          ${renderIconActionButton({
             icon: 'arrow-rotate-left',
-            text: 'Reset',
-            kind: 'secondary',
-            appearance: 'outlined',
             label: `Reset ${entry.label}`,
-            title: 'Reset to default',
+            tooltip: 'Reset to default',
             onClick: () =>
               this.updateShortcut(entry.id, entry.defaultAccelerator),
           })}
@@ -249,27 +261,25 @@ export class ShortcutsTab extends LitElement {
         : '');
     return html`
       <div class="tab-content-container">
-        ${renderSettingsBanner({
-          id: 'keyboard-shortcuts-banner',
-          icon: 'code',
-          title: 'Keyboard shortcuts',
-          description:
-            'Select a binding, then press the new chord. Changes apply immediately to the desktop app and persist for this profile.',
-          actions: renderLabeledActionButton({
+        <p class="shortcuts-help">
+          Select a shortcut and press the new keys. Changes save automatically.
+        </p>
+        <div class="shortcuts-toolbar">
+          <wa-input
+            id="shortcuts-search"
+            class="shortcuts-search"
+            type="search"
+            label="Filter shortcuts"
+            @input=${this.handleSearch}
+          ></wa-input>
+          ${renderLabeledActionButton({
             icon: 'arrow-rotate-left',
             text: 'Reset all',
             kind: 'secondary',
             appearance: 'outlined',
             onClick: () => this.resetAll(),
-          }),
-        })}
-        <wa-input
-          id="shortcuts-search"
-          class="shortcuts-search"
-          type="search"
-          label="Filter shortcuts"
-          @input=${this.handleSearch}
-        ></wa-input>
+          })}
+        </div>
         <p
           class="shortcuts-feedback"
           role="status"

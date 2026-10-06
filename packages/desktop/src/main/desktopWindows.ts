@@ -3,6 +3,7 @@ import { Menu, type BrowserWindow } from 'electron';
 
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
+import { DESKTOP_HEADLESS } from './desktopPresentation.js';
 
 /**
  * Run a program on the process runtime as a fiber of the window's scope: it
@@ -167,9 +168,11 @@ export function createDesktopWindows(options: {
         reopen(then);
         return;
       }
-      if (window.isMinimized()) window.restore();
-      window.show();
-      window.focus();
+      if (!DESKTOP_HEADLESS) {
+        if (window.isMinimized()) window.restore();
+        window.show();
+        window.focus();
+      }
       then?.();
     },
     revealRun: (key, runId) => current?.reveal(key, runId),

@@ -19,17 +19,14 @@ import { html, nothing, render, type TemplateResult } from 'lit';
 
 import type { Theme } from '@shared/schemas';
 import { monacoLanguageForPath } from '@shared/monaco/monacoLanguage';
-import {
-  loadMonaco,
-  monacoThemeForHostTheme,
-  type MonacoModule,
-} from '@shared/monaco/monacoLoader';
+import { loadMonaco, type MonacoModule } from '@shared/monaco/monacoLoader';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
+import { applyMonacoTheme } from '@ui/wa/monacoTheme';
+import { monacoPresentationOptions } from '@ui/wa/monacoOptions';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLoadingState } from '@ui/wa/loadingState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
-import { getDesktopChromeFontSize } from './desktopTypography';
 import { createEditorFileNotice } from './editorFileNotice';
 import {
   buildEditorDirectoryEntries,
@@ -119,6 +116,10 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   // One model per opened file so switching tabs preserves each file's undo
   // history and cursor — recreating a model on every switch would lose both.
   const models = new Map<string, TextModel>();
+  const viewStates = new Map<
+    string,
+    NonNullable<ReturnType<CodeEditor['saveViewState']>>
+  >();
   const pendingModelLoads = new Map<string, Promise<TextModel | undefined>>();
   // The tail of each path's model-sync lane; see `onModelSyncLane`.
   const modelSyncTails = new Map<string, Promise<void>>();
@@ -324,30 +325,18 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         const loadedMonaco = await loadMonaco();
         if (disposed) return undefined;
         monaco = loadedMonaco;
-        const editorFontSize = getDesktopChromeFontSize();
         editor = loadedMonaco.editor.create(editorHost, {
-          theme: monacoThemeForHostTheme(theme),
+          ...monacoPresentationOptions(document.body),
+          theme: applyMonacoTheme(loadedMonaco, theme, document.body),
           // Monaco measures its own container, and the pane is resized by splits
           // and divider drags, not only by the window.
           automaticLayout: true,
-          // A minimap on a prose-shaped document is noise; the file tree already
-          // names the file. Line numbers stay because errors are reported by line.
-          minimap: { enabled: false },
-          fontSize: editorFontSize,
-          lineHeight: Math.round(editorFontSize * 1.5),
           // Papers and proofs have paragraph-length lines, so wrapping beats a
           // horizontal scrollbar — but wrap on word boundaries, not anywhere.
           wordWrap: 'bounded',
           wordWrapColumn: 120,
-          wrappingStrategy: 'advanced',
-          scrollBeyondLastLine: false,
-          renderWhitespace: 'selection',
-          lineNumbersMinChars: 3,
-          glyphMargin: false,
+          wrappingStrategy: 'simple',
           folding: true,
-          padding: { top: 12, bottom: 12 },
-          smoothScrolling: true,
-          cursorBlinking: 'smooth',
         });
         return editor;
       } catch (error) {
@@ -484,7 +473,15 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       // Populate every requested model, but only the newest request may choose
       // which one is visible.
       if (!model || disposed || request !== latestOpenRequest) return;
-      target.setModel(model);
+      if (target.getModel() !== model) {
+        if (openPath) {
+          const state = target.saveViewState();
+          if (state) viewStates.set(openPath, state);
+        }
+        target.setModel(model);
+        const state = viewStates.get(path);
+        if (state) target.restoreViewState(state);
+      }
       openPath = path;
       notice.clear(path);
       renderTree();
@@ -589,7 +586,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       // `monaco.editor.setTheme` is global, not per-instance; applying it here
       // also re-themes the diff viewer, which is the desired behavior since
       // both follow the one host theme.
-      monaco?.editor.setTheme(monacoThemeForHostTheme(next));
+      if (monaco) applyMonacoTheme(monaco, next, document.body);
     },
 
     layout() {
@@ -610,6 +607,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       }
       models.get(path)?.dispose();
       models.delete(path);
+      viewStates.delete(path);
       dirtyPaths.delete(path);
       renderTree();
     },
@@ -622,6 +620,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       editor = undefined;
       for (const model of models.values()) model.dispose();
       models.clear();
+      viewStates.clear();
     },
   };
 }

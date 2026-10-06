@@ -122,6 +122,7 @@ export const TEXRA_ICON_CANONICAL_NAMES = [
   'shield',
   'spinner',
   'star',
+  'table-columns',
   'terminal',
   'thumbtack',
   'thumbtack-slash',

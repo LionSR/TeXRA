@@ -9,7 +9,6 @@ import {
   type TemplateResult,
 } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
@@ -95,12 +94,6 @@ export class MemoryItem extends LitElement {
       }
       .memory-preview .markdown-content p {
         margin: var(--wa-space-3xs) 0;
-      }
-
-      .memory-item.pinned {
-        border-inline-start: var(--border-medium) solid
-          var(--wa-color-text-link);
-        padding-inline-start: calc(var(--wa-space-xs) - var(--border-medium));
       }
     `,
   ];
@@ -279,13 +272,7 @@ export class MemoryItem extends LitElement {
     }
 
     return html`
-      <div
-        class=${classMap({
-          'list-item': true,
-          'memory-item': true,
-          pinned: this.item.pinned === true,
-        })}
-      >
+      <div class="list-item memory-item">
         <div class="list-item-header">
           <div class="memory-path" dir="auto">${this.item.displayPath}</div>
           ${this.renderActionGroup()}

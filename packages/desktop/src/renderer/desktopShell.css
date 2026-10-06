@@ -1,17 +1,14 @@
 /*
- * Conversation-first desktop shell.
- *
- * The stable hierarchy is sidebar → task → optional workbench. The task never
- * becomes a tab and never disappears behind an editor: artifacts open beside
- * it, matching the reference's chat + code layout.
+ * Project history, conversation and workspace have distinct regions.
+ * Files and Terminal expose the optional workbench without closing documents.
  */
 
 :root {
   --shell-frame-header-height: 48px;
   --shell-frame-icon-box: var(--control-size-s);
   --shell-frame-icon-size: var(--font-size-icon-sm);
-  --shell-workbench-tab-height: var(--shell-frame-header-height);
-  --shell-sidebar-default-width: 288px;
+  --shell-workbench-tab-height: 36px;
+  --shell-sidebar-default-width: 256px;
   /* Traffic lights end near 70px with the custom hidden-inset position. Keep
      native controls plus a full compact-control gap clear of app content. */
   --macos-titlebar-safe-inset: 92px;
@@ -40,7 +37,7 @@
 .shell-bottom-split::part(panel) {
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow: clip;
 }
 
 .shell-frame::part(divider),
@@ -67,17 +64,79 @@
   height: 100%;
   min-width: 0;
   min-height: 0;
+  overflow: clip;
+}
+
+.shell-frame-main-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.shell-workspace-layout {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.shell-workspace-toolbar {
+  flex: 0 0 var(--shell-frame-header-height);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--wa-color-surface-border);
+  box-sizing: border-box;
+  background: var(--wa-color-surface-lowered);
+  -webkit-app-region: drag;
+}
+
+.shell-workspace-project {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.shell-workspace-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+  -webkit-app-region: no-drag;
+}
+
+.shell-main-panel[hidden] {
+  display: none;
 }
 
 .shell-main-split {
   --divider-width: 1px;
   --divider-hit-area: 12px;
-  --min: 380px;
-  --max: min(960px, calc(100% - 380px));
+  --min: min(320px, 50%);
+  --max: min(960px, calc(100% - min(320px, 50%)));
   display: grid;
   width: 100%;
   height: 100%;
+}
+
+.shell-main-split.is-workspace-focus {
+  display: block;
+}
+
+.shell-main-split.is-workspace-focus::part(start),
+.shell-main-split.is-workspace-focus::part(divider) {
+  display: none;
+}
+
+.shell-main-split.is-workspace-focus::part(end) {
+  display: block;
+  height: 100%;
+  width: 100%;
 }
 
 .shell-bottom-split {
@@ -90,35 +149,6 @@
   height: 100%;
   min-width: 0;
   min-height: 0;
-}
-
-.shell-split-handle {
-  display: block;
-  width: 18px;
-  height: 18px;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-xs);
-  line-height: 1;
-  pointer-events: none;
-  transform: rotate(90deg);
-}
-
-.shell-bottom-split-handle {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-xs);
-  line-height: 1;
-  pointer-events: none;
-}
-
-/* A closed pane's split panel is disabled with a zero-width divider; its
-   grip would otherwise float free in the canvas. */
-wa-split-panel[disabled] > .shell-split-handle,
-wa-split-panel[disabled] > .shell-bottom-split-handle {
-  display: none;
 }
 
 /* ── Project/task sidebar ─────────────────────────────────────────────── */
@@ -138,7 +168,6 @@ wa-split-panel[disabled] > .shell-bottom-split-handle {
   height: 100%;
   min-width: 0;
   min-height: 0;
-  border-right: 1px solid var(--wa-color-surface-border);
   background: var(--wa-color-surface-lowered);
   overflow: hidden;
 }
@@ -151,48 +180,18 @@ wa-split-panel[disabled] > .shell-bottom-split-handle {
   padding: 0 12px;
   box-sizing: border-box;
   -webkit-app-region: drag;
+  border-bottom: 1px solid var(--wa-color-surface-border);
 }
 
 body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   padding-left: var(--macos-titlebar-safe-inset);
 }
 
-/* The TeXRA {T} mark (extension/resources/logo-128x128.svg) as a mask, so
-   it takes the brand accent in either theme. */
-.shell-sidebar-logo {
-  width: 26px;
-  height: 26px;
-  background: var(--wa-color-brand-fill-loud);
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg fill='none' stroke='%23000' stroke-width='4.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 10c-5.2 0-8 3.4-8 8.5v5.3c0 3-1.5 4.8-4.7 5.7 3.2.9 4.7 2.7 4.7 5.7v5.3c0 5.1 2.8 8.5 8 8.5'/%3E%3Cpath d='M42 10c5.2 0 8 3.4 8 8.5v5.3c0 3 1.5 4.8 4.7 5.7-3.2.9-4.7 2.7-4.7 5.7v5.3c0 5.1-2.8 8.5-8 8.5'/%3E%3C/g%3E%3Cpath d='M25 17.5h14v5.6h-4.1V47h-5.8V23.1H25z'/%3E%3C/svg%3E")
-    center / contain no-repeat;
-  -webkit-app-region: no-drag;
-}
-
-.shell-sidebar-product {
-  min-width: 0;
-  color: var(--wa-color-text-normal);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: -0.015em;
-}
-.shell-split-handle wa-icon,
-.shell-bottom-split-handle wa-icon,
-.shell-header-button wa-icon,
-.shell-layout-toggle wa-icon,
-.shell-workbench-tab-close wa-icon,
-.shell-workbench-close wa-icon {
-  display: grid;
-  place-items: center;
-  width: 1em;
-  height: 1em;
-  font-size: var(--shell-frame-icon-size);
-  line-height: 1;
-}
-
 .shell-sidebar-primary {
   display: grid;
-  gap: 2px;
-  padding: 8px 10px 10px;
+  grid-template-columns: minmax(0, 1fr) var(--height-button);
+  gap: 6px;
+  padding: 10px 10px 6px;
 }
 
 .shell-sidebar-action {
@@ -211,6 +210,7 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   font-weight: var(--font-weight-normal);
   min-height: var(--row-height);
   padding: 0 10px;
+  font-size: inherit;
 }
 
 .shell-sidebar-action::part(label) {
@@ -221,50 +221,32 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
 .shell-sidebar-action-icon {
   display: grid;
   place-items: center;
-  width: var(--shell-frame-icon-box);
-  height: var(--shell-frame-icon-box);
-  flex: 0 0 var(--shell-frame-icon-box);
+  width: var(--shell-frame-icon-size);
+  height: var(--shell-frame-icon-size);
+  flex: 0 0 var(--shell-frame-icon-size);
   color: var(--wa-color-text-quiet);
   font-size: var(--shell-frame-icon-size);
   line-height: 1;
 }
 
+.shell-sidebar-command::part(base) {
+  justify-content: center;
+  padding: 0;
+}
+
 .shell-sidebar-scroll {
-  --divider-width: 1px;
-  --divider-hit-area: 12px;
-  --min: 120px;
-  --max: calc(100% - 120px);
-  display: grid;
-  width: 100%;
-  height: 100%;
+  flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
-}
-
-.shell-sidebar-scroll::part(panel) {
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.shell-sidebar-scroll::part(divider) {
-  min-height: 0;
-  overflow: visible;
-  background: var(--wa-color-surface-border);
-  transition: background-color var(--transition-fast);
-}
-
-.shell-sidebar-scroll::part(divider):hover,
-.shell-sidebar-scroll::part(divider):focus-visible {
-  background: var(--wa-color-focus);
+  overflow: auto;
+  scrollbar-width: thin;
 }
 
 .shell-sidebar-section {
   width: 100%;
   min-width: 0;
   min-height: 0;
-  padding: 10px;
+  padding: 0 10px;
   box-sizing: border-box;
   overflow: auto;
   scrollbar-width: thin;
@@ -272,22 +254,44 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
 
 .shell-sidebar-section-label {
   color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
 }
 
 .shell-sidebar-section-heading {
   display: flex;
   align-items: center;
-  min-height: 30px;
-  padding: 0 8px;
+  min-height: 28px;
+  padding: 0 4px 0 6px;
 }
 
 .shell-project-item {
-  display: flex;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns:
+    var(--control-size-s) minmax(0, 1fr) var(--control-size-s)
+    var(--control-size-s);
   align-items: center;
-  gap: 2px;
-  margin-top: 4px;
+  column-gap: var(--wa-space-2xs);
+  margin-top: 2px;
+  min-height: var(--row-height);
+  border-radius: var(--row-radius);
+  padding-inline: var(--wa-space-2xs);
+}
+
+.shell-project-item::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(var(--control-size-s) + 2 * var(--wa-space-2xs));
+  inset-inline-end: 0;
+  border-radius: var(--row-radius);
+  z-index: -1;
+}
+
+.shell-project-item:hover::before {
+  background: var(--surface-hover);
 }
 
 /* The shown project reads as selected by weight alone: the selected task
@@ -301,10 +305,11 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
 /* One dot per project, always present when the project has news: what
    needs the user, what is running, what finished while they were away. */
 .shell-project-status {
+  grid-column: 3;
   flex: 0 0 auto;
   width: 8px;
   height: 8px;
-  margin: 0 4px;
+  justify-self: center;
   border-radius: 50%;
 }
 
@@ -321,21 +326,18 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   background: var(--wa-color-brand-fill-loud);
 }
 
-/* The row's own actions take room only while the row is hovered or
-   focused, so at rest the project name has the sidebar's whole width. */
-.shell-project-new,
-.shell-project-close {
-  flex: 0 0 auto;
+/* The same trailing action column is used by project and task rows. */
+.shell-project-menu {
+  display: block;
+  width: var(--control-size-s);
+  height: var(--control-size-s);
+  grid-column: 4;
+  justify-self: end;
   color: var(--wa-color-text-quiet);
 }
 
-.shell-project-item:not(:hover, :focus-within)
-  :is(.shell-project-new, .shell-project-close) {
-  display: none;
-}
-
 .shell-project-add {
-  margin-left: auto;
+  margin-inline-start: auto;
   color: var(--wa-color-text-quiet);
 }
 
@@ -354,25 +356,25 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
 .shell-project-row {
   display: block;
   width: 100%;
-  margin-top: 4px;
+  min-width: 0;
   color: var(--wa-color-text-normal);
 }
 
 .shell-project-item .shell-project-row {
-  flex: 1 1 auto;
-  min-width: 0;
-  margin-top: 0;
+  grid-column: 2;
 }
 
 .shell-project-fold {
-  flex: 0 0 auto;
+  grid-column: 1;
   color: var(--wa-color-text-quiet);
+}
+
+.shell-project-fold wa-icon {
+  font-size: var(--font-size-xs);
 }
 
 .shell-project-row::part(base) {
   width: 100%;
-  min-height: 28px;
-  padding: 2px 6px;
 }
 
 .shell-project-row::part(label) {
@@ -384,20 +386,13 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   text-align: left;
 }
 
-.shell-project-mark {
-  color: var(--wa-color-text-normal);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  box-shadow: var(--desktop-shadow-sm);
-}
-
 .shell-project-name {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--font-size);
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
 }
 
@@ -415,9 +410,9 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
 
 .shell-sidebar-footer {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 2px;
-  padding: 8px 10px 10px;
+  padding: 6px 8px;
   border-top: 1px solid var(--wa-color-surface-border);
 }
 
@@ -426,7 +421,7 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
 }
 
 .shell-sidebar-footer .shell-sidebar-action::part(base) {
-  min-height: 34px;
+  min-height: var(--row-height);
   padding: 0 8px;
 }
 
@@ -505,11 +500,7 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   padding: 0 12px;
   box-sizing: border-box;
   border-bottom: 1px solid var(--wa-color-surface-border);
-  background: color-mix(
-    in srgb,
-    var(--wa-color-surface-default) 94%,
-    transparent
-  );
+  background: var(--wa-color-surface-default);
   -webkit-app-region: drag;
 }
 
@@ -540,7 +531,7 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
 /* ── Optional workbench ───────────────────────────────────────────────── */
 
 .shell-workbench {
-  --workbench-tabs-height: var(--shell-frame-header-height);
+  --workbench-tabs-height: var(--shell-workbench-tab-height);
   position: relative;
   z-index: 3;
   display: grid;
@@ -551,10 +542,11 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   min-height: 0;
   background: var(--wa-color-surface-default);
   overflow: hidden;
+  container: workbench / inline-size;
 }
 
 .shell-workbench[data-placement='bottom'] {
-  --workbench-tabs-height: var(--shell-workbench-tab-height);
+  --workbench-tabs-height: 32px;
 }
 
 .shell-workbench-tabs {
@@ -585,9 +577,8 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   display: flex;
   align-items: center;
   flex: 0 0 auto;
-  min-width: 90px;
-  max-width: 210px;
-  border-right: 1px solid var(--wa-color-surface-border);
+  min-width: 64px;
+  max-width: 180px;
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-sm);
   user-select: none;
@@ -609,15 +600,15 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   inset: auto 10px 0;
   height: 2px;
   border-radius: 999px;
-  background: var(--wa-color-text-normal);
+  background: var(--wa-color-brand-fill-loud);
 }
 
 .shell-workbench-tab-icon {
   display: grid;
   place-items: center;
-  width: var(--shell-frame-icon-box);
-  height: var(--shell-frame-icon-box);
-  flex: 0 0 var(--shell-frame-icon-box);
+  width: var(--shell-frame-icon-size);
+  height: var(--shell-frame-icon-size);
+  flex: 0 0 var(--shell-frame-icon-size);
   font-size: var(--shell-frame-icon-size);
   line-height: 1;
 }
@@ -637,6 +628,8 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   padding: 0 4px 0 8px;
   border-radius: 0;
   background: transparent;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-normal);
 }
 
 .shell-workbench-tab-activate::part(label) {
@@ -710,10 +703,20 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
 
 .shell-workbench-close {
   align-self: center;
-  margin: 0 8px;
+  margin: 0 4px;
+}
+
+.shell-workbench-add {
+  display: flex;
+  align-items: center;
+  padding-inline-start: 4px;
+  border-inline-start: 1px solid var(--wa-color-surface-border);
 }
 
 body[data-desktop-platform='darwin'] .shell-frame-collapsed .shell-header,
+body[data-desktop-platform='darwin']
+  .shell-frame-collapsed
+  .shell-workspace-toolbar,
 body[data-desktop-platform='darwin']
   .shell-frame-collapsed
   .shell-header-start {
@@ -775,6 +778,15 @@ body[data-desktop-platform='darwin']
 }
 
 @media (max-width: 1120px) {
+  .shell-workspace-toolbar {
+    gap: 8px;
+    padding-inline: 8px;
+  }
+
+  .shell-workspace-project {
+    flex-basis: 0;
+  }
+
   .shell-main-split {
     --min: 320px;
     --max: min(720px, calc(100% - 320px));
@@ -810,19 +822,19 @@ body[data-desktop-platform='darwin']
  * Projects as rail sections
  * ------------------------------------------------------------------------- */
 
-.shell-sidebar-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  scrollbar-width: thin;
-}
-
 /* The rail is one line per task, the way a page tree is: agent, branch,
    time and model live in the row's tooltip, not a second line that appears
    under the selected row. */
 .shell-project-runs {
-  margin: 2px 0 4px 10px;
+  margin-block-end: var(--wa-space-xs);
+  margin-inline-start: calc(var(--control-size-s) + 2 * var(--wa-space-2xs));
+  --run-tab-padding-inline-start: var(--wa-space-xs);
+  --run-tab-row-gap: 1px;
+  --run-tab-radius: var(--row-radius);
   --run-tab-meta-display: none;
+  --run-tab-detail-display: none;
+  --run-tab-status-width: var(--control-size-s);
+  --run-tab-status-label-display: none;
 }
 
 /* Project and tab contents retain their DOM nodes while another owner is visible. */
@@ -837,16 +849,17 @@ body[data-desktop-platform='darwin']
   display: none;
 }
 
-/* The Files tab: the tree alone; the tab names it, so its own heading
-   keeps only the refresh control. */
+/* File navigation has its own density and scroll area. */
 .shell-files,
 .shell-editor-tree {
   align-content: start;
-  padding: 6px 4px;
+  padding: 8px;
 }
 
 :is(.shell-files, .shell-editor-tree) .desktop-editor-tree-header > span {
-  visibility: hidden;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--wa-color-text-quiet);
 }
 
 :is(.shell-files, .shell-editor-tree) .desktop-editor-tree-list {
@@ -860,10 +873,43 @@ body[data-desktop-platform='darwin']
   --indent-size: 1.15em;
 }
 
-/* An open file keeps the tree it came from beside it, so the next file is
-   one click away rather than a tab switch back to Files. */
+/* File navigation stays beside code at every workspace width. */
+.shell-editor-workspace {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 24px;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.shell-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 8px;
+  border-top: 1px solid var(--wa-color-surface-border);
+  background: var(--wa-color-surface-lowered);
+}
+
+.shell-editor-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-xs);
+}
+
+.shell-editor-toolbar .action-button::part(base) {
+  height: 22px;
+  min-height: 22px;
+  font-size: var(--font-size-xs);
+}
+
 .shell-editor-with-tree {
-  grid-template-columns: minmax(150px, 28%) minmax(0, 1fr);
+  grid-template-columns: 200px minmax(0, 1fr);
 }
 
 .shell-editor-tree {
@@ -871,12 +917,18 @@ body[data-desktop-platform='darwin']
   min-height: 0;
   overflow: auto;
   border-right: 1px solid var(--wa-color-surface-border);
+  background: var(--wa-color-surface-lowered);
+}
+
+@container workbench (max-width: 640px) {
+  .shell-editor-with-tree {
+    grid-template-columns: minmax(120px, 30%) minmax(0, 1fr);
+  }
 }
 
 :is(.shell-files, .shell-editor-tree) .desktop-editor-tree-row::part(item) {
-  min-height: 26px;
-  padding: 0 4px;
-  border-radius: 6px;
+  min-height: var(--row-height);
+  padding: 0 var(--wa-space-2xs);
 }
 
 :is(.shell-files, .shell-editor-tree) .desktop-editor-tree-empty {

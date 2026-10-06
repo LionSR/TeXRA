@@ -61,7 +61,7 @@ export const WORKBENCH_KIND_META = {
     singleton: true,
   },
   logs: {
-    defaultPlacement: 'right',
+    defaultPlacement: 'bottom',
     icon: 'file-lines',
     label: 'Logs',
     singleton: true,
@@ -88,8 +88,10 @@ const WorkbenchTabSchema = z.object({
 
 export type WorkbenchTab = z.infer<typeof WorkbenchTabSchema>;
 
-/** Persisted per paper in Surface.workbench. */
+/** Persisted per project in Surface.workbench. */
 export const DesktopShellStateSchema = z.object({
+  /** Desktop display name; the project folder and session key stay stable. */
+  projectName: z.string().default(''),
   activeWorkbenchTabIds: z.partialRecord(
     z.enum(WORKBENCH_PLACEMENTS),
     z.string().optional(),
@@ -97,6 +99,8 @@ export const DesktopShellStateSchema = z.object({
   bottomPanelHeight: z.number(),
   sidebarCollapsed: z.boolean(),
   sidebarWidth: z.number(),
+  explorerWidth: z.number().default(300),
+  focusWorkspace: z.boolean().default(false),
   workbenchWidth: z.number(),
   workbenchTabs: z.array(WorkbenchTabSchema),
   nextTerminalSerial: z.int().positive(),
@@ -113,10 +117,13 @@ const WORKBENCH_MAX_WIDTH = 960;
 
 export function initialDesktopShellState(): DesktopShellState {
   return {
+    projectName: '',
     activeWorkbenchTabIds: {},
-    bottomPanelHeight: 300,
+    bottomPanelHeight: 240,
     sidebarCollapsed: false,
-    sidebarWidth: 288,
+    sidebarWidth: 256,
+    explorerWidth: 300,
+    focusWorkspace: false,
     workbenchWidth: 640,
     workbenchTabs: [],
     nextTerminalSerial: 1,
@@ -404,36 +411,45 @@ export function setBottomPanelHeight(
   state: DesktopShellState,
   height: number,
 ): DesktopShellState {
-  return {
-    ...state,
-    bottomPanelHeight: clampedDimension(
-      height,
-      BOTTOM_PANEL_MIN_HEIGHT,
-      BOTTOM_PANEL_MAX_HEIGHT,
-    ),
-  };
+  const next = clampedDimension(
+    height,
+    BOTTOM_PANEL_MIN_HEIGHT,
+    BOTTOM_PANEL_MAX_HEIGHT,
+  );
+  return next === state.bottomPanelHeight
+    ? state
+    : { ...state, bottomPanelHeight: next };
 }
 
 export function setSidebarWidth(
   state: DesktopShellState,
   width: number,
 ): DesktopShellState {
-  return {
-    ...state,
-    sidebarWidth: clampedDimension(width, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH),
-  };
+  const next = clampedDimension(width, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+  return next === state.sidebarWidth ? state : { ...state, sidebarWidth: next };
 }
 
 export function setWorkbenchWidth(
   state: DesktopShellState,
   width: number,
 ): DesktopShellState {
-  return {
-    ...state,
-    workbenchWidth: clampedDimension(
-      width,
-      WORKBENCH_MIN_WIDTH,
-      WORKBENCH_MAX_WIDTH,
-    ),
-  };
+  const next = clampedDimension(
+    width,
+    WORKBENCH_MIN_WIDTH,
+    WORKBENCH_MAX_WIDTH,
+  );
+  return next === state.workbenchWidth
+    ? state
+    : { ...state, workbenchWidth: next };
+}
+
+/** Browsing files needs less width than reading or editing their contents. */
+export function setExplorerWidth(
+  state: DesktopShellState,
+  width: number,
+): DesktopShellState {
+  const next = clampedDimension(width, 240, 420);
+  return next === state.explorerWidth
+    ? state
+    : { ...state, explorerWidth: next };
 }

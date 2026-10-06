@@ -64,12 +64,67 @@ export const focusRingStyles: CSSResult = css`
  * surface in the ladder, which opacity does not.
  */
 export const buttonStyles: CSSResult = css`
+  /* Slotted text names the inner native button as well as the custom host. */
+  .action-button-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* Native WA buttons and semantic skins share the same geometry. Without
+     this reset, WA's font-relative height produces different sizes whenever
+     a button inherits a caption, a section heading, or the body font. */
+  wa-button {
+    font-family: var(--font-family);
+    font-size: var(--font-size);
+    vertical-align: middle;
+  }
+
+  wa-button::part(base) {
+    box-sizing: border-box;
+    height: var(--height-button);
+    min-height: var(--height-button);
+    padding: 0 var(--control-padding-inline);
+    border-radius: var(--field-radius);
+    font-size: var(--font-size);
+    font-weight: var(--font-weight-medium);
+    line-height: var(--line-height-normal);
+    gap: 0;
+  }
+
+  /* Reset WA's slotted 0.75em margin; the part below owns icon/text spacing. */
+  wa-button > [slot='start'],
+  wa-button > [slot='end'] {
+    margin-inline: 0;
+  }
+
+  /* Empty slots still occupy space in WA. Only populated slots get a gap,
+     otherwise text-only buttons and icon-only actions become misaligned. */
+  wa-button::part(start),
+  wa-button::part(end) {
+    margin-inline: 0;
+  }
+
+  wa-button:has(> [slot='start'])::part(start) {
+    margin-inline-end: var(--wa-space-2xs);
+  }
+
+  wa-button:has(> [slot='end'])::part(end) {
+    margin-inline-start: var(--wa-space-2xs);
+  }
+
   .btn-primary::part(base),
   .btn-secondary::part(base) {
     min-height: var(--height-button);
-    padding-inline: var(--wa-space-m);
+    padding-inline: var(--control-padding-inline);
     border: var(--border-thin) solid transparent;
     border-radius: var(--border-radius-medium);
+    font-size: var(--font-size);
     font-weight: var(--font-weight-medium);
     transition:
       background-color var(--transition-normal),
@@ -107,22 +162,14 @@ export const buttonStyles: CSSResult = css`
   }
 
   .btn-secondary::part(base) {
-    border-color: var(--border-hairline-strong);
+    border-color: var(--wa-form-control-border-color);
     background: var(--control-fill);
     color: var(--wa-color-text-normal);
   }
 
   .btn-secondary::part(base):hover {
-    border-color: color-mix(
-      in srgb,
-      var(--wa-color-focus) 38%,
-      var(--border-hairline-strong)
-    );
-    background: color-mix(
-      in srgb,
-      var(--wa-color-brand-fill-quiet) 40%,
-      var(--control-fill-hover)
-    );
+    border-color: var(--wa-form-control-border-color);
+    background: var(--control-fill-hover);
   }
 
   .btn-secondary::part(base):active {
@@ -136,13 +183,14 @@ export const buttonStyles: CSSResult = css`
 
   .btn-ghost::part(base),
   .action-button:not(.btn-primary):not(.btn-secondary)::part(base) {
-    gap: var(--wa-space-2xs);
-    min-height: var(--height-control-compact);
+    gap: 0;
+    min-height: var(--height-button);
     padding-inline: var(--control-padding-inline);
     border: var(--border-thin) solid transparent;
     border-radius: var(--border-radius-medium);
     background: transparent;
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size);
+    font-weight: var(--font-weight-normal);
     transition:
       background-color var(--transition-normal),
       border-color var(--transition-normal),
@@ -151,7 +199,6 @@ export const buttonStyles: CSSResult = css`
 
   .btn-ghost::part(base):hover,
   .action-button:not(.btn-primary):not(.btn-secondary)::part(base):hover {
-    border-color: var(--border-hairline);
     background: var(--surface-hover);
   }
 
@@ -160,16 +207,35 @@ export const buttonStyles: CSSResult = css`
     background: var(--surface-active);
   }
 
+  /* A select button inside a row whose container owns hover/selection.
+     Avoid a second filled rectangle inside the row. */
+  .btn-ghost.is-row-content::part(base),
+  .btn-ghost.is-row-content::part(base):is(:hover, :active) {
+    background: transparent;
+    border: 0;
+    padding: 0 var(--wa-space-xs);
+    min-height: var(--row-height);
+    height: var(--row-height);
+  }
+
   .btn-ghost wa-icon,
   .action-button wa-icon {
+    font-size: var(--font-size-icon-sm);
+  }
+
+  /* Dense toolbars opt in together; a ghost action is not automatically
+     shorter than the outlined button beside it. */
+  .btn-ghost.is-compact::part(base),
+  .action-button.is-compact::part(base) {
+    height: var(--height-control-compact);
+    min-height: var(--height-control-compact);
     font-size: var(--font-size-sm);
   }
 
   .icon-button,
   .action-icon-button {
     flex-shrink: 0;
-    /* Legacy compact toolbars keep the small step; .icon-button callers get
-       the 28px default and can opt into any step via --control-size. */
+    /* Toolbar actions share a square target, independently of label size. */
     --control-size: var(--control-size-s);
     width: var(--control-size);
     height: var(--control-size);
@@ -210,7 +276,6 @@ export const buttonStyles: CSSResult = css`
 
   .icon-button::part(base):hover,
   .action-icon-button::part(base):hover {
-    border-color: var(--border-hairline);
     background: var(--surface-hover);
     color: var(--wa-color-text-normal);
   }
@@ -225,39 +290,6 @@ export const buttonStyles: CSSResult = css`
   .action-icon-button[aria-pressed='true']::part(base) {
     background: var(--surface-selected);
     color: var(--wa-color-text-normal);
-  }
-
-  :is(${INTERACTIVE_CONTROLS}):not([disabled]) {
-    transition:
-      filter var(--transition-normal),
-      transform var(--transition-normal);
-  }
-
-  :is(${INTERACTIVE_CONTROLS}):not([disabled]):hover {
-    transform: translateY(-1px);
-  }
-
-  :is(${INTERACTIVE_CONTROLS}):not([disabled]):active {
-    transform: translateY(0) scale(0.97);
-  }
-
-  /* Native WA split-action groups (the approve caret menu, the diff-actions
-     dropdown) render nativeChrome segments that carry none of the
-     INTERACTIVE_CONTROLS aliases above, so the fused group needs its own
-     lift/press feedback — applied to the wa-button-group host so the whole
-     control moves as one unit instead of the segments moving independently. */
-  wa-button-group.split-group {
-    transition:
-      filter var(--transition-normal),
-      transform var(--transition-normal);
-  }
-
-  wa-button-group.split-group:hover {
-    transform: translateY(-1px);
-  }
-
-  wa-button-group.split-group:active {
-    transform: translateY(0) scale(0.97);
   }
 
   .icon-button wa-icon,
@@ -293,7 +325,7 @@ export const buttonStyles: CSSResult = css`
       .action-icon-button
     )[disabled]::part(base) {
     cursor: not-allowed;
-    opacity: var(--opacity-disabled);
+    opacity: 1;
     box-shadow: none;
   }
 
@@ -307,7 +339,7 @@ export const buttonStyles: CSSResult = css`
 
   :is(
       .btn-ghost,
-      .action-button,
+      .action-button:not(.btn-primary):not(.btn-secondary),
       .icon-button,
       .action-icon-button
     )[disabled]::part(base):is(:hover, :active) {
@@ -317,6 +349,7 @@ export const buttonStyles: CSSResult = css`
 
   .btn-ghost.is-link::part(base),
   .action-button.is-link::part(base) {
+    height: auto;
     min-height: 0;
     padding: 0;
     background: transparent;
@@ -333,10 +366,6 @@ export const buttonStyles: CSSResult = css`
   .action-button.is-link::part(base):hover {
     background: transparent;
     color: var(--color-text-link-active);
-  }
-
-  :is(.btn-ghost.is-link, .action-button.is-link):is(:hover, :active) {
-    transform: none;
   }
 
   /* Destructive actions read as red text. A filled red button is reserved for
@@ -360,7 +389,7 @@ export const buttonStyles: CSSResult = css`
   /* Send is the view's primary action, so it wears the one accent fill that
      .btn-primary wears (the editor's button color in VS Code). */
   .action-icon-button.composer-primary-action::part(base) {
-    border-radius: var(--wa-border-radius-circle);
+    border-radius: var(--field-radius);
     background: var(--wa-color-brand-fill-loud);
     color: var(--wa-color-brand-on-loud);
   }
@@ -376,16 +405,6 @@ export const buttonStyles: CSSResult = css`
     ) {
     background: var(--wa-color-brand-fill-loud);
     color: var(--wa-color-brand-on-loud);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    :is(${INTERACTIVE_CONTROLS}):not([disabled]):is(:hover, :active) {
-      transform: none;
-    }
-
-    wa-button-group.split-group:is(:hover, :active) {
-      transform: none;
-    }
   }
 `;
 
@@ -452,6 +471,24 @@ export const iconSurfaceStyles: CSSResult = css`
 export const formControlStyles: CSSResult = css`
   ${compactFormControlStyles}
 
+  .inline-rename {
+    box-sizing: border-box;
+    min-width: 0;
+    height: var(--height-control-compact);
+    padding: var(--wa-space-3xs) var(--wa-space-2xs);
+    border: var(--border-thin) solid var(--wa-form-control-border-color);
+    border-radius: var(--field-radius);
+    background: var(--wa-form-control-background-color);
+    color: var(--wa-color-text-normal);
+    font: inherit;
+  }
+
+  .inline-rename:focus {
+    outline: none;
+    border-color: var(--wa-color-focus);
+    box-shadow: var(--field-focus-halo);
+  }
+
   wa-textarea::part(base) {
     min-height: var(--textarea-min-height, var(--textarea-h-m));
     border: var(--border-thin) solid var(--wa-form-control-border-color);
@@ -459,10 +496,10 @@ export const formControlStyles: CSSResult = css`
 
   wa-textarea::part(textarea) {
     max-height: var(--textarea-max-height, 13rem);
-    padding-block: 1px;
+    padding-block: var(--wa-space-xs);
     padding-inline: var(--control-padding-inline);
-    font-family: var(--wa-font-family-mono);
-    font-size: var(--font-size-sm);
+    font-family: var(--font-family);
+    font-size: var(--font-size);
     line-height: var(--line-height-normal);
   }
 
@@ -470,13 +507,31 @@ export const formControlStyles: CSSResult = css`
      fallback is the desktop's roomier row; the extension overrides it at
      :root, which reaches here because the token is not re-declared on
      :host. */
-  wa-option::part(base),
-  wa-dropdown-item::part(base) {
+  wa-option::part(base) {
     min-height: var(--wa-height-option, 32px);
     padding: var(--wa-space-3xs) var(--wa-space-xs);
     border-radius: var(--border-radius);
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
+  }
+
+  /* Dropdown items render the row on their host, with no "base" part.
+     Icons have a square canvas; glyph width must never move the label. */
+  wa-dropdown-item {
+    box-sizing: border-box;
+    min-height: var(--row-height);
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
+    border-radius: var(--row-radius);
+    font-family: var(--wa-font-family-body);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+  }
+
+  wa-dropdown-item > [slot='icon'] {
+    flex: 0 0 var(--font-size-icon-sm);
+    width: var(--font-size-icon-sm);
+    height: var(--font-size-icon-sm);
+    font-size: var(--font-size-icon-sm);
   }
 
   /* Makes a form control fill its row. The min-width reset is the load-bearing
@@ -513,7 +568,7 @@ export const formControlStyles: CSSResult = css`
  */
 export const settingsRowStyles: CSSResult = css`
   .settings-section {
-    margin-block-end: var(--wa-space-l);
+    margin-block-end: var(--wa-space-m);
   }
 
   .settings-row {
@@ -521,7 +576,7 @@ export const settingsRowStyles: CSSResult = css`
     align-items: center;
     justify-content: space-between;
     gap: var(--wa-space-m);
-    padding-block: var(--wa-space-s);
+    padding-block: var(--wa-space-xs);
     border-block-end: var(--border-thin) solid var(--border-hairline);
   }
 
@@ -529,7 +584,12 @@ export const settingsRowStyles: CSSResult = css`
     border-block-end: 0;
   }
 
+  .settings-row.is-compact {
+    padding-block: var(--wa-space-2xs);
+  }
+
   .settings-row-text {
+    flex: 1 1 auto;
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -554,7 +614,28 @@ export const settingsRowStyles: CSSResult = css`
     display: flex;
     align-items: center;
     align-self: center;
-    gap: var(--wa-space-2xs);
+    gap: var(--wa-space-xs);
+    min-width: 0;
+    max-width: 52%;
+  }
+
+  .settings-row-control > :is(wa-input, wa-select, wa-textarea) {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  @container settings (max-width: 520px) {
+    .settings-row {
+      align-items: stretch;
+      flex-direction: column;
+      gap: var(--wa-space-xs);
+    }
+
+    .settings-row-control {
+      align-self: flex-start;
+      max-width: 100%;
+      flex-wrap: wrap;
+    }
   }
 
   /* Skins for the hooks renderSettingsNumberRow hardcodes. They live here

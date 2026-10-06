@@ -2,6 +2,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 
 import { renderEmptyState } from '@ui/wa/emptyState';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
 import {
   workbenchPanelDomId,
@@ -32,7 +33,7 @@ import type { createReviewPane } from './reviewPane';
 interface WorkbenchControllerDeps {
   session: string;
   isActive(): boolean;
-  /** A modal (Settings) covers the shell; the native browser view stays hidden. */
+  /** DOM menus and dialogs cover the shell; the native browser view stays hidden. */
   isBrowserCovered(): boolean;
   editorPane: ReturnType<typeof createEditorPane>;
   terminalPane: ReturnType<typeof createTerminalPane>;
@@ -52,7 +53,10 @@ interface WorkbenchController {
     placement: WorkbenchPlacement,
     emptyKind: WorkbenchKind,
   ): void;
-  layoutVisibleSurfaces(options?: { focus?: boolean }): void;
+  layoutVisibleSurfaces(options?: {
+    focus?: boolean;
+    activate?: readonly WorkbenchPlacement[];
+  }): void;
   syncBrowserViewBounds(): void;
   template(placement: WorkbenchPlacement): TemplateResult;
   takePendingTerminalCommand(sessionId: string): string | undefined;
@@ -122,16 +126,22 @@ export function createWorkbenchController({
    */
   function layoutVisibleSurfaces({
     focus = false,
-  }: { focus?: boolean } = {}): void {
+    activate = WORKBENCH_PLACEMENTS,
+  }: { focus?: boolean; activate?: readonly WorkbenchPlacement[] } = {}): void {
     for (const placement of WORKBENCH_PLACEMENTS) {
       const tab = activeWorkbenchTab(getState(), placement);
       if (!tab) continue;
       if (tab.kind === 'editor') {
         editorPane.layout();
-        if (tab.target) void editorPane.open(tab.target);
+        if (activate.includes(placement) && tab.target)
+          void editorPane.open(tab.target);
       }
       // activate() creates the terminal on first use and re-fits an existing one.
-      if (tab.kind === 'terminal') terminalPane.activate(tab.id, { focus });
+      if (tab.kind === 'terminal') {
+        if (activate.includes(placement))
+          terminalPane.activate(tab.id, { focus });
+        else terminalPane.layout();
+      }
       // The main process owns the WebContentsView, so hand it the URL once.
       if (
         tab.kind === 'browser' &&
@@ -258,22 +268,45 @@ export function createWorkbenchController({
   ): TemplateResult | typeof nothing {
     switch (tab.kind) {
       case 'files':
-        return html`<div
-          class="shell-workbench-surface shell-files"
-          data-scroll="true"
-        >
-          ${treeSurface() === 'files' ? editorPane.treeElement : nothing}
+        return html`<div class="shell-workbench-surface shell-editor-with-tree">
+          <div class="shell-files shell-editor-tree" data-scroll="true">
+            ${treeSurface() === 'files' ? editorPane.treeElement : nothing}
+          </div>
+          <div class="shell-workbench-placeholder">
+            ${renderEmptyState({ icon: 'file-lines', title: 'Choose a file', body: 'Select a file in the explorer to open it here.' })}
+          </div>
         </div>`;
       case 'editor':
         if (!tab.target) return workbenchPlaceholderTemplate();
-        return treeSurface() === 'editor'
-          ? html`<div class="shell-workbench-surface shell-editor-with-tree">
-              <div class="shell-editor-tree" data-scroll="true">
-                ${editorPane.treeElement}
-              </div>
+        return html`
+          <div class="shell-editor-workspace">
+            <div
+              class="shell-workbench-surface ${treeSurface() === 'editor' ? 'shell-editor-with-tree' : ''}"
+            >
+              ${
+                treeSurface() === 'editor'
+                  ? html`<div class="shell-editor-tree" data-scroll="true">
+                      ${editorPane.treeElement}
+                    </div>`
+                  : nothing
+              }
               ${editorPane.element}
-            </div>`
-          : workbenchSurfaceTemplate(editorPane.element);
+            </div>
+            <div class="shell-editor-toolbar">
+              <span class="shell-editor-path" title=${tab.target}
+                >${tab.target}</span
+              >
+              ${renderLabeledActionButton({
+                text: tab.dirty ? 'Save changes' : 'Saved',
+                icon: tab.dirty ? 'floppy-disk' : 'check',
+                kind: 'ghost',
+                className: 'is-compact',
+                disabled: !tab.dirty,
+                onClick: () => void editorPane.save(),
+              })}
+            </div>
+          </div>
+        `;
       case 'terminal':
         return workbenchSurfaceTemplate(terminalPane.element);
       case 'browser':

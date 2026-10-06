@@ -4,8 +4,8 @@
  * working directory, only with two or more roots), and the polish,
  * dictation, attach, and send controls. The agent menu lists chat agents,
  * document tasks and teams as sections: the section picked is the launch
- * mode. Compact, it is the follow-up line with the same trailing
- * controls, under a line that offers the parent instead when there is one.
+ * mode. The follow-up keeps a two-line writing area and a separate action
+ * row, under a line that offers the parent instead when there is one.
  *
  * It reads `Surface` (the draft or the launch selections) and the `host`
  * snapshot (the catalogs) and dispatches the arm for every change: a
@@ -105,8 +105,8 @@ export class SessionComposer extends LitElement {
         flex-direction: column;
         gap: var(--wa-space-2xs);
         min-width: 0;
-        padding: var(--wa-space-2xs);
-        border: var(--border-thin) solid var(--wa-color-surface-border);
+        padding: var(--wa-space-xs);
+        border: var(--border-thin) solid var(--wa-form-control-border-color);
         border-radius: var(--wa-border-radius-l);
         background: var(--composer-background, var(--wa-color-surface-raised));
         transition: border-color var(--transition-fast);
@@ -116,31 +116,17 @@ export class SessionComposer extends LitElement {
         border-color: var(--wa-color-focus);
         box-shadow: var(--field-focus-halo);
       }
-      /* Compact: one pill, the follow-up line and its trailing controls on
-         one row; the textarea grows with its content up to a few lines. */
-      .composer.is-compact {
-        flex-direction: row;
-        align-items: flex-end;
-        gap: var(--wa-space-3xs);
-        padding: var(--wa-space-3xs) var(--wa-space-3xs) var(--wa-space-3xs)
-          var(--wa-space-2xs);
-        border-radius: var(--wa-border-radius-xl, 20px);
-      }
+      /* Follow-ups keep a writing area above the same action row as launch.
+         Controls never move into the text line or appear only on focus. */
       .composer.is-compact textarea {
-        flex: 1 1 auto;
-        --textarea-min-height: calc(1lh + 2 * var(--wa-space-3xs));
-        --textarea-max-height: 10em;
+        --textarea-min-height: calc(2lh + 2 * var(--wa-space-2xs));
+        --textarea-max-height: clamp(var(--textarea-min-height), 24vh, 200px);
       }
       .composer.is-compact .row {
-        flex: 0 0 auto;
+        width: 100%;
       }
-      /* Collapsed, the pill is the field alone; the tools and the send
-         button appear once the field has focus or text. */
-      .composer.is-compact .tools {
-        display: none;
-      }
-      .composer.is-compact:is(:focus-within, .has-text) .tools {
-        display: contents;
+      .tools .action-icon-button {
+        --control-size: var(--control-size-l);
       }
 
       /* A plain native textarea (#11851): the card draws the one focus
@@ -161,20 +147,20 @@ export class SessionComposer extends LitElement {
         height: auto;
         min-height: var(--textarea-min-height);
         max-height: var(--textarea-max-height);
-        padding: var(--wa-space-3xs);
+        padding: var(--wa-space-2xs);
         overflow-x: hidden;
         overflow-y: auto;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
         font-family: var(--wa-font-family-body, inherit);
-        font-size: var(--font-size);
+        font-size: var(--font-size-reading);
         line-height: var(--line-height-normal);
       }
       textarea::placeholder {
         color: var(--wa-color-text-quiet);
       }
       .composer:not(.is-compact) textarea {
-        --textarea-min-height: calc(3lh + 2 * var(--wa-space-3xs));
+        --textarea-min-height: calc(2lh + 2 * var(--wa-space-2xs));
         --textarea-max-height: clamp(var(--textarea-min-height), 32vh, 240px);
       }
 
@@ -210,11 +196,11 @@ export class SessionComposer extends LitElement {
       .chip-trigger::part(base) {
         gap: var(--wa-space-3xs);
         padding-inline: var(--wa-space-2xs);
-        font-size: var(--font-size-xs);
-        border-radius: var(--wa-border-radius-pill, 999px);
+        font-size: var(--font-size-sm);
+        border-radius: var(--field-radius);
       }
       .chip-trigger wa-icon {
-        font-size: var(--font-size-xs);
+        font-size: var(--font-size-sm);
       }
       .chip-label {
         display: block;
@@ -232,9 +218,6 @@ export class SessionComposer extends LitElement {
         color: var(--color-text-muted);
       }
 
-      .composer-primary-action::part(base) {
-        border-radius: var(--wa-border-radius-circle, 50%);
-      }
       .recording::part(base) {
         color: var(--wa-color-danger-on-quiet);
       }
@@ -242,6 +225,25 @@ export class SessionComposer extends LitElement {
         display: block;
         min-width: 0;
         margin-bottom: var(--wa-space-2xs);
+      }
+
+      /* A narrow chat pane gives model/agent choices their own full row.
+         Keeping tools beside a wrapping chip column squeezes every label. */
+      @container (max-width: 440px) {
+        .composer:not(.is-compact) .row {
+          flex-direction: column;
+          align-items: stretch;
+          gap: var(--wa-space-2xs);
+        }
+
+        .composer:not(.is-compact) .chips {
+          flex: none;
+          width: 100%;
+        }
+
+        .composer:not(.is-compact) .tools {
+          justify-content: flex-end;
+        }
       }
     `,
   ];
@@ -449,8 +451,8 @@ export class SessionComposer extends LitElement {
         <wa-button
           slot="trigger"
           id=${menu.id}
-          class="chip-trigger"
-          appearance="outlined"
+          class="chip-trigger btn-ghost is-compact"
+          appearance="plain"
           variant="neutral"
           size="s"
           type="button"
@@ -531,7 +533,7 @@ export class SessionComposer extends LitElement {
           id="composer-text"
           name=${compact ? 'follow-up-message' : 'instruction'}
           placeholder=${compact ? 'Follow-up' : 'Describe the outcome you want…'}
-          rows=${compact ? '1' : '3'}
+          rows="2"
           autocomplete="off"
           spellcheck="true"
           aria-describedby="composer-text-hint"
@@ -588,7 +590,7 @@ export class SessionComposer extends LitElement {
               className: 'composer-primary-action',
               appearance: 'filled',
               variant: 'brand',
-              size: compact ? 'm' : 'l',
+              size: 'l',
               busy: this.run !== null && this.surface?.sending.has(this.run.id),
               disabled:
                 !canSend ||

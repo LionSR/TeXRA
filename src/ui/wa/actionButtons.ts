@@ -155,12 +155,15 @@ function renderActionButtonParts({
   // is only needed as a fallback hint when there's no `wa-tooltip` sibling to
   // show one — setting both here would double up the hover hint (native
   // tooltip + wa-tooltip) for every id+tooltip icon button.
-  const nativeTitle = tooltip && !id ? tooltip : (title ?? ariaLabel);
+  const nativeTitle =
+    tooltip && !id ? tooltip : (title ?? (text ? undefined : ariaLabel));
   let content: TemplateResult | typeof nothing = nothing;
   if (text) {
     content = html`${icon ? waIcon(icon, { slot: 'start' }) : nothing}${text}`;
   } else if (icon) {
-    content = waIcon(icon);
+    content = html`${waIcon(icon)}<span class="action-button-label"
+        >${ariaLabel}</span
+      >`;
   }
 
   const button = html`

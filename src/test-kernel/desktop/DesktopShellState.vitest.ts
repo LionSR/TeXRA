@@ -107,7 +107,7 @@ describe('desktop shell state model', () => {
   it('closes active tabs toward the left, then the right', () => {
     let state = shellWith(
       { kind: 'browser' },
-      { kind: 'logs' },
+      { kind: 'logs', placement: 'right' },
       { kind: 'editor', target: 'paper.tex' },
     );
 
@@ -123,7 +123,10 @@ describe('desktop shell state model', () => {
   });
 
   it('hides the workbench without discarding tabs and reopens the latest tab', () => {
-    const openState = shellWith({ kind: 'browser' }, { kind: 'logs' });
+    const openState = shellWith(
+      { kind: 'browser' },
+      { kind: 'logs', placement: 'right' },
+    );
     const closed = closeWorkbench(openState, 'right');
 
     expect(closed.workbenchTabs).toEqual(openState.workbenchTabs);

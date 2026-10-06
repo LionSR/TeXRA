@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import { Effect } from 'effect';
 import { app, BrowserWindow, nativeTheme } from 'electron';
+import { DESKTOP_HEADLESS } from './desktopPresentation.js';
 
 /** The window, owned by the scope it opens in. It is already destroyed once
  *  the user closed it; a close that comes from the scope (a failed open, the
@@ -28,6 +29,8 @@ export const openDesktopBrowserWindow = (options: {
           // hidden-inset window behind the launching macOS Space while the app
           // itself is active.
           show: false,
+          focusable: !DESKTOP_HEADLESS,
+          skipTaskbar: DESKTOP_HEADLESS,
           title: options.title,
           // Frameless chrome. The OS title bar was a dead 28px strip in the
           // app's own color scheme that no amount of theming could reach, and
@@ -49,6 +52,8 @@ export const openDesktopBrowserWindow = (options: {
             ? '#212121'
             : '#f7f7f7',
           webPreferences: {
+            offscreen: DESKTOP_HEADLESS,
+            backgroundThrottling: !DESKTOP_HEADLESS,
             preload: join(options.mainDir, '../preload/index.cjs'),
             contextIsolation: true,
             nodeIntegration: false,
@@ -72,7 +77,7 @@ export function loadDesktopWindow(
 ): void {
   let presented = false;
   const present = (): void => {
-    if (presented || window.isDestroyed()) return;
+    if (DESKTOP_HEADLESS || presented || window.isDestroyed()) return;
     presented = true;
     window.center();
     window.show();

@@ -138,7 +138,7 @@ describe('run-tabs over the fold', () => {
     expect(rowOf(element, ROOT)).toBeTruthy();
   });
 
-  it('sends one run.delete for a double-clicked rail ×', async () => {
+  it('sends one run.delete for a repeated task-menu delete action', async () => {
     const base = fanOutView();
     const root = base.runs.get(ROOT);
     if (!root) throw new Error('no root run');
@@ -152,9 +152,16 @@ describe('run-tabs over the fold', () => {
       { topLevelOnly: true, removable: true },
     );
 
-    const remove = control(rowOf(element, ROOT), 'delete');
-    remove.click();
-    remove.click();
+    const menu = rowOf(element, ROOT).shadowRoot?.querySelector('.tab-actions');
+    if (!menu) throw new Error('no task actions menu');
+    const selectDelete = () =>
+      menu.dispatchEvent(
+        new CustomEvent('wa-select', {
+          detail: { item: { value: 'delete' } },
+        }),
+      );
+    selectDelete();
+    selectDelete();
     expect(requests).toEqual([{ kind: 'run.delete', runId: ROOT }]);
   });
 });

@@ -37,6 +37,7 @@ export interface RailProject {
 }
 
 interface ShellSidebarModel {
+  readonly renamingProjectKey?: string | null;
   /** Every open project, in `shell.open` order. */
   readonly projects: readonly RailProject[];
   readonly shell: Shell;
@@ -46,8 +47,8 @@ interface ShellSidebarModel {
   readonly commandsTitle: string;
 }
 
-/** What a project row's `⋯` menu and `+` do; each names the project. */
-type ProjectAction = 'new-task' | 'close';
+/** Project menu actions always name the project they affect. */
+type ProjectAction = 'new-task' | 'rename' | 'close';
 
 interface ShellSidebarCallbacks {
   onNewTask(): void;
@@ -55,6 +56,7 @@ interface ShellSidebarCallbacks {
   onOpenFolder(): void;
   onSelectProject(key: string): void;
   onProjectAction(key: string, action: ProjectAction): void;
+  onRenameProject?(key: string, name: string | null): void;
   onToggleProjectCollapsed(key: string): void;
   onOpenSettings(): void;
 }
@@ -63,13 +65,14 @@ function sidebarAction(options: {
   icon: TeXRAIconName;
   label: string;
   title?: string;
+  emphasized?: boolean;
   onClick: () => void;
 }): TemplateResult {
   return html`
     <wa-button
       type="button"
-      class="shell-sidebar-action btn-ghost"
-      appearance="plain"
+      class="shell-sidebar-action ${options.emphasized ? 'btn-secondary' : 'btn-ghost'}"
+      appearance=${options.emphasized ? 'outlined' : 'plain'}
       size="s"
       title=${options.title ?? nothing}
       @click=${options.onClick}
@@ -107,15 +110,15 @@ function projectStatus(
  * (its top-level runs; a run's agents live on its script and dispatch
  * cards) unless
  * the user folded the section shut. Every row has the same controls, so the
- * shown project differs only by its highlight: the row chooses the project,
- * `+` starts a task in it, and `×` closes it.
+ * shown project differs only by its weight. The row chooses the project;
+ * its menu starts a task or closes the project.
  */
 function projectSection(
   project: RailProject,
   model: ShellSidebarModel,
   callbacks: ShellSidebarCallbacks,
 ): TemplateResult {
-  const { key, name, initials } = project.display;
+  const { key, name } = project.display;
   const active = key === model.shell.active;
   const collapsed = model.shell.collapsed.includes(key);
   const foldLabel = `${collapsed ? 'Expand' : 'Collapse'} ${name}`;
@@ -133,20 +136,44 @@ function projectSection(
         className: 'shell-project-fold icon-button is-size-s',
         onClick: () => callbacks.onToggleProjectCollapsed(key),
       })}
-      <wa-button
-        type="button"
-        class="shell-project-row btn-ghost"
-        appearance="plain"
-        size="s"
-        title=${key}
-        aria-current=${active ? 'true' : nothing}
-        @click=${() => callbacks.onSelectProject(key)}
-      >
-        <span class="shell-project-mark icon-surface is-size-s"
-          >${initials}</span
-        >
-        <span class="shell-project-name">${name}</span>
-      </wa-button>
+      ${
+        model.renamingProjectKey === key
+          ? html`<input
+              class="shell-project-row shell-project-rename inline-rename"
+              aria-label="Project display name"
+              maxlength="80"
+              .value=${name}
+              @keydown=${(event: KeyboardEvent) => {
+                event.stopPropagation();
+                if (event.key === 'Enter')
+                  callbacks.onRenameProject?.(
+                    key,
+                    (event.target as HTMLInputElement).value,
+                  );
+                if (event.key === 'Escape')
+                  callbacks.onRenameProject?.(key, null);
+              }}
+              @blur=${(event: FocusEvent) => callbacks.onRenameProject?.(key, (event.target as HTMLInputElement).value)}
+            />`
+          : html`<wa-button
+              type="button"
+              class="shell-project-row btn-ghost is-row-content"
+              appearance="plain"
+              size="s"
+              title=${key}
+              aria-current=${active ? 'true' : nothing}
+              @click=${() => callbacks.onSelectProject(key)}
+              @dblclick=${() => callbacks.onProjectAction(key, 'rename')}
+              @keydown=${(event: KeyboardEvent) => {
+                if (event.key === 'F2') {
+                  event.preventDefault();
+                  callbacks.onProjectAction(key, 'rename');
+                }
+              }}
+            >
+              <span class="shell-project-name">${name}</span>
+            </wa-button>`
+      }
       ${
         // The dot is the row's whole status line; its words are the tooltip.
         status
@@ -159,22 +186,36 @@ function projectSection(
             ></span>`
           : nothing
       }
-      ${renderIconActionButton({
-        id: `${idBase}-new`,
-        icon: 'plus',
-        label: `New task in ${name}`,
-        tooltip: `New task in ${name}`,
-        className: 'shell-project-new icon-button is-size-s',
-        onClick: () => callbacks.onProjectAction(key, 'new-task'),
-      })}
-      ${renderIconActionButton({
-        id: `${idBase}-close`,
-        icon: 'xmark',
-        label: `Close ${name}`,
-        tooltip: `Close ${name}`,
-        className: 'shell-project-close icon-button is-size-s',
-        onClick: () => callbacks.onProjectAction(key, 'close'),
-      })}
+      <wa-dropdown
+        class="shell-project-menu"
+        placement="bottom-end"
+        @wa-select=${(event: CustomEvent<{ item: { value: string } }>) => {
+          const action = event.detail.item.value;
+          if (
+            action === 'new-task' ||
+            action === 'rename' ||
+            action === 'close'
+          )
+            callbacks.onProjectAction(key, action);
+        }}
+      >
+        ${renderIconActionButton({
+          id: `${idBase}-menu`,
+          icon: 'ellipsis',
+          slot: 'trigger',
+          label: `Actions for ${name}`,
+          tooltip: `Actions for ${name}`,
+        })}
+        <wa-dropdown-item value="new-task">
+          ${waIcon('plus', { slot: 'icon' })} New task
+        </wa-dropdown-item>
+        <wa-dropdown-item value="rename">
+          ${waIcon('pencil', { slot: 'icon' })} Rename project…
+        </wa-dropdown-item>
+        <wa-dropdown-item value="close">
+          ${waIcon('xmark', { slot: 'icon' })} Close project
+        </wa-dropdown-item>
+      </wa-dropdown>
     </div>
     ${
       // An empty project lists nothing: its `+` is the way to start.
@@ -201,21 +242,22 @@ export function shellSidebarTemplate(
 ): TemplateResult {
   return html`
     <aside class="shell-sidebar" aria-label="Projects and tasks">
-      <header class="shell-sidebar-brand">
-        <div class="shell-sidebar-logo" aria-hidden="true"></div>
-        <span class="shell-sidebar-product">TeXRA</span>
-      </header>
+      <div class="shell-sidebar-brand" aria-hidden="true"></div>
 
       <nav class="shell-sidebar-primary" aria-label="Task actions">
         ${sidebarAction({
-          icon: 'pencil',
+          icon: 'plus',
           label: 'New task',
+          emphasized: true,
           onClick: callbacks.onNewTask,
         })}
-        ${sidebarAction({
+        ${renderIconActionButton({
+          id: 'shellCommands',
           icon: 'magnifying-glass',
           label: model.commandsLabel,
-          title: model.commandsTitle,
+          tooltip: model.commandsTitle,
+          className: 'shell-sidebar-action shell-sidebar-command',
+          size: 'l',
           onClick: callbacks.onOpenCommands,
         })}
       </nav>
@@ -226,7 +268,7 @@ export function shellSidebarTemplate(
             <span class="shell-sidebar-section-label">Projects</span>
             ${renderIconActionButton({
               id: 'shellProjectAdd',
-              icon: 'folder-open',
+              icon: 'plus',
               label: 'Open project folder',
               tooltip: 'Open project folder',
               className: 'shell-project-add icon-button is-size-s',

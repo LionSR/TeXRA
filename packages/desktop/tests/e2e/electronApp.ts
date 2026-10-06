@@ -1,9 +1,8 @@
 import { existsSync, mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
-import { _electron as electron } from '@playwright/test';
+import { _electron as electron, expect } from '@playwright/test';
 import {
   loadDatabaseFixture,
   rememberOpenProject,
@@ -14,6 +13,7 @@ import type { ElectronApplication, Page } from '@playwright/test';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(HERE, '..', '..');
 const MAIN_ENTRY = join(PACKAGE_ROOT, 'dist', 'main', 'index.js');
+const HEADLESS = process.env.TEXRA_DESKTOP_E2E_HEADED !== '1';
 
 interface LaunchOptions {
   /**
@@ -98,10 +98,19 @@ export async function launchTexraApp(
       TEXRA_DESKTOP_E2E_USER_DATA_PATH: userDataPath,
       NODE_ENV: 'production',
       ...options.env,
+      // Electron's offscreen renderer keeps native windows, Dock and focus
+      // out of the developer's session. Playwright's headless option alone
+      // does not control an application launched through _electron.
+      TEXRA_DESKTOP_HEADLESS: HEADLESS ? '1' : '0',
     },
   });
 
   const page = await app.firstWindow();
+  page.on('console', (message) => {
+    if (message.type() === 'error')
+      console.error(`[desktop renderer] ${message.text()}`);
+  });
+  page.on('pageerror', (error) => console.error('[desktop renderer]', error));
   // Resize the native window, not Playwright's renderer viewport. Calling
   // page.setViewportSize() installs a fixed emulation viewport in Electron:
   // the BrowserWindow can then grow while CSS `vw`/`vh` stay frozen at the
@@ -113,39 +122,51 @@ export async function launchTexraApp(
     if (!window) throw new Error('TeXRA window was not found.');
     window.setContentSize(1280, 800);
   });
-  // `firstWindow()` resolves when Electron creates BrowserWindow, before the
-  // main process's did-finish-load presentation fallback necessarily runs.
-  // Wait for the renderer's explicit ready marker, then assert native
-  // visibility so this remains a real blank/hidden-window regression guard
-  // instead of a race against the first frame.
+  // Wait for the actual renderer, independently of native window visibility.
   await page.waitForSelector('#app', { state: 'attached' });
   await page.waitForFunction(
     () => document.body.dataset.desktopReady === 'true',
     undefined,
     { timeout: 20_000 },
   );
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    const visible = await app.evaluate(
-      ({ BrowserWindow }) =>
-        BrowserWindow.getAllWindows().at(0)?.isVisible() ?? false,
-    );
-    if (visible) {
-      return {
-        app,
-        page,
-        workspacePath,
-        userDataPath,
-        ownsWorkspace,
-        ownsUserData,
-      };
-    }
-    await sleep(50);
-  }
-  throw new Error('TeXRA window finished loading without being presented.');
+  if (HEADLESS) await assertOffscreen(app);
+  else
+    await expect
+      .poll(() =>
+        app.evaluate(
+          ({ BrowserWindow }) =>
+            BrowserWindow.getAllWindows().at(0)?.isVisible() ?? false,
+        ),
+      )
+      .toBe(true);
+  return {
+    app,
+    page,
+    workspacePath,
+    userDataPath,
+    ownsWorkspace,
+    ownsUserData,
+  };
+}
+
+async function assertOffscreen(app: ElectronApplication): Promise<void> {
+  const windows = await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows().map((window) => ({
+      visible: window.isVisible(),
+      focused: window.isFocused(),
+      offscreen: window.webContents.isOffscreen(),
+    })),
+  );
+  for (const window of windows)
+    expect(window).toEqual({ visible: false, focused: false, offscreen: true });
 }
 
 export async function closeTexraApp(launched: LaunchedApp): Promise<void> {
-  await launched.app.close();
+  try {
+    if (HEADLESS) await assertOffscreen(launched.app);
+  } finally {
+    await launched.app.close();
+  }
   // Clean up only auto-allocated directories. Caller-supplied workspace and
   // profile paths may be reused across relaunches and remain caller-owned.
   if (launched.ownsWorkspace) cleanupDirectory(launched.workspacePath);

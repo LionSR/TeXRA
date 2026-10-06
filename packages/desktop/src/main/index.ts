@@ -29,10 +29,13 @@ import { openDesktopWindow } from './desktopWindow.js';
 import { installDesktopBeforeQuitWiring } from './desktopWindowLifecycle.js';
 import { createDesktopWindows, type DesktopWindows } from './desktopWindows.js';
 import { reportFatalStartupError } from './fatalStartupError.js';
+import { DESKTOP_HEADLESS } from './desktopPresentation.js';
 import { initializeElectronPlatform } from './platform/index.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
 
 const moduleDirname = import.meta.dirname;
+if (DESKTOP_HEADLESS && process.platform === 'darwin')
+  app.setActivationPolicy('accessory');
 // Playwright tests need a deterministic Electron profile so app-scoped stores
 // survive across launches. Normal desktop launches keep Electron's default
 // userData path.

@@ -52,6 +52,11 @@ export function createProjectRail(deps: {
           });
           return;
         case 'new-task':
+          if (project?.getState().focusWorkspace)
+            project.updateState({
+              ...project.getState(),
+              focusWorkspace: false,
+            });
           sessions.act(key, { kind: 'selectNew' });
           break;
       }
