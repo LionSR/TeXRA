@@ -4,7 +4,12 @@ import { fileURLToPath } from 'node:url';
 
 import { isFile, walkFiles } from './fsWalk.mjs';
 
-const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+// The built package to check: this package, or the one a build names (the
+// llm build passes its own root). Each is checked against what it publishes:
+// `publishConfig.exports` when the workspace `exports` name sources.
+const packageRoot = path.resolve(
+  process.argv[2] ?? fileURLToPath(new URL('..', import.meta.url)),
+);
 const repositoryRoot = path.resolve(packageRoot, '../..');
 const distRoot = path.join(packageRoot, 'dist');
 const manifest = JSON.parse(
@@ -48,12 +53,14 @@ for (const alias of internalAliases) {
     throw new Error(`Unresolved internal declaration alias remains: ${alias}`);
   }
 }
-const distManifest = JSON.parse(
-  await readFile(path.join(distRoot, 'package.json'), 'utf8'),
-);
-if (distManifest.type !== 'module') {
-  throw new Error('dist/package.json must mark the built output as ESM.');
+const distManifestPath = path.join(distRoot, 'package.json');
+const distType = (await isFile(distManifestPath))
+  ? JSON.parse(await readFile(distManifestPath, 'utf8')).type
+  : manifest.type;
+if (distType !== 'module') {
+  throw new Error('The package must mark its built output as ESM.');
 }
+const publishedExports = manifest.publishConfig?.exports ?? manifest.exports;
 if (allFiles.some((file) => file.endsWith('.map'))) {
   throw new Error('Source or declaration maps must not be published.');
 }
@@ -131,7 +138,7 @@ async function reachableDeclarations(entry) {
 // Every published entry, not only the root: an entry whose declaration
 // graph reaches a provider SDK puts that provider's types back on the
 // published surface however narrow the entry looks.
-for (const [entry, target] of Object.entries(manifest.exports)) {
+for (const [entry, target] of Object.entries(publishedExports)) {
   const entryTypes = path.resolve(packageRoot, target.types);
   const entryGraph = await reachableDeclarations(entryTypes);
   const entryGraphText = (
@@ -181,7 +188,7 @@ if (missingPackages.length > 0) {
 }
 if (externalPackages.has('openai')) {
   throw new Error(
-    'The agent bundle must carry the repository-patched OpenAI runtime.',
+    'The bundle must carry the repository-patched OpenAI runtime.',
   );
 }
 

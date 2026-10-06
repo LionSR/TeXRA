@@ -1,14 +1,44 @@
 {
   "name": "@texra-ai/llm",
-  "version": "0.41.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "description": "TeXRA-owned canonical model operations",
+  "license": "Apache-2.0",
+  "author": "TeXRA.ai",
+  "homepage": "https://texra.ai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LionSR/TeXRA.git",
+    "directory": "packages/llm"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "files": [
+    "dist",
+    "LICENSE.txt",
+    "NOTICE.txt"
+  ],
   "exports": {
     ".": "./src/index.ts",
     "./node": "./src/node.ts"
   },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/types/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./node": {
+        "types": "./dist/types/node.d.ts",
+        "import": "./dist/node.js"
+      }
+    }
+  },
   "scripts": {
+    "build": "node scripts/build.mjs",
+    "prepack": "npm run build",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test-live.json"
   },
   "dependencies": {
@@ -20,13 +50,15 @@
     "ws": "8.22.0"
   },
   "peerDependencies": {
-    "effect": "4.0.0",
-    "zod": "4.4.3"
+    "effect": "^4.0.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@effect/vitest": "4.0.0",
     "@types/ws": "8.18.2",
+    "@typescript/native": "catalog:",
     "effect": "4.0.0",
+    "esbuild": "catalog:",
     "vitest": "^5.0.3",
     "zod": "4.4.3"
   }

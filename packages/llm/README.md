@@ -28,8 +28,12 @@ ESLint holds the rest: nothing under `src/` imports another repo module, and
 outside `api/`, `oauth/` and `node.ts` nothing imports a Node built-in or a
 vendor SDK.
 
-Private workspace package, built from source through the workspace, not
-published.
+Inside the workspace the entries are the TypeScript sources. `npm run build`
+writes what a pack publishes (`publishConfig.exports`): one ESM bundle per
+entry under `dist/`, each protocol a chunk, OpenAI's patched runtime carried
+inside, and the entries' declarations, checked by the harness's artifact
+validator. It is versioned on its own (`0.1.0`), not with the app, and not
+published yet: that waits for TeXRA 1.0.
 
 ## The contract
 
