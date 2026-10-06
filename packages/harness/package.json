@@ -48,13 +48,10 @@
   },
   "dependencies": {
     "@cantoo/pdf-lib": "catalog:",
-    "@date-fns/tz": "catalog:",
     "@effect/platform-node": "catalog:",
     "@effect/sql-sqlite-node": "catalog:",
     "@jitl/quickjs-wasmfile-release-sync": "catalog:",
     "@texra-ai/llm": "workspace:*",
-    "acorn": "catalog:",
-    "acorn-walk": "catalog:",
     "date-fns": "catalog:",
     "diff": "catalog:",
     "escape-string-regexp": "catalog:",
