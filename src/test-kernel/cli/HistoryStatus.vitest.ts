@@ -73,7 +73,7 @@ function snapshotPayload(): RunSnapshotPayload {
   return RunSnapshotPayloadSchema.parse({
     family: 'toolUse',
     runtime: SNAPSHOT_RUNTIME,
-    state: { stateSlices: null },
+    state: {},
   });
 }
 

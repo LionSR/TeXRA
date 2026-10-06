@@ -88,7 +88,7 @@ const OPENING_SNAPSHOT: RunSnapshotPayload = {
     lastError: null,
     declinedRoutes: [],
   },
-  state: { stateSlices: null },
+  state: {},
 };
 
 /**
@@ -107,7 +107,7 @@ const workflowSnapshot = (
     lastError: null,
     declinedRoutes: [],
   },
-  state: { stateSlices: null },
+  state: {},
 });
 
 /** The session the seeded run lives in, as the command resolves it. */

@@ -40,7 +40,6 @@ import {
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import type {
@@ -55,7 +54,6 @@ import {
   bindingRow,
   rowAggregate,
   snapshotRow,
-  type ToolUseLoopState,
 } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
@@ -243,7 +241,7 @@ interface DispatchKit {
   readonly state: RunState;
   /** The state before the response: the one a live dispatch's cell opened on. */
   readonly opened: RunState;
-  readonly workspace: AgentWorkspaceState;
+  readonly readFiles: Set<string>;
   /** The tools the dispatch's step offers. */
   readonly tools: RuntimeToolRegistry;
   readonly layer: Layer.Layer<
@@ -256,19 +254,11 @@ interface HarnessOptions {
   readonly calls: readonly Call[];
   readonly rootUserInstruction?: string;
   readonly logger?: AgentTrace;
-  /** Opened with the slices a real run carries, for the cases that read the
-   *  workspace a settlement persisted. */
-  readonly stateSlices?: ToolUseLoopState['stateSlices'];
   /** The run's binding, for the cases that read more than capabilities. */
   readonly bound?: BoundModel;
   /** A model switch waiting for the next boundary, for the upload gating. */
   readonly pendingSwitch?: string;
 }
-
-/** The slices of a run that has yet to touch a file. */
-const emptySlices = (): NonNullable<ToolUseLoopState['stateSlices']> => ({
-  workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-});
 
 /**
  * Open a run aggregate and commit the completed turn the dispatch continues
@@ -288,11 +278,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
     appendRow(runId, [
       { role: 'user', content: [{ kind: 'text', text: 'go' }] },
     ]),
-    ...snapshotRow(runId, freshState(), {
-      state: {
-        stateSlices: options.stateSlices ?? null,
-      },
-    }),
+    ...snapshotRow(runId, freshState(), { state: {} }),
   ]);
   const turn = turnWithCalls(options.calls);
   const state = yield* session.runHistory.appendBatch(runId, opened, [
@@ -346,7 +332,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
     session,
     state,
     opened,
-    workspace: AgentWorkspaceState.create(),
+    readFiles: new Set<string>(),
     tools,
     layer,
   } satisfies DispatchKit;
@@ -357,7 +343,7 @@ const dispatch = (kit: DispatchKit) =>
   makeRunCell(kit.runId, kit.opened).pipe(
     Effect.tap((cell) => cell.adopt(kit.state)),
     Effect.flatMap((cell) =>
-      dispatchPendingResponse(cell, kit.workspace, {
+      dispatchPendingResponse(cell, kit.readFiles, {
         definitions: [],
         registry: kit.tools,
         offered: [],
@@ -670,10 +656,9 @@ describe('tool-use dispatch', () => {
       }),
   );
 
-  // The settlement is the whole transactional boundary: the result, the card
-  // that reports it, and the workspace the call mutated commit together, so a
-  // stop before the delivering snapshot cannot leave a settled call whose
-  // edits, media and tool-call count existed only in memory.
+  // The settlement is the whole transactional boundary: the result and the
+  // card that reports it commit together, and the edit and the call the
+  // fold reads off the result need no other row.
   it.live('commits the card and the workspace with the tool result', () =>
     Effect.gen(function* () {
       const probe = newProbe();
@@ -700,7 +685,6 @@ describe('tool-use dispatch', () => {
           makeCall('c1', 'edit_file', { path: 'notes.tex' }),
           makeCall('c2', 'slow_barrier', {}),
         ],
-        stateSlices: emptySlices(),
       });
       const recorded = recordSessionEvents(kit.session, {
         aggregateId: rowAggregate(kit.runId),
@@ -722,15 +706,11 @@ describe('tool-use dispatch', () => {
         kit.layer,
       );
       expect(settledIds(folded)).toEqual(['c1']);
-      // No delivery ran, so this workspace can only have come from the
-      // settlement's own state operation.
-      const slices = folded!.loop?.stateSlices;
-      expect(slices?.workspaceSnapshot.interactions.edits).toEqual([
-        { path: 'notes.tex', added: 3, removed: 1 },
-      ]);
-      // The count the settling call had made: the interrupted barrier's own
-      // call is not in it, because it never settled.
-      expect(slices?.workspaceSnapshot.interactions.toolCallCount).toBe(1);
+      // No delivery ran: the edit and the call are folded from the
+      // settlement itself. The interrupted barrier's call is not counted,
+      // because it never settled.
+      expect(folded?.edited).toEqual(['notes.tex']);
+      expect(folded?.toolCalls).toBe(1);
 
       // The fast tool's card is now two rows of that same batch rather than a
       // pair of trace publications: exactly one open and one close reach the
@@ -866,7 +846,6 @@ describe('tool-use dispatch', () => {
             duplicateOf: null,
             result: { status: 'executed', output: 'ok' },
             attachments: [],
-            stateMutation: [],
           },
         },
       ]);

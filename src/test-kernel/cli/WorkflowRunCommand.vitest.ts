@@ -342,7 +342,7 @@ function workflowSnapshot(
       declinedRoutes: [],
       ...runtime,
     },
-    state: { stateSlices: null },
+    state: {},
   };
 }
 

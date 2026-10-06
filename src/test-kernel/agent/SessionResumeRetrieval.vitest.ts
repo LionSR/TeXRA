@@ -52,7 +52,7 @@ function toolUseSnapshot(
   return {
     family: 'toolUse',
     runtime: runtimeOf(modelId, backend),
-    state: { stateSlices: null },
+    state: {},
   };
 }
 

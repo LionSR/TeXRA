@@ -15,10 +15,10 @@ import {
   isAgentRunRecord,
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
-import type {
-  DatabaseNotOwner,
+import {
   DatabaseReadFailed,
-  DatabaseWriteFailed,
+  type DatabaseNotOwner,
+  type DatabaseWriteFailed,
 } from '@shared/session/database';
 import { foldAttempts, type AttemptKey } from '@shared/session/attemptFold';
 import { attemptOf } from '@shared/session/inFlight';
@@ -343,24 +343,25 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
     readReport: (): Effect.Effect<string | null, DatabaseReadFailed> =>
       read((rows) => latestOfType(rows, id, 'run.report')?.report ?? null),
     /**
-     * The workspace files the run edited: the edits its latest `run.snapshot`
-     * restates in the loop state's workspace snapshot, the one record of
-     * them, read as one indexed row. A run with no snapshot (no run history, or
-     * a closed run) edited nothing here.
+     * The workspace files the run edited, folded from its settled calls
+     * (`RunState.edited`). A run with no run history edited nothing here.
+     * A run whose rows this build cannot fold is a failed read of that run,
+     * never a refusal of the caller's own writes.
      */
     readWorkspaceFiles: (): Effect.Effect<string[], DatabaseReadFailed> =>
-      session.runHistory
-        .latestSnapshot(runId)
-        .pipe(
-          Effect.map((row) =>
-            RunWorkspaceFilesSchema.parse(
-              (
-                row?.payload.state.stateSlices?.workspaceSnapshot.interactions
-                  .edits ?? []
-              ).map((edit) => edit.path),
-            ),
+      session.runHistory.load(runId).pipe(
+        Effect.map((state) =>
+          RunWorkspaceFilesSchema.parse(state?.edited ?? []),
+        ),
+        Effect.catchTag('RunHistoryRefused', (refused) =>
+          Effect.fail(
+            new DatabaseReadFailed({
+              path: session.roots.storage ?? '',
+              cause: refused,
+            }),
           ),
         ),
+      ),
     readResultMeta: (): Effect.Effect<ResultMeta | null, DatabaseReadFailed> =>
       read((rows) => latestOfType(rows, id, 'run.result')?.result ?? null),
     /** The run's terminal result ({@link runEndOf}), or null while the

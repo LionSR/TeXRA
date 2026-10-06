@@ -25,7 +25,6 @@
 import { Deferred, Effect, Exit, type Scope, SynchronizedRef } from 'effect';
 import { z } from 'zod';
 
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { FollowUpBatch } from '@agent/followUp/RunInput';
 import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { logUserMessage } from '@agent/trace';
@@ -149,7 +148,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   });
 
   // ---------------------------------------------------------------- state
-  let workspace = AgentWorkspaceState.create();
+  // What the run read since this loop started: an edit of an existing file
+  // requires one. Memory only: a resumed run reads again.
+  const readFiles = new Set<string>();
   // Recorded facts a restore reads back.
   let memoryMisses = run.opening?.attachedMemoryMisses ?? [];
   let systemPrompt: string | undefined;
@@ -161,9 +162,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const loopState = (state: RunState): ToolUseLoopState => {
     const { instruction, activated } = state.loop ?? {};
     return {
-      stateSlices: {
-        workspaceSnapshot: workspace.toSnapshot(),
-      },
       ...(systemPrompt !== undefined ? { system: sha256(systemPrompt) } : {}),
       ...(instruction !== undefined ? { instruction } : {}),
       ...(activated !== undefined ? { activated } : {}),
@@ -304,7 +302,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         content.push({ kind: 'text', text: userRequest });
         const hooked = yield* openingHooks(run, opening, userRequest);
         content.push(...hooked.parts);
-        workspace = AgentWorkspaceState.create();
         return { bound, content, offered: [...step.rows, ...hooked.rows] };
       }),
     );
@@ -332,10 +329,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     if (saved === null) {
       throw new Error(`Run ${runId} is not a toolUse run; resume it as one.`);
     }
-    if (saved.stateSlices)
-      workspace = AgentWorkspaceState.fromSnapshot(
-        saved.stateSlices.workspaceSnapshot,
-      );
     systemPrompt = saved.system && stored(state, saved.system, z.string());
     memoryMisses = saved.memoryMisses ?? [];
     if (saved.structured !== undefined) run.structured.value = saved.structured;
@@ -366,12 +359,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       state.phase === 'halted';
     let continuedAt: number | null = null;
     let finalToolAttempted = false;
-    workspace.workPlan.setOnUpdate({
-      onPlanUpdate: (plan) => {
-        logger.emit({ type: 'run.fact', fact: { key: 'plan', plan } });
-        run.callbacks.onProgress?.({ kind: 'plan', plan });
-      },
-    });
     /** The turn's completed exit; the stage closes with its own verdict. */
     const completeTurn = (at: RunState): RunExit => ({
       state: at,
@@ -482,7 +469,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           const joined = yield* followUps.joinStopped(state);
           const dispatched = yield* dispatchPendingResponse(
             cell,
-            workspace,
+            readFiles,
             (yield* openStep(state, 'dispatch')).tools,
             joined,
           );
@@ -601,9 +588,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     return yield* stagedBy(
       () => logger.openStage('Tool-use turn', { kind: 'session' }),
       (exit: RunExit) => exit.outcome,
-    )(body).pipe(
-      Effect.ensuring(Effect.sync(() => workspace.workPlan.clearOnUpdate())),
-    );
+    )(body);
   });
 
   // ------------------------------------------------------------- the loop
@@ -735,12 +720,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // A turn's end is idle even when it took its next input with it.
         if (next !== null) run.callbacks.onIdle?.();
         if (turn.outcome === 'completed') {
-          const interactions = workspace.interactions;
           const cost = state.usage.totalCost;
           run.callbacks.onProgress?.({
             kind: 'overview',
-            toolCallCount: interactions.toolCallCount,
-            filesChanged: interactions.editedFilePaths,
+            toolCallCount: state.toolCalls,
+            filesChanged: [...state.edited],
             cost: cost > 0 ? cost : undefined,
           });
         }
@@ -760,7 +744,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const result = (outcome: RunOutcome, at: RunState): ToolUseResult => ({
     outcome,
     response,
-    files: workspace.interactions.toSnapshot().edits.map((e) => e.path),
+    files: [...at.edited],
     usage: at.usage,
     structured: run.structured.value,
     ...(outcome === RUN_OUTCOME.FAILED && at.lastError !== null

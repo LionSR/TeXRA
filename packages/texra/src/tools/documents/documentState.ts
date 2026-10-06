@@ -15,7 +15,6 @@ import { dirname } from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
 
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
@@ -272,7 +271,14 @@ const revisionMedia = Effect.fn('documents.revisionMedia')(function* (
     deps.roots,
     deps.fileService,
   );
-  const workspace = AgentWorkspaceState.create();
+  const found: string[] = [];
+  const workspace = {
+    media: {
+      addMediaFiles: (locations: readonly FileLocation[]) => {
+        found.push(...locations.map((file) => file.absolutePath));
+      },
+    },
+  };
   // Each revision is a fresh conversation: it gets the figures of the files
   // it works on (the last outputs, mirrored so their references resolve).
   const extracted = yield* Effect.exit(
@@ -296,12 +302,7 @@ const revisionMedia = Effect.fn('documents.revisionMedia')(function* (
     });
     return configured;
   }
-  return [
-    ...new Set([
-      ...configured,
-      ...workspace.media.files.map((file) => file.absolutePath),
-    ]),
-  ];
+  return [...new Set([...configured, ...found])];
 });
 
 /** Keep `reply` whole as the revision's reply, which every later

@@ -1226,7 +1226,7 @@ describe('sessionFold', () => {
 // Measured serialized size of the snapshot draft below (aggregate id
 // included, parsed defaults filled), so PR 2 has a number before it turns the
 // writes on (before the offered toolset joined the tool-use state): tool-use
-// with `stateSlices: null` was 362 bytes. It grows with the flow state it
+// with no workspace was 362 bytes. It grows with the flow state it
 // carries, never with the conversation, which the rows carry.
 // ---------------------------------------------------------------------------
 
@@ -1323,7 +1323,7 @@ const toolUseSnapshot = (runtime: Record<string, unknown> = {}) => ({
   payload: {
     family: 'toolUse',
     runtime: { ...RUNTIME, ...runtime },
-    state: { stateSlices: null },
+    state: {},
   },
 });
 
@@ -1358,7 +1358,6 @@ const settlement = (
     duplicateOf: null,
     result: { status: 'executed', output: 'ok' },
     attachments: [],
-    stateMutation: [],
     ...overrides,
   },
 });
@@ -1969,17 +1968,6 @@ describe('foldRunState', () => {
     expect(rowAccepted(response(CALLS))).toBe(true);
     expect(
       rowAccepted(response([{ ...CALLS[0], toolName: 'rm' }, CALLS[1]])),
-    ).toBe(false);
-    // The run's usage totals are derived from its priced responses alone
-    // (D12): a settlement never touches them.
-    expect(
-      rowAccepted(
-        settlement('call-a', {
-          stateMutation: [
-            { op: 'set', path: ['usage', 'totalCost'], value: 0 },
-          ],
-        }),
-      ),
     ).toBe(false);
     // The delivered tool group takes its provider-facing status from the
     // result, so a call the run recorded as failed carries an error result.
