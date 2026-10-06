@@ -65,6 +65,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 
 import ts from 'typescript';
 
@@ -707,7 +708,7 @@ const forks = Effect.gen(function* () {
   const actual = scanSourceFile(program.getTypeChecker(), probeFile).map(
     ({ kind, line }) => [kind, line],
   );
-  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+  if (!isDeepStrictEqual(actual, expected)) {
     console.error(
       'unexecuted-Effect gate self-test failed:',
       JSON.stringify({ actual, expected }),
