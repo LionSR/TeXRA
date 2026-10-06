@@ -22,6 +22,7 @@ export interface DesktopHostBridge {
   /** A `desktop:*` or settings-view command push. */
   postToRenderer(message: unknown): void;
   postSession(message: DownMessage): void;
+  /** Stop listening; the window's scope runs it when the window closes. */
   dispose(): void;
 }
 
@@ -29,7 +30,6 @@ export function installDesktopHostBridge(
   window: BrowserWindow,
   options: DesktopHostBridgeOptions,
 ): DesktopHostBridge {
-  let disposed = false;
   const listen = (channel: string, handle: (message: unknown) => void) => {
     const listener = (event: IpcMainEvent, message: unknown) => {
       if (event.sender === window.webContents) handle(message);
@@ -41,13 +41,6 @@ export function installDesktopHostBridge(
     listen(ELECTRON_WEBVIEW_MESSAGE_CHANNEL, options.onCommand),
     listen(ELECTRON_SESSION_MESSAGE_CHANNEL, options.onSession),
   ];
-
-  const dispose = () => {
-    if (disposed) return;
-    disposed = true;
-    for (const stop of stops) stop();
-  };
-  window.once('closed', dispose);
   const push = (channel: string, message: unknown) => {
     if (window.isDestroyed() || window.webContents.isDestroyed()) return;
     window.webContents.send(channel, message);
@@ -64,6 +57,8 @@ export function installDesktopHostBridge(
     },
     // Typed `DownMessage`s the session bridge builds: nothing to check.
     postSession: (message) => push(ELECTRON_SESSION_PUSH_CHANNEL, message),
-    dispose,
+    dispose: () => {
+      for (const stop of stops) stop();
+    },
   };
 }

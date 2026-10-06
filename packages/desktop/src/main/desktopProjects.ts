@@ -400,33 +400,31 @@ export function openDesktopProjectRegistry(
           // runs.
           yield* Effect.uninterruptible(
             Effect.gen(function* () {
-              yield* Effect.gen(function* () {
-                const wasActive = active() === project;
-                const remembered = yield* records.read;
-                const next =
-                  remembered.findLast(
-                    (candidate) => candidate !== root && byRoot(candidate),
-                  ) ??
-                  current().projects.findLast(
-                    (candidate) => candidate.root !== root,
-                  )?.root;
-                yield* records.forget(root, wasActive ? next : undefined);
-                const recent = yield* records.readRecent;
-                yield* SubscriptionRef.update(state, (s) => ({
-                  projects: s.projects.filter(
-                    (candidate) => candidate !== project,
-                  ),
-                  activeKey: wasActive
-                    ? (
-                        (next === undefined ? undefined : byRoot(next)) ??
-                        fallback
-                      ).key
-                    : s.activeKey,
-                  recent,
-                }));
-                yield* project.dispose();
-              }).pipe(withPerKeyLane(lanes, selection));
-            }),
+              const wasActive = active() === project;
+              const remembered = yield* records.read;
+              const next =
+                remembered.findLast(
+                  (candidate) => candidate !== root && byRoot(candidate),
+                ) ??
+                current().projects.findLast(
+                  (candidate) => candidate.root !== root,
+                )?.root;
+              yield* records.forget(root, wasActive ? next : undefined);
+              const recent = yield* records.readRecent;
+              yield* SubscriptionRef.update(state, (s) => ({
+                projects: s.projects.filter(
+                  (candidate) => candidate !== project,
+                ),
+                activeKey: wasActive
+                  ? (
+                      (next === undefined ? undefined : byRoot(next)) ??
+                      fallback
+                    ).key
+                  : s.activeKey,
+                recent,
+              }));
+              yield* project.dispose();
+            }).pipe(withPerKeyLane(lanes, selection)),
           );
         }).pipe(withPerKeyLane(lanes, root), Effect.mapError(ensureError));
       },
