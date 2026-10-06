@@ -138,8 +138,6 @@ export interface Surface {
   readonly groups: ReadonlyMap<RunId, ReadonlyMap<string, boolean>>;
   /** Per top-level run, the `lastTimestamp` this surface last showed. */
   readonly seen: ReadonlyMap<RunId, number>;
-  /** Never persisted. */
-  readonly focusedRow: string | null;
   readonly drawerOpen: boolean;
   readonly toolsSheetOpen: boolean;
   /** The output list's "where files are stored" hint, dismissed once. */
@@ -204,7 +202,6 @@ export function loadSurface(
       persisted.groups.map(([id, groups]) => [id, new Map(groups)]),
     ),
     seen: new Map(persisted.seen),
-    focusedRow: null,
     drawerOpen: persisted.drawerOpen,
     toolsSheetOpen: false,
     storageHintDismissed: persisted.storageHintDismissed,
@@ -394,7 +391,6 @@ export type SurfaceAction =
       readonly key: string;
       readonly expanded: boolean;
     }
-  | { readonly kind: 'focusRow'; readonly rowId: string | null }
   | { readonly kind: 'workbench'; readonly layout: WorkbenchLayout | null }
   | { readonly kind: 'dismissStorageHint' }
   | {
@@ -484,8 +480,6 @@ export function applySurfaceAction(
           ),
         ),
       };
-    case 'focusRow':
-      return { ...surface, focusedRow: action.rowId };
     case 'workbench':
       return { ...surface, workbench: action.layout };
     case 'seen':
