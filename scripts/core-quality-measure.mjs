@@ -450,13 +450,15 @@ function unwrapped(node) {
   return node;
 }
 
-/** The expression of a function's only return/expression, or null. */
+/** The value a function forwards: an expression body or its only `return`. */
 function onlyExpression(node) {
   if (node.body == null) return null;
   if (!ts.isBlock(node.body)) return unwrapped(node.body);
   const [only] = node.body.statements;
+  // A lone call statement forwards no value, so it is not a pass-through.
   return node.body.statements.length === 1 &&
-    (ts.isReturnStatement(only) || ts.isExpressionStatement(only))
+    ts.isReturnStatement(only) &&
+    only.expression != null
     ? unwrapped(only.expression)
     : null;
 }
