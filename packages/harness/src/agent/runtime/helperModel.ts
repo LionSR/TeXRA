@@ -7,7 +7,7 @@
  * A helper call is gated, priced and reported to the usage log like every
  * model call; it writes no run history row, because it belongs to no run's history.
  */
-import { Data, Effect, Exit, Ref, Scope } from 'effect';
+import { Data, Effect, ScopedRef, type Scope } from 'effect';
 
 import {
   modelUnavailableReasonFrom,
@@ -94,27 +94,19 @@ export const helperCall = Effect.fn('helperCall')(
     HelperModelUnavailable | Error,
     Scope.Scope | LanguageModel | HttpClient.HttpClient | UsageLog
   > {
-    // Each binding in its own fork of this call's scope, so a reacquired
-    // connection retires the dead one at once.
-    const scope = yield* Effect.scope;
     const context = yield* Effect.context<
       LanguageModel | HttpClient.HttpClient
     >();
     const stores: ModelOptionStores = { ...session.roots, secrets };
-    const bindFresh = Effect.gen(function* () {
-      const fork = yield* Scope.fork(scope);
-      const bound = yield* helperModel(stores).pipe(Scope.provide(fork));
-      return { bound, fork };
-    });
-    const held = yield* Ref.make(yield* bindFresh);
+    // ScopedRef masks its acquisition; a caller's deadline must still
+    // cancel a bind in progress.
+    const acquire = helperModel(stores).pipe(Effect.interruptible);
+    const held = yield* ScopedRef.fromAcquire(acquire);
     const { turn } = yield* callModel({
       purpose: 'helper',
-      binding: Effect.map(Ref.get(held), ({ bound }) => bound),
+      binding: ScopedRef.get(held),
       reacquire: () =>
-        Effect.gen(function* () {
-          const retired = yield* Ref.getAndSet(held, yield* bindFresh);
-          yield* Scope.close(retired.fork, Exit.void);
-        }).pipe(
+        ScopedRef.set(held, acquire).pipe(
           Effect.provideContext(context),
           Effect.catch((error) =>
             Effect.logWarning('Could not rebind the helper model').pipe(
