@@ -39,7 +39,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "prepack": "node -e \"if (!/^pnpm\\//.test(process.env.npm_config_user_agent ?? '')) { console.error('Pack and publish with pnpm: only it applies publishConfig.exports and resolves workspace: versions.'); process.exit(1); }\" && npm run build",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test-live.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test-live.json && node scripts/build.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.131.0",
