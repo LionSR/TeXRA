@@ -44,9 +44,10 @@ const InquiryThreadRecordSchema = z.object({
 export type InquiryThreadRecord = z.infer<typeof InquiryThreadRecordSchema>;
 
 /** The thread records, in the global database's current values and keyed by
- *  thread id, so a follow-up from another project still reaches its thread. */
+ *  thread id, so a follow-up from another project still reaches its thread.
+ *  Named as the plugin's own row kind is (`external-inquiry/thread`). */
 export const INQUIRY_THREADS: ValueFamily<InquiryThreadRecord> = {
-  name: 'inquiry',
+  name: 'external-inquiry/thread',
   schema: InquiryThreadRecordSchema,
   deletable: false,
 };
