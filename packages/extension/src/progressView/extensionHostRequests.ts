@@ -107,7 +107,7 @@ import {
 } from '@texra/controllers/session/sharedHostRequests';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies';
-import { getToolDocsCommand } from '@texra/utils/system/toolChecks';
+import { getToolDocsPage } from '@texra/utils/system/toolChecks';
 import {
   locateInWorkspace,
   workspaceRelativePath,
@@ -601,16 +601,15 @@ export function createExtensionHostRequests(
     }),
     openInstallGuide: (tool) =>
       Effect.gen(function* () {
-        const docsCommand = getToolDocsCommand(tool);
-        if (!docsCommand) {
+        const page = getToolDocsPage(tool);
+        if (!page) {
           return yield* Effect.fail(
             new Rejected({
               reason: `No install guide is registered for ${tool}.`,
             }),
           );
         }
-        const [command, ...args] = docsCommand.split(',');
-        yield* runCommand(command, ...args);
+        yield* commandVerb('texra.openDoc', page);
       }),
     gettingStarted: (action) =>
       Effect.gen(function* () {

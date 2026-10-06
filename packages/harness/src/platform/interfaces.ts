@@ -267,7 +267,8 @@ export class AgentDirectories extends Context.Service<
  */
 export type ToolMissingHandler = (
   message: string,
-  openDocsCommand?: string,
+  /** The guide page that covers installing the tool, when one is known. */
+  docsPage?: string,
 ) => Effect.Effect<void>;
 
 /**

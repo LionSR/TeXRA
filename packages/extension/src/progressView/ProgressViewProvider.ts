@@ -7,7 +7,6 @@ import {
   Data,
   Effect,
   Exit,
-  Fiber,
   FileSystem,
   Queue,
   Scope,
@@ -113,11 +112,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public readonly snapshot: HostSnapshotSource;
   public readonly toolEditApprovals: ToolEditApprovalController;
 
-  /** The bridge's lifetime: every port and request it owns ends when
-   *  {@link dispose} closes it. */
-  private readonly bridgeScope = Scope.makeUnsafe();
+  /** Everything the provider holds ends when {@link dispose} closes this,
+   *  last-in first-out: the ports, attached later, close before the host. */
+  private readonly scope = Scope.makeUnsafe();
   private readonly contentProvider: BundledViewContentProvider;
-  private readonly disposables: vscode.Disposable[] = [];
 
   /** The sidebar's `WebviewView` while VS Code holds one resolved. */
   private sidebarView: vscode.WebviewView | undefined;
@@ -218,7 +216,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         handleHostRequest: (request, port) =>
           hostRequests.handleHostRequest(request, port),
         onPortClosed: (port) => hostRequests.closePort(port),
-      }).pipe(Scope.provide(this.bridgeScope)),
+      }).pipe(Scope.provide(this.scope)),
     );
     const roots = session.roots;
     this.snapshot = createHostSnapshotSource({
@@ -304,10 +302,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // A decision goes where the run runs.
       session: { requests: backend },
     });
-    const attention = this.runtime.runFork(this.attention.follow(backend));
-    this.disposables.push({
-      dispose: () => this.runtime.runFork(Fiber.interrupt(attention)),
-    });
+    this.runtime.runSync(
+      Effect.forkIn(this.attention.follow(backend), this.scope),
+    );
 
     const hostRequests = createExtensionHostRequests({
       session,
@@ -326,7 +323,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       refreshOnboardingFunnel: () => this.refreshOnboardingFunnel(),
       refreshApiKeyStatus: this.refreshApiKeyStatus,
     });
-    this.disposables.push({ dispose: () => hostRequests.dispose() });
+    this.own(hostRequests);
 
     // Attached for the window's life, before the first run of this window
     // asks anything. Requests this host does not present (bash, plan,
@@ -334,7 +331,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // request row decides them. A document task's `run.end` is the completion
     // chime, one per process (PRD 12.4), never a renderer transition hook
     // that every subscriber would replay. A failed run does not chime.
-    const hostScope = this.runtime.runSync(Scope.make());
     // What this window does for a run, whether it runs here or in the
     // service: notices, the editor's diagnostics and inline criticism, and
     // opening a PDF.
@@ -381,19 +377,16 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             )
               this.chime();
           }),
-      }).pipe(Scope.provide(hostScope)),
+      }).pipe(Scope.provide(this.scope)),
     );
     // A window of the service is its project's window too: the service's
     // runs ask it for the same, and it stages their tool edits.
     if (service !== undefined)
       this.runtime.runFork(
         this.attachToService(service, capabilities).pipe(
-          Scope.provide(hostScope),
+          Scope.provide(this.scope),
         ),
       );
-    this.disposables.push({
-      dispose: () => this.runtime.runFork(Scope.close(hostScope, Exit.void)),
-    });
 
     this.watchWorkspace();
   }
@@ -504,7 +497,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // Only a non-first workspace folder can be added or removed here: VS
     // Code restarts the extension host for a first-folder change, so the
     // storage root never moves under a live window (#11432).
-    this.disposables.push(
+    this.own(
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
         void this.runtime.runPromise(
           this.snapshot
@@ -526,7 +519,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       void this.runtime.runPromise(this.snapshot.refreshFiles);
     fileWatcher.onDidCreate(refreshFiles);
     fileWatcher.onDidDelete(refreshFiles);
-    this.disposables.push(
+    this.own(
       fileWatcher,
       // The catalog reloads itself on every change to its sources
       // (`agentCatalogFollower`); this launcher repaints what it lists.
@@ -534,6 +527,17 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         this.debouncedRefreshCatalogs.schedule(),
       ),
     );
+  }
+
+  /** VS Code disposables as finalizers of the provider's scope. */
+  private own(...disposables: vscode.Disposable[]): void {
+    for (const disposable of disposables)
+      this.runtime.runSync(
+        Scope.addFinalizer(
+          this.scope,
+          Effect.sync(() => disposable.dispose()),
+        ),
+      );
   }
 
   /** The agent, team, and model catalogs. */
@@ -842,8 +846,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       this.editor?.panel.dispose();
       this.editor = undefined;
       this.debouncedRefreshCatalogs.cancel();
-      yield* Scope.close(this.bridgeScope, Exit.void);
-      for (const disposable of this.disposables.splice(0)) disposable.dispose();
+      yield* Scope.close(this.scope, Exit.void);
       yield* this.draftRequests.shutdown;
       yield* this.toolEditApprovals.dispose();
     });
