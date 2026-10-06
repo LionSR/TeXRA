@@ -82,6 +82,9 @@ export const HostSnapshotSchema = z.object({
     agentConfig: AgentConfigBannerDataSchema.extend(visible),
     dependency: DependencyBannerDataSchema.extend(visible),
     gettingStarted: z.boolean(),
+    /** The background service this window's tasks run in went away, and
+     *  the window is reaching it again. */
+    serviceOffline: z.boolean(),
   }),
   onboarding: OnboardingFunnelStateSchema,
 });
@@ -102,6 +105,7 @@ export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
       agentConfig: { visible: false },
       dependency: { visible: false },
       gettingStarted: false,
+      serviceOffline: false,
     },
     onboarding: 'done',
   };

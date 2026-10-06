@@ -9,18 +9,18 @@ import * as path from 'node:path';
 
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import {
-  ensureService,
+  linkService,
   spawnService,
-  type ServiceConnection,
+  type ServiceLink,
 } from '@texra/controllers/server/client';
 import type { Effect, Scope } from 'effect';
 
-/** Connect to the service, starting it when none answers, for the
- *  caller's scope. */
+/** Hold the service, starting it when none answers, for the caller's
+ *  scope; the link reaches it again when it goes away. */
 export function reachExtensionService(
   extensionPath: string,
-): Effect.Effect<ServiceConnection, Error, Scope.Scope> {
-  return ensureService(
+): Effect.Effect<ServiceLink, Error, Scope.Scope> {
+  return linkService(
     DEFAULT_NODE_STORAGE_ROOT,
     spawnService(
       DEFAULT_NODE_STORAGE_ROOT,

@@ -14,6 +14,7 @@ import {
   withProcessServices,
 } from '@platform/processRuntime';
 import type { RequestOpenFilePayload } from '@shared/schemas';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   createExternalLocation,
@@ -24,6 +25,8 @@ import type { DesktopAgentRun } from './desktopAgentRun.js';
 
 interface DesktopAgentLaunchContext {
   readonly session: SessionHandle;
+  /** Where the run runs: this session, or the service's. */
+  readonly backend: SessionBackend;
   /** The process runtime this host's launch runs on, handed down from the
    *  composition root rather than looked up. */
   readonly runtime: ProcessRuntime;
@@ -32,7 +35,10 @@ interface DesktopAgentLaunchContext {
 export type DesktopAgentLaunchOptions = Pick<
   RunAgentOptions,
   'ownApiKeyFallback' | 'preferHelperModel' | 'onRun' | 'onRunResolved'
->;
+> & {
+  /** An Auto-approve launch: the run starts with delegated work approved. */
+  readonly approveDelegatedWork?: boolean;
+};
 
 /**
  * Start a desktop run; its awaiting host owns failure presentation. The
@@ -46,22 +52,21 @@ export function launchDesktopAgent(
   options: DesktopAgentLaunchOptions = {},
 ): Effect.Effect<void, Error> {
   const launch = Effect.gen(function* () {
-    const { runAgent } = yield* Effect.tryPromise({
-      try: () => import('@agent/runtime'),
-      catch: ensureError,
-    });
-    yield* runAgent(request, {
-      session: context.session,
-      ownApiKeyFallback: options.ownApiKeyFallback,
-      ...(options.preferHelperModel && { preferHelperModel: true }),
-      onRun: options.onRun,
-      onRunResolved: options.onRunResolved,
-      suppressErrorNotification: true,
-    }).pipe(
-      // Presentation reacts to the outcome the run committed; it never runs
-      // inside the run, so it cannot change that outcome.
-      Effect.flatMap(presentDesktopFinalOutput(context.session)),
-    );
+    // Here or in the service, as the project's backend runs it.
+    yield* context.backend
+      .launch(request, {
+        ownApiKeyFallback: options.ownApiKeyFallback,
+        ...(options.preferHelperModel && { preferHelperModel: true }),
+        approveDelegatedWork: options.approveDelegatedWork,
+        onRun: options.onRun,
+        onRunResolved: options.onRunResolved,
+        suppressErrorNotification: true,
+      })
+      .pipe(
+        // Presentation reacts to the outcome the run committed; it never runs
+        // inside the run, so it cannot change that outcome.
+        Effect.flatMap(presentDesktopFinalOutput(context.session)),
+      );
   });
   return withProcessServices(context.runtime, launch);
 }

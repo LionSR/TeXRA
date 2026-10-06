@@ -3,7 +3,7 @@ import '@test/support/sessionGraphTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect, Fiber, Stream } from 'effect';
 import { describe, expect, onTestFinished, vi } from 'vitest';
 
 // Local imports
@@ -23,6 +23,7 @@ import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import { generateRunId } from '@utils/core';
 
 // Local file imports
@@ -64,6 +65,10 @@ describe('desktop agent run completion hook', () => {
           closeDiff: () => Effect.void,
         },
         session,
+        backend: localSessionBackend(session),
+        focused: Stream.empty,
+        service: undefined,
+        root: undefined,
         runtime: testRuntime(),
         showAgentConfigBanner: () => Effect.void,
         onRunCompleted: Effect.sync(onRunCompleted),

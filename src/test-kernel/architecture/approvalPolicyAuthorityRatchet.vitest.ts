@@ -52,6 +52,9 @@ const SEED_CALL_ALLOWLIST = new Set([
   // A window's settings change reaches its session through its backend:
   // the window's own session, or `project.policy` to the service.
   'packages/texra/src/controllers/session/sessionBackend.ts',
+  // The desktop settings surface sets a paper's policy on its session and
+  // on the service that runs its tasks.
+  'packages/desktop/src/main/desktopSettingsIpc.ts',
 ]);
 
 /**

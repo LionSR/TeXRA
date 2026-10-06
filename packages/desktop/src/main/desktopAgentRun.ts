@@ -1,4 +1,4 @@
-// The desktop's presentation of one paper's session and its launch path.
+// The desktop's presentation of one project's session and its launch path.
 //
 // The session's facts reach the renderer through the fold and the framer;
 // what remains host-side is what a session asks its host to do with no
@@ -8,7 +8,7 @@
 // here: a surface answers an approval with `runtime.request`, and the
 // session settles the pending request itself.
 
-import { Effect, Scope } from 'effect';
+import { Effect, Scope, type Stream } from 'effect';
 
 import {
   type RunEndResult,
@@ -24,9 +24,11 @@ import {
   withProcessServices,
 } from '@platform/processRuntime';
 import type { RequestOpenFilePayload, RunId } from '@shared/schemas';
-import { launchOnRun } from '@texra/controllers/mainView/backend/MainViewRunLaunchController';
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
+import type { ServiceLink } from '@texra/controllers/server/client';
+import { attachWindowHost } from '@texra/controllers/server/windowHost';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 
 import {
   DesktopToolEditApprovalHost,
@@ -45,6 +47,16 @@ export interface DesktopAgentRunOptions {
   /** Preview operations reject; the approval controller presents failures. */
   toolEditPreview: Omit<DesktopToolEditApprovalUi, 'showErrorMessage'>;
   session: SessionHandle;
+  /** Where this project's runs run: the session here, or the service's. */
+  backend: SessionBackend;
+  /** The service, when the backend is the service's: this window serves
+   *  its project's runs there with its notices and tool-edit previews. */
+  service: ServiceLink | undefined;
+  /** The project folder; none for the no-workspace session. */
+  root: string | undefined;
+  /** Emits when this window gains focus (and once at once when it has it),
+   *  so the service sends the project's host calls here first. */
+  focused: Stream.Stream<void>;
   /** A launch could not find its agent: the New-task state's
    *  agent-config banner (`HostSnapshot.banners`). */
   showAgentConfigBanner(data: { agentName: string }): Effect.Effect<void>;
@@ -78,7 +90,7 @@ export interface DesktopAgentRun {
 }
 
 /**
- * The run wiring of one paper, in the scope that opens it: closing the scope
+ * The run wiring of one project, in the scope that opens it: closing the scope
  * detaches the host interactions, stops the session-event follower and
  * settles once every staged tool-edit preview is gone.
  */
@@ -86,7 +98,7 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
   function* (
     options: DesktopAgentRunOptions,
   ): Effect.fn.Return<DesktopAgentRun, never, Scope.Scope> {
-    const { session, host, runtime } = options;
+    const { session, backend, host, runtime } = options;
 
     /**
      * Each arm answers with the program that presents its notice; the session
@@ -140,7 +152,8 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
         },
         spawn,
       }),
-      session,
+      // A decision goes where the run runs.
+      session: { requests: backend },
     });
     // Dispose joins any tool-edit LaTeX build still displaying, which has no
     // cancellation signal, so the window's release must not wait on it: it
@@ -162,6 +175,34 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
         emit: handlePresentationEvent,
       }).pipe(Scope.provide(scope)),
     );
+    // A project of the service: the window serves its runs there with the
+    // same notices and tool-edit previews.
+    if (options.service !== undefined && options.root !== undefined)
+      yield* attachWindowHost(
+        options.service,
+        options.root,
+        {
+          emit: handlePresentationEvent,
+          toolEdits: {
+            stage: (staging) =>
+              withProcessServices(
+                runtime,
+                toolEditApprovals.present({ ...staging, roots: session.roots }),
+              ).pipe(Effect.mapError((failure) => new Error(failure.message))),
+            release: (requestId) =>
+              withProcessServices(
+                runtime,
+                toolEditApprovals.release(requestId),
+              ),
+            approve: (requestId) =>
+              withProcessServices(
+                runtime,
+                toolEditApprovals.approveStaged(requestId),
+              ),
+          },
+        },
+        options.focused,
+      );
 
     /**
      * The launch, settling with the run. `onRunCompleted` fires on every
@@ -175,15 +216,10 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
         readonly approveDelegatedWork?: boolean;
       } = {},
     ): Effect.Effect<void, Error> {
-      const { approveDelegatedWork, ...launchOptions } = runOptions;
       return launchDesktopAgent(
         request,
-        { session, runtime },
-        {
-          onRunResolved: options.onLaunched,
-          ...launchOptions,
-          onRun: launchOnRun(session.approvals, runOptions),
-        },
+        { session, backend, runtime },
+        { onRunResolved: options.onLaunched, ...runOptions },
       ).pipe(Effect.ensuring(options.onRunCompleted ?? Effect.void));
     }
 

@@ -1170,10 +1170,25 @@ function removeScratch(dir) {
     const record = path.join(runDir, 'serve.json');
     for (let waited = 0; !existsSync(record) && waited < 3_000; waited += 100)
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    // The record names the current service; a retired one still draining
+    // is named only by its own `serve-<pid>.sock`.
+    const pids = new Set(
+      readdirSync(runDir).flatMap((name) => {
+        const match = /^serve-(\d+)\.sock$/.exec(name);
+        return match ? [Number(match[1])] : [];
+      }),
+    );
     try {
-      process.kill(JSON.parse(readFileSync(record, 'utf8')).pid, 'SIGTERM');
+      pids.add(JSON.parse(readFileSync(record, 'utf8')).pid);
     } catch {
-      // Gone already, or never started: nothing left to stop.
+      // No record: the service never started, or its sockets name it.
+    }
+    for (const pid of pids) {
+      try {
+        process.kill(pid, 'SIGTERM');
+      } catch {
+        // Gone already: nothing left to stop.
+      }
     }
   }
   rmSync(dir, { recursive: true, force: true });

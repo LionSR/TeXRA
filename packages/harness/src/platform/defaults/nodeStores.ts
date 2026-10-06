@@ -59,6 +59,9 @@ import {
  *
  * No write runner is supplied: a config store is written through the store's
  * own Effect `set`, which composes into the writer's program.
+ *
+ * `follow` opens both stores following their files
+ * (`JsonStoreOptions.follow`), for a process other processes configure.
  */
 export const openTexraWorkspaceConfigStores = Effect.fn(
   'nodeStores.openTexraWorkspaceConfigStores',
@@ -66,9 +69,11 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
   workspaceStoragePath: string,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,
+  follow?: (error: Error) => void,
 ) {
   const openLocal = JsonStore.open(
     path.join(workspaceStoragePath, TEXRA_CONFIG_FILE_NAME),
+    { follow },
   );
   if (!workspaceRoot) {
     const store = yield* openLocal;
@@ -78,6 +83,7 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
   const [workspace, local] = yield* Effect.all(
     [
       JsonStore.open(projectConfigPath, {
+        follow,
         onUnreadable: (error) =>
           warn(
             `Cannot read ${projectConfigPath}; project settings are ignored and cannot be saved until it is fixed. Cause: ${toErrorMessage(error)}`,

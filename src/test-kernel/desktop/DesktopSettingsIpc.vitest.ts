@@ -41,6 +41,7 @@ import {
   SettingsViewInboundMessageSchema,
   type DerivedSettingsSnapshot,
 } from '@texra/shared/settingsView/settingsViewMessages';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 
 import {
@@ -147,6 +148,7 @@ async function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
       secrets: new FakeSecrets(),
       resourcesPath: '/resources',
       session,
+      backend: localSessionBackend(session),
     }).pipe(
       // Runs an owned command's program the way the window's router does.
       Effect.map((ipc) => ({

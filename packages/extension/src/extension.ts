@@ -489,7 +489,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   });
   const backend = Result.isSuccess(service)
     ? yield* serviceSessionBackend(
-        service.success.client,
+        service.success,
         roots.workspace ?? '',
         runtimeSession.roots.storage,
       )
@@ -568,7 +568,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     runtime,
     runtimeSession,
     backend,
-    Result.isSuccess(service) ? service.success.client : undefined,
+    Result.isSuccess(service) ? service.success : undefined,
     (usable) => (usable ? setupPill.hide() : setupPill.show()),
   );
   yield* Effect.andThen(

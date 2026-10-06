@@ -45,9 +45,11 @@ import type { ServiceInfo } from '@texra/controllers/server/protocol';
 import type { ServiceProjects } from '@texra/controllers/server/handlers';
 import {
   ensureService,
+  linkService,
   probeRecordedService,
   spawnService,
   type ServiceConnection,
+  type ServiceLink,
   type ServiceUnavailable,
 } from '@texra/controllers/server/client';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
@@ -76,10 +78,18 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
   const { storageRoot } = context;
   const globalStorage = resolveGlobalStoragePath(storageRoot);
   const globalState = yield* AppState;
+  const warn = (message: string) => writeLogLine('WARN', 'cliService', message);
+  // The windows and the CLI write these files while the service runs: each
+  // read serves what they hold now, so a setting changed in any client
+  // reaches the next task and the next turn.
+  const follow = (error: Error) =>
+    warn(
+      `A TeXRA config file changed but could not be read; the service keeps its previous settings until it is fixed: ${error.message}`,
+    );
   const globalConfig = yield* JsonStore.open(
     path.join(globalStorage, TEXRA_CONFIG_FILE_NAME),
+    { follow },
   );
-  const warn = (message: string) => writeLogLine('WARN', 'cliService', message);
   const openRoots = Effect.fn('cliServiceProjects.openRoots')(function* (
     workspace: string | undefined,
   ) {
@@ -88,7 +98,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       [
         openProjectStateStore(storage, workspace),
         openRepoStateStore(workspace, storage),
-        openTexraWorkspaceConfigStores(storage, workspace, warn),
+        openTexraWorkspaceConfigStores(storage, workspace, warn, follow),
       ],
       { concurrency: 'unbounded' },
     ).pipe(Scope.provide(scope));
@@ -122,23 +132,37 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
   >();
   const sessions = new Map<string, SessionHandle>();
   const lanes = new Map<string, PerKeyLane>();
+  // Each project's approval policy as its config last read: a change there
+  // (`texra config`, any window's settings) applies at the next call, and
+  // a policy a window told the service holds until the config changes.
+  const configuredPolicy = new Map<string, TexraApprovalPolicy>();
+  const followPolicy = (root: string, session: SessionHandle) =>
+    Effect.map(
+      readSettingFrom<TexraApprovalPolicy>(
+        session.roots,
+        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+      ),
+      (policy) => {
+        if (configuredPolicy.get(root) === policy) return;
+        configuredPolicy.set(root, policy);
+        session.setApprovalPolicy(policy);
+      },
+    );
   const open = (workspace: string) => {
     const root = canonicalizeWorkspacePath(workspace);
     return Effect.gen(function* () {
       const held = sessions.get(root);
-      if (held !== undefined) return held;
+      if (held !== undefined) {
+        yield* followPolicy(root, held);
+        return held;
+      }
       const roots = yield* openRoots(root);
       const session = yield* openSessionEffect({
         roots,
         responseTextProcessing: createTexraResponseTextProcessing(),
         interruptedTasks: 'offer',
       });
-      session.setApprovalPolicy(
-        yield* readSettingFrom<TexraApprovalPolicy>(
-          roots,
-          TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-        ),
-      );
+      yield* followPolicy(root, session);
       sessions.set(root, session);
       return session;
     }).pipe(
@@ -186,12 +210,31 @@ const NO_SERVICE = 'TEXRA_NO_SERVICE';
 export function reachCliService(
   storageRoot: string,
 ): Effect.Effect<ServiceConnection, Error, Scope.Scope> {
+  return withCliService(storageRoot, ensureService);
+}
+
+/** {@link reachCliService} held for the chat's life: the link reaches the
+ *  service again when it goes away. */
+export function linkCliService(
+  storageRoot: string,
+): Effect.Effect<ServiceLink, Error, Scope.Scope> {
+  return withCliService(storageRoot, linkService);
+}
+
+/** `reach` over the storage root's service, started with this process's
+ *  own Node and entry, unless `TEXRA_NO_SERVICE` is set. */
+function withCliService<A>(
+  storageRoot: string,
+  reach: (
+    storageRoot: string,
+    start: Effect.Effect<void, Error>,
+  ) => Effect.Effect<A, Error, Scope.Scope>,
+): Effect.Effect<A, Error, Scope.Scope> {
   return Effect.flatMap(envFlag(NO_SERVICE), (off) =>
     off
       ? Effect.fail(new Error(`${NO_SERVICE} is set`))
-      : ensureService(
+      : reach(
           storageRoot,
-          // The same Node and entry as this process.
           spawnService(storageRoot, process.execPath, [
             ...process.execArgv,
             readCliEntrypointPath(),

@@ -52,7 +52,7 @@ import type {
 } from '@shared/session/sessionFrames';
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { OnboardingFunnelRefresher } from '@texra/controllers/onboarding/onboardingFunnel';
-import type { ServiceClient } from '@texra/controllers/server/client';
+import type { ServiceLink } from '@texra/controllers/server/client';
 import {
   attachWindowHost,
   type WindowHost,
@@ -183,7 +183,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     /** Where this window's runs run: the session here, or the service's. */
     private readonly backend: SessionBackend,
     /** The background service, when this window is its client. */
-    private readonly service: ServiceClient | undefined,
+    private readonly service: ServiceLink | undefined,
     /** The setup pill: painted from the same credential answer the funnel
      *  reads, so the pill and the "Connect a model" card agree. */
     private readonly paintSetupPill: (credentialUsable: boolean) => void,
@@ -407,7 +407,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    * and chime when one of its document tasks ends, as a run here does.
    */
   private attachToService(
-    service: ServiceClient,
+    service: ServiceLink,
     capabilities: Omit<WindowHost, 'toolEdits'>,
   ): Effect.Effect<void, never, Scope.Scope> {
     const workspace = this.session.roots.workspace;
@@ -454,6 +454,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           : focused,
       );
       yield* Effect.forkScoped(this.chimeOnServiceDocuments());
+      // Offline while the link reaches the service again, so the view never
+      // sits frozen without saying why.
+      yield* Effect.forkScoped(
+        Stream.runForEach(SubscriptionRef.changes(service.client), (client) =>
+          this.snapshot.setServiceOffline(client === null),
+        ),
+      );
     });
   }
 

@@ -25,6 +25,8 @@ import {
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
+import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
 import type { PlatformSecrets } from '@texra-ai/harness';
@@ -32,6 +34,9 @@ import type { DesktopSpawn } from './desktopWindows.js';
 
 const NO_EXTENSION_HOSTING =
   'TeXRA Desktop runs standalone and cannot host VS Code extensions.';
+
+/** Each project's policy updates to the service, one at a time. */
+const policyLanes = new WeakMap<SessionBackend, PerKeyLane>();
 
 export interface DesktopSettingsIpcOptions {
   /** This window's half of the shared settings body; the subscription
@@ -55,9 +60,12 @@ export interface DesktopSettingsIpcOptions {
       productName: string,
     ): Effect.Effect<void, Error>;
   };
-  /** The session of the paper this settings surface serves. The desktop has
+  /** The session of the project this settings surface serves. The desktop has
    *  no process-default session, so it must be passed. */
   readonly session: SessionHandle;
+  /** Where the project's runs run: an approval policy set here applies
+   *  there too. */
+  readonly backend: SessionBackend;
   readonly secrets: PlatformSecrets;
   /** Root of the packaged resources tree, which holds the agent templates. */
   readonly resourcesPath: string;
@@ -171,7 +179,25 @@ export function createDesktopSettingsIpc(
 
   const body = createSettingsViewBody({
     host: 'desktop',
-    session: options.session,
+    session: {
+      roots: options.session.roots,
+      // The policy holds here and in the service that runs the project's
+      // tasks. Telling the service outlives this surface, in the order set:
+      // a project switch or a closed window must not leave the service on
+      // an older policy.
+      setApprovalPolicy: (policy) => {
+        options.session.setApprovalPolicy(policy);
+        spawn(
+          Effect.asVoid(
+            Effect.forkDetach(
+              options.backend
+                .setApprovalPolicy(policy)
+                .pipe(withPerKeyLane(policyLanes, options.backend)),
+            ),
+          ),
+        );
+      },
+    },
     secrets: options.secrets,
     resourcesPath: options.resourcesPath,
     skillDisplay: loadRuntimeSkillDisplay(

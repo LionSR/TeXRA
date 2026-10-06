@@ -49,6 +49,7 @@ import type {
 import { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 
 import type { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { exportRunTranscript } from '@texra/controllers/progressView/exportTranscript';
 import { ApiKeyPromptFailed } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
@@ -64,7 +65,6 @@ import {
   type WorkflowFileOperationRequest,
 } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
-import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import {
   handleSharedHostRequest,
   isSharedHostRequest,
@@ -96,6 +96,8 @@ interface DesktopHostRequestsOptions {
   session: SessionHandle;
   /** The process secret store the model catalog reads. */
   secrets: PlatformSecrets;
+  /** Where this project's runs run: the session here, or the service's. */
+  backend: SessionBackend;
   host: DesktopAgentRunHost;
   run: DesktopAgentRun;
   files: DesktopFileSelection;
@@ -157,7 +159,7 @@ export function createDesktopHostRequests(
     createHostRunActions({
       ...run, // this window's launcher and output opener
       session,
-      backend: localSessionBackend(session),
+      backend: options.backend,
       loadModelOptions: () =>
         withProcessServices(
           runtime,
@@ -374,7 +376,7 @@ export function createDesktopHostRequests(
 
   const exportTranscript = (runId: RunId) =>
     Effect.gen(function* () {
-      if (!SubscriptionRef.getUnsafe(session.view).runs.has(runId)) {
+      if (!SubscriptionRef.getUnsafe(options.backend.view).runs.has(runId)) {
         return yield* Effect.fail(
           new Unavailable({ runId, reason: 'The run is no longer open.' }),
         );
