@@ -268,15 +268,18 @@ const moveAfter = <A, E, R>(
   failure: ModelFailure,
   ref: InvocationRef,
   bound: BoundModel,
+  observed: boolean,
 ): Effect.Effect<FailedNext> =>
   Effect.zipWith(driver.read, driver.chains(bound), ({ invocation }, chains) =>
     failedNext(
       failuresBefore(invocation, ref),
       {
         abort: isUserAbort(failure.error),
-        // A 404 on a request that chained nothing is an ordinary failure.
-        unchain: chains && failure.storedResponseGone,
-        automatic: failure.autoRetryable,
+        // A 404 on a request that chained nothing is an ordinary failure,
+        // and a failed observation is never resubmitted unasked: the work
+        // it watched was already billed.
+        unchain: !observed && chains && failure.storedResponseGone,
+        automatic: !observed && failure.autoRetryable,
         offered:
           failure.formatted.userRetryable &&
           !hasMissingApiKeyErrorMarker(failure.error),
@@ -316,10 +319,13 @@ const afterFailure = <A, E, R>(
   renew(failed, bound).pipe(
     Effect.flatMap((renewed) => {
       if (renewed !== true)
-        return Effect.map(moveAfter(driver, renewed, ref, bound), (next) => ({
-          failure: renewed,
-          next,
-        }));
+        return Effect.map(
+          moveAfter(driver, renewed, ref, bound, move.kind === 'observe'),
+          (next) => ({
+            failure: renewed,
+            next,
+          }),
+        );
       return Effect.succeed(
         move.kind === 'observe'
           ? null
