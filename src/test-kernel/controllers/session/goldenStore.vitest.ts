@@ -79,12 +79,14 @@ const SELF = JSON.stringify([
 /** The runs, by the ids the generator normalizes them to, in start order. */
 const PARENT = RunIdSchema.parse('a00000000001');
 const CHAT = RunIdSchema.parse('a00000000005');
-const SCRIPTED = RunIdSchema.parse('a00000000006');
+/** The chat's Codex child, detached by the user's stop. */
+const CODEX = RunIdSchema.parse('a00000000006');
+const SCRIPTED = RunIdSchema.parse('a00000000007');
 /** A headless run, the fork `texra resume --fork` made of it, and the
  *  handoff that continued the fork. */
-const FORK_SOURCE = RunIdSchema.parse('a00000000007');
-const FORKED = RunIdSchema.parse('a00000000008');
-const TOMBSTONED = RunIdSchema.parse('a00000000009');
+const FORK_SOURCE = RunIdSchema.parse('a00000000008');
+const FORKED = RunIdSchema.parse('a00000000009');
+const TOMBSTONED = RunIdSchema.parse('a0000000000a');
 
 const roots: string[] = [];
 afterAll(() => {
@@ -189,16 +191,10 @@ describe('the golden 1.0 store', () => {
       expect(events).toHaveLength(rows.length);
       const types = new Set(events.map((event) => event.type));
       // Every row kind is in the fixture, the decode test of a released store,
-      // but these: projected at read time (`usage`, `run.model`), or not yet
-      // in a clean scenario. The list only shrinks.
-      const notStored = [
-        'child.park',
-        'followup.closed',
-        'hook.outcome',
-        'run.detach',
-        'run.model',
-        'usage',
-      ];
+      // but `run.model`, projected at read time, and `followup.closed`, which
+      // only a resume of a run with no agent record writes: every CLI resume
+      // refuses that run before it. The list only shrinks.
+      const notStored = ['followup.closed', 'run.model'];
       expect(
         Object.keys(ROW_KINDS)
           .filter((kind) => !types.has(kind as (typeof events)[number]['type']))
@@ -259,7 +255,7 @@ describe('the golden 1.0 store', () => {
       // The durable harness's row shapes (H2): a fork's start names its
       // source, and its first history row seeds the source's view; a handoff
       // cuts the fork's view to its note; an awaited child names the call
-      // that owns it.
+      // that owns it, and a Codex child, which nobody awaits, names none.
       const forked = aggregateId('run', FORKED);
       expect(
         events.flatMap((event) =>
@@ -290,7 +286,10 @@ describe('the golden 1.0 store', () => {
             ? [[event.parent.id, event.parent.callId]]
             : [],
         ),
-      ).toEqual([[PARENT, 'validation-agent-3']]);
+      ).toEqual([
+        [PARENT, 'validation-agent-3'],
+        [CHAT, null],
+      ]);
       // The plan the chat ran as a goal: the goal plugin's fact, active, then
       // completed.
       expect(
@@ -347,8 +346,10 @@ describe('the golden 1.0 store', () => {
         run(DELEGATED, 'golden_child', { parent: PARENT }),
         run('a00000000003', 'review'),
         run('a00000000004', 'review'),
-        // The user stopped its held turn with Ctrl-C, then exited.
+        // The user stopped its held turn with Ctrl-C, which detached its
+        // parked Codex child, then exited, which ended the child.
         run(CHAT, 'golden_chat', { status: 'cancelled', outcome: 'cancelled' }),
+        run(CODEX, 'codex', { status: 'cancelled', outcome: 'cancelled' }),
         run(SCRIPTED, 'golden_script'),
         run(FORK_SOURCE, 'golden_fork'),
         // The resumed chat over the fork, exited at its idle prompt.
@@ -358,12 +359,13 @@ describe('the golden 1.0 store', () => {
         }),
       ]);
       expect(folded.requests).toEqual([]);
-      // The message typed behind the stopped turn stays queued for a resume
-      // to join. The headless parent holds none: its child's message was
-      // refused, since a one-shot run never reads one.
+      // The Codex turn's result and the message typed behind the stopped
+      // turn stay queued for a resume to join. The headless parent holds
+      // none: its child's message was refused, since a one-shot run never
+      // reads one.
       expect(
         [...folded.queuedFollowUps].map(([id, queued]) => [id, queued.length]),
-      ).toEqual([[CHAT, 1]]);
+      ).toEqual([[CHAT, 2]]);
       const runHistory = yield* RunHistory;
       const stateOf = (id: RunId) =>
         Effect.map(runHistory.load(id), (state) => ({
