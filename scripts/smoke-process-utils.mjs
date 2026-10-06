@@ -1,3 +1,5 @@
+import { setTimeout as sleep } from 'node:timers/promises';
+
 export function appendBoundedLog(current, chunk, maxLogChars) {
   const next = current + chunk.toString('utf8');
   return next.length > maxLogChars ? next.slice(-maxLogChars) : next;
@@ -57,17 +59,10 @@ export function waitForTermination(child) {
   return waitForExitEvent(child, false);
 }
 
-export function delay(ms) {
-  return new Promise((resolve) => {
-    const timeout = setTimeout(resolve, ms);
-    timeout.unref();
-  });
-}
-
 async function waitForExitOrTimeout(exitPromise, timeoutMs) {
   return Promise.race([
     exitPromise.then((exit) => ({ exit })),
-    delay(timeoutMs).then(() => ({ timeout: true })),
+    sleep(timeoutMs, { timeout: true }, { ref: false }),
   ]);
 }
 

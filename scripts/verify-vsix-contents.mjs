@@ -1,9 +1,9 @@
 import { execFileSync } from 'node:child_process';
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 
 import {
   collectRelativeFiles,
@@ -42,10 +42,6 @@ function readVsixEntry(vsixPath, entryPath) {
   return unzip(['-p', vsixPath, entryPath], { encoding: 'buffer' });
 }
 
-function hashBuffer(buffer) {
-  return crypto.createHash('sha256').update(buffer).digest('hex');
-}
-
 function assert(condition, message, failures) {
   if (!condition) failures.push(message);
 }
@@ -61,7 +57,7 @@ function verifyManifest(vsixPath, failures) {
   );
   const source = extensionManifestSnapshot(readJson(sourceManifestPath));
   assert(
-    JSON.stringify(shipped) === JSON.stringify(source),
+    isDeepStrictEqual(shipped, source),
     'VSIX extension/package.json does not match packages/extension/package.json.',
     failures,
   );
@@ -93,11 +89,9 @@ function verifyResourceHashes(vsixPath, entries, failures) {
     if (!entries.has(entryPath)) continue;
 
     const sourcePath = path.join(resourcesDir, sourceFile);
-    const sourceHash = hashBuffer(fs.readFileSync(sourcePath));
-    const packagedHash = hashBuffer(readVsixEntry(vsixPath, entryPath));
     assert(
-      sourceHash === packagedHash,
-      `VSIX resource hash mismatch for resources/${sourceFile}`,
+      fs.readFileSync(sourcePath).equals(readVsixEntry(vsixPath, entryPath)),
+      `VSIX resource content mismatch for resources/${sourceFile}`,
       failures,
     );
   }

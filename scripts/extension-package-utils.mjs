@@ -71,20 +71,9 @@ export function collectRelativeFiles(directory) {
     .sort();
 }
 
-function stable(value) {
-  if (Array.isArray(value)) return value.map(stable);
-  if (!value || typeof value !== 'object') return value;
-
-  return Object.fromEntries(
-    Object.entries(value)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, child]) => [key, stable(child)]),
-  );
-}
-
-/** The manifest keys of `packageJson`, key-sorted for a stable comparison. */
+/** The manifest keys of `packageJson`, compared with `isDeepStrictEqual`. */
 export function extensionManifestSnapshot(packageJson) {
   return Object.fromEntries(
-    MANIFEST_KEYS.map((key) => [key, stable(packageJson[key])]),
+    MANIFEST_KEYS.map((key) => [key, packageJson[key]]),
   );
 }
