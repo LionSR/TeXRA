@@ -9,11 +9,11 @@ import {
   cliMemoryItemDescription,
   runCliMemory,
 } from '@cli/runtime/memory';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { MemoryViewItem } from '@shared/tools/memoryView';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 
 import { AsyncListForm } from './_shared/ListForm';
+import type { ProcessRuntime } from '@texra-ai/harness';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
 interface MemoryListFormProps {

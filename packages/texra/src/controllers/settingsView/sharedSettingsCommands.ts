@@ -27,7 +27,6 @@ import {
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
 import { discoverCopilotRoutes } from '@model/copilotRouting';
-import type { ProcessServices } from '@platform/processRuntime';
 import { type StorageFs, withSessionFs } from '@platform/rootedFs';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SubscriptionUsageProvider } from '@shared/schemas';
@@ -71,6 +70,7 @@ import {
 import { GITHUB_TOKEN_CREATE_URL } from '@texra/tools/github/githubAuth';
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
+import type { ProcessServices } from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
 
 type HostEffect<A = void> = Effect.Effect<A, Error, ProcessServices>;

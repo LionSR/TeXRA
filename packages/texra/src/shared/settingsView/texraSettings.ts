@@ -3,7 +3,7 @@
  * surfaces read: the harness's rows (`@shared/state/stateSettings`), these,
  * and the rows its plugins declare (`./documentsSettings`,
  * `./integrationSettings`). The hosts pass {@link TEXRA_SETTING_ROWS} to
- * `installProcessRuntime`; the webview and the CLI, which render the
+ * `processLayer`; the webview and the CLI, which render the
  * catalog before or without a runtime, read {@link TEXRA_SETTINGS}.
  *
  * Owner by key: the CLI's startup rows (`agent`, `model`, `chat`, `run`,

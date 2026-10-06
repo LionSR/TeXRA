@@ -7,7 +7,6 @@ import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { usePollingInterval } from '@cli/tui/usePollingInterval';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { isEmptyUsage } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
@@ -36,6 +35,7 @@ import {
   statusBarRunTarget,
   subscriptionUsageProviderForStatus,
 } from './statusBarDisplay';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
 
 const CODEX_SUBSCRIPTION_REFRESH_MS = 10_000;

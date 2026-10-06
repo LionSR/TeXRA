@@ -3,10 +3,7 @@ import path from 'node:path';
 import { Cause, Effect, FileSystem, type PlatformError } from 'effect';
 import { nanoid } from 'nanoid';
 
-import {
-  type ProcessRuntime,
-  withProcessServices,
-} from '@platform/processRuntime';
+import { type ProcessRuntime, withProcessServices } from '@texra-ai/harness';
 import {
   ExternalOpenFailed,
   type DiffSource,

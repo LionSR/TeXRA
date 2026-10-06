@@ -2,7 +2,6 @@ import { Effect } from 'effect';
 
 import { API_KEY_PROVIDER_IDS, loadApiKeyStatusMap } from '@texra-ai/llm';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type SurfacedSettingEntry } from '@shared/state/stateSettings';
 import {
@@ -34,6 +33,7 @@ import {
   type ProviderApiKeyStatusView,
 } from './ProviderApiKeyForm';
 import { SkillsSettingsForm } from './SkillsSettingsForm';
+import type { ProcessRuntime } from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
 
 export interface CliConfigFormProps {

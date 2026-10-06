@@ -276,11 +276,11 @@ describe('CLI history runtime', () => {
   });
 
   beforeEach(async () => {
-    const { initializeDefaultSession, teardownDefaultSession } =
-      await import('@agent/runtime/sessionGraph');
-    await Effect.runPromise(teardownDefaultSession());
+    const { openTestDefaultSession, closeTestDefaultSession } =
+      await import('@test/support/sessionEnd');
+    await Effect.runPromise(closeTestDefaultSession);
     await Effect.runPromise(
-      initializeDefaultSession({ roots: testWorkspaceRoots() }),
+      openTestDefaultSession({ roots: testWorkspaceRoots() }),
     );
     vi.clearAllMocks();
     const host = installedHost();

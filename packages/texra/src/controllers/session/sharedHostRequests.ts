@@ -19,7 +19,6 @@ import { Rejected, type HostRequestFailure } from '@texra-ai/harness';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
-import type { ProcessServices } from '@platform/processRuntime';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type {
   HostOutcome,
@@ -41,6 +40,7 @@ import {
 } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import { formatResultCount } from '@utils/text/stringUtils';
+import type { ProcessServices } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The kinds {@link handleSharedHostRequest} answers. */

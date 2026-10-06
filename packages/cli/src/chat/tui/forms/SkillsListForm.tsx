@@ -8,7 +8,6 @@ import { Effect } from 'effect';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { readCliSkillsOffNotice } from '@cli/runtime/skills';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { escapeText } from '@shared/utils/xmlEscape';
 import {
@@ -24,6 +23,7 @@ import type {
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { AsyncListForm } from './_shared/ListForm';
+import type { ProcessRuntime } from '@texra-ai/harness';
 
 interface SkillsListFormProps {
   readonly availableRows?: number;

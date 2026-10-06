@@ -43,7 +43,6 @@ import {
 } from '@cli/runtime/terminalStatus';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   acceptsFollowUp,
@@ -96,6 +95,7 @@ import {
   moveLocalTranscriptToRun,
   reportRequestDefect,
 } from './tui/state/transcript';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
 import type {
   RunStopReason,
   RuntimeRequest,

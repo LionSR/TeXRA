@@ -2,7 +2,7 @@
  * A plugin: what one unit of the harness contributes (its tools, the probe
  * of its dependency, its switch, its continuation, prompt section and
  * layers). The harness's built-ins are `@tools/builtinPlugins`; an app
- * passes its list, built-ins included, to `installProcessRuntime`, and the
+ * passes its list, built-ins included, to `processLayer`, and the
  * process's `ToolRegistry` holds it (`@tools/toolTable`), which every
  * reader takes it from: availability probes, the first-install switch seed,
  * the switches, a run's injected tools

@@ -5,7 +5,7 @@ import { Cause, Context, Effect, Exit, FileSystem, Layer, Scope } from 'effect';
 import { it as effectIt } from '@effect/vitest';
 
 import { describe, expect, it, vi } from 'vitest';
-import * as agentRuntime from '@agent/runtime';
+import { SessionOwner } from '@agent/runtime/sessionGraph';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { projectDatabaseLayer } from '@controllers/session/projectDatabase';
 import { openDesktopProjectRegistry } from '@desktop/main/desktopProjects.js';
@@ -23,6 +23,11 @@ import { DatabaseWriteFailed, GlobalDatabase } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { createFakeHost } from '@test/support/setupPlatform';
+import {
+  closeAllTestSessions,
+  closeTestSession,
+  listTestSessions,
+} from '@test/support/sessionEnd';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 import { sourceFilesUnder } from '@test/support/repoScan';
@@ -51,6 +56,19 @@ const projectRecordsOf = (profile: string) =>
   Effect.flatMap(globalDatabaseOf(profile), (database) =>
     Effect.provideService(openDesktopProjectRecords, GlobalDatabase, database),
   );
+
+/** The kernel's session owner, opening every project's session ephemeral
+ *  on a root of its own. */
+const ephemeralOwner = (reason: string): SessionOwner['Service'] => ({
+  open: (init) =>
+    createTestSession({
+      ...init,
+      transcriptMode: { kind: 'ephemeral', reason },
+    }),
+  close: closeTestSession,
+  list: listTestSessions,
+  closeAll: closeAllTestSessions,
+});
 
 describe('desktop composition root and launch environment', () => {
   const tempDirs = useTempDirs();
@@ -115,20 +133,6 @@ describe('desktop composition root and launch environment', () => {
           });
           const root = join(profile, 'project');
           yield* fs.makeDirectory(root);
-          const opener = vi
-            .spyOn(agentRuntime, 'openSessionEffect')
-            .mockImplementation((init) =>
-              createTestSession({
-                ...init,
-                transcriptMode: {
-                  kind: 'ephemeral',
-                  reason: 'project close regression',
-                },
-              }),
-            );
-          yield* Effect.addFinalizer(() =>
-            Effect.sync(() => opener.mockRestore()),
-          );
           const records = yield* projectRecordsOf(profile);
           const config = yield* JsonStore.open(join(profile, 'config.json'));
           const host = createFakeHost({
@@ -143,6 +147,10 @@ describe('desktop composition root and launch environment', () => {
             service: undefined,
           }).pipe(
             Effect.provideService(DesktopProjectRecords, records),
+            Effect.provideService(
+              SessionOwner,
+              ephemeralOwner('project close regression'),
+            ),
             Effect.provideService(
               GlobalDatabase,
               yield* globalDatabaseOf(profile),
@@ -210,20 +218,6 @@ describe('desktop composition root and launch environment', () => {
           [fs.makeDirectory(firstRoot), fs.makeDirectory(secondRoot)],
           { concurrency: 'unbounded' },
         );
-        const opener = vi
-          .spyOn(agentRuntime, 'openSessionEffect')
-          .mockImplementation((init) =>
-            createTestSession({
-              ...init,
-              transcriptMode: {
-                kind: 'ephemeral',
-                reason: 'project disposal regression',
-              },
-            }),
-          );
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => opener.mockRestore()),
-        );
         const records = yield* projectRecordsOf(profile);
         const config = yield* JsonStore.open(join(profile, 'config.json'));
         const host = createFakeHost({
@@ -238,6 +232,10 @@ describe('desktop composition root and launch environment', () => {
           service: undefined,
         }).pipe(
           Effect.provideService(DesktopProjectRecords, records),
+          Effect.provideService(
+            SessionOwner,
+            ephemeralOwner('project disposal regression'),
+          ),
           Effect.provideService(
             GlobalDatabase,
             yield* globalDatabaseOf(profile),
@@ -292,7 +290,7 @@ describe('desktop composition root and launch environment', () => {
 
     for (const filePath of files) {
       const source = await readFile(filePath, 'utf8');
-      if (source.includes('installProcessRuntime(')) {
+      if (source.includes('processLayer(')) {
         installFiles.push(normalizeFilePath(relative(REPO_ROOT, filePath)));
       }
     }

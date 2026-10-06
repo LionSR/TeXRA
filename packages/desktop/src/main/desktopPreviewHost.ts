@@ -9,11 +9,8 @@ import {
   type PlatformError,
 } from 'effect';
 
+import { type ProcessRuntime, withProcessServices } from '@texra-ai/harness';
 import { isLatexFile } from '@common/files/fileTypeUtils';
-import {
-  type ProcessRuntime,
-  withProcessServices,
-} from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
 import { ExternalOpenFailed, type MessageHost } from '@texra/hosts/uiHosts';

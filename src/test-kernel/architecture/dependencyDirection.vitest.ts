@@ -135,7 +135,7 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   'packages/desktop/src/main/desktopWindowLifecycle.ts': 1,
   // The desktop entry: one program from `whenReady` to the wired window,
   // which builds the process runtime (its stores resolve before
-  // `installProcessRuntime`, being the values that install is given)
+  // `processLayer`, being the values that install is given)
   // and, when startup fails, runs the drain that disposes it.
   'packages/desktop/src/main/index.ts': 1,
   // The VS Code entry: one program from `activate` to the last registration,

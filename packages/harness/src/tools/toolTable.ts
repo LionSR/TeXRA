@@ -1,6 +1,6 @@
 /**
  * The process's plugin table: the plugin list an entry passes to
- * `installProcessRuntime` (TeXRA's is `texraPlugins` in `@tools/registry`),
+ * `processLayer` (TeXRA's is `texraPlugins` in `@tools/registry`),
  * by plugin id, and each tool by name. What a plugin contributes to the live catalog (`@tools/liveTools`)
  * is read off its value. The `ToolRegistry` service holds it, beside
  * the catalog built over it. This module imports no tool or plugin layer, so

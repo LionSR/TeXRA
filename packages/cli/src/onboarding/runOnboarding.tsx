@@ -30,7 +30,6 @@ import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
 import { CROSS } from '@cli/tui/ui/glyphs';
 import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { setOnboardingDeclined } from '@shared/state/onboardingState';
 import {
@@ -51,6 +50,7 @@ import { signInCliSubscription } from '../runtime/subscriptionLogin';
 import { commitOnboardingProviderApiKey } from '../chat/tui/hosts/cliProviderKeys';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { isLikelyRemoteSession } from '../runtime/remoteSession';
+import type { ProcessRuntime } from '@texra-ai/harness';
 import type { StateWriteFailed, PlatformSecrets } from '@texra-ai/harness';
 
 /**

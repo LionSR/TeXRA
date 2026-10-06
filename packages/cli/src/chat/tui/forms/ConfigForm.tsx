@@ -12,7 +12,6 @@ import { useState } from 'react';
 
 import { isCtrlInput } from '@cli/tui/inputKeys';
 import type { SelectItem } from '@cli/tui/ui/Select';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   settingEnumOptions,
   settingIsBoolean,
@@ -31,6 +30,7 @@ import { FormFrame } from './_shared/FormFrame';
 import { ListForm } from './_shared/ListForm';
 import { TextEntryForm } from './_shared/TextEntryForm';
 import { runFormWrite } from './_shared/useAsyncListForm';
+import type { ProcessRuntime } from '@texra-ai/harness';
 import type { Effect } from 'effect';
 
 const RESET_HINTS = [{ key: 'Ctrl-R', action: 'reset' }];

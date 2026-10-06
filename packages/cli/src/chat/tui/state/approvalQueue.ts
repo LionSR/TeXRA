@@ -13,7 +13,6 @@ import { computed, signal } from '@lit-labs/signals';
 import { Cause, Effect } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type {
   PermissionPayload,
   ProgressPermissionKind,
@@ -36,6 +35,7 @@ import {
   appendLocalRequestRefusal,
   reportRequestDefect,
 } from './transcript';
+import type { ProcessRuntime } from '@texra-ai/harness';
 import type { RuntimeRequest } from '@texra-ai/harness';
 
 interface TuiApprovalAdornments {

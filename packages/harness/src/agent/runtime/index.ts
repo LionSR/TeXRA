@@ -20,20 +20,8 @@
 // SessionHandle
 export { SessionHandle } from './SessionHandle';
 
-// sessionGraph: the process's session owner, as the hosts and the SDK open
-// and close sessions through it (one session per workspace storage root),
-// and the process-default session that owner holds.
-export {
-  closeAllSessions,
-  closeSession,
-  initializeDefaultSession,
-  installedProcessRuntime,
-  listSessions,
-  openSessionEffect,
-  SESSION_CLOSE_DEADLINE_MS,
-  teardownDefaultSession,
-  tryDefaultSession,
-} from './sessionGraph';
+// sessionGraph: the shutdown budget a host spends closing its sessions.
+export { SESSION_CLOSE_DEADLINE_MS } from './sessionGraph';
 
 // HostInteractions
 export type {

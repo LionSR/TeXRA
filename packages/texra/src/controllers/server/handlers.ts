@@ -25,7 +25,6 @@ import { resumeRun } from '@agent/runtime/resumeRun';
 import { runAgent } from '@agent/runtime/runAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getRunRecords } from '@agent/storage';
-import type { ProcessServices } from '@platform/processRuntime';
 import { isDocumentTaskConfig, RUN_PHASE, type RunId } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import {
@@ -46,6 +45,7 @@ import {
 } from './protocol';
 import { makeHostWindows } from './hostWindows';
 import { listTasks } from './taskList';
+import type { ProcessServices } from '@texra-ai/harness';
 
 /** The projects the service serves: one session per folder, opened on
  *  demand and held until the service stops. The host that composes the

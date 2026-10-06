@@ -67,7 +67,7 @@ export const UNAVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = Object.freeze(
 /**
  * The process's editor language-model bridge as an Effect service
  * (`@texra/platform/LanguageModel`), provided once by the composition root
- * through `installProcessRuntime`. The shape is the port itself — hosts
+ * through `processLayer`. The shape is the port itself — hosts
  * without an editor language-model API provide
  * {@link UNAVAILABLE_LANGUAGE_MODEL_PORT} — so a program that discovers
  * editor-supplied models yields the service instead of reading the platform

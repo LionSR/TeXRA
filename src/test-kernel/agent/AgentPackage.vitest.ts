@@ -14,7 +14,6 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { TestClock } from 'effect/testing';
 import { beforeEach, describe, expect, onTestFinished, vi } from 'vitest';
 
 interface RunAgentOptions {
@@ -39,16 +38,14 @@ const mocks = vi.hoisted(() => ({
     Effect.succeed({ settled: true, abandoned: [] as string[] }),
   ),
   detachEvents: vi.fn(),
-  disposeRuntime: vi.fn(() => Effect.void),
+  /** The process layer's release, as the package's scope ends it. */
+  releaseProcess: vi.fn(),
   runId: 'ae0001',
   /** Fails the package session's fold, as a fold defect ends its view. */
   foldDeath: undefined as Deferred.Deferred<never, Error> | undefined,
   eventListener: undefined as ((event: unknown) => void) | undefined,
-  /** The process's session owner, as `installProcessRuntime` installs it
-   *  and `disposeProcessRuntime` takes it away, carrying the runtime it runs
-   *  on: what says whether the package must compose the process. */
-  installRuntime: vi.fn(),
-  ownerRuntime: undefined as ProcessRuntime | undefined,
+  /** What the package composes its process from (`processLayer`). */
+  processLayer: vi.fn(),
   runValidatedAgent: vi.fn(),
   interruptRun: vi.fn(),
   /** Every session the owner built for the package, with what it was
@@ -82,13 +79,29 @@ vi.mock('@agent/index', () => ({
   }),
 }));
 
-// The package reaches the runtime through the curated `@agent/runtime` barrel,
-// so the suite mocks that one door instead of each runtime module by path.
-// The owner behind `openSession` is stood in for by a map keyed by storage
-// root, as the runtime's `Sessions` map keys its entries: the package must
-// resolve every run through it and never build a session of its own.
+// The package launches through the curated `@agent/runtime` barrel.
 vi.mock('@agent/runtime', async () => {
-  const { Deferred, Effect, Stream, SubscriptionRef } = await import('effect');
+  const { Effect } = await import('effect');
+  return {
+    runAgent: (input: unknown, options: RunAgentOptions) =>
+      Effect.tryPromise({
+        try: () => mocks.runValidatedAgent(input, options),
+        catch: (cause) =>
+          cause instanceof Error ? cause : new Error(String(cause)),
+      }).pipe(Effect.uninterruptible),
+  };
+});
+
+// The package composes its process with `processLayer`. The owner it serves
+// is stood in for by a map keyed by storage root, as the runtime's session
+// map keys its entries: the package must resolve every run through it and
+// never build a session of its own. The other process services are the
+// kernel runtime's.
+vi.mock('@controllers/session/sessionLayer', async () => {
+  const { Context, Deferred, Effect, Layer, Stream, SubscriptionRef } =
+    await import('effect');
+  const { SessionOwner } = await import('@agent/runtime/sessionGraph');
+  const { testRuntime } = await import('@test/support/testProcessRuntime');
   const { emptySessionView } = await import('@shared/session/sessionView');
   class FakeSession {
     readonly runs = {
@@ -136,8 +149,8 @@ vi.mock('@agent/runtime', async () => {
     Effect.sync(() => {
       sessions.delete(root);
     }).pipe(Effect.andThen(() => mocks.closeSession(root)));
-  return {
-    openSessionEffect: (init: ConstructorParameters<typeof FakeSession>[0]) =>
+  const owner = {
+    open: (init: ConstructorParameters<typeof FakeSession>[0]) =>
       Effect.sync(() => {
         let session = sessions.get(init.roots.storage);
         if (!session) {
@@ -146,46 +159,42 @@ vi.mock('@agent/runtime', async () => {
         }
         return session;
       }),
-    listSessions: () => Effect.sync(() => [...sessions.values()]),
-    closeSession,
-    closeAllSessions: () =>
-      Effect.suspend(() =>
-        Effect.forEach([...sessions.keys()], (root) => closeSession(root), {
-          concurrency: 'unbounded',
-        }),
-      ),
-    runAgent: (input: unknown, options: RunAgentOptions) =>
-      Effect.tryPromise({
-        try: () => mocks.runValidatedAgent(input, options),
-        catch: (cause) =>
-          cause instanceof Error ? cause : new Error(String(cause)),
-      }).pipe(Effect.uninterruptible),
-    installedProcessRuntime: () => mocks.ownerRuntime,
+    list: Effect.sync(() => [...sessions.values()]),
+    close: closeSession,
+    closeAll: Effect.suspend(() =>
+      Effect.forEach([...sessions.keys()], (root) => closeSession(root), {
+        concurrency: 'unbounded',
+      }),
+    ),
   };
-});
-
-vi.mock('@controllers/session/sessionLayer', async () => {
-  const { Effect: effect } = await import('effect');
   return {
-    // The double records when the disposal runs, not when the composition
-    // builds it: `disposeProcessRuntime` answers a program now.
-    disposeProcessRuntime: () => effect.suspend(() => mocks.disposeRuntime()),
-    installProcessRuntime: mocks.installRuntime,
+    processLayer: (options: unknown) => {
+      mocks.processLayer(options);
+      return Layer.effectContext(
+        Effect.map(testRuntime().contextEffect, (context) =>
+          Context.add(context, SessionOwner, owner as never),
+        ),
+      ).pipe(
+        Layer.merge(
+          Layer.effectDiscard(
+            Effect.addFinalizer(() =>
+              Effect.sync(() => mocks.releaseProcess()),
+            ),
+          ),
+        ),
+      );
+    },
   };
 });
 
 // Local imports - package API under test
-import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionGraph';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { SessionView as RuntimeSessionView } from '@shared/session/sessionView';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import type { Plugin } from '@tools/plugins';
 import {
   aggregateId,
   type AgentPlatform,
-  PlatformConflict,
   Sessions,
 } from '../../../packages/harness/src/index';
 import { nodePlatform } from '../../../packages/harness/src/node';
@@ -269,16 +278,6 @@ describe('agent package sessions', () => {
     mocks.sessionInits.splice(0);
     vi.clearAllMocks();
     mocks.eventListener = undefined;
-    mocks.ownerRuntime = undefined;
-    mocks.installRuntime.mockImplementation(() => {
-      mocks.ownerRuntime = testRuntime();
-      return mocks.ownerRuntime;
-    });
-    mocks.disposeRuntime.mockImplementation(() =>
-      Effect.sync(() => {
-        mocks.ownerRuntime = undefined;
-      }),
-    );
     mocks.foldDeath = Effect.runSync(Deferred.make<never, Error>());
     mocks.interruptRun.mockReturnValue(false);
     mocks.runValidatedAgent.mockImplementation(
@@ -347,258 +346,21 @@ describe('agent package sessions', () => {
       }),
   );
 
-  it.live(
-    'disposes the runtime its scope installed even when the closing session defects',
-    () =>
-      Effect.gen(function* () {
-        // Nothing is composed yet, so this scope installs the runtime and owns
-        // both the close and the disposal at its exit. The close defects on the
-        // artifact flush: the disposal is its finalizer, not its continuation,
-        // so the owner and the runtime under it still go, and the defect still
-        // leaves the scope.
-        mocks.closeSession.mockImplementationOnce(() => {
-          throw new Error('artifact flush defect');
-        });
-        const program = Effect.gen(function* () {
-          const sessions = yield* Sessions;
-          yield* sessions.open();
-        }).pipe(
+  it.live("serves the embedder's tool-missing handler", () =>
+    Effect.gen(function* () {
+      const openOnce = (platform: AgentPlatform) =>
+        Effect.flatMap(Sessions, (sessions) => sessions.open()).pipe(
           Effect.scoped,
-          Effect.provide(
-            Sessions.layer({ platform: PLATFORM, plugins: PLUGINS }),
-          ),
+          Effect.provide(Sessions.layer({ platform, plugins: PLUGINS })),
         );
-
-        const exit = yield* Effect.exit(program);
-        expect(Exit.isFailure(exit) && Cause.hasDies(exit.cause)).toBe(true);
-        if (Exit.isFailure(exit)) {
-          const defect = Cause.squash(exit.cause);
-          expect(defect).toBeInstanceOf(Error);
-          expect((defect as Error).message).toBe('artifact flush defect');
-        }
-        expect(mocks.disposeRuntime).toHaveBeenCalledOnce();
-      }),
-  );
-
-  it.live(
-    'holds the runtime for an overlapping scope: the composing scope leaving closes nothing',
-    () =>
-      Effect.gen(function* () {
-        // Two independently provided scopes over one platform. The first
-        // composes the process; the second finds that composition and borrows
-        // it. The first leaving must not close the session the second is still
-        // working on, nor dispose the runtime under it.
-        const firstComposed = yield* Deferred.make<void>();
-        const secondComposed = yield* Deferred.make<void>();
-        const secondMayLeave = yield* Deferred.make<void>();
-
-        const first = yield* Effect.forkChild(
-          Effect.gen(function* () {
-            const sessions = yield* Sessions;
-            yield* sessions.open();
-            yield* Deferred.succeed(firstComposed, undefined);
-            yield* Deferred.await(secondComposed);
-          }).pipe(
-            Effect.scoped,
-            Effect.provide(
-              Sessions.layer({ platform: PLATFORM, plugins: PLUGINS }),
-            ),
-          ),
-        );
-        yield* Deferred.await(firstComposed);
-
-        const second = yield* Effect.forkChild(
-          Effect.gen(function* () {
-            const sessions = yield* Sessions;
-            yield* sessions.open();
-            yield* Deferred.succeed(secondComposed, undefined);
-            yield* Deferred.await(secondMayLeave);
-          }).pipe(
-            Effect.scoped,
-            Effect.provide(
-              Sessions.layer({ platform: PLATFORM, plugins: PLUGINS }),
-            ),
-          ),
-        );
-        yield* Deferred.await(secondComposed);
-
-        yield* Fiber.join(first);
-        expect(mocks.closeSession).not.toHaveBeenCalled();
-        expect(mocks.disposeRuntime).not.toHaveBeenCalled();
-
-        yield* Deferred.succeed(secondMayLeave, undefined);
-        yield* Fiber.join(second);
-        // The last hold out is what ends the composition the two shared.
-        expect(mocks.closeSession).toHaveBeenCalledExactlyOnceWith(
-          PLATFORM.roots.storage,
-        );
-        expect(mocks.disposeRuntime).toHaveBeenCalledOnce();
-      }),
-  );
-
-  it.effect(
-    'waits for the retiring runtime before admitting another scope',
-    () =>
-      Effect.gen(function* () {
-        const closing = yield* Deferred.make<void>();
-        const closeMayFinish = yield* Deferred.make<void>();
-        const retiring = yield* Deferred.make<void>();
-        const retirementMayFinish = yield* Deferred.make<void>();
-        const successorEntered = yield* Deferred.make<void>();
-        const successorMayLeave = yield* Deferred.make<void>();
-        mocks.closeSession.mockImplementationOnce(() =>
-          Deferred.succeed(closing, undefined).pipe(
-            Effect.andThen(Deferred.await(closeMayFinish)),
-            Effect.as({ settled: true, abandoned: [] as string[] }),
-          ),
-        );
-        mocks.disposeRuntime.mockImplementationOnce(() =>
-          Effect.sync(() => {
-            // Disposal uninstalls the owner before unwinding the runtime.
-            mocks.ownerRuntime = undefined;
-          }).pipe(
-            Effect.andThen(Deferred.succeed(retiring, undefined)),
-            Effect.andThen(Deferred.await(retirementMayFinish)),
-          ),
-        );
-        yield* Effect.gen(function* () {
-          const first = yield* Effect.forkChild(
-            Effect.flatMap(Sessions, (sessions) => sessions.open()).pipe(
-              Effect.provide(
-                Sessions.layer({ platform: PLATFORM, plugins: PLUGINS }),
-              ),
-            ),
-          );
-          yield* Deferred.await(closing);
-          const successor = yield* Effect.forkChild(
-            Effect.gen(function* () {
-              const sessions = yield* Sessions;
-              yield* sessions.open();
-              yield* Deferred.succeed(successorEntered, undefined);
-              yield* Deferred.await(successorMayLeave);
-            }).pipe(
-              Effect.provide(
-                Sessions.layer({ platform: PLATFORM, plugins: PLUGINS }),
-              ),
-            ),
-            { startImmediately: true },
-          );
-          expect(yield* Deferred.isDone(successorEntered)).toBe(false);
-          yield* Deferred.succeed(closeMayFinish, undefined);
-          yield* Deferred.await(retiring);
-          expect(mocks.ownerRuntime).toBeUndefined();
-          expect(yield* Deferred.isDone(successorEntered)).toBe(false);
-          expect(mocks.installRuntime).toHaveBeenCalledOnce();
-          yield* Deferred.succeed(retirementMayFinish, undefined);
-          yield* Fiber.join(first);
-          yield* Deferred.await(successorEntered);
-          expect(mocks.installRuntime).toHaveBeenCalledTimes(2);
-          expect(mocks.disposeRuntime).toHaveBeenCalledOnce();
-          yield* Deferred.succeed(successorMayLeave, undefined);
-          yield* Fiber.join(successor);
-          expect(mocks.disposeRuntime).toHaveBeenCalledTimes(2);
-        }).pipe(
-          Effect.ensuring(
-            Effect.all([
-              Deferred.succeed(closeMayFinish, undefined),
-              Deferred.succeed(retirementMayFinish, undefined),
-              Deferred.succeed(successorMayLeave, undefined),
-            ]),
-          ),
-        );
-      }),
-  );
-
-  it.live(
-    'closes every root the owner holds before it disposes the runtime',
-    () =>
-      Effect.gen(function* () {
-        const otherRoots = { storage: '/other-storage' };
-        const program = Effect.gen(function* () {
-          const sessions = yield* Sessions;
-          yield* sessions.open();
-          yield* sessions.open(otherRoots as never);
-        }).pipe(
-          Effect.scoped,
-          Effect.provide(
-            Sessions.layer({ platform: PLATFORM, plugins: PLUGINS }),
-          ),
-        );
-
-        yield* program;
-
-        // A root this composition opened of its own settles and flushes like
-        // the runtime's, rather than going down with the runtime unwritten.
-        expect(mocks.closeSession.mock.calls.map(([root]) => root)).toEqual([
-          PLATFORM.roots.storage,
-          otherRoots.storage,
-        ]);
-        const [disposal] = mocks.disposeRuntime.mock.invocationCallOrder;
-        for (const order of mocks.closeSession.mock.invocationCallOrder) {
-          expect(order).toBeLessThan(disposal as number);
-        }
-      }),
-  );
-
-  it.effect(
-    'settles every root it closes under one shutdown deadline, not one each (#12804)',
-    () =>
-      Effect.gen(function* () {
-        // Each close spends its whole budget, as a close with a run still
-        // live past it does.
-        const spendBudget = () =>
-          Effect.sleep(SESSION_CLOSE_DEADLINE_MS).pipe(
-            Effect.as({ settled: false, abandoned: [] as string[] }),
-          );
-        mocks.closeSession
-          .mockImplementationOnce(spendBudget)
-          .mockImplementationOnce(spendBudget);
-        const released = yield* Effect.forkChild(
-          Effect.gen(function* () {
-            const sessions = yield* Sessions;
-            yield* sessions.open();
-            yield* sessions.open({ storage: '/other-storage' } as never);
-          }).pipe(
-            Effect.scoped,
-            Effect.provide(
-              Sessions.layer({ platform: PLATFORM, plugins: PLUGINS }),
-            ),
-          ),
-        );
-
-        yield* TestClock.adjust(`${SESSION_CLOSE_DEADLINE_MS} millis`);
-
-        expect(released.pollUnsafe()).toBeDefined();
-        expect(mocks.closeSession).toHaveBeenCalledTimes(2);
-        expect(mocks.disposeRuntime).toHaveBeenCalledOnce();
-      }),
-  );
-
-  it.live(
-    "serves the embedder's tool-missing handler and refuses a runtime it did not compose",
-    () =>
-      Effect.gen(function* () {
-        const openOnce = (platform: AgentPlatform) =>
-          Effect.flatMap(Sessions, (sessions) => sessions.open()).pipe(
-            Effect.scoped,
-            Effect.provide(Sessions.layer({ platform, plugins: PLUGINS })),
-          );
-        const toolMissingHandler = vi.fn();
-        yield* openOnce({ ...PLATFORM, toolMissingHandler });
-        expect(mocks.installRuntime).toHaveBeenCalledWith(
-          expect.objectContaining({ toolMissingReporter: toolMissingHandler }),
-        );
-
-        // A runtime a host installed for its own roots is not the package's
-        // to borrow, even once every hold of its own has ended.
-        mocks.ownerRuntime = testRuntime();
-        const exit = yield* Effect.exit(openOnce(PLATFORM));
-        expect(Exit.isFailure(exit)).toBe(true);
-        if (Exit.isFailure(exit)) {
-          expect(Cause.squash(exit.cause)).toBeInstanceOf(PlatformConflict);
-        }
-        expect(mocks.installRuntime).toHaveBeenCalledOnce();
-      }),
+      const toolMissingHandler = vi.fn();
+      yield* openOnce({ ...PLATFORM, toolMissingHandler });
+      expect(mocks.processLayer).toHaveBeenCalledWith(
+        expect.objectContaining({ toolMissingReporter: toolMissingHandler }),
+      );
+      // The process lives for the layer's scope.
+      expect(mocks.releaseProcess).toHaveBeenCalledOnce();
+    }),
   );
 
   it.live(

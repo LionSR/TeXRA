@@ -10,6 +10,7 @@
 
 import { Effect, Scope, type Stream } from 'effect';
 
+import { type ProcessRuntime, withProcessServices } from '@texra-ai/harness';
 import {
   type RunEndResult,
   type HostPresentation,
@@ -19,10 +20,6 @@ import {
   type SessionHandle,
   type ValidatedRunRequest,
 } from '@agent/runtime';
-import {
-  type ProcessRuntime,
-  withProcessServices,
-} from '@platform/processRuntime';
 import type { RequestOpenFilePayload, RunId } from '@shared/schemas';
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';

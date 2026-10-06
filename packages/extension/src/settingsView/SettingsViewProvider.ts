@@ -5,7 +5,6 @@ import * as vscode from 'vscode';
 // Local imports
 import type { SessionHandle } from '@agent/runtime';
 import { BundledViewContentProvider } from '@common/webview';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { DisposableStore } from '@texra/platform/disposable';
@@ -17,6 +16,7 @@ import {
   postToWebview,
   SettingsViewMessageHandler,
 } from './SettingsViewMessageHandler';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
 import type { PlatformSecrets, StateStore } from '@texra-ai/harness';
 
 function isReadyMessage(message: unknown): boolean {

@@ -18,7 +18,6 @@ import {
   type CliLoginSlashArgs,
   type CliLogoutTarget,
 } from '@cli/runtime/loginOptions';
-import type { AgentCatalogServices } from '@platform/processRuntime';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
 import {
@@ -32,6 +31,7 @@ import {
   type SlashCommandOutput,
   transcriptSlashCommandOutput,
 } from './slashContext';
+import type { AgentCatalogServices } from '@texra-ai/harness';
 import type { Secrets, PlatformSecrets } from '@texra-ai/harness';
 
 const CHAT_LOGIN_USAGE = [

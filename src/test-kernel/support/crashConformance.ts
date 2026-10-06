@@ -74,10 +74,6 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { runAgent } from '@agent/runtime/runAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  initializeDefaultSession,
-  teardownDefaultSession,
-} from '@agent/runtime/sessionGraph';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
 import {
@@ -102,6 +98,10 @@ import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
+import {
+  closeTestDefaultSession,
+  openTestDefaultSession,
+} from '@test/support/sessionEnd';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
@@ -155,6 +155,7 @@ const json = (row: Row) => JSON.parse(row.data) as Record<string, unknown>;
 const payload = (row: Row) => json(row).payload as Record<string, unknown>;
 const isResponse = (row: Row) =>
   row.type === 'model.message' && payload(row).kind === 'response';
+
 /** A provider's call ids restart with each model binding, so a resumed
  *  run's differ from the clean run's by their counter; run ids are minted,
  *  and a command's summary names how long it took. */
@@ -700,7 +701,7 @@ const cleanPass = (
   Effect.gen(function* () {
     const points = yield* Effect.scoped(
       Effect.gen(function* () {
-        const session = yield* initializeDefaultSession({ roots });
+        const session = yield* openTestDefaultSession({ roots });
         // The session's own store handle: the process holds one per root.
         const databases = yield* withProcessServices(
           testRuntime(),
@@ -719,7 +720,7 @@ const cleanPass = (
         yield* approveAll(session);
         const run = yield* launch(session).pipe(Effect.forkChild);
         yield* steps(session);
-        yield* teardownDefaultSession();
+        yield* closeTestDefaultSession;
         yield* Fiber.interrupt(run);
         // Every transaction observed, through the store's last commit.
         const last = Math.max(
@@ -767,7 +768,7 @@ const resumeFrom = (
     const prefix = rowsOf(storage);
     const refused = yield* Effect.scoped(
       Effect.gen(function* () {
-        const session = yield* initializeDefaultSession({
+        const session = yield* openTestDefaultSession({
           roots: { ...roots, storage },
         });
         yield* approveAll(session);
@@ -782,7 +783,7 @@ const resumeFrom = (
         yield* steps(session, storage);
         return null;
       }).pipe(
-        Effect.ensuring(teardownDefaultSession()),
+        Effect.ensuring(closeTestDefaultSession),
         Effect.timeout('60 seconds'),
         Effect.catchCause((cause) =>
           Effect.succeed(`the resume stalled: ${String(cause)}`),
@@ -846,10 +847,10 @@ export function crashConformanceSuite(plugins: string): void {
       await Effect.runPromise(
         fakeHostSecrets.set(apiKeySecretName('openai'), 'validation-fake-key'),
       );
-      await Effect.runPromise(teardownDefaultSession());
+      await Effect.runPromise(closeTestDefaultSession);
     });
     afterEach(async () => {
-      await Effect.runPromise(teardownDefaultSession());
+      await Effect.runPromise(closeTestDefaultSession);
       for (const [key, value] of Object.entries(restore)) {
         if (value === undefined) delete process.env[key];
         else process.env[key] = value;

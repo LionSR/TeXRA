@@ -7,7 +7,6 @@ import {
   type ApiKeyProviderId,
   providerDisplayName,
 } from '@texra-ai/llm';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { CODING_PLAN_BY_API_PROVIDER } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -15,6 +14,7 @@ import { ApiKeyEntryForm } from './ApiKeyEntryForm';
 import { formatStatusViewSummary } from './_shared/formatStatusViewSummary';
 import { ListForm } from './_shared/ListForm';
 import { runFormWrite } from './_shared/useAsyncListForm';
+import type { ProcessRuntime } from '@texra-ai/harness';
 import type { Effect } from 'effect';
 
 type ProviderApiKeyStatuses = Partial<

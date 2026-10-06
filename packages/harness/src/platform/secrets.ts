@@ -41,7 +41,7 @@ export interface PlatformSecrets extends CredentialStore {
 /**
  * The process's secret store as an Effect service (`@texra/platform/Secrets`,
  * injection plan §5 row 1), provided once by the composition root through
- * `installProcessRuntime`. The shape is the port itself: a program that reads
+ * `processLayer`. The shape is the port itself: a program that reads
  * or writes a credential yields the store's own Effect and matches
  * {@link SecretsFailed}.
  *

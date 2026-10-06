@@ -6,7 +6,6 @@
 import { app, dialog, shell, type BrowserWindow } from 'electron';
 import { Cause, Effect } from 'effect';
 
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { INSTRUCTION_ACTION, type InstructionAction } from '@shared/schemas';
 import type { DownMessage } from '@shared/session/sessionFrames';
 import {
@@ -19,6 +18,7 @@ import { createDesktopDialogs } from './desktopDialogs.js';
 import { createDesktopDiffHost } from './desktopDiffHost.js';
 import { createDesktopPreviewHost } from './desktopPreviewHost.js';
 import { DESKTOP_RELEASES_PAGE_URL } from './desktopUpdateChecker.js';
+import type { ProcessRuntime } from '@texra-ai/harness';
 import type { DesktopProject } from './desktopProjects.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopAgentRunOptions } from './desktopAgentRun.js';

@@ -17,7 +17,7 @@ import {
 } from '@latex/arxivProcessor';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessServices } from '@platform/processRuntime';
+import type { ProcessServices } from '@texra-ai/harness';
 
 const CHANNEL = 'arXivCommands';
 

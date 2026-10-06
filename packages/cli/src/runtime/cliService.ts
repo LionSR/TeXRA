@@ -15,14 +15,14 @@ import {
   type Path,
 } from 'effect';
 
-import { AppState } from '@texra-ai/harness';
+import { AppState, SessionOwner } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
   canonicalizeWorkspacePath,
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
-import { openSessionEffect, type SessionHandle } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import {
   openProjectStateStore,
   openRepoStateStore,
@@ -129,6 +129,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     | GlobalDatabase
     | Path.Path
     | ProjectDatabases
+    | SessionOwner
   >();
   const sessions = new Map<string, SessionHandle>();
   const lanes = new Map<string, PerKeyLane>();
@@ -157,7 +158,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
         return held;
       }
       const roots = yield* openRoots(root);
-      const session = yield* openSessionEffect({
+      const session = yield* (yield* SessionOwner).open({
         roots,
         responseTextProcessing: createTexraResponseTextProcessing(),
         interruptedTasks: 'offer',

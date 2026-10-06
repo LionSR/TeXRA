@@ -1,6 +1,6 @@
 /**
  * The once-per-process bootstrap that sits beside each composition root's
- * `installProcessRuntime()`, in one order for every host.
+ * `processLayer()`, in one order for every host.
  *
  * Each composition root still installs its own process runtime — every
  * service it serves is host-specific and ESLint pins the install to the

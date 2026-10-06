@@ -1135,12 +1135,19 @@ notes cite the rules by number; this is their text.
 
 ## Service scopes: HeldSessions and ExternalRoots stay (ruled 2026-09-20)
 
-`HeldSessions` is not converted to Effects: zero production breaks, but 414
-`testDefaultSession()` call sites in 45 suites for about 35 LoC. `ExternalRoots`
-is not made a standalone service: one writer, four readers, keyed by kind, a
-sound freeze rule; a service is +4 signatures for 0 deletions. Reopen when a
-consumer needs either to be scoped per session. Pinned by `SCOPE-held-sessions-as-effects`
-and `SCOPE-external-roots-standalone-service` in `config/ratchets/refuted-candidates.json`.
+`ExternalRoots` is not made a standalone service: one writer, four readers,
+keyed by kind, a sound freeze rule; a service is +4 signatures for 0 deletions.
+Reopen when a consumer needs it to be scoped per session. Pinned by
+`SCOPE-external-roots-standalone-service` in `config/ratchets/refuted-candidates.json`.
+
+`HeldSessions` was kept on the same date for its test churn (414
+`testDefaultSession()` call sites). **Superseded 2026-10-06** by owner decision
+19 (#13723): the hosts and the SDK compose one `processLayer`, whose
+`SessionOwner` service owns the open sessions through its `LayerMap` alone.
+`HeldSessions`, the global owner slot and the process-default session module
+state are deleted; the test kernel keeps its default session in
+`src/test-kernel/support/sessionEnd.ts`, so no `testDefaultSession()` call
+site changed.
 
 ## Cross-host Copilot OAuth is not approved (parked 2026-06-22)
 

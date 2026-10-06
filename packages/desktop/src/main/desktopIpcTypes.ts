@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import type { ProcessServices } from '@platform/processRuntime';
+import type { ProcessServices } from '@texra-ai/harness';
 import type { z } from 'zod';
 
 export type DesktopCommandMessage = { command: string } & Record<

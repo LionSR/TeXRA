@@ -14,11 +14,11 @@ import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessServices } from '@platform/processRuntime';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { ensureError } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { pluralize, truncateWithEllipsis } from '@utils/text/stringUtils';
+import type { ProcessServices } from '@texra-ai/harness';
 
 const CHANNEL = 'FigCommands';
 

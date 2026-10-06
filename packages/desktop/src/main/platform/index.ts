@@ -1,10 +1,13 @@
 import { app } from 'electron';
-import { Effect, Layer, Scope } from 'effect';
+import { Effect, Layer, ManagedRuntime, Scope } from 'effect';
 
 import {
   AgentDirectories,
   AppState,
+  processLayer,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
+  withForkFailureReporting,
+  type ProcessServices,
   type PlatformSecrets,
   type AgentDirectoriesPort,
   type StateStore,
@@ -16,19 +19,15 @@ import {
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
 import { AgentDirectoryService } from '@agent/index';
-import { globalDatabaseLayer } from '@controllers/session/Database';
-import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import {
   appStateStoreFromDatabase,
   openProjectStateStore,
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
 import { emitAppSignal } from '@eventBus/AppSignals';
-import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
-import type { ProcessServices } from '@platform/processRuntime';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
@@ -119,7 +118,7 @@ export const initializeElectronPlatform = Effect.fn(
   ).pipe(Effect.provide(Layer.merge(nodeFileServices, processEnvConfigLayer)));
   // The one Effect runtime of this process (PRD 7.7), over the stores it
   // serves: every project's session graph and Promise-facing fiber runs on
-  // it, and the entry disposes it last (`disposeProcessRuntime`), after run
+  // it, and the entry disposes it last (`disposeEffect`), after run
   // settlement and the projects' release of their graphs.
   const agentDirectoriesLayer = Layer.effect(
     AgentDirectories,
@@ -133,40 +132,40 @@ export const initializeElectronPlatform = Effect.fn(
         }),
     ),
   );
-  const runtime = installProcessRuntime({
-    processStart: nodeProcesses.selfIdentity(),
-    globalStorage,
-    plugins: texraPlugins(),
-    settings: TEXRA_SETTING_ROWS,
-    mcpConfigPath: USER_MCP_CONFIG_PATH,
-    secrets,
-    // Application state is the one the CLI and the extension keep, in the
-    // shared global database: one install record for plugins and the trust
-    // given to them, and one set of tool switches, across the three hosts.
-    appState: Layer.effect(
-      AppState,
-      Effect.map(GlobalDatabase, (database) =>
-        appStateStoreFromDatabase(globalStorage, database.values),
-      ),
+  const runtime = withForkFailureReporting(
+    ManagedRuntime.make(
+      processLayer({
+        globalStorage,
+        plugins: texraPlugins(),
+        settings: TEXRA_SETTING_ROWS,
+        mcpConfigPath: USER_MCP_CONFIG_PATH,
+        secrets,
+        // Application state is the one the CLI and the extension keep, in the
+        // shared global database: one install record for plugins and the trust
+        // given to them, and one set of tool switches, across the three hosts.
+        appState: Layer.effect(
+          AppState,
+          Effect.map(GlobalDatabase, (database) =>
+            appStateStoreFromDatabase(globalStorage, database.values),
+          ),
+        ),
+        // No editor in this process.
+        languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
+        agentDirectories: agentDirectoriesLayer,
+        // Desktop model traffic goes to the same anonymous usage log the extension
+        // and CLI write to, tagged with editorType 'desktop' and the app version.
+        // The runtime's disposal drains the queue, so a queue shorter than one
+        // batch is not lost at quit.
+        usageLog: usageLogLayer({
+          version: app.getVersion(),
+          editorType: 'desktop',
+        }),
+        // The rotated log file is the artefact attached to a bug report, so it
+        // keeps debug entries; rotation already bounds its size.
+        minimumLogLevel: 'Debug',
+      }),
     ),
-    // No editor in this process.
-    languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
-    agentDirectories: agentDirectoriesLayer,
-    // Desktop model traffic goes to the same anonymous usage log the extension
-    // and CLI write to, tagged with editorType 'desktop' and the app version.
-    // The runtime's disposal drains the queue, so a queue shorter than one
-    // batch is not lost at quit.
-    usageLog: usageLogLayer({
-      version: app.getVersion(),
-      editorType: 'desktop',
-    }),
-    // The process's one handle on that same global root, which the desktop's
-    // remembered projects and its update check read through.
-    globalDatabase: globalDatabaseLayer(globalStorage),
-    // The rotated log file is the artefact attached to a bug report, so it
-    // keeps debug entries; rotation already bounds its size.
-    minimumLogLevel: 'Debug',
-  });
+  );
 
   // The fallback project's scope, holding its state and its eventual session.
   const processScope = Scope.makeUnsafe();

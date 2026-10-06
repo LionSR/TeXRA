@@ -17,7 +17,6 @@ import {
 } from '@frontend/approval/VscodeDiffViewHost';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   fromHost,
   hostFailure,
@@ -35,6 +34,7 @@ import {
   type ToolEditApprovalRequest,
 } from '@tools/approval/toolEditApproval';
 import { pluralize } from '@utils/text/stringUtils';
+import type { ProcessRuntime } from '@texra-ai/harness';
 import type { HostRequestFailure } from '@texra-ai/harness';
 
 const CHANNEL = 'ToolEditApproval';

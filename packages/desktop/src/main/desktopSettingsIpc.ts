@@ -7,7 +7,6 @@ import {
 import type { SessionHandle } from '@agent/runtime';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessServices } from '@platform/processRuntime';
 import type { StorageFs } from '@platform/rootedFs';
 import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
@@ -29,6 +28,7 @@ import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
+import type { ProcessServices } from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
 import type { DesktopSpawn } from './desktopWindows.js';
 

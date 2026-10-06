@@ -13,7 +13,7 @@ import {
   type AppSignal,
   type AppSignalPayloads,
 } from '@eventBus/AppSignals';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@texra-ai/harness';
 import type * as vscode from 'vscode';
 
 /** Read one app signal from now on. */

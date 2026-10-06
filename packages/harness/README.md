@@ -82,11 +82,11 @@ Nothing in the package calls `Effect.runPromise` itself: the
 `Effect.runPromise` above is the embedder's own boundary, as is any host
 entry that runs the program.
 
-| Service    | What it is                                                                                                                                                                                                                                                                                                               |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Sessions` | The process's one session owner: `open(roots?)`, `close(roots?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through. `Sessions.layer({ platform, plugins })` composes the process and provides it, with this scope as the lifetime of the hold it takes on that composition. |
-| `Session`  | `start`, `request`, `view.changes`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                                                                                                                                                       |
-| `Run`      | `runId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its row published and its trace live.                                                                                                                                                                    |
+| Service    | What it is                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Sessions` | The process's one session owner: `open(roots?)`, `close(roots?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through. `Sessions.layer({ platform, plugins })` composes the process (`processLayer`, the one every TeXRA host builds) and provides a projection of its `SessionOwner`, for the layer's lifetime. Build it once per process. |
+| `Session`  | `start`, `request`, `view.changes`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                                                                                                                                                                                                                    |
+| `Run`      | `runId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its row published and its trace live.                                                                                                                                                                                                                                 |
 
 `run.events` is the run's trace as a `Stream`. Trace events are buffered from
 the moment the run enters its session, so a reader begun right after `start`
@@ -102,8 +102,7 @@ has yet to read.
 
 Every failure is a typed error on the effect that owns it. A refusal before
 any model work fails `session.start` with one of the tagged errors the
-surface names (`AgentNotFound`, `ToolsRefused`, and `PlatformConflict` for a
-second, different platform or a process runtime a host already installed); a run that fails after entering its session
+surface names (`AgentNotFound`, `ToolsRefused`); a run that fails after entering its session
 fails `run.result` and `run.events` with `RunFailure`, whose `cause` is
 exactly what the launch path threw.
 
@@ -136,29 +135,25 @@ descendants as they appear, and stay resident for the life of the process.
 Runs share one session per workspace storage root. The runtime's session
 owner holds it, the same owner every TeXRA host opens its sessions through, so
 opening a root twice resolves the one session already open there; a second
-root gets its own. The package never borrows a host's runtime (see "The
-platform" below), so every session on it is the package's own, and its host answers no
+root gets its own. Every session on it is the package's own, and its host answers no
 approval prompt, so the session denies the retries of every run on it. A
 session ends through `sessions.close(roots)`: it refuses new runs on the
 root, interrupts the runs it owns and waits for them to settle within the
 runtime's shutdown budget, flushes its artifacts, and releases the session,
 returning `{ settled, abandoned }`. `settled` is true when every run ended in
 time; otherwise `abandoned` names the runs still live, and the session stays
-open, refusing new runs, until they end. Leaving the `Sessions.layer` scope
-closes every session the owner holds this way and then disposes the runtime
-they ran on — the scope is the lifetime of the composition's hold, so an
-embedder that drains its scopes on shutdown needs no separate close call.
+open, refusing new runs, until they end. Releasing the `Sessions.layer`
+closes every session the owner holds this way and then releases the process
+under them, so an embedder that drains its scope on shutdown needs no
+separate close call.
 
-The composition is held, not owned: each `Sessions.layer` scope takes a hold
-on it, and the last hold to end is what closes every session the owner holds,
-each settling its runs and flushing its artifacts, and then disposes the
-runtime they ran on. So two overlapping scopes over one platform are safe,
-the first one out ends nothing the second is still using, and a later program
-in the same process composes again once the last hold has ended. A
-scope arriving during the last holder's shutdown waits for disposal to finish
-before composing the next runtime. Acquisition is interruption-safe:
-cancellation while waiting aborts without taking a hold, while the retiring
-runtime completes disposal through its own scope.
+**Build the layer once per process.** It is an ordinary Effect layer: provide
+it once at the application's edge (`ManagedRuntime.make(Sessions.layer(...))`,
+or one `Effect.provide` around the whole program) and run every program on
+it. Two live builds compose two processes in one: two session owners over
+the same storage root, both stamped with this process's owner id, which the
+one-writer claim fence cannot tell apart. A later build after the first one
+is released is fine.
 
 ## Durable invariants
 
@@ -255,7 +250,7 @@ parallel surfaces. The composition-once-per-process limit went with the
 Promise entry: each `Sessions.layer` scope owns the composition it made.
 
 Failures are `Data.TaggedError`s. Four come from the package itself —
-`PlatformConflict`, `AgentNotFound`, `ToolsRefused`, and `RunFailure`, whose
+`PluginsRefused`, `AgentNotFound`, `ToolsRefused`, and `RunFailure`, whose
 `cause` is exactly what the launch path threw — and two, `DatabaseOpenFailed`
 and `DatabaseReadFailed` (the `SessionOpenError` union), reach the surface from
 the session store when it cannot open or read, for six in all. A
@@ -285,13 +280,8 @@ Model requests carry their own HTTP transport: the environment's proxy policy
 timeout, bound to each model rather than installed as your process's global
 dispatcher.
 
-The platform is **process-wide** while any `Sessions.layer` scope holds the
-composition. Create one and reuse it for every run: passing a second,
-different platform while a hold is live fails the layer with
-`PlatformConflict`, and so does composing in a process where a TeXRA host
-already installed its own process runtime, since the package does not borrow
-a runtime built for someone else's roots. Once the last hold ends, the next
-scope may compose with a different platform.
+The platform is **process-wide** for the layer's lifetime: create one and
+reuse it for every run, with the one `Sessions.layer` built over it.
 
 Implement the `AgentPlatform` ports and the `roots` yourself when embedding in a
 host that already owns those services. For TeXRA 1.0, supply a fresh,

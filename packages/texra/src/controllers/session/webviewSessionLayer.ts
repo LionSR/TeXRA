@@ -21,6 +21,8 @@ import {
   ManagedRuntime,
 } from 'effect';
 
+// The browser-safe module, not the harness entry: this layer runs in the
+// webview, which must not evaluate the Node process composition.
 import { TranscriptSubscriptions } from '@controllers/session/sessionSources';
 import { SessionViewService } from '@controllers/session/SessionView';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';

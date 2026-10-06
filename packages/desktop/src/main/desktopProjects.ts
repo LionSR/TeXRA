@@ -14,17 +14,14 @@ import {
   type PlatformError,
 } from 'effect';
 
+import { SessionOwner } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
   canonicalizeWorkspacePath,
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
-import {
-  closeSession,
-  openSessionEffect,
-  type SessionHandle,
-} from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import {
   openProjectStateStore,
   openRepoStateStore,
@@ -225,6 +222,7 @@ function openProjectSession(
   // The closeable scope the caller provides; `dispose` closes it.
   scope: Scope.Closeable,
   service: ServiceLink | undefined,
+  owner: SessionOwner['Service'],
 ): Effect.Effect<DesktopProject, Error, Scope.Scope> {
   return Effect.gen(function* () {
     // A folder's runs run in the service, which follows its interrupted
@@ -232,7 +230,7 @@ function openProjectSession(
     // run here.
     const served = root !== undefined ? service : undefined;
     const session = yield* Effect.acquireRelease(
-      openSessionEffect({
+      owner.open({
         roots,
         responseTextProcessing: createTexraResponseTextProcessing(),
         ...(served === undefined && { interruptedTasks: 'offer' }),
@@ -240,7 +238,7 @@ function openProjectSession(
       // The one close every session takes: its runs stopped under the
       // shutdown deadline, the ones still live past it settled, its
       // artifacts flushed, its entry released.
-      (session) => Effect.asVoid(closeSession(session.roots.storage)),
+      (session) => Effect.asVoid(owner.close(session.roots.storage)),
     );
     session.setApprovalPolicy(
       yield* readSettingFrom<TexraApprovalPolicy>(
@@ -276,9 +274,10 @@ export function openDesktopProjectRegistry(
 ): Effect.Effect<
   DesktopProjectRegistry,
   Error,
-  DesktopProjectRecords | GlobalDatabase
+  DesktopProjectRecords | GlobalDatabase | SessionOwner
 > {
   return Effect.gen(function* () {
+    const owner = yield* SessionOwner;
     const records = yield* DesktopProjectRecords;
     const globalDatabase = yield* GlobalDatabase;
     const lanes = new Map<string | symbol, PerKeyLane>();
@@ -289,6 +288,7 @@ export function openDesktopProjectRegistry(
         options.processRoots,
         options.processScope,
         undefined,
+        owner,
       ).pipe(
         Scope.provide(options.processScope),
         Effect.onError(() => Scope.close(options.processScope, Exit.void)),
@@ -366,6 +366,7 @@ export function openDesktopProjectRegistry(
                 roots,
                 projectScope,
                 options.service,
+                owner,
               ).pipe(
                 Effect.tap((project) =>
                   Effect.gen(function* () {

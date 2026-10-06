@@ -27,7 +27,6 @@ import { outputFilesProduced } from '@frontend/events/runFactSubscriptions';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { AddOutputFilesPayload, OutputFileInfo } from '@shared/schemas';
 import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
@@ -36,6 +35,7 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 import { hasExtension } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
+import type { ProcessRuntime } from '@texra-ai/harness';
 import type { StateReadFailed } from '@texra-ai/harness';
 
 const CHANNEL = 'InlineCriticism';

@@ -14,13 +14,13 @@ import {
   isCompactFormRows,
   type SelectWindowSize,
 } from '@cli/tui/selectWindow';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import {
   CompactFormKeyHints,
   FormFrame,
   renderAsyncListFormTransient,
 } from './FormFrame';
 import { useAsyncListForm } from './useAsyncListForm';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
 import type { Effect } from 'effect';
 
 const LIST_FORM_FRAME_ROWS = 3;

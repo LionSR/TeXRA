@@ -43,9 +43,9 @@ const COMPOSITION_ROOT_FILES = new Set([
   path.join(__dirname, 'packages/extension/src/extension.ts'),
   path.join(__dirname, 'packages/desktop/src/main/platform/index.ts'),
   path.join(__dirname, 'packages/cli/src/runtime/cliProcessRuntime.ts'),
-  // The package's composition root is `composeProcess`, which the Promise
-  // entry and the Effect subpath's `Sessions.layer` both call.
-  path.join(__dirname, 'packages/harness/src/effect/runtime.ts'),
+  // The package's composition root: `Sessions.layer` composes the process
+  // its projection serves.
+  path.join(__dirname, 'packages/harness/src/effect/sessions.ts'),
   // The test suite's composition root: the one harness file that installs
   // the process runtime the session graph runs on, over the plugin list its
   // setup module passes (`sessionGraphTestSetup`, `builtinSessionGraphTestSetup`).
@@ -468,11 +468,11 @@ const localRules = {
         type: 'problem',
         docs: {
           description:
-            'Disallow installProcessRuntime imports outside composition roots.',
+            'Disallow processLayer imports outside composition roots.',
         },
         messages: {
           forbidden:
-            'installProcessRuntime may only be imported by composition roots; elsewhere read process services from the Effect context and take the workspace roots as data from the session, run or tool call that holds them.',
+            'processLayer may only be imported by composition roots; elsewhere read process services from the Effect context and take the workspace roots as data from the session, run or tool call that holds them.',
         },
         schema: [],
       },
@@ -490,7 +490,7 @@ const localRules = {
               return (
                 specifier.type === 'ImportSpecifier' &&
                 specifier.imported.type === 'Identifier' &&
-                specifier.imported.name === 'installProcessRuntime'
+                specifier.imported.name === 'processLayer'
               );
             });
 

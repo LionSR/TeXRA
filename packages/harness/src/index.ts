@@ -21,10 +21,9 @@
  */
 
 // The services and their layer. `Sessions.layer({ platform, plugins })` is
-// the only way in: the composition root and the session factory under it stay internal,
-// because a caller that reached them directly would hold a composed process
-// and an open session with no scope to end either.
-export type { AgentPlatform, Composition } from './effect/runtime.js';
+// an embedder's way in: the process and its sessions live for that layer's
+// scope, so nothing is held without a scope to end it.
+export type { AgentPlatform, Composition } from './effect/sessions.js';
 export type { Plugin } from '@tools/plugins';
 export { Sessions } from './effect/sessions.js';
 export type {
@@ -36,10 +35,25 @@ export type {
   TranscriptView,
 } from './effect/sessions.js';
 
+// The process the hosts compose and the session owner it serves: one
+// `processLayer` for every TeXRA host and for `Sessions.layer` above.
+export { SessionOwner } from '@agent/runtime/sessionGraph';
+export {
+  processLayer,
+  type ProcessLayerOptions,
+} from '@controllers/session/sessionLayer';
+export {
+  withForkFailureReporting,
+  withProcessServices,
+  type AgentCatalogServices,
+  type PluginContext,
+  type ProcessRuntime,
+  type ProcessServices,
+} from '@platform/processRuntime';
+
 // The failures the surface names.
 export {
   AgentNotFound,
-  PlatformConflict,
   PluginsRefused,
   RunFailure,
   ToolsRefused,

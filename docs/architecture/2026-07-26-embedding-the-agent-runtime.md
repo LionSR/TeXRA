@@ -30,7 +30,7 @@ agent directories, a session, and a populated registry. When a run can open
 requests, something must also decide them (§3); presentation goes through the
 session's interactions attachment, and there is no separate presentation-host
 argument. The direct Lean language
-services the shipped Node hosts pass to `installProcessRuntime` are a
+services the shipped Node hosts pass to `processLayer` are a
 shipped-feature choice; the raw loop only needs some `LeanLanguageServices`
 layer there.
 

@@ -1,8 +1,8 @@
 /**
  * The sessions of `@texra-ai/harness` and the runs on them.
  *
- * `Sessions` is the process's one session owner as an Effect service: it
- * opens, lists and closes through `@agent/runtime`'s owner port, so a root
+ * `Sessions` is a projection of the process's `SessionOwner`: it opens,
+ * lists and closes through that one owner, so a root
  * opened here is the same session every TeXRA host opens (one session per
  * workspace storage root, never a second registry). A {@link Session} is a
  * value, not a tag — there are N of them, one per root — and a pure
@@ -15,8 +15,7 @@
  * re-exports these services as the package's surface.
  */
 import {
-  Context,
-  Layer,
+  type Context,
   Deferred,
   Effect,
   Exit,
@@ -32,12 +31,10 @@ import {
 // reach the emitted declarations, so they carry no provider-type leak risk.
 import { getAgent } from '@agent/index';
 import {
-  closeSession as closeOwnedSession,
-  listSessions as listOwnedSessions,
-  openSessionEffect,
   runAgent as runValidatedAgent,
   type SessionHandle as RuntimeSessionHandle,
 } from '@agent/runtime';
+import type { SessionOwner } from '@agent/runtime/sessionGraph';
 import type { AgentEvent } from '@agent/trace';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -149,7 +146,7 @@ function admitInput(
  */
 function start(
   session: RuntimeSessionHandle,
-  services: Layer.Layer<ProcessServices>,
+  services: Context.Context<ProcessServices>,
   input: StartInput,
 ): Effect.Effect<Run, LaunchError | RunFailure> {
   return Effect.gen(function* () {
@@ -233,7 +230,7 @@ function start(
             Effect.onExit(settle),
             // The embedder owns this runtime. Provide the process's existing
             // context: tool I/O shares its scoped clients, `settle` its logger.
-            Effect.provide(services),
+            Effect.provideContext(services),
           ),
           { startImmediately: true },
         );
@@ -323,7 +320,7 @@ let readerPorts = 0;
  *  handle, holding nothing the owner already holds. */
 function sessionOf(
   handle: RuntimeSessionHandle,
-  services: Layer.Layer<ProcessServices>,
+  services: Context.Context<ProcessServices>,
 ): Session {
   return {
     roots: handle.roots,
@@ -343,26 +340,30 @@ function sessionOf(
 
 /** The package's session policy over the process's owner: an ephemeral
  *  transcript store, and a host that can answer no approval prompt, so the
- *  session's own policy settles every request a run raises. */
+ *  session's own policy settles every request a run raises. `services` is
+ *  the process's context, which every run's fiber is provided. */
 export function makeSessions(
   processRoots: WorkspaceRoots,
-  services: Layer.Layer<ProcessServices>,
+  owner: Context.Service.Shape<typeof SessionOwner>,
+  services: Context.Context<ProcessServices>,
 ): Context.Service.Shape<typeof Sessions> {
   return {
     open: (roots?: WorkspaceRoots) =>
-      openSessionEffect({
-        roots: roots ?? processRoots,
-        // No surface here can answer an approval prompt: every run of this
-        // session, launched or resumed, is offered no approval-gated tool.
-        interactions: { approvalPromptsUnavailable: true },
-        transcriptMode: {
-          kind: 'ephemeral',
-          reason: 'npm package consumer',
-        },
-      }).pipe(Effect.map((handle) => sessionOf(handle, services))),
+      owner
+        .open({
+          roots: roots ?? processRoots,
+          // No surface here can answer an approval prompt: every run of this
+          // session, launched or resumed, is offered no approval-gated tool.
+          interactions: { approvalPromptsUnavailable: true },
+          transcriptMode: {
+            kind: 'ephemeral',
+            reason: 'npm package consumer',
+          },
+        })
+        .pipe(Effect.map((handle) => sessionOf(handle, services))),
     close: (roots?: WorkspaceRoots) =>
-      closeOwnedSession((roots ?? processRoots).storage),
-    list: Effect.map(listOwnedSessions(), (handles) =>
+      owner.close((roots ?? processRoots).storage),
+    list: Effect.map(owner.list, (handles) =>
       handles.map((handle) => sessionOf(handle, services)),
     ),
   };

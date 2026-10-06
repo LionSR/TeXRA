@@ -26,7 +26,6 @@ import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys'
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RetryPermission } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { HostRequest } from '@shared/session/hostRequest';
@@ -52,6 +51,7 @@ import {
   useHostCapability,
 } from './approvalQueue';
 import { appendLocalNotice } from './transcript';
+import type { ProcessRuntime } from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
 
 /**

@@ -65,11 +65,11 @@ const tempDirs = useTempDirs();
 async function installFreshDefaultSession(): Promise<void> {
   await installStoragePlatform();
   await import('@test/support/sessionGraphTestSetup');
-  const { initializeDefaultSession, teardownDefaultSession } =
-    await import('@agent/runtime/sessionGraph');
-  await Effect.runPromise(teardownDefaultSession());
+  const { openTestDefaultSession, closeTestDefaultSession } =
+    await import('@test/support/sessionEnd');
+  await Effect.runPromise(closeTestDefaultSession);
   await Effect.runPromise(
-    initializeDefaultSession({ roots: testWorkspaceRoots() }),
+    openTestDefaultSession({ roots: testWorkspaceRoots() }),
   );
 }
 

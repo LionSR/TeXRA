@@ -1,6 +1,6 @@
 /**
  * The process's plugin catalog: the `ToolRegistry` over the plugin list an
- * entry passes to `installProcessRuntime`, the live catalog over it, the
+ * entry passes to `processLayer`, the live catalog over it, the
  * user's MCP servers and the installed plugins, following the switches.
  */
 
@@ -29,8 +29,8 @@ const SWITCH_READ = Schedule.exponential('200 millis');
  * The process's `ToolRegistry` over the app's `plugins` and the live catalog
  * (`LiveTools`) over it, with the MCP servers of `mcpConfigPath` (a host's is
  * the user's `~/.texra/mcp.json`) and the installed plugins.
- * `installProcessRuntime` builds it from the plugin list an entry passes. The layer takes the process `FileSystem`
- * that `installProcessRuntime` serves, to read that file, and its
+ * `processLayer` builds it from the plugin list an entry passes. The layer takes the process `FileSystem`
+ * that `processLayer` serves, to read that file, and its
  * `AppState`, which holds the key MCP env values are digested under, the
  * switches and the plugin install record. A switch flipped or a plugin
  * disabled in any process sharing that state reaches the catalog at once

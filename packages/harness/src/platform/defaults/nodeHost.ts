@@ -12,7 +12,7 @@
  * helpers, mirroring what each host's composition root would otherwise inline.
  * Nothing in `@agent` / `@skills` imports it back, so there is no cycle. The
  * direct Lean LSP adapter is not here: each Node root hands its layer to
- * `installProcessRuntime`, so the adapter stays out of hosts that only need
+ * `processLayer`, so the adapter stays out of hosts that only need
  * the composition helpers. The platform literal itself is not here either:
  * every field of it is host-specific, so each root writes its own.
  */
