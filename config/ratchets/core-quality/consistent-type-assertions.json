@@ -1,5 +1,4 @@
 {
-  "packages/harness/src/controllers/session/storeSchema.ts": 1,
   "packages/harness/src/platform/defaults/longRunningModelTransport.ts": 1,
   "packages/harness/src/shared/schemas/logPayload.ts": 1,
   "packages/harness/src/shared/session/surface.ts": 1,

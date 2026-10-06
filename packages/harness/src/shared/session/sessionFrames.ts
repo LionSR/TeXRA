@@ -232,13 +232,11 @@ export class SessionFrames extends Context.Service<
             Effect.map(SubscriptionRef.get(current), ({ queue }) =>
               Stream.fromQueue(queue).pipe(
                 Stream.mapAccum(
-                  () => {
-                    return {
-                      debug: undefined as boolean | undefined,
-                      pending: [] as FoldInput[],
-                      complete: false,
-                    };
-                  },
+                  (): {
+                    debug?: boolean;
+                    pending: FoldInput[];
+                    complete: boolean;
+                  } => ({ pending: [], complete: false }),
                   (state, frame) => {
                     if (!state.complete && frame.debug !== null)
                       state.debug = frame.debug;
