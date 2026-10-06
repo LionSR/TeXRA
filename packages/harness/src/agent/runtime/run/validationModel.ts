@@ -168,26 +168,25 @@ function goldenTurn(
   // to the message a `/compact` summarized. The compacted history has no
   // tool results, so its turns are told apart by what they say.
   if (system.includes('GOLDEN-CHAT')) {
-    // The last turn is held until the user stops it, so the message typed
-    // behind it stays queued on the stopped run.
+    // The last turn launches a Codex child, then is held until the user's
+    // stop detaches it; the message typed behind stays queued on the run.
     if (said.includes('Hold this turn.'))
-      return gate('golden-chat.release').pipe(Effect.as(text('Released.')));
+      return results.length === 0
+        ? Effect.succeed([call('codex', { prompt: 'Answer the Codex task.' })])
+        : gate('golden-chat.release').pipe(Effect.as(text('Released.')));
     if (said.includes('The golden chat so far.'))
       return Effect.succeed(text('Answered after the compaction.'));
-    const steps = [
-      () =>
-        call('plan', {
-          command: 'update',
-          objective: 'Answer the golden chat, then stop.',
-        }),
-      () =>
-        call('plan', {
-          command: 'complete',
-          reason: 'The golden chat is answered.',
-        }),
-    ];
-    const step = steps[results.length];
-    if (step !== undefined) return Effect.succeed([step()]);
+    const step = [
+      call('plan', {
+        command: 'update',
+        objective: 'Answer the golden chat, then stop.',
+      }),
+      call('plan', {
+        command: 'complete',
+        reason: 'The golden chat is answered.',
+      }),
+    ][results.length];
+    if (step !== undefined) return Effect.succeed([step]);
     return Effect.succeed(
       text(
         said.includes('After the model switch.')
