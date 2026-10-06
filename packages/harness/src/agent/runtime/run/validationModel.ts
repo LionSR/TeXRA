@@ -117,7 +117,6 @@ function goldenTurn(
       while (!existsSync(file)) yield* Effect.sleep('20 millis');
     });
   const system = turn.system ?? '';
-  const tools = new Set(turn.tools.map((tool) => tool.name));
   const results = turn.messages.filter((m) => m.role === 'tool');
   const said = JSON.stringify(turn.messages);
   // The golden chat's `/compact`: its summary replaces the history.

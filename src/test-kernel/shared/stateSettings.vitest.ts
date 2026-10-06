@@ -325,7 +325,7 @@ describe('settingsAccess', () => {
     'resolves reliability rows on the merged scope, bounded by their schema',
     () =>
       Effect.gen(function* () {
-        const logs = captureLogEntries();
+        captureLogEntries();
         const reliabilityRows = [
           {
             setting: MODEL_COMPACTION_THRESHOLD_SETTING,

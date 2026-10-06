@@ -326,7 +326,6 @@ function sendPositionRequest<T>(
   method: string,
 ): Effect.Effect<LspResult<T>> {
   return Effect.gen(function* () {
-    const uri = vscode.Uri.file(absolutePath);
     const leanUri = createLeanFileUri(absolutePath);
 
     const provider = yield* Effect.result(getClientProvider(globalState));

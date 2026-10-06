@@ -226,7 +226,7 @@ describe('desktop preview host', () => {
         yield* Effect.promise(() => makeTempDir()),
         'missing.pdf',
       );
-      const showErrorMessage = vi.fn((message: string) => Effect.void);
+      const showErrorMessage = vi.fn((_message: string) => Effect.void);
       const shell = makeShell();
 
       const host = createDesktopPreviewHost({

@@ -69,8 +69,7 @@ export function createExtensionCommandActions(
         ),
       ),
     openGettingStarted: () => sysOpenGettingStarted(context.extension.id),
-    createSampleProject: () =>
-      sysCreateSampleProject(context.extensionPath, session),
+    createSampleProject: () => sysCreateSampleProject(context.extensionPath),
     downloadArXivSource: () => latexDownloadArXivSource(session),
     openProgressViewInTab: () => progressViewProvider.popOutToEditor(),
     openDoc: (page) =>

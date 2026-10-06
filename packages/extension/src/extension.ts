@@ -291,13 +291,13 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
  * the prerequisite without firing the real command's `onCommand` completion
  * event.
  */
-const WALKTHROUGH_COMMANDS_NEEDING_WORKSPACE = [
-  EXTENSION_COMMANDS.CLONE_OVERLEAF_PROJECT,
-  EXTENSION_COMMANDS.DOWNLOAD_ARXIV_SOURCE,
-  EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT,
-  'texra.showMainView',
-  'texra.showApprovalSettings',
-] as const satisfies readonly CommandId[];
+type WalkthroughCommandNeedingWorkspace =
+  | (typeof EXTENSION_COMMANDS)[
+      | 'CLONE_OVERLEAF_PROJECT'
+      | 'DOWNLOAD_ARXIV_SOURCE'
+      | 'RUN_SETUP_ASSISTANT'
+      | 'SHOW_MAIN_VIEW']
+  | Extract<CommandId, 'texra.showApprovalSettings'>;
 
 /** Internal command URI used by workspace-bound walkthrough links. */
 const WALKTHROUGH_WORKSPACE_ACTION_COMMAND = 'texra.walkthroughWorkspaceAction';
@@ -325,7 +325,7 @@ function registerWalkthroughWorkspaceAction(
   context.subscriptions.push(
     vscode.commands.registerCommand(
       WALKTHROUGH_WORKSPACE_ACTION_COMMAND,
-      (command: (typeof WALKTHROUGH_COMMANDS_NEEDING_WORKSPACE)[number]) =>
+      (command: WalkthroughCommandNeedingWorkspace) =>
         hasSingleWorkspace
           ? vscode.commands.executeCommand(command)
           : runtime.runPromise(explainWorkspaceRequired(context.extensionPath)),

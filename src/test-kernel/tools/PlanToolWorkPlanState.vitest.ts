@@ -157,7 +157,6 @@ describe('PlanTool — update (plan approval)', () => {
           const runId = generateRunId();
           const { session, awaitPlanRequest } = yield* planSession(runId);
           const workspace = AgentWorkspaceState.create();
-          const workPlanState = workspace.workPlan;
 
           yield* Effect.addFinalizer(() =>
             Effect.sync(() => releaseRunResources(runId, session)),

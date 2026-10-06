@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { DocumentTaskSchema } from '@agent/core/definition/AgentDataclass';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
 import { noopTrace } from '@test/support/noopTrace';
@@ -22,13 +19,6 @@ const buildOpening = (...args: Parameters<typeof buildTemplateInputs>) =>
 const fakeConfig = new FakeConfigProvider();
 
 setupPlatform({}, { config: fakeConfig });
-
-const baseConfig: AgentConfig = AgentConfigSchema.parse({
-  model: 'test',
-  agent: 'agent',
-  instruction: '',
-  inputFile: 'input.tex',
-});
 
 // The describes below replace the whole global platform in their own
 // beforeEach and never restore it — they MUST stay the last describes in

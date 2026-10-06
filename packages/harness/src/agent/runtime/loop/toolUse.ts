@@ -687,7 +687,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
               ? (at) => compaction.settle(at, 'the task is being reset')
               : undefined,
           );
-          state = yield* cell.adopt(consumed.state);
+          yield* cell.adopt(consumed.state);
           if (!consumed.turn) continue;
         }
         restoring = false;

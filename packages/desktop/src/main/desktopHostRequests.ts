@@ -567,7 +567,6 @@ export function createDesktopHostRequests(
     ProcessServices | StorageFs | WorkspaceFs
   > {
     return Effect.gen(function* () {
-      const done: HostOutcome = { kind: 'done' };
       if (isSharedHostRequest(request)) {
         return yield* handleSharedHostRequest(sharedRequests, request, port);
       }

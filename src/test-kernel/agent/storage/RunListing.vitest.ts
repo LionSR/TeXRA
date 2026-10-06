@@ -228,7 +228,6 @@ describe('run listing normalization', () => {
     Effect.gen(function* () {
       const processId = 'bbb222' as RunId;
       const customBashAgentId = 'ccc333' as RunId;
-      const processStore = getRunRecords(session, processId);
       yield* Effect.promise(() =>
         writeMetadata(processId, {
           timestamp: '2026-07-15T09:00:00.000Z',
@@ -262,7 +261,6 @@ describe('run listing normalization', () => {
     () =>
       Effect.gen(function* () {
         const id = 'abe001' as RunId;
-        const store = getRunRecords(session, id);
         yield* Effect.promise(() =>
           writeMetadata(id, {
             timestamp: '2026-07-15T04:00:00.000Z',
