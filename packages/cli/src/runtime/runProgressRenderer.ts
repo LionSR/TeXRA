@@ -324,7 +324,7 @@ function formatActiveChildren(
   const first =
     agents.find((child) => child.status === RUN_PHASE.RUNNING) ?? agents[0];
   if (!first) return undefined;
-  const label = pluralize(agents.length, 'subagent');
+  const label = pluralize(agents.length, 'agent');
   const suffix = agents.length > 1 ? ` +${agents.length - 1}` : '';
   const description = first.description;
   const safeDescription =

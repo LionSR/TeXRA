@@ -539,7 +539,7 @@ describe('CLI run progress renderer', () => {
         'polish paper.tex · tools: 3 · 0s\n' +
         '[t1] · polish paper.tex · tools: 3 · 0s\n' +
         '[t1] · polish paper.tex · drafting · tools: 3 · 0s\n' +
-        '[t1] · polish paper.tex · drafting · subagent: review · 0s\n' +
+        '[t1] · polish paper.tex · drafting · agent: review · 0s\n' +
         '[t1] · polish paper.tex · Completed · tools: 3 · 0s\n',
     );
   });
@@ -579,7 +579,7 @@ describe('CLI run progress renderer', () => {
     // `runOrdering` (newest creation first).
     expect(output.text).toBe(
       'coordinator main.tex · 0s\n' +
-        'coordinator main.tex · subagents: proofreader +2 · 0s\n',
+        'coordinator main.tex · agents: proofreader +2 · 0s\n',
     );
   });
 
@@ -619,7 +619,7 @@ describe('CLI run progress renderer', () => {
 
     expect(output.text).toBe(
       'orchestrator · 0s\n' +
-        'orchestrator · subagent: review — Check multiplier signs and resonance counterexa… · 0s\n',
+        'orchestrator · agent: review — Check multiplier signs and resonance counterexa… · 0s\n',
     );
   });
 
@@ -635,7 +635,7 @@ describe('CLI run progress renderer', () => {
 
     expect(output.text).toBe(
       'orchestrator · 0s\n' +
-        'orchestrator · subagent: review — Current review task · 0s\n',
+        'orchestrator · agent: review — Current review task · 0s\n',
     );
   });
 
@@ -659,7 +659,7 @@ describe('CLI run progress renderer', () => {
 
     expect(output.text).toBe(
       'orchestrator · 0s\n' +
-        'orchestrator · subagents: review — Active review task +1 · 0s\n',
+        'orchestrator · agents: review — Active review task +1 · 0s\n',
     );
   });
 
@@ -673,7 +673,7 @@ describe('CLI run progress renderer', () => {
 
     const renderedLines = output.text.split('\r\x1b[2K').filter(Boolean);
     expect(renderedLines).toHaveLength(2);
-    expect(renderedLines.at(-1)).toContain('subagent: review — ');
+    expect(renderedLines.at(-1)).toContain('agent: review — ');
     expect(renderedLines.every((line) => textDisplayWidth(line) <= 80)).toBe(
       true,
     );
@@ -728,7 +728,7 @@ describe('CLI run progress renderer', () => {
 
     expect(output.text).toBe(
       'orchestrator · 0s\n' +
-        'orchestrator · subagent: review · 0s\n' +
+        'orchestrator · agent: review · 0s\n' +
         'orchestrator · Completed · 11s\n',
     );
   });
@@ -745,7 +745,7 @@ describe('CLI run progress renderer', () => {
 
     expect(output.text).toBe(
       'orchestrator · 0s\n' +
-        'orchestrator · subagent: review — Late review task · 0s\n' +
+        'orchestrator · agent: review — Late review task · 0s\n' +
         'orchestrator · Stopped · 0s\n',
     );
   });
