@@ -12,6 +12,8 @@
 // exception is file-size, whose value is a line count: a shorter file passes,
 // and `--update` lowers its cap. A rule with an empty baseline holds the core
 // at zero.
+// shallow-modules budgets interface elements while a module is shallow, so
+// reducing its public surface lowers the row and deepening it removes it.
 //
 // The API reports are not budgets but review diffs: any change to an entry's
 // exports fails until `--update` regenerates the report, so the diff of the
@@ -156,9 +158,9 @@ const NOT_PER_FILE = new Set([
   'durable-invariants',
 ]);
 
-function printReport(files, byRule) {
+function printReport(files, byRule, moduleDepths) {
   const packageOf = (file) =>
-    CORE_QUALITY_DIRS.find((dir) => file.startsWith(`${dir}/`));
+    CORE_QUALITY_DIRS.find((dir) => file === dir || file.startsWith(`${dir}/`));
   const lineCount = (file) =>
     readFileSync(path.join(rootDir, file), 'utf8').split('\n').length;
   const header = [
@@ -192,6 +194,8 @@ function printReport(files, byRule) {
     'type-assertions',
     'no-non-null-assertion',
     'wide-records',
+    'pass-through',
+    'shallow-modules',
   ];
   const score = new Map();
   for (const rule of HOTSPOT_RULES) {
@@ -211,6 +215,30 @@ function printReport(files, byRule) {
       byRule.get(rule).has(file),
     ).map((rule) => `${rule}=${byRule.get(rule).get(file).value}`);
     console.log(`${value}\t${file}\t${parts.join(' ')}`);
+  }
+  console.log(
+    '\nshallowest eligible modules (non-comment lines / interface elements):',
+  );
+  for (const { file, lines, elements, ratio } of moduleDepths
+    .toSorted(
+      (left, right) =>
+        left.ratio - right.ratio || left.file.localeCompare(right.file),
+    )
+    .slice(0, 15)) {
+    console.log(
+      `${file}\t${lines} / ${elements} = ${ratio.toFixed(2)}\t${byRule.get('shallow-modules').has(file) ? 'shallow' : 'within threshold'}`,
+    );
+  }
+  console.log(
+    '\npass-through hotspots (functions plus forwarding-only modules):',
+  );
+  for (const [file, entry] of [...byRule.get('pass-through')]
+    .toSorted(
+      (left, right) =>
+        right[1].value - left[1].value || left[0].localeCompare(right[0]),
+    )
+    .slice(0, 15)) {
+    console.log(`${entry.value}\t${file}\n${describeSites(entry)}`);
   }
   console.log('\nper key (rules not keyed by a core source file):');
   for (const rule of [
@@ -250,9 +278,9 @@ const main = async () => {
   if (moves.length > 0 && !values.update) {
     throw new Error('--move re-keys the baselines, so it needs --update');
   }
-  const { files, byRule } = await measure(rootDir);
+  const { files, byRule, moduleDepths } = await measure(rootDir);
   if (values.report) {
-    printReport(files, byRule);
+    printReport(files, byRule, moduleDepths);
     return;
   }
   const problems = [];
