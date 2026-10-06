@@ -13,8 +13,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.131.0",
-    "@google/genai": "2.26.0",
-    "@openrouter/sdk": "1.4.19",
+    "@google/genai": "2.27.0",
+    "@openrouter/sdk": "1.4.21",
     "llm-zoo": "catalog:",
     "openai": "7.20.0",
     "ws": "8.22.0"
