@@ -207,7 +207,7 @@ const checkStamps = Effect.fnUntraced(function* (sql: Sql, path: string) {
   )
     return yield* refused(
       path,
-      'is not a TeXRA store; move it away to let TeXRA create its store there',
+      `is not a TeXRA store (application id ${application}, schema ${stored}); move it away to let TeXRA create its store there`,
     );
   if (stored >= BASELINE_1_0 && stored !== SCHEMA_VERSION)
     return yield* refused(

@@ -92,7 +92,7 @@ export const PROJECTED_FROM = `projected_row p
   JOIN event_sequence s ON s.id = e.aggregate`;
 
 /** The kinds a display read selects: the display rows, and the settlements
- *  their tool cards' output is projected from ({@link settleCards}). */
+ *  their tool cards' output is projected from (`settleCards`). */
 export const DISPLAY_READ_TYPES = JSON.stringify([
   ...DISPLAY_EVENT_TYPES,
   'tool.result',
@@ -303,23 +303,26 @@ export function decodeRow(
 }
 
 /**
- * One connection's reader of selected rows, answering their events with
- * tool cards' output projected (`settleCards`). A newer row fails the read.
- * A row that does not decode fails a run history read (`whole`), so no run
- * folds from part of its rows; a wide read (tail, listing, projections)
+ * One connection's reader of selected rows (`read`), answering their
+ * events. A newer row fails the read. A row that does not decode fails a run history read (`whole`), so no
+ * run folds from part of its rows; a wide read (tail, listing, projections)
  * leaves it out with one warning, so one damaged row never costs the
- * session. An absent plugin's kind is left out with one warning.
+ * session. A damaged `run.start` is read as a bare one, so its run still
+ * lists (and can be deleted), and `damaged` names every such run; an absent
+ * plugin's kind is left out with one warning.
  */
-export function rowReader(
-  path: string,
-): (
-  rows: readonly SqlRow[],
-  whole: boolean,
-) => Effect.Effect<
-  readonly SessionEvent[],
-  DatabaseStoreNewer | DatabaseRowCorrupt
-> {
+export function rowReader(path: string): {
+  readonly read: (
+    rows: readonly SqlRow[],
+    whole: boolean,
+  ) => Effect.Effect<
+    readonly SessionEvent[],
+    DatabaseStoreNewer | DatabaseRowCorrupt
+  >;
+  readonly damaged: () => readonly AggregateId[];
+} {
   const warned = new Set<string>();
+  const damaged = new Set<AggregateId>();
   const warnOnce = (key: string, message: string) =>
     warned.has(key)
       ? Effect.void
@@ -327,7 +330,7 @@ export function rowReader(
           Effect.andThen(Effect.logWarning(message)),
           withLogChannel('sessionDatabase'),
         );
-  return (rows, whole) =>
+  const read = (rows: readonly SqlRow[], whole: boolean) =>
     Effect.gen(function* () {
       const events: SessionEvent[] = [];
       for (const row of rows) {
@@ -339,53 +342,41 @@ export function rowReader(
               decoded.success.kind,
               `${path} holds rows of the plugin kind ${decoded.success.kind}, whose plugin this build lacks; they stay in the store and are left out of every read.`,
             );
-        } else if (whole || decoded.failure._tag === 'DatabaseStoreNewer')
+          continue;
+        }
+        if (whole || decoded.failure._tag === 'DatabaseStoreNewer')
           return yield* Effect.fail(decoded.failure);
-        else
-          yield* warnOnce(
-            `${decoded.failure.commit}`,
-            `${path}: ${decoded.failure.message} It is left out of the listing and the tail, and its run cannot be read whole.`,
-          );
+        yield* warnOnce(
+          `${decoded.failure.commit}`,
+          `${path}: ${decoded.failure.message} It is left out of the listing and the tail, and its run cannot be read whole.`,
+        );
+        const start = bareStart(row);
+        if (start === null) continue;
+        damaged.add(start.aggregateId);
+        events.push(start);
       }
-      return settleCards(events);
+      return events;
     });
+  return { read, damaged: () => [...damaged] };
 }
 
-/**
- * The read-time projection of a tool card's output (§10): a `tool.end` on a
- * run history stores no `result`; its output is the `tool.result` committed
- * just before it in the same batch (bar the card's `tool.start`). The card
- * keeps its `files`; the fold keeps the name and input it opened with.
- */
-function settleCards(events: readonly SessionEvent[]): readonly SessionEvent[] {
-  const settled = new Map<
-    AggregateId,
-    SessionEvent & { type: 'tool.result' }
-  >();
-  return events.map((event) => {
-    if (event.type === 'tool.result') settled.set(event.aggregateId, event);
-    else if (event.type !== 'tool.start') {
-      const settlement = settled.get(event.aggregateId);
-      settled.delete(event.aggregateId);
-      if (event.type === 'tool.end' && event.result === undefined && settlement)
-        return { ...event, result: cardResult(settlement, event.files) };
-    }
-    return event;
-  });
-}
-
-function cardResult(
-  { payload }: SessionEvent & { type: 'tool.result' },
-  files: Extract<SessionEvent, { type: 'tool.end' }>['files'],
-): JsonValue {
-  const { status: _status, ...rest } = payload.result;
-  const output = { ...rest, ...(files?.length ? { editedFiles: files } : {}) };
-  return JSON.parse(
-    JSON.stringify({
-      ...(Object.keys(output).length > 0 ? { output } : {}),
-      ...(files?.length ? { files } : {}),
-    }),
-  );
+/** A damaged `run.start` as a bare one from its columns: the run it creates
+ *  still lists, unopened, and can be deleted. Null for any other row. */
+function bareStart(input: SqlRow): SessionEvent | null {
+  const row = RowSchema.parse(input);
+  if (row.type !== 'run.start' || row.kind !== 'run') return null;
+  return {
+    type: 'run.start',
+    aggregateId: aggregateOf(row.kind, row.logicalId),
+    seq: row.seq,
+    commit: row.commit,
+    origin: row.origin,
+    at: row.at,
+    identity: { kind: 'agent', agent: 'unknown' },
+    userFollowUpSupport: 'unsupported',
+    parent: null,
+    provenance: null,
+  };
 }
 
 /** The `stored_kind` entry a plugin value is recorded under: each arm

@@ -86,6 +86,7 @@ import {
   DISPLAY_PAGE_END,
   DISPLAY_PAGE_ROWS,
   priorOf,
+  settleCards,
   type ProjectionName,
   type ProjectionOp,
 } from './projections';
@@ -208,7 +209,7 @@ export const databaseLayer = (
         exec(statement, params).pipe(Effect.map((rows) => rows[0]));
       /** The store gate (`storeGate`), in the caller's transaction. */
       const gate = storeGate(exec);
-      const decoded = rowReader(path);
+      const { read: decoded, damaged } = rowReader(path);
       const decodedRows = (
         statement: string,
         params: readonly unknown[],
@@ -216,6 +217,7 @@ export const databaseLayer = (
       ) =>
         exec(statement, params).pipe(
           Effect.flatMap((rows) => decoded(rows, whole)),
+          Effect.map(settleCards),
         );
       const currentCommit = exec(highWater, []).pipe(
         Effect.map(commitFromRows),
@@ -295,9 +297,8 @@ export const databaseLayer = (
       let version = (yield* execOne(dataVersion, []).pipe(
         mapDatabaseFailure(openFailed),
       ))?.data_version;
-      // A failed read is logged and the poll backs off, 250 ms doubling to
-      // 30 s over a streak, reset on the first healthy tick. The version is
-      // checkpointed only once the commit behind it is read.
+      // A failed read is logged and backs off (250 ms doubling to 30 s);
+      // the version is checkpointed only once its commit is read.
       let failures = 0;
       yield* Effect.forkScoped(
         Stream.tick('250 millis').pipe(
@@ -331,8 +332,7 @@ export const databaseLayer = (
           ),
         ),
       );
-      // `derive` writes only what the rows already imply (a projection's
-      // catch-up): it takes the write lock but wakes no reader.
+      // `derive` (projection catch-up) takes the write lock, wakes no reader.
       const transactions = (mode: 'read' | 'write' | 'derive') =>
         SqlClient.makeWithTransaction({
           transactionService: sql.transactionService,
@@ -878,8 +878,7 @@ export const databaseLayer = (
             at,
           };
         });
-      // Every append passes the store gate in its transaction: no build
-      // writes beside rows it cannot read.
+      // Every append passes the store gate (`storeGate`) in its transaction.
       const appendPrepared = (
         prepared: readonly ReturnType<typeof prepareEventDraft>[],
         at: number,
@@ -1002,6 +1001,7 @@ export const databaseLayer = (
                 events,
                 checkedAggregateIds,
                 state: yield* readState(checkedAggregateIds),
+                damaged: damaged(),
               };
             }),
           ),

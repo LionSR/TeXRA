@@ -174,11 +174,10 @@ export interface SessionStoreMovedAside {
 }
 
 /**
- * The store gate's refusal (`storeGate`): the store holds a kind, or a
- * version of one, that this build does not read. A newer TeXRA wrote it, or
- * a pre-release build of a different format. The store is refused whole,
- * never read in part or written beside; it rides as the cause of the open,
- * read or write failure.
+ * The store gate's refusal (`storeGate`): the store holds a kind or version
+ * this build does not read (a newer TeXRA, or a pre-release of another
+ * format, wrote it). The store is refused whole, never read in part or
+ * written beside; it rides as the cause of the open, read or write failure.
  */
 export class DatabaseStoreNewer extends Data.TaggedError('DatabaseStoreNewer')<{
   readonly type: string;
@@ -370,7 +369,7 @@ export class Database extends Context.Service<
     readonly releaseClaims: (
       ids: readonly AggregateId[],
     ) => Effect.Effect<void, DatabaseWriteFailed>;
-    /** C7's event prefix and current claims from the same read transaction. */
+    /** C7's event prefix, current claims and damaged runs from one read. */
     readonly readInputBatch: (
       ids: readonly AggregateId[],
       fromCommit: CommitOrdinal,
@@ -381,6 +380,7 @@ export class Database extends Context.Service<
         readonly events: readonly SessionEvent[];
         readonly checkedAggregateIds: readonly AggregateId[];
         readonly state: readonly AggregateState[];
+        readonly damaged: readonly AggregateId[];
       },
       DatabaseReadFailed
     >;
