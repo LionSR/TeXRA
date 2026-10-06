@@ -1,5 +1,9 @@
 {
+<<<<<<< HEAD
   "@texra-ai/harness": 372,
+=======
+  "@texra-ai/harness": 373,
+>>>>>>> 7fda204154 (chore: golden store and baselines after rebase)
   "@texra-ai/harness/node": 134,
   "@texra-ai/harness/plugins": 375,
   "@texra-ai/harness/schemas": 74,
