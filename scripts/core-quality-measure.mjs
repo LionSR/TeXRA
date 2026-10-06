@@ -7,6 +7,19 @@
 // TypeScript parser. Import cycles come from esbuild's metafile: esbuild
 // erases type-only imports and resolves the tsconfig aliases, so its graph
 // is exactly the runtime module graph.
+//
+// Depth is a conservative syntactic proxy, not a reason to pad a module.
+// pass-through counts exact argument forwarding (including one identity map)
+// and adds one site for a module made entirely of forwarding exports.
+// shallow-modules uses interface >= 4 and non-comment lines/interface < 3.
+// Its value is the interface element count, rather than 0/1: widening an
+// already-shallow module must fail too; reducing its surface lowers the cap,
+// and becoming deep removes the row. Declarative types, schemas and data,
+// and documented public entry barrels, have no hidden implementation to
+// compare and are excluded. Mixed modules with behavior remain eligible.
+// An element is an exported name (a wildcard export is one), a public class
+// or interface member (Context.Service shapes included), or a parameter of
+// an exported function/signature, including const functions and Effect.fn.
 
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
@@ -23,6 +36,9 @@ import { walkFiles } from './walkFiles.mjs';
 
 /** Lines a core file may hold before it needs a budget row. */
 const CORE_FILE_LINES = 400;
+
+const MIN_DEPTH_INTERFACE = 4;
+const MIN_MODULE_DEPTH = 3;
 
 /**
  * The ESLint-measured rules: baseline name, rule id and options. Thresholds
@@ -92,6 +108,9 @@ export const RULES = {
     'External packages a core package entry evaluates on import.',
   'wide-records':
     'Public members past 20 on an exported class or `Context.Service` shape: a wide record, not a deep module.',
+  'pass-through':
+    'Functions forwarding all arguments without logic, and modules exporting only forwarding functions or re-exports: collapse the extra interface.',
+  'shallow-modules': `Modules with at least ${MIN_DEPTH_INTERFACE} interface elements and fewer than ${MIN_MODULE_DEPTH} non-comment lines per element: hide more work behind less interface.`,
   'core-module-mocks':
     '`vi.mock` of a core module in a test: path-keyed mocks break on every move; provide a layer instead.',
   'non-erasable-syntax':
@@ -416,7 +435,555 @@ function wideRecord(statement, name) {
   return { name, members };
 }
 
+/** Erased syntax does not change a value passed to a call. */
+function unwrapped(node) {
+  while (
+    node != null &&
+    (ts.isParenthesizedExpression(node) ||
+      ts.isAsExpression(node) ||
+      ts.isTypeAssertionExpression(node) ||
+      ts.isSatisfiesExpression(node) ||
+      ts.isNonNullExpression(node))
+  ) {
+    node = node.expression;
+  }
+  return node;
+}
+
+/** The expression of a function's only return/expression, or null. */
+function onlyExpression(node) {
+  if (node.body == null) return null;
+  if (!ts.isBlock(node.body)) return unwrapped(node.body);
+  const [only] = node.body.statements;
+  return node.body.statements.length === 1 &&
+    (ts.isReturnStatement(only) || ts.isExpressionStatement(only))
+    ? unwrapped(only.expression)
+    : null;
+}
+
+/** A named value imported from Effect, rather than a same-named local. */
+function isImportedFunction(node, name, sourceFile) {
+  return (
+    ts.isIdentifier(node) &&
+    sourceFile.statements.some(
+      (statement) =>
+        ts.isImportDeclaration(statement) &&
+        ['effect', 'effect/Function'].includes(
+          statement.moduleSpecifier.text,
+        ) &&
+        !statement.importClause?.isTypeOnly &&
+        statement.importClause?.namedBindings != null &&
+        ts.isNamedImports(statement.importClause.namedBindings) &&
+        statement.importClause.namedBindings.elements.some(
+          (element) =>
+            !element.isTypeOnly &&
+            element.name.text === node.text &&
+            (element.propertyName ?? element.name).text === name,
+        ),
+    )
+  );
+}
+
+function isIdentity(node, sourceFile) {
+  node = unwrapped(node);
+  if (node == null) return false;
+  if (ts.isIdentifier(node))
+    return isImportedFunction(node, 'identity', sourceFile);
+  if (!ts.isArrowFunction(node) && !ts.isFunctionExpression(node)) return false;
+  const [parameter] = node.parameters;
+  const body = onlyExpression(node);
+  return (
+    node.parameters.length === 1 &&
+    ts.isIdentifier(parameter.name) &&
+    parameter.initializer == null &&
+    parameter.dotDotDotToken == null &&
+    body != null &&
+    ts.isIdentifier(body) &&
+    body.text === parameter.name.text
+  );
+}
+
+/** One no-op map, in data-first or pipe form; never peel real combinators. */
+function withoutIdentityMap(node, sourceFile) {
+  const isMap = (call) =>
+    ts.isCallExpression(call) && call.expression.getText() === 'Effect.map';
+  if (
+    isMap(node) &&
+    node.arguments.length === 2 &&
+    isIdentity(node.arguments[1], sourceFile)
+  ) {
+    return unwrapped(node.arguments[0]);
+  }
+  if (
+    ts.isCallExpression(node) &&
+    node.arguments.length === 1 &&
+    isMap(node.expression) &&
+    node.expression.arguments.length === 1 &&
+    isIdentity(node.expression.arguments[0], sourceFile)
+  ) {
+    return unwrapped(node.arguments[0]);
+  }
+  if (
+    ts.isCallExpression(node) &&
+    isImportedFunction(node.expression, 'pipe', sourceFile) &&
+    node.arguments.length === 2 &&
+    isMap(node.arguments[1]) &&
+    node.arguments[1].arguments.length === 1 &&
+    isIdentity(node.arguments[1].arguments[0], sourceFile)
+  ) {
+    return unwrapped(node.arguments[0]);
+  }
+  if (
+    ts.isCallExpression(node) &&
+    ts.isPropertyAccessExpression(node.expression) &&
+    node.expression.name.text === 'pipe' &&
+    node.arguments.length === 1 &&
+    isMap(node.arguments[0]) &&
+    node.arguments[0].arguments.length === 1 &&
+    isIdentity(node.arguments[0].arguments[0], sourceFile)
+  ) {
+    return unwrapped(node.expression.expression);
+  }
+  return node;
+}
+
+/** A call target with no evaluation of another call or computed expression. */
+function isCallTarget(node) {
+  node = unwrapped(node);
+  return (
+    ts.isIdentifier(node) ||
+    node.kind === ts.SyntaxKind.ThisKeyword ||
+    node.kind === ts.SyntaxKind.SuperKeyword ||
+    (ts.isPropertyAccessExpression(node) && isCallTarget(node.expression))
+  );
+}
+
+/** Exact, once-only parameter forwarding, with reorder and rest allowed. */
+function isPassThrough(node, sourceFile) {
+  if (!isFunctionLike(node) || ts.isConstructorDeclaration(node)) return false;
+  let expression = onlyExpression(node);
+  if (expression == null) return false;
+  if (ts.isAwaitExpression(expression))
+    expression = unwrapped(expression.expression);
+  expression = withoutIdentityMap(expression, sourceFile);
+  if (!ts.isCallExpression(expression) || !isCallTarget(expression.expression))
+    return false;
+  const parameters = node.parameters.filter(
+    (parameter) => parameter.name.getText() !== 'this',
+  );
+  if (expression.arguments.length !== parameters.length) return false;
+  const remaining = new Map();
+  for (const parameter of parameters) {
+    if (!ts.isIdentifier(parameter.name) || parameter.initializer != null)
+      return false;
+    remaining.set(parameter.name.text, parameter.dotDotDotToken != null);
+  }
+  for (let argument of expression.arguments) {
+    argument = unwrapped(argument);
+    const spread = ts.isSpreadElement(argument);
+    const value = spread ? unwrapped(argument.expression) : argument;
+    if (
+      !ts.isIdentifier(value) ||
+      !remaining.has(value.text) ||
+      remaining.get(value.text) !== spread
+    )
+      return false;
+    remaining.delete(value.text);
+  }
+  return remaining.size === 0;
+}
+
+/** The callable declared by a const, including Effect.fn's body. */
+function declaredFunction(value) {
+  value = unwrapped(value);
+  if (value == null) return null;
+  if (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) return value;
+  if (ts.isCallExpression(value)) {
+    const factory = ts.isCallExpression(value.expression)
+      ? value.expression.expression
+      : value.expression;
+    if (['Effect.fn', 'Effect.fnUntraced'].includes(factory.getText())) {
+      return (
+        value.arguments.find(
+          (argument) =>
+            ts.isArrowFunction(argument) || ts.isFunctionExpression(argument),
+        ) ?? null
+      );
+    }
+  }
+  return null;
+}
+
+/** Each name introduced by a binding, including destructured exports. */
+function bindingNames(name) {
+  if (ts.isIdentifier(name)) return [name.text];
+  return name.elements.flatMap((element) =>
+    ts.isBindingElement(element) ? bindingNames(element.name) : [],
+  );
+}
+
+/** Export names, including aliases, default exports and imported bindings. */
+function depthExports(sourceFile) {
+  const imported = new Set();
+  const locals = new Map();
+  const exports = new Map();
+  for (const statement of sourceFile.statements) {
+    if (ts.isImportDeclaration(statement)) {
+      const clause = statement.importClause;
+      if (clause?.name != null) imported.add(clause.name.text);
+      const bindings = clause?.namedBindings;
+      if (bindings != null && ts.isNamedImports(bindings)) {
+        bindings.elements.forEach((element) => imported.add(element.name.text));
+      } else if (bindings != null) imported.add(bindings.name.text);
+      continue;
+    }
+    if (!DECLARATION_KINDS.some((isKind) => isKind(statement))) continue;
+    const modifiers = ts.getModifiers(statement) ?? [];
+    const named = ts.isVariableStatement(statement)
+      ? statement.declarationList.declarations.flatMap((node) =>
+          bindingNames(node.name).map((name) => ({ name, node })),
+        )
+      : declaredNames(statement).map((name) => ({ name, node: statement }));
+    for (const { name, node } of named) {
+      const nodes = locals.get(name) ?? [];
+      nodes.push(node);
+      locals.set(name, nodes);
+      if (
+        modifiers.some(
+          (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+        )
+      ) {
+        const exported = modifiers.some(
+          (modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword,
+        )
+          ? 'default'
+          : name;
+        exports.set(exported, { nodes, reexport: false });
+      }
+    }
+  }
+  for (const statement of sourceFile.statements) {
+    if (ts.isExportAssignment(statement)) {
+      const value = unwrapped(statement.expression);
+      const name = ts.isIdentifier(value) ? value.text : null;
+      exports.set('default', {
+        nodes: locals.get(name) ?? [value],
+        reexport: imported.has(name),
+      });
+      continue;
+    }
+    if (!ts.isExportDeclaration(statement)) continue;
+    const clause = statement.exportClause;
+    if (clause != null && ts.isNamedExports(clause)) {
+      for (const element of clause.elements) {
+        const local = (element.propertyName ?? element.name).text;
+        exports.set(element.name.text, {
+          nodes: locals.get(local) ?? [element],
+          reexport: statement.moduleSpecifier != null || imported.has(local),
+        });
+      }
+    } else {
+      // A wildcard is one syntactic export; expanding it would measure the
+      // implementation of a different module. The module site still counts it.
+      exports.set(
+        clause?.name.text ?? `*:${statement.moduleSpecifier.getText()}`,
+        { nodes: [statement], reexport: true },
+      );
+    }
+  }
+  return exports;
+}
+
+/** Physical lines bearing syntax; comments inside strings are still code. */
+function implementationLines(sourceFile) {
+  const lines = new Set();
+  const visit = (node) => {
+    if (ts.isJSDoc(node)) return;
+    const children = node.getChildren(sourceFile);
+    if (children.length > 0) {
+      children.forEach(visit);
+      return;
+    }
+    let line = sourceFile.getLineAndCharacterOfPosition(
+      node.getStart(sourceFile),
+    ).line;
+    for (const part of node.getText(sourceFile).split(/\r?\n/)) {
+      if (part.trim() !== '') lines.add(line);
+      line++;
+    }
+  };
+  visit(sourceFile);
+  return lines.size;
+}
+
+/** No behavior in a literal/table, or in a schema-building declaration. */
+function isDeclarative(node, schemas) {
+  node = unwrapped(node);
+  if (node == null) return true;
+  if (isFunctionLike(node)) {
+    const expression = onlyExpression(node);
+    // Constant tables sometimes expose a literal/URI formatter. A parser,
+    // predicate, projection or arithmetic function is still implementation.
+    return (
+      expression != null &&
+      (ts.isLiteralExpression(expression) ||
+        ts.isTemplateExpression(expression) ||
+        ts.isNoSubstitutionTemplateLiteral(expression)) &&
+      isDeclarative(expression, schemas)
+    );
+  }
+  if (ts.isCallExpression(node)) {
+    // Schema callbacks define validation data, not a module's implementation.
+    if (
+      ts.isPropertyAccessExpression(node.expression) &&
+      /^(?:safeParse|parse|decode|encode)(?:Async)?$/.test(
+        node.expression.name.text,
+      )
+    )
+      return false;
+    let target = node.expression;
+    while (ts.isCallExpression(target) || ts.isPropertyAccessExpression(target))
+      target = target.expression;
+    return ts.isIdentifier(target) && schemas.has(target.text);
+  }
+  if (ts.isNewExpression(node) || ts.isConditionalExpression(node))
+    return false;
+  if (
+    ts.isPostfixUnaryExpression(node) ||
+    ts.isAwaitExpression(node) ||
+    ts.isYieldExpression(node)
+  )
+    return false;
+  if (
+    ts.isPrefixUnaryExpression(node) &&
+    [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(
+      node.operator,
+    )
+  )
+    return false;
+  if (
+    ts.isBinaryExpression(node) &&
+    ![
+      ts.SyntaxKind.PlusToken,
+      ts.SyntaxKind.MinusToken,
+      ts.SyntaxKind.AsteriskToken,
+      ts.SyntaxKind.SlashToken,
+    ].includes(node.operatorToken.kind)
+  )
+    return false;
+  if (ts.isClassDeclaration(node)) {
+    return (
+      node.members.every(
+        (member) =>
+          ts.isPropertyDeclaration(member) &&
+          isDeclarative(member.initializer, schemas),
+      ) &&
+      (node.heritageClauses ?? []).every((clause) =>
+        clause.types.every((type) =>
+          /^Data\.Tagged(?:Error|Class)\b/.test(type.expression.getText()),
+        ),
+      )
+    );
+  }
+  let declarative = true;
+  ts.forEachChild(node, (child) => {
+    if (!isDeclarative(child, schemas)) declarative = false;
+  });
+  return declarative;
+}
+
+function isDeclarationModule(sourceFile) {
+  const schemas = new Set();
+  const types = new Set();
+  for (const statement of sourceFile.statements) {
+    if (
+      ts.isInterfaceDeclaration(statement) ||
+      ts.isTypeAliasDeclaration(statement)
+    )
+      types.add(statement.name.text);
+    if (ts.isImportDeclaration(statement)) {
+      const clause = statement.importClause;
+      if (clause == null) continue;
+      const fromZod = statement.moduleSpecifier.text === 'zod';
+      if (clause.name != null) {
+        if (clause.isTypeOnly) types.add(clause.name.text);
+        else if (fromZod) schemas.add(clause.name.text);
+      }
+      const bindings = clause.namedBindings;
+      if (bindings != null && ts.isNamedImports(bindings)) {
+        for (const element of bindings.elements) {
+          if (clause.isTypeOnly || element.isTypeOnly) {
+            types.add(element.name.text);
+            continue;
+          }
+          if (
+            fromZod ||
+            (element.propertyName ?? element.name).text.endsWith('Schema')
+          )
+            schemas.add(element.name.text);
+        }
+      } else if (bindings != null) {
+        if (clause.isTypeOnly) types.add(bindings.name.text);
+        else if (fromZod) schemas.add(bindings.name.text);
+      }
+    } else if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (
+          ts.isIdentifier(declaration.name) &&
+          declaration.initializer != null &&
+          ts.isCallExpression(unwrapped(declaration.initializer)) &&
+          isDeclarative(declaration.initializer, schemas)
+        )
+          schemas.add(declaration.name.text);
+      }
+    }
+  }
+  return sourceFile.statements.every((statement) => {
+    if (
+      ts.isInterfaceDeclaration(statement) ||
+      ts.isTypeAliasDeclaration(statement) ||
+      ts.isEmptyStatement(statement)
+    )
+      return true;
+    if (ts.isImportDeclaration(statement))
+      return statement.importClause != null;
+    if (
+      ts
+        .getModifiers(statement)
+        ?.some((modifier) => modifier.kind === ts.SyntaxKind.DeclareKeyword)
+    )
+      return true;
+    if (ts.isExportDeclaration(statement))
+      return (
+        statement.isTypeOnly ||
+        (statement.exportClause != null &&
+          ts.isNamedExports(statement.exportClause) &&
+          statement.exportClause.elements.every(
+            (element) =>
+              element.isTypeOnly ||
+              (statement.moduleSpecifier == null &&
+                types.has((element.propertyName ?? element.name).text)),
+          ))
+      );
+    if (ts.isVariableStatement(statement))
+      return statement.declarationList.declarations.every((declaration) =>
+        isDeclarative(declaration.initializer, schemas),
+      );
+    return (
+      (ts.isFunctionDeclaration(statement) ||
+        ts.isClassDeclaration(statement) ||
+        ts.isExportAssignment(statement)) &&
+      isDeclarative(statement, schemas)
+    );
+  });
+}
+
+function measureDepth(sourceFile, file, publicEntries, site, byRule) {
+  const exports = depthExports(sourceFile);
+  const forwards = ({ nodes, reexport }) =>
+    reexport ||
+    (nodes.length > 0 &&
+      nodes.every((node) => {
+        const callable = ts.isVariableDeclaration(node)
+          ? declaredFunction(node.initializer)
+          : node;
+        return callable != null && isPassThrough(callable, sourceFile);
+      }));
+  if (exports.size > 0 && [...exports.values()].every(forwards)) {
+    site(
+      'pass-through',
+      sourceFile,
+      'module exports only re-exports or pass-throughs (one module site in addition to function sites)',
+    );
+  }
+  let elements = exports.size;
+  for (const { nodes, reexport } of exports.values()) {
+    if (reexport) continue;
+    for (const node of nodes) {
+      if (ts.isClassDeclaration(node)) {
+        elements += wideRecord(node, '').members;
+        for (const member of node.members) {
+          if (!ts.isConstructorDeclaration(member)) continue;
+          const publicConstructor = !ts
+            .getModifiers(member)
+            ?.some((modifier) =>
+              [
+                ts.SyntaxKind.PrivateKeyword,
+                ts.SyntaxKind.ProtectedKeyword,
+              ].includes(modifier.kind),
+            );
+          elements +=
+            (publicConstructor ? 1 : 0) +
+            member.parameters.filter(
+              (parameter) =>
+                ts
+                  .getModifiers(parameter)
+                  ?.some((modifier) => PARAMETER_PROPERTY.has(modifier.kind)) &&
+                !isHidden(parameter),
+            ).length;
+        }
+      } else if (ts.isInterfaceDeclaration(node))
+        elements += node.members.length;
+      const callable = ts.isVariableDeclaration(node)
+        ? declaredFunction(node.initializer)
+        : node;
+      if (callable != null && isFunctionLike(callable))
+        elements += callable.parameters.filter(
+          (parameter) => parameter.name.getText() !== 'this',
+        ).length;
+    }
+  }
+  if (elements < MIN_DEPTH_INTERFACE || isDeclarationModule(sourceFile)) return;
+  const barrel = sourceFile.statements.every(
+    (statement) =>
+      ts.isExportDeclaration(statement) || ts.isImportDeclaration(statement),
+  );
+  const doc = sourceFile.text.slice(
+    0,
+    sourceFile.statements[0]?.getStart(sourceFile) ?? 0,
+  );
+  if (
+    barrel &&
+    (publicEntries.has(file) ||
+      (path.basename(file) === 'index.ts' &&
+        /\b(?:public|SDK)\b[\s\S]*?\b(?:surface|entry|contract)\b/i.test(doc)))
+  )
+    return;
+  const lines = implementationLines(sourceFile);
+  const depth = { file, lines, elements, ratio: lines / elements };
+  if (lines < MIN_MODULE_DEPTH * elements) {
+    byRule.get('shallow-modules').set(file, {
+      value: elements,
+      sites: [
+        {
+          line: 1,
+          detail: `${lines} non-comment lines / ${elements} interface elements = ${(lines / elements).toFixed(2)} (< ${MIN_MODULE_DEPTH})`,
+        },
+      ],
+    });
+  }
+  return depth;
+}
+
 function measureAst(rootDir, files, byRule) {
+  // Package manifests declare these entries public; their package README
+  // must actually document the entry to exempt a barrel without an inline doc.
+  const publicEntries = new Set(
+    coreEntries(rootDir)
+      .filter(({ name, subpath, file }) => {
+        const packageDir = path
+          .relative(rootDir, file)
+          .split(path.sep)
+          .slice(0, 2);
+        const readme = path.join(rootDir, ...packageDir, 'README.md');
+        const entry = subpath === '.' ? name : `${name}/${subpath.slice(2)}`;
+        return (
+          existsSync(readme) && readFileSync(readme, 'utf8').includes(entry)
+        );
+      })
+      .map(({ file }) => path.relative(rootDir, file).replaceAll('\\', '/')),
+  );
+  const moduleDepths = [];
   for (const file of files) {
     const text = readFileSync(path.join(rootDir, file), 'utf8');
     const sourceFile = ts.createSourceFile(
@@ -431,6 +998,9 @@ function measureAst(rootDir, files, byRule) {
       1;
     const site = (rule, node, detail) =>
       addSite(byRule, rule, file, lineOf(node), detail);
+
+    const depth = measureDepth(sourceFile, file, publicEntries, site, byRule);
+    if (depth != null) moduleDepths.push(depth);
 
     const lines = text.endsWith('\n')
       ? text.split('\n').length - 1
@@ -476,6 +1046,13 @@ function measureAst(rootDir, files, byRule) {
     }
 
     const visit = (node) => {
+      if (isPassThrough(node, sourceFile)) {
+        site(
+          'pass-through',
+          node,
+          `forwards unchanged parameters: ${onlyExpression(node).getText()}`,
+        );
+      }
       // `let x!: T` and `field!: T`: the ESLint rule sees only `value!`.
       if (
         (ts.isVariableDeclaration(node) || ts.isPropertyDeclaration(node)) &&
@@ -568,6 +1145,7 @@ function measureAst(rootDir, files, byRule) {
     };
     visit(sourceFile);
   }
+  return moduleDepths;
 }
 
 /** Strongly connected components of `graph` (Tarjan), as sets. */
@@ -927,14 +1505,15 @@ function measureInvariants(rootDir, byRule) {
 /**
  * Every rule's findings: `Map<rule, Map<key, { value, sites }>>`. The key is
  * a repo file, or a package entry for the entry rules. `value` is the site
- * count, except for file-size (line count) and the entry rules (files or
- * packages reached).
+ * count, except for file-size (line count), shallow-modules (interface
+ * elements), and the entry rules (files or packages reached). moduleDepths
+ * carries ratios for every eligible module, including those above the cutoff.
  */
 export async function measure(rootDir) {
   const files = coreFiles(rootDir);
   const byRule = new Map(Object.keys(RULES).map((rule) => [rule, new Map()]));
   await measureEslint(rootDir, files, byRule);
-  measureAst(rootDir, files, byRule);
+  const moduleDepths = measureAst(rootDir, files, byRule);
   await measureCycles(rootDir, files, byRule);
   measureReadmes(rootDir, byRule);
   // The repo's module resolution (its `paths` aliases), for the graph rules.
@@ -947,5 +1526,5 @@ export async function measure(rootDir) {
   measureMocks(rootDir, files, options, byRule);
   measureDependencies(rootDir, byRule);
   measureInvariants(rootDir, byRule);
-  return { files, byRule };
+  return { files, byRule, moduleDepths };
 }
