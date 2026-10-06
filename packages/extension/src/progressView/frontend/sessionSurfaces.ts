@@ -443,6 +443,10 @@ export function createSessionSurfaces(options: {
     const { launch } = surface;
     const instruction = launch.instruction.trim();
     if (instruction === '') return;
+    // Auto-approve is this launch's alone: the request carries it, and the
+    // request settles only with the run, so the next task must not find it.
+    if (launch.approval !== 'policy')
+      act(entry, { kind: 'launch', patch: { approval: 'policy' } });
     void hostRequestFor(entry, { kind: 'launch', launch, instruction });
   }
 

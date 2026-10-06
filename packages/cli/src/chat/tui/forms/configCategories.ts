@@ -5,8 +5,8 @@ import { capitalize, formatResultCount } from '@utils/text/stringUtils';
 const CONFIG_CATEGORY_LABELS: Readonly<Record<string, string>> = {
   git: 'Git and worktrees',
   // The `Agents` row above the categories opens the agent library; these two
-  // hold child-run policy and the external coding agents' options.
-  agents: 'Subagents',
+  // hold what a task's agents may do and the external coding agents' options.
+  agents: 'Tasks and agents',
   'ai-agents': 'Codex and Claude Code',
   workflow: 'Workflow run',
   model: 'Models and providers',

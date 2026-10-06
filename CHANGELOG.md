@@ -802,6 +802,20 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **"Auto-approve — this task only" now ends with the task it was chosen
+  for.** The new-task composer kept the choice after a launch, so the next
+  task (even in a later window) started auto-approved too. A launch now
+  resets it to your approval policy.
+- **Screen readers reach the rail's hover actions.** The desktop project
+  row's New task and Close project buttons and a task row's Delete button
+  were removed from the page while the row was not hovered or focused, so a
+  screen reader's browse cursor never found them. They are now visually
+  hidden instead, and appear as before on hover or focus.
+- **An agent's rows say "agent", not "task" or "subagent".** An agent row's
+  Delete button and header item read "Delete agent", an agent with no
+  output yet reads "Agent is starting", the `agent` tool's transcript row is
+  headed "Agent", and the CLI's `/config` category for these settings reads
+  "Tasks and agents" (it read "Subagents").
 - **Projects that share an API key back off together after a rate
   limit.** The background service runs every project's tasks, but each
   project waited out a provider's 429 on its own, so a second project kept

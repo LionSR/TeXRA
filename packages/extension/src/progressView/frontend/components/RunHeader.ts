@@ -626,7 +626,7 @@ export class RunHeader extends LitElement {
           canDelete
             ? html`<wa-divider></wa-divider
                 ><wa-dropdown-item value=${DELETE_SESSION} variant="danger"
-                  >${waIcon('trash', { slot: 'icon' })}${TASK_ACTIONS.delete}</wa-dropdown-item
+                  >${waIcon('trash', { slot: 'icon' })}${run.parentId === null ? TASK_ACTIONS.delete : TASK_ACTIONS.deleteAgent}</wa-dropdown-item
                 >`
             : nothing
         }

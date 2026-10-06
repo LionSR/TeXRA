@@ -1,6 +1,8 @@
 // Third-party imports
 import { css } from 'lit';
 
+import { visuallyHiddenDeclarations } from '@ui/styles';
+
 /** Styles for the individual <run-tab> row. */
 export const runTabStyles = css`
   :host {
@@ -234,7 +236,8 @@ export const runTabStyles = css`
     display: none;
   }
 
-  /* The row's Delete: shown on hover or focus. */
+  /* The row's Delete: shown on hover or focus, and at rest kept for a
+     screen reader's browse cursor, which reaches it without moving focus. */
   .tab-remove {
     flex-shrink: 0;
     color: var(--color-text-muted);
@@ -247,7 +250,7 @@ export const runTabStyles = css`
   }
 
   .tab-container:not(:hover, :focus-within) .tab-remove {
-    display: none;
+    ${visuallyHiddenDeclarations}
   }
 
   .tab-container.is-read-only .tab-title {
