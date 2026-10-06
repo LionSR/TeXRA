@@ -64,7 +64,6 @@ vi.mock('@agent/runtime/executeAgent', async () => {
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { RunHandle } from '@agent/runtime/RunHandle';
-import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runAgent } from '@agent/runtime/runAgent';
@@ -78,6 +77,7 @@ import {
   attachContextWindowError,
   attachMissingApiKeyError,
 } from '@common/errors/sdkError/errorMetadata';
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
   aggregateId as qualifyAggregateId,
   type AggregateId,
@@ -97,9 +97,6 @@ const CONFIG = AgentConfigSchema.parse({
   agent: 'assistant',
   model: 'test-model',
 });
-const settlePublications = vi.fn(
-  (_runId?: RunId): Effect.Effect<void, Error> => Effect.void,
-);
 let trackedHandle: RunHandle | undefined;
 const trackRun = vi.fn((handle: RunHandle) => {
   trackedHandle = handle;
@@ -107,8 +104,7 @@ const trackRun = vi.fn((handle: RunHandle) => {
 const untrackRun = vi.fn((runId: RunId) => {
   if (trackedHandle?.runId === runId) trackedHandle = undefined;
 });
-// The real exit choreography over the fake's settlePublications and the mocked
-// claim verbs, so the existing flush/release assertions keep
+// The real exit choreography over the mocked claim verbs, so the existing flush/release assertions keep
 // observing the same tree through its one owner.
 const sessionRuns = {
   track: trackRun,
@@ -146,8 +142,6 @@ const SESSION = {
     ),
   holdRunClaim: SessionHandle.prototype.holdRunClaim,
   borrowRunClaim: SessionHandle.prototype.borrowRunClaim,
-  settlePublications,
-  commitRunEnd: SessionHandle.prototype.commitRunEnd,
 } as never;
 
 const EXECUTE_RESULT = {
@@ -179,7 +173,7 @@ function realRunRegistry(): RunRegistry {
   return new RunRegistry({
     runView: () => undefined,
     commit: () => Effect.void,
-    approvals: createSessionApprovals(),
+    grantsOnDetach: () => NO_APPROVAL_GRANTS,
     finalizeRun: ((input: { readonly outcome: string }) =>
       Effect.succeed({ ok: true, outcome: input.outcome })) as never,
     holdRunClaim: () => Effect.void,
@@ -217,7 +211,6 @@ describe('runAgent run ownership', () => {
     }));
     mocks.readRunEnd.mockReturnValue(null);
     mocks.runExists.mockReturnValue(true);
-    settlePublications.mockReturnValue(Effect.void);
     mocks.finalizeRun.mockResolvedValue(FINALIZE_RESULT);
     mocks.executeAgent.mockResolvedValue(EXECUTE_RESULT);
   });
@@ -398,11 +391,6 @@ describe('runAgent run ownership', () => {
           order.push('release');
         }),
       );
-      settlePublications.mockImplementationOnce(() =>
-        Effect.sync(() => {
-          order.push('session-artifacts');
-        }),
-      );
 
       yield* launch({
         beforeRunEnd: () =>
@@ -411,12 +399,7 @@ describe('runAgent run ownership', () => {
           }),
       });
 
-      expect(order).toEqual([
-        'execute',
-        'artifacts',
-        'session-artifacts',
-        'release',
-      ]);
+      expect(order).toEqual(['execute', 'artifacts', 'release']);
     }),
   );
 
@@ -434,33 +417,6 @@ describe('runAgent run ownership', () => {
           expect.objectContaining({ publishWorkflowOutput }),
         );
         expect(publishWorkflowOutput).not.toHaveBeenCalled();
-      }),
-  );
-
-  it.effect(
-    'does not drain artifacts again after the host committed the run end',
-    () =>
-      Effect.gen(function* () {
-        const order: string[] = [];
-        mocks.executeAgent.mockImplementationOnce(async () => {
-          order.push('execute');
-          return EXECUTE_RESULT;
-        });
-        yield* launch({
-          beforeRunEnd: () =>
-            Effect.sync(() => {
-              order.push('host-artifacts-and-release');
-              return true;
-            }),
-        });
-
-        expect(order).toEqual(['execute', 'host-artifacts-and-release']);
-        expect(settlePublications).not.toHaveBeenCalled();
-        // The host committed the run's ending; the claim is still the
-        // launch's hold, released once as its scope closes.
-        expect(mocks.releaseClaims).toHaveBeenCalledExactlyOnceWith(
-          qualifyAggregateId('run', RUN_ID),
-        );
       }),
   );
 
@@ -530,7 +486,6 @@ describe('runAgent run ownership', () => {
         expect(mocks.releaseClaims).toHaveBeenCalledWith(
           qualifyAggregateId('run', RUN_ID),
         );
-        expect(settlePublications).toHaveBeenCalledWith(RUN_ID);
       }),
   );
 });

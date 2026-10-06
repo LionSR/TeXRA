@@ -57,7 +57,7 @@ function foldRunPhase(
         payload: { family: 'toolUse', at: step },
       },
     ]);
-    yield* session.settlePublications().pipe(Effect.orDie);
+    yield* session.settled.pipe(Effect.orDie);
     expect(session.runView(runId)?.status).toBe(expected);
   });
 }
@@ -448,7 +448,7 @@ describe('ExecutionsTool', () => {
             const callerRunId = RunIdSchema.parse('ca11e0000001');
 
             publishTestRunStart(session, runId);
-            yield* session.settlePublications();
+            yield* session.settled;
             mocks.readConfig.mockResolvedValue(config);
             mocks.readReport.mockResolvedValue(
               '<subagent-result>full report</subagent-result>',

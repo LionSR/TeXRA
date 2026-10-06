@@ -80,7 +80,7 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
       `executions/${childRunId}/${relativePath}`,
     );
     publishTestRunStart(session, parentId);
-    yield* session.settlePublications();
+    yield* session.settled;
     yield* session.commit([
       {
         type: 'run.start',

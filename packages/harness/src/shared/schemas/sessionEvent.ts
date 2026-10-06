@@ -25,7 +25,6 @@ import { z } from 'zod';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 
 import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
-import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import { JsonValueSchema } from './jsonValue';
 import {
   RunEndRowSchema,
@@ -51,7 +50,7 @@ import {
 import { ContextBlobSchema, ToolsOfferedPayloadSchema } from './offeredTools';
 import { HookOutcomePayloadSchema } from './hookOutcome';
 import { UserFollowUpSupportSchema, WorktreeInfoSchema } from './run';
-import { ApprovalBypassesSchema, ConversationProgressSchema } from './runState';
+import { ConversationProgressSchema } from './runState';
 import { TranscriptEventSchemas } from './traceEvent';
 
 /** C5's complete process identity, encoded canonically without losing null. */
@@ -169,26 +168,21 @@ const SeqSchema = z.int().positive();
 export const CommitOrdinalSchema = z.int().nonnegative();
 export type CommitOrdinal = z.infer<typeof CommitOrdinalSchema>;
 
-/** The full approval-policy snapshot after a change, from the single policy
- *  authority (`packages/harness/src/shared/approvalPolicy.ts`); the fold keeps the latest. */
+/**
+ * A run's approval grants after a change, the one record of them: what the
+ * run itself decided, never what it inherits. A kind the run decides
+ * nothing about defers to its parent's grants while the edge stands, which
+ * is read off the rows (`resolveBypass`), never stored here.
+ */
 export const ApprovalPolicySnapshotSchema = z.object({
-  policy: TexraApprovalPolicySchema,
-  /** Each kind's effective value, own or inherited: what surfaces show. */
-  bypasses: ApprovalBypassesSchema,
-  /**
-   * The run's own human value per kind, where it has one (absent: it defers
-   * to its ancestry): `on` granted, `off` an explicit override. A resume in
-   * a new process restores exactly these.
-   */
+  /** The run's own human value per kind, where it has one: `on` granted,
+   *  `off` an explicit override. */
   own: z.partialRecord(z.enum(APPROVAL_BYPASS_KINDS), z.enum(['on', 'off'])),
   /** The kinds the run's autonomous goal grants it, over its own values
-   *  until the goal ends or a human decides that kind. Never restored: a
-   *  resume leaves them off until a human re-arms the goal. */
-  goal: z.array(z.enum(APPROVAL_BYPASS_KINDS)),
+   *  until the goal ends or a human decides that kind. A resume ends them:
+   *  its activation writes them off until a human re-arms the goal. */
+  goal: z.array(z.enum(APPROVAL_BYPASS_KINDS)).readonly(),
 });
-export type ApprovalPolicySnapshot = z.infer<
-  typeof ApprovalPolicySnapshotSchema
->;
 
 /**
  * The envelope every durable arm rides (contract C1). A run-scoped fact's

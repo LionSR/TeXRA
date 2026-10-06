@@ -5,6 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, Stream } from 'effect';
 import { describe, expect } from 'vitest';
+import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -127,7 +128,8 @@ describe('requestBashApproval queueing', () => {
           },
         });
         session.setApprovalPolicy('never');
-        session.approvals.bash.bypass.setBypass(runId, true, { silent: true });
+        publishTestRunStart(session, runId);
+        yield* session.approvals.change(runId, humanGrant(['bash'], true));
         const requests = yield* watchBashRequests(session);
 
         const result = yield* requestBashApproval({
@@ -164,7 +166,7 @@ describe('requestBashApproval queueing', () => {
           yield* Effect.addFinalizer(() => closeSessionOf(session));
           const runId = generateRunId();
           publishTestRunStart(session, runId);
-          yield* session.settlePublications();
+          yield* session.settled;
           const requests = yield* watchBashRequests(session);
 
           const request = (command: string) =>
@@ -183,9 +185,7 @@ describe('requestBashApproval queueing', () => {
             'echo first',
           ]);
 
-          session.approvals.bash.bypass.setBypass(runId, true, {
-            silent: true,
-          });
+          yield* session.approvals.change(runId, humanGrant(['bash'], true));
           requests.approve(0);
 
           expect(yield* Fiber.join(first)).toEqual({ action: 'approve' });

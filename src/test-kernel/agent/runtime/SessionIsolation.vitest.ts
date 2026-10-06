@@ -124,9 +124,6 @@ describe('session isolation', () => {
           [sessionA, 'a0da01' as RunId],
           [sessionB, 'b0db01' as RunId],
         ] as const;
-        const closures = live.map(([session]) =>
-          vi.spyOn(session, 'publishRunEvent').mockImplementation(() => {}),
-        );
         for (const [session, runId] of live) {
           publishTestRunStart(session, runId);
           session.publish([
@@ -137,7 +134,7 @@ describe('session isolation', () => {
               label: 'Running stage',
             },
           ]);
-          yield* session.settlePublications();
+          yield* session.settled;
           session.runs.track(
             testRunHandle({
               runId,
@@ -156,13 +153,6 @@ describe('session isolation', () => {
             concurrency: 'unbounded',
           },
         );
-        for (const [index, [, runId]] of live.entries()) {
-          expect(closures[index]).toHaveBeenCalledWith(runId, {
-            type: 'stage.end',
-            id: `stage:${runId}`,
-            status: RUN_OUTCOME.CANCELLED,
-          });
-        }
         expect(storageMocks.settledUnder.get('a0da01')).toBe(
           fakePath('storage/a'),
         );

@@ -446,7 +446,7 @@ describe('CLI terminal outcome resolution', () => {
           output: emptyRunEndOutput(),
         },
       ]);
-      yield* session.settlePublications();
+      yield* session.settled;
 
       expect(
         yield* readCliRunOutcomeState(session, {
@@ -468,7 +468,7 @@ describe('CLI terminal outcome resolution', () => {
         const session = yield* createTestSession();
         const runId = 'b0f001' as RunId;
         publishTestRunStart(session, runId);
-        yield* session.settlePublications();
+        yield* session.settled;
         const reportReadFailure = vi.fn();
         // The read fails the way a corrupt store fails it: through the
         // session's own records port, typed.
@@ -656,7 +656,7 @@ describe('createChatSessionController', () => {
 
         // The launch's `run.start` rows are detached publishes: the stop
         // claims the child's aggregate, so they commit first.
-        yield* runtimeSession.settlePublications();
+        yield* runtimeSession.settled;
         // The stop Ctrl-C sends under "Keep subagents running": the root
         // stops and its live children detach.
         const owner = mocks.sessionStub() as SessionHandle;

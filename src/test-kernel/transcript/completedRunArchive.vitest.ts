@@ -66,7 +66,7 @@ async function stampRun(runId: RunId): Promise<void> {
   const view = await Effect.runPromise(taskSession.readView([runId]));
   if (!view.runs.has(runId)) {
     publishTestRunStart(taskSession, runId);
-    await Effect.runPromise(taskSession.settlePublications());
+    await Effect.runPromise(taskSession.settled);
   }
 }
 
@@ -110,8 +110,7 @@ async function appendRows(
   runId: RunId,
   rows: readonly LogRow[],
 ): Promise<void> {
-  if (taskSession.runView(runId) === undefined)
-    publishTestRunStart(taskSession, runId);
+  await stampRun(runId);
   taskSession.publish(
     rows.map((row) => ({
       type: 'log' as const,
@@ -122,7 +121,7 @@ async function appendRows(
       data: row.data,
     })),
   );
-  await Effect.runPromise(taskSession.settlePublications());
+  await Effect.runPromise(taskSession.settled);
 }
 
 /** Write the transcript rows of a completed run. */
@@ -203,7 +202,7 @@ describe('completedRunArchive facade', () => {
           ({ session, label }) =>
             Effect.gen(function* () {
               publishTestRunStart(session, runId);
-              yield* session.settlePublications();
+              yield* session.settled;
               yield* seedRunRecord(session, runId, {
                 ...runConfig(label),
                 instruction: label,
@@ -223,7 +222,7 @@ describe('completedRunArchive facade', () => {
                   text: `Proof for ${label}.`,
                 },
               ]);
-              yield* session.settlePublications();
+              yield* session.settled;
             }),
           { concurrency: 'unbounded', discard: true },
         );
@@ -309,7 +308,7 @@ describe('completedRunArchive facade', () => {
         });
         taskSession = session;
         publishTestRunStart(session, runId);
-        yield* session.settlePublications();
+        yield* session.settled;
         yield* seedRunRecord(session, runId, config);
         session.publish([
           {
@@ -325,7 +324,7 @@ describe('completedRunArchive facade', () => {
             text: 'First proof.',
           },
         ]);
-        yield* session.settlePublications();
+        yield* session.settled;
 
         launchMocks.resolveAgent.mockReturnValue(
           Effect.succeed({

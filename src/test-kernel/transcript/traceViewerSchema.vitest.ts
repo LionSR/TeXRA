@@ -54,7 +54,7 @@ describe('trace-viewer TraceDocumentSchema', () => {
 
       const session = yield* createTestSession();
       publishTestRunStart(session, runId);
-      yield* session.settlePublications();
+      yield* session.settled;
       yield* seedRunRecord(session, runId, runConfigRecord);
       session.publish([
         {
@@ -71,7 +71,7 @@ describe('trace-viewer TraceDocumentSchema', () => {
           output: emptyRunEndOutput(),
         },
       ]);
-      yield* session.settlePublications();
+      yield* session.settled;
       const result = yield* assembleTrace(runId, session);
       yield* closeSessionOf(session);
       expect(result.status).toBe('ok');

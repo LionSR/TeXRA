@@ -259,7 +259,7 @@ describe('tool dispatch interrupted mid-turn', () => {
       // end, as its lifecycle writes it.
       yield* Fiber.await(fiber);
       yield* finalizeRun(session, { runId, outcome: RUN_OUTCOME.CANCELLED });
-      yield* session.settlePublications();
+      yield* session.settled;
       yield* session.followUps.send(runId, {
         text: 'What is 2+2?',
         from: { kind: 'user' },

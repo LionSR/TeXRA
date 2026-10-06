@@ -255,7 +255,6 @@
       "@agent/runtime/resumeRun",
       "@agent/runtime/run/AgentRun",
       "@agent/runtime/runAgent",
-      "@agent/runtime/runApprovalQueue",
       "@agent/runtime/RunCall",
       "@agent/runtime/RunEndResult",
       "@agent/runtime/RunHandle",

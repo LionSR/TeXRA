@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
 import { CompileFailureSchema, OutputFileInfoSchema } from './output';
 import { roundIndexedRecord } from './roundIndexed';
 
@@ -21,11 +20,6 @@ export const ConversationProgressSchema = z.object({
   /** Cumulative number of individual tool calls executed. */
   toolCallCount: z.number().prefault(0),
 });
-
-export const ApprovalBypassesSchema = z.record(
-  z.enum(APPROVAL_BYPASS_KINDS),
-  z.boolean(),
-);
 
 export const RoundKeyedOutputSidecarValueSchemas = {
   outputFiles: roundIndexedRecord(OutputFileInfoSchema),

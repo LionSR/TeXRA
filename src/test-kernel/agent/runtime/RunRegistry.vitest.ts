@@ -9,7 +9,11 @@ import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { RunHandle, RunControls } from '@agent/runtime/RunHandle';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { RunLive } from '@agent/runtime/runRegistry';
-import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
+import { humanGrant } from '@agent/runtime/runApprovalQueue';
+import {
+  NO_APPROVAL_GRANTS,
+  type ApprovalGrants,
+} from '@shared/approvalBypassKind';
 import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
@@ -105,7 +109,7 @@ interface FoldedPhases {
 /** Wires the events/phases/registry trio most tests drive kills through. */
 function createRegistry(
   options: {
-    approvals?: ReturnType<typeof createSessionApprovals>;
+    grantsOnDetach?: (runId: RunId) => ApprovalGrants;
     commit?: (
       drafts: readonly SessionEventDraft[],
     ) => Effect.Effect<void, Error>;
@@ -141,7 +145,7 @@ function createRegistry(
       Effect.sync(() => {
         events.published.push(...drafts);
       }),
-    approvals: createSessionApprovals(),
+    grantsOnDetach: options.grantsOnDetach ?? (() => NO_APPROVAL_GRANTS),
     finalizeRun: (input) => finalizeRun(testDefaultSession(), input),
     holdRunClaim: () => Effect.void,
     borrowRunClaim: () => Effect.void,
@@ -899,7 +903,7 @@ describe('runRegistry', () => {
         // `finalizeOwnerlessStop` fails for a run that has none, and today the
         // registry's own runFork drops that failure.
         publishTestRunStart(testDefaultSession(), runId);
-        yield* testDefaultSession().settlePublications();
+        yield* testDefaultSession().settled;
         yield* registry.stop(runId, { reason: 'user' }).settlement;
 
         // `run.end` is the run's whole terminal fact (one run model, 3.3), so
@@ -1058,8 +1062,10 @@ describe('runRegistry', () => {
       yield* registry['detachActiveChildren'](parentRunId);
       expect(handle.parent).toBeNull();
 
+      // The edge goes with the grants the child keeps, in one batch.
       expect(sinceTrack.events.map((event) => event.type)).toEqual([
         'run.detach',
+        'approval.policy',
       ]);
 
       expect(eventsOfType(recorded.events, 'run.detach')).toContainEqual({
@@ -1092,23 +1098,27 @@ describe('runRegistry', () => {
     }),
   );
 
-  it.effect('preserves child approvals when detaching it from its parent', () =>
+  it.effect('keeps the grants a child inherited in its detach batch', () =>
     Effect.gen(function* () {
-      const approvals = createSessionApprovals();
-      const { registry } = createRegistry({ approvals });
+      const inherited = humanGrant(['toolEdit'], true)(NO_APPROVAL_GRANTS);
+      const { registry, events } = createRegistry({
+        grantsOnDetach: () => inherited,
+      });
       yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
       const parentRunId = generateRunId();
       const childRunId = generateRunId();
       const handle = createHandle(childRunId, parentRunId);
-
-      approvals.toolEdit.bypass.setBypass(parentRunId, true);
-      approvals.registerRunParent(childRunId, parentRunId);
       registry.track(handle);
 
       yield* registry['detachActiveChildren'](parentRunId);
-      approvals.toolEdit.bypass.setBypass(parentRunId, false);
 
-      expect(approvals.toolEdit.bypass.isBypassed(childRunId)).toBe(true);
+      expect(events.published).toContainEqual(
+        expect.objectContaining({
+          type: 'approval.policy',
+          aggregateId: qualifyAggregateId('run', childRunId),
+          snapshot: inherited,
+        }),
+      );
       expect(handle.parent).toBeNull();
     }),
   );

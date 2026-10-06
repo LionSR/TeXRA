@@ -6,19 +6,26 @@
  * accessors in `runRecords.ts`.
  */
 
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit, SubscriptionRef } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { consumedRows, haltedPositionRow } from '@agent/runtime/loop/rows';
+import {
+  afterActivation,
+  recordedGrants,
+} from '@agent/runtime/runApprovalQueue';
+import {
+  NO_APPROVAL_GRANTS,
+  type ApprovalGrants,
+} from '@shared/approvalBypassKind';
 
 import {
   RUN_OUTCOME,
   RunRecordFieldsSchema,
   aggregateId,
   storedRunOutput,
-  type ApprovalPolicySnapshot,
   type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
   emptyRunEndOutput,
@@ -81,45 +88,41 @@ export const configChange = Effect.fn('configChange')(function* (
   } satisfies SessionEventDraft;
 });
 
-/**
- * The approval snapshot a run's re-activation stamps. Enforcement is the
- * session's in-memory state, so a process holding none of the run's grants
- * (a resume in a new process) first rebuilds them from the run's last
- * durable snapshot (`SessionApprovals.restoreRun`) rather than stamping an
- * empty snapshot over them. The durable snapshot is the run's own record,
- * the newer of its `approval.policy` and the one its `run.start` carried.
- */
-const reactivatedApprovalPolicy = (
+/** The grants a run's re-activation writes beside its `run.activate`
+ *  (`afterActivation`), or none when its rows already say them. */
+const reactivatedGrants = (
   session: SessionHandle,
   runId: RunId,
-): Effect.Effect<ApprovalPolicySnapshot, DatabaseReadFailed> =>
+): Effect.Effect<readonly SessionEventDraft[], DatabaseReadFailed> =>
   session.readRunRecords(runId).pipe(
     Effect.map((rows) => {
-      const latest = rows.findLast(
-        (row) => row.type === 'approval.policy' || row.type === 'run.start',
+      const snapshot = afterActivation(
+        SubscriptionRef.getUnsafe(session.view),
+        runId,
+        recordedGrants(rows),
       );
-      const durable =
-        latest?.type === 'approval.policy'
-          ? latest.snapshot
-          : latest?.approvalPolicy;
-      if (durable) session.approvals.restoreRun(runId, durable);
-      return session.approvalPolicySnapshotFor(runId);
+      return snapshot === null
+        ? []
+        : [
+            {
+              type: 'approval.policy' as const,
+              aggregateId: aggregateId('run', runId),
+              snapshot,
+            },
+          ];
     }),
   );
 
-/**
- * A resume's activation: its `run.activate` with the approval snapshot
- * enforcement holds, as one batch (no `run.start` re-stamps the snapshot).
- */
+/** A resume's activation: its `run.activate` and the grants it ends, as one
+ *  batch. */
 export const commitResumedActivation = (session: SessionHandle, runId: RunId) =>
-  reactivatedApprovalPolicy(session, runId).pipe(
-    Effect.flatMap((snapshot) => {
-      const target = aggregateId('run', runId);
-      return session.commit([
-        { type: 'run.activate', aggregateId: target },
-        { type: 'approval.policy', aggregateId: target, snapshot },
-      ]);
-    }),
+  reactivatedGrants(session, runId).pipe(
+    Effect.flatMap((grants) =>
+      session.commit([
+        { type: 'run.activate', aggregateId: aggregateId('run', runId) },
+        ...grants,
+      ]),
+    ),
   );
 
 interface RegisterRunOptions {
@@ -145,6 +148,8 @@ interface RegisterRunOptions {
   readonly descriptionBy?: 'model' | 'user';
   /** Where the run's history came from: a fork's source and cut. */
   readonly provenance?: RunProvenance;
+  /** The approval grants the run starts with, on its `run.start`. */
+  readonly grants?: ApprovalGrants;
 }
 
 /**
@@ -233,21 +238,12 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
         ...(options.parentCard !== undefined && {
           parentCard: options.parentCard,
         }),
-        approvalPolicy: session.approvalPolicySnapshotFor(runId),
+        approvalPolicy: options.grants ?? NO_APPROVAL_GRANTS,
       });
     }
     events.push(config);
     events.push({ type: 'run.activate', aggregateId: target });
-    // Enforcement is the session's in-memory policy; the row is its
-    // projection. A re-registration writes no `run.start`, so the
-    // activation re-stamps the snapshot enforcement now holds, rebuilt from
-    // the durable one when this process holds none of the run's grants.
-    if (prior)
-      events.push({
-        type: 'approval.policy',
-        aggregateId: target,
-        snapshot: yield* reactivatedApprovalPolicy(session, runId),
-      });
+    if (prior) events.push(...(yield* reactivatedGrants(session, runId)));
     if (options.description !== undefined)
       events.push({
         type: 'run.description',
@@ -397,7 +393,8 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
                 ? [haltedPositionRow(row, persisted)]
                 : [],
             ),
-            ...session.streamClosureFacts(runId),
+            // What the run left open closes with its end.
+            ...session.closureFacts(runId, persisted),
             {
               type: 'run.end' as const,
               aggregateId: target,

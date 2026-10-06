@@ -17,7 +17,7 @@ import type { executeCliRequest } from '@cli/runtime/executeCli';
 import { AgentError } from '@common/errors';
 import { enablePlugin } from '@common/plugins/pluginTrust';
 import { RUN_OUTCOME } from '@shared/schemas';
-import type { AggregateId, RunSnapshotPayload, RunId } from '@shared/schemas';
+import type { RunSnapshotPayload, RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { untrackRun } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -48,7 +48,6 @@ const mocks = vi.hoisted(() => ({
   prepareInteractivePrompt: vi.fn(),
   readCliRunOutcomeState: vi.fn(),
   deriveResumability: vi.fn(),
-  commitRunEndAfterArtifacts: vi.fn(),
   runAgent: vi.fn(),
   writeTextStderr: vi.fn(),
   writeTextStderrAndWait: vi.fn<() => Effect.Effect<void>>(() => Effect.void),
@@ -283,7 +282,7 @@ function stubHangingRun(published: Deferred.Deferred<LeaseOptions>): {
 /** Observe the session's terminal artifact drain. */
 async function spyOnArtifactFlush() {
   const flushSpy = vi
-    .spyOn(testDefaultSession(), 'settlePublications')
+    .spyOn(testDefaultSession(), 'settled', 'get')
     .mockReturnValue(Effect.void);
   return { flushSpy };
 }
@@ -337,18 +336,6 @@ async function stubExecuteCliDeps(): Promise<void> {
     kind: 'checkpoint',
     snapshot: checkpointSnapshot(),
   });
-  mocks.commitRunEndAfterArtifacts.mockResolvedValue(undefined);
-  // The CLI shutdown drain is the session's one exit choreography; the suite
-  // observes it through the same spy the deleted host-local shim fed.
-  const { SessionHandle } = await import('@agent/runtime/SessionHandle');
-  vi.spyOn(SessionHandle.prototype, 'commitRunEnd').mockImplementation(
-    function (this: unknown, runId) {
-      return Effect.tryPromise({
-        try: () => mocks.commitRunEndAfterArtifacts(this, runId),
-        catch: (error) => error as Error,
-      });
-    },
-  );
   mocks.finalizeRun.mockResolvedValue({ ok: true });
   mocks.runAgent.mockImplementation(async (_request, options) => {
     options.onRunClaimed?.('exec-1' as RunId);
@@ -576,32 +563,6 @@ describe('executeCliRequest', () => {
   );
 
   it.effect(
-    'preserves a run failure when the final artifact flush also fails',
-    () =>
-      Effect.gen(function* () {
-        const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-        const { flushSpy } = yield* Effect.promise(spyOnArtifactFlush);
-        const runError = new Error('provider transport failed');
-        const flushError = new Error('transcript flush failed');
-        mocks.runAgent.mockRejectedValueOnce(runError);
-        flushSpy.mockReturnValueOnce(Effect.fail(flushError));
-
-        const rejection = yield* Effect.flip(
-          executeCliRequest(baseRequest(), cliContext()),
-        );
-
-        expect(rejection).toEqual(
-          expect.objectContaining({
-            errors: [runError, flushError],
-            message:
-              'CLI run failed and its final artifacts could not be persisted',
-          }),
-        );
-        expect(mocks.close).toHaveBeenCalledOnce();
-      }),
-  );
-
-  it.effect(
     'does not repeat an error already presented before lifecycle startup',
     () =>
       Effect.gen(function* () {
@@ -633,10 +594,6 @@ describe('executeCliRequest', () => {
       );
       const { flushSpy } = yield* Effect.promise(spyOnArtifactFlush);
       const killSpy = vi.spyOn(testDefaultSession().runs, 'stop');
-      mocks.commitRunEndAfterArtifacts.mockImplementationOnce(
-        async (session, runId) =>
-          Effect.runPromise(session.settlePublications(runId)),
-      );
       let settleRecoveryWrite!: () => void;
       const recoveryWrite = new Promise<void>((resolve) => {
         settleRecoveryWrite = resolve;
@@ -671,7 +628,6 @@ describe('executeCliRequest', () => {
         detachActiveChildren: false,
         reason: 'shutdown',
       });
-      expect(mocks.commitRunEndAfterArtifacts).not.toHaveBeenCalled();
 
       mockCancelledOutcome();
       hangingRun.resolve(COMPLETED_RUN);
@@ -686,7 +642,6 @@ describe('executeCliRequest', () => {
       expect(shutdownResolved).toBe(false);
       settleRecoveryWrite();
       yield* Fiber.join(shutdown);
-      expect(mocks.commitRunEndAfterArtifacts).toHaveBeenCalledOnce();
       expect(flushSpy).toHaveBeenCalled();
       expect(mocks.finalizeRun).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -694,18 +649,8 @@ describe('executeCliRequest', () => {
           outcome: RUN_OUTCOME.CANCELLED,
         }),
       );
-      expect(mocks.finalizeRun.mock.invocationCallOrder[0]).toBeLessThan(
-        mocks.commitRunEndAfterArtifacts.mock.invocationCallOrder[0] ??
-          Number.POSITIVE_INFINITY,
-      );
       expect(onInterruptedRunFinalized).toHaveBeenCalledExactlyOnceWith(
         'exec-1',
-      );
-      expect(
-        mocks.commitRunEndAfterArtifacts.mock.invocationCallOrder[0],
-      ).toBeLessThan(
-        onInterruptedRunFinalized.mock.invocationCallOrder[0] ??
-          Number.POSITIVE_INFINITY,
       );
       expect(yield* Fiber.join(run)).toEqual({
         ok: true,
@@ -760,39 +705,6 @@ describe('executeCliRequest', () => {
         );
         expect(onInterruptedRunFinalized).not.toHaveBeenCalled();
       }),
-  );
-
-  it.live('forwards a failed shutdown drain to the runtime release hook', () =>
-    Effect.gen(function* () {
-      const { platform, executeCliRequest } = yield* Effect.promise(
-        loadExecuteCliOnInstalledHost,
-      );
-      const drainError = new Error('snapshot drain failed');
-      mocks.commitRunEndAfterArtifacts.mockRejectedValueOnce(drainError);
-      const published = yield* Deferred.make<LeaseOptions>();
-      const hangingRun = stubHangingRun(published);
-
-      const run = yield* Effect.forkChild(
-        executeCliRequest(baseRequest(), cliContext(), {}),
-      );
-      const leaseOptions = yield* Deferred.await(published);
-      yield* settle;
-      expect(leaseOptions).toBeDefined();
-      leaseOptions.onRunClaimed?.('exec-1' as RunId);
-      const shutdown = yield* Effect.forkChild(
-        Scope.close(platform.shutdownScope, Exit.void),
-        {
-          startImmediately: true,
-        },
-      );
-
-      expect(
-        yield* Effect.flip(leaseOptions.beforeRunEnd?.() ?? Effect.void),
-      ).toBe(drainError);
-      hangingRun.resolve(COMPLETED_RUN);
-      yield* Fiber.join(shutdown);
-      yield* Fiber.join(run);
-    }),
   );
 
   it.live(
@@ -873,7 +785,6 @@ describe('executeCliRequest', () => {
         yield* Fiber.join(run);
 
         expect(mocks.finalizeRun).not.toHaveBeenCalled();
-        expect(mocks.commitRunEndAfterArtifacts).not.toHaveBeenCalled();
       }),
   );
 
@@ -1067,50 +978,6 @@ describe('executeCliRequest', () => {
       }),
   );
 
-  it.live(
-    'does not report a shutdown drain that fails because the claim is already lost',
-    () =>
-      Effect.gen(function* () {
-        const { platform, executeCliRequest } = yield* Effect.promise(
-          loadExecuteCliOnInstalledHost,
-        );
-        // Imported dynamically (matching the module above) so the `instanceof`
-        // check in executeCli.ts sees the same module instance even after an
-        // earlier test's `vi.resetModules()` in this file.
-        const { DatabaseNotOwner } = yield* Effect.promise(
-          () => import('@shared/session/database'),
-        );
-        mocks.commitRunEndAfterArtifacts.mockRejectedValueOnce(
-          new DatabaseNotOwner({
-            // The fixture's run id is not a canonical one, so the key is
-            // written directly: only its type matters to the drain.
-            aggregateId: JSON.stringify(['run', 'exec-1']) as AggregateId,
-            ownerId: null,
-            closed: false,
-          }),
-        );
-        const published = yield* Deferred.make<LeaseOptions>();
-        const hangingRun = stubHangingRun(published);
-
-        const run = yield* Effect.forkChild(
-          executeCliRequest(baseRequest(), cliContext(), {}),
-        );
-        const leaseOptions = yield* Deferred.await(published);
-        yield* settle;
-        expect(leaseOptions).toBeDefined();
-        leaseOptions.onRunClaimed?.('exec-1' as RunId);
-        const shutdown = yield* Effect.forkChild(
-          Scope.close(platform.shutdownScope, Exit.void),
-          { startImmediately: true },
-        );
-
-        expect(yield* leaseOptions.beforeRunEnd?.() ?? Effect.void).toBe(false);
-        hangingRun.resolve(COMPLETED_RUN);
-        yield* Fiber.join(shutdown);
-        yield* Fiber.join(run);
-      }),
-  );
-
   it.live('closes the runtime host when shutdown finalization fails', () =>
     Effect.gen(function* () {
       const { platform, executeCliRequest } = yield* Effect.promise(
@@ -1214,7 +1081,7 @@ describe('executeCliRequest', () => {
         // The drain runs under the lease, before the launch settles: this is
         // the instant at which its failure notice used to claim the run's own
         // presentation and suppress the message below.
-        expect(yield* leaseOptions.beforeRunEnd?.() ?? Effect.void).toBe(true);
+        yield* leaseOptions.beforeRunEnd?.() ?? Effect.void;
         hangingRun.reject(
           new RuntimeAgentError('Error executing agent chat: boom'),
         );

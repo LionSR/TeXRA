@@ -807,9 +807,6 @@ describe('CLI run command, workflow agents', () => {
                     options.publishWorkflowOutput(run.result, [], () => true),
                   ),
                   Effect.as(run),
-                  Effect.ensuring(
-                    session.commitRunEnd(runId).pipe(Effect.orDie),
-                  ),
                   Effect.orDie,
                 ),
             ),

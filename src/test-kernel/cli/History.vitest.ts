@@ -239,7 +239,7 @@ async function publishRunFacts(
       },
     ]);
   }
-  await Effect.runPromise(session.settlePublications());
+  await Effect.runPromise(session.settled);
   return session;
 }
 
@@ -457,7 +457,7 @@ describe('CLI history runtime', () => {
         message: 'Root status only',
         messageType: MESSAGE_TYPES.PROGRESS_STATUS,
       });
-      yield* session.settlePublications();
+      yield* session.settled;
       mockNothingPersisted();
       // The run's own `run.start` plus the diagnostic-only transcript row
       // prove the run exists even though it yields no conversation.
@@ -723,7 +723,7 @@ describe('CLI history runtime', () => {
         Effect.gen(function* () {
           const id = 'aabbcc' as RunId;
           publishTestRunStart(session, id);
-          yield* session.settlePublications();
+          yield* session.settled;
           expect(yield* deleteCliHistory(session, { all: true })).toEqual({
             deleted: 'all',
             count: 1,

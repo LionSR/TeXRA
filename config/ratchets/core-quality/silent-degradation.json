@@ -1,6 +1,5 @@
 {
   "packages/harness/src/agent/runtime/runLaunchGuard.ts": 1,
-  "packages/harness/src/agent/runtime/SessionHandle.ts": 1,
   "packages/harness/src/controllers/session/storeAside.ts": 2,
   "packages/harness/src/controllers/session/storeSchema.ts": 3,
   "packages/harness/src/tools/mcp/mcpServer.ts": 2,

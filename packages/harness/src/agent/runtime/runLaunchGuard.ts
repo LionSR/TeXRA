@@ -1,6 +1,6 @@
 /**
  * The terminal a run's launch owns: the backstop `run.end` its lifecycle did
- * not write, the host's final artifacts, the run's ending and the claim. A
+ * not write, the host's final artifacts and the claim. A
  * fresh root (`runAgent`), a standalone resume and a detached child's handoff
  * end through {@link runWithLaunchGuard}; a child loop's own tail writes the
  * same backstop row.
@@ -59,21 +59,19 @@ export interface RunTerminalOwner {
   /** Fires once the launch holds the run's claim. */
   readonly onRunClaimed?: (runId: RunId) => void;
   /**
-   * Host-owned final state, persisted before the run's ending commits; true
-   * when the hook committed that ending itself (`commitRunEnd`). Its failure
-   * is one more failure reported, never a `false`: the ending still commits.
+   * Host-owned final state, persisted before the run's claim goes. Its
+   * failure is one more failure reported.
    */
   readonly beforeRunEnd?: (
     session: SessionHandle,
-  ) => Effect.Effect<boolean | void, Error>;
+  ) => Effect.Effect<void, Error>;
 }
 
 /**
  * The one terminal of a run's launch, in the exit-protocol pattern: a stop
  * lands before it or after it, never inside. It ends what the lifecycle did
  * not ({@link endRunOutsideLifecycle}: FAILED, or CANCELLED for a stop),
- * persists the host's final artifacts, commits the run's ending, then lets
- * the claim go.
+ * persists the host's final artifacts, then lets the claim go.
  *
  * With an `owner`, the launch owns the run for its whole life (a fresh root,
  * a standalone resume): the guard holds the run's claim around `operation`
@@ -111,12 +109,11 @@ export function runWithLaunchGuard<A, E, R>(
             ),
           );
         }
-        const artifacts = yield* Effect.exit(
-          Effect.suspend(() => owner?.beforeRunEnd?.(session) ?? Effect.void),
+        collect(
+          yield* Effect.exit(
+            Effect.suspend(() => owner?.beforeRunEnd?.(session) ?? Effect.void),
+          ),
         );
-        collect(artifacts);
-        if (Exit.isFailure(artifacts) || artifacts.value !== true)
-          collect(yield* Effect.exit(session.commitRunEnd(runId)));
         // A hold taken and let go at once releases the birth claim no driver
         // took; an owner's own hold is released by its scope.
         if (owner === undefined)

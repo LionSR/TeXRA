@@ -326,7 +326,7 @@ const openRun = Effect.fn('openRun')(function* (
 > {
   const runId = retryRunId();
   publishTestRunStart(session, runId);
-  yield* session.settlePublications().pipe(Effect.orDie);
+  yield* session.settled.pipe(Effect.orDie);
   yield* session.runHistory.acquire(runId);
   const state = yield* session.runHistory.appendBatch(runId, null, [
     appendRow(runId, [

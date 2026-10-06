@@ -66,7 +66,7 @@ function prepareBashApprovalPrompt(
     ...(cwd && { cwd }),
     allowBypass:
       request.grant === 'shell' &&
-      !session.approvals.bash.bypass.isBypassed(runId),
+      session.approvals.bypass(runId, 'bash') === null,
     runId,
   };
 }
@@ -86,10 +86,10 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
   );
   const { session, runId } = run;
   const granted = () =>
-    (request.grant === 'shell'
-      ? session.approvals.bash.bypass
-      : session.approvals.proposal
-    ).isBypassed(runId);
+    session.approvals.bypass(
+      runId,
+      request.grant === 'shell' ? 'bash' : 'superYolo',
+    ) !== null;
   const decision = decideTexraApproval({
     policy: session.approvalPolicy,
     promptRequired: approvalsEnabled,
@@ -121,7 +121,8 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
   // run's lane. Another tool's call re-reads its own grant there instead, so a
   // command bypass turned on while it waited does not answer it.
   const atDispatch = Effect.suspend(() => (granted() ? approved : prompt));
-  return yield* session.approvals.bash.enqueue(
+  return yield* session.approvals.enqueue(
+    'bash',
     runId,
     request.grant === 'shell'
       ? { prompt, bypassed: approved }

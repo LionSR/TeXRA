@@ -114,7 +114,11 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
   if (goalOf(call.run.session, runId)) {
     return yield* Effect.gen(function* () {
       const active = yield* retargetGoal(call.run.session, runId, objective);
-      setGoalSessionAutoApproval(call.run.session, runId, autoApprovalScope);
+      yield* setGoalSessionAutoApproval(
+        call.run.session,
+        runId,
+        autoApprovalScope,
+      );
       return executed(
         `The user approved a new plan while goal ${active.goalId} ` +
           `was already in flight. The goal has been retargeted to the ` +
@@ -155,7 +159,11 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
 
   return yield* Effect.gen(function* () {
     const goal = yield* startGoal(call.run.session, runId, objective);
-    setGoalSessionAutoApproval(call.run.session, runId, autoApprovalScope);
+    yield* setGoalSessionAutoApproval(
+      call.run.session,
+      runId,
+      autoApprovalScope,
+    );
     return executed(
       `The user approved this plan and started an autonomous goal ` +
         `(${goal.goalId}) toward its stopping condition.\n\n` +
@@ -319,7 +327,7 @@ const executePause = Effect.fn('PlanTool.executePause')(function* (
     );
   }
   const updated = (yield* pauseGoal(call.run.session, runId)) ?? goal;
-  setGoalSessionAutoApproval(call.run.session, runId, false);
+  yield* setGoalSessionAutoApproval(call.run.session, runId, false);
   return executed(
     `Goal paused: ${reason}\n\n${formatGoalView(updated, yield* Clock.currentTimeMillis)}`,
     'Goal paused.',
@@ -343,7 +351,7 @@ const executeComplete = Effect.fn('PlanTool.executeComplete')(function* (
   // The autonomous loop stops because the run's next row states that no goal
   // is in flight for the wait-node continuation check.
   yield* clearGoal(call.run.session, runId);
-  setGoalSessionAutoApproval(call.run.session, runId, false);
+  yield* setGoalSessionAutoApproval(call.run.session, runId, false);
   return executed(
     `Goal ${goal.goalId} marked complete.\n\n` +
       `Reason: ${reason}\n\n` +

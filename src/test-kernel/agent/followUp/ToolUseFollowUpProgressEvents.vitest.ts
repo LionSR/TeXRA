@@ -82,7 +82,7 @@ describe('tool-use follow-up progress events', () => {
         const run = createRecordingHost();
         const session = yield* trackSession();
         publishTestRunStart(session, runId);
-        yield* session.settlePublications();
+        yield* session.settled;
         const input = yield* session.followUps.open(runId);
 
         trackRunControls({ session });

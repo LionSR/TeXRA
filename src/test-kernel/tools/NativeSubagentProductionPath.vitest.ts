@@ -68,6 +68,7 @@ import {
   type RunId,
   type SessionEvent,
 } from '@shared/schemas';
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -101,7 +102,6 @@ import {
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
-import { configureDelegatedChildApprovals } from '@tools/approval';
 import { launchDetachedSubagent } from '@tools/delegation/subagentRun';
 import { readCompletedRunConversation } from '@transcript';
 import { generateRunId } from '@utils/core';
@@ -413,7 +413,7 @@ function waitForParentTurns(count: number): Effect.Effect<void> {
   return Effect.promise(() =>
     vi.waitFor(
       async () => {
-        await Effect.runPromise(session.settlePublications(PARENT_RUN_ID));
+        await Effect.runPromise(session.settled);
         const transcript = await Effect.runPromise(
           readCompletedRunConversation(PARENT_RUN_ID, session),
         );
@@ -460,13 +460,7 @@ const launchChild = (
     return yield* launchDetachedSubagent(parent, payload, {
       runId: generateRunId(),
       parentOffered: yield* offeredBy(parent.run),
-      inheritChildRunApprovals: (childRunId) =>
-        configureDelegatedChildApprovals(
-          childRunId,
-          PARENT_RUN_ID,
-          'inherit',
-          parent.run.session,
-        ),
+      grants: NO_APPROVAL_GRANTS,
     });
   });
 
@@ -650,7 +644,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       openTestDefaultSession({ roots: testWorkspaceRoots() }),
     );
     publishTestRunStart(session, OUTER_RUN_ID);
-    await Effect.runPromise(session.settlePublications());
+    await Effect.runPromise(session.settled);
     childId = undefined;
     // Every wake: a send that owed the run a resume.
     resumedRuns = [];
@@ -677,7 +671,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     interruptActiveRuns(session);
     if (parentFiber) await Effect.runPromise(Fiber.await(parentFiber));
     if (childId) await waitForClaimRelease(childId);
-    await Effect.runPromise(session.commitRunEnd(PARENT_RUN_ID));
     await Effect.runPromise(closeTestDefaultSession);
     vi.restoreAllMocks();
   });
@@ -733,7 +726,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           'Result A.',
         );
 
-        yield* session.settlePublications();
+        yield* session.settled;
         const archivedChild = yield* readCompletedRunConversation(
           runId,
           session,
@@ -910,7 +903,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         );
         yield* waitForParentTurns(2);
 
-        yield* session.settlePublications();
+        yield* session.settled;
         const archivedChild = yield* readCompletedRunConversation(
           runId,
           session,
@@ -994,7 +987,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         const childNodes = yield* Effect.promise(() =>
           vi.waitFor(
             async () => {
-              await Effect.runPromise(session.settlePublications());
+              await Effect.runPromise(session.settled);
               const archived = await Effect.runPromise(
                 readCompletedRunConversation(runId, session),
               );
@@ -1099,7 +1092,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             { session },
           );
         }
-        yield* session.settlePublications();
+        yield* session.settled;
         const afterReplay = JSON.stringify(
           yield* readCompletedRunConversation(PARENT_RUN_ID, session),
         );
@@ -1117,7 +1110,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           { session },
         );
         yield* waitForParentTurns(2);
-        yield* session.settlePublications();
+        yield* session.settled;
         const afterDistinct = JSON.stringify(
           yield* readCompletedRunConversation(PARENT_RUN_ID, session),
         );
@@ -1340,9 +1333,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         yield* Effect.promise(() =>
           vi.waitFor(
             async () => {
-              await Effect.runPromise(
-                session.settlePublications(PARENT_RUN_ID),
-              );
+              await Effect.runPromise(session.settled);
               const transcript = await Effect.runPromise(
                 readCompletedRunConversation(PARENT_RUN_ID, session),
               );

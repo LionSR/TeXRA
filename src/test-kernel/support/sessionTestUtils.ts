@@ -127,7 +127,7 @@ export function publishTestRunStart(
  */
 export const queuedFollowUps = (session: SessionHandle, runId: RunId) =>
   Effect.gen(function* () {
-    yield* session.settlePublications();
+    yield* session.settled;
     const view = yield* session.readView([runId]);
     return view.queuedFollowUps.get(runId) ?? [];
   });

@@ -51,14 +51,14 @@ describe('committed run removal', () => {
           const child = 'bb0002' as RunId;
           publishTestRunStart(session, parent);
           publishTestRunStart(session, child, { parent });
-          yield* session.settlePublications();
+          yield* session.settled;
           const handle = testRunHandle({
             runId: child,
             parent,
             agent: 'chat',
           });
           session.runs.track(handle);
-          yield* session.settlePublications();
+          yield* session.settled;
           yield* startGoal(
             session,
             parent,
@@ -89,7 +89,7 @@ describe('committed run removal', () => {
               thread: null,
             },
           ]);
-          yield* session.settlePublications();
+          yield* session.settled;
           expect(
             SubscriptionRef.getUnsafe(session.view).requests.map(
               (request) => request.requestId,
@@ -102,7 +102,7 @@ describe('committed run removal', () => {
               aggregateId: aggregateId('run', parent),
             },
           ]);
-          yield* session.settlePublications();
+          yield* session.settled;
           expect(SubscriptionRef.getUnsafe(session.view).requests).toEqual([]);
           expect(handle.isOwnedBy(parent)).toBe(false);
           expect(session.now()).toBe(before + 1);
@@ -205,7 +205,7 @@ describe('indexed background-shell cleanup', () => {
             },
           ]);
           publishTestRunStart(session, agent);
-          yield* session.settlePublications();
+          yield* session.settled;
           const rows = yield* Effect.all(
             [shell, active, notAShell, agent].map((id) =>
               Stream.runCollect(

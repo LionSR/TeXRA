@@ -38,7 +38,7 @@ import { RunHandle } from './RunHandle';
 import { Runs, type AgentRunServices } from './runRegistry';
 import { receiveTerminalFailure } from './terminalResultToast';
 import { buildTerminalRunEndResult, type RunEndResult } from './RunEndResult';
-import { RunArtifactDrainError, type SessionHandle } from './SessionHandle';
+import type { SessionHandle } from './SessionHandle';
 import type { AgentLaunchContext } from './AgentLaunchContext';
 
 const CHANNEL = 'agentRunLifecycle';
@@ -66,13 +66,8 @@ export interface RunLifecycleOptions {
 }
 
 interface FinalizeRunTerminalParams {
-  /**
-   * Owns the registry tracking the handle (untracked after the `run.end` row)
-   * and the display sidecars drained before the `run.end` row is written, so
-   * a waiter that opens the completed-run archive does not race the final
-   * transcript write and a failed drain is the run's terminal outcome rather
-   * than a warning behind a COMPLETED row.
-   */
+  /** Owns the registry tracking the handle (untracked after the `run.end`
+   *  row) and the publisher every row of the run goes through in order. */
   readonly session: SessionHandle;
   /** Live handle of the run this terminal ends. */
   readonly handle: RunHandle;
@@ -110,7 +105,7 @@ interface FinalizeRunTerminalParams {
 interface FinalizeRunTerminalResult {
   readonly event: ResultEvent;
   /** The `run.end` row write's failure, reported rather than thrown: the
-   *  terminal still drained, settled and untracked. A caller whose exit must
+   *  terminal still settled and untracked. A caller whose exit must
    *  attest the persistence (the child loop's cleanup) reads it here. */
   readonly persistFailure?: unknown;
 }
@@ -118,11 +113,12 @@ interface FinalizeRunTerminalResult {
 /**
  * The single owner of terminal run choreography, shared by the run lifecycle
  * below and agent-CLI child runs (`finalizeChildRun`), in this order: the
- * transcript stage end, the artifact drain, the `run.end` row (through
- * `finalizeRun`, its one writer), then registry untrack. The row is the
- * post-drain fact, so the stage closes first, inside the drain that attests
- * it. Each run has one caller of this: the lifecycle's masked terminal, or
- * the child loop's exit for a run with no lifecycle.
+ * transcript stage end, the `run.end` row (through `finalizeRun`, its one
+ * writer), then registry untrack. The publisher commits in order, so every
+ * row the run published lands before its end, and a refusal of one of them
+ * is the end's own write failure. Each run has one caller of this: the
+ * lifecycle's masked terminal, or the child loop's exit for a run with no
+ * lifecycle.
  */
 export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
   function* (
@@ -133,10 +129,8 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
     // Stop precedence, read once: a stop that reached the run before its exit
     // outranks the flow's report, on the stage here as on the row below.
     const stopped = params.stopped === true;
-    // Close the transcript stage before the drain: `stage.end` queues one
-    // more publication, which the drain must attest. The stage carries the
-    // run's own report, since the drain's verdict is not knowable until that
-    // publication settles; the `run.end` row is where the verdict lands.
+    // Close the transcript stage first: its `stage.end` is published ahead of
+    // the `run.end` row, and a refusal of it is that row's write failure.
     if (params.stage) {
       const stage = params.stage;
       const stageOutcome = stopped ? RUN_OUTCOME.CANCELLED : params.outcome;
@@ -152,47 +146,15 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
         ),
       );
     }
-    // The `run.end` row is the run's post-drain fact, and this is the drain:
-    // settling the ordered publisher for this run, so a failure here rolled
-    // back facts the run had queued — the stage closure above included — and
-    // decides the outcome rather than being logged past. The run id keeps that
-    // decision this run's own: a sibling's rolled-back fact is that run's.
-    const drainFailure = yield* session.settlePublications(handle.runId).pipe(
-      Effect.mapError(
-        (cause) => new RunArtifactDrainError({ runId: handle.runId, cause }),
-      ),
-      Effect.as(undefined),
-      Effect.catch((failure) => Effect.succeed(failure)),
-    );
-    if (drainFailure !== undefined)
-      yield* logLifecycleWarning(
-        'Failed to persist the facts this run queued',
-        {
-          runId: handle.runId,
-          error: drainFailure,
-        },
-      );
-    // The run's own report, unless the drain rolled its facts back.
-    const reported =
-      drainFailure === undefined ? params.outcome : RUN_OUTCOME.FAILED;
-    // A lost drain is marked on the row it decided, so every reader sees the
-    // run's queued facts are gone, not that the model run failed.
-    const reportedError =
-      drainFailure === undefined
-        ? params.error
-        : {
-            kind: 'artifact-drain' as const,
-            message: toErrorMessage(drainFailure),
-          };
+    // A trace row the store refused means the run's record is incomplete:
+    // the run failed, whatever it reported, and its row says why.
+    const lost = yield* session.lostRows(handle.runId);
+    const reported = lost === undefined ? params.outcome : RUN_OUTCOME.FAILED;
     // The `run.end` row written below is the run's terminal fact: the report
     // is only the verdict for a run no stop reached.
     const outcome = stopped ? RUN_OUTCOME.CANCELLED : reported;
-    // Error facts for an outcome that did not happen are not this run's,
-    // except a lost drain's marker, which rides a cancelled row too.
     const error =
-      drainFailure !== undefined || outcome === reported
-        ? reportedError
-        : undefined;
+      lost ?? (outcome === params.outcome ? params.error : undefined);
     const output = params.output ?? emptyRunEndOutput();
     // Write the terminal row BEFORE untrack, so the registry's terminal event
     // never precedes it; `finalizeRun` adds the usage totals from history.
@@ -243,7 +205,7 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
     };
   },
   // The run's terminal is atomic: the run's stop is its fiber's interruption,
-  // and one landing mid-drain must not strand the run with no `run.end` row.
+  // and one landing mid-way must not strand the run with no `run.end` row.
   // A stop lands either before this finalizer or after its row, never inside.
   Effect.uninterruptible,
 );

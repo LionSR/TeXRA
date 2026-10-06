@@ -207,10 +207,10 @@ async function ensureRunStart(
 ): Promise<void> {
   // A start already queued has yet to reach the view, and a second one is
   // refused by the substrate.
-  await Effect.runPromise(session.settlePublications());
+  await Effect.runPromise(session.settled);
   if (session.runView(runId) !== undefined) return;
   publishTestRunStart(session, runId);
-  await Effect.runPromise(session.settlePublications());
+  await Effect.runPromise(session.settled);
 }
 
 /**
@@ -232,7 +232,7 @@ export async function seedActiveRun(
         aggregateId: qualifyAggregateId('run', runId),
       },
     ]);
-    await Effect.runPromise(session.settlePublications());
+    await Effect.runPromise(session.settled);
   }
 }
 
@@ -252,7 +252,7 @@ export async function seedTerminalRun(
       output: emptyRunEndOutput(),
     },
   ]);
-  await Effect.runPromise(session.settlePublications());
+  await Effect.runPromise(session.settled);
 }
 
 /**

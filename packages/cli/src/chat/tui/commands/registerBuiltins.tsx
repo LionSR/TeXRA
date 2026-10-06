@@ -16,6 +16,7 @@ import {
   installPlugins,
   parsePluginOrigin,
 } from '@common/plugins/installedPlugins';
+import { runBypasses } from '@shared/approvalBypassKind';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
@@ -224,9 +225,7 @@ export function registerBuiltinSlashCommands(options: {
     const run = runViewOf(currentView(), selectedRunId.get());
     const runId = run?.actions.includes('grant') === true ? run.id : undefined;
     const bypasses =
-      runId === undefined
-        ? undefined
-        : currentView().policy.get(runId)?.bypasses;
+      runId === undefined ? undefined : runBypasses(currentView(), runId);
     const grants = RUN_GRANT_ORDER.filter((kind) => bypasses?.[kind] === true);
     return (
       <ApprovalPolicyForm

@@ -52,7 +52,7 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
-import { configureDelegatedChildApprovals } from '@tools/approval';
+import { delegatedChildGrants } from '@tools/approval';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { errorResult, executed } from '@tools/core/result';
@@ -653,14 +653,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   if (taskScript === null)
     return errorResult(`'${approved.agent}' has no document task.`);
   const childApproval = decided.approvalMeta.childApproval ?? 'inherit';
-  const inherit = (childRunId: RunId): void => {
-    configureDelegatedChildApprovals(
-      childRunId,
-      parentRunId,
-      childApproval,
-      session,
-    );
-  };
+  const grants = delegatedChildGrants(childApproval);
   const configPayload = {
     ...approved,
     ...(outputSchema !== undefined && { outputSchema }),
@@ -674,7 +667,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     const receipt = yield* launchDetachedSubagent(call, configPayload, {
       runId,
       parentOffered,
-      inheritChildRunApprovals: inherit,
+      grants,
       approvalMeta: decided.approvalMeta,
     });
     // What a script's `await` gets for a child sent to the background.
@@ -692,7 +685,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
         parentOffered,
         parentCard: call.logId,
         parentCallId: call.callId,
-        onRunResolved: inherit,
+        grants,
         notify,
       }),
     ),

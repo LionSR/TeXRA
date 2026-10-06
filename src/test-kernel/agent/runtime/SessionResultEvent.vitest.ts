@@ -10,17 +10,12 @@ import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import { aggregateId, RUN_OUTCOME, type RunId } from '@shared/schemas';
-import { LaunchSurfaceSchema } from '@shared/session/surface';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   fakeProcessServices,
   setupPlatform,
 } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import {
-  launchApprovalOptions,
-  launchOnRun,
-} from '@texra/controllers/mainView/backend/MainViewRunLaunchController';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
 let counter = 0;
@@ -71,7 +66,7 @@ function explodedRun(): Effect.Effect<never, Error> {
 /** The run's committed `run.end` rows, as results. */
 const resultsOf = (ctx: AgentLaunchContext) =>
   Effect.gen(function* () {
-    yield* ctx.session.settlePublications();
+    yield* ctx.session.settled;
     const rows = yield* Stream.runCollect(
       ctx.session.events.aggregate(aggregateId('run', ctx.runId), 0),
     );
@@ -133,36 +128,6 @@ describe('terminal result event', () => {
       );
       expect(result).toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
       yield* expectSingleResult(ctx, { outcome: 'completed' });
-    }),
-  );
-
-  // The launch-time approval choice rides on onRun: it must be in force
-  // before the run's first step, or an approval could open ahead of it.
-  it.effect('an Auto-approve launch is bypassed before the run starts', () =>
-    Effect.gen(function* () {
-      const { ctx } = setupResultCase();
-      const { approvals } = ctx.session;
-      const launch = LaunchSurfaceSchema.parse({ approval: 'autoApprove' });
-      let atFirstStep: ReturnType<typeof approvals.bypassesFor> | undefined;
-      yield* runLifecycle(
-        ctx,
-        () =>
-          Effect.sync(() => {
-            atFirstStep = approvals.bypassesFor(ctx.runId);
-            return completedRun(ctx);
-          }),
-        {
-          onRun: launchOnRun(
-            approvals,
-            launchApprovalOptions({ kind: 'launch', launch, instruction: '' }),
-          ),
-        },
-      );
-      expect(atFirstStep).toEqual({
-        bash: true,
-        toolEdit: true,
-        superYolo: true,
-      });
     }),
   );
 

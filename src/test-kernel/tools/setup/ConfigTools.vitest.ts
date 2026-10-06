@@ -121,7 +121,7 @@ describe('ConfigTools — update_config approval', () => {
       );
       const runId = generateRunId();
       publishTestRunStart(session, runId);
-      yield* session.settlePublications();
+      yield* session.settled;
       const requests = yield* Effect.acquireRelease(
         Effect.sync(() =>
           autoDecideRequests(session, () => ({ action: 'reject' })),

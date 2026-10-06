@@ -11,7 +11,8 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
+import { type ApprovalBypassKind } from '@shared/approvalBypassKind';
+import { resolveBypass } from '@shared/approvalBypassKind';
 import { goalStateOf, type GoalState } from '@shared/plugins/goal';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import type { TeXRAIconName } from '@shared/iconNames';
@@ -418,9 +419,9 @@ export class RunHeader extends LitElement {
     </div>`;
   }
 
-  /** Whether a run grant is on, per the run's policy snapshot. */
+  /** Whether a run grant is on, its own or its ancestry's. */
   private grantActive(run: RunView, kind: ApprovalBypassKind): boolean {
-    return this.view?.policy.get(run.id)?.bypasses[kind] === true;
+    return this.view != null && resolveBypass(this.view, run.id, kind) !== null;
   }
 
   /** Revoke one run grant; granting is the approval card's. */

@@ -4,7 +4,7 @@ import { Effect, type Fiber } from 'effect';
 import type { AgentTrace } from '@agent/trace';
 import { RunHandle, type RunFacts } from '@agent/runtime/RunHandle';
 import { RunRegistry, type RunRegistryInit } from '@agent/runtime/runRegistry';
-import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import type { RunId, RunIdentity } from '@shared/schemas';
 import { testPinPlugins } from './testPluginServices';
 import { testRuntime } from './testProcessRuntime';
@@ -42,7 +42,7 @@ export function testRunRegistry(): RunRegistry {
   const registry: RunRegistry = new RunRegistry({
     runView: () => undefined,
     commit: () => Effect.void,
-    approvals: createSessionApprovals(),
+    grantsOnDetach: () => NO_APPROVAL_GRANTS,
     finalizeRun: (input) =>
       Effect.succeed({ ok: true, outcome: input.outcome }),
     holdRunClaim: () => Effect.void,

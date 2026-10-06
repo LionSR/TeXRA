@@ -1,6 +1,7 @@
 import { it } from '@effect/vitest';
 import { Cause, Effect, Exit, Layer } from 'effect';
 import { assert, beforeEach, describe, expect, vi } from 'vitest';
+import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
@@ -32,6 +33,7 @@ import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
+import { runBypasses } from '@shared/approvalBypassKind';
 import { RUN_OUTCOME, RUN_PHASE, type RunId } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
@@ -282,7 +284,7 @@ describe('AgentLaunchContext', () => {
         yield* session.interactions.use(recording.interactions);
         yield* Effect.addFinalizer(() => closeSessionOf(session));
         publishTestRunStart(session, EXECUTION_ID);
-        yield* session.settlePublications();
+        yield* session.settled;
         mocks.resolve.mockReturnValueOnce(
           Effect.succeed({
             path: '/agents/chat.yaml',
@@ -410,11 +412,12 @@ describe('AgentLaunchContext', () => {
         });
         // A human approves edits for the session; the run's goal then
         // auto-approves its commands.
-        session.approvals.toolEdit.bypass.setBypass(EXECUTION_ID, true);
-        setGoalSessionAutoApproval(session, EXECUTION_ID, 'commands');
-        yield* session.settlePublications();
-        // A new process: nothing of the run's approval state is in memory.
-        session.approvals.clearAll();
+        yield* session.approvals.change(
+          EXECUTION_ID,
+          humanGrant(['toolEdit'], true),
+        );
+        yield* setGoalSessionAutoApproval(session, EXECUTION_ID, 'commands');
+        yield* session.settled;
 
         definitionMocks();
         yield* buildAgentLaunchContext({
@@ -424,15 +427,17 @@ describe('AgentLaunchContext', () => {
           resumed: true,
         });
 
-        const restored = { bash: false, toolEdit: true, superYolo: false };
-        expect(session.approvals.bypassesFor(EXECUTION_ID)).toEqual(restored);
-        expect((yield* session.readView([])).policy.get(EXECUTION_ID)).toEqual(
-          expect.objectContaining({
-            bypasses: restored,
-            own: { toolEdit: 'on' },
-            goal: [],
-          }),
-        );
+        // The human's grant stands; the goal's ends with the activation.
+        const view = yield* session.readView([]);
+        expect(runBypasses(view, EXECUTION_ID)).toEqual({
+          bash: false,
+          toolEdit: true,
+          superYolo: false,
+        });
+        expect(view.policy.get(EXECUTION_ID)).toEqual({
+          own: { toolEdit: 'on' },
+          goal: [],
+        });
       }),
   );
 
@@ -449,7 +454,7 @@ describe('AgentLaunchContext', () => {
       });
       yield* Effect.addFinalizer(() => closeSessionOf(session));
       publishTestRunStart(session, EXECUTION_ID);
-      yield* session.settlePublications();
+      yield* session.settled;
       const terminalEvents = recordSessionEvents(session);
       const stage = noopTrace.openStage('Run');
       const endStage = vi.spyOn(stage, 'end').mockImplementation(() => {

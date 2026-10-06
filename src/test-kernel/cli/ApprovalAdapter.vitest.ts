@@ -90,7 +90,7 @@ function ensureRun(runId: RunId) {
     if (started.has(runId)) return;
     started.add(runId);
     publishTestRunStart(testDefaultSession(), runId);
-    yield* testDefaultSession().settlePublications();
+    yield* testDefaultSession().settled;
   });
 }
 

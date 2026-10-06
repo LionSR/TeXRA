@@ -176,7 +176,7 @@ const projectionOver = Effect.fnUntraced(function* (session: SessionHandle) {
   const publish = async (source: Source): Promise<void> => {
     if ('run' in source) session.publishRunEvent(runId, source.run);
     else session.publish([source.draft]);
-    await Effect.runPromise(session.settlePublications());
+    await Effect.runPromise(session.settled);
   };
   const all = (): CliNdjsonRecord[] =>
     vi.mocked(writeRecord).mock.calls.map(([record]) => record);
@@ -196,7 +196,7 @@ describe('attachCliSessionProgressProjection', () => {
         publishTestRunStart(session, childRunId, { parent: runId });
         // The projection attaches at the current ordinal: settle the seeded
         // existence facts first so only what the test publishes is projected.
-        yield* session.settlePublications();
+        yield* session.settled;
         const { records, publish, detach } = yield* projectionOver(session);
         yield* Effect.addFinalizer(() => detach);
         for (const { source } of PASS_THROUGH_CASES) {
@@ -218,7 +218,7 @@ describe('attachCliSessionProgressProjection', () => {
       Effect.gen(function* () {
         const session = yield* createTestSession();
         publishTestRunStart(session, runId);
-        yield* session.settlePublications();
+        yield* session.settled;
         const { records, publish, detach } = yield* projectionOver(session);
         yield* Effect.addFinalizer(() => detach);
         yield* Effect.promise(() =>
@@ -306,7 +306,7 @@ describe('attachCliSessionProgressProjection', () => {
             output: { response: '', files: [] },
           },
         ]);
-        yield* session.settlePublications();
+        yield* session.settled;
 
         const { all, publish, detach } = yield* projectionOver(session);
         yield* Effect.addFinalizer(() => detach);
@@ -338,7 +338,7 @@ describe('attachCliSessionProgressProjection', () => {
       Effect.gen(function* () {
         const session = yield* createTestSession();
         publishTestRunStart(session, runId);
-        yield* session.settlePublications();
+        yield* session.settled;
         const { all, publish, detach } = yield* projectionOver(session);
         yield* Effect.addFinalizer(() => detach);
         const childLists = () =>
@@ -425,7 +425,7 @@ describe('attachCliSessionProgressProjection', () => {
     Effect.gen(function* () {
       const session = yield* createTestSession();
       publishTestRunStart(session, runId);
-      yield* session.settlePublications();
+      yield* session.settled;
       const { writeRecord, publish, detach } = yield* projectionOver(session);
       yield* Effect.promise(() =>
         publish({
@@ -440,7 +440,7 @@ describe('attachCliSessionProgressProjection', () => {
       expect(writeRecord).toHaveBeenCalledTimes(1);
 
       yield* detach;
-      yield* session.settlePublications();
+      yield* session.settled;
       yield* Effect.promise(() =>
         publish({
           draft: {
