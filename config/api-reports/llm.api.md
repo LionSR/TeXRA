@@ -2,7 +2,7 @@
 
 Generated from `packages/llm/src/index.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. A diff here is a change to the public surface.
 
-Exports: 81
+Exports: 79
 
 - `acceptedEfforts` — `function acceptedEfforts: (config: Pick<ModelConfig, "reasoning">) => ReasoningEffort[]`
 - `API_KEY_ENV_NAMES` — `const API_KEY_ENV_NAMES: readonly string[]`
