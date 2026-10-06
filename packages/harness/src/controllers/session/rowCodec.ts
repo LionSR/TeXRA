@@ -32,6 +32,7 @@ import {
   aggregateTarget,
   CURRENT_VALUE_VERSION,
   DISPLAY_EVENT_TYPES,
+  RETIRED_ROW_KINDS,
   ROW_KINDS,
   SessionEventDraftSchema,
   SessionEventSchema,
@@ -230,9 +231,9 @@ interface LeftOut {
 
 /**
  * A selected row as its event, or {@link LeftOut}. A row of a kind or
- * version this build does not read fails `DatabaseStoreNewer`: another build
- * wrote it after this one passed the store gate. A row that does not decode
- * fails `DatabaseRowCorrupt` naming it.
+ * newer version fails `DatabaseStoreNewer` (another build wrote it after
+ * this one passed the store gate); one that does not decode, or of a kind
+ * this build lacks, fails `DatabaseRowCorrupt` naming it.
  */
 export function decodeRow(
   input: SqlRow,
@@ -241,14 +242,6 @@ export function decodeRow(
   DatabaseStoreNewer | DatabaseRowCorrupt
 > {
   const row = RowSchema.parse(input);
-  if (!hasKind(row.type))
-    return Result.fail(
-      new DatabaseStoreNewer({ type: row.type, version: row.version ?? 0 }),
-    );
-  // A projected row has no version: this build's projector wrote it.
-  const version = row.version ?? ROW_KINDS[row.type].version;
-  if (version > ROW_KINDS[row.type].version)
-    return Result.fail(new DatabaseStoreNewer({ type: row.type, version }));
   const corrupt = (error: unknown, type = row.type) =>
     Result.fail(
       new DatabaseRowCorrupt({
@@ -257,6 +250,13 @@ export function decodeRow(
         detail: causeOf(error),
       }),
     );
+  // A kind this build retired, or one a newer build wrote since the gate
+  // passed (the next write refuses the store): its run's reads fail.
+  if (!hasKind(row.type)) return corrupt('a kind this build does not read');
+  // A projected row has no version: this build's projector wrote it.
+  const version = row.version ?? ROW_KINDS[row.type].version;
+  if (version > ROW_KINDS[row.type].version)
+    return Result.fail(new DatabaseStoreNewer({ type: row.type, version }));
   let data: Record<string, JsonValue>;
   try {
     data = JsonObjectSchema.parse(parseData(row));
@@ -304,13 +304,11 @@ export function decodeRow(
 
 /**
  * One connection's reader of selected rows, answering their events with
- * each tool card's output projected (`settleCards`). A row of a kind or
- * version this build does not read fails the read: the store is not this
- * build's. A row that does not decode fails a run history read (`whole`), so
- * no run is folded from part of its rows; a wide read (the tail, the
- * listing, the projections) leaves it out with one warning per connection,
- * so one damaged row never costs the session. A plugin kind whose plugin
- * this build lacks is left out with one warning.
+ * tool cards' output projected (`settleCards`). A newer row fails the read.
+ * A row that does not decode fails a run history read (`whole`), so no run
+ * folds from part of its rows; a wide read (tail, listing, projections)
+ * leaves it out with one warning, so one damaged row never costs the
+ * session. An absent plugin's kind is left out with one warning.
  */
 export function rowReader(
   path: string,
@@ -407,6 +405,7 @@ function readableVersion(type: string): number {
     return (
       PLUGIN_ARMS.get(type.slice('plugin.fact/'.length))?.version ?? Infinity
     );
+  if (RETIRED_ROW_KINDS.has(type)) return Infinity;
   return hasKind(type) ? ROW_KINDS[type].version : 0;
 }
 
