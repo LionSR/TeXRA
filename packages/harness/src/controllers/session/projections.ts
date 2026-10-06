@@ -29,6 +29,7 @@ import {
   TokenUsageStatsSchema,
   type AggregateId,
   type ExtendedTokenUsageStats,
+  type JsonValue,
   type SessionEvent,
   type TokenUsageStats,
 } from '@shared/schemas';
@@ -343,3 +344,42 @@ export const CATCH_UP = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
   WHERE e.type IN (SELECT value FROM json_each(?))
     AND e."commit" > ? AND e."commit" <= ?
   ORDER BY e."commit" LIMIT 1000`;
+
+/**
+ * The read-time projection of a tool card's output (§10): a `tool.end` on a
+ * run history stores no `result`; its output is the `tool.result` committed
+ * just before it in the same batch (bar the card's `tool.start`). The card
+ * keeps its `files`; the fold keeps the name and input it opened with.
+ */
+export function settleCards(
+  events: readonly SessionEvent[],
+): readonly SessionEvent[] {
+  const settled = new Map<
+    AggregateId,
+    SessionEvent & { type: 'tool.result' }
+  >();
+  return events.map((event) => {
+    if (event.type === 'tool.result') settled.set(event.aggregateId, event);
+    else if (event.type !== 'tool.start') {
+      const settlement = settled.get(event.aggregateId);
+      settled.delete(event.aggregateId);
+      if (event.type === 'tool.end' && event.result === undefined && settlement)
+        return { ...event, result: cardResult(settlement, event.files) };
+    }
+    return event;
+  });
+}
+
+function cardResult(
+  { payload }: SessionEvent & { type: 'tool.result' },
+  files: Extract<SessionEvent, { type: 'tool.end' }>['files'],
+): JsonValue {
+  const { status: _status, ...rest } = payload.result;
+  const output = { ...rest, ...(files?.length ? { editedFiles: files } : {}) };
+  return JSON.parse(
+    JSON.stringify({
+      ...(Object.keys(output).length > 0 ? { output } : {}),
+      ...(files?.length ? { files } : {}),
+    }),
+  );
+}

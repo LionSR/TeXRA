@@ -95,6 +95,7 @@ import {
   type SessionEventDraft,
   type InquiryThreadSummary,
 } from '@shared/schemas';
+import { RUN_DAMAGED_MESSAGE } from '@shared/runs/runStatusDisplay';
 import { Database, GlobalDatabase } from '@shared/session/database';
 import { runActions } from '@shared/session/runActions';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -1465,6 +1466,7 @@ describe('the C1 event table and the C6 publisher', () => {
           );
           expect(failure._tag).toBe('DatabaseOpenFailed');
           expect(failure.message).toContain('is not a TeXRA store');
+          expect(failure.message).toContain('application id');
           const stored = reader(storage);
           try {
             expect(stored.prepare('SELECT body FROM notes').all()).toEqual([
@@ -1587,7 +1589,7 @@ describe('the C1 event table and the C6 publisher', () => {
   );
 
   it.effect(
-    'fails a run history read of a row that does not decode, and the session still opens',
+    'fails a run history read of a row that does not decode, and the session still opens and lists it damaged',
     () => {
       const storage = workspace();
       return Effect.gen(function* () {
@@ -1609,13 +1611,20 @@ describe('the C1 event table and the C6 publisher', () => {
             cause: { _tag: 'DatabaseRowCorrupt', type: 'run.start', commit: 1 },
           });
         }).pipe(Effect.provide(substrate(storage)));
-        // A fresh session over the store opens, and the healthy run lists.
+        // A fresh session over the store opens: the healthy run lists, and
+        // the damaged one lists too, shown damaged and read-only.
         yield* Effect.gen(function* () {
           const view = yield* SessionViewService;
-          yield* settle(view.ref, (v) => v.runs.has(OLDER));
-          expect((yield* SubscriptionRef.get(view.ref)).runs.has(RUN)).toBe(
-            false,
+          yield* settle(
+            view.ref,
+            (v) => v.runs.has(OLDER) && v.runs.get(RUN)?.readOnly === true,
           );
+          expect(
+            (yield* SubscriptionRef.get(view.ref)).runs.get(RUN),
+          ).toMatchObject({
+            readOnly: true,
+            statusDetail: RUN_DAMAGED_MESSAGE,
+          });
         }).pipe(
           Effect.provide(graph([], substrate(storage).pipe(Layer.orDie))),
           Effect.scoped,

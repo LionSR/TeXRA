@@ -25,7 +25,7 @@
   "packages/harness/src/agent/storage/runLifecycle.ts": 406,
   "packages/harness/src/agent/workspaceAgents/WorkspaceAgentsController.ts": 436,
   "packages/harness/src/controllers/session/Database.ts": 1281,
-  "packages/harness/src/controllers/session/rowCodec.ts": 429,
+  "packages/harness/src/controllers/session/rowCodec.ts": 420,
   "packages/harness/src/controllers/session/sessionLayer.ts": 1106,
   "packages/harness/src/controllers/session/SessionRequests.ts": 547,
   "packages/harness/src/controllers/session/storeSchema.ts": 412,
