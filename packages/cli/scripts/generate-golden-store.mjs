@@ -164,6 +164,8 @@ function scenario(root) {
     ),
     ...Object.fromEntries(PROVIDER_KEYS.map((name) => [name, ''])),
     OPENAI_API_KEY: FAKE_KEY,
+    // The helper model's provider: a run's session label (`run.description`).
+    DEEPSEEK_API_KEY: FAKE_KEY,
     HOME: home,
     USERPROFILE: home,
     APPDATA: path.join(home, 'AppData/Roaming'),

@@ -107,6 +107,12 @@ function goldenTurn(
   // The golden chat's `/compact`: its summary replaces the history.
   if (system === COMPACTION_SYSTEM_PROMPT)
     return Effect.succeed(text('The golden chat so far.'));
+  // The golden parent's session label: its `run.description`.
+  if (
+    system.startsWith('Generate a short TeXRA session label') &&
+    said.includes('<agent>golden_parent</agent>')
+  )
+    return Effect.succeed(text('Working through the golden parent task'));
   // A model call held until its release file appears (the service checks).
   if (system.includes('GOLDEN-PARK'))
     return gate('golden-park.release').pipe(
