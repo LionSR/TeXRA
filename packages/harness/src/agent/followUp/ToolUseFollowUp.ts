@@ -20,6 +20,8 @@ import type { InboxItem } from './Inbox';
  *   no longer accepts). A history listing advertises a run from the file
  *   alone, so this is the refusal that cohort meets — never `finished`, which
  *   would claim the run ended normally.
+ * - `read_failed`: the run's claim or state could not be read just now
+ *   (a busy or failing store), which says nothing about the run itself.
  * - `owned_elsewhere`: another TeXRA process holds the run.
  * - `not_resumable`: the run has no running loop here and the submission was
  *   refused (a terminalized queue, a disposed session, or a message that
@@ -30,6 +32,7 @@ import type { InboxItem } from './Inbox';
 export type FollowUpFailureReason =
   | 'finished'
   | 'unusable_checkpoint'
+  | 'read_failed'
   | 'owned_elsewhere'
   | 'not_resumable'
   | 'blocked';
@@ -64,6 +67,8 @@ const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
   finished: 'This run has finished. Start a new agent task to continue.',
   unusable_checkpoint:
     "This run's saved state could not be loaded, so it cannot be continued. Delete it from history and start a new agent task.",
+  read_failed:
+    "TeXRA couldn't read this task right now. Try again in a moment.",
   owned_elsewhere:
     'This run is live in another TeXRA window. Send the message there.',
   not_resumable:
@@ -253,7 +258,7 @@ function admitQueued(
 const REFUSAL_REASON = {
   held_elsewhere: 'owned_elsewhere',
   finished: 'finished',
-  unreadable: 'unusable_checkpoint',
+  unreadable: 'read_failed',
 } as const satisfies Record<string, FollowUpFailureReason>;
 
 export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
