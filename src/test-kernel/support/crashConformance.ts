@@ -41,6 +41,10 @@
  *   ended cleanly before the crash;
  * - a person is asked whether a command ran that the crash stopped before
  *   its body started (before its approval);
+ * - approvals durable: a crash between a request and its answer leaves it
+ *   pending, and the resume's answer is to that same request; a crash
+ *   between the answer and the body it admits honours that answer. Either
+ *   way the attempt never asks again;
  * - invariant I9: a bypass turned off is acknowledged before its row is durable (a
  *   resume would restore it on).
  */
@@ -313,13 +317,16 @@ function crashAt(clean: string, storage: string, n: number): void {
   }
 }
 
-/** Approve every request the runs open, those the prefix left pending
- *  included. */
-const approveAll = (session: SessionHandle) =>
+/** Approve every request the runs open above commit `after`. */
+const approveAll = (session: SessionHandle, after = 0) =>
   Stream.runForEach(
     session.log
       .tail(0)
-      .pipe(Stream.filter((event) => event.type === 'request.opened')),
+      .pipe(
+        Stream.filter(
+          (event) => event.type === 'request.opened' && event.commit > after,
+        ),
+      ),
     (event) => {
       if (event.type !== 'request.opened') return Effect.void;
       const target = aggregateTarget(event.aggregateId);
@@ -471,13 +478,40 @@ function violations(
       (row) =>
         (payload(row).invocation as { invocationId: string }).invocationId,
     );
-  const boundTo = new Map(
-    final
-      .filter((row) => row.type === 'tool.binding')
-      .map((row) => [
-        String(payload(row).requestId),
-        String(payload(row).callId),
-      ]),
+  // A call's requests carry ids its attempt derives,
+  // `<responseId>/<callId>:<attempt>:<ordinal>`: the attempt is the id
+  // without its ordinal.
+  const requestIdOf = (row: Row) => String(json(row).requestId);
+  const attemptOfRequest = (requestId: string) =>
+    requestId.replace(/:\d+$/, '');
+  const callOfRequest = (requestId: string) =>
+    /^[^/]+\/(.+):\d+:\d+$/.exec(requestId)?.[1];
+  // A crash between a request and its answer, or between the answer and
+  // the body it admits, loses no person's decision: the resume joins the
+  // request the attempt opened, pending or answered, and never asks that
+  // attempt again, nor retires what it left pending.
+  const askedBefore = new Set(
+    prefix
+      .filter((row) => row.type === 'request.opened')
+      .map((row) => attemptOfRequest(requestIdOf(row))),
+  );
+  const reasked = final.filter(
+    (row) =>
+      row.commit > n &&
+      row.type === 'request.opened' &&
+      askedBefore.has(attemptOfRequest(requestIdOf(row))),
+  );
+  const decidedIn = (rows: readonly Row[], requestId: string) =>
+    rows.find(
+      (row) => row.type === 'request.decided' && requestIdOf(row) === requestId,
+    );
+  const pendingLost = prefix.filter(
+    (row) =>
+      row.type === 'request.opened' &&
+      decidedIn(prefix, requestIdOf(row)) === undefined &&
+      decidedIn(final, requestIdOf(row))?.data.includes(
+        '"action":"approve"',
+      ) !== true,
   );
   const isCommand = (callId: unknown) =>
     /validation-(bash-\d+|script-\d+\/1)$/.test(String(callId));
@@ -499,7 +533,7 @@ function violations(
       readonly decision: { readonly action: string };
     };
     return decided.decision.action === 'approve'
-      ? [{ callId: boundTo.get(decided.requestId), commit: row.commit }]
+      ? [{ callId: callOfRequest(decided.requestId), commit: row.commit }]
       : [];
   });
   const unapproved = resumed.filter(
@@ -602,6 +636,12 @@ function violations(
       : 'an invocation was answered twice',
     reruns.length === 0 ? null : 'an unfinished command ran again',
     unapproved.length === 0 ? null : 'a command ran before its approval',
+    reasked.length === 0
+      ? null
+      : 'a call attempt that asked before the crash asked again',
+    pendingLost.length === 0
+      ? null
+      : 'a request the crash left pending was not answered after it',
     relaunches.length === 0 ? null : 'a child launched again',
     children.every((child) =>
       final.some((row) => row.run === child.run && row.type === 'run.end'),
@@ -699,7 +739,33 @@ const resumeFrom = (
         const session = yield* openTestDefaultSession({
           roots: { ...roots, storage },
         });
-        yield* approveAll(session);
+        yield* approveAll(session, n);
+        // What the prefix left pending is answered a beat after the resume
+        // starts: a resume that retired it instead does so as it loads the
+        // run, so the answer then finds it cancelled.
+        const pending = prefix.filter(
+          (row) =>
+            row.type === 'request.opened' &&
+            !prefix.some(
+              (decided) =>
+                decided.type === 'request.decided' &&
+                json(decided).requestId === json(row).requestId,
+            ),
+        );
+        yield* Effect.sleep('1 second').pipe(
+          Effect.andThen(
+            Effect.forEach(pending, (row) =>
+              session.requests
+                // cast: the store's logical id of a run aggregate is its RunId.
+                .decide(row.run as RunId, String(json(row).requestId), {
+                  action: 'approve',
+                })
+                .pipe(Effect.ignore),
+            ),
+          ),
+          Effect.when(Effect.succeed(pending.length > 0)),
+          Effect.forkScoped,
+        );
         if (!prefix.some((row) => row.run === root && row.type === 'run.end')) {
           const resumed = yield* withProcessServices(
             testRuntime(),
@@ -847,6 +913,16 @@ export function crashConformanceSuite(plugins: string): void {
               'request.decided',
             ].filter((type) => !cleanRows.some((row) => row.type === type)),
           ).toEqual([]);
+          // The script's `agent()` approval, which its calls share, is the
+          // script call's (attempt 0): every crash point while it is pending
+          // must resume to that same card, never a second one.
+          expect(
+            cleanRows.some(
+              (row) =>
+                row.type === 'request.opened' &&
+                /:0:\d+$/.test(String(json(row).requestId)),
+            ),
+          ).toBe(true);
           expect(
             violations([], cleanRows, 0, root, expected, ['batch', 'script']),
           ).toEqual([]);

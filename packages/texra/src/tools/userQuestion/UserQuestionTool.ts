@@ -42,7 +42,7 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
     run: { runId },
     requests,
   } = yield* requireToolRun('ask_user_question');
-  const requestId = requests.nextId('user-question');
+  const requestId = requests.nextId('userQuestion');
 
   yield* Effect.logInfo('User question requested').pipe(
     Effect.annotateLogs({

@@ -49,12 +49,7 @@ import type {
 } from '@agent/runtime/ToolServices';
 import { makeRunCell } from '@agent/runtime/loop/runProgram';
 import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
-import {
-  appendRow,
-  bindingRow,
-  positionRow,
-  rowAggregate,
-} from '@agent/runtime/loop/rows';
+import { appendRow, positionRow, rowAggregate } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
@@ -826,12 +821,6 @@ describe('tool-use dispatch', () => {
             },
           },
         },
-        bindingRow(kit.runId, {
-          callId: 'c1',
-          attempt: 1,
-          requestId: 'q1',
-          role: 'call',
-        }),
       ]);
       yield* kit.session.requests.decide(kit.runId, 'q1', { action: 'reject' });
       yield* cell.append([

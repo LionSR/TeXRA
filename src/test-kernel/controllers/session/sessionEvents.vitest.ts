@@ -2924,7 +2924,7 @@ describe('RunHistory', () => {
   });
   const refusalOf = (error: unknown): RunHistoryRefused | null =>
     error instanceof RunHistoryRefused ? error : null;
-  /** The approval a barrier call waits on, and the row that binds it. */
+  /** The approval a barrier call waits on. */
   const approvalRequested: RunHistoryDraft = {
     type: 'request.opened',
     aggregateId: AGGREGATE,
@@ -2938,11 +2938,6 @@ describe('RunHistory', () => {
         runId: RUN,
       },
     },
-  };
-  const approvalBinding: RunHistoryDraft = {
-    type: 'tool.binding',
-    aggregateId: AGGREGATE,
-    payload: { callId: 'call-a', attempt: 1, requestId: 'req-1', role: 'call' },
   };
   const toolEnd = (callId: string): RunHistoryDraft => ({
     type: 'tool.end',
@@ -3146,17 +3141,11 @@ describe('RunHistory', () => {
           .pipe(Effect.flip);
         expect(refusalOf(orphanGroup)?.reason).toBe('unprepared-history');
         expect((yield* log.readAggregate(AGGREGATE, 1)).length).toBe(written);
-        // The approval and the row that binds it commit in one batch; the
-        // binding names the attempt the rows already hold.
-        state = yield* run.appendBatch(RUN, state, [
-          approvalRequested,
-          approvalBinding,
-        ]);
+        state = yield* run.appendBatch(RUN, state, [approvalRequested]);
         expect(state.requests['req-1']?.resolved).toBe(false);
         expect(state.pendingResponse?.records['call-a']?.status).toEqual({
           kind: 'started',
           attempt: 1,
-          binding: { requestId: 'req-1', role: 'call' },
         });
         // A real attachment carries loose keys and binary fields: accepted, and
         // the binary fields never reach the row.

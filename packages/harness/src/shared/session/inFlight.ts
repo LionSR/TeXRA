@@ -20,7 +20,6 @@ import type {
   RequestDecision,
   RetryErrorInfo,
   ScriptCallPayload,
-  ToolBindingPayload,
   ToolResultPayload,
 } from '@shared/schemas';
 import { byId, type RunPosition } from './runRows';
@@ -290,27 +289,12 @@ type Settlement = Pick<
   'attempt' | 'disposition' | 'duplicateOf' | 'result' | 'attachments'
 >;
 
-/**
- * How far one call got, as its rows say. `issued`: nothing of it ran.
- * `asking`: its own request for `attempt` is open or answered, and its body
- * has not started, so whatever the answer, nothing happened yet.
- * `started`: the `tool.intent` of `attempt` committed as its body began, so
- * the body may have run; `binding` is the request that attempt is bound to:
- * the call's own (its guard's approval, or the first its body raised) or the
- * loop's outcome question. `settled`: its `tool.result`, at commit `at`.
- */
+/** How far one call got, as its rows say: `issued`, no body started;
+ *  `started`, the `tool.intent` of `attempt` committed, so the body may
+ *  have run; `settled`, its `tool.result` at `at` ({@link attemptRequests}). */
 export type CallStatus =
   | { readonly kind: 'issued' }
-  | {
-      readonly kind: 'asking';
-      readonly attempt: number;
-      readonly requestId: string;
-    }
-  | {
-      readonly kind: 'started';
-      readonly attempt: number;
-      readonly binding: Pick<ToolBindingPayload, 'requestId' | 'role'> | null;
-    }
+  | { readonly kind: 'started'; readonly attempt: number }
   | ({ readonly kind: 'settled'; readonly at: CommitOrdinal } & Settlement);
 
 /** One call of the pending response, the same record whichever issued it:
@@ -321,19 +305,43 @@ export type PendingCall = {
   readonly status: CallStatus;
 };
 
-/** The request a call's current attempt stands bound to, or null: its own
- *  while it asks, else the attempt's binding. */
-export const boundRequestOf = (
-  status: CallStatus,
-): Pick<ToolBindingPayload, 'requestId' | 'role'> | null => {
-  if (status.kind === 'asking')
-    return { requestId: status.requestId, role: 'call' };
-  return status.kind === 'started' ? status.binding : null;
-};
-
-/** The attempt a call's rows have reached: 0 before any asked or started. */
+/** The attempt a call's rows started: 0 before any started. */
 export const attemptOf = (status: CallStatus): number =>
   status.kind === 'issued' ? 0 : status.attempt;
+
+/** A call's attempt; 0 holds what its attempts share (a script's `agent` ask). */
+type CallAttempt = Pick<ToolResultPayload, 'responseId' | 'callId' | 'attempt'>;
+
+/** The id of the `ordinal`-th request (from 1) `at` raises: derived, never
+ *  drawn, so a resumed attempt joins the request it left standing. */
+export const callRequestId = (at: CallAttempt, ordinal: number): string =>
+  `${at.responseId}/${at.callId}:${at.attempt}:${ordinal}`;
+
+/** What one attempt asked: `raised` requests (ordinals 1..raised); `own`,
+ *  the first no cancellation retired (a stop's decides nothing, so it asked
+ *  again), since a later one parked a body already past its own answer. */
+export interface AttemptRequests {
+  readonly raised: number;
+  readonly own: {
+    readonly requestId: string;
+    readonly request: RunPosition['requests'][string];
+  } | null;
+}
+
+/** What `at` has asked, read off the run's `requests` by derived id. */
+export function attemptRequests(
+  requests: RunPosition['requests'],
+  at: CallAttempt,
+): AttemptRequests {
+  let own: AttemptRequests['own'] = null;
+  for (let raised = 0; ; raised += 1) {
+    const requestId = callRequestId(at, raised + 1);
+    const request = requests[requestId];
+    if (request === undefined) return { raised, own };
+    if (own === null && request.decision?.action !== 'cancel')
+      own = { requestId, request };
+  }
+}
 
 /** A response whose calls are not yet all settled and delivered. */
 export type PendingResponse = {

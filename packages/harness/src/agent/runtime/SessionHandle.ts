@@ -266,8 +266,8 @@ export type RequestRow = Extract<
 export interface AskOptions<E> {
   /**
    * How the request's rows commit, answering the commit its decision is
-   * read from: a tool call's request commits through its run's history,
-   * beside the `tool.binding` that lets it outlive this process, and a
+   * read from: a tool call's request commits through its run's history under
+   * the id its attempt derives, so it outlives this process, and a
    * request a resumed call re-enters commits only what the policy decides.
    * Omitted, the session's log commits them.
    */

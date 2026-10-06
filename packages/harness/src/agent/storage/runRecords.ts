@@ -161,7 +161,7 @@ export const callChildRunId = (call: {
 
 /** The runs the attempts so far of `runId`'s open calls launched under
  *  their derived ids (they may not exist), by call: a call no attempt of
- *  which asked or started owns none. */
+ *  which started owns none. */
 const openCallChildren = (
   runId: RunId,
   state: RunState | null,

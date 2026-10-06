@@ -251,7 +251,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     }
 
     const { permission, diffTimeout } = prepareToolEditApprovalPrompt(session, {
-      requestId: requests.nextId('approval'),
+      requestId: requests.nextId('toolEdit'),
       request: preparedRequest,
       // The call's own workspace root, as data: the display path a host shows
       // is relative to the session that raised the request, not to whichever

@@ -135,7 +135,7 @@ describe('human prompt progress events', () => {
             {
               kind: 'userQuestion',
               data: {
-                requestId: expect.stringContaining('user-question-'),
+                requestId: expect.stringContaining('userQuestion-'),
                 questions: [
                   {
                     question,
