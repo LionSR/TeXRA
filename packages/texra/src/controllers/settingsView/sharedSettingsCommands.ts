@@ -17,7 +17,6 @@ import { Cause, Effect } from 'effect';
 import {
   API_KEY_PROVIDER_IDS,
   apiProviderOfSecretName,
-  codingPlanForApiProvider,
   loadApiKeyStatusMap,
 } from '@texra-ai/llm';
 
@@ -33,6 +32,7 @@ import { type StorageFs, withSessionFs } from '@platform/rootedFs';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SubscriptionUsageProvider } from '@shared/schemas';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
+import { codingPlanForApiProvider } from '@shared/schemas';
 import { codingPlanForUsageSetting } from '@texra/model/codingPlanSubscriptions';
 import { UnsupportedCommandError } from '@texra/shared/utils/dispatcher';
 import {
@@ -70,7 +70,7 @@ import {
 } from '@texra/shared/settingsView/settingsViewMessages';
 import { GITHUB_TOKEN_CREATE_URL } from '@texra/tools/github/githubAuth';
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
-import { getProviderKeyUrl } from '@utils/config/providerConfig';
+import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import type { PlatformSecrets } from '@texra-ai/harness';
 
 type HostEffect<A = void> = Effect.Effect<A, Error, ProcessServices>;

@@ -8,12 +8,7 @@ import {
   SharedAttempt,
   SubscriptionOAuthError,
 } from '@texra-ai/llm/node';
-import {
-  CODING_PLAN_SUBSCRIPTIONS,
-  exposeApiKey,
-  lookupApiKey,
-  type SecretsFailed,
-} from '@texra-ai/llm';
+import { exposeApiKey, lookupApiKey, type SecretsFailed } from '@texra-ai/llm';
 import { withLogChannel } from '@logger/effectLog';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type {
@@ -21,7 +16,10 @@ import type {
   SubscriptionUsageSnapshot,
   SubscriptionUsageSnapshots,
 } from '@shared/schemas';
-import { SUBSCRIPTION_USAGE_PROVIDERS } from '@shared/schemas';
+import {
+  CODING_PLAN_SUBSCRIPTIONS,
+  SUBSCRIPTION_USAGE_PROVIDERS,
+} from '@shared/schemas';
 import { useChinaRegion } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

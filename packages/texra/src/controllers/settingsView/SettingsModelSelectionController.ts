@@ -11,9 +11,6 @@ import {
 import {
   acceptedEfforts,
   defaultReasoningLevel,
-  isExpensiveModel,
-  isFastFirstResponseModel,
-  MODEL_SOURCE_ORDER,
   resolveModelSource,
 } from '@texra-ai/llm';
 import {
@@ -37,10 +34,15 @@ import {
 } from '@model/reasoningLevel';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { type ModelOptionData } from '@shared/schemas';
+import {
+  isExpensiveModel,
+  isFastFirstResponseModel,
+  type ModelOptionData,
+} from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   type CopilotRouteInfo,
+  MODEL_SOURCE_ORDER,
   type ModelSelectionItem,
   type UpdateModelSelectionMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';

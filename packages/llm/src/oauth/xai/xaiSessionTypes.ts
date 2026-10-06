@@ -29,12 +29,6 @@ export const XaiSessionSchema = SubscriptionSessionBaseSchema.extend({
 });
 export type XaiSession = z.infer<typeof XaiSessionSchema>;
 
-export function xaiAccountLabel(
-  account: { readonly email?: string | null } | null | undefined,
-): string {
-  return account?.email ?? 'your Grok account';
-}
-
 /** RFC 8628 device-code authorization response. */
 export const XaiDeviceCodeSchema = z.object({
   device_code: z.string().min(1),

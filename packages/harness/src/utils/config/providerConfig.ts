@@ -3,7 +3,7 @@ import { Effect } from 'effect';
  * Provider streaming, endpoint, and region configuration.
  *
  * The provider settings (`@shared/state/providerSettings`) own the provider
- * state keys; the llm catalog owns the region copy.
+ * state keys; the app owns the copy that depends on them.
  * This module only reads/writes those keys through the active platform state.
  *
  * Canonical read path: every key read here is registered in the state-setting
@@ -18,13 +18,6 @@ import { Effect } from 'effect';
  * carry.
  */
 
-import {
-  findModelProviderPlugin,
-  PROVIDER_URLS,
-  type EndpointProviderId,
-  type RegionalProviderId,
-} from '@texra-ai/llm';
-
 import type { ConfigWriteFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
@@ -35,6 +28,7 @@ import {
 } from '@shared/state/providerSettings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { readSettingFrom, writeSettingTo } from './platformSettings';
+import type { EndpointProviderId, RegionalProviderId } from '@texra-ai/llm';
 
 type AssertNever<T extends never> = T;
 
@@ -93,38 +87,8 @@ export function supportsCustomEndpoint(provider: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Region (display name + key URL)
+// Region
 // ---------------------------------------------------------------------------
-
-export function getProviderDisplayName(
-  stores: SettingsStores,
-  provider: string,
-  defaultName: string,
-) {
-  return Effect.gen(function* () {
-    const region = findModelProviderPlugin(provider)?.region;
-    if (!region?.displayName) return defaultName;
-    return (yield* regionSet(stores, provider))
-      ? region.displayName
-      : defaultName;
-  });
-}
-
-export function getProviderKeyUrl(stores: SettingsStores, provider: string) {
-  return Effect.gen(function* () {
-    // PROVIDER_URLS is a Record<string, string>, so this lookup is typed as
-    // string even for an unknown provider; the guard is what makes it honest.
-    const defaultUrl = PROVIDER_URLS[provider];
-    if (!defaultUrl) return undefined;
-    const region = findModelProviderPlugin(provider)?.region;
-    if (!region) return defaultUrl;
-    const isSet = yield* regionSet(stores, provider);
-    if (isSet === true && region.keyUrlWhenSet) return region.keyUrlWhenSet;
-    if (isSet === false && region.keyUrlWhenUnset)
-      return region.keyUrlWhenUnset;
-    return defaultUrl;
-  });
-}
 
 /** Whether a provider routes through its China-region endpoint. */
 export function useChinaRegion(stores: SettingsStores, provider: string) {

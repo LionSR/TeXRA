@@ -228,6 +228,26 @@ const UpdateAgentSelectionMessageSchema = z.object({
 
 // ==================== Model selection data schema ====================
 
+/**
+ * The model sources the Models tab groups its rows under, in display order.
+ * A model whose source is outside this list never renders as a row, so the
+ * controller admits only these.
+ */
+export const MODEL_SOURCE_ORDER: readonly string[] = Object.freeze([
+  'openai',
+  'anthropic',
+  'google',
+  'xai',
+  'deepseek',
+  'moonshot',
+  'dashscope',
+  'minimax',
+  'glm',
+  'meta',
+  'kimiCode',
+  'copilot',
+]);
+
 const ModelSelectionItemSchema = z.object({
   name: z.string(),
   label: z.string(),
