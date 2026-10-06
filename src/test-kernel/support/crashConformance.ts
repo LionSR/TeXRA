@@ -317,13 +317,16 @@ function crashAt(clean: string, storage: string, n: number): void {
   }
 }
 
-/** Approve every request the runs open, those the prefix left pending
- *  included. */
-const approveAll = (session: SessionHandle) =>
+/** Approve every request the runs open above commit `after`. */
+const approveAll = (session: SessionHandle, after = 0) =>
   Stream.runForEach(
     session.log
       .tail(0)
-      .pipe(Stream.filter((event) => event.type === 'request.opened')),
+      .pipe(
+        Stream.filter(
+          (event) => event.type === 'request.opened' && event.commit > after,
+        ),
+      ),
     (event) => {
       if (event.type !== 'request.opened') return Effect.void;
       const target = aggregateTarget(event.aggregateId);
@@ -736,7 +739,33 @@ const resumeFrom = (
         const session = yield* openTestDefaultSession({
           roots: { ...roots, storage },
         });
-        yield* approveAll(session);
+        yield* approveAll(session, n);
+        // What the prefix left pending is answered a beat after the resume
+        // starts: a resume that retired it instead does so as it loads the
+        // run, so the answer then finds it cancelled.
+        const pending = prefix.filter(
+          (row) =>
+            row.type === 'request.opened' &&
+            !prefix.some(
+              (decided) =>
+                decided.type === 'request.decided' &&
+                json(decided).requestId === json(row).requestId,
+            ),
+        );
+        yield* Effect.sleep('1 second').pipe(
+          Effect.andThen(
+            Effect.forEach(pending, (row) =>
+              session.requests
+                // cast: the store's logical id of a run aggregate is its RunId.
+                .decide(row.run as RunId, String(json(row).requestId), {
+                  action: 'approve',
+                })
+                .pipe(Effect.ignore),
+            ),
+          ),
+          Effect.when(Effect.succeed(pending.length > 0)),
+          Effect.forkScoped,
+        );
         if (!prefix.some((row) => row.run === root && row.type === 'run.end')) {
           const resumed = yield* withProcessServices(
             testRuntime(),
@@ -884,6 +913,16 @@ export function crashConformanceSuite(plugins: string): void {
               'request.decided',
             ].filter((type) => !cleanRows.some((row) => row.type === type)),
           ).toEqual([]);
+          // The script's `agent()` approval, which its calls share, is the
+          // script call's (attempt 0): every crash point while it is pending
+          // must resume to that same card, never a second one.
+          expect(
+            cleanRows.some(
+              (row) =>
+                row.type === 'request.opened' &&
+                /:0:\d+$/.test(String(json(row).requestId)),
+            ),
+          ).toBe(true);
           expect(
             violations([], cleanRows, 0, root, expected, ['batch', 'script']),
           ).toEqual([]);

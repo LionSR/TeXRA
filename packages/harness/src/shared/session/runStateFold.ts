@@ -262,14 +262,14 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
  * the run by then, so it stands across every batch its run writes.
  */
 export function unboundRequests(state: RunState): readonly string[] {
-  // What the rows can recover (R5): the retry request the turn's failed
-  // attempt asks and every pending call's own requests.
+  // What the rows can recover (R5): the turn's retry ask and each pending
+  // call's own requests, those its attempts share included.
   const pending = state.pendingResponse;
   const own = new Set<string | undefined>(
     Object.entries(pending?.records ?? {}).flatMap(([callId, { status }]) =>
       pending === null || status.kind === 'settled'
         ? []
-        : [attemptOf(status), attemptOf(status) + 1].map(
+        : [0, attemptOf(status), attemptOf(status) + 1].map(
             (attempt) =>
               attemptRequests(state.requests, {
                 responseId: pending.responseId,

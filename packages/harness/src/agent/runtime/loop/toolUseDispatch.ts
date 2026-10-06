@@ -579,8 +579,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       });
     };
     // The call's requests, under ids the attempt derives: a fresh one past
-    // every ordinal the attempt raised, so a restart leaves it where the
-    // resume finds it. A resumed attempt joins the request it left
+    // every ordinal it raised. A resumed attempt joins the request it left
     // standing when it asks that kind again; one it no longer asks is
     // retired as cancelled, so no surface keeps offering it.
     const at = { responseId, callId: fact.callId, attempt };
@@ -620,8 +619,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             payload.data.requestId === reentering?.requestId
               ? reentering
               : null;
-          if (reentered === null) opened += 1;
-          else reentering = null;
+          if (reentered !== null) reentering = null;
+          else if (payload.data.requestId === callRequestId(at, opened + 1))
+            opened += 1;
           // Answered before this owner's loop reached the call: the answer
           // is the row's, and what the host staged for it is released here,
           // as no later decision will release it.

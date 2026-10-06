@@ -305,11 +305,11 @@ export type PendingCall = {
   readonly status: CallStatus;
 };
 
-/** The attempt a call's rows started: 0 before any body started. */
+/** The attempt a call's rows started: 0 before any started. */
 export const attemptOf = (status: CallStatus): number =>
   status.kind === 'issued' ? 0 : status.attempt;
 
-/** One attempt of one call: call ids are unique within one response only. */
+/** A call's attempt; 0 holds what its attempts share (a script's `agent` ask). */
 type CallAttempt = Pick<ToolResultPayload, 'responseId' | 'callId' | 'attempt'>;
 
 /** The id of the `ordinal`-th request (from 1) `at` raises: derived, never
