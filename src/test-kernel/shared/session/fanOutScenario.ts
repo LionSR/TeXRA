@@ -149,7 +149,6 @@ export class Log {
       cursor: this.events[through - 1]?.commit ?? 0,
       existence: {
         checkedAggregateIds: [...claims.keys(), ...removed],
-        removedAggregateIds: [...removed],
         claims: [...claims].map(([aggregateId, ownerId]) => ({
           aggregateId,
           ownerId,

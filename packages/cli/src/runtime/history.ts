@@ -40,7 +40,6 @@ import { CliUsageError } from './cliContext';
 import { cliErrorMessage } from './logSinks';
 import { cliRunStanding } from './toolUseResumeData';
 import {
-  blockedHistoryEntry,
   formatCliHistoryAgentLabel,
   formatCliHistorySubject,
 } from './historyLabels';
@@ -156,11 +155,7 @@ export const listCliHistoryEntries = Effect.fn('cli.listCliHistoryEntries')(
     const opened = yield* session;
     return (yield* listRuns(opened))
       .filter(isUserVisibleRun)
-      .map((entry) =>
-        entry.kind === 'blocked'
-          ? blockedHistoryEntry(entry)
-          : toCliHistoryEntry(entry),
-      );
+      .map(toCliHistoryEntry);
   },
 );
 
@@ -207,7 +202,6 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
         (checkpointPresent || resumeFrom.kind === 'unopened'),
       phase: run?.status,
       paused: run?.substate === RUN_SUBSTATE.PAUSED,
-      blocked: (run?.blocked ?? null) !== null,
     });
     const workspaceFiles = yield* listRunWorkspaceFiles(
       config,
@@ -446,7 +440,6 @@ function toNdjsonHistoryStatus(status: HistoryRunStatus): string {
   if (
     status === HISTORY_RUN_STATUS.RESUMABLE ||
     status === HISTORY_RUN_STATUS.PAUSED ||
-    status === HISTORY_RUN_STATUS.BLOCKED ||
     status === HISTORY_RUN_STATUS.UNKNOWN
   ) {
     return status;
@@ -536,7 +529,6 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
     resumable: entry.resumable,
     phase: entry.status,
     paused: entry.paused,
-    blocked: entry.blocked !== undefined,
   });
   return {
     id: entry.id,

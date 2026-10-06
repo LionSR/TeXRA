@@ -13,7 +13,6 @@ import { z } from 'zod';
 import { AggregateIdSchema, OwnerIdSchema } from '@shared/schemas';
 import type {
   AggregateId,
-  BlockedAggregate,
   CommitOrdinal,
   DisplaySessionEvent,
   RunId,
@@ -22,7 +21,6 @@ import type {
   SessionEvent,
   SessionEventDraft,
 } from '@shared/schemas';
-import { RUN_BLOCKED_COPY } from '@shared/runs/runStatusDisplay';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { ValueFamily } from './valueFamily';
 
@@ -176,35 +174,27 @@ export interface SessionStoreMovedAside {
 }
 
 /**
- * A current value written at a newer version of its family than this build
- * reads: its read and its change are refused, as the cause of the
- * `DatabaseReadFailed` or `DatabaseWriteFailed`, and it is never decoded as
- * the older shape or overwritten.
+ * The store gate's refusal (`storeGate`): the store holds a kind, or a
+ * version of one, that this build does not read. A newer TeXRA wrote it, or
+ * a pre-release build of a different format. The store is refused whole,
+ * never read in part or written beside; it rides as the cause of the open,
+ * read or write failure.
  */
-export class CurrentValueNewer extends Data.TaggedError('CurrentValueNewer')<{
-  readonly family: string;
-  readonly key: string;
-  readonly version: number;
-}> {
-  override readonly message = `The ${this.family} value ${this.key} was written by a newer TeXRA (version ${this.version}); update TeXRA to read or change it.`;
-}
-
-/**
- * A run history read or claim of an aggregate this build cannot read whole
- * (`BlockedAggregate`): a later build wrote a row of it, an earlier build
- * wrote an older shape, or a row is corrupt. Nothing is read or claimed, so no run state is ever folded from
- * part of its rows. It rides as the cause of the read's `DatabaseReadFailed`
- * or the claim's `DatabaseWriteFailed`, as `DatabaseClaimRefused` does.
- */
-export class DatabaseAggregateBlocked extends Data.TaggedError(
-  'DatabaseAggregateBlocked',
-)<{
-  readonly aggregateId: AggregateId;
-  readonly reason: BlockedAggregate['reason'];
+export class DatabaseStoreNewer extends Data.TaggedError('DatabaseStoreNewer')<{
   readonly type: string;
   readonly version: number;
 }> {
-  override readonly message = `${RUN_BLOCKED_COPY[this.reason]} (run ${this.aggregateId}, its ${this.type} row, version ${this.version})`;
+  override readonly message = `The session store holds ${this.type} rows at version ${this.version}, which this build does not read: a newer TeXRA wrote them, or a pre-release of a different format. Update TeXRA, or move the store aside to start a fresh one. Nothing in the store was changed.`;
+}
+
+/** A stored row that does not decode as its kind's shape: its read fails,
+ *  naming the row, as the cause of the `DatabaseReadFailed`. */
+export class DatabaseRowCorrupt extends Data.TaggedError('DatabaseRowCorrupt')<{
+  readonly commit: number;
+  readonly type: string;
+  readonly detail: string;
+}> {
+  override readonly message = `The session store's ${this.type} row at commit ${this.commit} does not decode (${this.detail}).`;
 }
 
 /**
@@ -304,13 +294,6 @@ export class Database extends Context.Service<
       readonly SessionEvent[],
       DatabaseReadFailed
     >;
-    /** The aggregates this build cannot read whole, as their fold input:
-     *  those holding a row of a newer version or an unknown kind, and those
-     *  a read found a corrupt row in. */
-    readonly readBlocked: () => Effect.Effect<
-      readonly BlockedAggregate[],
-      DatabaseReadFailed
-    >;
     /** The latest listing row of each type on one open run: its private
      *  records beside its creation, status and tombstone. */
     readonly readRunRecords: (
@@ -337,8 +320,7 @@ export class Database extends Context.Service<
     /** The root's current values: application state, not history. */
     readonly values: CurrentValues;
     /** One aggregate's rows from `fromSeq`, or only those of `types`
-     *  through the `(aggregate, type, seq)` index, in seq order. A blocked
-     *  aggregate is refused whole. */
+     *  through the `(aggregate, type, seq)` index, in seq order. */
     readonly readAggregate: (
       id: AggregateId,
       fromSeq: number,
@@ -409,7 +391,6 @@ export class Database extends Context.Service<
         readonly events: readonly SessionEvent[];
         readonly checkedAggregateIds: readonly AggregateId[];
         readonly state: readonly AggregateState[];
-        readonly blocked: readonly BlockedAggregate[];
       },
       DatabaseReadFailed
     >;

@@ -702,10 +702,8 @@ describe('session events and view', () => {
         host: null,
         debug: false,
         replayComplete: true,
-        blocked: [],
         existence: {
           checkedAggregateIds: rows.map(({ aggregateId }) => aggregateId),
-          removedAggregateIds: [],
           claims: rows.map(({ aggregateId, origin }) => ({
             aggregateId,
             ownerId: origin,
@@ -1452,50 +1450,38 @@ describe('the C1 event table and the C6 publisher', () => {
     },
   );
 
-  for (const [kind, stamp, why] of [
-    // No TeXRA stamp and no TeXRA tables: not a pre-1.0 store, so nothing
-    // retires it.
-    ['unstamped', '', 'tables notes'],
-    // Stamped by another application, even at the 1.0 schema's number.
-    [
-      'stamped',
-      'PRAGMA application_id = 1234; PRAGMA user_version = 101;',
-      'application id 1234',
-    ],
-  ] as const)
-    it.effect(`refuses a foreign SQLite file (${kind}) untouched`, () => {
-      // Another tool's database at the store's path.
-      const storage = workspace();
-      return Effect.gen(function* () {
-        yield* Effect.sync(() => {
-          const connection = reader(storage);
-          try {
-            connection.exec(
-              `CREATE TABLE notes (body TEXT); INSERT INTO notes VALUES ('mine'); ${stamp}`,
-            );
-          } finally {
-            connection.close();
-          }
-        });
-        const before = readFileSync(join(storage, 'texra.db'));
-        const failure = yield* Effect.flip(
-          Database.pipe(Effect.provide(substrate(storage))),
-        );
-        expect(failure._tag).toBe('DatabaseOpenFailed');
-        expect(failure.message).toContain('not a TeXRA session store');
-        expect(failure.message).toContain(why);
-        expect(readFileSync(join(storage, 'texra.db'))).toEqual(before);
-        expect(readdirSync(storage)).toEqual(['texra.db']);
-        const stored = reader(storage);
+  it.effect("refuses another application's SQLite file untouched", () => {
+    // Another tool's database at the store's path, stamped with its own id
+    // even at the 1.0 schema's number.
+    const storage = workspace();
+    return Effect.gen(function* () {
+      yield* Effect.sync(() => {
+        const connection = reader(storage);
         try {
-          expect(stored.prepare('SELECT body FROM notes').all()).toEqual([
-            { body: 'mine' },
-          ]);
+          connection.exec(
+            `CREATE TABLE notes (body TEXT); INSERT INTO notes VALUES ('mine');
+             PRAGMA application_id = 1234; PRAGMA user_version = 101;`,
+          );
         } finally {
-          stored.close();
+          connection.close();
         }
       });
+      const failure = yield* Effect.flip(
+        Database.pipe(Effect.provide(substrate(storage))),
+      );
+      expect(failure._tag).toBe('DatabaseOpenFailed');
+      expect(failure.message).toContain('is not a TeXRA store');
+      expect(failure.message).toContain('application id 1234');
+      const stored = reader(storage);
+      try {
+        expect(stored.prepare('SELECT body FROM notes').all()).toEqual([
+          { body: 'mine' },
+        ]);
+      } finally {
+        stored.close();
+      }
     });
+  });
 
   it.effect('moves a truncated store aside and opens a fresh one', () =>
     // A store cut short (a copy that stopped part way) is kept beside the
@@ -1531,105 +1517,31 @@ describe('the C1 event table and the C6 publisher', () => {
   );
 
   it.effect(
-    'marks a projection that skipped a newer row, so a build that reads it rebuilds',
+    'refuses an append once a newer build wrote to the store under this connection',
     () => {
-      // A newer build's run.config lands where this build catches the
-      // listing up: it cannot read the row, so the projection it builds
-      // lacks it. Checkpointed past it unmarked, a build that reads the row
-      // would trust that checkpoint and never list it.
-      const storage = workspace();
-      const bump = (version: number) =>
-        Effect.sync(() => {
-          const raw = reader(storage);
-          try {
-            raw.exec(`UPDATE event SET version = ${version} WHERE type = 'run.config';
-              UPDATE stored_kind SET version = ${version} WHERE type = 'run.config';
-              DROP TABLE projection_state;`);
-          } finally {
-            raw.close();
-          }
-        });
-      const listing = Database.pipe(
-        Effect.flatMap((database) => database.readListing()),
-        Effect.map((rows) => rows.map((row) => row.type)),
-        Effect.provide(substrate(storage)),
-      );
-      return Effect.gen(function* () {
-        yield* Database.pipe(
-          Effect.flatMap((database) =>
-            database.appendAll([
-              runStart,
-              {
-                type: 'run.config',
-                aggregateId: runStart.aggregateId,
-                config: AgentConfigFieldsSchema.parse({
-                  model: 'test-model',
-                }),
-              },
-            ]),
-          ),
-          Effect.provide(substrate(storage)),
-        );
-        yield* bump(2);
-        expect(yield* listing).toEqual(['run.start']);
-        const marked = reader(storage);
-        try {
-          expect(
-            marked
-              .prepare(
-                "SELECT version FROM projection_state WHERE name = 'listing'",
-              )
-              .get(),
-          ).toEqual({ version: -1 });
-          // The row becomes one this build reads: as a newer build sees it.
-          marked.exec(`UPDATE event SET version = 1 WHERE type = 'run.config';
-            UPDATE stored_kind SET version = 1 WHERE type = 'run.config';`);
-        } finally {
-          marked.close();
-        }
-        expect(yield* listing).toEqual(['run.start', 'run.config']);
-      });
-    },
-  );
-
-  it.effect(
-    'refuses a claim of a run a newer build wrote to since this connection last looked',
-    () => {
-      // A newer build commits a row this build cannot read and releases the
-      // run before this connection's poll has seen it: its verdict cache is
-      // stale, so only the claim's own transaction can refuse.
+      // A newer build commits a row this build cannot read after this
+      // connection opened: only the append's own transaction can refuse.
       const storage = workspace();
       return Effect.gen(function* () {
         const db = yield* Database;
-        yield* db.appendAll([runStart, waiting]);
+        yield* db.appendAll([runStart]);
         yield* Effect.sync(() => {
           const raw = reader(storage);
           try {
-            raw.exec(`UPDATE event SET version = 2 WHERE type = 'run.position';
-              UPDATE stored_kind SET version = 2 WHERE type = 'run.position';
-              UPDATE event_sequence SET owner_id = NULL;`);
+            raw.exec(`UPDATE event SET version = 2 WHERE type = 'run.start';
+              UPDATE stored_kind SET version = 2 WHERE type = 'run.start';`);
           } finally {
             raw.close();
           }
         });
-        expect(yield* db.readBlocked()).toEqual([]);
-        const refused = yield* Effect.flip(
-          db.acquireClaims([runStart.aggregateId]),
-        );
-        expect(refused).toMatchObject({
+        expect(yield* Effect.flip(db.appendAll([waiting]))).toMatchObject({
           _tag: 'DatabaseWriteFailed',
-          cause: { _tag: 'DatabaseAggregateBlocked', type: 'run.position' },
+          cause: { _tag: 'DatabaseStoreNewer', type: 'run.start', version: 2 },
         });
-        const stored = reader(storage);
-        try {
-          expect(
-            stored
-              .prepare('SELECT owner_id AS owner FROM event_sequence')
-              .get(),
-          ).toEqual({ owner: null });
-        } finally {
-          stored.close();
-        }
+        expect(yield* Effect.flip(db.readAll(0))).toMatchObject({
+          _tag: 'DatabaseReadFailed',
+          cause: { _tag: 'DatabaseStoreNewer', type: 'run.start' },
+        });
       }).pipe(Effect.provide(substrate(storage)));
     },
   );
@@ -1680,54 +1592,34 @@ describe('the C1 event table and the C6 publisher', () => {
     },
   );
 
-  // A newer build's version, and an earlier shape of this version.
-  for (const [reason, edit] of [
-    [
-      'newer',
-      `UPDATE event SET version = 2 WHERE type = 'run.start';
-      UPDATE stored_kind SET version = 2 WHERE type = 'run.start';`,
-    ],
-    ['older', `UPDATE event SET data = '{}' WHERE type = 'run.start';`],
-  ] as const)
-    it.effect(`lists a run whose own run.start is ${reason} as blocked`, () => {
-      // The unreadable row is the one that creates the run: without it the
-      // run would vanish from every listing instead of reading as blocked.
+  it.effect(
+    'fails a run history read of a row that does not decode, naming it',
+    () => {
       const storage = workspace();
       return Effect.gen(function* () {
-        yield* Database.pipe(
-          Effect.flatMap((database) => database.appendAll([runStart, waiting])),
-          Effect.provide(substrate(storage)),
-        );
+        const db = yield* Database;
+        yield* db.appendAll([runStart, waiting]);
         yield* Effect.sync(() => {
           const raw = reader(storage);
           try {
-            raw.exec(edit);
+            raw.exec(`UPDATE event SET data = '{}' WHERE type = 'run.start';`);
           } finally {
             raw.close();
           }
         });
-        yield* Effect.gen(function* () {
-          const view = yield* SessionViewService;
-          yield* settle(view.ref, (v) => v.runs.has(RUN));
-          const run = (yield* SubscriptionRef.get(view.ref)).runs.get(RUN);
-          expect(run).toMatchObject({ blocked: reason, readOnly: true });
-          const refused = yield* Effect.flip(
-            (yield* Database).acquireClaims([runStart.aggregateId]),
-          );
-          expect(refused).toMatchObject({
-            _tag: 'DatabaseWriteFailed',
-            cause: {
-              _tag: 'DatabaseAggregateBlocked',
-              reason,
-              type: 'run.start',
-            },
-          });
-        }).pipe(
-          Effect.provide(graph([], substrate(storage).pipe(Layer.orDie))),
-          Effect.scoped,
+        expect(
+          yield* Effect.flip(db.readAggregate(runStart.aggregateId, 0)),
+        ).toMatchObject({
+          _tag: 'DatabaseReadFailed',
+          cause: { _tag: 'DatabaseRowCorrupt', type: 'run.start', commit: 1 },
+        });
+        // A wide read leaves it out instead, so one row never costs the session.
+        expect((yield* db.readListing()).map((row) => row.type)).not.toContain(
+          'run.start',
         );
-      });
-    });
+      }).pipe(Effect.provide(substrate(storage)));
+    },
+  );
 
   it.effect('refuses a store of a newer schema and changes nothing', () => {
     const storage = workspace();
@@ -1738,7 +1630,7 @@ describe('the C1 event table and the C6 publisher', () => {
         Database.pipe(Effect.provide(substrate(storage))),
       );
       expect(failure._tag).toBe('DatabaseOpenFailed');
-      expect(failure.message).toContain('Update TeXRA');
+      expect(failure.message).toContain('update TeXRA');
       const stored = reader(storage);
       try {
         expect(stored.prepare('PRAGMA user_version').get()).toEqual({
@@ -2373,7 +2265,9 @@ describe('the C1 event table and the C6 publisher', () => {
             fresh.readAggregate(qualifyAggregateId('run', OLDER), 0),
           );
         }).pipe(Effect.provide(substrate(storage)));
-        expect(reopened).toMatchObject({ cause: { reason: 'corrupt' } });
+        expect(reopened).toMatchObject({
+          cause: { _tag: 'DatabaseRowCorrupt', type: 'tool.start' },
+        });
         yield* remove(OLDER);
         expect(yield* count('blob')).toBe(0);
       }).pipe(

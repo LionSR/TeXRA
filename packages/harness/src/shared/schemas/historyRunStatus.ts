@@ -11,8 +11,6 @@ export const HISTORY_RUN_STATUS = {
   COMPLETED: RUN_OUTCOME.COMPLETED,
   CANCELLED: RUN_OUTCOME.CANCELLED,
   FAILED: RUN_OUTCOME.FAILED,
-  /** A row of the run is a newer or older TeXRA's, or corrupt: listed, never opened. */
-  BLOCKED: 'blocked',
   UNKNOWN: 'unknown',
 } as const;
 
@@ -25,6 +23,5 @@ export const HISTORY_RUN_STATUS_LABEL = {
   [HISTORY_RUN_STATUS.COMPLETED]: 'Completed',
   [HISTORY_RUN_STATUS.CANCELLED]: 'Cancelled',
   [HISTORY_RUN_STATUS.FAILED]: 'Failed',
-  [HISTORY_RUN_STATUS.BLOCKED]: 'Blocked',
   [HISTORY_RUN_STATUS.UNKNOWN]: 'Unknown',
 } as const satisfies Record<HistoryRunStatus, string>;

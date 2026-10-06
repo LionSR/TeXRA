@@ -6,6 +6,17 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **A project a newer TeXRA has saved into opens only in that version.**
+  When a newer TeXRA version has saved tasks into a project, an older one
+  now refuses to open the project's history ("update TeXRA, or move the
+  store aside") instead of showing those tasks as blocked, and an older
+  window that is already open stops saving into it. A single damaged task
+  is left out of the task list with a note in the log, and it cannot be
+  opened, while every other task still works. History from before 1.0 is
+  still set aside on first launch; the copies set aside are now kept until
+  you remove them with `texra doctor --prune-storage`, which lists every
+  copy and every project folder that no longer exists before deleting
+  anything.
 - **`@texra-ai/harness`: one process layer for hosts and embedders.**
   `Sessions.layer` now composes the same `processLayer` every TeXRA host
   builds its runtime from, and the root entry exports it with the

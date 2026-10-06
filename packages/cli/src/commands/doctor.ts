@@ -73,7 +73,7 @@ const DOCTOR_ARGS = {
   'prune-storage': {
     type: 'boolean',
     description:
-      'List the workspace stores whose project is gone and old aside copies of history, and delete them once confirmed',
+      'List the workspace stores whose project is gone and the aside copies of session stores, and delete them once confirmed',
   },
   yes: {
     type: 'boolean',

@@ -125,7 +125,6 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
         (run) =>
           run.parentId === null &&
           run.identity.kind === 'agent' &&
-          run.blocked === null &&
           run.substate !== RUN_SUBSTATE.PAUSED &&
           !isTerminalOutcomePhase(run.status) &&
           !session.runs.isLive(run.id),

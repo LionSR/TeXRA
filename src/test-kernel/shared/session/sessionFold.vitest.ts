@@ -943,7 +943,6 @@ describe('sessionFold', () => {
         cursor: 0,
         existence: {
           checkedAggregateIds: [id],
-          removedAggregateIds: [id],
           claims: [],
         },
       },
@@ -998,7 +997,6 @@ describe('sessionFold', () => {
           _tag: 'replay.complete',
           existence: {
             checkedAggregateIds: [processStart.aggregateId],
-            removedAggregateIds: [],
             claims: [{ aggregateId: processStart.aggregateId, ownerId: OWNER }],
           },
         },

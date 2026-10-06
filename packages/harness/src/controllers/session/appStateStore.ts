@@ -103,8 +103,7 @@ export function appStateStoreFromDatabase(
  * design's §7): `texra doctor --prune-storage` finds a store whose root is
  * gone by it. An unchanged record is not rewritten (`values.modify`). One
  * that cannot be read or written is logged at warn and the project still
- * opens: the store then only ages toward the prune's rule for a store with
- * no record.
+ * opens: the prune then never lists the store as an orphan.
  */
 export const openProjectStateStore = Effect.fn(
   'appStateStore.openProjectStateStore',
@@ -118,7 +117,7 @@ export const openProjectStateStore = Effect.fn(
       .pipe(
         Effect.catch((error) =>
           Effect.logWarning(
-            `Could not record that ${storage} serves ${workspaceRoot}; \`texra doctor --prune-storage\` will judge it by age alone.`,
+            `Could not record that ${storage} serves ${workspaceRoot}; \`texra doctor --prune-storage\` will not list it as an orphan.`,
           ).pipe(
             Effect.annotateLogs({ data: error }),
             withLogChannel('sessionDatabase'),
