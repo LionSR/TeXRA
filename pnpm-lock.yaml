@@ -117,9 +117,6 @@ catalogs:
     postal-mime:
       specifier: ^4.0.2
       version: 4.0.2
-    pretty-bytes:
-      specifier: 7.2.0
-      version: 7.2.0
     pretty-ms:
       specifier: ^9.3.1
       version: 9.3.1
@@ -303,9 +300,6 @@ importers:
       postal-mime:
         specifier: 'catalog:'
         version: 4.0.2
-      pretty-bytes:
-        specifier: 'catalog:'
-        version: 7.2.0
       pretty-ms:
         specifier: 'catalog:'
         version: 9.3.1
@@ -695,9 +689,6 @@ importers:
       postal-mime:
         specifier: 'catalog:'
         version: 4.0.2
-      pretty-bytes:
-        specifier: 'catalog:'
-        version: 7.2.0
       pretty-ms:
         specifier: 'catalog:'
         version: 9.3.1
@@ -4734,10 +4725,6 @@ packages:
     resolution: {integrity: sha512-Z/CJHIkdujO/OtN7nXUii0Rf3VT5SRuhjBA82Xvu2XhBUgX3nhP67T0LHceBdQLex7OOFGTox+Q5Yg8Jk2Qivg==}
     engines: {node: '>=14'}
     hasBin: true
-
-  pretty-bytes@7.2.0:
-    resolution: {integrity: sha512-T2kroepGB5DRVbkN/nOpW03+VRWqdtJhZNuCW3wYk3chdPjgi4GcTBOaxWfHq1MIM0ypidxsSWbQaAiRpxnXmg==}
-    engines: {node: '>=20'}
 
   pretty-ms@9.3.1:
     resolution: {integrity: sha512-HzMy3Geq23nVALD/M2LliU+F+M+gVNsvkQWWqeBZ8HDiCgzo6YPJ/Omrmtq24EFrIsk0a3EkQGEd7bDOo+IhGA==}
@@ -9538,8 +9525,6 @@ snapshots:
   prelude-ls@1.2.1: {}
 
   prettier@3.9.9: {}
-
-  pretty-bytes@7.2.0: {}
 
   pretty-ms@9.3.1:
     dependencies:

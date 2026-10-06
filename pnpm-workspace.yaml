@@ -41,7 +41,6 @@ catalog:
   openai: '^7.20.0'
   pathe: '^2.0.3'
   postal-mime: '^4.0.2'
-  pretty-bytes: '7.2.0'
   pretty-ms: '^9.3.1'
   quickjs-emscripten-core: '0.32.0'
   safe-stable-stringify: '^2.5.0'
