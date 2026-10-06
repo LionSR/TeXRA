@@ -44,7 +44,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "example:packed": "npm run build && rm -f example/*.tgz && corepack pnpm --filter @texra-ai/llm pack --pack-destination \"$PWD/example\" && corepack pnpm pack --pack-destination example && mv example/texra-ai-harness-*.tgz example/harness.tgz && mv example/texra-ai-llm-*.tgz example/llm.tgz && cd example && npm install ./llm.tgz ./harness.tgz && npm start",
-    "prepack": "npm run build"
+    "prepack": "node -e \"if (!/^pnpm\\//.test(process.env.npm_config_user_agent ?? '')) { console.error('Pack and publish with pnpm: only it applies publishConfig.exports and resolves workspace: versions.'); process.exit(1); }\" && npm run build"
   },
   "dependencies": {
     "@cantoo/pdf-lib": "catalog:",
