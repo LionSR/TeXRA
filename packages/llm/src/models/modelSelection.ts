@@ -40,13 +40,3 @@ export function modelConfig(id: string): ModelConfig | undefined {
 export function modelRefOf(id: string): string | undefined {
   return selectModel(id)?.config.ref;
 }
-
-/** Return whether the registry marks a model as deprecated. */
-export function isDeprecatedModel(model: string): boolean {
-  return modelConfig(model)?.deprecated ?? false;
-}
-
-/** Return whether the registry marks a model as no longer served. */
-export function isRetiredModel(model: string): boolean {
-  return modelConfig(model)?.retired ?? false;
-}
