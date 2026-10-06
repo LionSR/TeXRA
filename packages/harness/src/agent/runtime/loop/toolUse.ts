@@ -683,8 +683,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // A summary the turn started lands before the turn ends.
         state = yield* cell.adopt(yield* compaction.finish(state));
         // The turn's trace rows are queued ahead of the boundary: the
-        // barrier lets the open streams `waiting` closes count every one. A
-        // refused one fails the boundary's own commit.
+        // barrier lets the open streams `waiting` closes count every one.
         yield* session.settled;
         // The turn boundary, in one batch: Stop hooks, the snapshot, the
         // steps (`waiting` closes open streams), a child's settlement, and a

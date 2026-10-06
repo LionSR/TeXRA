@@ -6,16 +6,12 @@
  * accessors in `runRecords.ts`.
  */
 
-import { Cause, Effect, Exit, SubscriptionRef } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { consumedRows, haltedPositionRow } from '@agent/runtime/loop/rows';
-import {
-  afterActivation,
-  recordedGrants,
-} from '@agent/runtime/runApprovalQueue';
 import {
   NO_APPROVAL_GRANTS,
   type ApprovalGrants,
@@ -37,7 +33,6 @@ import {
   type RunProvenance,
   type UserFollowUpSupport,
 } from '@shared/schemas';
-import type { DatabaseReadFailed } from '@shared/session/database';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   getRunRecords,
@@ -88,42 +83,19 @@ export const configChange = Effect.fn('configChange')(function* (
   } satisfies SessionEventDraft;
 });
 
-/** The grants a run's re-activation writes beside its `run.activate`
- *  (`afterActivation`), or none when its rows already say them. */
-const reactivatedGrants = (
-  session: SessionHandle,
-  runId: RunId,
-): Effect.Effect<readonly SessionEventDraft[], DatabaseReadFailed> =>
-  session.readRunRecords(runId).pipe(
-    Effect.map((rows) => {
-      const snapshot = afterActivation(
-        SubscriptionRef.getUnsafe(session.view),
-        runId,
-        recordedGrants(rows),
-      );
-      return snapshot === null
-        ? []
-        : [
-            {
-              type: 'approval.policy' as const,
-              aggregateId: aggregateId('run', runId),
-              snapshot,
-            },
-          ];
-    }),
-  );
-
 /** A resume's activation: its `run.activate` and the grants it ends, as one
  *  batch. */
 export const commitResumedActivation = (session: SessionHandle, runId: RunId) =>
-  reactivatedGrants(session, runId).pipe(
-    Effect.flatMap((grants) =>
-      session.commit([
-        { type: 'run.activate', aggregateId: aggregateId('run', runId) },
-        ...grants,
-      ]),
-    ),
-  );
+  session.approvals
+    .activationRows(runId)
+    .pipe(
+      Effect.flatMap((grants) =>
+        session.commit([
+          { type: 'run.activate', aggregateId: aggregateId('run', runId) },
+          ...grants,
+        ]),
+      ),
+    );
 
 interface RegisterRunOptions {
   /** The launching run: the whole parent edge, stamped on `run.start`. */
@@ -243,7 +215,7 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
     }
     events.push(config);
     events.push({ type: 'run.activate', aggregateId: target });
-    if (prior) events.push(...(yield* reactivatedGrants(session, runId)));
+    if (prior) events.push(...(yield* session.approvals.activationRows(runId)));
     if (options.description !== undefined)
       events.push({
         type: 'run.description',
@@ -364,6 +336,13 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
     input.report?.(error);
     return { ok: false, error };
   }
+  // Rows the run published and the store refused fail it, whoever ends it.
+  const lost = yield* session.lostRows(runId);
+  const requested =
+    lost !== undefined && outcome !== RUN_OUTCOME.CANCELLED
+      ? RUN_OUTCOME.FAILED
+      : outcome;
+  const error = input.error ?? lost;
   const status = yield* Effect.exit(
     session.updateRecordFacts(runId, (rows) =>
       Effect.gen(function* () {
@@ -378,10 +357,15 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
         // every `durableOutcome` reader keeps it RUNNING for want of the row.
         const ended = runEndFromEvents(rows, runId)?.outcome;
         const persisted =
-          keepExistingOutcome === true && ended !== undefined ? ended : outcome;
+          keepExistingOutcome === true && ended !== undefined
+            ? ended
+            : requested;
         const settlement = input.settlement ?? [];
-        if (ended === persisted)
+        if (ended === persisted) {
+          if (lost !== undefined)
+            yield* Effect.logWarning(`Run ${runId} had ended: ${lost.message}`);
           return { events: settlement, value: persisted };
+        }
         return {
           events: [
             ...settlement,
@@ -399,7 +383,7 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
               type: 'run.end' as const,
               aggregateId: target,
               outcome: persisted,
-              ...(input.error !== undefined ? { error: input.error } : {}),
+              ...(error !== undefined ? { error } : {}),
               output: storedRunOutput(input.output ?? emptyRunEndOutput()),
             },
           ],

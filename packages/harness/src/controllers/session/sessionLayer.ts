@@ -800,12 +800,10 @@ const heldSession = (root: string) =>
 const settleRun = (session: SessionHandle, runId: RunId): Effect.Effect<void> =>
   Effect.gen(function* () {
     if (!(yield* session.ownsRun(runId))) return;
-    const lost = yield* session.lostRows(runId);
     const finalization = yield* finalizeRun(session, {
       runId,
       outcome: RUN_OUTCOME.CANCELLED,
       keepExistingOutcome: true,
-      ...(lost !== undefined && { error: lost }),
     });
     if (!finalization.ok) return yield* Effect.die(finalization.error);
   }).pipe(

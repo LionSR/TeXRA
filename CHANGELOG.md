@@ -43,8 +43,8 @@ All notable changes to this project will be documented in this file.
   that holds it is resumed, for its subagents too. When a display row a
   task published cannot be saved, the task ends as failed with the real
   error instead of an "artifact drain" mark; a task an earlier build ended
-  with that mark opens as made by an older TeXRA. Grants a task only
-  inherited under an earlier build are not carried over.
+  with that mark is left out of the task list as unreadable. Grants a task
+  only inherited under an earlier build are not carried over.
 - **One credential store for every TeXRA app; enter your keys once more.**
   The VS Code extension and the desktop app no longer keep API keys and
   sign-ins in VS Code's secret storage or the system keychain. Every host,

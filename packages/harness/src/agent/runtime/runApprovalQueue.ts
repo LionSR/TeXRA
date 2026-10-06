@@ -23,6 +23,7 @@ import {
   resolveBypass,
   type ApprovalBypassKind,
   type ApprovalGrants,
+  type ApprovalGrantSource,
 } from '@shared/approvalBypassKind';
 import {
   aggregateId,
@@ -72,11 +73,14 @@ interface GrantStore {
       rows: readonly SessionEvent[],
     ) => Effect.Effect<{ events: readonly SessionEventDraft[]; value: A }, E>,
   ) => Effect.Effect<A, E | GrantWriteError>;
+  readonly readRunRecords: (
+    runId: RunId,
+  ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
 }
 
 /** A run's grants as its rows record them: the latest `approval.policy`,
  *  else the snapshot its `run.start` carried. */
-export function recordedGrants(rows: readonly SessionEvent[]): ApprovalGrants {
+function recordedGrants(rows: readonly SessionEvent[]): ApprovalGrants {
   const latest = rows.findLast(
     (row) => row.type === 'approval.policy' || row.type === 'run.start',
   );
@@ -93,16 +97,16 @@ export function recordedGrants(rows: readonly SessionEvent[]): ApprovalGrants {
  * to the human value it inherits (off when none), since that goal is not
  * this activation's either.
  */
-export function afterActivation(
-  view: Pick<SessionView, 'runs' | 'policy'>,
+function afterActivation(
+  source: ApprovalGrantSource<RunId>,
   runId: RunId,
   recorded: ApprovalGrants,
 ): ApprovalGrants | null {
-  const inherited = inheritedGrants(view, runId).own;
+  const inherited = inheritedGrants(source, runId).own;
   const pinned = APPROVAL_BYPASS_KINDS.filter(
     (kind) =>
       !recorded.goal.includes(kind) &&
-      resolveBypass(view, runId, kind) === 'goal',
+      resolveBypass(source, runId, kind) === 'goal',
   );
   if (recorded.goal.length === 0 && pinned.length === 0) return null;
   const own = { ...recorded.own };
@@ -142,6 +146,14 @@ export interface SessionApprovals {
     runId: RunId,
     edit: (grants: ApprovalGrants) => ApprovalGrants,
   ): Effect.Effect<void, GrantWriteError>;
+  /**
+   * The grants row a run's activation commits beside its `run.activate`, if
+   * any (`afterActivation`), read from the rows of the run and its ancestry,
+   * never from a view that may not have folded them yet.
+   */
+  activationRows(
+    runId: RunId,
+  ): Effect.Effect<readonly SessionEventDraft[], DatabaseReadFailed>;
 }
 
 /** Build the session's approvals over its view and its record door. */
@@ -163,6 +175,40 @@ export function createSessionApprovals(store: GrantStore): SessionApprovals {
           ? approval.bypassed
           : approval.prompt,
       ).pipe(withPerKeyLane(lanes[kind], runId)),
+    activationRows: (runId) =>
+      Effect.gen(function* () {
+        const runs = new Map<RunId, { parentId: RunId | null }>();
+        const policy = new Map<RunId, ApprovalGrants>();
+        for (let id: RunId | null = runId; id !== null && !runs.has(id);) {
+          const rows: readonly SessionEvent[] = yield* store.readRunRecords(id);
+          const start = rows.find(
+            (row: SessionEvent) => row.type === 'run.start',
+          );
+          // A severed edge never comes back (`run.detach`).
+          const parentId: RunId | null =
+            start?.type === 'run.start' &&
+            !rows.some((row: SessionEvent) => row.type === 'run.detach')
+              ? (start.parent?.id ?? null)
+              : null;
+          runs.set(id, { parentId });
+          policy.set(id, recordedGrants(rows));
+          id = parentId;
+        }
+        const next = afterActivation(
+          { runs, policy },
+          runId,
+          policy.get(runId) ?? NO_APPROVAL_GRANTS,
+        );
+        return next === null
+          ? []
+          : [
+              {
+                type: 'approval.policy' as const,
+                aggregateId: aggregateId('run', runId),
+                snapshot: next,
+              },
+            ];
+      }),
     change: (runId, edit) => {
       // The claim holder's own grants are folded by the time each change
       // returns, so a change the view already shows writes nothing.
