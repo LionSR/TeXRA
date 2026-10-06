@@ -120,7 +120,6 @@ class WorkspaceEnvFileUnreadable extends Data.TaggedError(
   'WorkspaceEnvFileUnreadable',
 )<{ readonly cause: unknown }> {}
 
-let statusBarItem: vscode.StatusBarItem | undefined;
 // VS Code invokes activation and deactivation separately. Only this entry
 // reads back the scope the activation program ran in: its finalizer is the
 // process's shutdown drain, so closing it is deactivation.
@@ -641,7 +640,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   yield* registerInlineCriticism(context, runtime, backend, roots);
   registerInlineComments(context);
 
-  statusBarItem = vscode.window.createStatusBarItem(
+  const statusBarItem = vscode.window.createStatusBarItem(
     'texra.taskStatus',
     vscode.StatusBarAlignment.Left,
   );
@@ -651,7 +650,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
 
   const statusBarUsageTracker = new StatusBarUsageTracker(backend);
   const updateStatusBarTooltip = () => {
-    if (!statusBarItem) return;
     const policy = runtimeSession.approvalPolicy;
     const policyLine = `Approval policy: ${texraApprovalPolicyLabel(policy)} — ${formatTexraApprovalPolicy(policy)}`;
     const usage = statusBarUsageTracker.totalUsage;
@@ -677,7 +675,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     statusBarItem.tooltip = tip;
   };
   const updateStatusBarText = () => {
-    if (!statusBarItem) return;
     const count = statusBarUsageTracker.activeRunCount;
     if (statusBarUsageTracker.activity === 'approval') {
       statusBarItem.text = '$(bell-dot) TeXRA: Waiting for you';

@@ -84,6 +84,16 @@ export class BundledViewContentProvider {
     this.channel = `${viewName}ContentProvider`;
   }
 
+  /** The folders the view's page may load from: its own and the shared
+   *  stylesheet's. */
+  public get localResourceRoots(): vscode.Uri[] {
+    return [
+      this.buildUri(['src', this.viewFolder]),
+      this.buildUri(['dist', this.viewFolder]),
+      this.buildUri(['src', 'common', 'styles']),
+    ];
+  }
+
   /**
    * `attributes` are the view's own HTML tokens, escaped for an attribute
    * value: the progress view carries its session key as

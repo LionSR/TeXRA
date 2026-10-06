@@ -25,7 +25,10 @@ import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import {
+  withProcessServices,
+  type ProcessRuntime,
+} from '@platform/processRuntime';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import {
   INSTRUCTION_ACTION,
@@ -208,13 +211,11 @@ export function createAgentPresentationHost(
     // The open-and-build program takes this window's file services from the
     // runtime's context, which the session that forks it does not carry.
     requestOpenFile: (payload) =>
-      Effect.flatMap(runtime.contextEffect, (context) =>
-        Effect.provideContext(
-          openBuildDisplayIfTex(session, payload.location, {
-            preserveFocus: payload.preserveFocus,
-          }),
-          context,
-        ),
+      withProcessServices(
+        runtime,
+        openBuildDisplayIfTex(session, payload.location, {
+          preserveFocus: payload.preserveFocus,
+        }),
       ).pipe(Effect.asVoid),
     requestShowInstruction: (payload) =>
       handleRequestShowInstruction(globalState, payload),

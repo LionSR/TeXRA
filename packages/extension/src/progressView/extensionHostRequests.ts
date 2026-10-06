@@ -201,8 +201,7 @@ function commandVerb(command: string, ...args: unknown[]) {
   return Effect.asVoid(runCommand(command, ...args));
 }
 
-/** The typed notification surface the run-action ports, the launch host, and
- *  the transcript export ports take. */
+/** This window's `host.request` handler over its ports. */
 export function createExtensionHostRequests(
   options: ExtensionHostRequestsOptions,
 ): ExtensionHostRequests {
@@ -472,7 +471,7 @@ export function createExtensionHostRequests(
               patch: { commit: parsed.commitHash },
             });
           } else {
-            void runtime.runFork(
+            runtime.runFork(
               vscodeUi.showInfoMessage(
                 `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
               ),
@@ -491,7 +490,7 @@ export function createExtensionHostRequests(
             yield* snapshot.refreshFiles;
             return { kind: 'files', paths: [parsed.sourcePath] } as HostOutcome;
           }
-          void runtime.runFork(
+          runtime.runFork(
             vscodeUi.showInfoMessage(
               `The base file ${parsed.sourcePath} could not be found. Keeping ${currentOpenFile} selected.`,
             ),
@@ -593,14 +592,7 @@ export function createExtensionHostRequests(
     openAgentSettings: commandVerb('texra.showAgents'),
     openCustomAgentDirectory: Effect.gen(function* () {
       const dir = yield* (yield* AgentDirectories).custom();
-      if (dir) {
-        yield* fromHost('revealFileInOS', () =>
-          vscode.commands.executeCommand(
-            'revealFileInOS',
-            vscode.Uri.file(dir),
-          ),
-        );
-      }
+      if (dir) yield* commandVerb('revealFileInOS', vscode.Uri.file(dir));
     }),
     openAgentDocs: commandVerb('texra.openDoc', 'custom-agents'),
     recheckDependencies: Effect.gen(function* () {
