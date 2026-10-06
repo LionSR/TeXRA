@@ -1760,12 +1760,6 @@ show` print the same notice, and the new `texra agents customize`,
   `--input` is no longer a required flag, because a tool-use run may take none.
   A name carried by both categories is refused rather than resolved to one of
   them: the error names both candidates and their source-qualified spellings.
-- **`@texra-ai/harness` and `@texra-ai/llm` pack as two npm packages.**
-  `@texra-ai/llm` now builds to `dist/` (bundles and declarations), and the
-  harness depends on it instead of bundling it. Both take `effect` as a peer
-  at `^4.0.0` rather than one exact version, and both carry their own
-  version (`0.1.0`), which an app release no longer moves. Neither is
-  published yet.
 - **`@texra-ai/harness` exports the platform's ports and a request's
   refusals.** The root entry now exports the port types an `AgentPlatform`
   implements, the failures its stores answer with, the services a plugin's
