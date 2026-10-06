@@ -25,6 +25,8 @@ export interface RuntimePresentationEventPayloads {
   requestEnsureProgressView: RequestEnsureProgressViewPayload;
   /** A run wrote these workspace files: a window badges them. */
   workspaceFilesWritten: { readonly absolutePaths: readonly string[] };
+  /** A run changed the workspace's agent list: a window repaints it. */
+  workspaceAgentsChanged: Readonly<Record<string, never>>;
 }
 
 export type RuntimePresentationEvent = keyof RuntimePresentationEventPayloads;

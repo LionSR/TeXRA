@@ -230,6 +230,8 @@ export function createAgentPresentationHost(
       emitAppSignal('workspaceFilesWritten', {
         absolutePaths: [...absolutePaths],
       }),
+    workspaceAgentsChanged: () =>
+      emitAppSignal('workspaceAgentsChanged', undefined),
   };
   return {
     emit<K extends RuntimePresentationEvent>(

@@ -804,7 +804,8 @@ show` print the same notice, and the new `texra agents customize`,
   (`accept_run_files`), the window never heard of it, so VS Code's "T"
   badge and the desktop app's file tree stayed unmarked. The task now
   tells its project's window through the service, as it already does
-  for its other notices.
+  for its other notices. The same goes for the settings view's agent
+  list after the setup agent applies a team.
 - **The CLI's progress line no longer goes blank for a task with an empty
   description.** It shows the run's status instead.
 - **A task with an empty description no longer shows a blank title in

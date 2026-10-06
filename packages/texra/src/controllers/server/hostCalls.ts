@@ -117,6 +117,10 @@ const NoticeSchema = z.discriminatedUnion('event', [
     event: z.literal('workspaceFilesWritten'),
     payload: z.object({ absolutePaths: z.array(z.string()) }),
   }),
+  z.object({
+    event: z.literal('workspaceAgentsChanged'),
+    payload: z.object({}),
+  }),
 ]);
 export type Notice = z.infer<typeof NoticeSchema>;
 

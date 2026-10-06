@@ -134,6 +134,8 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
         emitAppSignal('workspaceFilesWritten', {
           absolutePaths: [...absolutePaths],
         }),
+      workspaceAgentsChanged: () =>
+        emitAppSignal('workspaceAgentsChanged', undefined),
     };
 
     function handlePresentationEvent<K extends RuntimePresentationEvent>(
