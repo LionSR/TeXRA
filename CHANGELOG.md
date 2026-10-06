@@ -802,6 +802,11 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Projects that share an API key back off together after a rate
+  limit.** The background service runs every project's tasks, but each
+  project waited out a provider's 429 on its own, so a second project kept
+  hitting the limited key. A rate limit on one credential now pauses that
+  credential's calls in every project the process serves.
 - **The CLI's progress line no longer goes blank for a task with an empty
   description.** It shows the run's status instead.
 - **A task with an empty description no longer shows a blank title in

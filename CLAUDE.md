@@ -260,7 +260,7 @@ folded `RunState` each `appendBatch` returns; resume is the same function
 reading the same rows. Every wait writes a `run.position`; a response row is
 committed before its tools dispatch and a `tool.result` before the loop
 continues. Retry has two owners inside `ModelInvoker`: an automatic
-route-scoped batch under the session's `ModelRetryGate`, and a durable human
+route-scoped batch under the process's `ModelRetryGate`, and a durable human
 permit (`request.opened` + the snapshot's `pendingRetry`). Do not add a
 node, a cursor, a services bag, or a second writer of the run history.
 

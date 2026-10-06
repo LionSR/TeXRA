@@ -200,7 +200,11 @@ type HeldSessions = Map<SessionKey, SessionHandle>;
  * both end it by closing that scope, and every owner the handle holds is torn
  * down by a finalizer registered here.
  */
-const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
+const sessionHandleLayer = (
+  key: SessionKey,
+  held: HeldSessions,
+  modelRetries: ModelRetryGate,
+) =>
   Layer.effectContext(
     Effect.gen(function* () {
       const { publish, exclusive, detach, settle, removeRun, ...reads } =
@@ -511,11 +515,11 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
       );
       // Capture the startup cohort before callers can publish new launches.
       const initialListing = yield* eventLog.readListing();
-      // The runs' fork, the gate's probes and the history store end with this scope.
+      // The runs' fork and the history store end with this scope.
       const fork = yield* FiberSet.makeRuntime<ProcessServices>();
       const pinPlugins = yield* sessionPluginLayers(() => session.runs);
       const services = {
-        modelRetries: yield* ModelRetryGate.make,
+        modelRetries,
         history: yield* HistoryQuery.make(() => session),
       };
       const session = new SessionHandle({ ...key.open, graph, ...services });
@@ -704,26 +708,14 @@ const sessionGraphLayer = (key: SessionKey) => {
 };
 
 /**
- * The complete session of one root: the handle over the root's graph, the
- * handle alone being the entry's service. `Layer.fresh`: the layer map builds
- * every key's entry through one memo map, and layers memoize by reference, so
- * without it every root would share one log and one fold. The graph's sources
- * and ephemeral database are fresh; a persistent graph retains its database
- * from `ProjectDatabases`, shared with the project's application state. That
- * resource family and the process identity come from the runtime's context.
- */
-const sessionLayer = (key: SessionKey, held: HeldSessions) =>
-  Layer.fresh(
-    sessionHandleLayer(key, held).pipe(Layer.provide(sessionGraphLayer(key))),
-  );
-
-/**
  * The keyed resource family the desktop's N papers and the SDK's N roots need:
  * one session per root, held by the map until `close` releases it or the
  * runtime goes. Opens borrow (the reference an open takes is released at once)
  * and the idle lifetime is infinite, so no reader's detachment and no
  * reference count decides a session's end: the application does, explicitly
- * (PR #11893, agent SDK architecture proposal, section 3).
+ * (PR #11893, agent SDK architecture proposal, section 3). Entries share one
+ * route gate (a 429 cools a credential for every project) and are otherwise
+ * `Layer.fresh`: layers memoize by reference, else roots share one fold.
  */
 class Sessions extends Context.Service<
   Sessions,
@@ -732,9 +724,17 @@ class Sessions extends Context.Service<
   static layer(held: HeldSessions) {
     return Layer.effect(
       Sessions,
-      LayerMap.make((key: SessionKey) => sessionLayer(key, held), {
-        idleTimeToLive: Duration.infinity,
-      }),
+      Effect.flatMap(ModelRetryGate.make, (modelRetries) =>
+        LayerMap.make(
+          (key: SessionKey) =>
+            Layer.fresh(
+              sessionHandleLayer(key, held, modelRetries).pipe(
+                Layer.provide(sessionGraphLayer(key)),
+              ),
+            ),
+          { idleTimeToLive: Duration.infinity },
+        ),
+      ),
     );
   }
 }

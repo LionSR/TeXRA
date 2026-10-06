@@ -171,7 +171,7 @@ export interface ModelCall<R = never> {
 
 /**
  * One completed call outside a turn: prepared, streamed to its completed
- * result under the session's route gate, retried automatically as a turn's
+ * result under the process's route gate, retried automatically as a turn's
  * attempts are (the batch, over failures classified retryable on the bound
  * route, reacquiring a dead connection first), then priced and reported. It
  * writes no row; a caller that records the call stamps the usage on its own.

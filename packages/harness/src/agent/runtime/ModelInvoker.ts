@@ -9,8 +9,8 @@
  * binding, gate and pricing, recorded by its caller.
  *
  * Two owners of retry. Owner A is automatic and route-scoped: a bounded batch
- * of attempts under the session's `ModelRetryGate`, so sibling runs on one
- * credential share cooling. Owner B is a human, indefinite and durable: a
+ * of attempts under the process's `ModelRetryGate`, so every run on one
+ * credential shares cooling. Owner B is a human, indefinite and durable: a
  * `request.opened` row whose `model.retry` permit walks `waiting` ->
  * `authorized` -> `started`. A decision and an unused permit survive a
  * restart; a consumed permit never buys a second billed attempt implicitly.
@@ -696,8 +696,8 @@ export const modelInvokerLayer = (): Layer.Layer<
       );
 
       /**
-       * One attempt under the session's route gate: the gate is session state
-       * by design (sibling runs share cooling), and the attempt runs inside its
+       * One attempt under the process's route gate, which every session's
+       * runs share (one cooling per route), and the attempt runs inside its
        * permits on this fiber. Cancelling the run interrupts the fiber, which
        * the gate reads as the waiting or in-flight attempt being abandoned.
        */

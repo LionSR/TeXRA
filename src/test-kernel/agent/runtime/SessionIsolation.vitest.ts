@@ -90,6 +90,9 @@ describe('session isolation', () => {
         Effect.promise((): Promise<string> => readFile(file, 'utf8'));
       expect(yield* read(fakePath('storage/a/note.txt'))).toBe('from a');
       expect(yield* read(fakePath('storage/b/note.txt'))).toBe('from b');
+      // What the two share is the process's: a 429 one paper's run hits on a
+      // credential cools the other paper's runs on that credential too.
+      expect(sessionB.modelRetries).toBe(sessionA.modelRetries);
       // Neither paper's roots are the process's: a session answers from the
       // record it holds, and the process roots name only the default session.
       expect(testWorkspaceRoots().workspace).toBe(fakePath('workspace'));
