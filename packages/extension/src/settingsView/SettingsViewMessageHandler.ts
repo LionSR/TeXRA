@@ -163,12 +163,10 @@ export class SettingsViewMessageHandler {
             (selected) => selected ?? undefined,
           ),
         refreshCatalogs: (selectedAgent) =>
-          progressView
-            .refreshCatalogs({
-              agentCatalogAlreadyFresh: true,
-              selectedAgent,
-            })
-            .pipe(Effect.asVoid),
+          progressView.refreshCatalogs({
+            agentCatalogAlreadyFresh: true,
+            selectedAgent,
+          }),
         // The launcher's API-key banner reads the same credential probe from
         // the host snapshot; the funnel follows the banner.
         refreshCredentialStatus: progressView.refreshApiKeyStatus,
@@ -399,7 +397,7 @@ export class SettingsViewMessageHandler {
 
   private refreshCopilotRoutes() {
     return allSettledVoid<Error, ProcessServices>([
-      this.progressView.refreshCatalogs().pipe(Effect.asVoid),
+      this.progressView.refreshCatalogs(),
       this.body.postModelSelection,
     ]);
   }

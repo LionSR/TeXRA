@@ -21,11 +21,7 @@ import {
   type ManualCriticismEntry,
   type SessionHandle,
 } from '@agent/runtime';
-import {
-  BundledViewContentProvider,
-  getCombinedLocalResourceRoots,
-  getSharedLocalResourceRoots,
-} from '@common/webview';
+import { BundledViewContentProvider } from '@common/webview';
 import {
   EXTENSION_CATEGORIES,
   getFilterExtensions,
@@ -89,9 +85,8 @@ const CHANNEL = 'ProgressViewProvider';
 const CATALOG_RESCAN_FAILED =
   'Agent catalog rescan after an agent-directory change failed';
 
-export type ProgressRunRevealResult = 'revealed' | 'missing';
+type ProgressRunRevealResult = 'revealed' | 'missing';
 
-/** One transport port: a VS Code webview attached to the bridge. */
 /**
  * A placement the window refused: the sidebar focus command, or a tab
  * attaching to a bridge that has closed. Tagged because these reach the
@@ -105,6 +100,7 @@ export class SurfacePlacementFailed extends Data.TaggedError(
   readonly cause: unknown;
 }> {}
 
+/** One transport port: a VS Code webview attached to the bridge. */
 interface Port {
   readonly attached: AttachedPort;
   readonly disposables: vscode.Disposable[];
@@ -173,7 +169,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private readonly draftRequests = new HostDraftRequests();
 
   constructor(
-    private readonly context: vscode.ExtensionContext,
+    context: vscode.ExtensionContext,
     private readonly globalState: StateStore,
     private readonly secrets: PlatformSecrets,
     /** Process runtime shared with every extension surface. */
@@ -588,9 +584,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.options = {
       enableScripts: true,
       enableCommandUris: true,
-      localResourceRoots: getCombinedLocalResourceRoots(this.context, [
-        'progressView',
-      ]),
+      localResourceRoots: this.contentProvider.localResourceRoots,
     };
     this.closeSidebarPort();
     this.sidebarView = webviewView;
@@ -749,7 +743,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  /** The New-task state in the sidebar (`texra.showMainView`). */
   /**
    * "Connect a model" from outside the panel (the setup command, the status
    * pill): bring the one credential prompt into view. A previous "Skip for
@@ -764,6 +757,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
+  /** The New-task state in the sidebar (`texra.showMainView`). */
   public showLauncher() {
     return Effect.gen({ self: this }, function* () {
       yield* this.showInSidebar();
@@ -824,10 +818,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           enableScripts: true,
           enableCommandUris: true,
           retainContextWhenHidden: true,
-          localResourceRoots: getSharedLocalResourceRoots(
-            this.context,
-            'progressView',
-          ),
+          localResourceRoots: this.contentProvider.localResourceRoots,
         },
       );
       panel.iconPath = new vscode.ThemeIcon('pulse');

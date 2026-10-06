@@ -38,6 +38,25 @@ const SHOW_OF_MEMBER: Record<
 };
 
 /**
+ * A quick pick or input box the calling fiber owns: the token source is
+ * disposed on every path — the answer, a host fault, and interruption — and
+ * cancelling it is what closes a list or box the user never answered.
+ */
+export const ownedPrompt = <A, E>(
+  show: (token: vscode.CancellationToken) => Thenable<A>,
+  failed: (cause: unknown) => E,
+): Effect.Effect<A, E> =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => new vscode.CancellationTokenSource()),
+    (tokens) =>
+      Effect.tryPromise({
+        try: async () => show(tokens.token),
+        catch: failed,
+      }).pipe(Effect.onInterrupt(() => Effect.sync(() => tokens.cancel()))),
+    (tokens) => Effect.sync(() => tokens.dispose()),
+  );
+
+/**
  * VS Code's message and dialog surfaces behind the host-neutral
  * {@link MessageHost} and {@link PromptHost}.
  *
@@ -117,34 +136,21 @@ class VscodeUiHost implements MessageHost, PromptHost {
     );
   }
 
-  /**
-   * Ask for one line of text. The box is opened with a cancellation token this
-   * program owns: the token source is disposed on every path — the answer, a
-   * host fault, and interruption — and cancelling it is what closes an input
-   * box the user never answered.
-   */
+  /** Ask for one line of text in a box {@link ownedPrompt} owns. */
   input(
     options: PromptInputOptions,
   ): Effect.Effect<string | undefined, PromptFailed> {
-    return Effect.acquireUseRelease(
-      Effect.sync(() => new vscode.CancellationTokenSource()),
-      (tokens) =>
-        Effect.tryPromise({
-          // A secret pasted from another window must not dismiss the box.
-          try: () =>
-            vscode.window.showInputBox(
-              { ...options, ignoreFocusOut: true },
-              tokens.token,
-            ),
-          catch: (cause) =>
-            new PromptFailed({
-              reason: 'presentation-failed',
-              member: 'input',
-              message: 'VS Code would not show the input box.',
-              cause,
-            }),
-        }).pipe(Effect.onInterrupt(() => Effect.sync(() => tokens.cancel()))),
-      (tokens) => Effect.sync(() => tokens.dispose()),
+    return ownedPrompt(
+      // A secret pasted from another window must not dismiss the box.
+      (token) =>
+        vscode.window.showInputBox({ ...options, ignoreFocusOut: true }, token),
+      (cause) =>
+        new PromptFailed({
+          reason: 'presentation-failed',
+          member: 'input',
+          message: 'VS Code would not show the input box.',
+          cause,
+        }),
     );
   }
 

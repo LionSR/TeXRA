@@ -48,15 +48,13 @@ function announceSelection<E>(
 function createMultiPicker(
   session: SessionHandle,
   options: PickerOptions,
-): (currentFile?: string) => Effect.Effect<string[] | null> {
-  return (currentFile) =>
+): () => Effect.Effect<string[] | null> {
+  return () =>
     announceSelection(
       selectFiles({
-        currentFile,
         workspacePath: session.roots.workspace,
         openLabel: options.openLabel,
         filters: options.filters(),
-        allowMany: true,
       }),
     );
 }
@@ -67,10 +65,7 @@ function createMultiPicker(
  */
 export function createFileSelectionPickers(
   session: SessionHandle,
-): Record<
-  MultipleDocumentFileType,
-  (currentFile?: string) => Effect.Effect<string[] | null>
-> {
+): Record<MultipleDocumentFileType, () => Effect.Effect<string[] | null>> {
   return {
     input: createMultiPicker(session, {
       openLabel: 'Select Files',

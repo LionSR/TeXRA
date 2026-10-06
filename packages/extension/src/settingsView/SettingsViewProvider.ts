@@ -4,10 +4,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime';
-import {
-  BundledViewContentProvider,
-  getSharedLocalResourceRoots,
-} from '@common/webview';
+import { BundledViewContentProvider } from '@common/webview';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -45,7 +42,7 @@ export class SettingsViewProvider {
   private readonly messageHandler: SettingsViewMessageHandler;
 
   constructor(
-    private readonly context: vscode.ExtensionContext,
+    context: vscode.ExtensionContext,
     globalState: StateStore,
     secrets: PlatformSecrets,
     private readonly runtime: ProcessRuntime,
@@ -92,10 +89,7 @@ export class SettingsViewProvider {
           {
             enableScripts: true,
             retainContextWhenHidden: true,
-            localResourceRoots: getSharedLocalResourceRoots(
-              this.context,
-              'settingsView',
-            ),
+            localResourceRoots: this.contentProvider.localResourceRoots,
           },
         );
         panel.iconPath = new vscode.ThemeIcon('gear');

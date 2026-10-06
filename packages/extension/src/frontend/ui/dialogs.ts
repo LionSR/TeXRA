@@ -1,11 +1,9 @@
-// Standard library imports
-import * as path from 'node:path';
-
 // Third-party imports
 import { Data, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
+import { ownedPrompt } from '@frontend/hosts/VscodeUiHost';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
@@ -29,23 +27,8 @@ export class HostPromptFailed extends Data.TaggedError('HostPromptFailed')<{
   readonly cause: unknown;
 }> {}
 
-/**
- * A prompt this program owns: the token source is disposed on every path, and
- * interrupting the fiber cancels the list or box the user never answered.
- */
-const ownedPrompt = <A>(
-  show: (token: vscode.CancellationToken) => Thenable<A>,
-): Effect.Effect<A, HostPromptFailed> =>
-  Effect.acquireUseRelease(
-    Effect.sync(() => new vscode.CancellationTokenSource()),
-    (tokens) =>
-      Effect.tryPromise({
-        try: async () => show(tokens.token),
-        catch: (cause) =>
-          new HostPromptFailed({ message: toErrorMessage(cause), cause }),
-      }).pipe(Effect.onInterrupt(() => Effect.sync(() => tokens.cancel()))),
-    (tokens) => Effect.sync(() => tokens.dispose()),
-  );
+const hostPromptFailed = (cause: unknown) =>
+  new HostPromptFailed({ message: toErrorMessage(cause), cause });
 
 export function quickPick<T extends string | vscode.QuickPickItem>(
   items: readonly T[],
@@ -58,50 +41,38 @@ export function quickPick<T extends string | vscode.QuickPickItem>(
         options,
         token,
       )) as T | undefined,
+    hostPromptFailed,
   );
 }
 
 export function inputBox(
   options: vscode.InputBoxOptions,
 ): Effect.Effect<string | undefined, HostPromptFailed> {
-  return ownedPrompt((token) => vscode.window.showInputBox(options, token));
+  return ownedPrompt(
+    (token) => vscode.window.showInputBox(options, token),
+    hostPromptFailed,
+  );
 }
 
 interface FileDialogOptions {
-  /** Whether multiple files can be selected */
-  allowMany?: boolean;
   /** Label for the open button */
   openLabel: string;
   /** Mapping from filter name to array of extensions without dots */
   filters: { [name: string]: string[] };
-  /** Current file path relative to workspace (used to compute defaultUri) */
-  currentFile?: string;
   /** The workspace root the dialog opens in and relativizes picks against. */
   workspacePath: string | undefined;
 }
 
-function computeDefaultUri({
-  workspacePath,
-  currentFile,
-}: FileDialogOptions): vscode.Uri | null {
-  if (!workspacePath) {
-    return null;
-  }
-  const basePath = currentFile
-    ? path.dirname(path.join(workspacePath, currentFile))
-    : workspacePath;
-  return vscode.Uri.file(basePath);
-}
-
 /**
- * Generic helper to show an open file dialog and return selected relative paths.
+ * Show a multi-select open file dialog in the workspace and return the
+ * selected workspace-relative paths.
  */
 export function selectFiles(
   options: FileDialogOptions,
 ): Effect.Effect<string[] | null, OpenDialogFailed> {
   return Effect.gen(function* () {
-    const defaultUri = computeDefaultUri(options);
-    if (!defaultUri) {
+    const { workspacePath } = options;
+    if (!workspacePath) {
       // The notice is detached, as the caller's `runFork` left it: the picker
       // answers "nothing picked" straight away rather than waiting on a toast
       // the user may never dismiss.
@@ -114,11 +85,11 @@ export function selectFiles(
     const fileUris = yield* Effect.tryPromise({
       try: async () =>
         vscode.window.showOpenDialog({
-          canSelectMany: options.allowMany ?? false,
+          canSelectMany: true,
           openLabel: options.openLabel,
           canSelectFiles: true,
           canSelectFolders: false,
-          defaultUri,
+          defaultUri: vscode.Uri.file(workspacePath),
           filters: options.filters,
         }),
       catch: (cause) =>
@@ -133,7 +104,7 @@ export function selectFiles(
       return null;
     }
     return fileUris.map((uri) =>
-      workspaceRelativePath(options.workspacePath, uri.fsPath),
+      workspaceRelativePath(workspacePath, uri.fsPath),
     );
   });
 }
