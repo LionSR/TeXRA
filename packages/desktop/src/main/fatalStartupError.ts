@@ -20,7 +20,7 @@ export function reportFatalStartupError(error: unknown): void {
  * Installs the fatal post-startup rejection path. Unhandled main-process
  * failures cannot safely continue with a partially-updated Electron state.
  */
-export function installPostStartupRejectionHandler(): () => void {
+export function installPostStartupRejectionHandler(): void {
   const report = (error: unknown) => {
     const ready = app.isReady();
     reportFatalDesktopError(error, {
@@ -34,10 +34,6 @@ export function installPostStartupRejectionHandler(): () => void {
     });
   };
   process.on('unhandledRejection', report);
-
-  return () => {
-    process.off('unhandledRejection', report);
-  };
 }
 
 function reportFatalDesktopError(

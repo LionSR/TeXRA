@@ -1,4 +1,4 @@
-import { Data, Effect, FileSystem, type Path } from 'effect';
+import { Effect, type FileSystem, type Path } from 'effect';
 
 import type { ProjectDatabases } from '@shared/session/database';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsViewMessages';
@@ -21,23 +21,6 @@ import type {
 } from './desktopIpcTypes.js';
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
 import type { DesktopSpawn } from './desktopWindows.js';
-
-/** A shell action's host call rejected. The window reports it and stays up. */
-class ShellActionFailed extends Data.TaggedError('ShellActionFailed')<{
-  readonly cause: unknown;
-}> {}
-
-/**
- * One host program on the shell's own failure channel: the value the reporter
- * formats is the one the member failed with.
- */
-function onShellFailure<A, E, R>(
-  program: Effect.Effect<A, E, R>,
-): Effect.Effect<A, ShellActionFailed, R> {
-  return program.pipe(
-    Effect.mapError((cause) => new ShellActionFailed({ cause })),
-  );
-}
 
 interface DesktopShellActionFactoryOptions {
   openExternalUrl(url: string): Effect.Effect<void, PreviewUnavailable>;
@@ -66,23 +49,18 @@ export function createDesktopShellActions(
 
   /**
    * Shell actions are fire-and-forget: the program runs on its own fiber and
-   * a host rejection reaches the window's async-error reporter with the
-   * rejection value itself, which is what the reporter formats. The handler
-   * names the whole channel, so a tag added to it fails to compile rather
-   * than escaping the fork unreported.
+   * whatever it fails with reaches the window's async-error reporter as is.
    */
   function runShellAction(
     program: Effect.Effect<
       void,
-      ShellActionFailed,
+      Error,
       FileSystem.FileSystem | Path.Path | ProjectDatabases | ChildProcessSpawner
     >,
   ): void {
     options.spawn(
       program.pipe(
-        Effect.catch((failure: ShellActionFailed) =>
-          Effect.sync(() => reportAsyncError(failure.cause)),
-        ),
+        Effect.catch((error) => Effect.sync(() => reportAsyncError(error))),
       ),
     );
   }
@@ -107,11 +85,9 @@ export function createDesktopShellActions(
 
   return {
     openDesktopDocs: () =>
-      runShellAction(onShellFailure(options.openExternalUrl(DESKTOP_DOCS_URL))),
-    openLogFolder: () =>
-      runShellAction(onShellFailure(options.openLogFolder())),
-    openWorkspaceFolder: () =>
-      runShellAction(onShellFailure(options.openWorkspaceFolder())),
+      runShellAction(options.openExternalUrl(DESKTOP_DOCS_URL)),
+    openLogFolder: () => runShellAction(options.openLogFolder()),
+    openWorkspaceFolder: () => runShellAction(options.openWorkspaceFolder()),
     saveFile: () => {
       renderer.postToRenderer({
         command: DESKTOP_SHELL_COMMANDS.SAVE_FILE,
