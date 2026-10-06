@@ -25,7 +25,7 @@ import { Rejected } from '@shared/session/requestErrors';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import { generateRunId } from '@utils/core';
 
-import { positionRow, rowAggregate } from './loop/rows';
+import { configRow, positionRow, rowAggregate } from './loop/rows';
 import type { SessionHandle } from './SessionHandle';
 
 /**
@@ -113,6 +113,15 @@ export const forkRun = Effect.fn('forkRun')(function* (
   const named = [input.system, input.instruction].flatMap((digest) =>
     digest === undefined ? [] : [digest],
   );
+  // A child's fork is a root: the task its ancestors were given, and the
+  // structured result its parent's call asked for, are not its. It runs on
+  // the model its source was on at the cut, bound as it was.
+  const {
+    rootUserInstruction: _root,
+    outputSchema: _schema,
+    ...launched
+  } = config;
+  const record = { ...launched, model: state.modelId ?? launched.model };
   const rows: RunHistoryDraft[] = [
     {
       type: 'context.edit',
@@ -132,26 +141,20 @@ export const forkRun = Effect.fn('forkRun')(function* (
       aggregateId: rowAggregate(runId),
       payload: { digest, value: state.contents[digest] },
     })),
+    ...(state.backend === null
+      ? []
+      : [
+          configRow(runId, record, record.model, {
+            backend: state.backend,
+            declinedRoutes: state.declinedRoutes,
+          }),
+        ]),
     positionRow(runId, state, 'waiting'),
   ];
-  // A child's fork is a root: the task its ancestors were given, and the
-  // structured result its parent's call asked for, are not its.
-  const {
-    rootUserInstruction: _root,
-    outputSchema: _schema,
-    ...record
-  } = config;
   const registration = yield* registrationRows(session, runId, record, {
     identity: start.identity,
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     provenance: { kind: 'fork', from, at: cut },
-    // The fork runs on what its source ran on at the cut.
-    ...(state.backend !== null && {
-      binding: {
-        backend: state.backend,
-        declinedRoutes: state.declinedRoutes,
-      },
-    }),
     ...(title !== null && {
       description: title.description,
       descriptionBy: title.by,

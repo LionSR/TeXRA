@@ -102,7 +102,7 @@
   "packages/harness/src/shared/schemas/runHistoryEvent.ts": 10,
   "packages/harness/src/shared/schemas/runIdentity.ts": 1,
   "packages/harness/src/shared/schemas/runRecords.ts": 7,
-  "packages/harness/src/shared/schemas/runSnapshotState.ts": 3,
+  "packages/harness/src/shared/schemas/runFacts.ts": 3,
   "packages/harness/src/shared/schemas/runState.ts": 3,
   "packages/harness/src/shared/schemas/scriptDelivery.ts": 2,
   "packages/harness/src/shared/schemas/sessionEvent.ts": 12,

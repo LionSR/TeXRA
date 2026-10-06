@@ -34,7 +34,6 @@ import {
   type AggregateId,
   type DeliveredResult,
   type ResultMeta,
-  type RunBinding,
   type RunEnd,
   type SessionEvent,
   type RunId,
@@ -300,12 +299,7 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
           'Failed to fold the run usage from its run history rows',
         ).pipe(Effect.annotateLogs({ runId, error: folded.failure.message }));
       }
-      // Its configuration folds without a history: usage is a history's.
-      const history = Result.isSuccess(folded) ? folded.success : null;
-      const own =
-        history !== null && history.runHistoryRows > 0
-          ? history.usage
-          : undefined;
+      const own = Result.isSuccess(folded) ? folded.success?.usage : undefined;
       const config = latestOfType(rows, id, 'run.config')?.config;
       const usage =
         config && isDocumentTaskConfig(config)
@@ -341,18 +335,6 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
         rows.some((row) => row.aggregateId === id && row.type === 'run.start'),
       ),
     readRunRecord: readRecord,
-    /** The run's loop opened it: a `run.position` is among its rows. */
-    isOpened: (): Effect.Effect<boolean, DatabaseReadFailed> =>
-      read((rows) =>
-        rows.some(
-          (row) => row.aggregateId === id && row.type === 'run.position',
-        ),
-      ),
-    /** What the run's newest `run.config` says it is bound to: the backend
-     *  and launch-declined routes a resume rebinds on; null before the run
-     *  first bound. */
-    readBinding: (): Effect.Effect<RunBinding | null, DatabaseReadFailed> =>
-      read((rows) => latestOfType(rows, id, 'run.config')?.binding ?? null),
     readConfig: (): Effect.Effect<AgentConfig | null, DatabaseReadFailed> =>
       readRecord().pipe(
         Effect.map((record) =>

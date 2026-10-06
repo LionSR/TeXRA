@@ -58,6 +58,7 @@ export const NormalizedUsageSchema = TokenUsageStatsSchema.pick({
   /** The route's subscription plan, when it names one; display-only. */
   usagePlan: z.string().optional(),
 });
+/** Normalized, priced usage of one call ({@link NormalizedUsageSchema}). */
 export type NormalizedUsage = z.infer<typeof NormalizedUsageSchema>;
 
 /**
@@ -95,10 +96,12 @@ export function addTurnUsage(
 
 // ------------------------------------------------------------ launch facts
 
+/** An attached memory the opening could not read, and why. */
 export const AttachedMemoryMissSchema = z.object({
   path: z.string(),
   reason: z.string(),
 });
+/** An attached memory the opening could not read ({@link AttachedMemoryMissSchema}). */
 export type AttachedMemoryMiss = z.infer<typeof AttachedMemoryMissSchema>;
 
 /** One skill in a step's catalog, as the prompt lists it, with the plugin

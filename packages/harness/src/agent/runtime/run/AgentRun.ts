@@ -22,7 +22,7 @@ import {
   type StepToolInputs,
 } from '@agent/runtime/agentToolResolution';
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
-import { getRunRecords } from '@agent/storage/runRecords';
+import { RunHistory } from '@shared/session/runHistory';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
 import {
@@ -161,13 +161,14 @@ export const agentRunLayer = (
 ): Layer.Layer<
   AgentRun,
   Error,
-  LanguageModel | HttpClient.HttpClient | LiveTools
+  RunHistory | LanguageModel | HttpClient.HttpClient | LiveTools
 > =>
   Layer.effect(
     AgentRun,
     Effect.gen(function* () {
       const { runId, session } = ctx;
       const { logger, config } = ctx;
+      const runHistory = yield* RunHistory;
       const layerScope = yield* Effect.scope;
       // One parallel child holds what the run holds for its life; at close
       // each release runs concurrently under its own deadline.
@@ -244,15 +245,16 @@ export const agentRunLayer = (
         parentOffered,
         held,
       };
-      // A resumed run rebinds what its newest `run.config` records (its
-      // model is that config's); a fresh run binds the launch model under
-      // today's default route.
-      const persisted = yield* getRunRecords(session, runId).readBinding();
+      // A resumed run rebinds what its rows fold to (its model is its
+      // newest config's); a fresh run binds the launch model under today's
+      // default route.
+      const folded = yield* runHistory.load(runId);
+      const backend = folded?.backend ?? undefined;
+      const persisted = backend === undefined ? null : folded;
       const modelId = config.model;
-      const backend = persisted?.backend;
       const modelConfig = ctx.modelConfig;
-      // The routes this run's launch declines: a resumed run replays the set
-      // its binding recorded, a fresh own-API-key fallback declines every
+      // The routes this run declines: a resumed run replays the set its rows
+      // record, a fresh own-API-key fallback declines every
       // subscription route from its first binding (the user answered a quota
       // prompt by choosing to pay with their own key). Nothing here reads or
       // writes the user's stored preferences.

@@ -21,7 +21,7 @@ import {
   type StageHandle,
 } from '@agent/trace';
 import { commitResumedActivation } from '@agent/storage/runLifecycle';
-import { getRunRecords } from '@agent/storage/runRecords';
+import { deriveResumability } from '@agent/storage/resumability';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
@@ -355,9 +355,9 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     // policy and a root launch gets the process default exactly once.
     const { session, runId } = input;
     // Whether a resumed run's rows hold its opening.
-    const opened = input.resumed
-      ? yield* getRunRecords(session, runId).isOpened()
-      : false;
+    const opened =
+      input.resumed &&
+      (yield* deriveResumability(runId, session)).kind === 'checkpoint';
     // The run's model is bound from the stores the launch already has: the
     // session's own setting slots, so routing and the provider switches
     // answer for this run's workspace, and the process secret store.

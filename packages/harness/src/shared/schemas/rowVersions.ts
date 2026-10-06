@@ -44,6 +44,7 @@ export const RETIRED_ROW_KINDS: ReadonlySet<string> = new Set<string>([
   'model.compaction',
   'model.retry',
   'output.produced',
+  'run.snapshot',
   'workflow.attempt',
   'workflow.call',
   'workflow.journal',

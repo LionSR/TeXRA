@@ -30,7 +30,6 @@ import {
   type RunId,
   type RunIdentity,
   type RunOutcome,
-  type RunBinding,
   type RunProvenance,
   type UserFollowUpSupport,
 } from '@shared/schemas';
@@ -57,9 +56,10 @@ function pinRunWorkingDirectory(
  * The `run.config` row an activation owes, or null when the run's newest
  * row already says it. A run's configuration is written with its
  * registration and afterwards only when it changes, so the newest row is the
- * configuration and no activation restates it. Its model and binding stay
- * the stored row's: the model the run is on is the newest config's, which
- * only a switch moves. Its caller holds the run's claim, so no other writer
+ * configuration and no activation restates it. Its model stays the stored
+ * row's: the model the run is on is the newest config's, which only a
+ * switch moves, and its binding is the fold's, which a config without one
+ * leaves as it was. Its caller holds the run's claim, so no other writer
  * can move the row between the read and the write.
  */
 export const configChange = Effect.fn('configChange')(function* (
@@ -67,9 +67,7 @@ export const configChange = Effect.fn('configChange')(function* (
   runId: RunId,
   config: RunRecord,
 ) {
-  const records = getRunRecords(session, runId);
-  const stored = yield* records.readRunRecord();
-  const binding = yield* records.readBinding();
+  const stored = yield* getRunRecords(session, runId).readRunRecord();
   const next = RunRecordFieldsSchema.parse(
     pinRunWorkingDirectory(
       stored?.model === undefined ? config : { ...config, model: stored.model },
@@ -82,7 +80,6 @@ export const configChange = Effect.fn('configChange')(function* (
     type: 'run.config',
     aggregateId: aggregateId('run', runId),
     config: next,
-    ...(binding !== null && { binding }),
   } satisfies SessionEventDraft;
 });
 
@@ -125,9 +122,6 @@ interface RegisterRunOptions {
   readonly provenance?: RunProvenance;
   /** The approval grants the run starts with, on its `run.start`. */
   readonly grants?: ApprovalGrants;
-  /** What the run is bound to, when it starts bound (a fork keeps its
-   *  source's); a re-registration keeps the binding the run has. */
-  readonly binding?: RunBinding;
 }
 
 /**
@@ -187,14 +181,10 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
     // A registration, first or again, opens the run with its configuration
     // in the batch that takes the claim: nothing is compared before the
     // claim is held, so a takeover never skips the row on a stale read.
-    const binding =
-      options.binding ??
-      (prior ? yield* getRunRecords(session, runId).readBinding() : null);
     const config = {
       type: 'run.config',
       aggregateId: target,
       config: RunRecordFieldsSchema.parse(pinned),
-      ...(binding != null && { binding }),
     } satisfies SessionEventDraft;
     const events: SessionEventDraft[] = [];
     if (!prior) {
