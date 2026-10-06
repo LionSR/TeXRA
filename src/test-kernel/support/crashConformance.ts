@@ -313,9 +313,8 @@ function crashAt(clean: string, storage: string, n: number): void {
   }
 }
 
-/** Answer every request the runs open, those the prefix left pending
- *  included: approve, and retry an unfinished call whose outcome is
- *  unknown. */
+/** Approve every request the runs open, those the prefix left pending
+ *  included. */
 const approveAll = (session: SessionHandle) =>
   Stream.runForEach(
     session.events
@@ -326,13 +325,7 @@ const approveAll = (session: SessionHandle) =>
       const target = aggregateTarget(event.aggregateId);
       if (target.kind !== 'run') return Effect.void;
       return session
-        .decideRequest(
-          target.id,
-          event.requestId,
-          event.payload.kind === 'toolOutcome'
-            ? { action: 'retry' }
-            : { action: 'approve' },
-        )
+        .decideRequest(target.id, event.requestId, { action: 'approve' })
         .pipe(Effect.ignore);
     },
   ).pipe(Effect.forkScoped);
@@ -478,23 +471,6 @@ function violations(
       (row) =>
         (payload(row).invocation as { invocationId: string }).invocationId,
     );
-  // A person's retry of a call whose outcome is unknown: the decision's
-  // commit, by the tool the question is about and the call it is bound to.
-  const questions = new Map(
-    final.flatMap((row): [string, string][] => {
-      if (row.type !== 'request.opened') return [];
-      const opened = json(row) as {
-        readonly requestId: string;
-        readonly payload: {
-          readonly kind: string;
-          readonly data: { readonly toolName?: string };
-        };
-      };
-      return opened.payload.kind === 'toolOutcome'
-        ? [[opened.requestId, opened.payload.data.toolName ?? '']]
-        : [];
-    }),
-  );
   const boundTo = new Map(
     final
       .filter((row) => row.type === 'tool.binding')
@@ -503,35 +479,17 @@ function violations(
         String(payload(row).callId),
       ]),
   );
-  const retries = final.flatMap((row) => {
-    if (row.type !== 'request.decided') return [];
-    const decided = json(row) as {
-      readonly requestId: string;
-      readonly decision: { readonly action: string };
-    };
-    const tool = questions.get(decided.requestId);
-    return tool !== undefined && decided.decision.action === 'retry'
-      ? [
-          {
-            tool,
-            callId: boundTo.get(decided.requestId) ?? null,
-            commit: row.commit,
-          },
-        ]
-      : [];
-  });
-  // An unfinished command runs again only once a person chose to retry it.
-  const unaskedReruns = resumed.filter(
+  const isCommand = (callId: unknown) =>
+    /validation-(bash-\d+|script-\d+\/1)$/.test(String(callId));
+  // An unfinished command never runs again, whatever a second run would
+  // have returned: its outcome is unknown, and the model decides. A body
+  // that starts again is a second intent of the call.
+  const reruns = final.filter(
     (row) =>
-      payload(row).disposition === 'executed' &&
+      row.commit > n &&
+      row.type === 'tool.intent' &&
       Number(payload(row).attempt) > 1 &&
-      /validation-(bash-\d+|script-\d+\/1)$/.test(
-        String(payload(row).callId),
-      ) &&
-      !retries.some(
-        (retry) =>
-          retry.callId === payload(row).callId && retry.commit < row.commit,
-      ),
+      isCommand(payload(row).callId),
   );
   // A command runs only once a person approved it, before its result.
   const approvals = final.flatMap((row) => {
@@ -543,22 +501,6 @@ function violations(
     return decided.decision.action === 'approve'
       ? [{ callId: boundTo.get(decided.requestId), commit: row.commit }]
       : [];
-  });
-  // A command's body runs only once approved, so a command the prefix never
-  // approved cannot have started: asking whether it ran is a false question.
-  const isCommand = (callId: unknown) =>
-    /validation-(bash-\d+|script-\d+\/1)$/.test(String(callId));
-  const askedAboutUnstarted = final.some((row) => {
-    if (row.commit <= n || row.type !== 'request.opened') return false;
-    const { requestId } = json(row) as { readonly requestId: string };
-    const callId = boundTo.get(requestId);
-    return (
-      questions.has(requestId) &&
-      isCommand(callId) &&
-      !approvals.some(
-        (approval) => approval.callId === callId && approval.commit <= n,
-      )
-    );
   });
   const unapproved = resumed.filter(
     (row) =>
@@ -572,7 +514,8 @@ function violations(
           approval.commit < row.commit,
       ),
   );
-  // A call's child launches again only after a person chose to retry it.
+  // A call's child never launches again: one an earlier attempt left
+  // answers the call or resumes under its own id.
   const children = final.filter(
     (row) => row.type === 'run.start' && row.parent !== null,
   );
@@ -584,42 +527,6 @@ function violations(
         earlier.commit < child.commit && callOf(earlier) === callOf(child),
     ),
   );
-  // Each relaunch of a call needs its own retry of that call before it.
-  const unaskedRelaunches = relaunches.filter(
-    (child) =>
-      retries.filter(
-        (retry) =>
-          retry.tool === 'agent' &&
-          retry.callId === callOf(child) &&
-          retry.commit < child.commit,
-      ).length <
-      relaunches.filter(
-        (other) =>
-          callOf(other) === callOf(child) && other.commit <= child.commit,
-      ).length,
-  );
-  // An awaited child that ended cleanly answers its call: nobody is asked
-  // whether the work it finished should run again.
-  const cleanlyEnded = new Set(
-    prefix
-      .filter(
-        (row) => row.type === 'run.end' && json(row).outcome === 'completed',
-      )
-      .map((row) => row.run),
-  );
-  const askedAboutEnded = final.some((row) => {
-    if (row.type !== 'request.opened' || row.commit <= n) return false;
-    const opened = json(row) as {
-      readonly payload: {
-        readonly kind: string;
-        readonly data: { readonly childRunId?: string };
-      };
-    };
-    return (
-      opened.payload.kind === 'toolOutcome' &&
-      cleanlyEnded.has(opened.payload.data.childRunId ?? '')
-    );
-  });
   // A run's halt and its end are one fact: a halt committed without its end
   // reads as an interrupted run, which an automatic resume carries on. The
   // prefix ends where a transaction did, so a halt in it has its end too.
@@ -635,6 +542,33 @@ function violations(
       ),
   );
   const got = outcome(final, root);
+  // A command whose body the prefix started and never settled is not run
+  // again: it settles as outcome unknown, and the model decides. What the
+  // conversation settled from there on is then the model's choice, not
+  // the clean pass's, so those fields are not compared.
+  const isSettled = (callId: unknown) =>
+    prefix.some(
+      (row) => row.type === 'tool.result' && payload(row).callId === callId,
+    );
+  const cutShort = prefix.filter(
+    (row) =>
+      row.type === 'tool.intent' &&
+      isCommand(payload(row).callId) &&
+      !isSettled(payload(row).callId),
+  );
+  const unknownOutcomes = cutShort.filter(
+    (intent) =>
+      !final.some(
+        (row) =>
+          row.type === 'tool.result' &&
+          payload(row).callId === payload(intent).callId &&
+          payload(row).disposition === 'skipped' &&
+          JSON.stringify(payload(row).result).includes('outcome is unknown'),
+      ),
+  );
+  const modelDecides = new Set(
+    cutShort.length > 0 ? ['settled', 'children', 'childAnswers'] : [],
+  );
   // Every run's committed answers, each finalized once.
   const unfinalized = [...new Set(final.map((row) => row.run))].filter(
     (run) =>
@@ -645,11 +579,15 @@ function violations(
   );
   return [
     ...Object.entries(got).map(([field, value]) =>
+      modelDecides.has(field) ||
       JSON.stringify(value) ===
-      JSON.stringify(expected[field as keyof typeof expected])
+        JSON.stringify(expected[field as keyof typeof expected])
         ? null
         : `the conversation's ${field} came to ${JSON.stringify(value)}`,
     ),
+    unknownOutcomes.length === 0
+      ? null
+      : 'an interrupted command did not settle as outcome unknown',
     resumed.some((row) => settledBefore.has(key(row)))
       ? 'a call settled before the crash settled again'
       : null,
@@ -662,25 +600,15 @@ function violations(
     new Set(invocations).size === invocations.length
       ? null
       : 'an invocation was answered twice',
-    unaskedReruns.length === 0
-      ? null
-      : 'an unfinished command ran again with no one asked',
+    reruns.length === 0 ? null : 'an unfinished command ran again',
     unapproved.length === 0 ? null : 'a command ran before its approval',
-    askedAboutUnstarted
-      ? 'a person was asked whether a command that never started ran'
-      : null,
-    unaskedRelaunches.length === 0
-      ? null
-      : 'a child launched again with no one asked',
+    relaunches.length === 0 ? null : 'a child launched again',
     children.every((child) =>
       final.some((row) => row.run === child.run && row.type === 'run.end'),
     )
       ? null
       : 'a child was left without a terminal row',
     unfinalized.length === 0 ? null : 'an answer was never finalized',
-    askedAboutEnded
-      ? 'a person was asked about a child that had ended cleanly'
-      : null,
     haltedApart.length === 0
       ? null
       : 'a run halted in another transaction than its end',

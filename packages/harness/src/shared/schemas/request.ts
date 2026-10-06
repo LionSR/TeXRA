@@ -5,7 +5,7 @@
  * is the fold, opened without decided. Every kind of request
  * (`PermissionPayload['kind']`) is answered with an arm of this union, so the
  * frontend action vocabulary, the runtime's reading, and the recovery
- * bindings (`model-retry`, `tool-outcome`) read one word.
+ * bindings (`model-retry`) read one word.
  *
  * The three refusal arms are the three provenances a declined request can
  * have, each carrying the fact that names it: `reject` is a person declining

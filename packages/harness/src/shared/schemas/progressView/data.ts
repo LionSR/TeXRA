@@ -15,7 +15,6 @@ import {
   ExternalInquiryPermissionSchema,
   PlanApprovalPermissionSchema,
   RetryPermissionSchema,
-  ToolOutcomePermissionSchema,
   ToolEditPermissionSchema,
   UserQuestionPermissionSchema,
 } from '../prompts';
@@ -107,10 +106,6 @@ export const PermissionPayloadSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('toolEdit'), data: ToolEditPermissionSchema }),
   z.object({ kind: z.literal('bash'), data: BashPermissionSchema }),
   z.object({ kind: z.literal('retry'), data: RetryPermissionSchema }),
-  z.object({
-    kind: z.literal('toolOutcome'),
-    data: ToolOutcomePermissionSchema,
-  }),
   z.object({
     kind: z.literal('proposal'),
     data: AgentProposalPermissionSchema,

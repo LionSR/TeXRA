@@ -564,7 +564,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   } else {
     const recovered = yield* Effect.result(
       recoverAgentChild(call, {
-        agentName: agent.name,
         notify,
         running,
       }),
@@ -572,11 +571,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     if (Result.isFailure(recovered))
       return failedResult(agent.name, recovered.failure);
     const settled = recovered.success;
-    if (settled.kind === 'unknown')
-      return errorResult(
-        `The outcome of agent run ${settled.runId} is unknown (${settled.reason}), and the call was skipped.`,
-        { name: 'Skipped', diagnostics: { reason: 'outcome-unknown' } },
-      );
     if (settled.kind === 'ended')
       return childResult(agent.name, settled.runId, settled.result, key);
   }

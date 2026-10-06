@@ -396,9 +396,9 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   }),
   /**
    * The answer, whatever surface gave it and whatever its provenance. The
-   * decision is the durable recovery fact (R5): a `model-retry` or
-   * `tool-outcome` binding reads its consent off this row, never off a
-   * snapshot alone, and an automatic close names its cause here.
+   * decision is the durable recovery fact (R5): a `model-retry` binding
+   * reads its consent off this row, never off a snapshot alone, and an
+   * automatic close names its cause here.
    */
   durable('request.decided', {
     requestId: z.string().min(1),
@@ -440,7 +440,7 @@ const RunHistoryEventDraftSchema = z.discriminatedUnion('type', [
   durable('tool.intent', { payload: ToolIntentPayloadSchema }),
   /** A call a script issued, with its arguments: committed with its intent. */
   durable('script.call', { payload: ScriptCallPayloadSchema }),
-  /** Guards one outcome-unknown call; commits with the request it names. */
+  /** Binds a call attempt to its own request; commits with the request. */
   durable('tool.binding', { payload: ToolBindingPayloadSchema }),
   durable('tool.result', { payload: ToolResultPayloadSchema }),
   /** The human retry permit, written by the one retry owner

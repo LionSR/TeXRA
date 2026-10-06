@@ -24,7 +24,7 @@
  * derives its primary; a call whose body never started asks again what it
  * asked, or, issued and untouched in a recovered response, is reported not
  * started; a call whose body started re-runs when `replayable` says so, else
- * asks whether it ran. The model decides on retries.
+ * settles as outcome unknown. The model decides on retries.
  */
 import { isDeepStrictEqual } from 'node:util';
 
@@ -73,7 +73,6 @@ import {
 } from '@shared/schemas';
 import { JsonValueSchema, toJsonValue } from '@shared/schemas';
 import { findStorageRefusal } from '@shared/session/runHistory';
-import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import {
   type RunHistoryDraft,
   type RunState,
@@ -105,7 +104,6 @@ import {
   formatAttachmentSummary,
   formatToolResultAsText,
 } from '../run/toolResultText';
-import { policyDecidedRows } from '../requestPolicy';
 import { guardedToolCall } from './toolGuard';
 import { callHookText, preToolUse } from './hooks';
 import {
@@ -880,112 +878,16 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     );
   });
 
-  /** Ask whether a call whose body started, and left no result, re-runs or
-   *  is skipped (A3). Read from the run's rows as they stand, so an answer
-   *  another writer landed is seen whatever this cell committed since. */
-  const decideOutcomeUnknown = Effect.fn('toolUse.outcomeUnknown')(function* (
-    fact: CallFacts,
-    input: unknown,
-    started: Extract<CallStatus, { kind: 'started' }>,
-  ): Effect.fn.Return<'rerun' | 'skip', InvokeError> {
-    const current = yield* cell.refresh;
-    // A person decides this barrier: `retry`, or `skip` (a card's decline,
-    // `reject`, is the same answer), landed as the request's
-    // `request.decided` (R5). A `deny` is a policy or headless host with
-    // nobody to ask (yolo, never): it denies again on every resume, so it
-    // is a skip, which never re-runs the call blindly. A `cancel` was
-    // written by a cleanup (the run stopped, the session closed), so it
-    // decides nothing and the barrier is asked again.
-    const decided = (decision: RequestDecision): 'rerun' | 'skip' | null => {
-      if (decision.action === 'retry') return 'rerun';
-      return decision.action === 'cancel' ? null : 'skip';
-    };
-    // Only the loop's own question answers this: the call's own request,
-    // decided, says nothing about whether the body ran.
-    const questionId =
-      started.binding?.role === 'outcome' ? started.binding.requestId : null;
-    const bound = current.requests[questionId ?? ''];
-    const answered =
-      bound?.resolved === true && bound.decision !== null
-        ? decided(bound.decision)
-        : null;
-    if (answered !== null) return answered;
-    // A request the run committed and nobody answered is asked again under
-    // its own id, so one barrier never accumulates requests. Anything else
-    // opens a fresh one, bound to the same call by the `tool.binding`
-    // committed with it: the fold refuses a second `request.opened` on an id
-    // it already carries, so a request retired without a decision cannot be
-    // reopened, only replaced.
-    const standing =
-      questionId !== null && bound !== undefined && !bound.resolved
-        ? questionId
-        : null;
-    const requestId = standing ?? `tool-outcome-${generateShortId()}`;
-    let from = current.commit;
-    if (standing === null) {
-      const preview = deriveToolInputPreview(fact.toolName, input);
-      const payload = {
-        kind: 'toolOutcome' as const,
-        data: {
-          requestId,
-          runId,
-          toolName: fact.toolName,
-          title: preview ? `${fact.toolName}: ${preview}` : fact.toolName,
-          childRunId: null,
-        },
-      };
-      const asked = yield* commit(fact, [
-        {
-          type: 'request.opened',
-          aggregateId,
-          requestId,
-          payload,
-          thread: null,
-        },
-        bindingRow(runId, {
-          callId: fact.callId,
-          attempt: started.attempt,
-          requestId,
-          role: 'outcome',
-        }),
-        // `yolo` or a host that cannot present answers in the same batch.
-        ...policyDecidedRows(run.session, runId, payload),
-      ]);
-      const policy = asked.requests[requestId]?.decision;
-      const answer = policy == null ? null : decided(policy);
-      if (answer !== null) return answer;
-      // The batch's own commit: nothing answering it can precede it.
-      from = asked.commit;
-    }
-    // The decision is the `request.decided` row the decide command lands on
-    // the tail. A plane that closes first, and a cleanup's `cancel`, leave
-    // the attempt bound and the request open, and the dispatch interrupts
-    // so the next resume asks the same question again. Writing `skip` for a
-    // cancellation would tell the model a person skipped the call.
-    const row = yield* run.session.decisionFor(runId, requestId, from).pipe(
-      Effect.catch((error) =>
-        Effect.sync(() => {
-          logger.warn(
-            'The tool-outcome prompt closed; the call stays outcome-unknown and the next resume asks again.',
-            { data: error },
-          );
-          return null;
-        }),
-      ),
-    );
-    const answer = row === null ? null : decided(row.decision);
-    if (answer === null) return yield* Effect.interrupt;
-    return answer;
-  });
-
   /**
    * A call the rows left unsettled, continued from where they left it. Its
    * own request stands or was answered: before its body started, any
    * answer is the attempt's, since nothing ran yet; after, only one no
    * waiter read (decided since this owner took the run). A request a stop
    * retired as cancelled decides nothing and is asked again. Otherwise the
-   * body may have run: the replay rule re-runs it, or a person is asked,
-   * and a skip closes the card the interrupted attempt opened.
+   * body may have run: the replay rule re-runs it, or it settles as outcome
+   * unknown, closing the card the interrupted attempt opened, and the model
+   * decides from that what to do (verify, ask, or call again under its own
+   * approval).
    */
   const resumeCall = Effect.fn('toolUse.resumeCall')(function* (
     fact: CallFacts,
@@ -1015,10 +917,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     }
     if (status.kind === 'asking')
       return yield* execute(fact, input, status.attempt, null);
-    const rerun =
-      (yield* replayable(fact, step.registry, input, logger)) ||
-      (yield* decideOutcomeUnknown(fact, input, status)) === 'rerun';
-    if (rerun) return yield* execute(fact, input, status.attempt + 1, null);
+    if (yield* replayable(fact, step.registry, input, logger))
+      return yield* execute(fact, input, status.attempt + 1, null);
     yield* settle(
       fact,
       status.attempt,

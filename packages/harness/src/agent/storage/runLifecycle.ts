@@ -305,10 +305,9 @@ export type FinalizeRunResult =
 
 /**
  * End a run nothing drives any more, CANCELLED (an outcome it already wrote
- * stands), under its own claim: an owned child its parent's stop outlived,
- * or one a person's outcome decision left behind.
+ * stands), under its own claim: an owned child its parent's stop outlived.
  */
-export const retireRun = Effect.fn('retireRun')(function* (
+const retireRun = Effect.fn('retireRun')(function* (
   session: SessionHandle,
   runId: RunId,
 ) {

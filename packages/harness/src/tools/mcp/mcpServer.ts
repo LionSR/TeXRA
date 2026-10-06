@@ -10,7 +10,8 @@
  * runtime tool named `mcp__<server>__<tool>` whose JSON Schema passes through
  * as its parameters. Every call is approval-gated through the loop's one
  * guard (`agent/runtime/loop/toolGuard.ts`, the session's bash approval), is
- * never parallel-safe (an outcome-unknown call on resume goes to the human),
+ * never parallel-safe nor replay-safe (an interrupted call settles as outcome
+ * unknown on resume, and the model decides),
  * and is bounded by a timeout and an output cap.
  *
  * A server that fails to spawn, initialize or list answers its failure and

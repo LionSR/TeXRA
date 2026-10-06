@@ -26,7 +26,6 @@ import {
   type SessionView,
 } from '@shared/session/sessionView';
 import { deliveredResponse } from '@shared/subagentFollowup';
-import { TOOL_OUTCOME_COPY } from '@shared/transcript/toolOutcome';
 import { formatWorkflowCallFiles } from '@shared/transcript/workflowCall';
 import { assertNever, getBasename, isObject } from '@utils/core';
 import {
@@ -147,8 +146,6 @@ function pendingRequestLine(payload: PermissionPayload): string {
       return 'Wants an answer to an inquiry';
     case 'userQuestion':
       return 'Wants an answer to a question';
-    case 'toolOutcome':
-      return TOOL_OUTCOME_COPY.waiting(payload.data);
     default:
       return assertNever(payload, 'Unhandled request kind');
   }

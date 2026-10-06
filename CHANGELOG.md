@@ -6,6 +6,17 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **No more "Did it finish before TeXRA stopped?" question after a crash.**
+  When TeXRA stops while a command, an edit or another call that is not
+  safe to repeat is running, the resumed task no longer asks you whether to
+  run it again. The call is reported to the model as interrupted with an
+  unknown outcome, and the model checks the result itself, asks you in the
+  chat, or calls it again under the run's approval policy. A
+  subagent left in an inconsistent state after a crash is resumed under its
+  own id, or comes back as an ordinary failed call. An approval this build
+  asked for is still waiting after a restart. A task saved by an earlier
+  build that ever showed the old "Run again / Skip it" question opens as
+  made by an older TeXRA and cannot be resumed.
 - **A project a newer TeXRA has saved into opens only in that version.**
   When a newer TeXRA version has saved tasks into a project, an older one
   now refuses to open the project's history ("update TeXRA, or move the

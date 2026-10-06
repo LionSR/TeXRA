@@ -802,13 +802,12 @@ describe('the interrupted golden runs', () => {
   it.live('resumes the killed script, replaying its settled call', () =>
     Effect.gen(function* () {
       const { storage, workspace } = testWorkspaceRoots();
-      // The command the kill interrupted waits for this file. `notes.tex`
-      // is not here: the read that settled before the kill would fail if it
-      // ran again.
+      // The second read reads this file. `notes.tex` is not here: the read
+      // that settled before the kill would fail if it ran again.
       if (workspace === undefined) throw new Error('no test workspace');
       mkdirSync(workspace, { recursive: true });
       writeFileSync(join(workspace, 'golden-script.release'), '');
-      // It runs again where the run works: here this test's workspace.
+      // It runs where the run works: here this test's workspace.
       raw(storage, (db) =>
         db
           .prepare(
@@ -818,12 +817,9 @@ describe('the interrupted golden runs', () => {
           )
           .run(workspace, SCRIPTED),
       );
-      const asked = autoDecideRequests(session, (opened) => {
-        if (opened.payload.kind === 'bash') return { action: 'approve' };
-        return opened.payload.kind === 'toolOutcome'
-          ? { action: 'retry' }
-          : null;
-      });
+      const asked = autoDecideRequests(session, (opened) =>
+        opened.payload.kind === 'bash' ? { action: 'approve' } : null,
+      );
       const result = yield* withProcessServices(
         testRuntime(),
         resumeRun(SCRIPTED, { session }),
@@ -862,18 +858,16 @@ describe('the interrupted golden runs', () => {
         expect(settled(`validation-script-1/${seq}`)).toEqual([
           { attempt: 1, disposition: 'executed' },
         ]);
-      // The command the kill interrupted was asked about, then run again.
-      expect(
-        asked.opened.filter((opened) => opened.payload.kind === 'toolOutcome'),
-      ).toHaveLength(1);
+      // The command the kill interrupted is not run again: it settles as
+      // outcome unknown, and the guest reads that.
       expect(settled('validation-script-1/3')).toEqual([
-        { attempt: 2, disposition: 'executed' },
+        { attempt: 1, disposition: 'skipped' },
       ]);
-      expect(settled('validation-script-1/4')).toEqual([
-        { attempt: 1, disposition: 'executed' },
-      ]);
-      // The guest issued the calls its rows recorded, and returned what the
-      // replayed read and the live calls gave it.
+      // The second read waited behind the command. The guest's `Promise.all`
+      // rejects on the command's unknown outcome, so the read may or may not
+      // settle before the script ends; it never settles twice.
+      expect(settled('validation-script-1/4').length).toBeLessThanOrEqual(1);
+      // The guest issued the calls its rows recorded.
       expect(
         payloads('script.call').map(({ seq, toolName, phase }) => [
           seq,
@@ -890,13 +884,10 @@ describe('the interrupted golden runs', () => {
       const script = results.find(
         (row) => row.callId === 'validation-script-1',
       );
-      expect(script).toMatchObject({ attempt: 2, disposition: 'executed' });
-      expect(script?.result.output).toContain(
-        'The golden store reads this file.',
-      );
-      expect(script?.result.output).toContain('released');
-      expect(script?.result.output).toContain('"found": "read_file"');
-      expect(script?.result.output).toContain('"documented": true');
+      // The guest's `Promise.all` rejects on the command's unknown outcome,
+      // so the script fails with it: the model reads that and decides.
+      expect(script).toMatchObject({ attempt: 2, disposition: 'failed' });
+      expect(JSON.stringify(script?.result)).toContain('outcome is unknown');
     }),
   );
 
