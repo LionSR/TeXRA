@@ -41,61 +41,27 @@ function toolUseAgent(name: string, systemPrompt: string): string[] {
 describe('agent YAML scanner', () => {
   beforeAll(() => installPlatform({}));
 
-  it.live('derives a task revision count from its inherited request list', () =>
-    Effect.gen(function* () {
-      const dir = yield* agentDir({
-        'base.yaml': [
-          'name: base',
-          'task:',
-          '  rewrite: false',
-          '  requests: [first, second, third]',
-        ],
-        'child.yaml': ['name: child', 'inherits: base'],
-        'override.yaml': [
-          'name: override',
-          'inherits: base',
-          'task:',
-          '  requests: [only]',
-        ],
-      });
-
-      const { entries } = yield* scanCustom(dir);
-      const byName = (name: string) =>
-        entries.find((entry) => entry.name === name);
-
-      expect(byName('child')?.rounds).toBe(3);
-      expect(byName('override')?.rounds).toBe(1);
-      expect(byName('override')?.task?.rewrite).toBe(false);
-    }),
-  );
-
   it.live(
-    'lists only agents whose whole definition resolves: a missing parent or a loop is an issue',
+    'refuses a file that still names a parent, saying inherits was removed',
     () =>
       Effect.gen(function* () {
         const dir = yield* agentDir({
-          'orphan.yaml': ['name: orphan', 'inherits: no-such-parent'],
-          'loop-a.yaml': ['name: loop-a', 'inherits: loop-b'],
-          'loop-b.yaml': ['name: loop-b', 'inherits: loop-a'],
-          'ok.yaml': toolUseAgent('ok', 'fine'),
+          'base.yaml': ['name: base', 'task:', '  requests: [first, second]'],
+          'child.yaml': ['name: child', 'inherits: base'],
         });
 
         const { entries, issues } = yield* scanCustom(dir);
 
-        expect(entries.map((entry) => entry.name)).toEqual(['ok']);
-        expect(issues.map(({ path, message }) => [path, message])).toEqual([
-          [
-            'loop-a.yaml',
-            expect.stringContaining('Circular "inherits" chain detected'),
-          ],
-          [
-            'loop-b.yaml',
-            expect.stringContaining('Circular "inherits" chain detected'),
-          ],
-          [
-            'orphan.yaml',
-            expect.stringContaining('Unable to locate parent agent'),
-          ],
+        expect(entries.map((entry) => [entry.name, entry.rounds])).toEqual([
+          ['base', 2],
+        ]);
+        expect(issues).toEqual([
+          {
+            path: 'child.yaml',
+            message: expect.stringContaining(
+              '`inherits` was removed in 1.0; copy the fields you need into this agent',
+            ),
+          },
         ]);
       }),
   );

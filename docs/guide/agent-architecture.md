@@ -33,7 +33,7 @@ These `.yaml` files are flat. An agent with a document task has two main parts:
 
 1.  **The persona** (top-level fields): how the model behaves.
     - `prompt`: The system prompt. Sets the overall role and high-level instructions for the LLM.
-    - `temperature`, `inherits`, and (for agents without a `task` block only) `tools`. See [Custom agents](./custom-agents.md) for details.
+    - `temperature` and (for agents without a `task` block only) `tools`. See [Custom agents](./custom-agents.md) for details.
 2.  **`task`**: Present only on agents with a document task. Text templates that TeXRA fills with your context (input files, instruction) to guide the LLM at each stage, plus output settings:
     - `prefix`: Provides the main context, including your input file(s) (available as `{{ INPUT_CONTENT }}`) and the instruction you typed in the UI (available as `{{ INSTRUCTION }}`).
     - `requests`: A list with one entry per revision. The first entry asks the LLM to perform the initial task (the first revision). It often instructs the LLM to think within `<scratchpad>` tags and then output the main content wrapped in the fixed `<documents>` container, with one `<document name="...">...</document>` entry per output file. Each further entry drives one reflection revision.

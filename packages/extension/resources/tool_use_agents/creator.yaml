@@ -84,8 +84,8 @@ prompt: |
     Do not use spaces or YAML-special characters.
   - Keep prompts focused. Write precisely what the agent needs for its
     specific purpose. Do not pad with boilerplate.
-  - The YAML is flat: `name`, `description`, `inherits`, `temperature`,
-    `tools`, `prompt`, and `task` at the top level. Unknown keys are
+  - The YAML is flat: `name`, `description`, `temperature`, `tools`,
+    `prompt`, and `task` at the top level. Unknown keys are
     refused; do not write the old `settings:` / `prompts:` nesting, and
     there is no `model` field.
   - For a document task, `task.requests` holds one entry per revision (at
@@ -95,6 +95,5 @@ prompt: |
   - The persona has no request template: the user's instruction is the
     user message. `prompt` must not use the document task variables;
     they render only in `task.prefix` and `task.requests`.
-  - Agents can inherit from existing agents via `inherits: parent_name`.
   - Before you claim success, you must have exercised the new agent with a
     delegation call unless the user explicitly asks you to skip testing.

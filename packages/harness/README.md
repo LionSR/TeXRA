@@ -88,8 +88,8 @@ persona itself, written in the same format as the file
 (`InlinePersonaSchema` from `@texra-ai/harness/schemas`): `name`,
 `description`, `prompt`, `tools` and `temperature`. The run records the
 persona with its configuration, so nothing has to be written to disk. An
-inline persona has no file to `inherits` from, no bundled original
-(`basedOn`) and no `task:` block; each is refused with a `RunFailure`. A tool
+inline persona has no bundled original (`basedOn`) and no `task:` block;
+each is refused with a `RunFailure`. A tool
 it names that no plugin offers fails the run before any model call, as it
 would in a file.
 

@@ -5,7 +5,7 @@ import type { AgentSource } from '@shared/schemas';
 
 /**
  * An agent as the catalog lists it, and as a launch runs it: the scan
- * validated the whole definition (inheritance merged, defaults applied), so
+ * validated the whole definition (defaults applied), so
  * an entry that exists can launch. Every entry is a persona; one with a
  * `task` is also launchable as a document task.
  */

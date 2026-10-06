@@ -17,7 +17,6 @@ then each earlier request with its reply, then this revision's request.
 ```yaml
 name: agent_name
 description: One-line description.
-# inherits: parent_agent   # optional — inherit and override an existing agent
 temperature: 0.1 # 0.1 for editing, 0.5-0.8 for creative tasks
 
 prompt: |
@@ -38,7 +37,7 @@ task:
       [Revision 2: reflect in <scratchpad>, then emit the refined <documents><document name="output.tex">...</document></documents>]
 ```
 
-The file is flat: `name`, `description`, `inherits`, `temperature` and
+The file is flat: `name`, `description`, `temperature` and
 `prompt` sit at the top level, and the `task` block holds `rewrite`,
 `outputs`, `files`, `prefix` and `requests`. Unknown keys are refused, and
 there is no reader for the old nested `settings:` / `prompts:` format.
@@ -117,14 +116,6 @@ Example output format in a `task.requests` entry:
 {% endfor %}
 </documents>
 ```
-
-## Inheritance
-
-Agents can inherit from existing agents via `inherits: parent_name` (from the
-same source). Only the fields you specify are overridden; everything else
-comes from the parent. A child's `task` block merges with the parent's field
-by field, and lists such as `requests` or `outputs` replace the parent's
-list rather than extend it.
 
 ## Example: a `polish` agent
 
