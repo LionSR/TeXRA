@@ -7,8 +7,8 @@
  *
  * A row is always written at its kind's current version. A lower stored
  * version is upcast step by step and then parsed with the current arm; a
- * higher one, or a kind this registry lacks, blocks its aggregate and is
- * never rewritten.
+ * higher one, or a kind this registry lacks and never retired, refuses the
+ * whole store (`storeGate`) and is never rewritten.
  *
  * The release watermark is the frozen schemas, `config/storage/frozen/`
  * (`npm run storage:freeze` at a release; `rowVersions.vitest.ts`): a
@@ -31,6 +31,14 @@ interface RowKind {
 }
 
 const V1 = { version: 1, upcast: [] } as const satisfies RowKind;
+
+/**
+ * The row kinds this build deleted from `ROW_KINDS`. A store that holds one
+ * is not a newer build's: its rows fail the reads of their own run
+ * (`DatabaseRowCorrupt`) and the rest of the store opens. A kind moves here
+ * from `ROW_KINDS` in the change that deletes it.
+ */
+export const RETIRED_ROW_KINDS: ReadonlySet<string> = new Set<string>([]);
 
 /** The version every current-value family writes and reads
  *  (each `ValueFamily`), until one gains an upcaster. */

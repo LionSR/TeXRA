@@ -166,6 +166,11 @@ const userTables = (sql: Sql) =>
     )
     .pipe(Effect.map((rows) => rows.map((row) => row.name)));
 
+/** A pre-1.0 TeXRA store's mark: `event`, `event_sequence` keyed by `aggregate_id`. */
+const PRE1_SIGNATURE = `SELECT count(*) AS keyed FROM pragma_table_info('event') a,
+  pragma_table_info('event_sequence') b
+  WHERE a.name = 'aggregate_id' AND b.name = 'aggregate_id'`;
+
 /** The refusal of a file this build must not touch. */
 const refused = (path: string, why: string) =>
   Effect.fail(
@@ -182,35 +187,34 @@ const incrementalVacuum = Effect.fnUntraced(function* (sql: Sql) {
 
 /**
  * Refuse a file this build must not touch, answering whether it is a store
- * written before 1.0 (tables under a stamp below the baseline). Refused:
- * another application's `application_id`, a 1.0-stamped file without
- * TeXRA's, a newer schema, and a released one this build has no step from.
- * Run on a read-only connection before the store's own connection opens
- * (which switches the file to WAL), and again under it, where another
- * process may have changed the file since.
+ * written before 1.0, which the caller moves aside (a released store never
+ * is). Refused: another application's file (its `application_id`, a 1.0
+ * stamp without TeXRA's, or tables without `PRE1_SIGNATURE` below the
+ * baseline), a newer schema, and a released one this build has no step from.
+ * Run read-only before the store's own connection enables WAL, and again.
  */
 const checkStamps = Effect.fnUntraced(function* (sql: Sql, path: string) {
   const application = Number(yield* pragmaValue(sql, 'application_id'));
   const stored = Number(yield* pragmaValue(sql, 'user_version'));
+  const pre1 = stored < BASELINE_1_0 && (yield* userTables(sql)).length > 0;
+  const signed =
+    pre1 &&
+    (yield* sql.unsafe<{ keyed: number }>(PRE1_SIGNATURE, []))[0]?.keyed === 1;
   if (
-    (application !== 0 && application !== APPLICATION_ID) ||
-    (stored >= BASELINE_1_0 && application !== APPLICATION_ID)
+    application === 0
+      ? stored >= BASELINE_1_0 || (pre1 && !signed)
+      : application !== APPLICATION_ID
   )
     return yield* refused(
       path,
-      `is not a TeXRA store (application id ${application}, schema ${stored}); move it away to let TeXRA create its store there`,
-    );
-  if (stored > SCHEMA_VERSION)
-    return yield* refused(
-      path,
-      `was written by a newer TeXRA build (schema ${stored}; this build writes ${SCHEMA_VERSION}); update TeXRA to open it`,
+      'is not a TeXRA store; move it away to let TeXRA create its store there',
     );
   if (stored >= BASELINE_1_0 && stored !== SCHEMA_VERSION)
     return yield* refused(
       path,
-      `has schema ${stored}, and this build has no step from it to schema ${SCHEMA_VERSION}`,
+      `has schema ${stored} and this build writes ${SCHEMA_VERSION}: ${stored > SCHEMA_VERSION ? 'update TeXRA to open it' : 'no step from it exists'}`,
     );
-  return stored < BASELINE_1_0 && (yield* userTables(sql)).length > 0;
+  return pre1;
 });
 
 /**
@@ -225,13 +229,9 @@ const checkStamps = Effect.fnUntraced(function* (sql: Sql, path: string) {
  * thread in SQLite. `synchronous = NORMAL` is the WAL-safe setting: `FULL` cost
  * 1.4x to 1.8x, and `kill -9` mid-transaction lost nothing at `NORMAL`.
  *
- * - What `checkStamps` refuses is refused untouched.
- * - A store written before 1.0 (below 101, the never-shipped 100
- *   included) is copied whole to `<file>.pre1` (or the
- *   first free `.pre1.<n>`), every table is dropped, and the file starts
- *   fresh: nothing in it is kept, current values included.
- * - An empty file gets the schema, under the write lock; of two processes
- *   creating at once, the second finds it stamped and does nothing.
+ * A store written before 1.0 is copied whole to the first free `.pre1`
+ * name and every table dropped (`underCopy`); an empty file gets the schema
+ * under the write lock, which a second process finds stamped.
  */
 const prepareStore = Effect.fnUntraced(function* (
   sql: Sql,

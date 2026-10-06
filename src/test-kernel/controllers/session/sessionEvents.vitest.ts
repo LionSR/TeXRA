@@ -1450,38 +1450,44 @@ describe('the C1 event table and the C6 publisher', () => {
     },
   );
 
-  it.effect("refuses another application's SQLite file untouched", () => {
-    // Another tool's database at the store's path, stamped with its own id
-    // even at the 1.0 schema's number.
-    const storage = workspace();
-    return Effect.gen(function* () {
-      yield* Effect.sync(() => {
-        const connection = reader(storage);
-        try {
-          connection.exec(
-            `CREATE TABLE notes (body TEXT); INSERT INTO notes VALUES ('mine');
-             PRAGMA application_id = 1234; PRAGMA user_version = 101;`,
+  // Another tool's database at the store's path: unstamped, or stamped with
+  // its own id even at the 1.0 schema's number.
+  for (const stamp of [
+    '',
+    'PRAGMA application_id = 1234; PRAGMA user_version = 101;',
+  ])
+    it.effect(
+      `refuses another application's SQLite file untouched (${stamp || 'unstamped'})`,
+      () => {
+        const storage = workspace();
+        return Effect.gen(function* () {
+          yield* Effect.sync(() => {
+            const connection = reader(storage);
+            try {
+              connection.exec(
+                `CREATE TABLE notes (body TEXT); INSERT INTO notes VALUES ('mine');
+             ${stamp}`,
+              );
+            } finally {
+              connection.close();
+            }
+          });
+          const failure = yield* Effect.flip(
+            Database.pipe(Effect.provide(substrate(storage))),
           );
-        } finally {
-          connection.close();
-        }
-      });
-      const failure = yield* Effect.flip(
-        Database.pipe(Effect.provide(substrate(storage))),
-      );
-      expect(failure._tag).toBe('DatabaseOpenFailed');
-      expect(failure.message).toContain('is not a TeXRA store');
-      expect(failure.message).toContain('application id 1234');
-      const stored = reader(storage);
-      try {
-        expect(stored.prepare('SELECT body FROM notes').all()).toEqual([
-          { body: 'mine' },
-        ]);
-      } finally {
-        stored.close();
-      }
-    });
-  });
+          expect(failure._tag).toBe('DatabaseOpenFailed');
+          expect(failure.message).toContain('is not a TeXRA store');
+          const stored = reader(storage);
+          try {
+            expect(stored.prepare('SELECT body FROM notes').all()).toEqual([
+              { body: 'mine' },
+            ]);
+          } finally {
+            stored.close();
+          }
+        });
+      },
+    );
 
   it.effect('moves a truncated store aside and opens a fresh one', () =>
     // A store cut short (a copy that stopped part way) is kept beside the
@@ -1593,31 +1599,40 @@ describe('the C1 event table and the C6 publisher', () => {
   );
 
   it.effect(
-    'fails a run history read of a row that does not decode, naming it',
+    'fails a run history read of a row that does not decode, and the session still opens',
     () => {
       const storage = workspace();
       return Effect.gen(function* () {
-        const db = yield* Database;
-        yield* db.appendAll([runStart, waiting]);
-        yield* Effect.sync(() => {
-          const raw = reader(storage);
-          try {
-            raw.exec(`UPDATE event SET data = '{}' WHERE type = 'run.start';`);
-          } finally {
-            raw.close();
-          }
-        });
-        expect(
-          yield* Effect.flip(db.readAggregate(runStart.aggregateId, 0)),
-        ).toMatchObject({
-          _tag: 'DatabaseReadFailed',
-          cause: { _tag: 'DatabaseRowCorrupt', type: 'run.start', commit: 1 },
-        });
-        // A wide read leaves it out instead, so one row never costs the session.
-        expect((yield* db.readListing()).map((row) => row.type)).not.toContain(
-          'run.start',
+        yield* Effect.gen(function* () {
+          const db = yield* Database;
+          yield* db.appendAll([runStart, olderStart, waiting]);
+          yield* Effect.sync(() => {
+            const raw = reader(storage);
+            try {
+              raw.exec(`UPDATE event SET data = '{}' WHERE "commit" = 1;`);
+            } finally {
+              raw.close();
+            }
+          });
+          expect(
+            yield* Effect.flip(db.readAggregate(runStart.aggregateId, 0)),
+          ).toMatchObject({
+            _tag: 'DatabaseReadFailed',
+            cause: { _tag: 'DatabaseRowCorrupt', type: 'run.start', commit: 1 },
+          });
+        }).pipe(Effect.provide(substrate(storage)));
+        // A fresh session over the store opens, and the healthy run lists.
+        yield* Effect.gen(function* () {
+          const view = yield* SessionViewService;
+          yield* settle(view.ref, (v) => v.runs.has(OLDER));
+          expect((yield* SubscriptionRef.get(view.ref)).runs.has(RUN)).toBe(
+            false,
+          );
+        }).pipe(
+          Effect.provide(graph([], substrate(storage).pipe(Layer.orDie))),
+          Effect.scoped,
         );
-      }).pipe(Effect.provide(substrate(storage)));
+      });
     },
   );
 
