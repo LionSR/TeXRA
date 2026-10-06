@@ -2413,20 +2413,66 @@ describe('native OpenAI Responses protocol', () => {
       final: snapshot([REASONING, { ...MESSAGE, phase: 'final_answer' }]),
     },
     {
-      name: 'reordered completed items',
-      final: snapshot([MESSAGE, REASONING]),
+      name: 'reordered items',
+      final: snapshot([...CALLS, MESSAGE, REASONING]),
+    },
+    {
+      name: 'respaced local-call arguments',
+      final: snapshot([
+        REASONING,
+        MESSAGE,
+        { ...CALLS[0], arguments: '{ "path" : "a" }' },
+        ...CALLS.slice(1),
+      ]),
+    },
+  ])(
+    'keeps each item as its done event delivered it against a $name terminal snapshot',
+    ({ final }) =>
+      Effect.gen(function* () {
+        const run = (frames: object[]) =>
+          Effect.gen(function* () {
+            const model = modelWith(
+              vi
+                .fn<typeof globalThis.fetch>()
+                .mockResolvedValue(response(frames)),
+            );
+            const turn = yield* model.prepareTurn(REQUEST);
+            assert(turn.mode === 'foreground');
+            return yield* completedTurn(model.streamTurn(turn));
+          });
+        const faithful = yield* run(events(OUTPUT));
+        const contradicted = yield* run(events(OUTPUT, final));
+        expect(contradicted.content).toEqual(faithful.content);
+        expect(contradicted.content).toMatchObject([
+          { kind: 'reasoning', evidence: { itemId: 'rs_1' } },
+          {
+            kind: 'message',
+            evidence: { itemId: 'msg_1', phase: 'commentary' },
+          },
+          {
+            kind: 'local-call',
+            providerCallId: 'call_1',
+            argumentsText: '{"path":"a"}',
+          },
+          {
+            kind: 'local-call',
+            providerCallId: 'call_2',
+            argumentsText: '{"path":"b"}',
+          },
+        ]);
+      }),
+  );
+
+  it.effect.each([
+    {
+      name: 'a local call only the terminal snapshot names',
+      final: snapshot([...OUTPUT.slice(0, 3)]),
+      output: OUTPUT.slice(0, 2),
     },
     {
       name: 'invalid local-call arguments',
       final: snapshot([{ ...CALLS[0], arguments: '{' }]),
       output: [{ ...CALLS[0], arguments: '{' }],
-    },
-    {
-      // Reconciliation compares the provider's exact bytes, so a terminal
-      // snapshot that re-spaces the same arguments is a conflict, not a match.
-      name: 'respaced local-call arguments',
-      final: snapshot([{ ...CALLS[0], arguments: '{ "path" : "a" }' }]),
-      output: [CALLS[0]!],
     },
     {
       name: 'changed local-call ID',

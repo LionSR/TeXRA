@@ -186,7 +186,7 @@ const normalizeItem = Effect.fn('llm.responses.normalizeItem')(function* (
 
 /**
  * A terminal snapshot as parts: its identity, usage and finish, with its
- * items as the provider's terminal statement of the content.
+ * items for whatever no item event delivered.
  */
 export const terminalParts = Effect.fn('llm.responses.terminalParts')(
   function* (response: ResponseValue, type: string) {
@@ -212,7 +212,7 @@ export const terminalParts = Effect.fn('llm.responses.terminalParts')(
     const calls = snapshot.some((item) => item.kind === 'local-call');
     // An incomplete response cannot leave a dispatchable call.
     if (response.status === 'incomplete' && calls) return yield* rejected();
-    // A completed response states no reason, and its snapshot may restate
+    // A completed response states no reason, and its snapshot may list
     // only part of what streamed: the settled content decides.
     let finishReason: HttpTurnResult['finishReason'] | null = null;
     if (response.status === 'incomplete')
