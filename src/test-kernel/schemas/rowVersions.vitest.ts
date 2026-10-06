@@ -16,6 +16,7 @@ import { DESKTOP_PROJECTS } from '@desktop/main/desktopProjectRecords';
 import { INQUIRY_THREADS } from '@shared/plugins/externalInquiry';
 import {
   CURRENT_VALUE_VERSION,
+  RETIRED_ROW_KINDS,
   ROW_KINDS,
   SessionEventDraftSchema,
 } from '@shared/schemas';
@@ -124,6 +125,40 @@ describe('row versions', () => {
     expect(declared.toSorted()).toEqual(
       VALUE_FAMILIES.map(({ name }) => name).toSorted(),
     );
+  });
+
+  it('reads or retires every row kind ever stored', () => {
+    // A kind deleted without a retirement would make every store that holds
+    // it refuse to open. The list only grows: check-ratchet-baselines fails a
+    // name the base branch lists and the tree does not.
+    const { kinds } = z
+      .object({ kinds: z.array(z.string()) })
+      .parse(
+        JSON.parse(
+          readFileSync(
+            resolve(REPO_ROOT, 'config/storage/row-kinds-ever.json'),
+            'utf8',
+          ),
+        ),
+      );
+    expect(kinds, 'kept sorted and unique').toEqual(
+      [...new Set(kinds)].toSorted(),
+    );
+    const current = Object.keys(ROW_KINDS);
+    expect(
+      current.filter((kind) => !kinds.includes(kind)),
+      'a new row kind is added to config/storage/row-kinds-ever.json',
+    ).toEqual([]);
+    expect(
+      kinds.filter(
+        (kind) => !current.includes(kind) && !RETIRED_ROW_KINDS.has(kind),
+      ),
+      'a deleted row kind moves to RETIRED_ROW_KINDS',
+    ).toEqual([]);
+    expect(
+      [...RETIRED_ROW_KINDS].filter((kind) => !kinds.includes(kind)),
+      'a retired row kind stays in config/storage/row-kinds-ever.json',
+    ).toEqual([]);
   });
 
   it.each(VERSIONED)(
