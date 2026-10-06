@@ -846,7 +846,12 @@ describe('tool-use dispatch', () => {
             },
           },
         },
-        bindingRow(kit.runId, { callId: 'c1', attempt: 1, requestId: 'q1' }),
+        bindingRow(kit.runId, {
+          callId: 'c1',
+          attempt: 1,
+          requestId: 'q1',
+          role: 'call',
+        }),
       ]);
       yield* kit.session.decideRequest(kit.runId, 'q1', { action: 'reject' });
       yield* cell.append([

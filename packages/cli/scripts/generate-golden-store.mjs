@@ -524,7 +524,8 @@ async function generate(root) {
       query(
         cli.store(),
         `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
-         WHERE s.logical_id = ? AND e.type = 'tool.binding'`,
+         WHERE s.logical_id = ? AND e.type = 'tool.binding'
+           AND json_extract(e.data, '$.payload.role') = 'call'`,
         [approvalRun()],
       ).length > 0 && asking.screen().includes('echo approved'),
     asking,

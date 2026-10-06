@@ -78,9 +78,9 @@ type Settlement = Pick<
  * `asking`: its own request for `attempt` is open or answered, and its body
  * has not started, so whatever the answer, nothing happened yet.
  * `started`: the `tool.intent` of `attempt` committed as its body began, so
- * the body may have run; `binding` is the call's own request that attempt
- * is bound to (its guard's approval, or the first its body raised).
- * `settled`: its `tool.result`, at commit `at`.
+ * the body may have run; `binding` is the request that attempt is bound to:
+ * the call's own (its guard's approval, or the first its body raised) or the
+ * loop's outcome question. `settled`: its `tool.result`, at commit `at`.
  */
 export type CallStatus =
   | { readonly kind: 'issued' }
@@ -92,7 +92,7 @@ export type CallStatus =
   | {
       readonly kind: 'started';
       readonly attempt: number;
-      readonly binding: Pick<ToolBindingPayload, 'requestId'> | null;
+      readonly binding: Pick<ToolBindingPayload, 'requestId' | 'role'> | null;
     }
   | ({ readonly kind: 'settled'; readonly at: CommitOrdinal } & Settlement);
 
@@ -108,8 +108,9 @@ export type PendingCall = {
  *  while it asks, else the attempt's binding. */
 export const boundRequestOf = (
   status: CallStatus,
-): Pick<ToolBindingPayload, 'requestId'> | null => {
-  if (status.kind === 'asking') return { requestId: status.requestId };
+): Pick<ToolBindingPayload, 'requestId' | 'role'> | null => {
+  if (status.kind === 'asking')
+    return { requestId: status.requestId, role: 'call' };
   return status.kind === 'started' ? status.binding : null;
 };
 

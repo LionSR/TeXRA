@@ -71,6 +71,16 @@ const standingOf = Effect.fn('agent.childStanding')(function* (
 ): Effect.fn.Return<ChildStanding, DatabaseReadFailed> {
   const records = getRunRecords(session, runId);
   const end = yield* records.readRunEnd();
+  // A drain that rolled back the facts the child had queued is a failure,
+  // whatever outcome rides its row: a stopped child whose turn ran (paid)
+  // and edited files would otherwise read as "stopped, so this call was
+  // skipped", and the model would re-issue it on a false premise. Nor is a
+  // run whose rows were rolled back resumed.
+  if (end?.error?.kind === 'artifact-drain')
+    return {
+      kind: 'answered',
+      result: { ...end, outcome: RUN_OUTCOME.FAILED },
+    };
   const turns = yield* readChildTurnState(session, runId);
   // `childRunLoop` commits a turn's acceptance just before the turn runs:
   // one that never settled was cut short, and continues where it stopped.
@@ -92,12 +102,28 @@ const standingOf = Effect.fn('agent.childStanding')(function* (
     end.outcome !== RUN_OUTCOME.COMPLETED
   )
     return { kind: 'fresh' };
+  // A completed child whose delivery manifest is missing has no answer to
+  // read back: it is a failure that says so, not a completion with no
+  // output.
+  if (end.outcome === RUN_OUTCOME.COMPLETED && delivered === null)
+    return {
+      kind: 'answered',
+      result: {
+        ...end,
+        outcome: RUN_OUTCOME.FAILED,
+        error: {
+          kind: 'unexpected',
+          message:
+            'The agent completed, but its result was not recorded. Its work may be done: check before calling it again.',
+        },
+      },
+    };
   // Anything else ended: its end answers the call as it stands, a failure
   // included, and the model reads that answer and decides what follows.
   return {
     kind: 'answered',
     result:
-      end.outcome === RUN_OUTCOME.COMPLETED && delivered !== null
+      delivered !== null && end.outcome === RUN_OUTCOME.COMPLETED
         ? { ...end, output: deliveredOutput(delivered, end.output) }
         : end,
   };

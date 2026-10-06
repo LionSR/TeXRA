@@ -696,6 +696,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
                             callId: fact.callId,
                             attempt,
                             requestId: payload.data.requestId,
+                            role: 'call',
                           }),
                         ]
                       : []),
@@ -898,7 +899,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     ProcessServices | Runs | WorkspaceFs | StorageFs | ScriptServices
   > {
     const current = yield* cell.current;
-    const ownId = boundRequestOf(status)?.requestId ?? null;
+    const bound = boundRequestOf(status);
+    const ownId = bound?.role === 'call' ? bound.requestId : null;
     const own = ownId === null ? undefined : current.requests[ownId];
     if (ownId !== null && own !== undefined) {
       if (own.decision?.action === 'cancel')

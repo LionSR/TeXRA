@@ -481,11 +481,13 @@ function violations(
   );
   const isCommand = (callId: unknown) =>
     /validation-(bash-\d+|script-\d+\/1)$/.test(String(callId));
-  // An unfinished command never runs again: its outcome is unknown, and
-  // the model decides.
-  const reruns = resumed.filter(
+  // An unfinished command never runs again, whatever a second run would
+  // have returned: its outcome is unknown, and the model decides. A body
+  // that starts again is a second intent of the call.
+  const reruns = final.filter(
     (row) =>
-      payload(row).disposition === 'executed' &&
+      row.commit > n &&
+      row.type === 'tool.intent' &&
       Number(payload(row).attempt) > 1 &&
       isCommand(payload(row).callId),
   );

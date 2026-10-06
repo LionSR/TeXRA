@@ -23,6 +23,7 @@
   "packages/harness/src/shared/session/transcriptReads.ts": 1,
   "packages/harness/src/shared/session/transcriptState.ts": 1,
   "packages/harness/src/tools/codemode/declarations.ts": 1,
+  "packages/harness/src/tools/delegation/agentChild.ts": 1,
   "packages/harness/src/tools/delegation/AgentTool.ts": 1,
   "packages/harness/src/tools/delegation/inBandSubagentRun.ts": 1,
   "packages/harness/src/tools/delegation/proposalFlow.ts": 1,

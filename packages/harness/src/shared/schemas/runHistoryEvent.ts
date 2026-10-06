@@ -372,13 +372,16 @@ export const ToolIntentPayloadSchema = z.strictObject({
  *  intent's binding, committed beside the `request.opened` it names, so a
  *  restart neither cancels the request nor loses the call it parks.
  *  `attempt` is the intent attempt it guards, so a later dispatch of the same
- *  call needs its own binding. The request is the call's own (its guard's
- *  approval, or the first request its body raised): its answer completes the
- *  attempt, and a resume re-enters it while it stands. */
+ *  call needs its own binding. `role` says what the answer decides: `call`
+ *  is the call's own request (its guard's approval, or the first request its
+ *  body raised), whose answer completes the attempt, and a resume re-enters
+ *  it while it stands; `outcome` is the loop's question for an attempt whose
+ *  outcome is unknown, whose answer re-runs or skips the call. */
 export const ToolBindingPayloadSchema = z.strictObject({
   callId: CallIdSchema,
   attempt: z.int().positive(),
   requestId: z.string().min(1),
+  role: z.enum(['call', 'outcome']),
 });
 export type ToolBindingPayload = z.infer<typeof ToolBindingPayloadSchema>;
 
