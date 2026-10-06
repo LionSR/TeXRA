@@ -210,9 +210,6 @@ importers:
       '@xterm/xterm':
         specifier: ^6.0.0
         version: 6.0.0
-      citty:
-        specifier: ^0.2.2
-        version: 0.2.2
       effect:
         specifier: 'catalog:'
         version: 4.0.0
