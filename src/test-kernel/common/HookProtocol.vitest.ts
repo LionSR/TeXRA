@@ -7,8 +7,8 @@
 // 4. plain stdout is context on UserPromptSubmit and SessionStart only;
 // 5. a non-zero exit other than 2 with valid JSON lets the JSON decide;
 // 6. a timeout renders no decision, so PreToolUse does not deny;
-// 7. what v1 parses but does not act on (a prompt block, a stop block, an
-//    input rewrite) is named as ignored, not dropped;
+// 7. what v1 parses but does not act on (a prompt block, a second stop
+//    block in a row, an input rewrite) is named as ignored, not dropped;
 // 8. matchers: `*`/empty match all, an exact list, else an unanchored regex.
 import { describe, expect, it } from 'vitest';
 

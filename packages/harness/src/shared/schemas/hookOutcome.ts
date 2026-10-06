@@ -47,7 +47,8 @@ export const HookOutcomePayloadSchema = z.strictObject({
   exitCode: z.int().nullable(),
   /** A `PreToolUse` denial's reason, as the model reads it. */
   deny: z.string().nullable(),
-  /** Text the model reads beside the prompt or the tool result. */
+  /** Text the model reads beside the prompt or the tool result; for a
+   *  stop, the instruction its block continues the run with. */
   context: z.string().nullable(),
   /** What the hook asked for that v1 parses and does not act on. */
   ignored: z.array(z.string()).readonly(),
