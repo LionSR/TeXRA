@@ -68,9 +68,7 @@ export function serviceAgentRuns(backend: SessionBackend): ChatAgentRuns {
             Effect.as<ResumeRunResult>({
               started: true,
               delivered: true,
-              completion: backend
-                .ended(resumed.runId)
-                .pipe(Effect.map((end) => end.outcome)),
+              completion: backend.ended(resumed.runId),
             }),
           );
         }),

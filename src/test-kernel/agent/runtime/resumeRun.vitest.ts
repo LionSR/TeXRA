@@ -397,7 +397,7 @@ describe('resumeRun tool-use queue ownership', () => {
       });
       // A root's lifetime is the caller's to await past the acknowledgement.
       if (!('started' in result)) throw new Error('resume refused');
-      expect(yield* result.completion!).toBe(RUN_OUTCOME.COMPLETED);
+      expect((yield* result.completion!).outcome).toBe(RUN_OUTCOME.COMPLETED);
       expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
     }),
   );

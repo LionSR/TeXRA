@@ -42,14 +42,15 @@ import {
 import type { SessionHandle } from './SessionHandle';
 import type { AgentRunServices } from './runRegistry';
 
-type ResumeRunCompletion = Effect.Effect<RunEndResult['outcome'], Error>;
+type ResumeRunCompletion = Effect.Effect<RunEndResult, Error>;
 /** A resume settles at the run's idle turn or at run termination, after admitted input is consumed. */
 export type ResumeRunResult =
   | {
       readonly started: true;
       readonly delivered: boolean;
       readonly outcome?: RunEndResult['outcome'] | typeof RUN_PHASE.WAITING;
-      /** A root's lifetime past its idle acknowledgement; children have none. */
+      /** A root's lifetime past its idle acknowledgement, ending with its
+       *  result; children have none. */
       readonly completion?: ResumeRunCompletion;
       /** A workflow resume settles with its whole run: this is that run. */
       readonly result?: RunEndResult;
@@ -58,7 +59,13 @@ export type ResumeRunResult =
 
 export interface ResumeRunOptions extends Pick<
   ResumeToolUseFromResumeDataOptions,
-  'publishWorkflowOutput' | 'beforeRunEnd' | 'onRunClaimed' | 'onRun'
+  | 'publishWorkflowOutput'
+  | 'beforeRunEnd'
+  | 'onRunClaimed'
+  | 'onRun'
+  | 'onRunResolved'
+  | 'onTraceEvent'
+  | 'stopAfterCycle'
 > {
   /** Session owning the resumed run's coordination state. */
   readonly session: SessionHandle;
@@ -211,6 +218,9 @@ const runLaunchOptions = (options: ResumeRunOptions) => ({
   beforeRunEnd: options.beforeRunEnd,
   onRunClaimed: options.onRunClaimed,
   onRun: options.onRun,
+  onRunResolved: options.onRunResolved,
+  onTraceEvent: options.onTraceEvent,
+  stopAfterCycle: options.stopAfterCycle,
 });
 
 /** The follow-ups still queued on the run, folded from its durable rows. */
@@ -299,7 +309,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
           resumeToolUseFromResumeData(resume, { ...launchOptions, onIdle }),
           (admitted) => admitted,
         );
-        rootCompletion = Fiber.join(root).pipe(Effect.map((r) => r.outcome));
+        rootCompletion = Fiber.join(root);
         completion = root;
       } else {
         const native = {

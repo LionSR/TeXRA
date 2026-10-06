@@ -425,6 +425,15 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Agent SDK: persistent sessions, resume, and approvals.**
+  `sessions.open(roots, { persistent: true })` keeps a session's history in
+  the same on-disk store the TeXRA apps keep, and `session.resume(runId)`
+  continues a run from it in a later process, handing back the same run
+  handle `start` does (`ResumeRefused` says why a run cannot continue).
+  `sessions.open(roots, { approve })` answers the runs' approval requests
+  with the embedder's own Effect function; without one, every request is
+  still denied. A run killed while it waits for approval is asked the same
+  request again after a restart and a resume.
 - **Agent SDK: an agent can be written inline.** `session.start({ agent })`
   takes the persona itself (`name`, `description`, `prompt`, `tools`,
   `temperature`, as an agent file writes them) instead of the name of an

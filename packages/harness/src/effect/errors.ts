@@ -1,10 +1,10 @@
 /**
- * The failures the Effect surface names (`@texra-ai/harness`). Four are defined
+ * The failures the Effect surface names (`@texra-ai/harness`). Five are defined
  * here — the plugin list the package refuses, the two launch refusals an
- * embedder branches on, and the run's own failure — and two more reach the
- * surface re-exported from the session store (`DatabaseOpenFailed`,
- * `DatabaseReadFailed`, the `SessionOpenError` union in
- * `@shared/session/database`), for six tagged errors on the surface in all.
+ * embedder branches on, the resume refusal, and the run's own failure — and
+ * two more reach the surface re-exported from the session store
+ * (`DatabaseOpenFailed`, `DatabaseReadFailed`, the `SessionOpenError` union in
+ * `@shared/session/database`), for seven tagged errors on the surface in all.
  *
  * Request failures are not here. A `session.request` answers with the
  * runtime's own `RequestError` union (`@shared/session/requestErrors`), the
@@ -12,6 +12,8 @@
  * vocabulary for them.
  */
 import { Data } from 'effect';
+
+import type { FollowUpFailureReason } from '@agent/followUp/ToolUseFollowUp';
 
 /**
  * The plugin list cannot be composed: an id that is not lowercase letters,
@@ -30,7 +32,7 @@ export class AgentNotFound extends Data.TaggedError('AgentNotFound')<{
 
 /**
  * The tools the caller passed cannot run here: a tool that requires
- * approval (the package has no approval channel).
+ * approval, on a session opened without an approval handler.
  */
 export class ToolsRefused extends Data.TaggedError('ToolsRefused')<{
   readonly tools: readonly string[];
@@ -41,6 +43,18 @@ export class ToolsRefused extends Data.TaggedError('ToolsRefused')<{
  *  threw. */
 export class RunFailure extends Data.TaggedError('RunFailure')<{
   readonly cause: unknown;
+  readonly message: string;
+}> {}
+
+/**
+ * A run `session.resume` will not continue, for the runtime's reason:
+ * `finished` (nothing left to continue), `owned_elsewhere` (another live
+ * process holds it), `blocked` (an agent or plugin it needs is missing
+ * here), `unusable_checkpoint`, `read_failed` or `not_resumable`.
+ */
+export class ResumeRefused extends Data.TaggedError('ResumeRefused')<{
+  readonly runId: string;
+  readonly reason: FollowUpFailureReason;
   readonly message: string;
 }> {}
 

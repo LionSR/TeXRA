@@ -126,6 +126,15 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+/** Poll `check` until it holds, failing the scenario after `timeoutMs`. */
+async function waitFor(label, check, timeoutMs = 120_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!check()) {
+    assert(Date.now() < deadline, `timed out waiting for ${label}`);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+}
+
 function assertSuccess(result, label) {
   assert(
     result.status === 0,
@@ -1329,6 +1338,7 @@ function validateSdkInlinePersona() {
         sdkHarnessPath,
         work,
         path.join(cwd, 'storage'),
+        'inline',
         'Inline persona message',
       ],
       {
@@ -1355,6 +1365,139 @@ function validateSdkInlinePersona() {
         response === 'Model saw: Inline persona message' &&
         identity?.agent === 'inline_echo',
       `the inline persona's run should complete with the echoed instruction under the persona's name (artifact: ${artifactPath})`,
+    );
+  } finally {
+    removeScratch(cwd);
+  }
+}
+
+/**
+ * An SDK approval that outlives its process: an embedder on a persistent
+ * session starts a run whose command asks for approval, and its handler
+ * receives the request and leaves it pending; the process is killed there.
+ * A second embedder reopens the session's store, resumes the run, and its
+ * handler approves the same request, so the command runs once and the run
+ * completes. Both phases' output, the run's request and tool rows and the
+ * file the command wrote are the artifact.
+ */
+async function validateSdkResumeApproval() {
+  const cwd = makeScratch('texra-sdk-resume-');
+  try {
+    const home = path.join(cwd, 'home');
+    const work = path.join(cwd, 'work');
+    const storage = path.join(cwd, 'storage');
+    mkdirSync(work, { recursive: true });
+    const validationFlagPath = path.join(work, validationFlagName);
+    writeFileSync(validationFlagPath, validationFlagContent);
+    const golden = { TEXRA_INTERNAL_VALIDATE_GOLDEN: '1' };
+    const asking = spawn(
+      process.execPath,
+      [sdkHarnessPath, work, storage, 'ask', 'Run the command'],
+      {
+        cwd: work,
+        env: {
+          ...process.env,
+          CI: '1',
+          ...isolatedCliHomeEnv(home, golden),
+          ...validationModelProviderEnv,
+          [validationEnv]: '1',
+          [validationFlagEnv]: validationFlagPath,
+          TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT: '1',
+        },
+      },
+    );
+    liveChildren.add(asking);
+    let asked = '';
+    asking.stdout.on('data', (chunk) => (asked += chunk));
+    asking.stderr.on('data', () => {});
+    const exited = new Promise((resolve) => asking.on('close', resolve));
+    const line = (key) =>
+      asked
+        .split('\n')
+        .filter((text) => text.startsWith(`{"${key}"`))
+        .map((text) => JSON.parse(text)[key])
+        .at(0);
+    await waitFor('the SDK approval handler to be asked', () => line('asked'));
+    asking.kill('SIGKILL');
+    await exited;
+    liveChildren.delete(asking);
+    const runId = line('started');
+    const resumed = run(
+      process.execPath,
+      [sdkHarnessPath, work, storage, 'resume', runId],
+      {
+        cwd: work,
+        validationModel: true,
+        validationFlagPath,
+        env: isolatedCliHomeEnv(home, golden),
+      },
+    );
+    assertSuccess(resumed, 'the resuming SDK harness');
+    const { answered, result } = parseJson(
+      resumed.stdout.trim().split('\n').at(-1),
+      'resuming SDK harness',
+    );
+    // The workspace's store: the global one beside it holds no runs.
+    const store = spawnSync(
+      'find',
+      [storage, '-path', '*/workspace-storage/*', '-name', 'texra.db'],
+      { encoding: 'utf8' },
+    ).stdout.trim();
+    const db = new DatabaseSync(store, { readOnly: true });
+    let rows;
+    try {
+      rows = db
+        .prepare(
+          `SELECT e.type, json_extract(e.data, '$.requestId') AS requestId,
+             json_extract(e.data, '$.decision.action') AS decision
+           FROM event e JOIN event_sequence s ON s.id = e.aggregate
+           WHERE s.logical_id = ? AND e.type IN
+             ('request.opened', 'request.decided', 'tool.result', 'run.end')
+           ORDER BY e."commit"`,
+        )
+        .all(runId);
+    } finally {
+      db.close();
+    }
+    const approvedPath = path.join(work, 'approved.txt');
+    const approved = existsSync(approvedPath)
+      ? readFileSync(approvedPath, 'utf8')
+      : null;
+    // Ids differ per run, so the artifact names each request by whether
+    // it is the one asked before the kill: the file diffs across runs.
+    const { requestId: askedId, kind } = line('asked');
+    const sameRequest = (row) =>
+      row.requestId === null ? null : row.requestId === askedId;
+    const artifactPath = writeArtifact('sdk-resume-approval.json', {
+      asked: kind,
+      answered: answered.map((request) => ({
+        kind: request.kind,
+        sameRequest: sameRequest(request),
+      })),
+      outcome: result?.outcome,
+      response: result?.output?.response,
+      rows: rows.map((row) => ({
+        type: row.type,
+        sameRequest: sameRequest(row),
+        decision: row.decision,
+      })),
+      approved,
+    });
+    const requests = rows.filter((row) => row.requestId !== null);
+    assert(
+      answered.length === 1 &&
+        sameRequest(answered[0]) &&
+        requests.length === 2 &&
+        requests.every(sameRequest) &&
+        requests[1].type === 'request.decided' &&
+        requests[1].decision === 'approve',
+      `the resumed run's one request should be the one asked before the kill, approved after it (artifact: ${artifactPath})`,
+    );
+    assert(
+      result?.outcome === 'completed' &&
+        result?.output?.response === 'The approved command ran.' &&
+        approved === 'approved\n',
+      `the resumed run should run the approved command once and complete (artifact: ${artifactPath})`,
     );
   } finally {
     removeScratch(cwd);
@@ -1940,13 +2083,6 @@ prompt: |
     assertSuccess(result, label);
     return result.stdout.trim();
   };
-  const waitFor = async (label, check, timeoutMs = 120_000) => {
-    const deadline = Date.now() + timeoutMs;
-    while (!check()) {
-      assert(Date.now() < deadline, `timed out waiting for ${label}`);
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    }
-  };
   // The task's tool results, from the project's store.
   const toolResults = (runId) => {
     const storage = path.join(storageRoot, 'v1', 'workspace-storage');
@@ -2226,13 +2362,6 @@ async function validateServiceSharedTask() {
       child.on('close', (code) => resolve((state.exit = code))),
     );
     return state;
-  };
-  const waitFor = async (label, check, timeoutMs = 120_000) => {
-    const deadline = Date.now() + timeoutMs;
-    while (!check()) {
-      assert(Date.now() < deadline, `timed out waiting for ${label}`);
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    }
   };
   const count = (text, needle) => text.split(needle).length - 1;
   let a;
@@ -2678,6 +2807,7 @@ async function validateCliRunArtifacts(options = {}) {
   validateHistoryQueryRunCommand();
   validateStopHookBlock();
   validateSdkInlinePersona();
+  await validateSdkResumeApproval();
   await validateForkResetHandoff();
   await validateTuiForkHandoffReset();
   await validateBackgroundCompaction();

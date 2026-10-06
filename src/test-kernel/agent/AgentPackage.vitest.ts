@@ -80,7 +80,7 @@ vi.mock('@agent/index', () => ({
 }));
 
 // The package launches through the curated `@agent/runtime` barrel.
-vi.mock('@agent/runtime', async () => {
+vi.mock('@agent/runtime/runAgent', async () => {
   const { Effect } = await import('effect');
   return {
     runAgent: (input: unknown, options: RunAgentOptions) =>
@@ -107,6 +107,8 @@ vi.mock('@controllers/session/sessionLayer', async () => {
     readonly runs = {
       interrupt: mocks.interruptRun,
     };
+    /** Opened without an approval handler: nobody answers. */
+    readonly interactions = { approvalPromptsUnavailable: true };
     /** The session's view level: the pre-launch session, no run yet. */
     readonly viewRef = Effect.runSync(
       SubscriptionRef.make<FakeSessionView>({

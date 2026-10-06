@@ -22,6 +22,7 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   InlinePersona,
+  RequestDecision,
   RunId,
   SessionCloseReport,
   TranscriptSubscription,
@@ -40,7 +41,12 @@ import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { toolTable } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { PluginsRefused, type LaunchError, type RunFailure } from './errors.js';
+import {
+  PluginsRefused,
+  type LaunchError,
+  type ResumeRefused,
+  type RunFailure,
+} from './errors.js';
 import { makeSessions } from './sessionPrograms.js';
 
 /**
@@ -79,9 +85,18 @@ export interface Composition {
  * A runtime value as the embedder may hold it: read-only all the way down,
  * every map, array, and record included. The value itself is not copied
  * (the fold publishes immutable levels); the type is what keeps a write
- * from reaching it.
+ * from reaching it. A primitive stays itself, so a branded id (a `RunId`)
+ * is still that id.
  */
-type ReadonlyDeep<T> = T extends (...args: never[]) => unknown
+type ReadonlyDeep<T> = T extends
+  | string
+  | number
+  | boolean
+  | bigint
+  | symbol
+  | null
+  | undefined
+  | ((...args: never[]) => unknown)
   ? T
   : T extends ReadonlyMap<infer K, infer V>
     ? ReadonlyMap<K, ReadonlyDeep<V>>
@@ -99,6 +114,34 @@ export type SessionView = ReadonlyDeep<RuntimeSessionView>;
 export type RunView = ReadonlyDeep<RuntimeRunView>;
 /** A stream's transcript slice: what hosts paint. */
 export type TranscriptView = ReadonlyDeep<RuntimeTranscriptView>;
+/** A request a run waits on a person for, as {@link SessionView} lists it:
+ *  which run asks, the request's id, and its payload (`payload.kind` is
+ *  what is asked: a command, an edit, a plan, a retry, a question). */
+export type PendingRequest = SessionView['requests'][number];
+
+/**
+ * The embedder's answer to each request a run of the session waits on: an
+ * approval, a denial with its reason, or for a retry, `retry` or `cancel`.
+ * The session records it as the request's `request.decided`, through the
+ * same `request.decide` a {@link Session.request} sends.
+ */
+export type ApprovalHandler = (
+  request: PendingRequest,
+) => Effect.Effect<RequestDecision>;
+
+/** How {@link Sessions} opens a root's session; read only by the open that
+ *  builds it, as a later open of the same root gets the session already
+ *  there. */
+export interface OpenOptions {
+  /** Keep the session's history in the root's SQLite store (under
+   *  `roots.storage`, the store every TeXRA host keeps), so a later process
+   *  reopens it and resumes its runs. Absent, the store is in memory and
+   *  ends with the session. */
+  readonly persistent?: boolean;
+  /** Answer the runs' requests. Absent, nobody answers: the session's
+   *  policy denies every request and offers no approval-gated tool. */
+  readonly approve?: ApprovalHandler;
+}
 
 /** What starting a run on a session takes. */
 export interface StartInput {
@@ -157,6 +200,15 @@ export interface Session {
   readonly start: (
     input: StartInput,
   ) => Effect.Effect<Run, LaunchError | RunFailure>;
+  /**
+   * Continue a persisted run of this session through the one resume path
+   * every host takes, from its committed history: the same handle and the
+   * same admission as {@link start}. A run nothing can continue fails with
+   * {@link ResumeRefused}.
+   */
+  readonly resume: (
+    runId: RunId,
+  ) => Effect.Effect<Run, ResumeRefused | RunFailure>;
   /** The one handler of every request a surface issues to this session:
    *  answered exactly once, an outcome or a request error. */
   readonly request: (
@@ -178,9 +230,10 @@ export class Sessions extends Context.Service<
   Sessions,
   {
     /** The session of these roots, or the runtime's, through the process's
-     *  one owner. */
+     *  one owner; `options` decide its store and who answers its runs. */
     readonly open: (
       roots?: WorkspaceRoots,
+      options?: OpenOptions,
     ) => Effect.Effect<Session, SessionOpenError>;
     /**
      * Refuse new runs, settle the ones it owns inside the runtime's
@@ -215,10 +268,11 @@ export class Sessions extends Context.Service<
       Layer.effect(
         Sessions,
         Effect.gen(function* () {
-          return makeSessions(
+          return yield* makeSessions(
             platform.roots,
             yield* SessionOwner,
             yield* Effect.context<ProcessServices>(),
+            yield* Effect.scope,
           );
         }),
       ).pipe(
