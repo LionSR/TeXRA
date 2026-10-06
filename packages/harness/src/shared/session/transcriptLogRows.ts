@@ -1,17 +1,13 @@
 /**
- * The `log`-shaped transcript rows: a `log` row and a `usage` row each carry
- * a payload keyed by a message type, decoded here
- * exactly once (`decodeLogPayload`). A payload its schema rejects is written
- * as an error row naming the diagnostic, never dropped or cast.
+ * The `log` transcript rows: a `log` row carries a payload keyed by a
+ * message type, decoded here exactly once (`decodeLogPayload`). A payload
+ * its schema rejects is written as an error row naming the diagnostic, never
+ * dropped or cast.
  */
 
-import { modelConfig } from '@texra-ai/llm';
 import {
   MESSAGE_TYPES,
-  addTurnTotals,
-  runStatistics,
   decodeLogPayload,
-  type LogLevel,
   type MessageType,
   type TranscriptEvent,
 } from '@shared/schemas';
@@ -28,17 +24,18 @@ export const STREAMING_TEXT_ROW_KIND: Partial<
   [MESSAGE_TYPES.SCRATCHPAD]: 'scratchpad',
 };
 
-/** A `log`-shaped row: its payload decoded once, and a payload its schema
- *  rejects written as an error row naming the diagnostic, never dropped. */
-function appendLog(
+/** One `log` event onto the transcript: its payload decoded once, and a
+ *  payload its schema rejects written as an error row naming the
+ *  diagnostic, never dropped. */
+export function recordLogRow(
   d: Draft,
-  groupId: string | undefined,
-  messageType: MessageType,
-  text: string,
-  data: unknown,
-  level: LogLevel = 'info',
+  event: Extract<TranscriptEvent, { type: 'log' }>,
 ): void {
-  const decoded = decodeLogPayload(messageType, data);
+  if (event.level === 'debug' && !d.ctx.debug) return;
+  const groupId = event.stageId;
+  const messageType = event.messageType ?? MESSAGE_TYPES.DEFAULT;
+  const text = event.message;
+  const decoded = decodeLogPayload(messageType, event.data);
   if ('issue' in decoded) {
     write(d, {
       kind: 'log',
@@ -51,7 +48,7 @@ function appendLog(
     });
     return;
   }
-  const base = open(d, d.stampId, groupId, messageType, true, level);
+  const base = open(d, d.stampId, groupId, messageType, true, event.level);
   const { payload } = decoded;
   switch (payload.messageType) {
     case MESSAGE_TYPES.MODEL_RESPONSE:
@@ -87,50 +84,5 @@ function appendLog(
     }
     default:
       write(d, { kind: 'log', base, text, payload });
-  }
-}
-
-/** One `log` or `usage` event onto the transcript. */
-export function recordLogRow(
-  d: Draft,
-  event: Extract<TranscriptEvent, { type: 'log' | 'usage' }>,
-): void {
-  switch (event.type) {
-    case 'log': {
-      if (event.level === 'debug' && !d.ctx.debug) return;
-      appendLog(
-        d,
-        event.stageId,
-        event.messageType ?? MESSAGE_TYPES.DEFAULT,
-        event.message,
-        event.data,
-        event.level,
-      );
-      return;
-    }
-
-    case 'usage': {
-      // A priced turn shows as a workflow run's statistics so far; other
-      // runs show none.
-      const statistics = d.ctx.statistics;
-      if (statistics === undefined) return;
-      d.ix.spend = addTurnTotals(d.ix.spend, event.usage);
-      const id = d.ix.model ?? statistics.model;
-      const model = id == null ? undefined : modelConfig(id);
-      appendLog(
-        d,
-        d.ix.runStage,
-        MESSAGE_TYPES.STATISTICS,
-        '',
-        runStatistics(
-          d.ix.spend,
-          model && {
-            ...model.capabilities,
-            supportsReasoning: model.reasoning !== undefined,
-          },
-        ),
-      );
-      return;
-    }
   }
 }

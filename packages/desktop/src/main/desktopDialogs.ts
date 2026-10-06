@@ -35,7 +35,7 @@ export function createDesktopDialogs(
   window: BrowserWindow,
   actions: {
     /** Open the guide page a refusal names. */
-    openGuide(docsCommand: string): void;
+    openGuide(docsPage: string): void;
     dispatchInstructionAction(action: InstructionAction): void;
   },
 ) {
@@ -103,17 +103,17 @@ export function createDesktopDialogs(
       }).pipe(Effect.map((result) => result.response === 0)),
     /**
      * A failure is an 'error' dialog; a refusal that names a docs page
-     * (`docsCommand`, e.g. a launch without an input file) adds a guide
+     * (`docsPage`, e.g. a launch without an input file) adds a guide
      * button so the desktop dialog keeps the link the extension's
      * request-error callout renders. The URL path is host-originated, never
      * network data.
      */
     showErrorDialog: (
       message: string,
-      docsCommand: string | undefined,
+      docsPage: string | undefined,
       project: string,
     ): Effect.Effect<void, NotificationFailed> => {
-      if (!docsCommand) return showErrorMessage(message, project);
+      if (!docsPage) return showErrorMessage(message, project);
       return Effect.tryPromise({
         try: () =>
           dialog.showMessageBox(window, {
@@ -132,7 +132,7 @@ export function createDesktopDialogs(
           }),
       }).pipe(
         Effect.map(({ response }) => {
-          if (response === 0) actions.openGuide(docsCommand);
+          if (response === 0) actions.openGuide(docsPage);
         }),
       );
     },

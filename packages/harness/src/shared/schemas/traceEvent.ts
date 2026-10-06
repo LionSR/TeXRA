@@ -64,12 +64,9 @@ export const TranscriptEventSchemas = {
    * `context.edit` summary (`Database`'s display reads). A child's spend
    * is on the child's own run, never on its parent's. An
    * agent-CLI child, which has no run history, stores one per turn. `elapsedTime`
-   * is the turn's response time in seconds; `percentageCached` is a
-   * statistics row's, never a turn's.
+   * is the turn's response time in seconds.
    */
-  usage: trace('usage', {
-    usage: ExtendedTokenUsageStatsSchema.omit({ percentageCached: true }),
-  }),
+  usage: trace('usage', { usage: ExtendedTokenUsageStatsSchema }),
   context: trace('context.state', {
     inputTokens: ContextStateDataSchema.shape.inputTokens,
     contextWindow: ContextStateDataSchema.shape.contextWindow,

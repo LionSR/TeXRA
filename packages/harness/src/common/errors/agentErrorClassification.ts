@@ -77,11 +77,11 @@ const MISSING_API_KEY_MESSAGE =
 export function agentErrorPresentation(error: {
   kind: AgentErrorKind;
   message?: string;
-  /** Docs page of a refusing request (`Rejected.docsCommand`), surfaced
+  /** Docs page of a refusing request (`Rejected.docsPage`), surfaced
    *  beside the error so the host's dialog keeps the guide affordance. */
-  docsCommand?: string;
+  docsPage?: string;
 }): AgentErrorPresentation | null {
-  const docs = error.docsCommand ? { docsCommand: error.docsCommand } : {};
+  const docs = error.docsPage ? { docsPage: error.docsPage } : {};
   switch (error.kind) {
     case 'missing-api-key':
       return {

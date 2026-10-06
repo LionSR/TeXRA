@@ -136,7 +136,7 @@ function wireError(error: RequestError): RequestErrorWire {
       return {
         _tag: 'Rejected',
         reason: error.reason,
-        ...(error.docsCommand && { docsCommand: error.docsCommand }),
+        ...(error.docsPage && { docsPage: error.docsPage }),
       };
     case 'Internal':
       return { _tag: 'Internal', ref: error.ref };

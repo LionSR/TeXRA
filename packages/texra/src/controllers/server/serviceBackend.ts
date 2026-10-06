@@ -70,7 +70,7 @@ function requestError(
     case 'Rejected':
       return new Rejected({
         reason: error.reason,
-        ...(error.docsCommand && { docsCommand: error.docsCommand }),
+        ...(error.docsPage && { docsPage: error.docsPage }),
       });
     case 'Invalid':
       return new Rejected({ reason: error.reason });

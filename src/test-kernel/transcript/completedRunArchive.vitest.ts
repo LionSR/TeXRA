@@ -149,9 +149,9 @@ async function writeArchiveFixture(runId: RunId): Promise<void> {
     }),
     // Diagnostic row: deliberately skipped by the mapper (never lived in the
     // legacy conversation.json projection either).
-    logRow(MESSAGE_TYPES.STATISTICS, {
-      text: 'Usage - input: 10, output: 5',
-      data: { inputTokens: 10, outputTokens: 5 },
+    logRow(MESSAGE_TYPES.MISSING_OUTPUTS, {
+      text: 'Missing outputs',
+      data: { missing: ['appendix.tex'], xmlFile: null },
     }),
     logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
       text: 'Done - the lemma is fixed.',

@@ -130,7 +130,7 @@ describe('main-view run launch controller', () => {
       expect(error).toMatchObject({
         _tag: 'Rejected',
         reason: 'Choose an input file first.',
-        docsCommand: 'file-management',
+        docsPage: 'file-management',
       });
     }),
   );

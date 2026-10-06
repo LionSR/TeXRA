@@ -15,7 +15,6 @@
   "packages/harness/src/agent/runtime/RunHistory.ts": 2,
   "packages/harness/src/agent/runtime/SessionEvents.ts": 1,
   "packages/harness/src/controllers/session/Database.ts": 2,
-  "packages/harness/src/shared/schemas/usage.ts": 1,
   "packages/harness/src/shared/session/runActions.ts": 1,
   "packages/harness/src/shared/session/runRows.ts": 1,
   "packages/harness/src/shared/session/runStateFold.ts": 1,

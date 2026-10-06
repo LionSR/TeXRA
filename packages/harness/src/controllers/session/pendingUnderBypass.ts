@@ -14,10 +14,9 @@ import {
   type ApprovalBypassKind,
 } from '@shared/approvalBypassKind';
 import type { PermissionPayload } from '@shared/schemas';
-import { DatabaseNotOwner } from '@shared/session/database';
 import {
-  NotOwner,
   Unavailable,
+  writeRefused,
   type RequestError,
 } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
@@ -76,13 +75,11 @@ function approvePendingUnderBypass(
       ),
     { discard: true },
   ).pipe(
-    Effect.mapError((error): RequestError =>
-      error instanceof DatabaseNotOwner
-        ? new NotOwner({ runId })
-        : new Unavailable({
-            runId,
-            reason: 'The pending requests could not be approved.',
-          }),
+    Effect.mapError(
+      writeRefused({
+        runId,
+        reason: 'The pending requests could not be approved.',
+      }),
     ),
   );
 }

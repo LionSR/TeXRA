@@ -13,7 +13,6 @@ import {
   UserMessagePayloadSchema,
   WebSearchPayloadSchema,
 } from './progressView/data';
-import { ExtendedTokenUsageStatsSchema } from './usage';
 
 const StreamingTextDataSchema = z.looseObject({
   status: z.enum(['running', 'completed']).optional(),
@@ -30,7 +29,6 @@ const LOG_PAYLOAD_SCHEMAS = {
   [MESSAGE_TYPES.FILE_LIST]: z.array(FileListEntrySchema),
   [MESSAGE_TYPES.MISSING_OUTPUTS]: MissingOutputsPayloadSchema,
   [MESSAGE_TYPES.LATEXDIFF]: z.unknown().transform(parseDiffResultEntries),
-  [MESSAGE_TYPES.STATISTICS]: ExtendedTokenUsageStatsSchema.partial(),
   // Passthrough: a tool's extra fields (e.g. `files`) are forwarded as-is.
   [MESSAGE_TYPES.TOOL_USE]: ToolUseLogSchema.loose(),
   [MESSAGE_TYPES.WEB_SEARCH]: WebSearchPayloadSchema,

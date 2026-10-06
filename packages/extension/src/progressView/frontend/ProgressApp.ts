@@ -232,9 +232,9 @@ export class ProgressApp extends LitElement {
         <div>
           ${message}
           ${
-            error._tag === 'Rejected' && error.docsCommand
+            error._tag === 'Rejected' && error.docsPage
               ? html`<a
-                  href=${`https://texra.ai/guide/${error.docsCommand}`}
+                  href=${`https://texra.ai/guide/${error.docsPage}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   >Read the file management guide</a

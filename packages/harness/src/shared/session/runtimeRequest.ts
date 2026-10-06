@@ -115,9 +115,5 @@ export const OutcomeSchema = z.discriminatedUnion('kind', [
     wake: z.literal('failed').nullish(),
   }),
   z.object({ kind: z.literal('forked'), runId: RunIdSchema }),
-  z.object({
-    kind: z.literal('deleted'),
-    result: z.enum(['deleted', 'active', 'failed', 'superseded']),
-  }),
 ]);
 export type Outcome = z.infer<typeof OutcomeSchema>;

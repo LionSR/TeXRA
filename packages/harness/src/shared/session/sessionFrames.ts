@@ -102,7 +102,7 @@ export const RequestErrorWireSchema = z.discriminatedUnion('_tag', [
   z.object({
     _tag: z.literal('Rejected'),
     reason: z.string(),
-    docsCommand: z.string().optional(),
+    docsPage: z.string().optional(),
   }),
   z.object({ _tag: z.literal('Invalid'), reason: z.string() }),
   z.object({ _tag: z.literal('Internal'), ref: RequestIdSchema }),
