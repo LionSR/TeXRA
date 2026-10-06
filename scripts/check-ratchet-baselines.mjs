@@ -11,6 +11,10 @@
  * A deleted baseline file retires its ratchet and fails; that is an owner
  * call, made outside this check. Refuted candidates are recorded refusals,
  * which only restrict, so they are not compared.
+ *
+ * `config/storage/row-kinds-ever.json` runs the other way: it lists every row
+ * kind a build ever stored, so it may only grow; a name the base lists and the
+ * tree does not is a problem.
  */
 
 // Node imports
@@ -28,6 +32,7 @@ const rootDir = path.resolve(
 const baselineDir = 'config/ratchets';
 const base = process.env.TEXRA_RATCHET_BASE ?? 'origin/main';
 const REFUTED_CANDIDATES = `${baselineDir}/refuted-candidates.json`;
+const ROW_KINDS_EVER = 'config/storage/row-kinds-ever.json';
 const git = (...args) =>
   execFileSync('git', args, {
     cwd: rootDir,
@@ -244,6 +249,23 @@ function main() {
     if (file !== REFUTED_CANDIDATES)
       problems.push(...checkBaseline(file, previous, current));
   }
+  // Absent on the base only before this file's first commit.
+  const kindsEver = (text) => JSON.parse(text).kinds;
+  const everBefore = git(
+    'ls-tree',
+    '--name-only',
+    base,
+    '--',
+    ROW_KINDS_EVER,
+  ).trim()
+    ? kindsEver(git('show', `${base}:${ROW_KINDS_EVER}`))
+    : [];
+  const everNow = new Set(
+    kindsEver(readFileSync(path.join(rootDir, ROW_KINDS_EVER), 'utf8')),
+  );
+  for (const kind of everBefore)
+    if (!everNow.has(kind))
+      problems.push(`${ROW_KINDS_EVER}: ${kind} removed (the list only grows)`);
   const present = new Set(files);
   for (const file of baseFiles)
     if (file && !present.has(file))

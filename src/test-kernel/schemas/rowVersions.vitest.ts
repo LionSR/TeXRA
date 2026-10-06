@@ -128,8 +128,9 @@ describe('row versions', () => {
   });
 
   it('reads or retires every row kind ever stored', () => {
-    // Append-only: a kind deleted without a retirement would make every
-    // store that holds it refuse to open, so a name never leaves the list.
+    // A kind deleted without a retirement would make every store that holds
+    // it refuse to open. The list only grows: check-ratchet-baselines fails a
+    // name the base branch lists and the tree does not.
     const { kinds } = z
       .object({ kinds: z.array(z.string()) })
       .parse(
@@ -153,6 +154,10 @@ describe('row versions', () => {
         (kind) => !current.includes(kind) && !RETIRED_ROW_KINDS.has(kind),
       ),
       'a deleted row kind moves to RETIRED_ROW_KINDS',
+    ).toEqual([]);
+    expect(
+      [...RETIRED_ROW_KINDS].filter((kind) => !kinds.includes(kind)),
+      'a retired row kind stays in config/storage/row-kinds-ever.json',
     ).toEqual([]);
   });
 

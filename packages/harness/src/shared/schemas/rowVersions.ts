@@ -40,8 +40,10 @@ const V1 = { version: 1, upcast: [] } as const satisfies RowKind;
  * listed in `config/storage/row-kinds-ever.json`, which never shrinks.
  */
 export const RETIRED_ROW_KINDS: ReadonlySet<string> = new Set<string>([
+  'inquiryThreadUpdated',
   'model.compaction',
   'model.retry',
+  'output.produced',
   'workflow.attempt',
   'workflow.call',
   'workflow.journal',
