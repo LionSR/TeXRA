@@ -19,7 +19,7 @@
 /** Friendly labels for tool names that shouldn't be shown verbatim, keyed by
  *  normalized name. */
 const TOOL_LABEL = new Map<string, string>([
-  ['agent', 'Subagent'],
+  ['agent', 'Agent'],
   ['codex_patch', 'Codex Files'],
   ['codex_thread', 'Codex Thread'],
   ['codex_turn', 'Codex Turn'],

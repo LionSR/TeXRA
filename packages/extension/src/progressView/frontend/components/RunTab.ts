@@ -136,6 +136,8 @@ export class RunTab extends LitElement {
       : run.statusLabel;
     const runTitle = run.title;
     const tooltip = buildTooltip(run);
+    const deleteLabel =
+      run.parentId === null ? TASK_ACTIONS.delete : TASK_ACTIONS.deleteAgent;
     const childCountLabel = formatResultCount(
       run.rollup.total,
       NESTED_AGENT.countNoun,
@@ -280,12 +282,12 @@ export class RunTab extends LitElement {
                   variant="neutral"
                   size="s"
                   type="button"
-                  aria-label=${`${TASK_ACTIONS.delete}: ${runTitle}`}
+                  aria-label=${`${deleteLabel}: ${runTitle}`}
                   data-run=${run.id}
                   data-action="delete"
                   >${waIcon('xmark')}</wa-button
                 ><wa-tooltip for="run-tab-remove-button"
-                  >${TASK_ACTIONS.delete}</wa-tooltip
+                  >${deleteLabel}</wa-tooltip
                 >`
             : nothing
         }

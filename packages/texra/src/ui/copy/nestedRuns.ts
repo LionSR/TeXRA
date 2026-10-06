@@ -62,6 +62,8 @@ export const FOCUSED_AGENT = {
 export const TASK_ACTIONS = {
   /** The header menu's destructive item and the desktop rail's ×. */
   delete: 'Delete task',
+  /** The same on an agent's row or header. */
+  deleteAgent: 'Delete agent',
   /** The header menu's clipboard item: the task's facts for a bug report. */
   copyDiagnostics: 'Copy diagnostics',
   /** A new task holding this conversation: the ended line and the header

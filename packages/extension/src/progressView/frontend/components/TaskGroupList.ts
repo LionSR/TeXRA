@@ -45,7 +45,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
-import { formatDuration, pluralize } from '@utils/text/stringUtils';
+import { capitalize, formatDuration, pluralize } from '@utils/text/stringUtils';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS, GROUP_DOM_IDS } from '../constants';
@@ -580,12 +580,13 @@ export class TaskGroupList extends LitElement {
     // pane, so show the same "Task is starting" / idle text instead.
     if (this.rows.length === 0 && this.groups.length === 0) {
       const active = isInFlightPhase(this.runStatus);
+      const noun = this.run?.parentId ? 'agent' : 'task';
       return html`
         <div class="log-placeholder">
           ${
             active
-              ? 'Task is starting. Progress updates will appear here.'
-              : 'No log output for this task yet.'
+              ? `${capitalize(noun)} is starting. Progress updates will appear here.`
+              : `No log output for this ${noun} yet.`
           }
         </div>
       `;

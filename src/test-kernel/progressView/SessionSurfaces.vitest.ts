@@ -124,6 +124,22 @@ describe('session Surface ownership', () => {
     });
   });
 
+  it('ends a per-task auto-approve with the launch it was chosen for (#13342)', () => {
+    surfaces.act(KEY, { kind: 'select', runId: null });
+    surfaces.act(KEY, {
+      kind: 'launch',
+      patch: { instruction: 'Proofread', approval: 'autoApprove' },
+    });
+    // The launch request settles only with its run: the next task must not
+    // inherit the choice while it runs.
+    response();
+    surfaces.submit(KEY);
+    expect(transport.request.mock.calls[0]?.[0]).toMatchObject({
+      request: { kind: 'launch', launch: { approval: 'autoApprove' } },
+    });
+    expect(surfaces.get(KEY)?.surface$.get().launch.approval).toBe('policy');
+  });
+
   it('keeps persisted drafts through host updates before listing replay, then prunes authoritative absence', async () => {
     host.set(
       emptyHostSnapshot({
