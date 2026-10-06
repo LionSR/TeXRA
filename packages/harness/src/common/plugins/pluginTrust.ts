@@ -111,7 +111,7 @@ const reviewLines = (record: InstalledPlugin, plugin: ResolvedPlugin) =>
     if (hooks.length === 0) lines.push('Hooks: none');
     else {
       lines.push(
-        'Hooks (each runs as a process in the workspace, as you, with only PATH, HOME and the CLAUDE_* paths set; it can deny a tool call and add text the model reads):',
+        'Hooks (each runs as a process in the workspace, as you, with only PATH, HOME and the CLAUDE_* paths set; it can deny a tool call, add text the model reads, and keep a run going past the end of a turn once):',
       );
       for (const hook of hooks) {
         lines.push(`  ${describeHook(hook)}`);

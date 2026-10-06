@@ -109,6 +109,7 @@ function run(command, args, options = {}) {
     cwd: options.cwd ?? repoRoot,
     encoding: 'utf8',
     env,
+    ...(options.input === undefined ? {} : { input: options.input }),
   });
   return {
     status: result.status ?? 1,
@@ -1200,6 +1201,110 @@ function writeArtifact(name, value) {
   const artifactPath = path.join(artifactDir, name);
   writeFileSync(artifactPath, `${JSON.stringify(value, null, 2)}\n`);
   return artifactPath;
+}
+
+/**
+ * A plugin's `Stop` hook as a quality gate: a headless `texra run` whose
+ * hook blocks the first stop goes on for one more turn with the hook's
+ * reason as its instruction (the echo model's reply shows it), and the stop
+ * after it, told `stop_hook_active: true`, lets the run end. The reply and
+ * the run's `hook.outcome` rows are the artifact.
+ */
+function validateStopHookBlock() {
+  const cwd = makeScratch('texra-cli-stop-hook-');
+  try {
+    const project = echoProject(cwd);
+    const plugin = path.join(cwd, 'stopgate');
+    mkdirSync(path.join(plugin, '.claude-plugin'), { recursive: true });
+    mkdirSync(path.join(plugin, 'hooks'), { recursive: true });
+    writeFileSync(
+      path.join(plugin, '.claude-plugin', 'plugin.json'),
+      `${JSON.stringify({ name: 'stopgate', version: '1.0.0' })}\n`,
+    );
+    writeFileSync(
+      path.join(plugin, 'hooks', 'hooks.json'),
+      `${JSON.stringify({
+        hooks: {
+          Stop: [
+            {
+              hooks: [
+                {
+                  type: 'command',
+                  command: 'node',
+                  args: ['${CLAUDE_PLUGIN_ROOT}/stop.mjs'],
+                },
+              ],
+            },
+          ],
+        },
+      })}\n`,
+    );
+    writeFileSync(
+      path.join(plugin, 'stop.mjs'),
+      `import { readFileSync } from 'node:fs';
+const input = JSON.parse(readFileSync(0, 'utf8'));
+if (!input.stop_hook_active)
+  process.stdout.write(JSON.stringify({ decision: 'block', reason: 'Stop gate: check the answer once more.' }));
+`,
+    );
+    const cli = (args, label, input) => {
+      const result = run(process.execPath, [binaryPath, ...args], {
+        cwd: project.work,
+        env: project.ptyEnv,
+        input,
+      });
+      assertSuccess(result, label);
+      return result;
+    };
+    cli(['plugin', 'install', plugin], 'texra plugin install');
+    cli(['plugin', 'enable', 'stopgate'], 'texra plugin enable', 'y\n');
+    const result = cli(
+      [
+        'run',
+        'echo_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        'First message',
+        '--cwd',
+        project.work,
+        '--approval-policy',
+        'never',
+        '--output-format',
+        'json',
+        '--print',
+      ],
+      'texra run echo_validation with a Stop hook',
+    );
+    const response = String(
+      parseJson(result.stdout, 'stop hook run').output?.response ?? '',
+    );
+    const outcomes = project.readStore(
+      `SELECT json_extract(e.data, '$.payload.point') AS point,
+         json_extract(e.data, '$.payload.status') AS status,
+         json_extract(e.data, '$.payload.context') AS context,
+         json_extract(e.data, '$.payload.ignored') AS ignored
+       FROM event e WHERE e.type = 'hook.outcome' ORDER BY e."commit"`,
+    );
+    const artifactPath = writeArtifact('stop-hook-block.json', {
+      response,
+      outcomes,
+    });
+    assert(
+      response.includes('First message') &&
+        response.includes('Stop gate: check the answer once more.'),
+      `the run should go on with the Stop hook's reason as its next instruction (artifact: ${artifactPath})\nresponse: ${response}`,
+    );
+    assert(
+      outcomes.length === 2 &&
+        outcomes[0].context?.includes('Stop gate') &&
+        outcomes[1].context === null &&
+        outcomes[1].ignored === '[]',
+      `the first stop should block and the second, after the block's turn, should let the run end (artifact: ${artifactPath})`,
+    );
+  } finally {
+    removeScratch(cwd);
+  }
 }
 
 /**
@@ -2517,6 +2622,7 @@ async function validateCliRunArtifacts(options = {}) {
   validateRunCommand();
   validateToolUseAgentRunCommand();
   validateHistoryQueryRunCommand();
+  validateStopHookBlock();
   await validateForkResetHandoff();
   await validateTuiForkHandoffReset();
   await validateBackgroundCompaction();
