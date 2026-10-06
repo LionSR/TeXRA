@@ -8,6 +8,11 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "../harness/src/**/*.d.ts"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "../harness/src/**/*.d.ts",
+    "../texra/src/types/**/*.d.ts"
+  ],
   "exclude": []
 }

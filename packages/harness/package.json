@@ -59,7 +59,6 @@
     "acorn-walk": "catalog:",
     "date-fns": "catalog:",
     "diff": "catalog:",
-    "diff-match-patch": "catalog:",
     "escape-string-regexp": "catalog:",
     "glob": "catalog:",
     "http-status-codes": "catalog:",
@@ -80,7 +79,6 @@
     "quickjs-emscripten-core": "catalog:",
     "safe-stable-stringify": "catalog:",
     "shell-quote": "catalog:",
-    "strip-ansi": "^7.2.0",
     "turndown": "catalog:",
     "turndown-plugin-gfm": "catalog:",
     "undici": "catalog:",
@@ -94,6 +92,11 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@texra-ai/llm": "workspace:*",
+    "@types/mime-types": "^3.0.1",
+    "@types/nunjucks": "^3.2.6",
+    "@types/turndown": "^5.0.6",
+    "@types/write-file-atomic": "^4.0.3",
     "@typescript/native": "catalog:",
     "effect": "catalog:",
     "esbuild": "catalog:",

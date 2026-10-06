@@ -8,7 +8,8 @@
   "include": [
     "src/**/*.ts",
     "vite.config.ts",
-    "../harness/src/types/**/*.d.ts"
+    "../harness/src/types/**/*.d.ts",
+    "../texra/src/types/**/*.d.ts"
   ],
   "exclude": ["node_modules"]
 }
