@@ -51,11 +51,11 @@ export const goalContinuation: Continuation = {
       GOAL_MAX_COST_SETTING.configKey,
     );
     const spent =
-      (yield* SubscriptionRef.get(session.view)).runs.get(runId)?.treeUsage
+      (yield* SubscriptionRef.get(session.view.ref)).runs.get(runId)?.treeUsage
         .cost ?? 0;
     if (cap > 0 && spent >= cap) {
       yield* pauseActive({ session, runId });
-      session.publishRunEvent(runId, {
+      session.trace.publish(runId, {
         type: 'log',
         level: 'warn',
         message:

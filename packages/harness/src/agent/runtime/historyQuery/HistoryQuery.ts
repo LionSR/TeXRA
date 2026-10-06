@@ -87,7 +87,7 @@ const ReplySchema = z.discriminatedUnion('ok', [
 type Reply = z.infer<typeof ReplySchema>;
 
 /** The session a store reads: its display tail and its current commit. */
-type HistorySession = Pick<SessionHandle, 'events' | 'now'>;
+type HistorySession = Pick<SessionHandle, 'log'>;
 
 type StoreOp =
   | readonly ['insert', string, string, string, string]
@@ -308,7 +308,7 @@ export class HistoryQuery {
 
   private run(sql: string, params: readonly HistoryCell[]) {
     return Effect.gen({ self: this }, function* () {
-      const target = this.session().now();
+      const target = this.session().log.now();
       // A cleared database restarts its commits below what the store holds.
       if (this.store && target < this.store.cursor) {
         yield* this.discard('the session database was cleared');
@@ -373,7 +373,7 @@ export class HistoryQuery {
           Stream.runHead,
         );
         return this.session()
-          .events.all(from, drained)
+          .log.tail(from, drained)
           .pipe(Stream.interruptWhen(reached));
       }),
     );

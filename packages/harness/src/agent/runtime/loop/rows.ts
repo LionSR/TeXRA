@@ -209,12 +209,10 @@ interface ScriptSettlement {
 /** The settlement of `runId`'s script call; null before it settled. */
 export const scriptSettlement = Effect.fn('toolUse.scriptSettlement')(
   function* (
-    session: Pick<SessionHandle, 'readAggregate'>,
+    session: Pick<SessionHandle, 'log'>,
     runId: RunId,
   ): Effect.fn.Return<ScriptSettlement | null, DatabaseReadFailed> {
-    const rows = yield* session.readAggregate(rowAggregate(runId), [
-      'tool.result',
-    ]);
+    const rows = yield* session.log.rows(rowAggregate(runId), ['tool.result']);
     const settled = rows.findLast(
       (row) =>
         row.type === 'tool.result' && row.payload.callId === SCRIPT_CALL_ID,

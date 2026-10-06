@@ -571,7 +571,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       const text = chunk.slice(0, STREAMED_OUTPUT_MAX - streamed);
       if (text.length === 0) return;
       streamed += text.length;
-      run.session.publishRunEvent(runId, {
+      run.session.trace.publish(runId, {
         type: 'stream.chunk',
         id: fact.logId,
         text,
@@ -593,8 +593,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       const open = reentering?.decision === null ? reentering : null;
       reentering = null;
       if (open === null) return Effect.void;
-      return run.session
-        .decideRequest(runId, open.requestId, {
+      return run.session.requests
+        .decide(runId, open.requestId, {
           action: 'cancel',
           cause: 'The resumed call no longer asks it.',
         })
@@ -632,7 +632,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               Effect.uninterruptible(options?.onNeverCommitted ?? Effect.void),
               reentered.decision,
             );
-          return run.session.openRequest(runId, payload, {
+          return run.session.requests.ask(runId, payload, {
             ...options,
             open: (rows) => {
               if (reentered !== null) {
@@ -647,7 +647,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
                   : commit(fact, decided).pipe(Effect.as(from));
               }
               return retireStanding.pipe(
-                Effect.andThen(Effect.sync(() => run.session.now())),
+                Effect.andThen(Effect.sync(() => run.session.log.now())),
                 Effect.flatMap((from) =>
                   commit(fact, [
                     ...rows,
@@ -914,7 +914,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           title: string | null,
         ) {
           if (yield* Ref.getAndSet(stageOpened, true)) return;
-          run.session.publishRunEvent(runId, {
+          run.session.trace.publish(runId, {
             type: 'stage.start',
             id: stageId,
             label: title ?? 'Script',
@@ -930,7 +930,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               settled?.result.status === 'executed' ? 'completed' : 'failed';
             if (Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause))
               status = 'cancelled';
-            run.session.publishRunEvent(runId, {
+            run.session.trace.publish(runId, {
               type: 'stage.end',
               id: stageId,
               status,
@@ -1224,27 +1224,26 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   // batch that ends the turn, or one delivered while a queued model switch
   // waits for the next boundary (whose binding never saw these ids), keeps
   // its documents local.
-  const documents = (
-    endTurn ||
-    run.session.events
-      .pendingFollowUps(rowAggregate(run.runId))
-      .some((f) => f.control?.kind === 'model')
-      ? []
-      : settledPending.calls
-  ).flatMap((fact) =>
-    (settlementOf(settledPending, fact.callId)?.attachments ?? []).flatMap(
-      (attachment) => {
-        if (attachment.content.kind !== 'base64') return [];
-        const part = inlineMediaPart(
-          attachment.mimeType,
-          attachment.content.data,
-          bound,
-        );
-        return part?.kind === 'document'
-          ? [{ path: attachment.path, part }]
-          : [];
-      },
-    ),
+  const switching =
+    !endTurn &&
+    (yield* run.session.followUps.read(run.runId)).followUps.some(
+      (f) => f.control?.kind === 'model',
+    );
+  const documents = (endTurn || switching ? [] : settledPending.calls).flatMap(
+    (fact) =>
+      (settlementOf(settledPending, fact.callId)?.attachments ?? []).flatMap(
+        (attachment) => {
+          if (attachment.content.kind !== 'base64') return [];
+          const part = inlineMediaPart(
+            attachment.mimeType,
+            attachment.content.data,
+            bound,
+          );
+          return part?.kind === 'document'
+            ? [{ path: attachment.path, part }]
+            : [];
+        },
+      ),
   );
   const uploadFile =
     documents.length === 0 ? undefined : bound.model.uploadFile;

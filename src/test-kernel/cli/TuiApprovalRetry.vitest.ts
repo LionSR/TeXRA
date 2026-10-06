@@ -113,7 +113,7 @@ function tui(
   contextOverrides: Partial<CliContext> = {},
 ): { readonly presentationHost: CliRuntimeHost; readonly dispose: () => void } {
   const cliContext = createTuiCliContext(contextOverrides);
-  testDefaultSession().setApprovalPolicy(cliContext.approvalPolicy);
+  testDefaultSession().approvals.setPolicy(cliContext.approvalPolicy);
   // The installed fake host's secret store: the credential work takes it
   // directly, and the key-check expectations name exactly this object.
   const { secrets } = installedHost();
@@ -158,7 +158,7 @@ function ensureRun(runId: RunId): Effect.Effect<void> {
     started.add(runId);
     const session = testDefaultSession();
     publishTestRunStart(session, runId, { parent: root ?? null });
-    yield* session.settled.pipe(Effect.orDie);
+    yield* session.log.settled.pipe(Effect.orDie);
   });
 }
 
@@ -187,7 +187,7 @@ function openRequest(
 ): Effect.Effect<RequestDecision, Error> {
   return Effect.gen(function* () {
     yield* ensureRun(runId);
-    return yield* testDefaultSession().openRequest(runId, payload);
+    return yield* testDefaultSession().requests.ask(runId, payload);
   }).pipe(Effect.mapError((cause) => new Error(String(cause))));
 }
 
@@ -311,7 +311,7 @@ function waitForNoApproval(): Effect.Effect<void> {
 }
 
 beforeAll(() => {
-  bindSessionView(testRuntime(), testDefaultSession().view);
+  bindSessionView(testRuntime(), testDefaultSession().view.ref);
 });
 
 beforeEach(() => {
@@ -329,7 +329,7 @@ afterEach(async () => {
   // A request left open outlives its test on the file's session, so close
   // whatever this test did not answer before the next one reads the head.
   const session = testDefaultSession();
-  for (const request of SubscriptionRef.getUnsafe(session.view).requests) {
+  for (const request of SubscriptionRef.getUnsafe(session.view.ref).requests) {
     await testRuntime().runPromise(
       session.requests
         .request({
@@ -341,7 +341,7 @@ afterEach(async () => {
         .pipe(Effect.ignore),
     );
   }
-  await Effect.runPromise(session.settled);
+  await Effect.runPromise(session.log.settled);
   resetCliState();
   mocks.hasUsableApiKey.mockReset();
   mocks.notify.mockReset();
@@ -590,9 +590,11 @@ describe('TUI request decisions', () => {
         attached.dispose();
         finishLookup?.();
         yield* settle();
-        yield* testDefaultSession().settled;
+        yield* testDefaultSession().log.settled;
         expect(
-          SubscriptionRef.getUnsafe(testDefaultSession().view).requests.some(
+          SubscriptionRef.getUnsafe(
+            testDefaultSession().view.ref,
+          ).requests.some(
             (request) => request.requestId === permission.requestId,
           ),
         ).toBe(true);
@@ -614,9 +616,11 @@ describe('TUI request decisions', () => {
         // No key was entered: the request is neither denied nor decided, as
         // on the extension and the desktop, and the user chooses again.
         yield* waitForApproval('retry', { requestId: permission.requestId });
-        yield* testDefaultSession().settled;
+        yield* testDefaultSession().log.settled;
         expect(
-          SubscriptionRef.getUnsafe(testDefaultSession().view).requests.some(
+          SubscriptionRef.getUnsafe(
+            testDefaultSession().view.ref,
+          ).requests.some(
             (request) => request.requestId === permission.requestId,
           ),
         ).toBe(true);

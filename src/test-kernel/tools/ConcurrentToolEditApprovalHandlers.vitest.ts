@@ -13,6 +13,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createTestSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import {
   requestToolEditApproval,
@@ -46,11 +47,11 @@ describe('Concurrent session tool edit approval handlers', () => {
               }),
             );
             yield* Effect.forkScoped(
-              Stream.runForEach(session.events.all(session.now()), (event) =>
+              Stream.runForEach(session.log.tail(session.log.now()), (event) =>
                 Effect.sync(() => {
                   if (event.type !== 'request.opened') return;
                   if (event.payload.kind !== 'toolEdit') return;
-                  session.publish([
+                  publishTestRows(session, [
                     {
                       type: 'request.decided',
                       aggregateId: event.aggregateId,
@@ -77,7 +78,7 @@ describe('Concurrent session tool edit approval handlers', () => {
 
         const runA = publishTestRunStart(sessionA);
         const runB = publishTestRunStart(sessionB);
-        yield* Effect.all([sessionA.settled, sessionB.settled], {
+        yield* Effect.all([sessionA.log.settled, sessionB.log.settled], {
           concurrency: 'unbounded',
         });
 

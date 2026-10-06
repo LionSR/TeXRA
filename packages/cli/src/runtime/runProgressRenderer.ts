@@ -120,7 +120,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   ): Effect.Effect<void, never, Scope.Scope> {
     return Effect.suspend(() => {
       this.wantedRunId = options.runId;
-      this.attachCursor = SubscriptionRef.getUnsafe(session.view).cursor;
+      this.attachCursor = SubscriptionRef.getUnsafe(session.view.ref).cursor;
       return Effect.addFinalizer(() =>
         Effect.sync(() => {
           this.view = undefined;
@@ -129,7 +129,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         Effect.andThen(
           Effect.forkScoped(
             Effect.scoped(
-              Stream.runForEach(session.viewChanges, (view) =>
+              Stream.runForEach(session.view.changes, (view) =>
                 Effect.gen({ self: this }, function* () {
                   this.applyView(view);
                   if (this.rootRunTerminal || !this.rootRunId) {

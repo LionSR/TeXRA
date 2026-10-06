@@ -35,7 +35,7 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
   runId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<ResumabilityDecision> {
-  const read = yield* session.readRunRecords(runId).pipe(Effect.result);
+  const read = yield* session.log.records(runId).pipe(Effect.result);
   if (read._tag === 'Failure') {
     const cause = `run state could not be read (${toErrorMessage(read.failure)})`;
     yield* Effect.logWarning(`Run ${runId}: ${cause}`).pipe(

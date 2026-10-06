@@ -5,6 +5,8 @@ import { expect, vi } from 'vitest';
 
 // Local imports
 import { apiKeySecretName } from '@texra-ai/llm';
+import { RouteRetries } from '@agent/runtime/run/invocation';
+import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { AppState } from '@platform/interfaces';
 import {
@@ -65,6 +67,8 @@ const processStores = Layer.mergeAll(
   LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
   testHttpClientLayer,
   UsageLog.disabled,
+  // The helper call's route gate, as `processLayer` serves it.
+  Layer.effect(RouteRetries, ModelRetryGate.make),
   // The recorder is mocked, so nothing is spawned.
   scriptedSpawnerLayer(() => ({})).layer,
 );
@@ -79,6 +83,8 @@ const storesWithoutCredential = Layer.mergeAll(
   LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
   testHttpClientLayer,
   UsageLog.disabled,
+  // The helper call's route gate, as `processLayer` serves it.
+  Layer.effect(RouteRetries, ModelRetryGate.make),
   scriptedSpawnerLayer(() => ({})).layer,
 );
 

@@ -82,7 +82,7 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
 }
 
 const persistTranscriptEntry = (runId: RunId) =>
-  session.commit([
+  session.log.transact([
     {
       type: 'log',
       aggregateId: aggregateId('run', runId),
@@ -132,7 +132,7 @@ describe('ChatExportController.exportAsHtml', () => {
           model: 'anthropic/claude-sonnet-4-6',
         });
         publishTestRunStart(session, runId);
-        yield* session.settled;
+        yield* session.log.settled;
         yield* seedRunRecord(session, runId, runConfigRecord);
         yield* persistTranscriptEntry(runId);
 
@@ -176,7 +176,7 @@ describe('ChatExportController.buildExportInput', () => {
       Effect.gen(function* () {
         const runId = 'eec003' as RunId;
         publishTestRunStart(session, runId);
-        yield* session.settled;
+        yield* session.log.settled;
         yield* seedRunRecord(session, runId, config());
 
         expect(yield* controller.buildExportInput(runId)).toEqual({

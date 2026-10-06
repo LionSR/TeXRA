@@ -26,6 +26,7 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   createProcessSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
@@ -90,7 +91,7 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
 
     assert.equal(launched.status, 'executed');
     yield* Effect.promise(() => outputEmitted);
-    yield* testDefaultSession().settled;
+    yield* testDefaultSession().log.settled;
     const reported = /Run ID: (\S+)/.exec(launched.output ?? '')?.[1];
     assert.ok(reported, 'Background launch should report its run ID');
     const runId = RunIdSchema.parse(reported);
@@ -118,7 +119,7 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
 
 function readOutput(runId: RunId, viewRange?: [number, number]) {
   return Effect.gen(function* () {
-    yield* testDefaultSession().settled;
+    yield* testDefaultSession().log.settled;
     return yield* ExecutionsTool.call({
       path: `/executions/${runId}/output`,
       ...(viewRange ? { view_range: viewRange } : {}),
@@ -163,7 +164,7 @@ function registerScriptRun(name: string, model?: string) {
     );
     if (model !== undefined) {
       const session = testDefaultSession();
-      session.publishRunEvent(runId, {
+      session.trace.publish(runId, {
         type: 'run.config',
         runId,
         config: AgentConfigSchema.parse({
@@ -172,7 +173,7 @@ function registerScriptRun(name: string, model?: string) {
           instruction: `Script '${name}'`,
         }),
       });
-      yield* session.settled;
+      yield* session.log.settled;
     }
     return runId;
   });
@@ -361,7 +362,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         level:
           typeof LOG_LEVELS.INFO | typeof LOG_LEVELS.WARN = LOG_LEVELS.INFO,
       ): void => {
-        session.publish([
+        publishTestRows(session, [
           {
             type: 'log',
             aggregateId: aggregateId('run', runId),

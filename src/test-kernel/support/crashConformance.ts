@@ -317,15 +317,15 @@ function crashAt(clean: string, storage: string, n: number): void {
  *  included. */
 const approveAll = (session: SessionHandle) =>
   Stream.runForEach(
-    session.events
-      .all(0)
+    session.log
+      .tail(0)
       .pipe(Stream.filter((event) => event.type === 'request.opened')),
     (event) => {
       if (event.type !== 'request.opened') return Effect.void;
       const target = aggregateTarget(event.aggregateId);
       if (target.kind !== 'run') return Effect.void;
-      return session
-        .decideRequest(target.id, event.requestId, { action: 'approve' })
+      return session.requests
+        .decide(target.id, event.requestId, { action: 'approve' })
         .pipe(Effect.ignore);
     },
   ).pipe(Effect.forkScoped);

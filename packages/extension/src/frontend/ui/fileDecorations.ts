@@ -52,7 +52,7 @@ class TeXRAFileDecorationProvider implements vscode.FileDecorationProvider {
  *  both listeners are fibers of it (activation's, in the extension). */
 export function registerFileDecorations(
   context: vscode.ExtensionContext,
-  session: Pick<SessionBackend, 'viewChanges'>,
+  session: Pick<SessionBackend, 'view'>,
 ): Effect.Effect<void, never, Scope.Scope> {
   return Effect.gen(function* () {
     const provider = new TeXRAFileDecorationProvider();

@@ -12,6 +12,7 @@ import { z } from 'zod';
 
 import { getRunRecords } from '@agent/storage';
 import { requireToolRun } from '@agent/runtime/RunCall';
+import { postProcessResponse } from '@latex/texraResponseTextProcessing';
 import { documentsSummary } from '@shared/plugins/documents';
 import {
   fileLocationDisplayPath,
@@ -146,7 +147,7 @@ export const DocumentExtractTool = defineTool({
     const { session } = docs.run;
     const end = yield* getRunRecords(session, run).readRunEnd();
     // The host's cleanup of provider text (TeXRA's LaTeX replacements).
-    const reply = yield* session.responseTextProcessing.postProcessResponse(
+    const reply = yield* postProcessResponse(
       end?.output.response ?? '',
       session.roots.config,
     );

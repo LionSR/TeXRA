@@ -21,7 +21,7 @@
  */
 import { Context, Effect } from 'effect';
 
-import { SessionOwner } from '@agent/runtime/sessionGraph';
+import { SessionOwner } from '@agent/runtime/SessionOwner';
 import type { ProcessRuntime } from '@platform/processRuntime';
 
 let runtime: ProcessRuntime | undefined;

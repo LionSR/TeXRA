@@ -774,7 +774,7 @@ describe('the interrupted golden runs', () => {
             .get(APPROVAL),
         )?.n === 2;
       // Re-presented: the run waits on its user, held here, on that request.
-      yield* SubscriptionRef.changes(session.view).pipe(
+      yield* SubscriptionRef.changes(session.view.ref).pipe(
         Stream.takeUntil(
           (view) =>
             view.runs.get(APPROVAL)?.approval === 'own' &&
@@ -784,7 +784,7 @@ describe('the interrupted golden runs', () => {
         Stream.runDrain,
       );
       expect(
-        yield* session.decideRequest(APPROVAL, requestId!, {
+        yield* session.requests.decide(APPROVAL, requestId!, {
           action: 'approve',
         }),
       ).toBe(true);
@@ -918,10 +918,10 @@ describe('the interrupted golden runs', () => {
         // nothing works on the call whose child was running, so it reads as
         // interrupted, not running. A finished agent's row says the first
         // line of its answer, never the `<subagent-result>` envelope.
-        yield* session.setTranscriptSubscriptions('golden-test', [
-          { id: FANOUT, fromSeq: 0 },
+        yield* session.view.subscribe('golden-test', [
+          { id: aggregateId('run', FANOUT), fromSeq: 0 },
         ]);
-        const [killed] = yield* SubscriptionRef.changes(session.view).pipe(
+        const [killed] = yield* SubscriptionRef.changes(session.view.ref).pipe(
           Stream.filter((view) => {
             const run = view.runs.get(FANOUT);
             return (
@@ -959,7 +959,7 @@ describe('the interrupted golden runs', () => {
             line: 'Interrupted: B',
           },
         ]);
-        yield* session.setTranscriptSubscriptions('golden-test', []);
+        yield* session.view.subscribe('golden-test', []);
         const count = (run: RunId, type: string) =>
           Number(
             raw(storage, (db) =>
@@ -1084,10 +1084,10 @@ describe('the interrupted golden runs', () => {
         // call under its phase, the first script's linked to the child its
         // card launched (the one launched before the kill included), the
         // second's reused with no child of their own.
-        yield* session.setTranscriptSubscriptions('golden-test', [
-          { id: FANOUT, fromSeq: 0 },
+        yield* session.view.subscribe('golden-test', [
+          { id: aggregateId('run', FANOUT), fromSeq: 0 },
         ]);
-        const [painted] = yield* SubscriptionRef.changes(session.view).pipe(
+        const [painted] = yield* SubscriptionRef.changes(session.view.ref).pipe(
           Stream.filter((view) => {
             const run = view.runs.get(FANOUT);
             return (
@@ -1245,11 +1245,11 @@ describe('the interrupted golden runs', () => {
       expect(rows(SCRIPT_RUN, 'run.end').at(-1)?.outcome).toBe('completed');
       // The script's run is the parent's dispatched child; the child its
       // `agent()` awaited is the script's, listed by its stage alone.
-      yield* session.setTranscriptSubscriptions('golden-test', [
-        { id: BACKGROUND, fromSeq: 0 },
-        { id: SCRIPT_RUN, fromSeq: 0 },
+      yield* session.view.subscribe('golden-test', [
+        { id: aggregateId('run', BACKGROUND), fromSeq: 0 },
+        { id: aggregateId('run', SCRIPT_RUN), fromSeq: 0 },
       ]);
-      const [listed] = yield* SubscriptionRef.changes(session.view).pipe(
+      const [listed] = yield* SubscriptionRef.changes(session.view.ref).pipe(
         Stream.map((view) =>
           [BACKGROUND, SCRIPT_RUN].map((id) => {
             const run = view.runs.get(id);

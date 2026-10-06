@@ -14,6 +14,7 @@ import {
   type RunId,
   type RunPhase,
   type SessionEvent,
+  type SessionEventDraft,
 } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
 import type { TranscriptView } from '@shared/session/sessionView';
@@ -99,6 +100,18 @@ export function createProcessSession(
 }
 
 /**
+ * Enqueue rows on the session's publisher and return at once, as a detached
+ * producer does: they commit in call order, and a reader waits on
+ * `session.log.settled` before reading them.
+ */
+export function publishTestRows(
+  session: SessionHandle,
+  rows: readonly SessionEventDraft[],
+): void {
+  Effect.runFork(session.log.transact(rows));
+}
+
+/**
  * Publish the existence fact before a test exercises a run's later events.
  * A child names its parent, whose own `run.start` must already be published.
  */
@@ -107,7 +120,7 @@ export function publishTestRunStart(
   runId: RunId = generateRunId(),
   options: { parent?: RunId | null } = {},
 ): RunId {
-  session.publish([
+  publishTestRows(session, [
     {
       type: 'run.start',
       aggregateId: aggregateId('run', runId),
@@ -127,8 +140,8 @@ export function publishTestRunStart(
  */
 export const queuedFollowUps = (session: SessionHandle, runId: RunId) =>
   Effect.gen(function* () {
-    yield* session.settled;
-    const view = yield* session.readView([runId]);
+    yield* session.log.settled;
+    const view = yield* session.view.read([runId]);
     return view.queuedFollowUps.get(runId) ?? [];
   });
 

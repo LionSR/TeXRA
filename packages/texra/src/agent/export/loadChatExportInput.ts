@@ -83,7 +83,7 @@ export const loadChatExportInput = Effect.fn('loadChatExportInput')(function* (
       readCompletedRunConversation(id, session).pipe(
         Effect.mapError((cause) => unreadable('conversation', cause)),
       ),
-      session.readView([]),
+      session.view.read([]),
     ],
     { concurrency: 3 },
   );

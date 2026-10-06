@@ -1,6 +1,6 @@
 // Test harness: seed the session fold with synthetic runs and rows, render
 // <App /> to the real terminal. Every fixture is published through the
-// runtime session (`SessionHandle.publish`, the transcript store, the
+// runtime session (`SessionHandle.log`, the transcript store, the
 // interaction port), so the TUI under test renders the same `SessionView` a
 // live chat does. Used to verify the TUI without API access. Exits on Ctrl-C.
 
@@ -369,7 +369,7 @@ if (HARNESS_MEMORY_FILES.length > 0) {
 const harnessRuntimeSession = await harnessRuntime.runPromise(
   HARNESS_PLATFORM_SERVICES.session,
 );
-harnessRuntimeSession.setApprovalPolicy(TEXRA_APPROVAL_POLICY_DEFAULT);
+harnessRuntimeSession.approvals.setPolicy(TEXRA_APPROVAL_POLICY_DEFAULT);
 if (process.env.HARNESS_VISIBLE_AGENTS !== undefined) {
   await harnessRuntime.runPromise(
     harnessRoots.repoState.update(WorkspaceStateKey.WORKSPACE_AGENTS, {
@@ -402,12 +402,12 @@ function session() {
 }
 
 function publish(...drafts: SessionEventDraft[]): void {
-  session().publish(drafts);
+  harnessRuntime.runFork(session().log.transact(drafts));
 }
 
 // The TUI reads the session fold (PRD 10.1): bind it and subscribe every
 // run's transcript tier the way `runChat` does.
-HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, session().view));
+HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, session().view.ref));
 {
   let subscribed = '';
   const syncTranscriptSubscriptions = (): void => {
@@ -416,9 +416,9 @@ HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, session().view));
     if (key === subscribed) return;
     subscribed = key;
     harnessRuntime.runFork(
-      session().setTranscriptSubscriptions(
+      session().view.subscribe(
         'tui-harness',
-        ids.map((id) => ({ id, fromSeq: 0 })),
+        ids.map((id) => ({ id: qualifyAggregateId('run', id), fromSeq: 0 })),
       ),
     );
   };
@@ -1054,7 +1054,7 @@ function requestHarnessApproval(
   onSettled: (decision: RequestDecision) => void | Promise<void>,
 ): void {
   void harnessRuntime
-    .runPromise(session().openRequest(runId, payload))
+    .runPromise(session().requests.ask(runId, payload))
     .then(onSettled)
     .catch((error: unknown) => {
       appendLocalErrorTranscript(
@@ -1335,7 +1335,7 @@ if (SHOW_BASH_APPROVAL) {
   const showApproval = (index = 1) => {
     const permission = makeBashApprovalPayload(index);
     return harnessRuntime.runPromise(
-      session().openRequest(permission.runId, {
+      session().requests.ask(permission.runId, {
         kind: 'bash',
         data: permission,
       }),
@@ -1468,7 +1468,7 @@ function appendHarnessTranscript(
 }
 
 function setHarnessApprovalPolicy(policy: TexraApprovalPolicy): void {
-  harnessRuntimeSession.setApprovalPolicy(policy);
+  harnessRuntimeSession.approvals.setPolicy(policy);
   sessionMeta.set({
     ...sessionMeta.get(),
     approvalPolicy: policy,
@@ -1525,7 +1525,7 @@ function appendHarnessStatus(): void {
       model: meta.model,
       teamName: meta.teamName,
       modelAccess: run?.usage.usageRoute,
-      approvalPolicy: harnessRuntimeSession.approvalPolicy,
+      approvalPolicy: harnessRuntimeSession.approvals.policy(),
       approvalBypasses: runBypasses(view, runId),
       statusLabel: run?.statusLabel,
       activeChildSessions: runningChildCount(view, run),
@@ -1629,7 +1629,7 @@ registerBuiltinSlashCommands({
         ? DISABLED_MODEL_SWITCH_REASON
         : undefined,
     ),
-  getApprovalPolicy: () => harnessRuntimeSession.approvalPolicy,
+  getApprovalPolicy: () => harnessRuntimeSession.approvals.policy(),
   onApprovalPolicySelect: setHarnessApprovalPolicy,
   onModelSelect: (model) =>
     Effect.sync(() => {
@@ -1804,24 +1804,24 @@ if (SHOW_STREAMING_TOOL_OUTPUT) {
     Effect.gen(function* () {
       yield* Effect.sleep('1 second');
       seedPhase(HARNESS_RUN_ID, RUN_PHASE.RUNNING);
-      session().publishRunEvent(HARNESS_RUN_ID, {
+      session().trace.publish(HARNESS_RUN_ID, {
         type: 'stream.start',
         id: 'streaming-thinking',
         kind: MESSAGE_TYPES.THINKING,
       });
-      session().publishRunEvent(HARNESS_RUN_ID, {
+      session().trace.publish(HARNESS_RUN_ID, {
         type: 'stream.chunk',
         id: 'streaming-thinking',
         text: 'Checking the streamed calculation.',
       });
-      session().publishRunEvent(HARNESS_RUN_ID, {
+      session().trace.publish(HARNESS_RUN_ID, {
         type: 'tool.start',
         logId: 'streaming-tool',
         toolName: 'bash',
         input: { command: 'python3 calculation.py' },
       });
       for (let index = 1; index <= 12; index += 1) {
-        session().publishRunEvent(HARNESS_RUN_ID, {
+        session().trace.publish(HARNESS_RUN_ID, {
           type: 'stream.chunk',
           id: 'streaming-tool',
           text: `output-${index}: ${'long result '.repeat(30)}\n`,

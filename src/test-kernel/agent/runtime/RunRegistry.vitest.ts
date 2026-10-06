@@ -1,15 +1,15 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, type Scope } from 'effect';
+import { Deferred, Effect, Fiber, type Scope, SubscriptionRef } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
-import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { RunHandle, RunControls } from '@agent/runtime/RunHandle';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { RunLive } from '@agent/runtime/runRegistry';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
+import type { SessionHandle, SessionLog } from '@agent/runtime/SessionHandle';
 import {
   NO_APPROVAL_GRANTS,
   type ApprovalGrants,
@@ -24,7 +24,7 @@ import {
   type RunSubstate,
   type SessionEventDraft,
 } from '@shared/schemas';
-import type { RunView } from '@shared/session/sessionView';
+import type { RunView, SessionView } from '@shared/session/sessionView';
 import { untrackRun } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -39,32 +39,6 @@ import { generateRunId } from '@utils/core';
 
 // Local file imports
 import { eventsOfType } from '../progressTestUtils';
-
-const storageMocks = vi.hoisted(() => ({
-  finalizeRun: vi.fn(),
-}));
-
-// The registry deep-imports finalizeRun from runLifecycle
-// (not the `@agent/storage` barrel), so the spy lives on that leaf module.
-// Mocking both the barrel and the leaf with the same `vi.fn` whose
-// implementation points at `importOriginal`'s barrel export recurses through
-// the re-export and blows the stack.
-vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@agent/storage/runLifecycle')>();
-  storageMocks.finalizeRun.mockImplementation(actual.finalizeRun);
-  return {
-    ...actual,
-    finalizeRun: storageMocks.finalizeRun,
-  };
-});
-vi.mock('@agent/storage', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agent/storage')>();
-  return {
-    ...actual,
-    finalizeRun: storageMocks.finalizeRun,
-  };
-});
 
 setupPlatform({ workspacePath: '/workspace' });
 
@@ -109,7 +83,6 @@ interface FoldedPhases {
 /** Wires the events/phases/registry trio most tests drive kills through. */
 function createRegistry(
   options: {
-    grantsOnDetach?: (runId: RunId) => ApprovalGrants;
     commit?: (
       drafts: readonly SessionEventDraft[],
     ) => Effect.Effect<void, Error>;
@@ -120,6 +93,10 @@ function createRegistry(
   events: PublishedEvents;
   phases: FoldedPhases;
   registry: RunRegistry;
+  grants: {
+    readonly runs: Map<RunId, { readonly parentId: RunId | null }>;
+    readonly policy: Map<RunId, ApprovalGrants>;
+  };
 } {
   // The session's publish path, in miniature: every draft the registry
   // publishes is appended in order, and a phase the fold moved reaches
@@ -139,21 +116,52 @@ function createRegistry(
       registry.sweepChildrenOfFoldedStop(runId);
     },
   };
-  const registry = new RunRegistry({
-    runView: (runId) => views.get(runId),
-    commit: (drafts) =>
+  // What the registry reads of its session: the run's view, the grants a
+  // detached child keeps, the claims (no-ops unless a test passes its own),
+  // and its own `run.detach` batches, which land in `events`. Everything
+  // else, a run's end among it, is the default session's.
+  const real = testDefaultSession();
+  const grants = {
+    runs: new Map<RunId, { readonly parentId: RunId | null }>(),
+    policy: new Map<RunId, ApprovalGrants>(),
+  };
+  const grantView = Effect.runSync(
+    SubscriptionRef.make(grants as unknown as SessionView),
+  );
+  const commit =
+    options.commit ??
+    ((drafts: readonly SessionEventDraft[]) =>
       Effect.sync(() => {
         events.published.push(...drafts);
-      }),
-    grantsOnDetach: options.grantsOnDetach ?? (() => NO_APPROVAL_GRANTS),
-    finalizeRun: (input) => finalizeRun(testDefaultSession(), input),
-    holdRunClaim: () => Effect.void,
-    borrowRunClaim: () => Effect.void,
+      }));
+  const session = {
+    ...real,
+    view: {
+      ...real.view,
+      ref: grantView,
+      run: (runId: RunId) => views.get(runId),
+    },
+    log: {
+      ...real.log,
+      transact: ((work: unknown) =>
+        typeof work === 'function'
+          ? real.log.transact(work as never)
+          : Effect.as(
+              commit(work as readonly SessionEventDraft[]),
+              [],
+            )) as SessionLog['transact'],
+      hold: (runId: RunId, hold?: { readonly ends?: boolean }) =>
+        (hold?.ends === true ? options.holdRunClaim : options.borrowRunClaim)?.(
+          runId,
+        ) ?? Effect.void,
+    },
+  } as SessionHandle;
+  const registry = new RunRegistry({
+    session: () => session,
     fork: testRunFork,
     pinPlugins: pinNoPlugins,
-    ...options,
   });
-  return { events, phases, registry };
+  return { events, phases, registry, grants };
 }
 
 interface PublishedEvents {
@@ -271,7 +279,7 @@ describe('runRegistry', () => {
           ),
         );
         yield* Deferred.await(untracked);
-        registry.closeAdmissions();
+        registry.close();
         expect(registry.activeIds()).toEqual([]);
         expect(registry.isLive(runId)).toBe(true);
         const drain = yield* Effect.forkChild(
@@ -324,7 +332,7 @@ describe('runRegistry', () => {
       registry.track(agentHandle);
       phases.set(agentRunId, RUN_PHASE.RUNNING);
 
-      registry.killBackgroundProcesses();
+      registry.close();
 
       expect(bashKill).toHaveBeenCalledOnce();
       // Neither handle is untracked: killing a background OS process
@@ -872,8 +880,8 @@ describe('runRegistry', () => {
     'stops a child driver before it has a handle and leaves finalization to it',
     () =>
       Effect.gen(function* () {
-        storageMocks.finalizeRun.mockClear();
         const { registry } = createRegistry();
+        const end = vi.spyOn(registry, 'end');
         yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
         const interrupt = vi.fn();
         const runId = generateRunId();
@@ -887,15 +895,15 @@ describe('runRegistry', () => {
         yield* registry.stop(runId, { reason: 'user' }).settlement;
 
         expect(interrupt).toHaveBeenCalledOnce();
-        expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
+        expect(end).not.toHaveBeenCalled();
         expect(registry.activeIds()).toContain(runId);
       }),
   );
 
   it.effect('cancels an ownerless run', () =>
     Effect.gen(function* () {
-      storageMocks.finalizeRun.mockClear();
       const { registry } = createRegistry();
+      const end = vi.spyOn(registry, 'end');
       const runId = generateRunId();
 
       try {
@@ -903,13 +911,12 @@ describe('runRegistry', () => {
         // `finalizeOwnerlessStop` fails for a run that has none, and today the
         // registry's own runFork drops that failure.
         publishTestRunStart(testDefaultSession(), runId);
-        yield* testDefaultSession().settled;
+        yield* testDefaultSession().log.settled;
         yield* registry.stop(runId, { reason: 'user' }).settlement;
 
         // `run.end` is the run's whole terminal fact (one run model, 3.3), so
         // a stop that reached no live handle still writes it.
-        expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-          testDefaultSession(),
+        expect(end).toHaveBeenCalledWith(
           expect.objectContaining({
             runId,
             outcome: RUN_OUTCOME.CANCELLED,
@@ -1101,12 +1108,12 @@ describe('runRegistry', () => {
   it.effect('keeps the grants a child inherited in its detach batch', () =>
     Effect.gen(function* () {
       const inherited = humanGrant(['toolEdit'], true)(NO_APPROVAL_GRANTS);
-      const { registry, events } = createRegistry({
-        grantsOnDetach: () => inherited,
-      });
+      const { registry, events, grants } = createRegistry();
       yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
       const parentRunId = generateRunId();
       const childRunId = generateRunId();
+      grants.runs.set(childRunId, { parentId: parentRunId });
+      grants.policy.set(parentRunId, inherited);
       const handle = createHandle(childRunId, parentRunId);
       registry.track(handle);
 

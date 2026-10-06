@@ -27,7 +27,7 @@ const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
       store.readRunEnd(),
       store.readResultMeta(),
     ]);
-    if (session.runView(reference.runId)?.parentId !== parentRunId) {
+    if (session.view.run(reference.runId)?.parentId !== parentRunId) {
       return yield* Effect.fail(
         new Error(
           `Run ${reference.runId} is not a direct child of ${parentRunId}.`,

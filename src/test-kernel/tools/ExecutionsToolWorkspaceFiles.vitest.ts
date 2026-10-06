@@ -30,6 +30,7 @@ import {
   createProcessSession,
   createTestSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -50,15 +51,15 @@ function foldRunPhase(
   expected: RunPhase,
 ): Effect.Effect<void> {
   return Effect.gen(function* () {
-    session.publish([
+    publishTestRows(session, [
       {
         type: 'run.position',
         aggregateId: aggregateId('run', runId),
         payload: { family: 'toolUse', at: step },
       },
     ]);
-    yield* session.settled.pipe(Effect.orDie);
-    expect(session.runView(runId)?.status).toBe(expected);
+    yield* session.log.settled.pipe(Effect.orDie);
+    expect(session.view.run(runId)?.status).toBe(expected);
   });
 }
 
@@ -298,7 +299,7 @@ describe('ExecutionsTool', () => {
           };
           yield* session.followUps.send(parentRunId, delivery);
           expect(
-            session.events.pendingFollowUps(aggregateId('run', parentRunId)),
+            (yield* session.followUps.read(parentRunId)).followUps,
           ).toHaveLength(1);
 
           const waited = yield* ExecutionsTool.call({
@@ -316,14 +317,14 @@ describe('ExecutionsTool', () => {
             '<subagent-result>full report</subagent-result>',
           );
           expect(
-            session.events.pendingFollowUps(aggregateId('run', parentRunId)),
+            (yield* session.followUps.read(parentRunId)).followUps,
           ).toEqual([]);
           // The child loop's replayed wake finds the row consumed.
           expect(yield* session.followUps.send(parentRunId, delivery)).toEqual({
             kind: 'duplicate',
           });
           expect(
-            session.events.pendingFollowUps(aggregateId('run', parentRunId)),
+            (yield* session.followUps.read(parentRunId)).followUps,
           ).toEqual([]);
         }),
       ),
@@ -417,7 +418,7 @@ describe('ExecutionsTool', () => {
           );
           yield* Effect.yieldNow;
           // The child stays RUNNING: only the committed report can end it.
-          session.publish([
+          publishTestRows(session, [
             {
               type: 'followup.queued',
               aggregateId: aggregateId('run', parentRunId),
@@ -448,7 +449,7 @@ describe('ExecutionsTool', () => {
             const callerRunId = RunIdSchema.parse('ca11e0000001');
 
             publishTestRunStart(session, runId);
-            yield* session.settled;
+            yield* session.log.settled;
             mocks.readConfig.mockResolvedValue(config);
             mocks.readReport.mockResolvedValue(
               '<subagent-result>full report</subagent-result>',

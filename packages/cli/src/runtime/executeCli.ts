@@ -12,7 +12,11 @@ import {
   type RunAgentOptions,
   type RunAgentRequest,
 } from '@agent/runtime';
-import { deriveResumability, finalizeRun } from '@agent/storage';
+import {
+  deriveResumability,
+  type FinalizeRunInput,
+  type FinalizeRunResult,
+} from '@agent/storage';
 import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
@@ -87,7 +91,10 @@ interface CliExecuteOptions {
    *  predicate; a test harness injects stand-ins rather than mocking. */
   readonly agentRuns?: Partial<{
     readonly launch: (shutdown: () => boolean) => typeof runAgent;
-    readonly finalize: typeof finalizeRun;
+    readonly finalize: (
+      session: SessionHandle,
+      input: FinalizeRunInput,
+    ) => Effect.Effect<FinalizeRunResult>;
     readonly resumability: typeof deriveResumability;
   }>;
 }
@@ -232,12 +239,13 @@ export function executeCliRequest(
   return Effect.gen(function* () {
     const agentRuns = {
       launch: () => runAgent,
-      finalize: finalizeRun,
+      finalize: (session: SessionHandle, input: FinalizeRunInput) =>
+        session.runs.end(input),
       resumability: deriveResumability,
       ...options.agentRuns,
     };
     const session = yield* options.session;
-    session.setApprovalPolicy(runContext.approvalPolicy);
+    session.approvals.setPolicy(runContext.approvalPolicy);
     const presentationHost = createCliRuntimeHost(runContext);
     // Everything the run attaches to the session for its output: closed once,
     // after the last result read, so the last line is on the wire before the
@@ -569,7 +577,7 @@ export function executeCliRequest(
     const finalization = yield* Effect.result(
       Effect.gen(function* () {
         yield* finalizeShutdownStatus;
-        yield* session.settled;
+        yield* session.log.settled;
         if (runResult.ok) {
           return yield* readCliRunOutcomeState(
             session,

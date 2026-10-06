@@ -22,6 +22,8 @@ import { ConfigProvider, Effect, RcMap } from 'effect';
 import { afterEach, beforeEach } from 'vitest';
 
 import { AgentEngine } from '@agent/runtime/AgentEngine';
+import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
+import { RouteRetries } from '@agent/runtime/run/invocation';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { AgentDirectoriesPort, StateStore } from '@platform/interfaces';
@@ -294,7 +296,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     import('@platform/interfaces'),
     import('@platform/languageModel'),
     import('./toolAvailabilityTestLayer'),
-    import('@agent/runtime/sessionGraph'),
+    import('@agent/runtime/SessionOwner'),
   ]);
   current = host;
   for (const key of Object.keys(harnessEnv)) delete harnessEnv[key];
@@ -316,6 +318,8 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // The process environment, hermetic: the installed host's `env`, never
     // the developer's shell.
     ConfigProvider.layer(ConfigProvider.fromEnvRecord(harnessEnv)),
+    // The process's one route retry gate, as `processLayer` serves it.
+    Layer.effect(RouteRetries, ModelRetryGate.make),
     // A wake resumes as in production. The module is read per call, so a
     // suite's own mock or spy of it is the resume the wake reaches.
     Layer.mock(AgentEngine, {

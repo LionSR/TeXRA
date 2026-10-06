@@ -67,7 +67,7 @@ export class RunHandle<
    * The background OS process this run owns, when a strategy declared one
    * (a background bash child, an agent-CLI child): the narrow survivor of
    * the interrupt-handler slot, read only by
-   * `RunRegistry.killBackgroundProcesses` to reach a leaked process at
+   * `RunRegistry.close` to reach a leaked process at
    * shutdown WITHOUT ending native agent runs (#8155), the opposite contract
    * of a run stop, which is the run fiber's interruption.
    */

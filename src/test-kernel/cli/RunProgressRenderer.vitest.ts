@@ -31,6 +31,7 @@ import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import {
   createTestSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { makeRunView, viewWith } from './fixtures/sessionViewFixture';
 
@@ -144,16 +145,18 @@ async function settle(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 }
+/** A followed session over a bare view: the renderer reads only its level
+ *  and its changes. */
+const followed = (ref: SubscriptionRef.SubscriptionRef<SessionView>) => ({
+  view: { ref, changes: SubscriptionRef.changes(ref) },
+});
+
 function attached(renderer: RunProgressRenderer): TestRunProgressRenderer {
   const runs = new Map<RunId, RunView>();
   const ref = Effect.runSync(SubscriptionRef.make<SessionView>(viewWith([])));
   const scope = Scope.makeUnsafe();
   rendererScopes.push(scope);
-  Effect.runSync(
-    renderer
-      .attach({ view: ref, viewChanges: SubscriptionRef.changes(ref) })
-      .pipe(Scope.provide(scope)),
-  );
+  Effect.runSync(renderer.attach(followed(ref)).pipe(Scope.provide(scope)));
   const setMany = async (
     entries: ReadonlyArray<readonly [string, Partial<RunView>]>,
   ): Promise<void> => {
@@ -301,7 +304,7 @@ function publishRun(
 ): Effect.Effect<void> {
   const runId = (overrides.runId ?? 'e5e5e5') as RunId;
   const agent = overrides.agent ?? 'polish';
-  session.publish([
+  publishTestRows(session, [
     {
       type: 'run.start',
       aggregateId: qualifyAggregateId('run', runId),
@@ -313,7 +316,7 @@ function publishRun(
       approvalPolicy: null,
     },
   ]);
-  session.publishRunEvent(runId, {
+  session.trace.publish(runId, {
     type: 'run.config',
     runId,
     config: AgentConfigSchema.parse({
@@ -336,7 +339,7 @@ function publishRun(
       workingDirectory: '/tmp/project',
     }),
   });
-  session.publish([
+  publishTestRows(session, [
     {
       type: 'run.activate',
       aggregateId: qualifyAggregateId('run', runId),
@@ -478,10 +481,7 @@ describe('CLI run progress renderer', () => {
       const scope = yield* Scope.make();
       yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
       yield* renderer
-        .attach(
-          { view, viewChanges: SubscriptionRef.changes(view) },
-          { runId: root.id },
-        )
+        .attach(followed(view), { runId: root.id })
         .pipe(Scope.provide(scope));
       yield* Queue.take(writes);
       const initial = '\r\x1b[2Kpolish paper.tex · 0s';
@@ -834,10 +834,10 @@ describe('CLI run progress renderer', () => {
             .attachRunProgressRenderer(session)
             .pipe(Scope.provide(scope));
           yield* publishRun(session, { runId: 'b2b2b2' });
-          yield* session.settled;
+          yield* session.log.settled;
           // The terminal phase is the `run.end` row's fact and nothing else, so
           // exactly one line renders for the transition.
-          session.publish([
+          publishTestRows(session, [
             {
               type: 'run.end',
               aggregateId: qualifyAggregateId('run', 'b2b2b2' as RunId),
@@ -845,7 +845,7 @@ describe('CLI run progress renderer', () => {
               output: { response: '', files: [] },
             },
           ]);
-          yield* session.settled;
+          yield* session.log.settled;
 
           yield* Scope.close(scope, Exit.void);
           yield* host.close();
@@ -1021,7 +1021,7 @@ describe('CLI run progress renderer', () => {
             // The child list is the fold's: the parent's `childIds` and the child's own
             // row, derived beside the line that folded them.
             const detach = yield* attachCliSessionProgressProjection(session);
-            session.publish([
+            publishTestRows(session, [
               {
                 type: 'run.start',
                 aggregateId: qualifyAggregateId('run', childRunId),

@@ -59,7 +59,7 @@ export const attachSessionHost = Effect.fn('session.attachHost')(function* (
   // Total: a failed event read is logged, not left to end this fiber with
   // every staged preview waiting on a `request.decided`.
   yield* Effect.forkScoped(
-    Stream.runForEach(session.events.all(session.now()), (event) =>
+    Stream.runForEach(session.log.tail(session.log.now()), (event) =>
       controller
         .handleSessionEvent(event)
         .pipe(Effect.andThen(onEvent?.(event) ?? Effect.void)),

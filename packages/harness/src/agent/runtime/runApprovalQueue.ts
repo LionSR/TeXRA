@@ -11,14 +11,18 @@
  *
  * One value per session (#8144): two sessions queue and answer their
  * approvals independently. It is reached through the session itself
- * (`SessionHandle.requests`), never from context.
+ * (`SessionHandle.approvals`), never from context.
  */
 
 import { Effect, SubscriptionRef } from 'effect';
 
 import {
+  TEXRA_APPROVAL_POLICY_DEFAULT,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
+
+import {
   APPROVAL_BYPASS_KINDS,
-  inheritedGrants,
   NO_APPROVAL_GRANTS,
   resolveBypass,
   type ApprovalBypassKind,
@@ -27,7 +31,7 @@ import {
 } from '@shared/approvalBypassKind';
 import {
   aggregateId,
-  type CommitOrdinal,
+  type PermissionPayload,
   type RunId,
   type SessionEvent,
   type SessionEventDraft,
@@ -36,12 +40,13 @@ import type {
   DatabaseNotOwner,
   DatabaseReadFailed,
   DatabaseWriteFailed,
-  DeletionMode,
 } from '@shared/session/database';
-import type { RequestError } from '@shared/session/requestErrors';
+import { writeRefused, type RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SessionView } from '@shared/session/sessionView';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
+
+import type { SessionHandle, SessionLog } from './SessionHandle';
 
 /**
  * One queued approval. `bypassed` exists because the queue can hold a request
@@ -67,15 +72,7 @@ export type GrantWriteError =
 /** The session doors the grants are read from and committed through. */
 interface GrantStore {
   readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
-  readonly updateRecordFacts: <A, E>(
-    runId: RunId,
-    update: (
-      rows: readonly SessionEvent[],
-    ) => Effect.Effect<{ events: readonly SessionEventDraft[]; value: A }, E>,
-  ) => Effect.Effect<A, E | GrantWriteError>;
-  readonly readRunRecords: (
-    runId: RunId,
-  ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+  readonly log: Pick<SessionLog, 'transact' | 'records'>;
 }
 
 /** A run's grants as its rows record them: the latest `approval.policy`,
@@ -93,16 +90,16 @@ function recordedGrants(rows: readonly SessionEvent[]): ApprovalGrants {
 /**
  * A run's grants once it activates again, or null when they stand as
  * recorded. A goal's grant does not outlive the activation that armed it:
- * the run's own goal ends, and a kind an ancestor's goal grants it is pinned
- * to the human value it inherits (off when none), since that goal is not
- * this activation's either.
+ * the run's own goal ends, and a kind an ancestor's goal grants it is marked
+ * `parent`, derived rather than chosen: the run follows its ancestry's human
+ * values for it, live, and no longer that goal, which is not this
+ * activation's either.
  */
 function afterActivation(
   source: ApprovalGrantSource<RunId>,
   runId: RunId,
   recorded: ApprovalGrants,
 ): ApprovalGrants | null {
-  const inherited = inheritedGrants(source, runId).own;
   const pinned = APPROVAL_BYPASS_KINDS.filter(
     (kind) =>
       !recorded.goal.includes(kind) &&
@@ -110,7 +107,7 @@ function afterActivation(
   );
   if (recorded.goal.length === 0 && pinned.length === 0) return null;
   const own = { ...recorded.own };
-  for (const kind of pinned) own[kind] = inherited[kind] ?? 'off';
+  for (const kind of pinned) own[kind] = 'parent';
   return { own, goal: [] };
 }
 
@@ -154,6 +151,11 @@ export interface SessionApprovals {
   activationRows(
     runId: RunId,
   ): Effect.Effect<readonly SessionEventDraft[], DatabaseReadFailed>;
+  /** The session's approval policy, the host's setting, read live. */
+  policy(): TexraApprovalPolicy;
+  /** Set the session's approval policy: every request any of its runs
+   *  opens from now on is decided under it. */
+  setPolicy(policy: TexraApprovalPolicy): void;
 }
 
 /** Build the session's approvals over its view and its record door. */
@@ -167,8 +169,13 @@ export function createSessionApprovals(store: GrantStore): SessionApprovals {
   };
   const bypass: SessionApprovals['bypass'] = (runId, kind) =>
     resolveBypass(SubscriptionRef.getUnsafe(store.view), runId, kind);
+  let policy = TEXRA_APPROVAL_POLICY_DEFAULT;
   return {
     bypass,
+    policy: () => policy,
+    setPolicy: (next) => {
+      policy = next;
+    },
     enqueue: (kind, runId, approval) =>
       Effect.suspend(() =>
         runId !== undefined && bypass(runId, kind) !== null
@@ -180,7 +187,7 @@ export function createSessionApprovals(store: GrantStore): SessionApprovals {
         const runs = new Map<RunId, { parentId: RunId | null }>();
         const policy = new Map<RunId, ApprovalGrants>();
         for (let id: RunId | null = runId; id !== null && !runs.has(id);) {
-          const rows: readonly SessionEvent[] = yield* store.readRunRecords(id);
+          const rows: readonly SessionEvent[] = yield* store.log.records(id);
           const start = rows.find(
             (row: SessionEvent) => row.type === 'run.start',
           );
@@ -215,22 +222,20 @@ export function createSessionApprovals(store: GrantStore): SessionApprovals {
       const shown = SubscriptionRef.getUnsafe(store.view).policy.get(runId);
       if (shown !== undefined && sameGrants(shown, edit(shown)))
         return Effect.void;
-      return store.updateRecordFacts(runId, (rows) => {
-        const recorded = recordedGrants(rows);
-        const next = edit(recorded);
-        return Effect.succeed({
-          events: sameGrants(recorded, next)
-            ? []
-            : [
-                {
-                  type: 'approval.policy' as const,
-                  aggregateId: aggregateId('run', runId),
-                  snapshot: next,
-                },
-              ],
-          value: undefined,
-        });
-      });
+      return store.log.transact((tx) =>
+        Effect.gen(function* () {
+          const recorded = recordedGrants(yield* store.log.records(runId));
+          const next = edit(recorded);
+          if (sameGrants(recorded, next)) return;
+          yield* tx.append([
+            {
+              type: 'approval.policy',
+              aggregateId: aggregateId('run', runId),
+              snapshot: next,
+            },
+          ]);
+        }),
+      );
     },
   };
 }
@@ -255,26 +260,99 @@ export const goalGrant =
   (kinds: readonly ApprovalBypassKind[]) =>
   (grants: ApprovalGrants): ApprovalGrants => ({ ...grants, goal: kinds });
 
+type BypassChange = Extract<RuntimeRequest, { kind: 'policy.set' }>['change'];
+
+/** The request kinds each bypass covers. The delegated-work grant covers all
+ *  three. A question, an inquiry, a retry and a plan approval never appear
+ *  here: they need an answer, or carry their own credential semantics. */
+const COVERED_KINDS: Record<
+  ApprovalBypassKind,
+  readonly PermissionPayload['kind'][]
+> = {
+  bash: ['bash'],
+  toolEdit: ['toolEdit'],
+  superYolo: ['proposal', 'toolEdit', 'bash'],
+};
+
 /**
- * Everything a surface asks of one session: its approvals and the one
- * handler every request goes through (PRD one-fold-three-renderers, 7.6 and
- * 8.2). Built by the session layer over that session's log and doors
- * (`SessionRequests.ts`); one value per session, so two sessions admit,
- * serialize and answer requests independently.
+ * Approve what waits behind a bypass that was just turned on: the run's
+ * pending requests of the kinds it covers. Each decision re-reads the
+ * committed rows in the session's publisher, so a request a surface decided
+ * meanwhile is left with that surface's answer. The request the surface
+ * decides itself (its own decision may carry more than a plain approval) is
+ * left to it, a tool edit staged on a host is approved by that host with the
+ * user's edits, and so is a bash command that is another tool's call, which
+ * offers no bypass. A request whose opening is still committing is not
+ * listed yet and stays pending for the user.
  */
-export interface SessionRequests {
-  /** This session's approval lanes and grants. */
-  readonly approvals: SessionApprovals;
-  /** Answer one request a surface issued: exactly once, an {@link Outcome}
-   *  the host renders or a request error. */
-  readonly request: (
-    req: RuntimeRequest,
-  ) => Effect.Effect<Outcome, RequestError>;
-  /** Internal deletion policies share the same admission and transaction as
-   *  a user's `run.delete`. */
-  readonly removeRun: (
-    runId: RunId,
-    mode: DeletionMode,
-    expectedStartCommit: CommitOrdinal,
-  ) => Effect.Effect<Outcome, RequestError>;
+function approvePendingUnderBypass(
+  session: SessionHandle,
+  { runId, bypass, exceptRequestId }: BypassChange,
+): Effect.Effect<void, RequestError> {
+  const kinds = COVERED_KINDS[bypass];
+  return Effect.forEach(
+    SubscriptionRef.getUnsafe(session.view.ref).requests.filter(
+      ({ runId: requestRunId, requestId, payload }) =>
+        requestRunId === runId &&
+        requestId !== exceptRequestId &&
+        kinds.includes(payload.kind) &&
+        !(payload.kind === 'bash' && !payload.data.allowBypass),
+    ),
+    ({ requestId, payload }) =>
+      // A tool edit a host staged a diff view for is approved with the
+      // content the user edited there; the host answers `false` for one it
+      // staged nothing for, which the payload decides.
+      (payload.kind === 'toolEdit'
+        ? session.interactions.approveToolEdit(requestId)
+        : Effect.succeed(false)
+      ).pipe(
+        Effect.flatMap((hostDecided) =>
+          hostDecided
+            ? Effect.void
+            : session.requests.decide(runId, requestId, { action: 'approve' }),
+        ),
+      ),
+    { discard: true },
+  ).pipe(
+    Effect.mapError(
+      writeRefused({
+        runId,
+        reason: 'The pending requests could not be approved.',
+      }),
+    ),
+  );
+}
+
+/**
+ * Apply a bypass change, acknowledged once its `approval.policy` row is
+ * durable: the row is the grant, so nothing is held to undo when it does
+ * not land. The caller holds the run's claim. Turning a bypass on then
+ * approves what already waits behind it, on a run this process drives.
+ */
+export function setPolicy(
+  session: SessionHandle,
+  change: BypassChange,
+  heldHere: boolean,
+): Effect.Effect<Outcome, RequestError> {
+  const { runId } = change;
+  // The delegated-work grant covers the command and edit grants too.
+  const kinds =
+    change.bypass === 'superYolo' ? APPROVAL_BYPASS_KINDS : [change.bypass];
+  return session.approvals
+    .change(runId, humanGrant(kinds, change.enabled))
+    .pipe(
+      Effect.mapError(
+        writeRefused({
+          runId,
+          reason: 'The approval change could not be saved.',
+        }),
+      ),
+      // A run held elsewhere has no fiber here to act on a decision.
+      Effect.andThen(
+        change.enabled && heldHere
+          ? approvePendingUnderBypass(session, change)
+          : Effect.void,
+      ),
+      Effect.as({ kind: 'done' } as const),
+    );
 }

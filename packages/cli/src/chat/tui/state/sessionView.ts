@@ -35,7 +35,7 @@ const bound = signal<StreamSignal<SessionView> | undefined>(undefined);
  * runtime the chat entry point holds, since the bridge lives as long as the
  * session it binds.
  *
- * A session binds `changes` to `SessionHandle.viewChanges`, the level stream
+ * A session binds `changes` to `SessionHandle.view.changes`, the level stream
  * that fails when the fold dies: the ref's own changes never fail, so a TUI
  * reading only those would freeze on a dead fold with nothing to say.
  * `onFailure` is that word, as the one error the cause squashes to, so the

@@ -1,7 +1,6 @@
 // Local imports - run state
 import { SubscriptionRef } from 'effect';
 
-import type { SessionHandle } from '@agent/runtime';
 import { sumUsageStats, type TokenUsageStats } from '@shared/schemas';
 import type { SessionTitleState } from '@shared/sessionTitle';
 import {
@@ -10,6 +9,7 @@ import {
   isWorkingRun,
   sessionActivity,
 } from '@shared/session/sessionView';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 
 /**
  * Projects the accumulated spend of the runs currently in flight for the
@@ -26,14 +26,14 @@ import {
  * the total without any bookkeeping here.
  */
 export class StatusBarUsageTracker {
-  constructor(private readonly session: Pick<SessionHandle, 'view'>) {}
+  constructor(private readonly session: Pick<SessionBackend, 'view'>) {}
 
   public get activity(): SessionTitleState {
-    return sessionActivity(SubscriptionRef.getUnsafe(this.session.view));
+    return sessionActivity(SubscriptionRef.getUnsafe(this.session.view.ref));
   }
 
   public get activeRunCount(): number {
-    const { runs } = SubscriptionRef.getUnsafe(this.session.view);
+    const { runs } = SubscriptionRef.getUnsafe(this.session.view.ref);
     return [...runs.values()].filter(isWorkingRun).length;
   }
 
@@ -41,7 +41,7 @@ export class StatusBarUsageTracker {
    *  its runs, finished children included, while any run in its tree is
    *  live. A child's spend is on its root's `treeUsage`. */
   public get totalUsage(): TokenUsageStats {
-    const view = SubscriptionRef.getUnsafe(this.session.view);
+    const view = SubscriptionRef.getUnsafe(this.session.view.ref);
     const liveTreeRoots = [...view.runs.values()].filter(
       (run) =>
         (run.parentId === null || !view.runs.has(run.parentId)) &&

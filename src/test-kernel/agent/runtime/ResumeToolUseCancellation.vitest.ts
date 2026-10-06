@@ -83,10 +83,8 @@ import {
   ResumeSessionUnavailableError,
   type ResumeToolUseFromResumeDataOptions,
 } from '@agent/runtime/executeAgent';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   aggregateId as qualifyAggregateId,
-  type AggregateId,
   RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
@@ -119,18 +117,25 @@ const LANE_SESSION = {
     launchRun: (_runId: RunId, operation: Effect.Effect<unknown, unknown>) =>
       operation,
   },
-  // The resume's hold on the run's claim: its release is what the suite
-  // observes, when the resume's scope closes.
-  acquireClaims: (id: AggregateId) =>
-    Effect.succeed(Effect.suspend(() => mocks.releaseClaims(id))),
-  holdRunClaim: SessionHandle.prototype.holdRunClaim,
-  // The resumed run reads its parent edge off the run's records, so the
-  // lineage fixture is that read.
-  readRunRecords: (...args: unknown[]) =>
-    Effect.tryPromise({
-      try: () => mocks.readRunRecords(...args),
-      catch: ensureError,
-    }),
+  log: {
+    // The resume's hold on the run's claim: its release is what the suite
+    // observes, when the resume's scope closes.
+    hold: (runId: RunId) =>
+      Effect.asVoid(
+        Effect.acquireRelease(Effect.void, () =>
+          Effect.suspend(() =>
+            mocks.releaseClaims(qualifyAggregateId('run', runId)),
+          ),
+        ),
+      ),
+    // The resumed run reads its parent edge off the run's records, so the
+    // lineage fixture is that read.
+    records: (...args: unknown[]) =>
+      Effect.tryPromise({
+        try: () => mocks.readRunRecords(...args),
+        catch: ensureError,
+      }),
+  },
   status: {},
   // A surface that can present approval prompts.
   interactions: { approvalPromptsUnavailable: false },

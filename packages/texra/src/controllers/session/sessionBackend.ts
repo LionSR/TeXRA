@@ -26,7 +26,10 @@ import {
 import { getRunRecords } from '@agent/storage/runRecords';
 import type { RunControls } from '@agent/runtime/RunHandle';
 import { runAgent, type RunAgentRequest } from '@agent/runtime/runAgent';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type {
+  SessionHandle,
+  SessionViewAccess,
+} from '@agent/runtime/SessionHandle';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   RUN_OUTCOME,
@@ -35,7 +38,7 @@ import {
 } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
-import { isLiveRun, type SessionView } from '@shared/session/sessionView';
+import { isLiveRun } from '@shared/session/sessionView';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import type { ToolEditPreview } from '@texra/controllers/server/protocol';
 import type { ProcessServices } from '@texra-ai/harness';
@@ -50,10 +53,10 @@ type RunModelControls = Pick<
 export interface SessionBackend {
   /** The session key every frame carries: the session's storage root. */
   readonly key: string;
-  /** The session's state as this window reads run state from it. */
-  readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
-  /** Each level of {@link view}, from the current one. */
-  readonly viewChanges: Stream.Stream<SessionView>;
+  /** The session's state as this window reads run state from it: its
+   *  current level (`ref`) and each level from the current one
+   *  (`changes`). */
+  readonly view: Pick<SessionViewAccess, 'ref' | 'changes'>;
   /** The frames that answer one port's `Subscribe`, `host` merged in. */
   readonly frames: (
     port: string,
@@ -132,7 +135,7 @@ export function runEnded(
 ): Effect.Effect<RunEndResult> {
   return Effect.gen(function* () {
     yield* session.runs.awaitDrained(runId);
-    const head = yield* SubscriptionRef.changes(session.view).pipe(
+    const head = yield* SubscriptionRef.changes(session.view.ref).pipe(
       Stream.map((view) => view.runs.get(runId)),
       Stream.filter((run) => run === undefined || !isLiveRun(run)),
       Stream.runHead,
@@ -162,20 +165,19 @@ export function localSessionBackend(session: SessionHandle): SessionBackend {
   return {
     key,
     view: session.view,
-    viewChanges: session.viewChanges,
     frames: (port, host, subscribe) =>
       frameSubscription(
         {
           key,
-          view: session.view,
-          inputs: session.inputs,
-          setTranscriptSubscriptions: session.subscriptions.set,
+          view: session.view.ref,
+          inputs: session.view.inputs,
+          setTranscriptSubscriptions: session.view.subscribe,
         },
         port,
         host,
         subscribe,
       ),
-    transcripts: (port, set) => session.subscriptions.set(port, set),
+    transcripts: (port, set) => session.view.subscribe(port, set),
     launch: (request, options) =>
       runAgent(request, {
         session,
@@ -208,6 +210,6 @@ export function localSessionBackend(session: SessionHandle): SessionBackend {
     // A tool this process runs stages its own preview (`presentToolEdit`).
     preview: () => Effect.succeed(null),
     setApprovalPolicy: (policy) =>
-      Effect.sync(() => session.setApprovalPolicy(policy)),
+      Effect.sync(() => session.approvals.setPolicy(policy)),
   };
 }

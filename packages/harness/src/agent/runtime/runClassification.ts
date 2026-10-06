@@ -42,7 +42,7 @@ export const classifyRun = Effect.fn('classifyRun')(function* (
   runId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<RunClassification> {
-  const claimResult = yield* Effect.result(session.claimOwner(runId));
+  const claimResult = yield* Effect.result(session.log.owner(runId));
   if (claimResult._tag === 'Failure') {
     const error = claimResult.failure;
     const cause = `claim unreadable (${toErrorMessage(error)})`;

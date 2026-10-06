@@ -27,11 +27,10 @@ import { invocationAfter, type Invocation } from '@shared/session/inFlight';
 import { UsageLog } from '@shared/usageLog';
 import { sha256 } from '@utils/core/idHash';
 
-import { runInvocation } from './invocation';
+import { runInvocation, type RouteRetries } from './invocation';
 import { AttemptFailed, classifyModelFailure } from './modelFailure';
 import { priceTurnUsage, reportUsage, type UsageAttribution } from './pricing';
 import type { HttpClient } from 'effect/http';
-import type { ModelRetryGate } from '../ModelRetryGate';
 import type { BoundModel } from './modelBinding';
 
 /** A completed call and its priced usage (`null`: none reported). */
@@ -49,8 +48,6 @@ export interface ModelCall<R = never> {
   readonly reacquire: (failed: BoundModel) => Effect.Effect<unknown, never, R>;
   /** A foreground request; each attempt prepares it on its binding. */
   readonly request: TurnRequest;
-  /** The process's retry gate: every call on one credential shares it. */
-  readonly gate: ModelRetryGate;
   /** The session's settings: usage consent reads them. */
   readonly settings: SettingsStores;
   readonly secrets: PlatformSecrets;
@@ -85,7 +82,11 @@ export interface ModelCall<R = never> {
  */
 export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
   call: ModelCall<R>,
-): Effect.fn.Return<CallResult, Error, UsageLog | R | HttpClient.HttpClient> {
+): Effect.fn.Return<
+  CallResult,
+  Error,
+  UsageLog | R | HttpClient.HttpClient | RouteRetries
+> {
   const usageLog = yield* UsageLog;
   // The trace's sinks are synchronous; with no trace, lines queue here and
   // leave through the Effect logger at the next step.
@@ -185,7 +186,6 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
     // The request carries no continuation.
     chains: () => Effect.succeed(false),
     retries: call.retries ?? (yield* call.binding).automaticRetries,
-    gate: call.gate,
     secrets: call.secrets,
     logger,
   }).pipe(Effect.ensuring(flush));

@@ -187,7 +187,7 @@ export const followDesktopAttention = Effect.gen(function* () {
     Stream.switchMap(({ projects: open }) =>
       Stream.mergeAll(
         [projects.fallback(), ...open].map((project) =>
-          project.backend.viewChanges.pipe(
+          project.backend.view.changes.pipe(
             Stream.map((view) => [project, view] as const),
           ),
         ),

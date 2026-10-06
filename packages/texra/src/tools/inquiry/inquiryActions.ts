@@ -107,7 +107,7 @@ const publishThreadUpdate = Effect.fn('publishInquiryThreadUpdate')(function* (
   const records = yield* InquiryRecords;
   const summary = yield* records.getThreadSummary(threadId);
   if (!summary) return;
-  session.publish([inquiryThreadRow(summary)]);
+  yield* session.log.transact([inquiryThreadRow(summary)]);
 });
 
 /**

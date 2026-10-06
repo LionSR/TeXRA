@@ -90,7 +90,7 @@ export const commitResumedActivation = (session: SessionHandle, runId: RunId) =>
     .activationRows(runId)
     .pipe(
       Effect.flatMap((grants) =>
-        session.commit([
+        session.log.transact([
           { type: 'run.activate', aggregateId: aggregateId('run', runId) },
           ...grants,
         ]),
@@ -135,7 +135,16 @@ export const registerRun = Effect.fn('registerRun')(function* (
   options: RegisterRunOptions,
 ): Effect.fn.Return<void, Error> {
   return yield* registrationRows(session, runId, record, options).pipe(
-    Effect.flatMap((events) => session.commitRegistration(events)),
+    // A registration owns its run's claim: a birth takes it with its
+    // `run.start`, a re-registration takes it over first; its driver keeps it.
+    Effect.flatMap((events) =>
+      session.log.transact((tx) =>
+        (events.some((event) => event.type === 'run.start')
+          ? Effect.void
+          : tx.claim(runId)
+        ).pipe(Effect.andThen(tx.append(events))),
+      ),
+    ),
     Effect.asVoid,
     // A registration that died wrote nothing, and the caller refuses the
     // launch on it like any other refused registration.
@@ -159,16 +168,11 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
     // registration takes the run's claim over as it commits.
     const prior = yield* getRunRecords(session, runId).exists();
     if (options.parentRunId !== undefined) {
-      // A record read goes straight to the database; it never queues behind
-      // the publisher. A parent whose `run.start` is queued but uncommitted
-      // therefore reads as absent here, and the refusal below would be about
-      // a parent that is on its way in. This empty batch is the barrier: the
-      // publisher is the one order, whether a fact was published detached or
-      // awaited, so a job enqueued here runs after every publication queued
-      // before it — while answering for none of them, which a settle could
-      // not do without failing this child over some other fact its parent
-      // lost.
-      yield* session.commit([]);
+      // A record read goes straight to the database, so a parent whose
+      // `run.start` is still queued would read as absent. This empty
+      // transaction is the barrier: it runs after every job queued before it,
+      // answering for none of them.
+      yield* session.log.transact([]);
       // The database refuses a parent that is closed or has no `run.start`;
       // this read only words the refusal before the transaction opens.
       if (!(yield* getRunRecords(session, options.parentRunId).exists()))
@@ -280,7 +284,7 @@ const retireRun = Effect.fn('retireRun')(function* (
   runId: RunId,
 ) {
   const ended = yield* Effect.scoped(
-    session.holdRunClaim(runId).pipe(
+    session.log.hold(runId, { ends: true }).pipe(
       Effect.andThen(
         finalizeRun(session, {
           runId,
@@ -316,12 +320,10 @@ const endOwnedChildren = Effect.fn('endOwnedChildren')(function* (
 });
 
 /**
- * The one terminal-persistence tail, and the one writer of the `run.end` row
- * (one run model, section 3.3). Rows live until explicit deletion (C9).
- * Read and write share one locked cycle, so a run whose current lifecycle
- * already ended this way writes nothing; a resumed run ends again. Never throws — every persistence
- * failure comes back as an `ok: false` result (and through
- * `report`, when given).
+ * The one writer of the `run.end` row (one run model, 3.3), reached through
+ * `Runs.end`. Read and write are one transaction, so a run whose current
+ * lifecycle already ended this way writes nothing; a resumed run ends again.
+ * Never fails: a persistence failure is `ok: false` (and `report`ed).
  */
 export const finalizeRun = Effect.fn('finalizeRun')(function* (
   session: SessionHandle,
@@ -337,18 +339,18 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
     return { ok: false, error };
   }
   // Rows the run published and the store refused fail it, whoever ends it.
-  const lost = yield* session.lostRows(runId);
+  const lost = yield* session.trace.lost(runId);
   const requested =
     lost !== undefined && outcome !== RUN_OUTCOME.CANCELLED
       ? RUN_OUTCOME.FAILED
       : outcome;
   const error = input.error ?? lost;
   const status = yield* Effect.exit(
-    session.updateRecordFacts(runId, (rows) =>
+    session.log.transact((tx) =>
       Effect.gen(function* () {
+        const rows = yield* session.log.records(runId);
         const target = aggregateId('run', runId);
-        const start = rows.find((row) => row.type === 'run.start');
-        if (start?.type !== 'run.start')
+        if (!rows.some((row) => row.type === 'run.start'))
           return yield* Effect.fail(
             new Error(`Run start not found for ${runId}`),
           );
@@ -361,34 +363,31 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
             ? ended
             : requested;
         const settlement = input.settlement ?? [];
-        if (ended === persisted) {
-          if (lost !== undefined)
-            yield* Effect.logWarning(`Run ${runId} had ended: ${lost.message}`);
-          return { events: settlement, value: persisted };
-        }
-        return {
-          events: [
-            ...settlement,
-            // A request the run never applied ends with it.
-            ...consumedRows(runId, session.events.pendingFollowUps(target)),
-            // The loop's halt, never apart from its end.
-            ...rows.flatMap((row) =>
-              row.type === 'run.position'
-                ? [haltedPositionRow(row, persisted)]
-                : [],
-            ),
-            // What the run left open closes with its end.
-            ...session.closureFacts(runId, persisted),
-            {
-              type: 'run.end' as const,
-              aggregateId: target,
-              outcome: persisted,
-              ...(error !== undefined ? { error } : {}),
-              output: storedRunOutput(input.output ?? emptyRunEndOutput()),
-            },
-          ],
-          value: persisted,
-        };
+        if (ended === persisted && lost !== undefined)
+          yield* Effect.logWarning(`Run ${runId} had ended: ${lost.message}`);
+        if (ended === persisted)
+          return yield* Effect.as(tx.append(settlement), persisted);
+        const { followUps } = yield* session.followUps.read(runId);
+        const ending = tx.append([
+          ...settlement,
+          ...consumedRows(runId, followUps), // a request it never applied
+          // The loop's halt, never apart from its end.
+          ...rows.flatMap((row) =>
+            row.type === 'run.position'
+              ? [haltedPositionRow(row, persisted)]
+              : [],
+          ),
+          // What the run left open closes with its end.
+          ...session.trace.closure(runId, persisted),
+          {
+            type: 'run.end' as const,
+            aggregateId: target,
+            outcome: persisted,
+            ...(error !== undefined ? { error } : {}),
+            output: storedRunOutput(input.output ?? emptyRunEndOutput()),
+          },
+        ]);
+        return yield* Effect.as(ending, persisted);
       }),
     ),
   );

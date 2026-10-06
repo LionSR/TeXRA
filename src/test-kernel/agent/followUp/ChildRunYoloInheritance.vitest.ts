@@ -111,6 +111,25 @@ describe('child subagent stream approval inheritance', () => {
     });
   });
 
+  it("follows the parent's later human value past a goal a resume ended (#13839)", () => {
+    // The child's activation ended its parent's goal grant for it: derived,
+    // not a human's `off`.
+    const resumed: ApprovalGrants = { own: { bash: 'parent' }, goal: [] };
+    const underGoal = rows({
+      parent: { grants: goalGrant(['bash'])(NO_APPROVAL_GRANTS) },
+      child: { parent: 'parent', grants: resumed },
+    });
+    expect(resolveBypass(underGoal, 'child' as RunId, 'bash')).toBeNull();
+    const humanOn = rows({
+      parent: { grants: commands },
+      child: { parent: 'parent', grants: resumed },
+    });
+    expect(resolveBypass(humanOn, 'child' as RunId, 'bash')).toBe('human');
+    expect(inheritedGrants(humanOn, 'child' as RunId).own).toEqual({
+      bash: 'on',
+    });
+  });
+
   it("ends a goal's grant of a kind a human decides", () => {
     const goal = goalGrant(['bash', 'toolEdit'])(NO_APPROVAL_GRANTS);
     expect(humanGrant(['bash'], false)(goal)).toEqual({

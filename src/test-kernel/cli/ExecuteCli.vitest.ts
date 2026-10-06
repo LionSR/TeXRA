@@ -281,9 +281,14 @@ function stubHangingRun(published: Deferred.Deferred<LeaseOptions>): {
 
 /** Observe the session's terminal artifact drain. */
 async function spyOnArtifactFlush() {
-  const flushSpy = vi
-    .spyOn(testDefaultSession(), 'settled', 'get')
-    .mockReturnValue(Effect.void);
+  // `settled` is a plain value on the log: make it an accessor to spy on.
+  const { log } = testDefaultSession();
+  const settled = log.settled;
+  Object.defineProperty(log, 'settled', {
+    configurable: true,
+    get: () => settled,
+  });
+  const flushSpy = vi.spyOn(log, 'settled', 'get').mockReturnValue(Effect.void);
   return { flushSpy };
 }
 
@@ -434,7 +439,7 @@ describe('executeCliRequest', () => {
         cliContext({ approvalPolicy: 'yolo' }),
       );
 
-      expect(testDefaultSession().approvalPolicy).toBe('yolo');
+      expect(testDefaultSession().approvals.policy()).toBe('yolo');
       expect(seen()).toBe(false);
     }),
   );

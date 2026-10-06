@@ -26,7 +26,7 @@ export function shouldSkipWait(session: SessionHandle, runId: RunId): boolean {
 
   // A tracked run whose activation has not folded yet is running: the
   // handle exists because its process is live.
-  const viewed = session.runView(runId)?.status;
+  const viewed = session.view.run(runId)?.status;
   const status =
     viewed === undefined || viewed === 'ready' ? RUN_PHASE.RUNNING : viewed;
   if (!isInFlightPhase(status)) return true;

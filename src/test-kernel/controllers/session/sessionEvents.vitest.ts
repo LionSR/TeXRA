@@ -60,8 +60,7 @@ vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
 import { runHistoryLayer } from '@agent/runtime/RunHistory';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
-import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionGraph';
+import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import {
   databaseLayer,
@@ -344,6 +343,22 @@ beforeAll(() => {
   }
 });
 
+/** Enqueue rows on a session's publisher and return at once, as a
+ *  detached producer does; a reader waits on `session.log.settled`. */
+const publishTestRows = (
+  session: SessionHandle,
+  rows: readonly SessionEventDraft[],
+): void => {
+  Effect.runFork(session.log.transact(rows));
+};
+
+/** The view access a request handler reads: the fold's level and one run
+ *  of it. */
+const viewAccess = (ref: SubscriptionRef.SubscriptionRef<SessionView>) => ({
+  ref,
+  run: (runId: RunId) => SubscriptionRef.getUnsafe(ref).runs.get(runId),
+});
+
 describe('session events and view', () => {
   it.effect(
     'commits a detached publication before a batch awaited after it',
@@ -367,16 +382,21 @@ describe('session events and view', () => {
             },
           ]).pipe(Effect.orDie),
         );
-        const settled = yield* events.publish([
-          {
-            type: 'tool.end',
-            aggregateId,
-            logId: 'card-1',
-            status: 'completed',
-            result: { toolName: 'bash', output: { output: '' } },
-          },
-        ]);
-        const rows = yield* Stream.runCollect(events.aggregate(aggregateId, 2));
+        const settled = yield* events.transact((append) =>
+          append([
+            {
+              type: 'tool.end',
+              aggregateId,
+              logId: 'card-1',
+              status: 'completed',
+              result: { toolName: 'bash', output: { output: '' } },
+            },
+          ]),
+        );
+        const rows = yield* (yield* Database).readDisplayAggregate(
+          aggregateId,
+          2,
+        );
         expect([...rows].map((row) => [row.type, row.seq])).toEqual([
           ['tool.start', 2],
           ['tool.end', 3],
@@ -423,7 +443,7 @@ describe('session events and view', () => {
         yield* TestClock.adjust('1 second');
         expect(yield* SubscriptionRef.get(view.ref)).toBe(initial);
         expect(observed).toHaveLength(0);
-        yield* events.publish([waiting]);
+        yield* events.transact((append) => append([waiting]));
         yield* Deferred.await(finished);
         expect(observed.length).toBeGreaterThan(0);
         expect(observed.every((state) => state.cursor > initial.cursor)).toBe(
@@ -443,22 +463,24 @@ describe('session events and view', () => {
         'plugin',
         `external-inquiry:${threadId}`,
       );
-      const committed = yield* events.publish([
-        runStart,
-        inquiryThreadRow({
-          threadId,
-          parentRunId: null,
-          status: 'open',
-          lastQuestionPreview: 'Which boundary condition applies?',
-          lastActivityIso: '2026-09-06T12:00:00.000Z',
-          turnCount: 1,
-        }),
-        { type: 'run.removed', aggregateId: run },
-      ]);
+      const committed = yield* events.transact((append) =>
+        append([
+          runStart,
+          inquiryThreadRow({
+            threadId,
+            parentRunId: null,
+            status: 'open',
+            lastQuestionPreview: 'Which boundary condition applies?',
+            lastActivityIso: '2026-09-06T12:00:00.000Z',
+            turnCount: 1,
+          }),
+          { type: 'run.removed', aggregateId: run },
+        ]),
+      );
       expect(yield* log.readAll(0)).toEqual(committed);
       expect((yield* log.aggregateState([run]))[0]?.closed).toBe(true);
       expect((yield* log.aggregateState([inquiry]))[0]?.closed).toBe(false);
-      const rows = yield* Stream.runCollect(events.aggregate(inquiry, 0));
+      const rows = yield* log.readDisplayAggregate(inquiry, 0);
       expect(rows.map(({ type, seq }) => ({ type, seq }))).toEqual([
         { type: 'plugin.fact', seq: 1 },
       ]);
@@ -555,24 +577,24 @@ describe('session events and view', () => {
    * `run.removed` arm never runs and the removed run keeps its queued
    * follow-up and open stream in what the publisher tracks.
    */
-  it.effect('forgets what a removed run left open or queued', () =>
+  it.effect('forgets what a removed run left open', () =>
     Effect.gen(function* () {
       const events = yield* SessionEvents;
       const run = qualifyAggregateId('run', RUN);
-      const [start] = yield* events.publish([
-        runStart,
-        {
-          type: 'followup.queued',
-          aggregateId: run,
-          followUpId: 'queued',
-          content: { text: 'deliver me', from: { kind: 'user' } },
-        },
-        { type: 'stream.start', aggregateId: run, id: 's1', kind: 'default' },
-      ]);
-      expect(events.pendingFollowUps(run)).toHaveLength(1);
+      const [start] = yield* events.transact((append) =>
+        append([
+          runStart,
+          {
+            type: 'followup.queued',
+            aggregateId: run,
+            followUpId: 'queued',
+            content: { text: 'deliver me', from: { kind: 'user' } },
+          },
+          { type: 'stream.start', aggregateId: run, id: 's1', kind: 'default' },
+        ]),
+      );
       expect(events.openWork(run)).toHaveLength(1);
       yield* events.removeRun(run, 'single', start!.commit);
-      expect(events.pendingFollowUps(run)).toEqual([]);
       expect(events.openWork(run)).toEqual([]);
     }).pipe(Effect.provide(graph([]))),
   );
@@ -596,21 +618,25 @@ describe('session events and view', () => {
       // The marker is out before the tail rows below are published, so
       // they reach the fold as the tail and not as part of its cold read.
       yield* settle(view.ref, (v) => v.runs.has(RUN));
-      yield* events.publish([
-        {
-          type: 'request.decided',
-          aggregateId: qualifyAggregateId('run', RUN),
-          requestId: 'req-1',
-          decision: { action: 'approve' },
-        },
-      ]);
-      yield* events.publish([
-        {
-          type: 'run.position',
-          aggregateId: qualifyAggregateId('run', RUN),
-          payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
-        },
-      ]);
+      yield* events.transact((append) =>
+        append([
+          {
+            type: 'request.decided',
+            aggregateId: qualifyAggregateId('run', RUN),
+            requestId: 'req-1',
+            decision: { action: 'approve' },
+          },
+        ]),
+      );
+      yield* events.transact((append) =>
+        append([
+          {
+            type: 'run.position',
+            aggregateId: qualifyAggregateId('run', RUN),
+            payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
+          },
+        ]),
+      );
       // The first state with the run in it has all of the history: no
       // state with the run started but not yet waiting, or waiting with
       // no approval, is ever published. The anchor is the seeded log's
@@ -717,9 +743,9 @@ describe('session events and view', () => {
       // A run born after the build enters through its own row alone,
       // above the reserved space, so a renderer attached at open sees it
       // as new.
-      yield* events.publish([
-        { ...runStart, aggregateId: qualifyAggregateId('run', RUN) },
-      ]);
+      yield* events.transact((append) =>
+        append([{ ...runStart, aggregateId: qualifyAggregateId('run', RUN) }]),
+      );
       yield* settle(view.ref, (v) => v.runs.has(RUN));
       const live = yield* SubscriptionRef.get(view.ref);
       expect(live.runs.get(RUN)?.createdAt).toBeGreaterThan(
@@ -767,20 +793,21 @@ describe('Sessions owner', () => {
           settlement: Effect.void,
         }));
         const session = {
-          view: view.ref,
+          view: viewAccess(view.ref),
           runs: { stop },
           roots: createFakeWorkspaceRoots({
             globalState: { [GlobalStateKey.DETACH_SUBAGENTS_ON_STOP]: true },
           }),
         } as unknown as SessionHandle;
-        const requests = sessionRequests(
-          session,
-          createSessionApprovals(session),
-          { ...db, removeRun: (yield* SessionEvents).removeRun },
+        const events = yield* SessionEvents;
+        const requests = sessionRequests({
+          session: () => session,
+          log: { ...db, removeRun: events.removeRun, detach: events.detach },
           local,
-          toolTable([]),
-          yield* GlobalDatabase,
-        );
+          plugins: toolTable([]),
+          globalDatabase: yield* GlobalDatabase,
+          closed: () => false,
+        });
         // The displayed fold was built as SELF and considers this run writable.
         // This requesting process is OTHER; it must respect the current claim.
         yield* settle(view.ref, (v) => v.runs.has(RUN));
@@ -829,13 +856,15 @@ describe('Sessions owner', () => {
       Effect.gen(function* () {
         const db = yield* Database;
         const view = yield* SessionViewService;
-        const removeRun = vi.fn((yield* SessionEvents).removeRun);
-        const session = { view: view.ref } as unknown as SessionHandle;
-        const requests = sessionRequests(
-          session,
-          createSessionApprovals(session),
-          { ...db, removeRun },
-          yield* SubscriptionRef.make(
+        const events = yield* SessionEvents;
+        const removeRun = vi.fn(events.removeRun);
+        const session = {
+          view: viewAccess(view.ref),
+        } as unknown as SessionHandle;
+        const requests = sessionRequests({
+          session: () => session,
+          log: { ...db, removeRun, detach: events.detach },
+          local: yield* SubscriptionRef.make(
             LocalRuntimeStateSchema.parse({
               self: [SELF],
               dead: [],
@@ -843,9 +872,10 @@ describe('Sessions owner', () => {
               resumeBlocked: [],
             }),
           ),
-          toolTable([]),
-          yield* GlobalDatabase,
-        );
+          plugins: toolTable([]),
+          globalDatabase: yield* GlobalDatabase,
+          closed: () => false,
+        });
         yield* settle(view.ref, (v) => v.runs.has(RUN));
         // The host rendered Delete session from this view; by the time the
         // click is handled the run has started in this process.
@@ -875,7 +905,7 @@ describe('Sessions owner', () => {
         // A second Resume while the first is in flight is refused at once,
         // not queued behind the first's whole run.
         const guard = runActionGuard(
-          {} as Pick<SessionHandle, 'runView' | 'runs'>,
+          {} as Pick<SessionHandle, 'view' | 'runs'>,
         );
         const finish = yield* Deferred.make<void>();
         const first = yield* Effect.forkChild(
@@ -1009,7 +1039,7 @@ describe('Sessions owner', () => {
         const sweep = vi.spyOn(session.runs, 'sweepChildrenOfFoldedStop');
 
         try {
-          session.publish([
+          publishTestRows(session, [
             runStart,
             { ...runStart, aggregateId: qualifyAggregateId('run', OLDER) },
             {
@@ -1017,16 +1047,16 @@ describe('Sessions owner', () => {
               aggregateId: qualifyAggregateId('run', RUN),
             },
           ]);
-          yield* session.settled;
-          expect(session.now()).toBe(3);
-          session.publish([
+          yield* session.log.settled;
+          expect(session.log.now()).toBe(3);
+          publishTestRows(session, [
             {
               type: 'run.position',
               aggregateId: qualifyAggregateId('run', RUN),
               payload: { family: 'toolUse', at: 'waiting' },
             },
           ]);
-          session.publish([
+          publishTestRows(session, [
             {
               type: 'run.position',
               aggregateId: qualifyAggregateId('run', OLDER),
@@ -1036,16 +1066,13 @@ describe('Sessions owner', () => {
           yield* Effect.promise(() =>
             vi.waitFor(() =>
               expect(
-                SubscriptionRef.getUnsafe(session.view).runs.get(OLDER)?.status,
+                SubscriptionRef.getUnsafe(session.view.ref).runs.get(OLDER)
+                  ?.status,
               ).toBe(RUN_PHASE.WAITING),
             ),
           );
           const received = yield* Effect.all(
-            [RUN, OLDER].map((id) =>
-              Stream.runCollect(
-                session.events.aggregate(qualifyAggregateId('run', id), 0),
-              ),
-            ),
+            [RUN, OLDER].map((id) => session.log.display(id)),
           );
           expect(
             received.flat().filter((event) => event.type === 'run.position'),
@@ -1063,28 +1090,19 @@ describe('Sessions owner', () => {
             outcome: 'completed',
             output: emptyRunEndOutput(),
           } as const;
-          session.publish([
+          publishTestRows(session, [
             { ...runEnd, aggregateId: qualifyAggregateId('run', RUN) },
           ]);
-          session.publish([
+          publishTestRows(session, [
             { ...runEnd, aggregateId: qualifyAggregateId('run', OLDER) },
           ]);
-          yield* session.settled;
-          const committed = yield* Stream.runCollect(
-            session.events.aggregate(qualifyAggregateId('run', OLDER), 0),
-          );
+          yield* session.log.settled;
           // The live run's `run.end` reaches the folded-stop sweep once the
-          // view has folded it, and a `waiting` step never does; the
-          // foreign-owned replay below must add none.
+          // view has folded it, and a `waiting` step never does.
           yield* Effect.promise(() =>
             vi.waitFor(() => expect(sweep).toHaveBeenCalledOnce()),
           );
           expect(sweep).toHaveBeenCalledWith(OLDER);
-          for (const event of committed) {
-            const foreign = { ...event, origin: OTHER };
-            yield* session.receiveFoldedEvent(foreign);
-          }
-          expect(sweep).toHaveBeenCalledOnce();
         } finally {
           sweep.mockRestore();
           yield* closeSessionOf(session);
@@ -1098,20 +1116,20 @@ describe('Sessions owner', () => {
     Effect.gen(function* () {
       const session = yield* open('/workspace/owner/retained-failure');
       try {
-        session.publish([runStart]);
-        yield* session.settled;
+        publishTestRows(session, [runStart]);
+        yield* session.log.settled;
         // A trace row on a run with no `run.start` is refused whole.
         const unborn = RunIdSchema.parse('fe12dc');
-        session.publishRunEvent(unborn, {
+        session.trace.publish(unborn, {
           type: 'log',
           level: 'info',
           message: 'lost',
         });
-        expect((yield* session.lostRows(unborn))?.message).toContain(
+        expect((yield* session.trace.lost(unborn))?.message).toContain(
           'were not written',
         );
         // No other writer is failed over it, and it is heard once.
-        yield* session.commit([
+        yield* session.log.transact([
           {
             type: 'run.description',
             aggregateId: runStart.aggregateId,
@@ -1119,7 +1137,7 @@ describe('Sessions owner', () => {
             by: 'user',
           },
         ]);
-        expect(yield* session.lostRows(unborn)).toBeUndefined();
+        expect(yield* session.trace.lost(unborn)).toBeUndefined();
       } finally {
         yield* closeSessionOf(session);
       }
@@ -1133,12 +1151,12 @@ describe('Sessions owner', () => {
     () =>
       Effect.gen(function* () {
         const session = yield* open('/workspace/owner/settled');
-        session.publish([runStart]);
-        yield* session.settled;
+        publishTestRows(session, [runStart]);
+        yield* session.log.settled;
         // A request nobody answers: the fold lists it while the fiber that
         // opened it waits on the decision.
         const pending = yield* Effect.forkScoped(
-          session.openRequest(RUN, {
+          session.requests.ask(RUN, {
             kind: 'planApproval',
             data: {
               requestId: 'closing-plan',
@@ -1148,7 +1166,7 @@ describe('Sessions owner', () => {
           }),
         );
         const requestIds = () =>
-          SubscriptionRef.getUnsafe(session.view).requests.map(
+          SubscriptionRef.getUnsafe(session.view.ref).requests.map(
             (request) => request.requestId,
           );
         yield* Effect.promise(() =>
@@ -1182,8 +1200,8 @@ describe('Sessions owner', () => {
           abandoned: [],
         });
         expect(interrupt).toHaveBeenCalledOnce();
-        expect(SubscriptionRef.getUnsafe(session.view).cursor).toBe(
-          session.now(),
+        expect(SubscriptionRef.getUnsafe(session.view.ref).cursor).toBe(
+          session.log.now(),
         );
         expect(yield* isLive(session)).toBe(false);
       }),
@@ -2722,7 +2740,6 @@ describe('the C1 event table and the C6 publisher', () => {
       );
       yield* Effect.gen(function* () {
         const restarted = yield* Database;
-        const events = yield* SessionEvents;
         expect(yield* restarted.claimOwner(target)).toEqual({
           ownerId: CRASHED,
           liveness: 'dead',
@@ -2731,13 +2748,10 @@ describe('the C1 event table and the C6 publisher', () => {
         expect((yield* Effect.flip(restarted.appendAll([waiting])))._tag).toBe(
           'DatabaseNotOwner',
         );
-        expect(events.pendingFollowUps(target)).toEqual([]);
         yield* (yield* RunHistory).acquire(RUN);
         expect((yield* restarted.aggregateState([target]))[0]?.ownerId).toBe(
           SELF,
         );
-        // The claim that moved here seeds the input the crash left queued.
-        expect(events.pendingFollowUps(target)).toEqual([followUp]);
         // The resumed run appends onto the rows the crash left behind.
         expect((yield* restarted.appendAll([waiting]))[0]?.commit).toBe(3);
       }).pipe(
@@ -3071,7 +3085,7 @@ describe('RunHistory', () => {
     Effect.gen(function* () {
       const events = yield* SessionEvents;
       const run = yield* RunHistory;
-      yield* events.publish([runStart]);
+      yield* events.transact((append) => append([runStart]));
       yield* run.acquire(RUN);
       let state = yield* openTurn(run);
       state = yield* run.appendBatch(RUN, state, [
@@ -3107,7 +3121,7 @@ describe('RunHistory', () => {
         const events = yield* SessionEvents;
         const run = yield* RunHistory;
         const log = yield* Database;
-        yield* events.publish([runStart]);
+        yield* events.transact((append) => append([runStart]));
         let state = yield* openTurn(run);
         // Delivering before the settlements committed is a caller defect.
         const early = yield* run

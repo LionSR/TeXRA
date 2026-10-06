@@ -260,7 +260,6 @@
       "@agent/runtime/RunHandle",
       "@agent/runtime/runRegistry",
       "@agent/runtime/runtimePresentationEvents",
-      "@agent/runtime/sessionGraph",
       "@agent/runtime/SessionHandle",
       "@agent/runtime/terminalResultToast",
       "@agent/runtime/ToolServices",

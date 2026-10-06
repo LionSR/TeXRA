@@ -136,7 +136,7 @@ function createApprovalFixture(
       Effect.promise(() => testRuntime().runPromise(controller.dispose())),
     );
     yield* Effect.forkScoped(
-      Stream.runForEach(session.events.all(session.now()), (event) =>
+      Stream.runForEach(session.log.tail(session.log.now()), (event) =>
         onRuntime(controller.handleSessionEvent(event)),
       ),
     );
@@ -171,7 +171,7 @@ function createApprovalFixture(
           if (!started.has(runId)) {
             started.add(runId);
             publishTestRunStart(session, runId);
-            yield* session.settled;
+            yield* session.log.settled;
           }
           return yield* modules.requestToolEditApproval(request).pipe(
             Effect.provide(
@@ -212,7 +212,7 @@ function createApprovalFixture(
             expect(stagePreview).toHaveBeenCalledTimes(count);
             expect(staged).toHaveLength(count);
             expect(
-              SubscriptionRef.getUnsafe(session.view).requests,
+              SubscriptionRef.getUnsafe(session.view.ref).requests,
             ).toHaveLength(count);
           });
           return stagePreview.mock.calls.map(([request]) => request.permission);

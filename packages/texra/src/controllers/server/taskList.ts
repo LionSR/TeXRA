@@ -165,7 +165,7 @@ export const listTasks = Effect.fn('taskList.listTasks')(function* (
     const session = open.get(storage);
     if (session !== undefined) {
       tasks.push(
-        ...summaries(yield* SubscriptionRef.get(session.view), workspace),
+        ...summaries(yield* SubscriptionRef.get(session.view.ref), workspace),
       );
       continue;
     }

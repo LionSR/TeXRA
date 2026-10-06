@@ -364,7 +364,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
     await installFakePlatform();
     RUN_ID = generateRunId();
     publishTestRunStart(testDefaultSession(), RUN_ID);
-    await Effect.runPromise(testDefaultSession().settled);
+    await Effect.runPromise(testDefaultSession().log.settled);
   });
 
   function callTool(input: unknown) {
@@ -395,7 +395,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
         reason: 'Need API credentials from the user.',
       });
       expect(result.status).toBe('executed');
-      yield* testDefaultSession().settled;
+      yield* testDefaultSession().log.settled;
       expect(goalOf(testDefaultSession(), RUN_ID)?.status).toBe('paused');
     }),
   );
@@ -411,7 +411,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
       expect(result.output).toContain('all 142 tests pass');
       // A finished goal is not archived: the run's next row states that none
       // is in flight, so the wait-node loop has nothing to continue.
-      yield* testDefaultSession().settled;
+      yield* testDefaultSession().log.settled;
       expect(goalOf(testDefaultSession(), RUN_ID)).toBeNull();
     }),
   );

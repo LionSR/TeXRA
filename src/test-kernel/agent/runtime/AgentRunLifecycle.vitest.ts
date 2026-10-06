@@ -3,7 +3,10 @@ import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
 
 import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
-import type { FinalizeRunResult } from '@agent/storage/runLifecycle';
+import type {
+  FinalizeRunInput,
+  FinalizeRunResult,
+} from '@agent/storage/runLifecycle';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -56,23 +59,18 @@ const storageMocks = vi.hoisted(() => ({
   ),
 }));
 
-// AgentRunLifecycle deep-imports finalizeRun from runLifecycle
-// (not the `@agent/storage` barrel). Spy only that leaf to avoid re-export
-// recursion through a dual mock.
-vi.mock('@agent/storage/runLifecycle', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/storage/runLifecycle')>()),
-  finalizeRun: storageMocks.finalizeRun,
-}));
-vi.mock('@agent/storage', () => ({
-  finalizeRun: storageMocks.finalizeRun,
-}));
-
+// The lifecycle ends a run through its session's one terminal writer
+// (`Runs.end`); the suite observes that call.
 beforeEach(() => {
   storageMocks.finalizeRun.mockClear();
+  vi.spyOn(testDefaultSession().runs, 'end').mockImplementation((input) =>
+    storageMocks.finalizeRun(testDefaultSession(), input),
+  );
 });
 
 afterEach(() => {
   setLogSink(null);
+  vi.restoreAllMocks();
 });
 
 async function initLifecycleTestPlatform(firstRunDone: boolean) {
@@ -288,7 +286,7 @@ describe('runWithLifecycle', () => {
         );
 
         expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-        yield* ctx.session.settled;
+        yield* ctx.session.log.settled;
         // A run that never ran a turn writes no step of its own: `run.end` is
         // the whole of what it says.
         expect(
@@ -644,12 +642,17 @@ function finalizeFixture(): {
   const runId =
     `f${(finalizeFixtureCounter++).toString(16).padStart(5, '0')}` as RunId;
   const untrackIfCurrent = vi.fn<(handle: RunHandle) => boolean>(() => true);
+  const session = {
+    runs: {
+      untrackIfCurrent,
+      end: (input: FinalizeRunInput) =>
+        storageMocks.finalizeRun(session, input),
+    },
+    trace: { lost: () => Effect.succeed(undefined) },
+  } as unknown as SessionHandle;
   return {
     runId,
-    session: {
-      runs: { untrackIfCurrent },
-      lostRows: () => Effect.succeed(undefined),
-    } as unknown as SessionHandle,
+    session,
     untrackIfCurrent,
     handle: testRunHandle({
       runId,

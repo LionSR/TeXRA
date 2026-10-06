@@ -23,7 +23,7 @@ const run = <A, E>(effect: Effect.Effect<A, E>) =>
 beforeEach(async () => {
   session = await Effect.runPromise(createTestSession());
   await run(
-    session.commit([
+    session.log.transact([
       {
         type: 'run.start',
         aggregateId: aggregateId('run', runId),
@@ -47,14 +47,16 @@ describe('canonical run records', () => {
     await run(seedReport(session, runId, 'private report'));
     expect(await run(records.readConfig())).toEqual(config);
     expect(await run(records.readReport())).toBe('private report');
-    const visible = await run(Stream.runCollect(session.events.listing()));
+    const visible = await run(Stream.runCollect(session.log.listing()));
     // The configuration is the run's one `run.config` display row; the
     // report stays private.
     expect(visible.map((event) => event.type)).toEqual([
       'run.start',
       'run.config',
     ]);
-    expect(SubscriptionRef.getUnsafe(session.view).cursor).toBe(session.now());
+    expect(SubscriptionRef.getUnsafe(session.view.ref).cursor).toBe(
+      session.log.now(),
+    );
   });
 
   it.effect(
@@ -76,7 +78,7 @@ describe('canonical run records', () => {
           wallTimeMs: 1,
           output: { response: 'done', files: [] },
         });
-        yield* session.commit([
+        yield* session.log.transact([
           {
             type: 'run.end',
             aggregateId: aggregateId('run', runId),
@@ -91,7 +93,7 @@ describe('canonical run records', () => {
           outcome: 'completed',
           output: { response: 'done', files: [] },
         });
-        yield* session.commit([
+        yield* session.log.transact([
           {
             type: 'run.removed',
             aggregateId: aggregateId('run', runId),
@@ -106,9 +108,7 @@ describe('canonical run records', () => {
             records.readResultMeta(),
           ]),
         ).toEqual([false, null, null, [], null]);
-        const retained = yield* Stream.runCollect(
-          session.events.aggregate(aggregateId('run', runId), 1),
-        );
+        const retained = yield* session.log.rows(aggregateId('run', runId));
         expect(retained.some((row) => row.type === 'run.removed')).toBe(true);
       }),
   );

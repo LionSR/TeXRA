@@ -90,14 +90,14 @@ export interface ConsumedFollowUps {
 }
 
 export interface FollowUps {
-  readonly hasQueued: () => boolean;
+  readonly hasQueued: Effect.Effect<boolean>;
   /** The run's own pending requests (`/compact`, a model switch). */
-  readonly controls: () => readonly QueuedFollowUp[];
+  readonly controls: Effect.Effect<readonly QueuedFollowUp[]>;
   /** The queued messages a take would read now, without taking them. */
-  readonly takeQueued: () => FollowUpBatch | null;
+  readonly takeQueued: Effect.Effect<FollowUpBatch | null>;
   /** Queue a view edit, taken at the loop's next park before any input:
    *  false while another is queued or once the input has ended. */
-  readonly editView: (edit: ViewEdit) => boolean;
+  readonly editView: (edit: ViewEdit) => Effect.Effect<boolean>;
   /** Block for the next batch; null when the queue was taken away. */
   readonly wait: Effect.Effect<FollowUpBatch | null>;
   /**
@@ -186,7 +186,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
         : undefined;
     return (
       child !== undefined &&
-      isTerminalOutcomePhase(session.runView(child as RunId)?.status)
+      isTerminalOutcomePhase(session.view.run(child as RunId)?.status)
     );
   };
 
@@ -388,39 +388,39 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   );
 
   return {
-    hasQueued: () => input.hasQueued(),
-    controls: () => input.controls(),
-    takeQueued: () => input.takeQueued(),
+    hasQueued: input.hasQueued,
+    controls: input.controls,
+    takeQueued: input.takeQueued,
     editView: (edit) => input.editView(edit),
     wait: input.take,
+    // Only a user stop joins: that halt carries no error fact to clear and
+    // no turn.ready row to write, which is why the join skips `consume`'s.
     joinStopped: (state) =>
-      state.at === 'halted' &&
-      // Only a user stop joins: that halt carries no error fact to clear and
-      // no turn.ready row to write, which is why the join skips `consume`'s.
-      state.outcome === 'cancelled' &&
-      input.hasQueued()
-        ? Effect.flatMap(input.take, (batch) => {
+      state.at !== 'halted' || state.outcome !== 'cancelled'
+        ? Effect.succeed(null)
+        : Effect.gen(function* () {
+            if (!(yield* input.hasQueued)) return null;
             // A take reads what the rows queue and consumes nothing, so a
             // declined batch, or a `/compact`'s wake, is left for the
             // ordinary wait.
-            if (batch?.kind === 'synthetic') return Effect.succeed(null);
+            const batch = yield* input.take;
+            if (batch?.kind === 'synthetic') return null;
             // A view edit waits for the park this stopped turn ends at.
             if (batch?.kind === 'edit') {
-              if (!input.editView(batch.edit))
+              if (!(yield* input.editView(batch.edit)))
                 Deferred.doneUnsafe(
                   batch.edit.done,
                   Effect.fail(
                     new Error('The task stopped before its view was edited.'),
                   ),
                 );
-              return Effect.succeed(null);
+              return null;
             }
             return batch === null ||
               !batch.followUps.some((f) => isInstruction(f.content))
-              ? Effect.succeed(null)
-              : batchRows(state, batch);
-          })
-        : Effect.succeed(null),
+              ? null
+              : yield* batchRows(state, batch);
+          }),
     // A child takes no more input once its loop ends: its parent resumes it.
     release: (next) =>
       session.followUps.release(

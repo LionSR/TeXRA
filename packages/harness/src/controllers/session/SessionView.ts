@@ -13,8 +13,8 @@
  *
  * The service holds no log: the webview builds it over frames
  * (`webviewSessionLayer`). The plane's tail as this view has folded it,
- * `SessionGraph.folded`, is derived from `ref` where the log is, in the
- * session graph opener (`sessionLayer.ts`).
+ * `SessionStore.folded`, is derived from `ref` where the log is
+ * (`sessionStore.ts`).
  */
 import {
   Cause,
@@ -23,17 +23,20 @@ import {
   Exit,
   Fiber,
   Layer,
+  Option,
   Stream,
   SubscriptionRef,
 } from 'effect';
 
+import type { SessionViewAccess } from '@agent/runtime/SessionHandle';
+import { aggregateId, type LocalRuntimeState } from '@shared/schemas';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { fold } from '@shared/session/sessionFold';
 import {
   emptySessionView,
   type SessionView,
 } from '@shared/session/sessionView';
-import { TranscriptSubscriptions } from './sessionSources';
+import { LocalRuntimeSource, TranscriptSubscriptions } from './sessionSources';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
 export class SessionViewService extends Context.Service<
@@ -110,3 +113,100 @@ export class SessionViewService extends Context.Service<
     }),
   );
 }
+
+/**
+ * A session's view as its handle carries it (`SessionHandle.view`): the
+ * fold's level, the replay it is folded from, the transcript subscriptions
+ * that decide what it folds, and the local truth it folds beside the rows.
+ * `closed` is the session's: once its doors shut, a subscription or a mark
+ * writes nothing.
+ */
+export const makeSessionViewAccess = (
+  storage: string,
+  closed: () => boolean,
+): Effect.Effect<
+  SessionViewAccess,
+  never,
+  | SessionViewService
+  | SessionInputs
+  | TranscriptSubscriptions
+  | LocalRuntimeSource
+> =>
+  Effect.gen(function* () {
+    const { ref, changes } = yield* SessionViewService;
+    const inputs = yield* SessionInputs;
+    const subscriptions = yield* TranscriptSubscriptions;
+    const local = yield* LocalRuntimeSource;
+    /** Update the local truth unless the session has closed. */
+    const updateLocal = (
+      next: (state: LocalRuntimeState) => LocalRuntimeState,
+    ): Effect.Effect<void> =>
+      Effect.suspend(() =>
+        closed() ? Effect.void : SubscriptionRef.update(local.ref, next),
+      );
+    return {
+      ref,
+      changes,
+      run: (runId) => SubscriptionRef.getUnsafe(ref).runs.get(runId),
+      read: (runIds) =>
+        inputs
+          .read(
+            runIds.map((id) => ({
+              id: aggregateId('run', id),
+              fromSeq: 0,
+            })),
+            0,
+            false,
+          )
+          .pipe(
+            Stream.runHead,
+            Effect.flatMap(
+              Option.match({
+                onNone: () =>
+                  Effect.die(
+                    new Error('Session input read produced no replay'),
+                  ),
+                onSome: (replay) =>
+                  Effect.succeed(fold(emptySessionView(storage), replay)),
+              }),
+            ),
+          ),
+      inputs: inputs.read,
+      subscribe: (port, set) =>
+        Effect.suspend(() =>
+          closed() ? Effect.void : subscriptions.set(port, set),
+        ),
+      markUnreadable: (runId, detail) =>
+        updateLocal((state) => {
+          const rest = state.unreadable.filter((u) => u.runId !== runId);
+          if (detail === null && rest.length === state.unreadable.length)
+            return state;
+          return {
+            ...state,
+            unreadable: detail === null ? rest : [...rest, { runId, detail }],
+          };
+        }),
+      markResumeBlocked: (runId, blocked) =>
+        updateLocal((state) => {
+          const rest = state.resumeBlocked.filter((b) => b.runId !== runId);
+          if (blocked === null && rest.length === state.resumeBlocked.length)
+            return state;
+          // The same block again leaves the state, and the view, as it is.
+          const held = state.resumeBlocked.find((b) => b.runId === runId);
+          if (
+            blocked !== null &&
+            held !== undefined &&
+            held.retry === blocked.retry &&
+            held.reason.kind === blocked.reason.kind &&
+            held.reason.name === blocked.reason.name
+          )
+            return state;
+          return {
+            ...state,
+            resumeBlocked:
+              blocked === null ? rest : [...rest, { runId, ...blocked }],
+          };
+        }),
+      resumeBlocks: () => SubscriptionRef.getUnsafe(local.ref).resumeBlocked,
+    };
+  });

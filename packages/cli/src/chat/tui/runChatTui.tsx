@@ -188,7 +188,7 @@ export async function runChat(
         }),
       });
       const runtimeSession = yield* services.session;
-      runtimeSession.setApprovalPolicy(context.approvalPolicy);
+      runtimeSession.approvals.setPolicy(context.approvalPolicy);
       const backend = Result.isSuccess(service)
         ? yield* serviceSessionBackend(
             service.success,
@@ -269,7 +269,7 @@ export async function runChat(
         model: modelSelection.model,
         modelSource: defaults.modelSource,
         cwd: context.cwd,
-        approvalPolicy: runtimeSession.approvalPolicy,
+        approvalPolicy: runtimeSession.approvals.policy(),
         teamName: yield* readCliTeamName(
           runtimeSession.roots.repoState,
           initialPresetId,
@@ -316,13 +316,13 @@ export async function runChat(
   const { agent } = defaults;
 
   const getApprovalPolicy = (): TexraApprovalPolicy =>
-    runtimeSession.approvalPolicy;
+    runtimeSession.approvals.policy();
   const currentSessionContext = (): CliContext => ({
     ...context,
     quietLogs: true,
   });
   const setApprovalPolicy = (policy: TexraApprovalPolicy): void => {
-    runtimeSession.setApprovalPolicy(policy);
+    runtimeSession.approvals.setPolicy(policy);
     if (runsElsewhere) runtime.runFork(backend.setApprovalPolicy(policy));
     patchSessionMeta({ approvalPolicy: policy });
   };
@@ -364,11 +364,11 @@ export async function runChat(
   // title below derives its attention state from it on install.
   const session = new TuiSession(backend.controls, runsElsewhere);
   disposables.add(() => runtime.runFork(Scope.close(chatScope, Exit.void)));
-  // A dead fold (`viewChanges` failing) is the end of this session: the
+  // A dead fold (`view.changes` failing) is the end of this session: the
   // composer closes on the reason, Ctrl-C still exits, and the exit is a
   // failure on every exit path, since they all read `session.runExitCode`.
-  const unbindSessionView = bindSessionView(runtime, backend.view, {
-    changes: backend.viewChanges,
+  const unbindSessionView = bindSessionView(runtime, backend.view.ref, {
+    changes: backend.view.changes,
     onFailure: (error) => {
       sessionViewFailureSignal.set(
         `The session view stopped updating: ${toErrorMessage(error)} Press Ctrl-C to exit and restart texra. If it repeats, run the same texra version that last opened this project; an older build cannot read a newer session store.`,
@@ -618,7 +618,7 @@ export async function runChat(
     runtime,
     followUpsIdle: followUpQueue.idle,
     getApprovalPolicy,
-    flushArtifacts: runtimeSession.settled,
+    flushArtifacts: runtimeSession.log.settled,
     repaintAfterTerminalResume: viewportController.repaintAfterTerminalResume,
     interruptActive: (reason) => chatController.stop(reason),
     quiet: context.quietLogs,

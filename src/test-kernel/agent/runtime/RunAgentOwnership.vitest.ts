@@ -64,8 +64,7 @@ vi.mock('@agent/runtime/executeAgent', async () => {
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { RunHandle } from '@agent/runtime/RunHandle';
-import { RunRegistry } from '@agent/runtime/runRegistry';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { RunRegistry } from '@agent/runtime/runRegistry';
 import { runAgent } from '@agent/runtime/runAgent';
 import {
   agentErrorPresentation,
@@ -77,16 +76,13 @@ import {
   attachContextWindowError,
   attachMissingApiKeyError,
 } from '@common/errors/sdkError/errorMetadata';
-import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
   aggregateId as qualifyAggregateId,
-  type AggregateId,
   RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
 import { fakeProcessServices } from '@test/support/setupPlatform';
-import { testRunFork } from '@test/support/runHandleFixtures';
-import { pinNoPlugins } from '@test/support/testPluginServices';
+import { testRunRegistry } from '@test/support/runHandleFixtures';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const RUN_ID = 'a9e70a9e7001' as RunId;
@@ -126,22 +122,36 @@ const sessionRuns = {
   launchRun: vi.fn(
     (_runId: RunId, operation: Effect.Effect<unknown, unknown>) => operation,
   ),
+  // The one terminal writer, over the mocked `finalizeRun`.
+  end: (input: unknown) =>
+    Effect.tryPromise({
+      try: () => mocks.finalizeRun(SESSION, input),
+      catch: ensureError,
+    }),
 };
 const SESSION = {
   runs: sessionRuns,
-  readView: () => Effect.succeed({ runs: persistedRuns }),
-  // The launch's hold on the run's claim: the release it hands back also
-  // reports to `mocks.releaseClaims`, which the release-order cases observe.
-  acquireClaims: (id: AggregateId) =>
-    (mocks.acquireClaims(id) as Effect.Effect<Effect.Effect<void>>).pipe(
-      Effect.map((release) =>
-        release.pipe(
-          Effect.andThen(Effect.suspend(() => mocks.releaseClaims(id))),
+  view: { read: () => Effect.succeed({ runs: persistedRuns }) },
+  log: {
+    // The launch's hold on the run's claim: its release also reports to
+    // `mocks.releaseClaims`, which the release-order cases observe.
+    hold: (runId: RunId) => {
+      const id = qualifyAggregateId('run', runId);
+      return Effect.asVoid(
+        Effect.acquireRelease(
+          mocks.acquireClaims(id) as Effect.Effect<Effect.Effect<void>>,
+          (release) =>
+            release.pipe(
+              Effect.andThen(
+                Effect.suspend(
+                  () => mocks.releaseClaims(id) as Effect.Effect<void>,
+                ),
+              ),
+            ),
         ),
-      ),
-    ),
-  holdRunClaim: SessionHandle.prototype.holdRunClaim,
-  borrowRunClaim: SessionHandle.prototype.borrowRunClaim,
+      );
+    },
+  },
 } as never;
 
 const EXECUTE_RESULT = {
@@ -166,21 +176,6 @@ function launch(options: RunOptions = {}) {
     { config: CONFIG, runId: RUN_ID },
     { session: SESSION, ...options },
   );
-}
-
-/** A real registry whose lane, liveness and stop the launch answers to. */
-function realRunRegistry(): RunRegistry {
-  return new RunRegistry({
-    runView: () => undefined,
-    commit: () => Effect.void,
-    grantsOnDetach: () => NO_APPROVAL_GRANTS,
-    finalizeRun: ((input: { readonly outcome: string }) =>
-      Effect.succeed({ ok: true, outcome: input.outcome })) as never,
-    holdRunClaim: () => Effect.void,
-    borrowRunClaim: () => Effect.void,
-    fork: testRunFork,
-    pinPlugins: pinNoPlugins,
-  });
 }
 
 /** Launches on a real registry, the session's own runs replaced by it. */
@@ -222,7 +217,7 @@ describe('runAgent run ownership', () => {
         // A real registry: the first launch's admission is its fiber on the
         // run registry, so the duplicate is refused against it wherever the first
         // launch has got to — here, mid-registration.
-        const runs = realRunRegistry();
+        const runs = testRunRegistry();
         let finishRegistration!: () => void;
         mocks.registerRun.mockImplementationOnce(
           () =>
@@ -250,7 +245,7 @@ describe('runAgent run ownership', () => {
     'makes a fresh launch interruptible before registration settles',
     () =>
       Effect.gen(function* () {
-        const runs = realRunRegistry();
+        const runs = testRunRegistry();
         let finishRegistration!: () => void;
         mocks.registerRun.mockImplementationOnce(
           () =>

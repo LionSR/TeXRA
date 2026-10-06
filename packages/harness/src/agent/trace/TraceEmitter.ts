@@ -61,7 +61,7 @@ export class TraceEmitter implements AgentTrace {
         // recursing into the trace stream.
         // `warn`, not `debug`: swallowing a sink fault at debug level is
         // the quiet-degradation shape the guardrail forbids, and it matches the
-        // sibling session plane (`SessionHandle.publish`) and the app-signal
+        // sibling session plane (`SessionHandle.trace`) and the app-signal
         // bus, whose delivery fiber warns and keeps its subscription.
         writeLogLine(
           'WARN',

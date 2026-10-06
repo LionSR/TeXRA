@@ -97,7 +97,7 @@ async function seedRunRecord(seed: {
     }),
   );
   await Effect.runPromise(
-    session.commit([
+    session.log.transact([
       {
         type: 'run.start',
         aggregateId: aggregateId('run', RUN_ID),
@@ -126,7 +126,9 @@ async function seedRunRecord(seed: {
   // Seeding wrote the run's rows, which claimed its aggregate. A run waiting
   // to be resumed is one nobody holds, so the seed gives the claim back: a
   // hold taken and let go releases it.
-  await Effect.runPromise(Effect.scoped(session.holdRunClaim(RUN_ID)));
+  await Effect.runPromise(
+    Effect.scoped(session.log.hold(RUN_ID, { ends: true })),
+  );
 }
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
@@ -296,9 +298,9 @@ describe('runResumeCommand', () => {
       );
       // Registered and never opened, it would resume by opening: it ended.
       yield* Effect.scoped(
-        seededSession.borrowRunClaim(RUN_ID).pipe(
+        seededSession.log.hold(RUN_ID).pipe(
           Effect.andThen(
-            seededSession.commit([
+            seededSession.log.transact([
               {
                 type: 'run.end',
                 aggregateId: aggregateId('run', RUN_ID),
@@ -322,7 +324,7 @@ describe('runResumeCommand', () => {
     Effect.gen(function* () {
       // The case's hold on the run's claim, handed back whatever the resume
       // probe does below: the test's scope close releases it.
-      yield* seededSession.holdRunClaim(RUN_ID);
+      yield* seededSession.log.hold(RUN_ID, { ends: true });
 
       // The command's program runs on the runtime its boundary holds, which
       // the `run` helper stands in for.
@@ -335,7 +337,7 @@ describe('runResumeCommand', () => {
   );
 
   it('refuses a run another live TeXRA process holds, naming its pid', async () => {
-    vi.spyOn(seededSession, 'claimOwner').mockReturnValue(
+    vi.spyOn(seededSession.log, 'owner').mockReturnValue(
       Effect.succeed({
         ownerId: JSON.stringify(['other-host', 4321, 'start-1']),
         liveness: 'alive',
@@ -350,7 +352,7 @@ describe('runResumeCommand', () => {
   });
 
   it('identifies claim read failures separately from session loading', async () => {
-    vi.spyOn(seededSession, 'claimOwner').mockReturnValue(
+    vi.spyOn(seededSession.log, 'owner').mockReturnValue(
       Effect.fail(
         new DatabaseReadFailed({
           path: 'session.db',

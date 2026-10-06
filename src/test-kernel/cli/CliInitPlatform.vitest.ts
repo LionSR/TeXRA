@@ -241,7 +241,7 @@ describe('CLI platform init', () => {
         ),
       );
       const drain = vi
-        .spyOn(session.runs, 'killBackgroundProcesses')
+        .spyOn(session.runs, 'close')
         .mockImplementation(() => {});
       yield* Effect.addFinalizer(() => Effect.sync(() => drain.mockRestore()));
 

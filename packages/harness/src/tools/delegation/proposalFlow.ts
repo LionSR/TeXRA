@@ -164,7 +164,7 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     if (isDocumentTaskConfig(config))
       return { result: { action: 'approve' }, childApproval: 'inherit' };
     const decision = decideProposalApproval({
-      policy: session.approvalPolicy,
+      policy: session.approvals.policy(),
       scopedBypass: session.approvals.bypass(runId, 'superYolo') !== null,
       canPresent: parent.run.toolPolicy.approvalPromptsUnavailable !== true,
     });

@@ -55,7 +55,7 @@ export const turnAttributionNote = Effect.fn('turnAttributionNote')(function* (
 ) {
   const { active, lastCompleted } = yield* readChildTurnState(session, runId);
   if (active === null) return null;
-  const fate = turnFate(active, session.runView(runId));
+  const fate = turnFate(active, session.view.run(runId));
   const showing = lastCompleted
     ? `showing the latest completed turn (${turnLabel(lastCompleted)}).`
     : 'no turn has completed yet.';

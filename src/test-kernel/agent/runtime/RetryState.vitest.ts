@@ -48,6 +48,8 @@ import {
   modelInvokerLayer,
   type InvokeRequest,
 } from '@agent/runtime/ModelInvoker';
+import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
+import { RouteRetries } from '@agent/runtime/run/invocation';
 import { makeRunCell } from '@agent/runtime/loop/runProgram';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
@@ -308,7 +310,7 @@ interface InvokerKit {
   /** The folded state of the freshly opened run. */
   readonly state: RunState;
   /** `ModelInvoker` and this run's history, with nothing left to provide. */
-  readonly layer: Layer.Layer<ModelInvoker | RunHistory>;
+  readonly layer: Layer.Layer<ModelInvoker | RunHistory | RouteRetries>;
 }
 
 /**
@@ -326,7 +328,7 @@ const openRun = Effect.fn('openRun')(function* (
 > {
   const runId = retryRunId();
   publishTestRunStart(session, runId);
-  yield* session.settled.pipe(Effect.orDie);
+  yield* session.log.settled.pipe(Effect.orDie);
   yield* session.runHistory.acquire(runId);
   const state = yield* session.runHistory.appendBatch(runId, null, [
     appendRow(runId, [
@@ -353,6 +355,8 @@ const openRun = Effect.fn('openRun')(function* (
       ),
     ),
     Layer.merge(Layer.succeed(RunHistory, session.runHistory)),
+    // The process's route gate, as `processLayer` serves it.
+    Layer.provideMerge(Layer.effect(RouteRetries, ModelRetryGate.make)),
   );
   return { runId, state, layer };
 });
@@ -861,7 +865,7 @@ describe('ModelInvoker retry', () => {
       expect((yield* session.runHistory.load(runId))?.lastError).toBeNull();
       // The decision neither parks nor ends the run: the phase the fold
       // reports is still running.
-      expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);
+      expect(session.view.run(runId)?.status).toBe(RUN_PHASE.RUNNING);
       requests.detach();
       yield* Fiber.interrupt(pump);
       yield* closeSessionOf(session);
@@ -995,7 +999,7 @@ describe('ModelInvoker retry', () => {
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
       const session = yield* sessionWithInteractions(undefined);
-      session.setApprovalPolicy('yolo');
+      session.approvals.setPolicy('yolo');
       const stub = stubModel([
         { fail: new Error('stream dropped before first token') },
       ]);
@@ -1014,7 +1018,7 @@ describe('ModelInvoker retry', () => {
       }
       // A denial is not a cancel: the run stays running so the failure can
       // terminalize (#7331).
-      expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);
+      expect(session.view.run(runId)?.status).toBe(RUN_PHASE.RUNNING);
       expect(stub.attempts()).toBe(1);
       yield* closeSessionOf(session);
     }),

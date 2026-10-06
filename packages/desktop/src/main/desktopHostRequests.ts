@@ -376,7 +376,9 @@ export function createDesktopHostRequests(
 
   const exportTranscript = (runId: RunId) =>
     Effect.gen(function* () {
-      if (!SubscriptionRef.getUnsafe(options.backend.view).runs.has(runId)) {
+      if (
+        !SubscriptionRef.getUnsafe(options.backend.view.ref).runs.has(runId)
+      ) {
         return yield* Effect.fail(
           new Unavailable({ runId, reason: 'The run is no longer open.' }),
         );

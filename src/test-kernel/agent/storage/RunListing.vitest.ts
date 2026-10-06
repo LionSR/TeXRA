@@ -50,7 +50,7 @@ async function writeMetadata(id: RunId, meta: SeededRunFacts): Promise<void> {
       .mockReturnValue(Date.parse(meta.timestamp));
     try {
       await Effect.runPromise(
-        session.commit([
+        session.log.transact([
           {
             type: 'run.start',
             aggregateId: aggregateId('run', id),
@@ -70,7 +70,7 @@ async function writeMetadata(id: RunId, meta: SeededRunFacts): Promise<void> {
   }
   if (meta.description)
     await Effect.runPromise(
-      session.commit([
+      session.log.transact([
         {
           type: 'run.description',
           by: 'model',
@@ -81,7 +81,7 @@ async function writeMetadata(id: RunId, meta: SeededRunFacts): Promise<void> {
     );
   if (meta.outcome)
     await Effect.runPromise(
-      session.commit([
+      session.log.transact([
         {
           type: 'run.end',
           aggregateId: aggregateId('run', id),
@@ -141,7 +141,7 @@ describe('run listing normalization', () => {
       yield* Effect.promise(() =>
         writeRun(id, '2026-07-15T11:00:00.000Z', config('assistant')),
       );
-      vi.spyOn(session, 'readRunRecords').mockReturnValue(
+      vi.spyOn(session.log, 'records').mockReturnValue(
         Effect.fail(
           new DatabaseReadFailed({
             path: 'session.db',

@@ -112,10 +112,10 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
         : (view.queuedFollowUps.get(context.runId) ?? []).map(
             (f) => f.followUpId,
           );
-    const initial = SubscriptionRef.getUnsafe(context.session.view);
+    const initial = SubscriptionRef.getUnsafe(context.session.view.ref);
     const started = phases(initial);
     const held = new Set(sent(initial));
-    const change = context.session.viewChanges.pipe(
+    const change = context.session.view.changes.pipe(
       Stream.filter(
         (view) =>
           phases(view) !== started || sent(view).some((id) => !held.has(id)),
@@ -360,7 +360,7 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
   } = {},
 ) {
   const session = context.session;
-  const view = yield* session.readView([runId]);
+  const view = yield* session.view.read([runId]);
   const run = view.runs.get(runId);
 
   // Every open run is in the view: its `run.start` is seq 1 of its aggregate
@@ -529,7 +529,7 @@ const showConfig = Effect.fn('ExecutionsTool.showConfig')(function* (
   // the fold decides from the stamped identity. Read from the fold's
   // listing tier rather than the live view, so a run no port holds is
   // filtered by the same rule as one that is.
-  const run = (yield* context.session.readView([])).runs.get(runId);
+  const run = (yield* context.session.view.read([])).runs.get(runId);
   return executed(
     serializeFilteredConfig(
       record,
@@ -597,7 +597,7 @@ const showOutput = Effect.fn('ExecutionsTool.showOutput')(function* (
   runId: RunId,
   viewRange?: [number, number],
 ) {
-  const run = context.session.runView(runId);
+  const run = context.session.view.run(runId);
   if (run === undefined) {
     return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
   }
@@ -611,14 +611,14 @@ const showOutput = Effect.fn('ExecutionsTool.showOutput')(function* (
   // The row above already proved the run is in the session's view; its
   // output is read from the run's own committed rows.
   const { lines, chars } = projectProcessOutput(
-    yield* context.session.readRunEvents(runId).pipe(Effect.orDie),
+    yield* context.session.log.display(runId).pipe(Effect.orDie),
   );
   // The row above was read before the transcript, and a command that
   // finished during that read must not be judged against it: the view is
   // in memory, so one read of one run can afford a fresh row. Only a
   // tombstone takes a run out of the view, and then the row this call
   // already holds is the last honest reading of it.
-  const current = context.session.runView(runId) ?? run;
+  const current = context.session.view.run(runId) ?? run;
   // The footer states the same reading as the header, and both come from
   // the fold: "no handle in this process" alone never justifies calling a
   // command finished, and a run whose owner is gone reads as interrupted

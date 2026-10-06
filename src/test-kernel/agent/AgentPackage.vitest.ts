@@ -100,7 +100,7 @@ vi.mock('@agent/runtime', async () => {
 vi.mock('@controllers/session/sessionLayer', async () => {
   const { Context, Deferred, Effect, Layer, Stream, SubscriptionRef } =
     await import('effect');
-  const { SessionOwner } = await import('@agent/runtime/sessionGraph');
+  const { SessionOwner } = await import('@agent/runtime/SessionOwner');
   const { testRuntime } = await import('@test/support/testProcessRuntime');
   const { emptySessionView } = await import('@shared/session/sessionView');
   class FakeSession {
@@ -108,29 +108,31 @@ vi.mock('@controllers/session/sessionLayer', async () => {
       interrupt: mocks.interruptRun,
     };
     /** The session's view level: the pre-launch session, no run yet. */
-    readonly view = Effect.runSync(
+    readonly viewRef = Effect.runSync(
       SubscriptionRef.make<FakeSessionView>({
         ...emptySessionView('package'),
         runs: new Map(),
       }),
     );
 
-    /** The level stream, ending as the fold does (`SessionViewService`);
-     *  the fold's fate is the test's. */
-    readonly viewChanges = Stream.unwrap(
-      Effect.sync(() =>
-        Stream.merge(
-          SubscriptionRef.changes(this.view),
-          Stream.fromEffect(
-            Deferred.await(mocks.foldDeath as Deferred.Deferred<never, Error>),
+    readonly view = {
+      ref: this.viewRef,
+      /** The level stream, ending as the fold does (`SessionViewService`);
+       *  the fold's fate is the test's. */
+      changes: Stream.unwrap(
+        Effect.sync(() =>
+          Stream.merge(
+            SubscriptionRef.changes(this.viewRef),
+            Stream.fromEffect(
+              Deferred.await(
+                mocks.foldDeath as Deferred.Deferred<never, Error>,
+              ),
+            ),
           ),
         ),
       ),
-    );
-
-    /** The transcript interest port, as the owner's graph exposes it. */
-    readonly subscriptions = {
-      set: (port: string, set: readonly unknown[]) =>
+      /** The transcript interest port. */
+      subscribe: (port: string, set: readonly unknown[]) =>
         Effect.sync(() => {
           mocks.setTranscriptSubscriptions(port, set);
         }),
@@ -140,7 +142,7 @@ vi.mock('@controllers/session/sessionLayer', async () => {
 
     constructor(init: (typeof mocks.sessionInits)[number]) {
       mocks.sessionInits.push(init);
-      mocks.sessionView = this.view;
+      mocks.sessionView = this.viewRef;
       this.roots = init.roots;
     }
   }

@@ -14,11 +14,11 @@ import { readConfigSettingFrom } from '@utils/config/platformSettings';
  *  never existed or is tombstoned. Verbosity is read at the call, from the
  *  same config authority the session view fold reads. */
 export const readRunTranscript = (
-  session: Pick<SessionHandle, 'readRunEvents' | 'roots'>,
+  session: Pick<SessionHandle, 'log' | 'roots'>,
   runId: RunId,
 ) =>
-  session
-    .readRunEvents(runId)
+  session.log
+    .display(runId)
     .pipe(
       Effect.map((events) =>
         foldRunTranscript(

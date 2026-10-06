@@ -281,8 +281,8 @@ function executeAsk(
       sessionLinks: collectKnownSessionLinks(manifest),
       transcript: manifest.turns,
     };
-    yield* session
-      .commit([
+    yield* session.log
+      .transact([
         {
           type: 'request.opened',
           aggregateId: qualifyAggregateId('run', runId),
@@ -305,7 +305,7 @@ function executeAsk(
         // rolled-back append: the committed rows decide, and a turn whose
         // request is durably open stays open with it.
         Effect.onError(() =>
-          session.readAggregate(qualifyAggregateId('run', runId)).pipe(
+          session.log.rows(qualifyAggregateId('run', runId)).pipe(
             Effect.flatMap((rows) =>
               rows.some(
                 (row) =>
@@ -339,7 +339,7 @@ function executeAsk(
     // Background Tasks panel: announce the open thread.
     const summary = yield* records.getThreadSummary(manifest.threadId);
     if (summary) {
-      session.publish([inquiryThreadRow(summary)]);
+      yield* session.log.transact([inquiryThreadRow(summary)]);
     }
 
     const message =

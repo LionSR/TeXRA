@@ -25,7 +25,6 @@ import type {
   DatabaseWriteFailed,
   DeletionMode,
 } from './database';
-import type { QueuedFollowUp } from './runRows';
 
 /** One piece of work a run's rows left open (`SessionEvents.openWork`). */
 export interface OpenWork {
@@ -71,32 +70,21 @@ export class ProcessIdentity extends Context.Service<
 export class SessionEvents extends Context.Service<
   SessionEvents,
   {
-    /** Return the committed rows of one ordered transaction (C6), or one of
-     *  two typed refusals, both meaning nothing was written (D6 b):
-     *  `DatabaseNotOwner`, a target the process does not hold open (the
-     *  single-owner race lost, or a closed aggregate), and
+    /** Run one job as the next transaction of the inbox and return its
+     *  value: a read of committed rows and the append that depends on it,
+     *  with no other write between them. An append refusal is one of two
+     *  typed failures, both meaning nothing was written (D6 b):
+     *  `DatabaseNotOwner`, a target the process does not hold open, and
      *  `DatabaseWriteFailed`, the batch rolled back for any other reason.
-     *  Neither is retried or converted here: a caller that lost its claim
-     *  stops and reports, a disk failure surfaces as itself, and neither is
-     *  ever read as the other (F3, R7). The batch is the next job of the
-     *  inbox: it commits after every job enqueued before it. */
-    readonly publish: (
-      events: readonly SessionEventDraft[],
-    ) => Effect.Effect<
-      readonly SessionEvent[],
-      DatabaseNotOwner | DatabaseWriteFailed
-    >;
-    /** Run one job on the publisher fiber and return its value: a read of
-     *  committed rows and the append that depends on it, with no other
-     *  write between them. */
-    readonly exclusive: <A, E>(
+     *  Neither is retried or converted here (F3, R7). */
+    readonly transact: <A, E>(
       job: (append: Append) => Effect.Effect<A, E>,
     ) => Effect.Effect<A, E>;
     /** Enqueue one job synchronously and return: the door for a producer
      *  with no fiber to wait on (a trace sink, a follow-up's admission).
      *  Its order is the moment of this call. A refused append is never
      *  retried: the job hears it (a run's trace keeps it for the run's end,
-     *  `SessionHandle.lostRows`), and the publisher logs it as itself. A
+     *  `RunTrace.lost`), and the publisher logs it as itself. A
      *  job enqueued after the plane closed goes nowhere, and says so. */
     readonly detach: (
       job: (
@@ -125,39 +113,6 @@ export class SessionEvents extends Context.Service<
      *  closes. Read on the publisher fiber (inside a job) or after a
      *  settle, it counts every commit before. */
     readonly openWork: (aggregateId: AggregateId) => readonly OpenWork[];
-    /** The follow-ups queued on one aggregate that no `followup.consumed`
-     *  has taken, in commit order: what a run's consumer delivers. Kept as
-     *  this publisher commits, and seeded from the rows by
-     *  {@link hydrateFollowUps} where a claim moves here, so rows an earlier
-     *  owner committed are in it once this process holds the run. */
-    readonly pendingFollowUps: (
-      aggregateId: AggregateId,
-    ) => readonly QueuedFollowUp[];
-    /** Whether the run's input is closed (`followup.closed` or `run.removed`
-     *  since its latest `run.activate`), as the rows known here say: this
-     *  publisher's commits, a read at {@link hydrateFollowUps}, and
-     *  {@link foldLifecycle}. */
-    readonly inputClosed: (aggregateId: AggregateId) => boolean;
-    /** A row the fold-gated tail folded, from any process: its lifecycle
-     *  standing, applied only past the commit already known. */
-    readonly foldLifecycle: (row: SessionEvent) => void;
-    /** Whether a row of the aggregate named this follow-up id, queued or
-     *  consumed: the replay key, kept with {@link pendingFollowUps} and
-     *  whole on the same terms. */
-    readonly followUpNamed: (
-      aggregateId: AggregateId,
-      followUpId: string,
-    ) => boolean;
-    /** Seed a run's `pendingFollowUps` from its committed rows, when the
-     *  claim just moved here (`claimMoved`) or this publisher has not seeded
-     *  it yet: `rows` when the caller just read them, else a read of its
-     *  own. Commits tracked while the read ran merge with it: a row the read
-     *  holds keeps its place, and a later one follows it. */
-    readonly hydrateFollowUps: (
-      aggregateId: AggregateId,
-      claimMoved: boolean,
-      rows?: readonly SessionEvent[],
-    ) => Effect.Effect<void, DatabaseReadFailed>;
     /** The cold listing hydrate (C8): the latest row per aggregate and type
      *  for the listing fact types plus the outstanding approvals, in commit
      *  order; never a transcript row; completes. */
@@ -176,29 +131,7 @@ export class SessionEvents extends Context.Service<
       fromCommit: SessionCursor,
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
     ) => Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
-    /** One aggregate's rows from `fromSeq`, in seq order; completes. A
-     *  history read, never a tail. */
-    readonly aggregate: (
-      aggregateId: AggregateId,
-      fromSeq: number,
-    ) => Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
   }
 >()('@texra/session/SessionEvents') {}
 
 export type SessionEventsShape = Context.Service.Shape<typeof SessionEvents>;
-
-/** The plane's reads alone: what a holder of a session may do to the log
- *  without publishing (the session publishes; nothing holding one appends
- *  past its bookkeeping). */
-export type SessionEventReads = Pick<
-  SessionEventsShape,
-  | 'listing'
-  | 'all'
-  | 'aggregate'
-  | 'openWork'
-  | 'pendingFollowUps'
-  | 'followUpNamed'
-  | 'inputClosed'
-  | 'foldLifecycle'
-  | 'hydrateFollowUps'
->;

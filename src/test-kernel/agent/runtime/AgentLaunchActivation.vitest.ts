@@ -114,13 +114,13 @@ const captureStartedLaunch = Effect.fn(function* (
       Effect.gen(function* () {
         if (options.parentRunId) {
           publishTestRunStart(session, options.parentRunId);
-          yield* session.settled;
+          yield* session.log.settled;
         }
         if (options.resumedRunId) {
           publishTestRunStart(session, options.resumedRunId, {
             parent: options.parentRunId ?? null,
           });
-          yield* session.settled;
+          yield* session.log.settled;
         }
         const recordedSession = recordSessionEvents(session);
 
@@ -204,7 +204,7 @@ function expectActivatedThenFailed(launch: StartedLaunch): void {
     aggregateId: launch.activate.aggregateId,
   });
   expect(
-    launch.session.runView(runOf(launch.activate.aggregateId))?.status,
+    launch.session.view.run(runOf(launch.activate.aggregateId))?.status,
   ).toBe(RUN_PHASE.FAILED);
 }
 
@@ -341,7 +341,7 @@ describe('native agent launch activation', () => {
         yield* Deferred.await(descriptionStarted);
         yield* Deferred.succeed(gate, 'Fixing grammar in the introduction');
         expect(yield* Fiber.join(failure)).toBe(RUN_FAILURE);
-        const view = yield* session.readView([DESCRIPTION_RUN_ID]);
+        const view = yield* session.view.read([DESCRIPTION_RUN_ID]);
         expect(view.runs.get(DESCRIPTION_RUN_ID)?.description).toBe(
           'Fixing grammar in the introduction',
         );

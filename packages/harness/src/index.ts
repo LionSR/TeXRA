@@ -37,7 +37,7 @@ export type {
 
 // The process the hosts compose and the session owner it serves: one
 // `processLayer` for every TeXRA host and for `Sessions.layer` above.
-export { SessionOwner } from '@agent/runtime/sessionGraph';
+export { SessionOwner } from '@agent/runtime/SessionOwner';
 export {
   processLayer,
   type ProcessLayerOptions,

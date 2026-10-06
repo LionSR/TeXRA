@@ -145,7 +145,7 @@ export const relayDelivery = Effect.fn('childSettlement.relay')(function* (
   // `run.end`, say) leaves the parent nothing to read.
   if (item.from.kind !== 'run') return;
   const sender = item.from.runId;
-  const settled = yield* session.readAggregate(aggregateId('run', sender), [
+  const settled = yield* session.log.rows(aggregateId('run', sender), [
     'child.turn',
   ]);
   if (
@@ -198,10 +198,10 @@ export const relayChildDeliveries = Effect.fn(
 ): Effect.fn.Return<void, Error> {
   // The listing as the log holds it: a session just opened has not folded
   // its runs yet.
-  const { runs } = yield* session.readView([]);
+  const { runs } = yield* session.view.read([]);
   for (const [childId, child] of runs) {
     if (child.parentId !== parentRunId) continue;
-    const rows = yield* session.readAggregate(aggregateId('run', childId), [
+    const rows = yield* session.log.rows(aggregateId('run', childId), [
       'child.turn',
       'run.report',
     ]);

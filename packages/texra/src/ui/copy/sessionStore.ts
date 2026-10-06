@@ -2,7 +2,7 @@ import type { SessionStoreMovedAside } from '@shared/session/database';
 
 /**
  * What a host tells the user when opening a session store moved it aside
- * whole (`SessionHandle.storeMovedAside`). The CLI prints it once (the chat
+ * whole (`SessionHandle.log.movedAside`). The CLI prints it once (the chat
  * TUI in its transcript) and the extension shows it as a warning; both say
  * the same thing.
  */

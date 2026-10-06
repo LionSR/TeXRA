@@ -5,7 +5,7 @@ import { Cause, Context, Effect, Exit, FileSystem, Layer, Scope } from 'effect';
 import { it as effectIt } from '@effect/vitest';
 
 import { describe, expect, it, vi } from 'vitest';
-import { SessionOwner } from '@agent/runtime/sessionGraph';
+import { SessionOwner } from '@agent/runtime/SessionOwner';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { projectDatabaseLayer } from '@controllers/session/projectDatabase';
 import { openDesktopProjectRegistry } from '@desktop/main/desktopProjects.js';

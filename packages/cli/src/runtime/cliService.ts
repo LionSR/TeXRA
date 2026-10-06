@@ -27,7 +27,6 @@ import {
   openProjectStateStore,
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
-import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { setLogSink, silentLogSink, writeLogLine } from '@logger/logSink';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
@@ -146,7 +145,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       (policy) => {
         if (configuredPolicy.get(root) === policy) return;
         configuredPolicy.set(root, policy);
-        session.setApprovalPolicy(policy);
+        session.approvals.setPolicy(policy);
       },
     );
   const open = (workspace: string) => {
@@ -160,7 +159,6 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       const roots = yield* openRoots(root);
       const session = yield* (yield* SessionOwner).open({
         roots,
-        responseTextProcessing: createTexraResponseTextProcessing(),
         interruptedTasks: 'offer',
       });
       yield* followPolicy(root, session);

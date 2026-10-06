@@ -8,7 +8,7 @@
  *   say: its own owner id, the owners whose runs it may not touch (alive or
  *   unprovable, written by the liveness prober in `sessionLayer.ts`), and
  *   the runs whose run state it could not read (written by
- *   `SessionHandle.markUnreadable`).
+ *   `SessionHandle.view.markUnreadable`).
  * - `TextChunkSource`: the in-flight text per streaming row, keyed
  *   `${runId}/${rowId}`; the ordered input reader derives suffixes from
  *   successive chunk tails after reading the events committed before them.

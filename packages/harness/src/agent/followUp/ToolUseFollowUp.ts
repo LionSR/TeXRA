@@ -129,7 +129,7 @@ export function resumeOnSession(
   const attempt = Effect.suspend(() => {
     let runMissing = false;
     const isCancellationRequested = (): boolean => {
-      runMissing ||= session.runView(runId) === undefined;
+      runMissing ||= session.view.run(runId) === undefined;
       return runMissing;
     };
     return Effect.flatMap(AgentEngine, (engine) =>
@@ -289,23 +289,27 @@ export function recordRunRefusal(
 ): Effect.Effect<FollowUpFailureReason> {
   switch (classification.kind) {
     case 'held_elsewhere':
-      return session
+      return session.view
         .markUnreadable(runId, runHeldMessage(ownerPid(classification.owner)))
         .pipe(Effect.as('owned_elsewhere'));
     case 'owned_here':
       // A claim this process holds for a run with no running loop here is
       // a registry/claim disagreement, not a free run: it stays read-only
       // with a diagnostic naming that disagreement.
-      return session
+      return session.view
         .markUnreadable(
           runId,
           runUnreadableMessage('run claimed by this process with no live run'),
         )
         .pipe(Effect.as('not_resumable'));
     case 'finished':
-      return session.clearUnreadable(runId).pipe(Effect.as('finished'));
+      return session.view
+        .markUnreadable(runId, null)
+        .pipe(Effect.as('finished'));
     case 'resumable':
-      return session.clearUnreadable(runId).pipe(Effect.as('not_resumable'));
+      return session.view
+        .markUnreadable(runId, null)
+        .pipe(Effect.as('not_resumable'));
     case 'unclassified':
       return Effect.succeed('not_resumable');
   }

@@ -7,14 +7,18 @@
 import { Effect, type Scope } from 'effect';
 
 import { Rejected } from '@texra-ai/harness';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type {
+  SessionHandle,
+  SessionViewAccess,
+} from '@agent/runtime/SessionHandle';
 import type { RunAction, RunId } from '@shared/schemas';
 import { runActionRefusal } from '@shared/session/runActions';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-export function runActionGuard(
-  session: Pick<SessionHandle, 'runView' | 'runs'>,
-) {
+export function runActionGuard(session: {
+  readonly view: Pick<SessionViewAccess, 'run'>;
+  readonly runs: SessionHandle['runs'];
+}) {
   /** Runs this process is resuming: a second Resume, and a pack, clean,
    *  diff or restore, is refused while one is in flight, never queued
    *  behind a whole run. Across processes the run's claim answers. */
@@ -28,7 +32,7 @@ export function runActionGuard(
      *  longer holds is left to the action's own read. */
     require: (runId: RunId, action: RunAction): Effect.Effect<void, Rejected> =>
       Effect.suspend(() => {
-        const run = session.runView(runId);
+        const run = session.view.run(runId);
         return run === undefined || run.actions.includes(action)
           ? Effect.void
           : Effect.fail(
