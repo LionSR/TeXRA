@@ -83,7 +83,6 @@
     "@types/jsdom": "^30.0.0",
     "@types/node": "^22.19.17",
     "@types/semver": "^7.8.0",
-    "@types/shell-quote": "^1.7.5",
     "@types/vscode": "^1.125.0",
     "@types/ws": "8.18.2",
     "@typescript/native": "catalog:",
