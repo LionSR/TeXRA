@@ -82,6 +82,11 @@ const [notes, shell] = await Promise.all([
 const child = await agent('Answer the conformance child task.', { agentName: 'golden_child', label: 'Child' })
 return { notes: notes.output, shell: shell.output, child: child.response }`;
 
+/** A reply of `value` alone. */
+const text = (value: string): TurnResult['content'] => [
+  { kind: 'message', content: [{ kind: 'text', text: value }] },
+];
+
 /**
  * The scripted conversation of the golden 1.0 store
  * (`generate-golden-store.mjs`): each agent's system prompt names its part,
@@ -93,9 +98,6 @@ function goldenTurn(
   flagPath: string,
   call: (name: string, input: unknown) => TurnResult['content'][number],
 ): Effect.Effect<TurnResult['content'] | null> {
-  const text = (value: string): TurnResult['content'] => [
-    { kind: 'message', content: [{ kind: 'text', text: value }] },
-  ];
   const gate = (name: string) =>
     Effect.gen(function* () {
       const file = path.join(path.dirname(flagPath), name);
@@ -195,7 +197,26 @@ function goldenTurn(
       ),
     );
   }
-  if (system.includes('GOLDEN-SCRIPT'))
+  if (system.includes('GOLDEN-SCRIPT')) {
+    // The service's task: a shell command sent to the background, which
+    // waits for its release file; its result wakes the task once more.
+    if (said.includes('Run in the background.')) {
+      const last = turn.messages.at(-1);
+      if (last?.role === 'tool')
+        return Effect.succeed(text('Sent to the background.'));
+      return Effect.succeed(
+        JSON.stringify(last).includes('Run in the background.')
+          ? [
+              call('bash', {
+                command:
+                  'until [ -e ../bash.release ]; do sleep 0.05; done; echo released',
+                description: 'Wait for the release',
+                run_in_background: true,
+              }),
+            ]
+          : text('The background command finished.'),
+      );
+    }
     return Effect.succeed(
       results.length === 0
         ? [
@@ -206,6 +227,7 @@ function goldenTurn(
           ]
         : text('Script done.'),
     );
+  }
   // The fork and its handoff: each reply names the user messages its view
   // held, each by its last line (a headless run's first message ends with
   // its instruction), so the store records what the edit left.
@@ -404,12 +426,7 @@ export function validationModel(config: ModelConfig): {
     if (golden !== null) {
       content = golden;
     } else if (echo && turn.system === COMPACTION_SYSTEM_PROMPT) {
-      content = [
-        {
-          kind: 'message',
-          content: [{ kind: 'text', text: 'Earlier turns, summarized.' }],
-        },
-      ];
+      content = text('Earlier turns, summarized.');
     } else if (echo) {
       // The user messages the request carries, in order, each by its last
       // 60 characters: what a fork, a reset, a handoff or a compaction left
@@ -421,12 +438,7 @@ export function validationModel(config: ModelConfig): {
             )
           : [],
       );
-      content = [
-        {
-          kind: 'message',
-          content: [{ kind: 'text', text: `Model saw: ${seen.join(' | ')}` }],
-        },
-      ];
+      content = text(`Model saw: ${seen.join(' | ')}`);
     } else if (scriptFanout && toolNames.has('submit_output')) {
       content = [
         call(
@@ -456,29 +468,11 @@ export function validationModel(config: ModelConfig): {
         message.role === 'tool' ? message.results : [],
       );
       const what = scriptFanout ? 'Script' : 'History query';
-      content = [
-        {
-          kind: 'message',
-          content: [
-            {
-              kind: 'text',
-              text: `${what} result: ${JSON.stringify(results)}`,
-            },
-          ],
-        },
-      ];
+      content = text(`${what} result: ${JSON.stringify(results)}`);
     } else {
-      content = [
-        {
-          kind: 'message',
-          content: [
-            {
-              kind: 'text',
-              text: `<documents><document name="paper.polished.tex">${VALIDATION_OUTPUT}</document></documents>`,
-            },
-          ],
-        },
-      ];
+      content = text(
+        `<documents><document name="paper.polished.tex">${VALIDATION_OUTPUT}</document></documents>`,
+      );
     }
     const calls = content.some((part) => part.kind === 'local-call');
     // The echo counts its input as a provider would, about four characters

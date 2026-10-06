@@ -87,6 +87,10 @@ const SCRIPTED = RunIdSchema.parse('a00000000007');
 const FORK_SOURCE = RunIdSchema.parse('a00000000008');
 const FORKED = RunIdSchema.parse('a00000000009');
 const TOMBSTONED = RunIdSchema.parse('a0000000000a');
+/** The service's task, and the background command it sent, whose input the
+ *  service's resume closed. */
+const SERVICE_TASK = RunIdSchema.parse('a0000000000b');
+const BACKGROUND = RunIdSchema.parse('a0000000000c');
 
 const roots: string[] = [];
 afterAll(() => {
@@ -191,10 +195,8 @@ describe('the golden 1.0 store', () => {
       expect(events).toHaveLength(rows.length);
       const types = new Set(events.map((event) => event.type));
       // Every row kind is in the fixture, the decode test of a released store,
-      // but `run.model`, projected at read time, and `followup.closed`, which
-      // only a resume of a run with no agent record writes: every CLI resume
-      // refuses that run before it. The list only shrinks.
-      const notStored = ['followup.closed', 'run.model'];
+      // but `run.model`, projected at read time. The list only shrinks.
+      const notStored = ['run.model'];
       expect(
         Object.keys(ROW_KINDS)
           .filter((kind) => !types.has(kind as (typeof events)[number]['type']))
@@ -289,6 +291,7 @@ describe('the golden 1.0 store', () => {
       ).toEqual([
         [PARENT, 'validation-agent-3'],
         [CHAT, null],
+        [SERVICE_TASK, null],
       ]);
       // The plan the chat ran as a goal: the goal plugin's fact, active, then
       // completed.
@@ -357,6 +360,13 @@ describe('the golden 1.0 store', () => {
           status: 'cancelled',
           outcome: 'cancelled',
         }),
+        // Stopped with `texra tasks stop` once its command reported back.
+        run(SERVICE_TASK, 'golden_script', {
+          status: 'cancelled',
+          outcome: 'cancelled',
+          children: [BACKGROUND],
+        }),
+        run(BACKGROUND, 'bash', { parent: SERVICE_TASK }),
       ]);
       expect(folded.requests).toEqual([]);
       // The Codex turn's result and the message typed behind the stopped

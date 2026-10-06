@@ -47,8 +47,14 @@
  *   fork, whose `run.start.provenance` names its source and whose first
  *   history row is a `context.edit` (cause `fork`); then `texra resume
  *   --handoff` on the fork: a `context.edit` (cause `handoff`).
- * - one `golden_child` run deleted last with `texra history delete`: the
- *   tombstoned run, which no later open is left to collect.
+ * - one `golden_child` run, deleted with `texra history delete` once
+ *   `texra serve` holds the project open: the tombstoned run, which no
+ *   later open is left to collect.
+ * - last, a `golden_script` task in that service (`texra tasks start`) that
+ *   sends a shell command to the background, and the service's
+ *   `task.resume` of the finished command: a run with no agent record, so
+ *   the resume closes its input (`followup.closed`). No open follows, which
+ *   would remove the finished command; `texra tasks stop` ends the task.
  *
  * What differs between two generations is normalized before the dump: the
  * temporary paths, the process identities, the clock, the random ids, and
@@ -56,7 +62,7 @@
  * normalized value is recomputed, so every digest still names its value.
  * Two generations on one tree give the same file.
  */
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   cpSync,
@@ -64,10 +70,12 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -104,6 +112,8 @@ const PROVIDER_KEYS = [
 const args = process.argv.slice(2).filter((arg) => arg !== '--');
 const noBuild = args.includes('--no-build');
 const keep = args.includes('--keep');
+/** The processes a step starts, reaped however the generation ends. */
+const spawned = new Set();
 if (args.some((arg) => !['--no-build', '--keep'].includes(arg))) {
   console.error(
     'usage: node scripts/generate-golden-store.mjs [--no-build] [--keep]',
@@ -177,7 +187,9 @@ const events = [
 ];
 process.stdin.resume();
 process.stdin.on('end', function answer() {
-  if (!existsSync(release)) return setTimeout(answer, 20);
+  // A generation that failed removed its root: there is no turn to answer.
+  if (!existsSync(release))
+    return existsSync(__dirname) ? setTimeout(answer, 20) : process.exit(1);
   for (const event of events) console.log(JSON.stringify(event));
 });
 `,
@@ -250,10 +262,10 @@ process.stdin.on('end', function answer() {
     TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
   };
   const argv = (command) => [binaryPath, ...command, '--cwd', project];
-  const run = (command, input) => {
+  const run = (command, input, runEnv = env) => {
     const result = spawnSync(process.execPath, argv(command), {
       cwd: project,
-      env,
+      env: runEnv,
       encoding: 'utf8',
       input,
     });
@@ -279,10 +291,12 @@ process.stdin.on('end', function answer() {
       cwd: project,
       env: { ...env, TERM: 'xterm-256color' },
     });
+    spawned.add(child);
     let done = false;
     child.onData((data) => term.write(data));
     const exited = new Promise((resolve) =>
       child.onExit((exit) => {
+        spawned.delete(child);
         done = true;
         resolve(exit);
       }),
@@ -303,12 +317,70 @@ process.stdin.on('end', function answer() {
       done: () => done,
     };
   };
+  // The project's store; the service keeps one for no workspace beside it.
   const store = () => {
     const dir = path.join(home, '.texra/v1/workspace-storage');
-    const [key] = existsSync(dir) ? readdirSync(dir) : [];
+    const key = existsSync(dir)
+      ? readdirSync(dir).find((name) => name.startsWith('project-'))
+      : undefined;
     return key === undefined ? null : path.join(dir, key, 'texra.db');
   };
-  return { run, chat, store, project, hooks };
+  // `texra serve` in the foreground, as a window's service, for `use`,
+  // which runs its client commands (`texra tasks`) and calls procedures
+  // over its socket (the Effect RPC NDJSON framing), hearing each one's
+  // exit; then `texra service stop`.
+  const serve = async (use) => {
+    const { TEXRA_NO_SERVICE: _, ...serviceEnv } = env;
+    const service = spawn(process.execPath, argv(['serve']), {
+      cwd: project,
+      env: serviceEnv,
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+    spawned.add(service);
+    service.on('exit', () => spawned.delete(service));
+    let log = '';
+    service.stderr.on('data', (data) => (log += data));
+    const exited = new Promise((resolve) => service.on('exit', resolve));
+    const record = path.join(home, '.texra/run/serve.json');
+    const handle = { done: () => service.exitCode !== null, output: () => log };
+    await until('the service', () => existsSync(record), handle);
+    const { socket } = JSON.parse(readFileSync(record, 'utf8'));
+    const call = (tag, payload) =>
+      new Promise((resolve, reject) => {
+        const client = connect(socket);
+        let buffered = '';
+        client.on('error', reject);
+        // A connection that ends without the exit fails the call (a settled
+        // call ignores it).
+        client.on('close', () =>
+          reject(new Error(`the service closed ${tag} unanswered\n${log}`)),
+        );
+        client.on('data', (data) => {
+          buffered += data;
+          try {
+            for (let end; (end = buffered.indexOf('\n')) >= 0;) {
+              const message = JSON.parse(buffered.slice(0, end));
+              buffered = buffered.slice(end + 1);
+              if (message._tag !== 'Exit') continue;
+              resolve(message.exit);
+              client.end();
+            }
+          } catch (error) {
+            reject(error);
+            client.destroy();
+          }
+        });
+        client.write(
+          `${JSON.stringify({ _tag: 'Request', id: '0', tag, payload, headers: [] })}\n`,
+        );
+      });
+    const client = (command) => run(command, undefined, serviceEnv);
+    await use({ client, call, handle });
+    run(['service', 'stop']);
+    const code = await exited;
+    if (code !== 0) fail(`texra serve exited ${code}\n${log}`);
+  };
+  return { run, chat, serve, store, project, hooks };
 }
 
 /** Rows of the workspace store, read from outside the CLI. */
@@ -571,10 +643,27 @@ async function generate(root) {
   /** Resume under a PTY with `flags`, type `message` once the chat idles
    *  (null: the flags start the turn), and exit once `reply` shows. */
   const resumeChat = async (flags, message, reply) => {
+    const starts = () =>
+      query(cli.store(), `SELECT 1 FROM event WHERE type = 'run.start'`).length;
+    const before = starts();
     const tty = await cli.chat(['resume', ...flags]);
     const shows = (label, text) =>
       until(label, () => tty.screen().includes(text), tty);
     if (message !== null) {
+      // Typed once the new run has offered its tools, so the message
+      // commits after its activation, not among its rows.
+      await until(
+        'the new run offering its tools',
+        () =>
+          starts() > before &&
+          query(
+            cli.store(),
+            `SELECT 1 FROM event e WHERE e.type = 'tools.offered'
+             AND e.aggregate = (SELECT aggregate FROM event
+               WHERE type = 'run.start' ORDER BY "commit" DESC LIMIT 1)`,
+          ).length > 0,
+        tty,
+      );
       await shows('the idle resumed chat', 'Ctrl-C exit');
       tty.write(message);
       await shows(`the typed ${JSON.stringify(message)}`, `› ${message}`);
@@ -604,8 +693,8 @@ async function generate(root) {
     'Saw: The handoff note.',
   );
 
-  // The tombstone: a finished run deleted last, before any later open could
-  // collect it.
+  // The tombstone's run: a finished run, deleted in the service step below
+  // with no later open left to collect it.
   const before = new Set(
     query(cli.store(), RUN_OF_AGENT, ['golden_child']).map((row) => row.id),
   );
@@ -626,7 +715,80 @@ async function generate(root) {
     .map((row) => row.id)
     .find((id) => !before.has(id));
   if (doomed === undefined) fail('no golden_child run to delete');
-  cli.run(['history', 'delete', doomed, '--yes', '--print']);
+
+  // The service (`texra serve`, a window's), last: its task sends a shell
+  // command to the background, which runs once `bash.release` appears and
+  // reports back. The service's `task.resume` of that finished command, a
+  // run with no agent record, closes its input (`followup.closed`) and
+  // refuses it. No open follows, which would remove the finished command.
+  await cli.serve(async ({ client, call, handle: service }) => {
+    // The tombstone, made once the service holds the project open: a later
+    // open would collect it.
+    await call('project.policy', { workspace: cli.project, policy: 'yolo' });
+    cli.run(['history', 'delete', doomed, '--yes', '--print']);
+    const { runId: task } = JSON.parse(
+      client([
+        'tasks',
+        'start',
+        'golden_script',
+        '--model',
+        'gpt56',
+        '--instruction',
+        'Run in the background.',
+        '--approval-policy',
+        'yolo',
+        '--output-format',
+        'json',
+      ]),
+    );
+    const rowsOf = (runId, sql) =>
+      query(
+        cli.store(),
+        `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
+         WHERE s.logical_id = ? AND ${sql}`,
+        [runId],
+      ).length;
+    const waited = (turn) =>
+      until(
+        `the service task waiting after turn ${turn}`,
+        () =>
+          rowsOf(
+            task,
+            `e.type = 'run.position'
+             AND json_extract(e.data, '$.payload.at') = 'waiting'
+             AND json_extract(e.data, '$.payload.turn') = ${turn}`,
+          ) > 0,
+        service,
+      );
+    await waited(1);
+    writeFileSync(path.join(root, 'bash.release'), '');
+    await waited(2);
+    const [shell] = query(
+      cli.store(),
+      `SELECT s.logical_id AS id FROM event e
+       JOIN event_sequence s ON s.id = e.aggregate
+       WHERE e.type = 'run.start'
+         AND json_extract(e.data, '$.identity.tool') = 'bash'`,
+    );
+    if (shell === undefined) fail('no background command run to resume');
+    const resumed = await call('task.resume', {
+      workspace: cli.project,
+      runId: shell.id,
+    });
+    if (resumed._tag !== 'Failure')
+      fail(`the service resumed ${shell.id}: ${JSON.stringify(resumed)}`);
+    await until(
+      'the closed input',
+      () => rowsOf(shell.id, `e.type = 'followup.closed'`) > 0,
+      service,
+    );
+    client(['tasks', 'stop', task]);
+    await until(
+      'the stopped service task',
+      () => rowsOf(task, `e.type = 'run.end'`) > 0,
+      service,
+    );
+  });
   return cli.store();
 }
 
@@ -1029,5 +1191,6 @@ try {
   writeFileSync(fixturePath, dump(copy));
   console.log(`[golden-store] wrote ${path.relative(repoRoot, fixturePath)}`);
 } finally {
+  for (const child of spawned) child.kill('SIGKILL');
   if (!keep) rmSync(root, { recursive: true, force: true });
 }
