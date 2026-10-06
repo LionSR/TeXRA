@@ -22,7 +22,6 @@ import React from 'react';
 
 import { apiKeySecretName } from '@texra-ai/llm';
 import { refresh } from '@agent/index';
-import { tryDefaultSession } from '@agent/runtime';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
@@ -399,11 +398,7 @@ const HARNESS_DISPOSERS: Array<() => void> = [];
 
 /** The session every fixture publishes into and the TUI renders. */
 function session() {
-  const installed = tryDefaultSession();
-  if (!installed) {
-    throw new Error('tui-harness: the default session is not initialized.');
-  }
-  return installed;
+  return harnessRuntimeSession;
 }
 
 function publish(...drafts: SessionEventDraft[]): void {

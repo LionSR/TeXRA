@@ -23,7 +23,6 @@ import {
   rewriteKittyEnterInput,
 } from '@cli/tui/inputKeys';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { acceptsFollowUp } from '@shared/session/sessionView';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { AGENT_LIST } from '@ui/copy/nestedRuns';
@@ -92,6 +91,7 @@ import {
   runningChildCount,
 } from './state/sessionView';
 import { useSignal } from './state/useSignal';
+import type { ProcessRuntime } from '@texra-ai/harness';
 import type { PlatformSecrets, RuntimeRequest } from '@texra-ai/harness';
 import type { InputHistory } from './history/inputHistory';
 import type { PastedImageEntry } from './input/draftAttachments';

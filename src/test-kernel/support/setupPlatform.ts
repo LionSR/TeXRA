@@ -71,7 +71,7 @@ export interface FakeHost {
   readonly roots: WorkspaceRoots;
   /** The store the host's `Secrets` service reads, as a root's own local. */
   readonly secrets: PlatformSecrets;
-  /** The language-model port a real root hands `installProcessRuntime`,
+  /** The language-model port a real root hands `processLayer`,
    *  held here as its own local. */
   readonly languageModel: LanguageModelPort;
   readonly setup?: SetupPlatformShape;
@@ -284,6 +284,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { AgentDirectories, AppState },
     { LanguageModel },
     { unprobedToolAvailability },
+    { SessionOwner },
   ] = await Promise.all([
     import('@test/support/testWorkspaceRoots'),
     import('./testProcessRuntime'),
@@ -293,6 +294,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     import('@platform/interfaces'),
     import('@platform/languageModel'),
     import('./toolAvailabilityTestLayer'),
+    import('@agent/runtime/sessionGraph'),
   ]);
   current = host;
   for (const key of Object.keys(harnessEnv)) delete harnessEnv[key];
@@ -389,7 +391,16 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   // `defaultSessionTestSetup`) after its own `vi.mock` registrations, which
   // this install, called from a setup file or a `beforeEach`, cannot promise.
   if (tryTestProcessRuntime() == null) {
-    initTestProcessRuntime(ManagedRuntime.make(processServices));
+    initTestProcessRuntime(
+      ManagedRuntime.make(
+        // No session graph here: it holds no session, and an open dies,
+        // naming the missing member.
+        Layer.merge(
+          processServices,
+          Layer.mock(SessionOwner, { list: Effect.succeed([]) }),
+        ),
+      ),
+    );
   }
 }
 

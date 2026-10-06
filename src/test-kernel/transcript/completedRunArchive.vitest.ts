@@ -17,9 +17,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { closeSession } from '@agent/runtime/sessionGraph';
 import { withProcessServices } from '@platform/processRuntime';
 import {
   LOG_LEVELS,
@@ -43,6 +41,10 @@ import {
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { settleSessionEvents } from '@test/agent/progressTestUtils';
 import { seedRunRecord, seedReport } from '@test/support/runRecordSeeds';
+import {
+  closeTestSession as closeSessionAt,
+  openTestDefaultSession,
+} from '@test/support/sessionEnd';
 import { loadChatExportInput as loadChatExportInputEffect } from '@texra/agent/export/loadChatExportInput';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { readCompletedRunConversation as readCompletedRunConversationEffect } from '@transcript';
@@ -75,7 +77,7 @@ const loadChatExportInput = (id: RunId) =>
   Effect.runPromise(loadChatExportInputEffect(id, taskSession));
 
 function closeTestSession(session: SessionHandle): Effect.Effect<void, Error> {
-  return closeSession(session.roots.storage).pipe(
+  return closeSessionAt(session.roots.storage).pipe(
     Effect.flatMap((report) =>
       report.settled && report.abandoned.length === 0
         ? Effect.void
@@ -302,7 +304,7 @@ describe('completedRunArchive facade', () => {
 
         yield* Effect.promise(() => stampRun(runId));
         yield* closeTestSession(taskSession);
-        const session = yield* initializeDefaultSession({
+        const session = yield* openTestDefaultSession({
           roots: testWorkspaceRoots(),
         });
         taskSession = session;

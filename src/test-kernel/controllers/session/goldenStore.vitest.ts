@@ -55,10 +55,6 @@ import { resumeRun } from '@agent/runtime/resumeRun';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import { runHistoryLayer } from '@agent/runtime/RunHistory';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  initializeDefaultSession,
-  teardownDefaultSession,
-} from '@agent/runtime/sessionGraph';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import { databaseLayer } from '@controllers/session/Database';
 import {
@@ -113,6 +109,10 @@ import {
 } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { autoDecideRequests } from '@test/agent/progressTestUtils';
+import {
+  closeTestDefaultSession,
+  openTestDefaultSession,
+} from '@test/support/sessionEnd';
 
 /** The host the painted script stages are read for. */
 const CLI_HOST = { terminalBacked: false } as const;
@@ -709,13 +709,13 @@ describe('the interrupted golden runs', () => {
         ),
       ),
     );
-    await Effect.runPromise(teardownDefaultSession());
+    await Effect.runPromise(closeTestDefaultSession);
     session = await Effect.runPromise(
-      initializeDefaultSession({ roots: testWorkspaceRoots() }),
+      openTestDefaultSession({ roots: testWorkspaceRoots() }),
     );
   });
   afterEach(async () => {
-    await Effect.runPromise(teardownDefaultSession());
+    await Effect.runPromise(closeTestDefaultSession);
     for (const [key, value] of Object.entries(restore)) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;

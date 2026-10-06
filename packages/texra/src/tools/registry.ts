@@ -1,7 +1,7 @@
 /**
  * TeXRA's plugin list: the harness's built-ins with TeXRA's options, beside
  * the app's own plugins, in the order the Tools dashboard lists them. Each
- * TeXRA entry passes it to `installProcessRuntime`; nothing in the harness
+ * TeXRA entry passes it to `processLayer`; nothing in the harness
  * names an app plugin.
  */
 
@@ -83,7 +83,7 @@ import { OpenPdfTool } from './OpenPdfTool';
  * reviewer keeps finding bypasses for.
  *
  * Credentials come from the `Secrets` service, which the host's composition
- * root provides through `installProcessRuntime`, and the host-varying
+ * root provides through `processLayer`, and the host-varying
  * capabilities from the `SetupPlatform` service, the setup plugin's process
  * layer over what the host passes `texraPlugins`.
  */

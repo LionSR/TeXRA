@@ -2,9 +2,7 @@ import { resolve as resolvePath } from 'node:path';
 import { Cause, Effect, Exit, Result, Scope } from 'effect';
 import { app, BrowserWindow, dialog, session } from 'electron';
 
-import { closeAllSessions } from '@agent/runtime';
-import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
-import { withProcessServices } from '@platform/processRuntime';
+import { SessionOwner, withProcessServices } from '@texra-ai/harness';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { NotificationFailed } from '@texra/hosts/uiHosts';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
@@ -129,7 +127,7 @@ if (ownsSingleInstanceLock) {
             ),
           ),
         );
-      yield* Scope.addFinalizer(shutdownScope, disposeProcessRuntime(runtime));
+      yield* Scope.addFinalizer(shutdownScope, runtime.disposeEffect);
       yield* Scope.addFinalizer(
         shutdownScope,
         Effect.suspend(
@@ -147,7 +145,13 @@ if (ownsSingleInstanceLock) {
         shutdownScope,
         reported('stopping the active recording', draftRequests.shutdown),
       );
-      yield* Scope.addFinalizer(shutdownScope, closeAllSessions());
+      yield* Scope.addFinalizer(
+        shutdownScope,
+        withProcessServices(
+          runtime,
+          Effect.flatMap(SessionOwner, (owner) => owner.closeAll),
+        ).pipe(Effect.asVoid),
+      );
       // Registered last, so it runs first: the sessions never close under a
       // window still tearing down.
       yield* Scope.addFinalizer(

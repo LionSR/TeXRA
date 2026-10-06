@@ -1,8 +1,8 @@
 import { defineCommand } from 'citty';
 import { Cause, Effect, Exit } from 'effect';
 
+import { withProcessServices } from '@texra-ai/harness';
 import { nodePlatformServices } from '@platform/defaults/nodePlatform';
-import { withProcessServices } from '@platform/processRuntime';
 import { usageLoggingOptOut } from '@telemetry/UsageLogService';
 import { ensureError } from '@utils/errors/errorMessage';
 import {

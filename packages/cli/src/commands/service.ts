@@ -1,7 +1,7 @@
 import { defineCommand } from 'citty';
 import { Deferred, Effect, Exit, Schedule, Scope } from 'effect';
 
-import { closeAllSessions } from '@agent/runtime';
+import { SessionOwner } from '@texra-ai/harness';
 import { entryChannel, entryMessage, setLogSink } from '@logger/logSink';
 import { adoptLoginShellEnvironment } from '@platform/defaults/loginShellEnv';
 import { askServiceToStop } from '@texra/controllers/server/client';
@@ -85,18 +85,19 @@ function runServe(context: CliContext, idleSeconds: number) {
     process.on('SIGINT', onSignal);
     process.on('SIGTERM', onSignal);
     const scope = yield* Scope.make();
+    const owner = yield* SessionOwner;
     const served = Effect.gen(function* () {
       const projects = yield* cliServiceProjects(context, scope);
       return yield* serve({
         idleAfter: `${idleSeconds} seconds`,
         shutdown,
-        settle: closeAllSessions(),
+        settle: Effect.asVoid(owner.closeAll),
       }).pipe(Effect.provideService(ServiceProjects, projects));
     }).pipe(
       // The sessions close first, their runs stopped and settled; then the
       // stores their roots opened.
       Effect.ensuring(
-        closeAllSessions().pipe(Effect.andThen(Scope.close(scope, Exit.void))),
+        owner.closeAll.pipe(Effect.andThen(Scope.close(scope, Exit.void))),
       ),
       Effect.ensuring(
         Effect.sync(() => {

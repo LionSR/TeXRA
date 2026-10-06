@@ -37,7 +37,7 @@ const CLAUDE_AGENT_DEFAULT_MODEL = 'anthropic/claude-sonnet-5-5';
 const CODEX_DEFAULT_MODEL = 'openai/gpt-6.1-sol';
 const CodexModelSchema = CODEX_MODEL_SETTING.schema.unwrap();
 
-// The plugins' rows, as a host's `installProcessRuntime` installs them: this
+// The plugins' rows, as a host's `processLayer` installs them: this
 // suite runs in the pure tier, which has no fake platform to do it.
 installSettingsCatalog(TEXRA_SETTINGS);
 

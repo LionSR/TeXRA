@@ -1,6 +1,6 @@
 /**
  * The Node standard-library services every process serves once: the
- * filesystem, path, and child-process spawner. `installProcessRuntime` merges
+ * filesystem, path, and child-process spawner. `processLayer` merges
  * this layer into every root's runtime, so a program that reads a file or
  * starts a child process takes the service from context instead of building a
  * Node layer of its own. Module paths, never the `@effect/platform-node`

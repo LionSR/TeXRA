@@ -13,9 +13,9 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
-import type { ProcessServices } from '@platform/processRuntime';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ensureError } from '@utils/errors/errorMessage';
+import type { ProcessServices } from '@texra-ai/harness';
 
 const CHANNEL = 'SampleProjectCommands';
 

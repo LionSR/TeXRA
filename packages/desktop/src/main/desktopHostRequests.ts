@@ -16,6 +16,11 @@ import {
   PlatformSecrets,
   AgentDirectoriesFailed,
 } from '@texra-ai/harness';
+import {
+  withProcessServices,
+  type ProcessRuntime,
+  type ProcessServices,
+} from '@texra-ai/harness';
 import { presentRunFailure, type SessionHandle } from '@agent/runtime';
 import {
   fileOpResultMessage,
@@ -34,11 +39,6 @@ import {
   type StorageFs,
   type WorkspaceFs,
 } from '@platform/rootedFs';
-import {
-  withProcessServices,
-  type ProcessRuntime,
-  type ProcessServices,
-} from '@platform/processRuntime';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { type FileOpResult, type RunId } from '@shared/schemas';

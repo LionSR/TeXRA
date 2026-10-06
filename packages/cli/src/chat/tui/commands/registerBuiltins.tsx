@@ -16,7 +16,6 @@ import {
   installPlugins,
   parsePluginOrigin,
 } from '@common/plugins/installedPlugins';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
@@ -85,6 +84,7 @@ import {
   type FormActionHandler,
   modelAccessContribution,
 } from './modelAccessContribution';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
 
 type SelectHandler<T> = (value: T) => SlashCommandEffect;

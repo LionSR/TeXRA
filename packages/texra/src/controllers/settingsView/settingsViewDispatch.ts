@@ -2,13 +2,13 @@
 import { Effect } from 'effect';
 
 // Local imports - settings wire contract and host services
-import type { ProcessServices } from '@platform/processRuntime';
 import {
   isUnsupported,
   UnsupportedCommandError,
   type HandlerRegistry,
 } from '@texra/shared/utils/dispatcher';
 import type { SettingsViewInboundMessage } from '@texra/shared/settingsView/settingsViewMessages';
+import type { ProcessServices } from '@texra-ai/harness';
 
 /** Settings commands are programs; only the native host entry executes them. */
 export type SettingsViewInboundHandlerRegistry<R = ProcessServices> =

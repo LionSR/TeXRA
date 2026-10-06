@@ -54,10 +54,6 @@ import { executeAgent } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { Runs } from '@agent/runtime/runRegistry';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  initializeDefaultSession,
-  teardownDefaultSession,
-} from '@agent/runtime/sessionGraph';
 
 // Local imports - shared/runtime boundaries
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
@@ -99,6 +95,10 @@ import {
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import {
+  closeTestDefaultSession,
+  openTestDefaultSession,
+} from '@test/support/sessionEnd';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
@@ -645,9 +645,9 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     );
     // The process session over a persistent store: one session per root,
     // so the ephemeral default this file's setup installed gives way to it.
-    await Effect.runPromise(teardownDefaultSession());
+    await Effect.runPromise(closeTestDefaultSession);
     session = await Effect.runPromise(
-      initializeDefaultSession({ roots: testWorkspaceRoots() }),
+      openTestDefaultSession({ roots: testWorkspaceRoots() }),
     );
     publishTestRunStart(session, OUTER_RUN_ID);
     await Effect.runPromise(session.settlePublications());
@@ -678,7 +678,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     if (parentFiber) await Effect.runPromise(Fiber.await(parentFiber));
     if (childId) await waitForClaimRelease(childId);
     await Effect.runPromise(session.commitRunEnd(PARENT_RUN_ID));
-    await Effect.runPromise(teardownDefaultSession());
+    await Effect.runPromise(closeTestDefaultSession);
     vi.restoreAllMocks();
   });
 

@@ -3,11 +3,8 @@
 
 import { Data, Effect, Scope } from 'effect';
 
+import { withProcessServices, type ProcessRuntime } from '@texra-ai/harness';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  withProcessServices,
-  type ProcessRuntime,
-} from '@platform/processRuntime';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { kickoffDesktopSetup } from './desktopAgentLaunch.js';

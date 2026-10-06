@@ -25,10 +25,10 @@ import {
   enablePlugin,
   type PluginReview,
 } from '@common/plugins/pluginTrust';
-import type { ProcessServices } from '@platform/processRuntime';
 import type { PluginActionMessage } from '@texra/shared/settingsView/pluginMessages';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { safeHomedir } from '@utils/system/platformPaths';
+import type { ProcessServices } from '@texra-ai/harness';
 
 // Local imports - this module's neighbours
 import type {

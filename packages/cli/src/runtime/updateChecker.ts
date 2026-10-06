@@ -5,7 +5,6 @@ import { z } from 'zod';
 import { Cause, Effect, Exit, Result } from 'effect';
 import { canonicalizeWorkspacePath } from '@texra-ai/harness/node';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
-import type { ProcessServices } from '@platform/processRuntime';
 import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
 import { UPDATE_CHECK_SKIP_ENV } from '@texra/utils/system/semverUpdateCheck';
 import {
@@ -26,6 +25,7 @@ import { CliExitCode } from './exitCodes';
 import { runForegroundCommand } from './foregroundCommand';
 import { askCliQuestion, writeTextStderr } from './logSinks';
 import { createCliStyle } from './style';
+import type { ProcessServices } from '@texra-ai/harness';
 import type { HttpClient } from 'effect/http';
 import type { PlatformError } from 'effect/PlatformError';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';

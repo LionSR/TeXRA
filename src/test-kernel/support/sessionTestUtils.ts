@@ -2,7 +2,6 @@ import '@test/support/sessionGraphTestSetup';
 
 import { Effect } from 'effect';
 import { TraceEmitter } from '@agent/trace';
-import { listSessions, openSessionEffect } from '@agent/runtime/sessionGraph';
 import type {
   SessionHandle,
   SessionHandleInit,
@@ -23,7 +22,11 @@ import {
   emptyTranscript,
   resetTranscriptOwnership,
 } from '@shared/session/transcriptState';
-import { closeSessionOf } from '@test/support/sessionEnd';
+import {
+  closeSessionOf,
+  openTestDefaultSession,
+} from '@test/support/sessionEnd';
+import { testSessionOwner } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { generateRunId } from '@utils/core';
 
@@ -41,10 +44,10 @@ let opened = 0;
 export const createTestSession = (
   init: TestSessionInit = {},
 ): Effect.Effect<SessionHandle, SessionOpenError> =>
-  Effect.suspend(() => {
+  Effect.flatMap(testSessionOwner, (owner) => {
     const installed = testWorkspaceRoots();
     opened += 1;
-    return openSessionEffect({
+    return owner.open({
       ...init,
       roots: init.roots ?? {
         host: installed.host,
@@ -76,13 +79,15 @@ export function createProcessSession(
 ): Effect.Effect<SessionHandle, SessionOpenError> {
   return Effect.gen(function* () {
     const roots = testWorkspaceRoots();
-    const predecessors = (yield* listSessions()).filter(
+    const owner = yield* testSessionOwner;
+    const predecessors = (yield* owner.list).filter(
       (live) => live.roots.storage === roots.storage,
     );
     yield* Effect.forEach(predecessors, (live) => closeSessionOf(live), {
       discard: true,
     });
-    return yield* openSessionEffect({
+    // The session over the process roots is the file's default session.
+    return yield* openTestDefaultSession({
       ...init,
       roots,
       transcriptMode: init.transcriptMode ?? {

@@ -6,7 +6,6 @@ import { Effect, FileSystem } from 'effect';
 
 // Local imports - controllers
 import { customCopyPath, writeStampedCopy } from '@agent/index/customAgentCopy';
-import type { ProcessServices } from '@platform/processRuntime';
 // Local imports - shared
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { isPackagedAgentSource, type AgentSource } from '@shared/schemas';
@@ -15,6 +14,7 @@ import { type SettingsMessageFor } from '@texra/shared/settingsView/settingsView
 // Local imports - utilities
 import { entryExists } from '@utils/files/fsEntryExists';
 import { isStrictlyWithin } from '@utils/core/pathCore';
+import type { ProcessServices } from '@texra-ai/harness';
 
 /**
  * One step of a settings agent action: the host's own failure, on the process

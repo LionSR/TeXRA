@@ -22,7 +22,6 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
-import type { AgentCatalogServices } from '@platform/processRuntime';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { type FileOptions } from '@shared/schemas';
 import type {
@@ -32,6 +31,7 @@ import type {
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import { readRecentCommits } from '@texra/utils/git/repositoryOverview';
 import { readSettingFrom } from '@utils/config/platformSettings';
+import type { AgentCatalogServices } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 type Banners = HostSnapshot['banners'];

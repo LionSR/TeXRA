@@ -1,11 +1,10 @@
 /**
- * The failures the Effect surface names (`@texra-ai/harness`). Five are defined
- * here — the process the package refuses to compose, the plugin list it
- * refuses, the two launch refusals
- * an embedder branches on, and the run's own failure — and two more reach the
+ * The failures the Effect surface names (`@texra-ai/harness`). Four are defined
+ * here — the plugin list the package refuses, the two launch refusals an
+ * embedder branches on, and the run's own failure — and two more reach the
  * surface re-exported from the session store (`DatabaseOpenFailed`,
  * `DatabaseReadFailed`, the `SessionOpenError` union in
- * `@shared/session/database`), for seven tagged errors on the surface in all.
+ * `@shared/session/database`), for six tagged errors on the surface in all.
  *
  * Request failures are not here. A `session.request` answers with the
  * runtime's own `RequestError` union (`@shared/session/requestErrors`), the
@@ -13,17 +12,6 @@
  * vocabulary for them.
  */
 import { Data } from 'effect';
-
-/**
- * A second, different platform was handed to a process the package already
- * composed and still holds, or the process already runs a process runtime
- * the package did not compose (a host installed it for its own roots). The
- * platform is process-wide by contract, so this is a programming error
- * rather than a condition to retry.
- */
-export class PlatformConflict extends Data.TaggedError('PlatformConflict')<{
-  readonly message: string;
-}> {}
 
 /**
  * The plugin list cannot be composed: an id that is not lowercase letters,

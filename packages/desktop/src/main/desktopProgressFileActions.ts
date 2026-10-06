@@ -3,6 +3,11 @@ import path from 'node:path';
 import { Data, Effect, FileSystem, type PlatformError } from 'effect';
 
 import {
+  type ProcessRuntime,
+  type ProcessServices,
+  withProcessServices,
+} from '@texra-ai/harness';
+import {
   getHelperModelName,
   validateRunRequest,
   type SessionHandle,
@@ -18,11 +23,6 @@ import {
 } from '@latex/latexdiff/latexdiffCopy';
 import { runLatexdiffForRun } from '@latex/latexdiff/diffOperations';
 import type { DiffRunOutcome } from '@latex/latexdiff/types';
-import {
-  type ProcessRuntime,
-  type ProcessServices,
-  withProcessServices,
-} from '@platform/processRuntime';
 import type { NotificationFailed, PromptFailed } from '@texra/hosts/uiHosts';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';

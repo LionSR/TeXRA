@@ -8,7 +8,6 @@ import { Effect, Scope, Semaphore, Stream, SubscriptionRef } from 'effect';
 import { app, clipboard, dialog, Menu } from 'electron';
 import { z } from 'zod';
 
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   DESKTOP_PROJECT_COMMANDS,
@@ -61,6 +60,7 @@ import {
 } from './desktopWindows.js';
 import { isFatalDesktopShutdownRequested } from './fatalStartupError.js';
 import { installDesktopHostBridge } from './hostBridge.js';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
 import type {
   PlatformSecrets,
   AgentDirectoriesPort,

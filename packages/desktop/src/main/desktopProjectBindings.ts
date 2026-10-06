@@ -11,7 +11,7 @@ import {
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
-} from '@platform/processRuntime';
+} from '@texra-ai/harness';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   createHostSnapshotSource,

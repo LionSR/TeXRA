@@ -21,6 +21,7 @@ import {
   type Path,
 } from 'effect';
 import type { AgentEngine } from '@agent/runtime/AgentEngine';
+import type { SessionOwner } from '@agent/runtime/sessionGraph';
 import type { ProcessIdentity } from '@shared/session/sessionEvents';
 import type {
   GlobalDatabase,
@@ -41,7 +42,7 @@ import type { Secrets } from './secrets';
 /**
  * The runtime over the process-lifetime services every entry provides: the
  * cohort-A tags, the language-model bridge and the HTTP client, merged once in
- * `installProcessRuntime`'s `services` layer, plus the standard library's
+ * `processLayer`'s `services` layer, plus the standard library's
  * `FileSystem`, `Path` and `ChildProcessSpawner`, which the same install
  * provides from `@effect/platform-node` so a program that reads a file or
  * starts a child process takes them from context instead of building a Node
@@ -53,7 +54,9 @@ import type { Secrets } from './secrets';
  * connection between application state and a session graph, `ToolRegistry`,
  * the plugin table every run's offered tools are rebuilt from,
  * `LiveTools`, the live catalog each run's step pins a generation of, and
- * `ToolAvailability`, each workspace's last dependency probe.
+ * `ToolAvailability`, each workspace's last dependency probe. Every run
+ * and session of the process is provided these; the `SessionOwner` above
+ * them is the composition root's alone ({@link ProcessRuntime}).
  */
 export type ProcessServices =
   | ProcessIdentity
@@ -92,8 +95,10 @@ export type PluginContext = Context.Context<never>;
 export type AgentCatalogServices =
   GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState;
 
+/** The runtime a composition root makes over `processLayer`: the process
+ *  services, and the `SessionOwner` that opens and closes its sessions. */
 export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
-  ProcessServices,
+  ProcessServices | SessionOwner,
   never
 >;
 
@@ -109,7 +114,7 @@ export function withProcessServices<A, E>(
   // Not named `runtime`: the migration ratchet pins this file's one approved
   // `runtime` binding to `withForkFailureReporting`'s parameter.
   processRuntime: ProcessRuntime,
-  effect: Effect.Effect<A, E, ProcessServices>,
+  effect: Effect.Effect<A, E, ProcessServices | SessionOwner>,
 ): Effect.Effect<A, E> {
   return Effect.flatMap(processRuntime.contextEffect, (context) =>
     Effect.provide(effect, context),

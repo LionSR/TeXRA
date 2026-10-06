@@ -21,7 +21,7 @@ import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessServices } from '@platform/processRuntime';
+import type { ProcessServices } from '@texra-ai/harness';
 
 export function handleFixCompilation(
   session: SessionHandle,

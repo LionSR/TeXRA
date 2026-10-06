@@ -53,7 +53,7 @@ export interface DirectLspLeanAdapterOptions {
 /**
  * The {@link LeanLanguageServices} port over `lake env lean --server`, for
  * hosts without a VS Code extension bridge (Electron desktop, CLI, the agent
- * package). A composition root hands this layer to `installProcessRuntime`,
+ * package). A composition root hands this layer to `processLayer`,
  * which provides the process's `ChildProcessSpawner` (and the `FileSystem`/
  * `Path` it runs over); the pool it builds acquires no resource of its
  * own, so nothing happens at startup when no Lean tool is invoked, and its

@@ -8,10 +8,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '@test/support/sessionGraphTestSetup';
 
 // Local imports
-import {
-  initializeDefaultSession,
-  teardownDefaultSession,
-} from '@agent/runtime';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -23,6 +19,10 @@ import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
+import {
+  closeTestDefaultSession,
+  openTestDefaultSession,
+} from '@test/support/sessionEnd';
 
 const cliRequire = createRequire(
   new URL('../../../packages/cli/package.json', import.meta.url),
@@ -265,9 +265,9 @@ describe('runChat signal ownership wiring', () => {
     mocks.callOrder.length = 0;
     // The init opens the process session over the roots it installed; here
     // the suite opens it over the fake host's roots, once per test.
-    await Effect.runPromise(teardownDefaultSession());
+    await Effect.runPromise(closeTestDefaultSession);
     const session = await Effect.runPromise(
-      initializeDefaultSession({ roots: testWorkspaceRoots() }),
+      openTestDefaultSession({ roots: testWorkspaceRoots() }),
     );
     // The init hands back the services the composition root holds; the fake
     // host installed above owns those stores here.

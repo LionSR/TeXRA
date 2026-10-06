@@ -19,7 +19,6 @@ import {
   keepCustomAgent,
   refresh,
 } from '@agent/index';
-import type { ProcessServices } from '@platform/processRuntime';
 import { agentKey } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createSettingsAgentActions } from '@texra/controllers/settingsView/backend/SettingsAgentActions';
@@ -38,6 +37,7 @@ import {
 } from '@texra/shared/settingsView/handlers/agentSelectionHandlers';
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { registerCustomAgentRoot } from '@tools/agentCatalogFollower';
+import type { ProcessServices } from '@texra-ai/harness';
 
 import type {
   SettingsHostBindings,

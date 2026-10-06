@@ -159,7 +159,7 @@ VS Code-free webview frontends above. This list is enforced by
 sync with this list and with each other.
 
 **VS Code-allowed zones** — platform wiring belongs here:
-`packages/extension/src/extension.ts` (calls `installProcessRuntime()` exactly once),
+`packages/extension/src/extension.ts` (builds its runtime over `processLayer()` exactly once),
 `packages/extension/src/commands/`, `packages/extension/src/frontend/`,
 `packages/extension/src/common/`, and `packages/harness/src/platform/` interface definitions.
 Within `packages/harness/src/utils/`, a browser-reachable module additionally
@@ -169,7 +169,7 @@ substitute for it.
 
 Reach process services from the Effect context the process runtime serves
 (`AgentDirectories`, `AppState`, `Secrets`, `FileSystem`, …; the
-composition roots install it once through `installProcessRuntime`) and
+composition roots build it once over `processLayer`) and
 per-workspace ones from the `WorkspaceRoots` the caller holds. When agnostic
 code needs a host-only capability, add a typed port served by that runtime
 rather than an import.

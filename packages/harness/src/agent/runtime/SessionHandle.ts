@@ -12,12 +12,11 @@
  * the other session-scoped owners.
  *
  * A session is one per workspace storage root, built and held by the
- * process's session owner (the `Sessions` map behind `openSessionEffect` in
- * `sessionGraph.ts`): the extension and the CLI open one over the roots their
- * composition root built, the desktop one per project, the SDK one per
- * platform. That module also owns the process-default session
- * (`initializeDefaultSession` / `tryDefaultSession`). There is no other way to
- * reach these owners:
+ * process's session owner (`SessionOwner` in `sessionGraph.ts`, served by
+ * `processLayer`): the extension and the CLI open one over the roots their
+ * composition root built, the desktop one per project, the service one per
+ * project it serves, the SDK one per platform. Each opener keeps the handle
+ * it was given. There is no other way to reach the owner:
  * the invariant is "no session-scoped mutable module export" (#7694) — a
  * run-scoped caller receives its session as data, never through a standalone
  * singleton import.
@@ -172,7 +171,7 @@ function draftedRun(events: readonly SessionEventDraft[]): RunId | null {
 }
 
 /**
- * What opening a session supplies (`openSessionEffect`): persistence mode and
+ * What opening a session supplies (`SessionOwner.open`): persistence mode and
  * host-owned policies. The graph constructs its store over its event
  * database. `interactions` is a presentation host the session is born with,
  * attached for its whole life by the session owner (`sessionLayer`) as soon as
@@ -315,7 +314,7 @@ export class SessionHandle {
    * Built by the session owner alone (`sessionLayer.ts`), inside the root's
    * graph, with that graph handed over as a function of the session: the
    * request handler admits on the session, so the graph is bound to the
-   * handle it serves. Every other caller opens through `openSessionEffect`.
+   * handle it serves. Every other caller opens through `SessionOwner.open`.
    */
   constructor(
     init: SessionHandleInit &

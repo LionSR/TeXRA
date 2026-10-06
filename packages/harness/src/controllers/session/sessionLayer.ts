@@ -1,17 +1,16 @@
 /**
- * The per-session Effect graph and the process's keyed family of them. `Sessions` is a `LayerMap` keyed by
- * workspace storage root: one session per root and one only, built on the one
- * `ManagedRuntime` each process makes at its entry (`installProcessRuntime`).
- * A root's entry is the complete session: the root-scoped services (the
- * database event log, the session event reads and publications, the fold, the
- * session inputs, the three local sources, and the owner-liveness prober) and
- * the `SessionHandle` built over them, whose request handler admits on that
- * graph. The handle layer opens the root's transcript store over that log and
- * hands it to the handle. Every opener (the hosts' default session, the
- * desktop's papers, the SDK) resolves its root here, so opening a root twice
- * returns one handle, and the map is the one owner of its lifetime: an open
- * borrows, `close` settles and releases, and the runtime's disposal releases
- * whatever is still open.
+ * The process layer ({@link processLayer}): every process service a
+ * composition root runs on, and the `SessionOwner` over the keyed family of
+ * sessions, a `LayerMap` keyed by workspace storage root (one session per
+ * root and one only). A root's entry is the complete session: the
+ * root-scoped services (the database event log, the session event reads and
+ * publications, the fold, the session inputs, the three local sources, and
+ * the owner-liveness prober) and the `SessionHandle` built over them, whose
+ * request handler admits on that graph. Every opener (the hosts' default
+ * sessions, the desktop's projects, the service's tasks, the SDK) resolves
+ * its root here, so opening a root twice returns one handle, and the map is
+ * the one owner of its lifetime: an open borrows, `close` settles and
+ * releases, and the layer's release closes whatever is still open.
  */
 import {
   Cause,
@@ -25,7 +24,6 @@ import {
   Hash,
   Layer,
   LayerMap,
-  ManagedRuntime,
   Option,
   Schedule,
   RcMap,
@@ -53,8 +51,8 @@ import {
   type SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
 import {
-  initSessionOwner,
   SESSION_CLOSE_DEADLINE_MS,
+  SessionOwner,
   type SessionGraph,
 } from '@agent/runtime/sessionGraph';
 import { withLogChannel } from '@logger/effectLog';
@@ -62,11 +60,7 @@ import {
   effectDiagnosticsLayer,
   type MinimumLogLevel,
 } from '@logger/effectDiagnostics';
-import {
-  withForkFailureReporting,
-  type ProcessRuntime,
-  type ProcessServices,
-} from '@platform/processRuntime';
+import type { ProcessServices } from '@platform/processRuntime';
 import {
   AgentDirectories,
   AppState,
@@ -77,6 +71,7 @@ import { LanguageModel, type LanguageModelPort } from '@platform/languageModel';
 import { globalStorageFsLayer } from '@platform/rootedFs';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import {
+  nodeProcesses,
   processOwnerId,
   type ProcessProbe,
 } from '@platform/defaults/nodeProcesses';
@@ -106,7 +101,7 @@ import {
   GlobalDatabase,
   type SessionOpenError,
 } from '@shared/session/database';
-import type { UsageLog } from '@shared/usageLog';
+import { UsageLog } from '@shared/usageLog';
 import {
   installSettingsCatalog,
   settingsCatalog,
@@ -124,7 +119,7 @@ import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { followInterruptedTasks } from '@tools/interruptedTasks';
 import { processEnvConfigLayer } from '@utils/system/envFlags';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { databaseLayer } from './Database';
+import { databaseLayer, globalDatabaseLayer } from './Database';
 import { projectDatabaseLayer } from './projectDatabase';
 import { collectPendingDeletions } from './deletionCleanup';
 import { ownerLiveness } from './ownerLiveness';
@@ -179,19 +174,6 @@ class Session extends Context.Service<Session, SessionHandle>()(
 ) {}
 
 /**
- * The sessions the owner holds, outside the map: what the owner's synchronous
- * `current` reads, and so the process's one list of live sessions — no module
- * keeps a second one. An
- * entry is written once its handle exists and removed as the first step of its
- * release, so a root whose session is still building, or already unwinding,
- * reads as having none. Keyed by the entry's `SessionKey` and matched on its
- * captured `key.storage` at lookup, as `heldSession` matches. `heldSession`
- * below is the map's own answer, which waits for a building entry;
- * `closeSession` needs that, a synchronous read cannot have it.
- */
-type HeldSessions = Map<SessionKey, SessionHandle>;
-
-/**
  * The handle of one root, over the root's graph: the session is the entry's
  * one service, and its `Runs` and requests are reached through it. The last
  * layer of the entry, so it is the first thing unwound when the entry closes
@@ -200,11 +182,7 @@ type HeldSessions = Map<SessionKey, SessionHandle>;
  * both end it by closing that scope, and every owner the handle holds is torn
  * down by a finalizer registered here.
  */
-const sessionHandleLayer = (
-  key: SessionKey,
-  held: HeldSessions,
-  modelRetries: ModelRetryGate,
-) =>
+const sessionHandleLayer = (key: SessionKey, modelRetries: ModelRetryGate) =>
   Layer.effectContext(
     Effect.gen(function* () {
       const { publish, exclusive, detach, settle, removeRun, ...reads } =
@@ -565,12 +543,6 @@ const sessionHandleLayer = (
       // and a constructor cannot run one.
       if (key.open.interactions)
         yield* session.interactions.use(key.open.interactions);
-      // Registered after the owners, so it is unwound first: `current` stops
-      // answering with this session before its owners unwind.
-      yield* Effect.acquireRelease(
-        Effect.sync(() => held.set(key, session)),
-        () => Effect.sync(() => held.delete(key)),
-      );
       yield* SubscriptionRef.set(delivered, anchor);
       yield* reads.all(anchor, delivered).pipe(
         Stream.runForEach((event) =>
@@ -717,26 +689,24 @@ const sessionGraphLayer = (key: SessionKey) => {
  * route gate (a 429 cools a credential for every project) and are otherwise
  * `Layer.fresh`: layers memoize by reference, else roots share one fold.
  */
-class Sessions extends Context.Service<
-  Sessions,
+class SessionMap extends Context.Service<
+  SessionMap,
   LayerMap.LayerMap<SessionKey, Session, SessionOpenError>
->()('@texra/session/Sessions') {
-  static layer(held: HeldSessions) {
-    return Layer.effect(
-      Sessions,
-      Effect.flatMap(ModelRetryGate.make, (modelRetries) =>
-        LayerMap.make(
-          (key: SessionKey) =>
-            Layer.fresh(
-              sessionHandleLayer(key, held, modelRetries).pipe(
-                Layer.provide(sessionGraphLayer(key)),
-              ),
+>()('@texra/session/SessionMap') {
+  static readonly layer = Layer.effect(
+    SessionMap,
+    Effect.flatMap(ModelRetryGate.make, (modelRetries) =>
+      LayerMap.make(
+        (key: SessionKey) =>
+          Layer.fresh(
+            sessionHandleLayer(key, modelRetries).pipe(
+              Layer.provide(sessionGraphLayer(key)),
             ),
-          { idleTimeToLive: Duration.infinity },
-        ),
+          ),
+        { idleTimeToLive: Duration.infinity },
       ),
-    );
-  }
+    ),
+  );
 }
 
 /** The session of `open`'s root: built now, or the one already open. A
@@ -744,24 +714,53 @@ class Sessions extends Context.Service<
  *  every later open of the root with the cached failure). */
 const openSession = (open: SessionHandleInit) =>
   Effect.gen(function* () {
-    const sessions = yield* Sessions;
-    const key = new SessionKey(open);
+    const sessions = yield* SessionMap;
+    // The map keys and releases a session by this root, so a caller's
+    // mutable or inherited root record may not change it later. Read the
+    // structural fields so inherited or non-enumerable getters work too.
+    const { roots } = open;
+    const key = new SessionKey({
+      ...open,
+      roots: {
+        host: roots.host,
+        workspace: roots.workspace,
+        storage: roots.storage,
+        globalStorage: roots.globalStorage,
+        config: roots.config,
+        workspaceState: roots.workspaceState,
+        repoState: roots.repoState,
+        globalState: roots.globalState,
+      },
+    });
     const context = yield* sessions
       .contextEffect(key)
       .pipe(Effect.onError(() => sessions.invalidate(key)));
     return Context.get(context, Session);
   }).pipe(Effect.scoped);
 
-/** Every session the map holds, entries still building waited for. Builds
- *  nothing: a key whose entry has been released is skipped. */
+/** Every session the map holds, entries still building waited for within
+ *  the close budget. Builds nothing: a key whose entry has been released,
+ *  or is still opening past the budget, is skipped. */
 const listSessions = Effect.gen(function* () {
-  const sessions = yield* Sessions;
+  const sessions = yield* SessionMap;
   const keys = yield* RcMap.keys(sessions.rcMap);
   const held: SessionHandle[] = [];
   for (const key of keys) {
-    const entry = yield* sessions
-      .contextEffectOption(key)
-      .pipe(Effect.scoped, Effect.catch(unopenedEntry(key)));
+    const entry = yield* sessions.contextEffectOption(key).pipe(
+      Effect.scoped,
+      Effect.catch(unopenedEntry(key)),
+      // A store that will not open must not hold a shutdown: past the
+      // close budget the entry is skipped, said once, and released with
+      // the map.
+      Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
+      Effect.flatMap((built) =>
+        Option.isSome(built)
+          ? Effect.succeed(built.value)
+          : Effect.logWarning(
+              `Session ${key.storage} was still opening past the close budget; it is skipped here and released with the process.`,
+            ).pipe(withLogChannel(CHANNEL), Effect.as(Option.none())),
+      ),
+    );
     if (Option.isSome(entry)) held.push(Context.get(entry.value, Session));
   }
   return held;
@@ -779,12 +778,10 @@ const unopenedEntry =
 
 /** The session held for `root`, if the map holds one: an entry still building
  *  is waited for, never skipped, which is what lets a close issued right after
- *  an open find the session (`SessionOwner.open`). Builds nothing. The owner's
- *  `current` reads the `HeldSessions` map instead: it answers synchronously
- *  and so cannot wait for a build. */
+ *  an open find the session (`SessionOwner.open`). Builds nothing. */
 const heldSession = (root: string) =>
   Effect.gen(function* () {
-    const sessions = yield* Sessions;
+    const sessions = yield* SessionMap;
     const keys = yield* RcMap.keys(sessions.rcMap);
     const key = [...keys].find((candidate) => candidate.storage === root);
     if (key === undefined) return undefined;
@@ -912,7 +909,7 @@ const settleRun = (session: SessionHandle, runId: RunId): Effect.Effect<void> =>
  */
 const closeSession = (root: string) =>
   Effect.gen(function* () {
-    const sessions = yield* Sessions;
+    const sessions = yield* SessionMap;
     const held = yield* heldSession(root);
     // A root with nothing open: nothing to settle, nothing abandoned.
     if (held === undefined)
@@ -962,18 +959,19 @@ const closeSession = (root: string) =>
   }).pipe(Effect.uninterruptible);
 
 /**
- * Make the one Effect runtime of this process over its identity (PRD 7.7) and
- * install it with the session family it serves: called by a composition root
- * exactly once at startup, which calls
- * {@link disposeProcessRuntime} on its shutdown path after the last session
- * has released its graph. Every root passes the process-start read as a
- * program over this runtime's spawner, read once per process as one of the
- * process services below. The owner it installs answers in Effect, on the
- * opener's own fiber; its one synchronous face, `current`, reads the held
- * map and runs nothing. Each host value and layer below is composed once.
+ * What a composition root composes its process from: the app's plugins and
+ * setting rows and the host's own ports. What every host builds the same
+ * way (the process identity, the global root's database) has a default.
  */
-interface ProcessRuntimeOptions {
-  readonly processStart: Effect.Effect<string | undefined, never, ProcessProbe>;
+export interface ProcessLayerOptions {
+  /** The process-start read the process identity is derived from, once per
+   *  process: absent, this Node process's own (`nodeProcesses.selfIdentity`). */
+  readonly processStart?: Effect.Effect<
+    string | undefined,
+    never,
+    ProcessProbe
+  >;
+  /** The global storage root every session of the process shares. */
   readonly globalStorage: string;
   /**
    * The app's plugins, in order, the harness's built-ins among them: the
@@ -999,9 +997,10 @@ interface ProcessRuntimeOptions {
    */
   readonly toolMissingReporter?: ToolMissingHandler;
   /**
-   * The host's global application-state layer, acquired in this runtime's scope.
-   * A platform-less CLI entry supplies its refusing store through AppState.layer
-   * so it creates no storage on a possibly read-only root.
+   * The host's global application-state layer, acquired in this runtime's
+   * scope: the TeXRA hosts' store over the global root's database values,
+   * the SDK's embedder store, or a platform-less CLI entry's refusing one,
+   * which creates no storage on a possibly read-only root.
    */
   readonly appState: Layer.Layer<
     AppState,
@@ -1020,22 +1019,24 @@ interface ProcessRuntimeOptions {
   readonly toolAvailability?: typeof toolAvailabilityLayer;
   /**
    * The host's usage layer owns its version-stamped sender and final drain.
-   * `UsageLog.disabled` reports no usage. The host supplies the layer so this
-   * composition does not reach into telemetry.
+   * Absent, `UsageLog.disabled`: no usage is reported, as for an embedder,
+   * which has no version or editor of its own to stamp entries with. The
+   * host supplies the layer so this composition does not reach into
+   * telemetry.
    */
-  readonly usageLog: Layer.Layer<
+  readonly usageLog?: Layer.Layer<
     UsageLog,
     never,
     HttpClient.HttpClient | AppState
   >;
   /**
    * The process's handle on the global storage root, built and closed with
-   * this runtime. The entry passes it, as it does `appState`, because opening
-   * it creates the root's SQLite file and forks a change poll: the CLI entry
-   * that runs before any platform, on a possibly read-only root, passes a
-   * refusing layer.
+   * this runtime. Absent, the root's own database; opening it creates the
+   * root's SQLite file and forks a change poll, so the CLI entry that runs
+   * before any platform, on a possibly read-only root, passes a refusing
+   * layer.
    */
-  readonly globalDatabase: Layer.Layer<
+  readonly globalDatabase?: Layer.Layer<
     GlobalDatabase,
     DatabaseOpenFailed,
     ProcessIdentity | ProcessProbe
@@ -1053,8 +1054,18 @@ interface ProcessRuntimeOptions {
   readonly minimumLogLevel: MinimumLogLevel;
 }
 
-export function installProcessRuntime({
-  processStart,
+/**
+ * The process: every process service a composition root runs on, and the
+ * {@link SessionOwner} that opens, lists and closes its sessions (one per
+ * workspace storage root, held by a `LayerMap`). A host builds it once with
+ * `ManagedRuntime.make` and disposes that runtime on its shutdown path; the
+ * SDK's `Sessions.layer` provides it to its projection. Disposal closes every
+ * session still open (plugins drained first), so a host that needs its
+ * sessions closed before its own resources tear down runs
+ * `SessionOwner.closeAll` first.
+ */
+export function processLayer({
+  processStart = nodeProcesses.selfIdentity(),
   globalStorage,
   plugins,
   settings = [],
@@ -1065,10 +1076,10 @@ export function installProcessRuntime({
   agentDirectories,
   toolMissingReporter,
   toolAvailability = toolAvailabilityLayer,
-  usageLog,
-  globalDatabase: globalDatabaseOption,
+  usageLog = UsageLog.disabled,
+  globalDatabase: globalDatabaseOption = globalDatabaseLayer(globalStorage),
   minimumLogLevel,
-}: ProcessRuntimeOptions): ProcessRuntime {
+}: ProcessLayerOptions): Layer.Layer<ProcessServices | SessionOwner> {
   installSettingsCatalog(settingsCatalog(settings));
   const catalog = pluginCatalogLayer(plugins, mcpConfigPath);
   // Non-failing: `selfIdentity()` reads an unreadable identity as undefined.
@@ -1102,104 +1113,66 @@ export function installProcessRuntime({
     Layer.provideMerge(appState.pipe(Layer.orDie)),
     Layer.provideMerge(identity),
   );
-  // Give an opener only this runtime's Sessions on its own fiber.
-  const onThisRuntime = <A, E>(
-    effect: Effect.Effect<A, E, Sessions>,
-  ): Effect.Effect<A, E> =>
-    Effect.flatMap(runtime.contextEffect, (context) =>
-      Effect.provideService(effect, Sessions, Context.get(context, Sessions)),
-    );
-  const held: HeldSessions = new Map();
-  const runtime = withForkFailureReporting(
-    ManagedRuntime.make(
-      Sessions.layer(held).pipe(
-        Layer.provideMerge(projectDatabaseLayer),
-        // The usage log's own lifetime: its sender and ticker run with this
-        // runtime, its finalizer drains the queue while HTTP is up, and it
-        // is ahead of `services` so HTTP reaches it.
-        Layer.provideMerge(usageLog),
-        // Its probes read the plugins' layers and the services below.
-        Layer.provideMerge(toolAvailability),
-        Layer.provideMerge(services),
-        // Every session shares this process's global-storage view.
-        Layer.provideMerge(globalStorageFsLayer(globalStorage)),
-        // The records' handle on that same root, for the same reason: one
-        // connection and one change poll per process, outside the entry.
-        Layer.provideMerge(globalDatabase),
-        Layer.provideMerge(
-          Layer.mergeAll(
-            effectDiagnosticsLayer(minimumLogLevel),
-            FetchHttpClient.layer,
-            Layer.succeed(HttpClient.TracerPropagationEnabled)(false), // no run trace ids to third parties
-            // Filesystem, path, spawner, env config: once per process.
-            nodePlatformServices,
-            processEnvConfigLayer,
-          ),
-        ),
+  return sessionOwnerLayer.pipe(
+    Layer.provideMerge(SessionMap.layer),
+    Layer.provideMerge(projectDatabaseLayer),
+    // The usage log's own lifetime: its sender and ticker run with this
+    // runtime, its finalizer drains the queue while HTTP is up, and it is
+    // ahead of `services` so HTTP reaches it.
+    Layer.provideMerge(usageLog),
+    // Its probes read the plugins' layers and the services below.
+    Layer.provideMerge(toolAvailability),
+    Layer.provideMerge(services),
+    // Every session shares this process's global-storage view.
+    Layer.provideMerge(globalStorageFsLayer(globalStorage)),
+    // The records' handle on that same root, for the same reason: one
+    // connection and one change poll per process, outside the entry.
+    Layer.provideMerge(globalDatabase),
+    Layer.provideMerge(
+      Layer.mergeAll(
+        effectDiagnosticsLayer(minimumLogLevel),
+        FetchHttpClient.layer,
+        Layer.succeed(HttpClient.TracerPropagationEnabled)(false), // no run trace ids to third parties
+        // Filesystem, path, spawner, env config: once per process.
+        nodePlatformServices,
+        processEnvConfigLayer,
       ),
     ),
   );
-  initSessionOwner({
-    runtime,
-    open: (open) => onThisRuntime(openSession(open)),
-    current: (root) => [...held].find(([key]) => key.storage === root)?.[1],
-    list: () => onThisRuntime(listSessions),
-    close: (root) => onThisRuntime(closeSession(root)),
-    closeAll: () =>
-      Effect.flatMap(runtime.contextEffect, (context) =>
-        Effect.gen(function* () {
-          // What a plugin admitted for a session (a GitHub poll round's
-          // delivery) lands before that session closes, not after.
-          yield* drainPlugins(yield* LiveTools);
-          // The held sessions, read synchronously: a shutdown never waits on
-          // an entry still building (a store that will not open), which the
-          // runtime's own disposal tears down.
-          return yield* Effect.forEach(
-            [...held.values()],
-            (session) => closeSession(session.roots.storage),
-            { concurrency: 'unbounded' },
-          );
-        }).pipe(Effect.provideContext(context)),
-      ),
-  });
-  return runtime;
 }
 
 /**
- * Uninstall the session owner and dispose `runtime`, the one this process's
- * root installed it with, releasing every session still open there: the one
- * shutdown step for both, so a close issued after it answers as a process
- * with no owner does instead of reaching the disposed runtime.
- *
- * The caller passes the runtime it holds. The owner is uninstalled first and
- * the runtime stays alive for the whole of its own disposal: its layer
- * finalizers are what release the open sessions, and they still publish while
- * they unwind -- a session entry's finalizers unwind its owners and then
- * await the publications that teardown left in flight
- * (`SessionHandle.settlePublications`), on the releasing fiber.
- *
- * Idempotent and safe to race: a second call joins the disposal already in
- * flight rather than starting another. The extension's shutdown path runs it
- * as a finalizer (`Effect.ensuring`) and permits a later shutdown, so both run.
+ * The owner over the map: each method runs on its caller's fiber with the
+ * map provided. Its release closes what is still open, plugins drained
+ * first, before the map's own release unwinds the entries.
  */
-let disposal: Effect.Effect<void> | undefined;
-
-export function disposeProcessRuntime(
-  runtime: ProcessRuntime,
-): Effect.Effect<void> {
-  return Effect.suspend(() => {
-    if (disposal) return disposal;
-    initSessionOwner(undefined);
-    // What a racing caller joins: the disposal in flight, not a second one.
-    const joined = Deferred.makeUnsafe<void>();
-    disposal = Deferred.await(joined);
-    return runtime.disposeEffect.pipe(
-      Effect.onExit((exit) =>
-        Effect.sync(() => {
-          disposal = undefined;
-          Deferred.doneUnsafe(joined, exit);
-        }),
-      ),
-    );
-  });
-}
+const sessionOwnerLayer = Layer.effect(
+  SessionOwner,
+  Effect.gen(function* () {
+    const map = yield* SessionMap;
+    const live = yield* LiveTools;
+    const registry = yield* ToolRegistry;
+    const withMap = <A, E>(
+      effect: Effect.Effect<A, E, SessionMap>,
+    ): Effect.Effect<A, E> => Effect.provideService(effect, SessionMap, map);
+    const closeAll = Effect.gen(function* () {
+      // What a plugin admitted for a session (a GitHub poll round's
+      // delivery) lands before that session closes, not after.
+      yield* drainPlugins(live).pipe(
+        Effect.provideService(ToolRegistry, registry),
+      );
+      return yield* Effect.forEach(
+        yield* listSessions,
+        (session) => closeSession(session.roots.storage),
+        { concurrency: 'unbounded' },
+      );
+    }).pipe(withMap);
+    yield* Effect.addFinalizer(() => Effect.asVoid(closeAll));
+    return {
+      open: (init) => withMap(openSession(init)),
+      list: withMap(listSessions),
+      close: (root) => withMap(closeSession(root)),
+      closeAll,
+    };
+  }),
+);

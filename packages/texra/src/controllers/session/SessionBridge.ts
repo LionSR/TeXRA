@@ -46,7 +46,6 @@ import {
   type RequestError,
 } from '@texra-ai/harness';
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessServices } from '@platform/processRuntime';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import {
@@ -60,6 +59,7 @@ import {
 } from '@shared/session/sessionFrames';
 import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { ProcessServices } from '@texra-ai/harness';
 
 const CHANNEL = 'SessionBridge';
 

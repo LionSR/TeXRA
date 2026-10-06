@@ -60,11 +60,6 @@ vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
 import { runHistoryLayer } from '@agent/runtime/RunHistory';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  closeSession,
-  listSessions,
-  openSessionEffect,
-} from '@agent/runtime/sessionGraph';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionGraph';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
@@ -108,7 +103,13 @@ import type { RunHistoryDraft } from '@shared/session/runStateFold';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import { DownMessageSchema } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
-import { untrackRun, closeSessionOf } from '@test/support/sessionEnd';
+import {
+  closeSessionOf,
+  closeTestSession,
+  listTestSessions,
+  openTestSession,
+  untrackRun,
+} from '@test/support/sessionEnd';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
   nodeSpawnerLayer,
@@ -746,7 +747,7 @@ describe('session events and view', () => {
 
 /**
  * The session owner (proposal 2026-09-05, sections 3 and 9): `closeSession`
- * is how a session the `Sessions` map holds behind `openSessionEffect` ends.
+ * is how a session the `Sessions` map holds behind `openTestSession` ends.
  */
 describe('Sessions owner', () => {
   it.effect(
@@ -902,12 +903,12 @@ describe('Sessions owner', () => {
   );
 
   const open = (storagePath: string) =>
-    openSessionEffect({
+    openTestSession({
       roots: createFakeWorkspaceRoots({ storagePath }),
       transcriptMode: { kind: 'ephemeral', reason: 'sessions owner test' },
     });
   const isLive = (session: SessionHandle) =>
-    Effect.map(listSessions(), (live) => live.includes(session));
+    Effect.map(listTestSessions, (live) => live.includes(session));
   const track = (session: SessionHandle, runId: RunId) =>
     session.runs.track(testRunHandle({ runId, agent: 'chat' }));
 
@@ -940,7 +941,7 @@ describe('Sessions owner', () => {
             );
             yield* state.update('shared', 'before session');
             const session = yield* Effect.acquireRelease(
-              openSessionEffect({
+              openTestSession({
                 roots: {
                   ...createFakeWorkspaceRoots({ storagePath: storage }),
                   workspaceState: state,
@@ -977,8 +978,8 @@ describe('Sessions owner', () => {
       // Lean pool must stay outside that `fresh` so its servers stay shared.
       yield* open('/workspace/owner/lean-once-a');
       yield* open('/workspace/owner/lean-once-b');
-      yield* closeSession('/workspace/owner/lean-once-a');
-      yield* closeSession('/workspace/owner/lean-once-b');
+      yield* closeTestSession('/workspace/owner/lean-once-a');
+      yield* closeTestSession('/workspace/owner/lean-once-b');
       expect(leanBuilds.count).toBe(1);
       expect(leanBuilds.state).toBe(
         yield* withProcessServices(testRuntime(), AppState),
@@ -993,8 +994,8 @@ describe('Sessions owner', () => {
       // whole file: every session this module graph opened shares it.
       yield* open('/workspace/owner/identity-once-a');
       yield* open('/workspace/owner/identity-once-b');
-      yield* closeSession('/workspace/owner/identity-once-a');
-      yield* closeSession('/workspace/owner/identity-once-b');
+      yield* closeTestSession('/workspace/owner/identity-once-a');
+      yield* closeTestSession('/workspace/owner/identity-once-b');
       expect(identityReads.count).toBe(1);
     }),
   );
@@ -1189,7 +1190,7 @@ describe('Sessions owner', () => {
           interrupt,
         });
 
-        expect(yield* closeSession('/workspace/owner/settled')).toEqual({
+        expect(yield* closeTestSession('/workspace/owner/settled')).toEqual({
           settled: true,
           abandoned: [],
         });
@@ -1214,7 +1215,7 @@ describe('Sessions owner', () => {
           settlement: Effect.fail(new Error('terminal write refused')),
         });
 
-        expect(yield* closeSession(root)).toEqual({
+        expect(yield* closeTestSession(root)).toEqual({
           settled: true,
           abandoned: [],
         });
@@ -1236,7 +1237,7 @@ describe('Sessions owner', () => {
           interrupt: () => {},
         });
         const closing = yield* Effect.forkChild(
-          closeSession('/workspace/owner/abandoned'),
+          closeTestSession('/workspace/owner/abandoned'),
         );
         // Let the forked close reach its settlement wait and register the
         // budget's sleep before the clock moves past the deadline.

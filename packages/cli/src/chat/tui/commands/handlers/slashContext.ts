@@ -6,10 +6,10 @@ import { type CliSignInProgress } from '@cli/runtime/signInUrl';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalNotice } from '@cli/chat/tui/state/transcript';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
 import type { Effect } from 'effect';
 

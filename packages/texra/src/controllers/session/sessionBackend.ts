@@ -27,7 +27,6 @@ import { getRunRecords } from '@agent/storage/runRecords';
 import type { RunControls } from '@agent/runtime/RunHandle';
 import { runAgent, type RunAgentRequest } from '@agent/runtime/runAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ProcessServices } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   RUN_OUTCOME,
@@ -40,6 +39,7 @@ import { isLiveRun, type SessionView } from '@shared/session/sessionView';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import { launchOnRun } from '@texra/controllers/mainView/backend/MainViewRunLaunchController';
 import type { ToolEditPreview } from '@texra/controllers/server/protocol';
+import type { ProcessServices } from '@texra-ai/harness';
 
 /** What a window asks of a live run's loop: its model switch. */
 type RunModelControls = Pick<

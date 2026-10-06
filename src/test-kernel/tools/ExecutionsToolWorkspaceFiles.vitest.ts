@@ -14,8 +14,6 @@ import type { ToolServices } from '@agent/runtime/ToolServices';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
-import { closeSession } from '@agent/runtime/sessionGraph';
 import { RUN_PHASE, DEFAULT_TOOL_CONFIG, aggregateId } from '@shared/schemas';
 import { RunIdSchema, type RunId, type RunPhase } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
@@ -35,6 +33,10 @@ import {
 } from '@test/support/sessionTestUtils';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
+import {
+  closeTestSession,
+  openTestDefaultSession,
+} from '@test/support/sessionEnd';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 
 /**
@@ -138,7 +140,7 @@ function withTempStorage(
               run: { session, runId: 'tool-test' as RunId, toolPolicy: {} },
             }),
           ),
-          Effect.ensuring(closeSession(session.roots.storage)),
+          Effect.ensuring(closeTestSession(session.roots.storage)),
         );
       }),
     );
@@ -150,7 +152,7 @@ describe('ExecutionsTool', () => {
 
   beforeEach(async () => {
     await Effect.runPromise(
-      initializeDefaultSession({
+      openTestDefaultSession({
         roots: testWorkspaceRoots(),
         transcriptMode: { kind: 'ephemeral', reason: 'executions tool test' },
       }),

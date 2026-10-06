@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 
 import { Cancelled, type PlatformSecrets } from '@texra-ai/harness';
+import { type ProcessRuntime, withProcessServices } from '@texra-ai/harness';
 import {
   presentRunFailure,
   selectAutoOpenFinalOutput,
@@ -9,10 +10,6 @@ import {
   type RunAgentRequest,
   type SessionHandle,
 } from '@agent/runtime';
-import {
-  type ProcessRuntime,
-  withProcessServices,
-} from '@platform/processRuntime';
 import type { RequestOpenFilePayload } from '@shared/schemas';
 import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { ensureError } from '@utils/errors/errorMessage';

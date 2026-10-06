@@ -3,7 +3,7 @@
  *
  * Effect programs read env through Effect `Config`, served by one
  * `ConfigProvider` over the live `process.env` (`processEnvConfigLayer`,
- * installed by `installProcessRuntime` and the CLI's pre-runtime run). Tests
+ * installed by `processLayer` and the CLI's pre-runtime run). Tests
  * replace it with a provider record instead of mutating `process.env`.
  *
  * - `fromEnvRecord(process.env)`, not a bare `fromEnv()`: the latter copies

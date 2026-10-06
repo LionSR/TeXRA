@@ -14,12 +14,13 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { getCatalogAgent, refresh } from '@agent/index';
+import { withProcessServices } from '@texra-ai/harness';
 import {
   PdfOpenFailed,
   type ManualCriticismEntry,
   type SessionHandle,
 } from '@agent/runtime';
+import { getCatalogAgent, refresh } from '@agent/index';
 import { BundledViewContentProvider } from '@common/webview';
 import {
   EXTENSION_CATEGORIES,
@@ -31,8 +32,6 @@ import { createAgentPresentationHost } from '@frontend/events/agentEventListener
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { withLogChannel } from '@logger/effectLog';
-import { withProcessServices } from '@platform/processRuntime';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { DOCUMENTS_OUTPUT_KEY } from '@shared/plugins/documents';
 import { agentKeyOf, type FileLocation, type RunId } from '@shared/schemas';
 import { isLiveRun } from '@shared/session/sessionView';
@@ -72,6 +71,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createExtensionHostRequests } from './extensionHostRequests';
 import { RequestAttention } from './requestAttention';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
 import type {
   PlatformSecrets,
   LanguageModel,

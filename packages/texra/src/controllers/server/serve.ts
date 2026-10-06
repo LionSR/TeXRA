@@ -31,8 +31,6 @@ import {
 } from 'effect';
 import { RpcSerialization, RpcServer } from 'effect/rpc';
 
-import type { ProcessServices } from '@platform/processRuntime';
-
 import {
   probeRecordedService,
   WINDOWS_UNSUPPORTED,
@@ -58,6 +56,7 @@ import {
   TexraRpcs,
   type ServiceInfo,
 } from './protocol';
+import type { ProcessServices } from '@texra-ai/harness';
 
 /** A live service already answers on this storage root's socket. */
 export class ServiceAlreadyRunning extends Data.TaggedError(

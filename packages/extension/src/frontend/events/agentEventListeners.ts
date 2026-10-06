@@ -12,6 +12,7 @@
 import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
 
+import { withProcessServices, type ProcessRuntime } from '@texra-ai/harness';
 import {
   type HostInteractions,
   type HostPresentation,
@@ -25,10 +26,6 @@ import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  withProcessServices,
-  type ProcessRuntime,
-} from '@platform/processRuntime';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import {
   INSTRUCTION_ACTION,

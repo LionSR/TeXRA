@@ -9,10 +9,6 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import {
-  initializeDefaultSession,
-  teardownDefaultSession,
-} from '@agent/runtime/sessionGraph';
 import { cliRunStanding } from '@cli/runtime/toolUseResumeData';
 import {
   formatCliHistoryDetailsText,
@@ -35,6 +31,10 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
+import {
+  closeTestDefaultSession,
+  openTestDefaultSession,
+} from '@test/support/sessionEnd';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 
 const TOOL_USE_CONFIG: AgentConfig = AgentConfigSchema.parse({
@@ -55,9 +55,9 @@ const tempDirs = useTempDirs();
 setupPlatform(() => createTempDirPlatform('texra-history-status-', tempDirs));
 
 beforeEach(async () => {
-  await Effect.runPromise(teardownDefaultSession());
+  await Effect.runPromise(closeTestDefaultSession);
   await Effect.runPromise(
-    initializeDefaultSession({ roots: testWorkspaceRoots() }),
+    openTestDefaultSession({ roots: testWorkspaceRoots() }),
   );
 });
 

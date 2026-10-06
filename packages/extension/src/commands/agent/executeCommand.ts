@@ -6,9 +6,9 @@ import { z, ZodError } from 'zod';
 import { AgentConfigSchema, type SessionHandle } from '@agent/runtime';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessServices } from '@platform/processRuntime';
 import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { ensureError } from '@utils/errors/errorMessage';
+import type { ProcessServices } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'ExecuteCommand';

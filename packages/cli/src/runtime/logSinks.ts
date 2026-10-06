@@ -16,9 +16,9 @@ import {
   type LogEntry,
   type LogSink as HostLogSink,
 } from '@logger/logSink';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import type { ProcessRuntime } from '@texra-ai/harness';
 
 const closed = { stdout: false, stderr: false };
 

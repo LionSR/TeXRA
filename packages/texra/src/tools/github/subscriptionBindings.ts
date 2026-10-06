@@ -7,7 +7,7 @@ import type { RunSubscriptionRegistry } from './RunSubscriptionRegistry';
 
 /**
  * The three subscription registries, one per polling source, held for the
- * process by `installProcessRuntime` rather than by this module. They record
+ * process by `processLayer` rather than by this module. They record
  * which runs own which subscription, so their lifetime is the runtime's: a
  * disposed runtime takes the ownership table with it instead of carrying a
  * previous process's bindings into the next one.

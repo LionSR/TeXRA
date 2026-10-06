@@ -8,6 +8,7 @@
 // then skips the graceful queue/run drain and exits with the signal code.
 
 import { Cause, Effect } from 'effect';
+import { withProcessServices, type ProcessRuntime } from '@texra-ai/harness';
 import { readCliCwd } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
@@ -20,10 +21,6 @@ import {
   supportsTerminalJobControl,
   type TuiTerminal,
 } from '@cli/tui/terminalCleanup';
-import {
-  withProcessServices,
-  type ProcessRuntime,
-} from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { SessionView } from '@shared/session/sessionView';
 import { DisposableStore } from '@texra/platform/disposable';

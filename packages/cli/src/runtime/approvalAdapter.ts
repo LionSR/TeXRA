@@ -13,7 +13,6 @@ import { Effect, Exit, Fiber, Result, Stream } from 'effect';
 
 import { type HostInteractions, type SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { texraApprovalDenialMessage } from '@shared/approvalPolicy';
 import { requestParksItsCaller } from '@shared/schemas';
 import type {
@@ -47,6 +46,7 @@ import {
 } from './userQuestionAnswer';
 import { type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
+import type { ProcessRuntime } from '@texra-ai/harness';
 
 const CHANNEL = 'cli.approval';
 

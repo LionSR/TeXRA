@@ -7,7 +7,6 @@ import {
   StateWriteFailed,
   StateReadFailed,
 } from '@texra-ai/harness';
-import type { ProcessServices } from '@platform/processRuntime';
 import type { OnboardingFunnelState } from '@shared/schemas';
 import {
   setFirstRunDone,
@@ -15,6 +14,7 @@ import {
 } from '@shared/state/onboardingState';
 import { OnboardingFunnelRefresher } from '@texra/controllers/onboarding/onboardingFunnel';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { ProcessServices } from '@texra-ai/harness';
 
 /**
  * A capability behind a card action that still answers with a promise

@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **`@texra-ai/harness`: one process layer for hosts and embedders.**
+  `Sessions.layer` now composes the same `processLayer` every TeXRA host
+  builds its runtime from, and the root entry exports it with the
+  `SessionOwner` service, `ProcessRuntime` and `withProcessServices`.
+  `PlatformConflict` is gone: the package keeps no process-wide session
+  owner to conflict with, so build `Sessions.layer` once per process, as
+  any memoized layer. Releasing the layer closes every session still open.
 - **One credential store for every TeXRA app; enter your keys once more.**
   The VS Code extension and the desktop app no longer keep API keys and
   sign-ins in VS Code's secret storage or the system keychain. Every host,

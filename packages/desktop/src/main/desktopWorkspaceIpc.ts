@@ -19,7 +19,6 @@ import { Rejected } from '@texra-ai/harness';
 import { FILE_HANDLING_RULES } from '@common/files/fileHandlingRules';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { onAppSignal } from '@eventBus/AppSignals';
-import type { ProcessServices } from '@platform/processRuntime';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostOutcome } from '@shared/session/sessionFrames';
 import {
@@ -44,6 +43,7 @@ import {
   type DesktopWorkspaceInboundMessage,
   type DesktopWorkspaceReply,
 } from '../shared/desktopWorkspaceMessages.js';
+import type { ProcessServices } from '@texra-ai/harness';
 import type { DesktopPtyHost } from './desktopPtyHost.js';
 import type { DesktopBrowserViews } from './desktopBrowserViews.js';
 

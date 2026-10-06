@@ -15,8 +15,6 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 // Local imports
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
-import { closeSession } from '@agent/runtime/sessionGraph';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { WorkspaceFs } from '@platform/rootedFs';
 import type { RequestDecision, RunId } from '@shared/schemas';
@@ -24,6 +22,10 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import {
+  closeTestSession,
+  openTestDefaultSession,
+} from '@test/support/sessionEnd';
 import { AcceptRunFilesTool } from '@texra/tools/AcceptRunFilesTool';
 import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
@@ -72,7 +74,7 @@ function installTestPlatform(): Promise<void> {
     globalStoragePath: '/global/.texra/storage',
   }).then(async () => {
     session = await Effect.runPromise(
-      initializeDefaultSession({
+      openTestDefaultSession({
         roots: testWorkspaceRoots(),
         transcriptMode: {
           kind: 'ephemeral',
@@ -263,7 +265,7 @@ describe('accept_run_files progress events', () => {
     detachHostInteractions = () => {};
     stagedToolEdits.clear();
     session.approvals.clearAll();
-    await Effect.runPromise(closeSession(session.roots.storage));
+    await Effect.runPromise(closeTestSession(session.roots.storage));
   });
 
   it.live('publishes accepted workspace files through app signals', () =>

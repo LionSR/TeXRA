@@ -22,7 +22,6 @@ import { onAppSignal } from '@eventBus/AppSignals';
 // Local imports - hosts
 // Local imports - model
 // Local imports - platform
-import type { ProcessRuntime } from '@platform/processRuntime';
 // Local imports - shared
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { PromptFailed, type PromptHost } from '@texra/hosts/uiHosts';
@@ -39,6 +38,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { bumpCodexPreferenceVersion } from '../state/cliState';
 import { tuiUi } from './tuiUiHost';
+import type { ProcessRuntime } from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
 
 /** Write through the calling surface; failures stay in the Effect channel. */

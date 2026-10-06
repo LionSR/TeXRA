@@ -1,7 +1,6 @@
 import { Text } from 'ink';
 import { Effect } from 'effect';
 
-import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   ActiveSkillSourceScopeSchema,
   type ActiveSkillSourceScope,
@@ -14,6 +13,7 @@ import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/sta
 import { readSettingFrom } from '@utils/config/platformSettings';
 
 import { AsyncListForm } from './_shared/ListForm';
+import type { ProcessRuntime } from '@texra-ai/harness';
 
 type SkillToggle =
   | { readonly kind: 'source'; readonly scope: ActiveSkillSourceScope }

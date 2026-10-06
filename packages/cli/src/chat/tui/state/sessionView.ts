@@ -10,7 +10,6 @@
  */
 import { signal, type Signal } from '@lit-labs/signals';
 import { Cause, Stream, SubscriptionRef } from 'effect';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   RUN_LIFECYCLE_READY,
   RUN_PHASE,
@@ -23,6 +22,7 @@ import type {
   RunView,
 } from '@shared/session/sessionView';
 import { toSignal, type StreamSignal } from '@texra/shared/signals';
+import type { ProcessRuntime } from '@texra-ai/harness';
 
 /** The bound bridge, itself a signal so a computed over the view (the
  *  approval Surface's foreground) re-tracks when a chat session rebinds. */

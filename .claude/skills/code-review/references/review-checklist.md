@@ -15,7 +15,7 @@ The full zone list lives in `CLAUDE.md` → "Separation of concerns: VS Code cou
 - **`vscode.FileType.File` / `.Directory`** → `isFile()` / `isDirectory()` from `@utils/files/fsEntryType`.
 - **`vscode.window.show*Message()` in business logic** → return error results; let the command/frontend layer handle UI.
 - **`process.env`, `os.homedir()`, raw `fs/promises`, `child_process.exec`** in agnostic zones → platform interfaces or `executeCommand` from `@utils/system/execUtils`.
-- **`installProcessRuntime()`** called outside a composition root (`COMPOSITION_ROOT_FILES` in `eslint.config.mjs`) → bug. Process services are read from the Effect context the runtime serves.
+- **`processLayer()`** imported outside a composition root (`COMPOSITION_ROOT_FILES` in `eslint.config.mjs`) → bug. Process services are read from the Effect context the runtime serves.
 
 ## 2. Zod v4 schema correctness
 

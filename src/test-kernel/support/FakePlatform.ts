@@ -408,7 +408,7 @@ export interface FakeProcessPorts {
  * Overrides for one fake host: the process ports above, the two
  * workspace-root ports a suite substitutes (a scoped config provider, a
  * hand-built state store), the process ports a root hands
- * `installProcessRuntime`, and the setup platform a setup-tool suite
+ * `processLayer`, and the setup platform a setup-tool suite
  * provides. The workspace and storage paths come from `FakePlatformOptions`.
  */
 export type FakeHostOverrides = Partial<FakeProcessPorts> &

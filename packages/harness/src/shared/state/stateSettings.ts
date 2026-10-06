@@ -54,7 +54,7 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  * harness's own rows (model, approvals, retries, compaction, concurrency,
  * skills, logging). An app declares its rows (its plugins' among them)
  * beside its code; `settingsCatalog` concatenates them after these, and
- * `installProcessRuntime` installs that catalog for the harness's own readers.
+ * `processLayer` installs that catalog for the harness's own readers.
  *
  * One row carries the catalog facts:
  *
@@ -907,14 +907,14 @@ export function settingsCatalog(
 }
 
 /**
- * The process's catalog: the harness's rows until `installProcessRuntime`
+ * The process's catalog: the harness's rows until `processLayer`
  * installs the app's rows beside them, once per process, as
  * it installs the session owner. The harness reads a setting by key through
  * it, so it never imports an app's rows.
  */
 let installed = settingsCatalog([]);
 
-/** Install the process's catalog; `installProcessRuntime` calls it once. */
+/** Install the process's catalog; `processLayer` calls it once. */
 export function installSettingsCatalog(catalog: SettingsCatalog): void {
   installed = catalog;
 }

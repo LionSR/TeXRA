@@ -26,7 +26,6 @@ import { cloneOverleafProject as gitCloneOverleafProject } from '@commands/git/g
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
@@ -38,6 +37,7 @@ import {
   EXTENSION_COMMAND_HANDLERS,
   type ExtensionCommandActions,
 } from './extensionCommandHandlers';
+import type { ProcessRuntime } from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
 
 const externalOpener = new VscodeExternalOpener();

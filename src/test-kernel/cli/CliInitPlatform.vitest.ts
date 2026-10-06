@@ -4,17 +4,15 @@ import { Effect, Scope, Stream } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { installedProcessRuntime } from '@agent/runtime';
+import { SessionOwner, withProcessServices } from '@texra-ai/harness';
 import {
   cliPlatformShutdown,
   initCliPlatform,
 } from '@cli/runtime/initPlatform';
-import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { StateWriteFailed } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testStorageRoot } from '@test/cli/fixtures/cliContext';
-import { createTestSession } from '@test/support/sessionTestUtils';
 
 type SignalSpyEvent = 'SIGINT' | 'SIGTERM';
 type SignalRegistration = {
@@ -160,14 +158,6 @@ function withFreshSignalCapture<E>(
   });
 }
 
-/** Disposes whichever process runtime an earlier case installed, so the
- *  CLI init below builds its own runtime (and its own shutdown/setup) instead
- *  of joining the test kernel's session-graph runtime. */
-const disposeInstalledRuntime: Effect.Effect<void> = Effect.suspend(() => {
-  const runtime = installedProcessRuntime();
-  return runtime ? disposeProcessRuntime(runtime) : Effect.void;
-});
-
 describe('CLI platform init', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -212,17 +202,12 @@ describe('CLI platform init', () => {
             cause: storeFailure,
           });
 
-          const { tryDefaultSession } = yield* Effect.promise(
-            () => import('@agent/runtime'),
-          );
-          expect(tryDefaultSession()).toBeUndefined();
           expect(registered).toEqual([]);
 
           const services = yield* initPlatform.initCliPlatform(cliContext());
           expect(services).toEqual(
             expect.objectContaining({ roots: expect.anything() }),
           );
-          expect(tryDefaultSession()).toBeUndefined();
           expect(registered).toEqual([
             { event: 'SIGINT', kind: 'once' },
             { event: 'SIGTERM', kind: 'once' },
@@ -238,12 +223,23 @@ describe('CLI platform init', () => {
       // any live codex / claude_agent session outlived `texra` as orphans.
       // Asserted through the real `registerAgentShutdownHandler` and its
       // observable effect on shutdown, not by mocking the @agent module. The
-      // init installs the process runtime the session graph runs on, so the
-      // session is built after it, not on a runtime an earlier case's shutdown
-      // disposed.
-      yield* disposeInstalledRuntime;
-      yield* initCliPlatform(cliContext({ installSignalHandlers: false }));
-      const session = yield* createTestSession();
+      // session is opened through the owner of the runtime the CLI's init
+      // built, so the CLI's shutdown is what closes it.
+      const services = yield* initCliPlatform(
+        cliContext({ installSignalHandlers: false }),
+      );
+      const session = yield* withProcessServices(
+        services.runtime,
+        Effect.flatMap(SessionOwner, (owner) =>
+          owner.open({
+            roots: services.roots,
+            transcriptMode: {
+              kind: 'ephemeral',
+              reason: 'shutdown drain test',
+            },
+          }),
+        ),
+      );
       const drain = vi
         .spyOn(session.runs, 'killBackgroundProcesses')
         .mockImplementation(() => {});

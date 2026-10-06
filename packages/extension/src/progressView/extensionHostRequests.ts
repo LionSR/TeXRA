@@ -26,6 +26,11 @@ import {
   PlatformSecrets,
   LanguageModel,
 } from '@texra-ai/harness';
+import {
+  withProcessServices,
+  type ProcessRuntime,
+  type ProcessServices,
+} from '@texra-ai/harness';
 import type { SessionHandle } from '@agent/runtime';
 import {
   handleLatexdiff,
@@ -54,11 +59,6 @@ import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { withLogChannel } from '@logger/effectLog';
 import { withSessionFs, WorkspaceFs, type StorageFs } from '@platform/rootedFs';
-import {
-  withProcessServices,
-  type ProcessRuntime,
-  type ProcessServices,
-} from '@platform/processRuntime';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import type { HostRequest } from '@shared/session/hostRequest';
 import {
