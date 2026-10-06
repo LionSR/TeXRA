@@ -31,19 +31,6 @@ const ProjectDisplaySchema = z.object({
 });
 export type ProjectDisplay = z.infer<typeof ProjectDisplaySchema>;
 
-/** The initials a rail row and the hero badge show for a folder. */
-function workspaceInitials(workspacePath: string | undefined): string {
-  if (!workspacePath) return 'TX';
-  const name = getBasename(workspacePath);
-  if (!name) return 'TX';
-  const words = name.split(/[\s._-]+/).filter(Boolean);
-  const initials = words
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase())
-    .join('');
-  return initials || 'TX';
-}
-
 /** The display record of one open folder, produced by the host once so no
  *  renderer derives a name or initials from a path; the no-folder session
  *  reads as the prompt to open one. */
@@ -59,8 +46,20 @@ export function projectDisplayOf(
       subtitle: 'Open a folder to start',
     };
   }
-  const name = getBasename(root) || root;
-  return { key, name, initials: workspaceInitials(root), subtitle: root };
+  const base = getBasename(root);
+  // The initials a rail row and the hero badge show for the folder.
+  const initials = base
+    .split(/[\s._-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase())
+    .join('');
+  return {
+    key,
+    name: base || root,
+    initials: initials || 'TX',
+    subtitle: root,
+  };
 }
 
 export const HostSnapshotSchema = z.object({

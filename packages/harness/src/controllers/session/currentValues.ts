@@ -142,11 +142,8 @@ export function currentValues(store: {
           return result;
         }),
       ).pipe(
-        Effect.flatMap((result) =>
-          Result.isSuccess(result)
-            ? Effect.succeed(result.success[0])
-            : Effect.fail(result.failure),
-        ),
+        Effect.flatMap(Effect.fromResult),
+        Effect.map(([value]) => value),
       ),
     list: (family) =>
       query(
@@ -200,7 +197,7 @@ export function currentValues(store: {
             Effect.orDie,
           ),
         ),
-        Stream.changesWith((a, b) => a === b),
+        Stream.changes,
         Stream.as(undefined),
       ),
   };

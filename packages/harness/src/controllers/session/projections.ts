@@ -93,7 +93,8 @@ const ALL_TYPES = SessionEventDraftSchema.options.map(
   (schema) => schema.shape.type.value,
 );
 
-/** A priced row's spend as the `usage` display row carries it. */
+/** A priced row's spend as the `usage` display row carries it; an absent
+ *  field stays absent, as `JSON.stringify` and `sumUsageStats` read it. */
 function pricedUsage(event: SessionEvent): ExtendedTokenUsageStats | null {
   let priced = null;
   if (event.type === 'context.edit') priced = event.payload.usage;
@@ -104,26 +105,14 @@ function pricedUsage(event: SessionEvent): ExtendedTokenUsageStats | null {
     inputTokens: priced.inputTokens,
     outputTokens: priced.outputTokens,
     cost: priced.cost,
-    ...(priced.cachedInputTokens === undefined
-      ? {}
-      : { cacheReadInputTokens: priced.cachedInputTokens }),
-    ...(priced.cacheMissInputTokens === undefined
-      ? {}
-      : { cacheMissInputTokens: priced.cacheMissInputTokens }),
-    ...(priced.cacheCreationTokens === undefined
-      ? {}
-      : { cacheCreationInputTokens: priced.cacheCreationTokens }),
-    ...(priced.reasoningTokens === undefined
-      ? {}
-      : { reasoningTokens: priced.reasoningTokens }),
-    ...(priced.toolUsePromptTokens === undefined
-      ? {}
-      : { toolUseTokens: priced.toolUsePromptTokens }),
+    cacheReadInputTokens: priced.cachedInputTokens,
+    cacheMissInputTokens: priced.cacheMissInputTokens,
+    cacheCreationInputTokens: priced.cacheCreationTokens,
+    reasoningTokens: priced.reasoningTokens,
+    toolUseTokens: priced.toolUsePromptTokens,
     elapsedTime: priced.responseTimeMs / 1000,
-    ...(priced.usageRoute === undefined
-      ? {}
-      : { usageRoute: priced.usageRoute }),
-    ...(priced.usagePlan === undefined ? {} : { usagePlan: priced.usagePlan }),
+    usageRoute: priced.usageRoute,
+    usagePlan: priced.usagePlan,
   };
 }
 
@@ -133,38 +122,15 @@ export const PROJECTORS = {
     inputs: ALL_TYPES.filter((type) => listingTypeOf({ type }) !== null),
     prior: null,
     projects: [],
+    // Every input has a listing type (`inputs`); a pending key replaces it.
     project: (event) => {
       const pending = pendingKeyOf(event);
-      if (pending !== null) {
-        return 'open' in pending
-          ? [
-              {
-                table: 'listing_entry',
-                aggregate: event.aggregateId,
-                key: pending.open,
-                commit: event.commit,
-              },
-            ]
-          : [
-              {
-                table: 'listing_entry',
-                aggregate: event.aggregateId,
-                key: pending.close,
-                commit: null,
-              },
-            ];
-      }
-      const key = listingTypeOf(event) === null ? null : listingKeyOf(event);
-      return key === null
-        ? []
-        : [
-            {
-              table: 'listing_entry',
-              aggregate: event.aggregateId,
-              key,
-              commit: event.commit,
-            },
-          ];
+      const key = pending?.key ?? listingKeyOf(event);
+      if (key === null) return [];
+      const commit = pending?.open === false ? null : event.commit;
+      return [
+        { table: 'listing_entry', aggregate: event.aggregateId, key, commit },
+      ];
     },
   },
   usage: {

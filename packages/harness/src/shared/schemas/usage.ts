@@ -74,15 +74,14 @@ export function isEmptyUsage(usage: TokenUsageStats): boolean {
   );
 }
 
-/** Accumulates usage stats from an iterable into a single total. */
+/** Accumulates usage stats from an iterable into a single total. The route
+ *  and plan are kept when every nonempty item names the same one. */
 export function sumUsageStats(
   items: Iterable<TokenUsageStats>,
 ): TokenUsageStats {
   const total = emptyUsageStats();
-  let commonUsageRoute: UsageRoute | undefined;
-  let commonUsagePlan: string | undefined;
-  let hasMixedOrMissingUsageRoute = false;
-  let hasMixedOrMissingUsagePlan = false;
+  const routes = new Set<UsageRoute | undefined>();
+  const plans = new Set<string | undefined>();
   for (const usage of items) {
     total.inputTokens += usage.inputTokens;
     total.outputTokens += usage.outputTokens;
@@ -91,31 +90,14 @@ export function sumUsageStats(
     total.cacheMissInputTokens += usage.cacheMissInputTokens ?? 0;
     total.cacheCreationInputTokens += usage.cacheCreationInputTokens ?? 0;
     total.reasoningTokens += usage.reasoningTokens ?? 0;
-    if (!isEmptyUsage(usage)) {
-      const usagePlan = usage.usagePlan;
-      if (usagePlan == null) {
-        hasMixedOrMissingUsagePlan = true;
-      } else if (commonUsagePlan == null) {
-        commonUsagePlan = usagePlan;
-      } else if (commonUsagePlan !== usagePlan) {
-        hasMixedOrMissingUsagePlan = true;
-      }
-      const usageRoute = usage.usageRoute;
-      if (usageRoute == null) {
-        hasMixedOrMissingUsageRoute = true;
-      } else if (commonUsageRoute == null) {
-        commonUsageRoute = usageRoute;
-      } else if (commonUsageRoute !== usageRoute) {
-        hasMixedOrMissingUsageRoute = true;
-      }
-    }
+    if (isEmptyUsage(usage)) continue;
+    routes.add(usage.usageRoute);
+    plans.add(usage.usagePlan);
   }
-  if (commonUsageRoute && !hasMixedOrMissingUsageRoute) {
-    total.usageRoute = commonUsageRoute;
-  }
-  if (commonUsagePlan && !hasMixedOrMissingUsagePlan) {
-    total.usagePlan = commonUsagePlan;
-  }
+  const [route] = routes;
+  const [plan] = plans;
+  if (routes.size === 1 && route) total.usageRoute = route;
+  if (plans.size === 1 && plan) total.usagePlan = plan;
   return total;
 }
 

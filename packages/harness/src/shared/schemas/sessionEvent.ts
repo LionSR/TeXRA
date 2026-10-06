@@ -642,21 +642,20 @@ export function listingKeyOf(event: SessionEvent): string | null {
 
 /**
  * The open sets the listing keeps beside its latest rows: an open request
- * and a queued follow-up are keys of their own, closed by their pair. The
- * fold and the listing projection both key them here.
+ * and a queued follow-up are keys of their own, closed by their pair.
  */
 export function pendingKeyOf(
   event: SessionEvent,
-): { readonly open: string } | { readonly close: string } | null {
+): { readonly key: string; readonly open: boolean } | null {
+  const open =
+    event.type === 'request.opened' || event.type === 'followup.queued';
   switch (event.type) {
     case 'request.opened':
-      return { open: `request/${event.requestId}` };
     case 'request.decided':
-      return { close: `request/${event.requestId}` };
+      return { key: `request/${event.requestId}`, open };
     case 'followup.queued':
-      return { open: `followup/${event.followUpId}` };
     case 'followup.consumed':
-      return { close: `followup/${event.followUpId}` };
+      return { key: `followup/${event.followUpId}`, open };
     default:
       return null;
   }

@@ -447,7 +447,7 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
   yield* prepareStore(sql, mode, path, filename);
   return {
     sql,
-    movedAside: { path, aside, reason: 'corrupt' } as SessionStoreMovedAside,
+    movedAside: { path, aside, reason: 'corrupt' as const },
   };
 });
 

@@ -67,10 +67,9 @@ export class TextChunkSource extends Context.Service<
 >()('@texra/session/TextChunkSource') {
   static readonly layer = Layer.effect(
     TextChunkSource,
-    Effect.gen(function* () {
-      const ref = yield* SubscriptionRef.make<InflightText>(new Map());
-      return { ref };
-    }),
+    Effect.map(SubscriptionRef.make<InflightText>(new Map()), (ref) => ({
+      ref,
+    })),
   );
 }
 

@@ -136,17 +136,11 @@ export const sessionInputsLayer = Layer.effect(
             );
             // Every level replays on subscribe; changes during the cold read
             // are therefore covered by the first finite tail read.
-            const wakes = Stream.mergeAll(
+            const wakes = Stream.mergeAll<unknown, never, never>(
               [
-                SubscriptionRef.changes(log.level).pipe(
-                  Stream.map(() => undefined),
-                ),
-                SubscriptionRef.changes(local.ref).pipe(
-                  Stream.map(() => undefined),
-                ),
-                SubscriptionRef.changes(text.ref).pipe(
-                  Stream.map(() => undefined),
-                ),
+                SubscriptionRef.changes(log.level),
+                SubscriptionRef.changes(local.ref),
+                SubscriptionRef.changes(text.ref),
               ],
               { concurrency: 3 },
             );
@@ -175,11 +169,10 @@ export const sessionInputsLayer = Layer.effect(
                       log.readInputBatch(
                         aggregates.map(({ id }) => id),
                         previous.cursor,
+                        // The read dedups the ids it checks.
                         [
-                          ...new Set([
-                            ...checked,
-                            ...effectiveAggregates.map(({ id }) => id),
-                          ]),
+                          ...checked,
+                          ...effectiveAggregates.map(({ id }) => id),
                         ],
                       ),
                     );
