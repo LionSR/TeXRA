@@ -247,7 +247,7 @@ describe('MemoryTool invocation storage root', () => {
             [first, 'one.md'],
             [second, 'two.md'],
           ] as const,
-          ([roots, file], index) =>
+          ([roots, file]) =>
             MemoryTool.call({
               command: 'create',
               path: `/memories/${file}`,

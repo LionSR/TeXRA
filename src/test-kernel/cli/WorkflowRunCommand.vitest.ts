@@ -318,20 +318,15 @@ async function writeGeneratedOutput(root: string): Promise<string> {
 async function setupCancelledOutput(
   root: string,
   runId: string,
-): Promise<ReturnType<typeof runOutputSummary>> {
+): Promise<void> {
   const generated = await writeGeneratedOutput(root);
-  const outputSummary = runOutputSummary(
-    generated,
-    path.join(root, 'paper.tex'),
-  );
   mockWorkflowRun(
     workflowRun(runId, {
       outcome: RUN_OUTCOME.CANCELLED,
-      outputs: [outputSummary],
+      outputs: [runOutputSummary(generated, path.join(root, 'paper.tex'))],
     }),
     true,
   );
-  return outputSummary;
 }
 
 /** The snapshot a round writes, with the runtime fields a case sets. */
@@ -968,9 +963,7 @@ describe('CLI run command, workflow agents', () => {
     () =>
       withTempDirEffect('texra-workflow-', (root) =>
         Effect.gen(function* () {
-          const outputSummary = yield* Effect.promise(() =>
-            setupCancelledOutput(root, 'abc008'),
-          );
+          yield* Effect.promise(() => setupCancelledOutput(root, 'abc008'));
           yield* seedResumableCheckpoint(currentSession(), 'abc008');
 
           const context = createRunCommandCliContext({
@@ -1020,9 +1013,7 @@ describe('CLI run command, workflow agents', () => {
     () =>
       withTempDirEffect('texra-workflow-', (root) =>
         Effect.gen(function* () {
-          const outputSummary = yield* Effect.promise(() =>
-            setupCancelledOutput(root, 'abc009'),
-          );
+          yield* Effect.promise(() => setupCancelledOutput(root, 'abc009'));
           yield* seedResumableCheckpoint(currentSession(), 'abc009');
 
           const context = createRunCommandCliContext({

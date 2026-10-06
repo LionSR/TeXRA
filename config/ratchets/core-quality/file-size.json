@@ -17,7 +17,7 @@
   "packages/harness/src/agent/runtime/modelRoutes.ts": 447,
   "packages/harness/src/agent/runtime/run/compaction.ts": 458,
   "packages/harness/src/agent/runtime/run/modelBinding.ts": 427,
-  "packages/harness/src/agent/runtime/run/validationModel.ts": 608,
+  "packages/harness/src/agent/runtime/run/validationModel.ts": 607,
   "packages/harness/src/agent/runtime/runApprovalQueue.ts": 499,
   "packages/harness/src/agent/runtime/RunHistory.ts": 535,
   "packages/harness/src/agent/runtime/runRegistry.ts": 1018,

@@ -436,7 +436,6 @@ function fitTransientNoticeStatusBarLeftSegments(
     statusBarSegmentsWidth(fitted) > innerWidth
   ) {
     fitted.splice(fitted.indexOf(liveness), 1);
-    liveness = undefined;
     fitNotice();
   }
 

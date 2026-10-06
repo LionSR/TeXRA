@@ -90,7 +90,6 @@ import { pinNoPlugins } from '@test/support/testPluginServices';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const RUN_ID = 'a9e70a9e7001' as RunId;
-const PARENT_RUN_ID = 'a9e70a9e7002' as RunId;
 // The persisted lineage a resume reads after tracking its launch handle.
 // Empty unless a case seeds this run's `run.start` parent.
 const persistedRuns = new Map<RunId, { readonly parentId: RunId }>();

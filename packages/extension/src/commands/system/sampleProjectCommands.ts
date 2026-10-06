@@ -6,7 +6,6 @@ import { Cause, Effect, FileSystem, type PlatformError } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - fs
-import type { SessionHandle } from '@agent/runtime';
 import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
@@ -81,7 +80,6 @@ export function createSampleProjectWithoutWorkspace(
  */
 export function createSampleProject(
   extensionPath: string,
-  session: SessionHandle,
 ): Effect.Effect<void, never, ProcessServices | WorkspaceFs> {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;

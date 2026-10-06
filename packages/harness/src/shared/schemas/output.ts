@@ -34,12 +34,6 @@ export const FileLocationSchema = z.discriminatedUnion('kind', [
   ExternalFileLocationSchema,
 ]);
 
-/** Agent outputs are workspace or runStorage, never external */
-const AgentFileLocationSchema = z.discriminatedUnion('kind', [
-  WorkspaceFileLocationSchema,
-  RunStorageFileLocationSchema,
-]);
-
 export type WorkspaceFileLocation = z.infer<typeof WorkspaceFileLocationSchema>;
 export type RunStorageFileLocation = z.infer<
   typeof RunStorageFileLocationSchema

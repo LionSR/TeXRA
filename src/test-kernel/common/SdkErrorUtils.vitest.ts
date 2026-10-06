@@ -43,8 +43,6 @@ const judged = (cause: unknown) =>
 
 class APIError extends Error {}
 
-class BadRequestError extends APIError {}
-
 class APIUserAbortError extends APIError {}
 
 /**

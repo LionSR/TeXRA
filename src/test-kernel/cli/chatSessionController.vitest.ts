@@ -429,10 +429,6 @@ const defaultResumeRun = (runId: RunId, options: ResumeRunOptions) =>
     return STARTED;
   });
 
-function resumeWithAutoResumeData(): void {
-  mocks.resumeRun.mockImplementation(defaultResumeRun);
-}
-
 describe('CLI terminal outcome resolution', () => {
   // The persisted outcome is a committed `run.end` row on a real session over
   // the fake platform's storage; the read path under test folds it, so no

@@ -75,8 +75,7 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  * The product hosts, spelled once: for settings and `unavailableHosts`.
  * `sdk` is the agent package embedded in someone else's process.
  */
-const SETTING_HOSTS = ['vscode', 'cli', 'desktop', 'sdk'] as const;
-export type SettingHost = (typeof SETTING_HOSTS)[number];
+export type SettingHost = 'vscode' | 'cli' | 'desktop' | 'sdk';
 
 /**
  * Storage slot a setting is read from / written to. `repoState` is shared by

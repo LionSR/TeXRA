@@ -364,9 +364,10 @@ function discriminantIsOwnedUnion(checker, tsNode, depth = 0) {
 
 const localRules = {
   rules: {
-    // Imports only: `@typescript-eslint/no-unused-vars` would also report the
-    // module-level schema a type is derived from (`z.infer<typeof X>`), a
-    // value the repo keeps on purpose.
+    // Imports only. `@typescript-eslint/no-unused-vars` ignores `Schema$`
+    // names so it does not report a module-level schema kept for
+    // `z.infer<typeof X>`, and that pattern applies to imports too: this rule
+    // still catches an unused `FooSchema` import.
     'no-unused-imports': {
       meta: {
         type: 'problem',
@@ -735,9 +736,22 @@ export default tseslint.config(
 
       '@typescript-eslint/no-explicit-any': 'off',
       'no-useless-escape': 'off',
-      'no-useless-assignment': 'off',
+      'no-useless-assignment': 'error',
       'preserve-caught-error': 'off',
-      '@typescript-eslint/no-unused-vars': 'off',
+      // `Schema$`: a module-level schema kept only for `z.infer<typeof X>`
+      // reads as "only used as a type", but it is the value the type comes
+      // from, so the repo keeps it on purpose. Unused imports of any name
+      // stay with `local/no-unused-imports`.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          args: 'after-used',
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_|Schema$',
+          caughtErrors: 'none',
+          ignoreRestSiblings: true,
+        },
+      ],
       'local/no-unused-imports': 'error',
       'local/no-vscode-import-in-free-zones': 'error',
       'prefer-const': 'error',

@@ -516,7 +516,6 @@ export function extractFilenameHeaderDocuments(
           sawSoleOutputChunkLabel = false;
           continue;
         }
-        preHeaderLines = [];
       }
       const carriedFence = flushCurrent();
       currentName = headerName;

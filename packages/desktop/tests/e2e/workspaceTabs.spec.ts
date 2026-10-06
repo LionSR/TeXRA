@@ -469,13 +469,6 @@ test('loads a workspace file into the Monaco editor workbench', async () => {
 
 test('reloads a clean cached editor model after an external file change', async () => {
   const { page } = launched;
-  const typescriptRow = page.locator(
-    '.desktop-editor-tree-row[data-path="sample.ts"]',
-  );
-  const latexRow = page.locator(
-    '.desktop-editor-tree-row[data-path="sample.tex"]',
-  );
-
   await clickTreeRow('sample.ts');
   await expect(
     page.locator('.desktop-editor-surface .view-lines'),
