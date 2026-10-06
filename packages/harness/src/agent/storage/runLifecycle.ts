@@ -286,7 +286,7 @@ const retireRun = Effect.fn('retireRun')(function* (
   const ended = yield* Effect.scoped(
     session.log.hold(runId, { ends: true }).pipe(
       Effect.andThen(
-        finalizeRun(session, {
+        session.runs.end({
           runId,
           outcome: RUN_OUTCOME.CANCELLED,
           keepExistingOutcome: true,

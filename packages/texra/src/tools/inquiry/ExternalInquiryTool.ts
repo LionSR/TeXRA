@@ -338,8 +338,19 @@ function executeAsk(
 
     // Background Tasks panel: announce the open thread.
     const summary = yield* records.getThreadSummary(manifest.threadId);
+    // The panel's announcement, after the request is durable: a refused row
+    // is logged, never the tool's failure (the thread record is the authority).
     if (summary) {
-      yield* session.log.transact([inquiryThreadRow(summary)]);
+      yield* session.log
+        .transact([inquiryThreadRow(summary)])
+        .pipe(
+          Effect.catch((error) =>
+            Effect.logWarning('The inquiry thread row was not written').pipe(
+              Effect.annotateLogs({ data: error }),
+              withLogChannel(CHANNEL),
+            ),
+          ),
+        );
     }
 
     const message =
