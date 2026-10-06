@@ -1,6 +1,6 @@
 /**
  * The one service that touches the llm `Model`; every call carries a purpose
- * (`run/modelCall.ts`). One `invoke` is one turn with its billed attempts: the
+ * (`run/invocation.ts`). One `invoke` is one turn with its billed attempts: the
  * `TurnRequest` assembled from the folded `RunState`, `prepareTurn`, the
  * `attempt` row committed before the request leaves the process (F1),
  * `identified` when the provider names the response, the stream bridged into
@@ -9,7 +9,7 @@
  * binding, gate and pricing, its attempts recorded on the run's history and
  * landed by its caller.
  *
- * Retry is the one loop (`run/modelCall.ts`) over the invocation's rows:
+ * Retry is the one loop (`run/invocation.ts`) over the invocation's rows:
  * each failed attempt commits a `failed` row with the move after it, an
  * automatic resend under the process's `ModelRetryGate` while the budget the
  * rows count lasts, then a person's answer to a `request.opened` the same
@@ -854,6 +854,12 @@ export const modelInvokerLayer = (): Layer.Layer<
                 );
               }),
           },
+          chains: (bound) =>
+            Effect.map(
+              cell.current,
+              (state) =>
+                'continuation' in chainedContinuation(state, bound.origin),
+            ),
           retries: (yield* SynchronizedRef.get(run.model)).automaticRetries,
           gate: session.modelRetries,
           secrets: run.stores.secrets,

@@ -215,7 +215,9 @@ export function nextAttempt(
   if (failed === null) {
     if (accepted !== null)
       return { kind: 'observe', attempt: { ...current, accepted } };
-    return earlier.at(-1)?.next.kind === 'ask'
+    // A person admitted an attempt of this invocation: whatever ran since
+    // was billed on their word, so they are asked before it is sent again.
+    return earlier.some((failure) => failure?.next.kind === 'ask')
       ? { kind: 'reask', attempt: current }
       : SEND;
   }
@@ -244,7 +246,8 @@ export function nextAttempt(
 export interface FailureFacts {
   /** The user aborted the request. */
   readonly abort: boolean;
-  /** The vendor no longer holds the response this attempt chained on. */
+  /** The vendor no longer holds the response this attempt chained on;
+   *  true only for an attempt that sent a continuation. */
   readonly unchain: boolean;
   /** The same request may succeed when sent again. */
   readonly automatic: boolean;
@@ -267,7 +270,12 @@ export function failedNext(
   requestId: string | null,
 ): FailedNext {
   if (facts.abort) return { kind: 'cancel' };
-  if (facts.unchain) return { kind: 'unchain' };
+  // Once per invocation: the resend after it carries no continuation.
+  if (
+    facts.unchain &&
+    !before.some((failure) => failure?.next.kind === 'unchain')
+  )
+    return { kind: 'unchain' };
   const spent = before.filter(
     (failure) => failure !== null && failure.next.kind !== 'unchain',
   ).length;

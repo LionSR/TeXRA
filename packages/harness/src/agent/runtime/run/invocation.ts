@@ -102,6 +102,9 @@ export interface InvocationDriver<A, E, R> {
   ) => Effect.Effect<void, E, R>;
   /** A turn's person; null where nobody can be asked. */
   readonly asker: Asker<E, R> | null;
+  /** Whether an attempt on `bound` sends a continuation, which a vendor
+   *  that lost it answers with `continuation-gone`. */
+  readonly chains: (bound: BoundModel) => Effect.Effect<boolean>;
   /** Automatic resends per invocation. */
   readonly retries: number;
   readonly gate: ModelRetryGate;
@@ -229,9 +232,8 @@ const consult = <A, E, R>(
     : asker.await(move.requestId);
 };
 
-/** The pause before the move after a failure: the backoff and a fresh
- *  connection before an automatic resend, a warning before an unchained
- *  one. */
+/** The pause before an automatic resend, unchained or not: the backoff,
+ *  then a fresh connection where the failed one died with the attempt. */
 const pauseBefore = <A, E, R>(
   driver: InvocationDriver<A, E, R>,
   next: FailedNext,
@@ -239,16 +241,15 @@ const pauseBefore = <A, E, R>(
   bound: BoundModel,
 ): Effect.Effect<void, never, R> => {
   if (next.kind === 'unchain')
-    return Effect.sync(() =>
-      driver.logger.warn(
-        `Chained response gone (${failure.info.message}); retrying once with the full transcript.`,
-      ),
+    driver.logger.warn(
+      `Chained response gone (${failure.info.message}); retrying once with the full transcript.`,
     );
-  if (next.kind !== 'retry') return Effect.void;
-  driver.logger.debug(
-    `Model request failed; automatic retry in ${RETRY_BACKOFF_MS}ms.`,
-    { data: failure.info.message },
-  );
+  else if (next.kind === 'retry')
+    driver.logger.debug(
+      `Model request failed; automatic retry in ${RETRY_BACKOFF_MS}ms.`,
+      { data: failure.info.message },
+    );
+  else return Effect.void;
   return Effect.sleep(RETRY_BACKOFF_MS).pipe(
     // A Responses WebSocket dies with a failed turn and ages out after 55
     // minutes, so retrying on it cannot succeed (#13407).
@@ -266,13 +267,15 @@ const moveAfter = <A, E, R>(
   driver: InvocationDriver<A, E, R>,
   failure: ModelFailure,
   ref: InvocationRef,
+  bound: BoundModel,
 ): Effect.Effect<FailedNext> =>
-  Effect.map(driver.read, ({ invocation }) =>
+  Effect.zipWith(driver.read, driver.chains(bound), ({ invocation }, chains) =>
     failedNext(
       failuresBefore(invocation, ref),
       {
         abort: isUserAbort(failure.error),
-        unchain: failure.storedResponseGone,
+        // A 404 on a request that chained nothing is an ordinary failure.
+        unchain: chains && failure.storedResponseGone,
         automatic: failure.autoRetryable,
         offered:
           failure.formatted.userRetryable &&
@@ -313,7 +316,7 @@ const afterFailure = <A, E, R>(
   renew(failed, bound).pipe(
     Effect.flatMap((renewed) => {
       if (renewed !== true)
-        return Effect.map(moveAfter(driver, renewed, ref), (next) => ({
+        return Effect.map(moveAfter(driver, renewed, ref, bound), (next) => ({
           failure: renewed,
           next,
         }));

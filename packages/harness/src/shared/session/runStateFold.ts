@@ -125,8 +125,8 @@ export type RunState = RunPosition & {
   readonly phase: RunLoopPhase | null;
   readonly modelId: string | null;
   readonly backend: ModelBackend | null;
-  /** The newest failed attempt's error, until a response or the input of
-   *  a new turn retires it. */
+  /** The failure that stopped the turn's invocation or that a person was
+   *  asked about, until a response or the input of a new turn retires it. */
   readonly lastError: RetryErrorInfo | null;
   /** Subscription routes this run declines: the launch's seed, as its
    *  snapshot restates it, plus each retry the user answered with their own
@@ -494,11 +494,13 @@ function foldRow(
               return outOfOrder(`a failed attempt asks ${p.next.requestId}`);
             // An unchained resend drops the response the vendor no longer
             // holds: the next attempt sends the whole transcript.
-            const unchained = p.next.kind === 'unchain';
+            // The run's failure is one that ends it or a person sees.
+            const shown = p.next.kind === 'stop' || p.next.kind === 'ask';
             return Result.succeed({
               ...moved,
-              lastError: p.error,
-              continuation: unchained ? null : state.continuation,
+              lastError: shown ? p.error : state.lastError,
+              continuation:
+                p.next.kind === 'unchain' ? null : state.continuation,
             });
           }
           if (p.kind !== 'response') return Result.succeed(moved);

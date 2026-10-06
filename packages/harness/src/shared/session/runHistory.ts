@@ -124,7 +124,7 @@ export class RunHistory extends Context.Service<
      * and no fold: what every reader of the retired `flow_<id>.json` becomes.
      * `null` when the run has never written one, or is closed. Existence,
      * `payload.family`, and `payload.runtime` (model id, backend,
-     * last error, declined routes) are the facts it answers; a run's
+     * declined routes) are the facts it answers; a run's
      * position and state are `load`.
      */
     readonly latestSnapshot: (

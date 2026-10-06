@@ -915,6 +915,39 @@ describe('ModelInvoker retry', () => {
       }),
   );
 
+  // Failure mode: a 404 on a request that chained nothing reads as a lost
+  // chain, and the "resend once" repeats without end.
+  it.effect(
+    'treats a gone continuation it never sent as an ordinary failure',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
+        );
+        const session = yield* sessionWithInteractions(undefined);
+        const denied = autoDecideRequests(session, () => ({
+          action: 'deny',
+          reason: 'Denied by TeXRA approval policy.',
+        }));
+        const stub = stubModel([
+          {
+            fail: new ModelError({
+              kind: 'continuation-gone',
+              status: 404,
+              message: 'No endpoints found for this model.',
+            }),
+          },
+        ]);
+
+        const outcome = yield* invokeOn(yield* openRun(session, stub.model));
+
+        expect(outcome.kind).toBe('failed');
+        expect(stub.attempts()).toBe(1);
+        denied.detach();
+        yield* closeSessionOf(session);
+      }),
+  );
+
   // Failure modes: a resume resends a billed attempt a person admitted
   // without asking again; it refills the automatic budget the rows spent.
   it.effect(

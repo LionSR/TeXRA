@@ -259,7 +259,7 @@ the run history (`packages/harness/src/shared/session/runHistory.ts`) and contin
 folded `RunState` each `appendBatch` returns; resume is the same function
 reading the same rows. Every wait writes a `run.position`; a response row is
 committed before its tools dispatch and a `tool.result` before the loop
-continues. Every model call retries in one loop (`run/modelCall.ts`) whose
+continues. Every model call retries in one loop (`run/invocation.ts`) whose
 next move is `nextAttempt` over the invocation's rows: a failed attempt
 commits a `failed` row naming the move after it, automatic resends run
 under the process's `ModelRetryGate` within a budget the rows count, and a
