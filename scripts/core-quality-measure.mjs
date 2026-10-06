@@ -565,7 +565,13 @@ function isPassThrough(node, sourceFile) {
   if (!isFunctionLike(node) || ts.isConstructorDeclaration(node)) return false;
   let expression = onlyExpression(node);
   if (expression == null) return false;
-  if (ts.isAwaitExpression(expression))
+  // `await f(x)` and an Effect generator's `yield* f(x)` forward like `f(x)`.
+  if (
+    ts.isAwaitExpression(expression) ||
+    (ts.isYieldExpression(expression) &&
+      expression.asteriskToken != null &&
+      expression.expression != null)
+  )
     expression = unwrapped(expression.expression);
   expression = withoutIdentityMap(expression, sourceFile);
   if (!ts.isCallExpression(expression) || !isCallTarget(expression.expression))
@@ -573,6 +579,8 @@ function isPassThrough(node, sourceFile) {
   const parameters = node.parameters.filter(
     (parameter) => parameter.name.getText() !== 'this',
   );
+  // A thunk forwards no parameter: it is the laziness an Effect API asks for.
+  if (parameters.length === 0) return false;
   if (expression.arguments.length !== parameters.length) return false;
   const remaining = new Map();
   for (const parameter of parameters) {
