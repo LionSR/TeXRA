@@ -2,19 +2,14 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Cause, Deferred, Effect, Exit, Fiber, Layer } from 'effect';
+import { Deferred, Effect, Fiber, Layer } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { finalizeRun } from '@agent/storage/runLifecycle';
-import {
-  RUN_OUTCOME,
-  type RequestDecision,
-  type ToolOutcomePermission,
-} from '@shared/schemas';
+import { RUN_OUTCOME } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runStateFold';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -28,10 +23,7 @@ import {
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { generateRunId } from '@utils/core';
 
-import {
-  autoDecideRequests,
-  sessionWithInteractions,
-} from '../progressTestUtils';
+import { sessionWithInteractions } from '../progressTestUtils';
 
 import type { TurnResult } from '@texra-ai/llm';
 
@@ -87,24 +79,6 @@ function executedTool(name: string) {
   return { call, tool: { call, definition: { name } } as ITool };
 }
 
-/**
- * The outcome-unknown barrier is a `request.opened` on the run and its answer
- * is the `request.decided` row a surface lands: record every question the
- * dispatch asks and answer it, or return null to leave it standing.
- */
-function askedQuestions(
-  session: SessionHandle,
-  answer: (question: ToolOutcomePermission) => RequestDecision,
-): { readonly questions: ToolOutcomePermission[] } {
-  const questions: ToolOutcomePermission[] = [];
-  autoDecideRequests(session, (opened) => {
-    if (opened.payload.kind !== 'toolOutcome') return null;
-    questions.push(opened.payload.data);
-    return answer(opened.payload.data);
-  });
-  return { questions };
-}
-
 const CALLS = [
   { id: 'call-a', name: 'toolA' },
   { id: 'call-b', name: 'toolB' },
@@ -132,10 +106,6 @@ describe('tool dispatch interrupted mid-turn', () => {
         const session = yield* sessionWithInteractions({ emit: () => {} });
         const runId = generateRunId();
         publishTestRunStart(session, runId);
-        // The person answers "Skip": the model is told the call was skipped
-        // rather than being handed a blind second run.
-        const asked = askedQuestions(session, () => ({ action: 'skip' }));
-
         const toolA = executedTool('toolA');
         const toolB = blockingTool('toolB');
         const toolC = executedTool('toolC');
@@ -190,10 +160,8 @@ describe('tool dispatch interrupted mid-turn', () => {
         );
         expect(resumed.outcome).toBe('completed');
 
-        // The outcome-unknown barrier asked before anything re-ran, and was
-        // not re-run when the answer was "skip".
-        expect(asked.questions).toHaveLength(1);
-        expect(asked.questions[0].toolName).toBe('toolB');
+        // The call whose body started is not re-run blind: it settles as
+        // outcome unknown, and the model decides from that.
         expect(toolB.call).toHaveBeenCalledTimes(1);
         // The call that never started is not run blind: the model is told
         // so and decides whether to retry it.
@@ -207,29 +175,26 @@ describe('tool dispatch interrupted mid-turn', () => {
         );
         // Every requested call is paired exactly once, in call order.
         expect(group?.role === 'tool' ? group.results.length : 0).toBe(3);
+        expect(
+          group?.role === 'tool' ? JSON.stringify(group.results[1]) : '',
+        ).toContain('Its outcome is unknown');
         expect(delivered?.pendingResponse).toBeNull();
       }),
   );
 
   /**
-   * A policy with nobody to ask (yolo, never, a headless host) denies the
-   * barrier prompt, and would deny it again on every resume: the denial is a
-   * skip, so the resumed run completes instead of interrupting itself into a
-   * failure that no resume can get past.
+   * Parallel-safe is about concurrency, not about running twice: an
+   * interrupted parallel-safe call whose tool is not replay-safe settles as
+   * outcome unknown like a barrier, never re-run blind.
    */
-  it.effect('skips an outcome-unknown barrier the policy denies', () =>
+  it.effect('never re-runs a parallel-safe call that is not replay-safe', () =>
     Effect.gen(function* () {
       const session = yield* sessionWithInteractions({ emit: () => {} });
       const runId = generateRunId();
       publishTestRunStart(session, runId);
-      const asked = askedQuestions(session, () => ({
-        action: 'deny',
-        reason: 'No person can answer here.',
-      }));
       const toolB = blockingTool('toolB');
-      const tools = { toolB: toolB.tool };
+      const tools = { toolB: { ...toolB.tool, parallelSafe: true } };
       const calls = [{ id: 'call-b', name: 'toolB' }];
-
       const fiber = yield* Effect.forkDetach(
         runToolUse({ resume: false }).pipe(
           Effect.provide(
@@ -258,67 +223,8 @@ describe('tool dispatch interrupted mid-turn', () => {
         ),
       );
       expect(resumed.outcome).toBe('completed');
-      expect(asked.questions).toHaveLength(1);
       expect(toolB.call).toHaveBeenCalledTimes(1);
-      const delivered = yield* session.runHistory
-        .load(runId)
-        .pipe(Effect.orDie);
-      const group = delivered?.messages.find(
-        (message) => message.role === 'tool',
-      );
-      expect(group?.role === 'tool' ? group.results[0]?.status : null).toBe(
-        'error',
-      );
     }),
-  );
-
-  /**
-   * Parallel-safe is about concurrency, not about running twice: an
-   * interrupted parallel-safe call whose tool is not replay-safe is asked
-   * about like a barrier, never re-run blind.
-   */
-  it.effect(
-    'asks before re-running a parallel-safe call that is not replay-safe',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* sessionWithInteractions({ emit: () => {} });
-        const runId = generateRunId();
-        publishTestRunStart(session, runId);
-        const asked = askedQuestions(session, () => ({ action: 'skip' }));
-        const toolB = blockingTool('toolB');
-        const tools = { toolB: { ...toolB.tool, parallelSafe: true } };
-        const calls = [{ id: 'call-b', name: 'toolB' }];
-        const fiber = yield* Effect.forkDetach(
-          runToolUse({ resume: false }).pipe(
-            Effect.provide(
-              loopLayer({
-                runId,
-                session,
-                tools,
-                turns: [toolCallTurn(calls)],
-                stopAfterCycle: true,
-              }),
-            ),
-          ),
-        );
-        yield* toolB.started;
-        yield* Fiber.interrupt(fiber);
-
-        const resumed = yield* runToolUse({ resume: true }).pipe(
-          Effect.provide(
-            loopLayer({
-              runId,
-              session,
-              tools,
-              turns: [textTurn('The call was skipped.')],
-              stopAfterCycle: true,
-            }),
-          ),
-        );
-        expect(resumed.outcome).toBe('completed');
-        expect(asked.questions).toHaveLength(1);
-        expect(toolB.call).toHaveBeenCalledTimes(1);
-      }),
   );
 
   /**
@@ -332,7 +238,6 @@ describe('tool dispatch interrupted mid-turn', () => {
       const session = yield* sessionWithInteractions({ emit: () => {} });
       const runId = generateRunId();
       publishTestRunStart(session, runId);
-      askedQuestions(session, () => ({ action: 'deny', reason: 'yolo' }));
       const toolB = blockingTool('toolB');
       const tools = { toolB: toolB.tool };
       const fiber = yield* Effect.forkDetach(
@@ -386,116 +291,5 @@ describe('tool dispatch interrupted mid-turn', () => {
         content: [{ kind: 'text', text: 'What is 2+2?' }],
       });
     }),
-  );
-
-  /**
-   * The barrier prompt is a question for a person, and only a person's answer
-   * retires it. An automatic close (a stop, a disposed session) lands
-   * `{ action: 'cancel' }`, which decides nothing about the call: no
-   * `tool.intent` is admitted and no skip is reported to the model. The
-   * dispatch interrupts, and the next resume asks the barrier again under a
-   * replacement request rather than telling the model a person skipped it.
-   */
-  it.effect(
-    'records no call decision when the outcome-unknown prompt is cancelled, and asks again on the next resume',
-    () =>
-      Effect.gen(function* () {
-        // The first ask is closed automatically, not answered by a person.
-        let answer: (
-          question: ToolOutcomePermission,
-        ) => RequestDecision = () => ({
-          action: 'cancel',
-          cause: 'Run interrupted.',
-        });
-        const session = yield* sessionWithInteractions({ emit: () => {} });
-        const runId = generateRunId();
-        publishTestRunStart(session, runId);
-        const asked = askedQuestions(session, (question) => answer(question));
-
-        const toolA = executedTool('toolA');
-        const toolB = blockingTool('toolB');
-        const toolC = executedTool('toolC');
-        const tools = {
-          toolA: toolA.tool,
-          toolB: toolB.tool,
-          toolC: toolC.tool,
-        };
-
-        const fiber = yield* Effect.forkDetach(
-          runToolUse({ resume: false }).pipe(
-            Effect.provide(
-              loopLayer({
-                runId,
-                session,
-                tools,
-                turns: [toolCallTurn(CALLS)],
-                stopAfterCycle: true,
-              }),
-            ),
-          ),
-        );
-        yield* toolB.started;
-        yield* Fiber.interrupt(fiber);
-
-        // The first resume asks, and the prompt is closed under it.
-        const cancelled = yield* Effect.exit(
-          runToolUse({ resume: true }).pipe(
-            Effect.provide(
-              loopLayer({
-                runId,
-                session,
-                tools,
-                turns: [],
-                stopAfterCycle: true,
-              }),
-            ),
-          ),
-        );
-        expect(
-          Exit.isFailure(cancelled) && Cause.hasInterrupts(cancelled.cause),
-        ).toBe(true);
-        expect(asked.questions).toHaveLength(1);
-
-        const open = yield* session.runHistory.load(runId).pipe(Effect.orDie);
-        const request = open?.requests[asked.questions[0].requestId];
-        // The close is on the request, and it decides nothing about the call:
-        // no rerun was admitted and no skip was reported.
-        expect(request?.decision).toMatchObject({ action: 'cancel' });
-        expect(settledIds(open)).toEqual(['call-a']);
-        expect(toolB.call).toHaveBeenCalledTimes(1);
-        expect(toolC.call).not.toHaveBeenCalled();
-
-        // The next resume asks again, and the answer decides.
-        answer = () => ({ action: 'skip' });
-        const resumed = yield* runToolUse({ resume: true }).pipe(
-          Effect.provide(
-            loopLayer({
-              runId,
-              session,
-              tools,
-              turns: [textTurn('All three calls are accounted for.')],
-              stopAfterCycle: true,
-            }),
-          ),
-        );
-        expect(resumed.outcome).toBe('completed');
-        expect(asked.questions).toHaveLength(2);
-        // A request retired without a person's answer is replaced, never
-        // reopened.
-        expect(asked.questions[1].requestId).not.toBe(
-          asked.questions[0].requestId,
-        );
-
-        const delivered = yield* session.runHistory
-          .load(runId)
-          .pipe(Effect.orDie);
-        expect(
-          delivered?.requests[asked.questions[1].requestId]?.decision,
-        ).toMatchObject({ action: 'skip' });
-        const group = delivered?.messages.find(
-          (message) => message.role === 'tool',
-        );
-        expect(group?.role === 'tool' ? group.results.length : 0).toBe(3);
-      }),
   );
 });

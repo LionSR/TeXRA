@@ -96,7 +96,7 @@
   "packages/harness/src/shared/schemas/plan.ts": 1,
   "packages/harness/src/shared/schemas/progressEvents.ts": 1,
   "packages/harness/src/shared/schemas/progressView/data.ts": 8,
-  "packages/harness/src/shared/schemas/prompts.ts": 20,
+  "packages/harness/src/shared/schemas/prompts.ts": 19,
   "packages/harness/src/shared/schemas/proposalFields.ts": 3,
   "packages/harness/src/shared/schemas/request.ts": 2,
   "packages/harness/src/shared/schemas/run.ts": 17,

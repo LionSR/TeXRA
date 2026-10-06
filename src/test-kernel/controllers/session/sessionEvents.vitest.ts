@@ -2947,7 +2947,7 @@ describe('RunHistory', () => {
   const approvalBinding: RunHistoryDraft = {
     type: 'tool.binding',
     aggregateId: AGGREGATE,
-    payload: { callId: 'call-a', attempt: 1, requestId: 'req-1', role: 'call' },
+    payload: { callId: 'call-a', attempt: 1, requestId: 'req-1' },
   };
   const toolEnd = (callId: string): RunHistoryDraft => ({
     type: 'tool.end',
@@ -3163,7 +3163,7 @@ describe('RunHistory', () => {
         expect(state.pendingResponse?.records['call-a']?.status).toEqual({
           kind: 'started',
           attempt: 1,
-          binding: { requestId: 'req-1', role: 'call' },
+          binding: { requestId: 'req-1' },
         });
         // A real attachment carries loose keys and binary fields: accepted, and
         // the binary fields never reach the row.

@@ -692,7 +692,7 @@ function foldRow(
             attempt: p.attempt,
             binding:
               status.kind === 'asking' && status.attempt === p.attempt
-                ? { requestId: status.requestId, role: 'call' }
+                ? { requestId: status.requestId }
                 : null,
           },
         }),
@@ -702,9 +702,9 @@ function foldRow(
       // The request that guards one call attempt, committed with the
       // `request.opened` it names. The call's own request may come before
       // the attempt's body starts (its guard's approval) or after (the
-      // first its body raised); the outcome question only after. A later
-      // binding of the same attempt replaces it (a request retired as
-      // cancelled, asked again under a new id).
+      // first its body raised). A later binding of the same attempt
+      // replaces it (a request retired as cancelled, asked again under a
+      // new id).
       if (!opened(current)) return beforeOpening(row.type);
       const p = row.payload;
       const pending = current.pendingResponse;
@@ -716,11 +716,6 @@ function foldRow(
       const refusal = openFor(p.callId, status, p.attempt);
       if (refusal !== null) return outOfOrder(refusal);
       const running = status.kind === 'started' && status.attempt === p.attempt;
-      if (p.role === 'outcome' && !running) {
-        return outOfOrder(
-          `outcome question ${p.requestId} for ${p.callId}, whose attempt ${p.attempt} never started`,
-        );
-      }
       return Result.succeed(
         withCall(current, pending, p.callId, {
           ...call,
@@ -728,7 +723,7 @@ function foldRow(
             ? {
                 kind: 'started',
                 attempt: p.attempt,
-                binding: { requestId: p.requestId, role: p.role },
+                binding: { requestId: p.requestId },
               }
             : { kind: 'asking', attempt: p.attempt, requestId: p.requestId },
         }),

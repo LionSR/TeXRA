@@ -745,7 +745,7 @@ describe('tool-use dispatch', () => {
   );
 
   // No fail-fast sibling interruption and no fabricated settlement: an
-  // interrupted call is outcome-unknown, and resume asks rather than guesses.
+  // interrupted call is outcome-unknown until resume settles it as such.
   it.live('commits no settlement for a call interrupted in flight', () =>
     Effect.gen(function* () {
       const probe = newProbe();
@@ -837,24 +837,18 @@ describe('tool-use dispatch', () => {
           requestId: 'q1',
           thread: null,
           payload: {
-            kind: 'toolOutcome',
+            kind: 'bash',
             data: {
               requestId: 'q1',
+              allowBypass: false,
               runId: kit.runId,
-              toolName: 'grep',
-              title: 'grep',
-              childRunId: null,
+              command: 'grep a',
             },
           },
         },
-        bindingRow(kit.runId, {
-          callId: 'c1',
-          attempt: 1,
-          requestId: 'q1',
-          role: 'outcome',
-        }),
+        bindingRow(kit.runId, { callId: 'c1', attempt: 1, requestId: 'q1' }),
       ]);
-      yield* kit.session.decideRequest(kit.runId, 'q1', { action: 'skip' });
+      yield* kit.session.decideRequest(kit.runId, 'q1', { action: 'reject' });
       yield* cell.append([
         {
           type: 'tool.result',
@@ -872,7 +866,9 @@ describe('tool-use dispatch', () => {
         },
       ]);
       const state = yield* cell.refresh;
-      expect(state.requests['q1']?.decision).toMatchObject({ action: 'skip' });
+      expect(state.requests['q1']?.decision).toMatchObject({
+        action: 'reject',
+      });
       expect(settledIds(state)).toEqual(['c2']);
       yield* closeSessionOf(kit.session);
     }),

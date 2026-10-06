@@ -23,7 +23,6 @@ import type {
   UserQuestionPermission,
 } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
-import { TOOL_OUTCOME_COPY } from '@shared/transcript/toolOutcome';
 import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -261,19 +260,6 @@ export function createHeadlessCliHostInteractions(
           requestId,
           yield* askHeadlessUserQuestion(payload.data, context, hooks),
         );
-      case 'toolOutcome': {
-        const decision = yield* ask({
-          summary: `${TOOL_OUTCOME_COPY.question(payload.data)}\n${payload.data.title}\n${TOOL_OUTCOME_COPY.explanation} Run it again?`,
-        });
-        if (decision.action === 'approve')
-          return yield* decide(runId, requestId, { action: 'retry' });
-        // A prompt that closed decides nothing: the barrier is asked again.
-        return yield* decide(
-          runId,
-          requestId,
-          decision.action === 'reject' ? { action: 'skip' } : decision,
-        );
-      }
     }
   });
 

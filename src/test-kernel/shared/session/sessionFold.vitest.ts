@@ -1339,7 +1339,7 @@ const intent = (callId: string, attempt = 1) => ({
 /** The binding row an approval commits beside its `request.opened`. */
 const toolBinding = (callId: string, requestId: string, attempt = 1) => ({
   type: 'tool.binding',
-  payload: { callId, attempt, requestId, role: 'call' },
+  payload: { callId, attempt, requestId },
 });
 const message = (payload: Record<string, unknown>) => ({
   type: 'model.message',
@@ -1532,7 +1532,7 @@ describe('foldRunState', () => {
         expect(started?.pendingResponse?.records['call-a']?.status).toEqual({
           kind: 'started',
           attempt: 1,
-          binding: { requestId: 'req-1', role: 'call' },
+          binding: { requestId: 'req-1' },
         });
       },
     ],
@@ -1889,21 +1889,6 @@ describe('foldRunState', () => {
       // attempt 1 settling now would retire attempt 2's uncertainty silently.
       'out-of-order',
       () => through(6, intent('call-a', 2), settlement('call-a')),
-    ],
-    [
-      // The outcome question asks whether a body ran: one that never
-      // started is a row out of order.
-      'out-of-order',
-      () =>
-        through(5, {
-          type: 'tool.binding',
-          payload: {
-            callId: 'call-a',
-            attempt: 1,
-            requestId: 'req-9',
-            role: 'outcome',
-          },
-        }),
     ],
     [
       // A call settles once.

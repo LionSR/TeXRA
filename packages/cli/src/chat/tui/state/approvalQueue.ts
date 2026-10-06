@@ -211,7 +211,6 @@ function presentedPayload(
     case 'planApproval':
     case 'proposal':
     case 'userQuestion':
-    case 'toolOutcome':
       return payload;
     case 'toolEdit':
     case 'retry':

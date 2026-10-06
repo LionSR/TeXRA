@@ -77,8 +77,7 @@ function answerFor(
         denial: { kind: 'plan' },
       };
     }
-    case 'userQuestion':
-    case 'toolOutcome': {
+    case 'userQuestion': {
       const decision = decideHumanInputRequest({
         policy,
         canPresent: canPresent(session),
