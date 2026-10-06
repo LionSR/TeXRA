@@ -8,7 +8,6 @@
  * dispatchers.
  */
 import { z } from 'zod';
-import type { ModelProvider } from 'llm-zoo';
 import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -58,6 +57,7 @@ import {
   PluginActionMessageSchema,
   PluginListItemSchema,
 } from './pluginMessages';
+import type { ModelProvider } from 'llm-zoo';
 
 // Re-export what settings consumers need from the view-message modules, so
 // they keep one import site; the schemas themselves stay unexported here.
