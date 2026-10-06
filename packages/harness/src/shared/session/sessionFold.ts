@@ -829,9 +829,9 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
       };
     }
     case 'run.config': {
-      // A process has no model; any other run keeps a `run.model` it holds.
+      // A process has no model; any other run is on its newest config's.
       const { config } = event;
-      const kept = run.model ?? config.model ?? null;
+      const kept = config.model ?? run.model ?? null;
       const model = run.identity.kind === 'process' ? null : kept;
       return {
         ...run,

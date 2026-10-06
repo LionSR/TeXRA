@@ -261,8 +261,8 @@ describe('the golden 1.0 store', () => {
       'run.removed',
     ] as const)
       expect(types, type).toContain(type);
-    // The chat's `/model` switch: the edit it records, and the snapshots
-    // naming the model before and after it; and its `/compact`.
+    // The chat's `/model` switch: the configs naming the model before and
+    // after it; and its `/compact`, the one edit.
     const chat = aggregateId('run', CHAT);
     expect(
       events.flatMap((event) =>
@@ -270,19 +270,19 @@ describe('the golden 1.0 store', () => {
           ? [event.payload.trigger]
           : [],
       ),
-    ).toEqual(['model-switch', 'user']);
+    ).toEqual(['user']);
     expect([
       ...new Set(
         events.flatMap((event) =>
-          event.type === 'run.snapshot' && event.aggregateId === chat
-            ? [event.payload.runtime.modelId]
+          event.type === 'run.config' && event.aggregateId === chat
+            ? [event.config.model]
             : [],
         ),
       ),
     ]).toEqual(['openai/gpt-5.6-sol@medium', 'gemini38f']);
-    // Each request is a queued control, consumed in the batch of the edit
-    // that applies it, right before that edit: the switch's, then the
-    // compaction's.
+    // Each request is a queued control, consumed in the batch that applies
+    // it: the switch's `run.config` (no edit), then the compaction's edit,
+    // right after its consumption.
     const applied = raw(storage, (db) =>
       db
         .prepare(
@@ -301,7 +301,7 @@ describe('the golden 1.0 store', () => {
         .all(CHAT),
     );
     expect(applied).toEqual([
-      { kind: 'model', trigger: 'model-switch' },
+      { kind: 'model', trigger: null },
       { kind: 'compact', trigger: 'user' },
     ]);
     // The durable harness's row shapes (H2): a fork's start names its

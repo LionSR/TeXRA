@@ -133,19 +133,19 @@ describe('run listing normalization', () => {
 
   // A row is dropped only when the facts it is built from are unreadable. The
   // resumability read is not one of them: it decides an advertisement, so an
-  // unreadable snapshot costs the row its Resume affordance, never its place
-  // in history.
-  it.effect('keeps a row whose snapshot read fails, not resumable', () =>
+  // unreadable run record costs the row its Resume affordance, never its
+  // place in history.
+  it.effect('keeps a row whose resumability read fails, not resumable', () =>
     Effect.gen(function* () {
       const id = 'eee556' as RunId;
       yield* Effect.promise(() =>
         writeRun(id, '2026-07-15T11:00:00.000Z', config('assistant')),
       );
-      vi.spyOn(session.runHistory, 'latestSnapshot').mockReturnValue(
+      vi.spyOn(session, 'readRunRecords').mockReturnValue(
         Effect.fail(
           new DatabaseReadFailed({
             path: 'session.db',
-            cause: new Error('snapshot read failed'),
+            cause: new Error('record read failed'),
           }),
         ),
       );
@@ -211,8 +211,8 @@ describe('run listing normalization', () => {
             identity: { kind: 'agent', agent: 'assistant' },
             record: agentConfig,
             status: 'ready',
-            // The model the run is on is the view's (its snapshots', else its
-            // launch model), not a second copy of the record's.
+            // The model the run is on is the view's (its newest config's),
+            // not a second copy of the record's.
             model: agentConfig.model,
             // Registered and never opened: it reopens from its config.
             resumable: true,

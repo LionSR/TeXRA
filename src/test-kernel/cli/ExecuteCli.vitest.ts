@@ -17,7 +17,7 @@ import type { executeCliRequest } from '@cli/runtime/executeCli';
 import { AgentError } from '@common/errors';
 import { enablePlugin } from '@common/plugins/pluginTrust';
 import { RUN_OUTCOME } from '@shared/schemas';
-import type { RunSnapshotPayload, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { untrackRun } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -287,22 +287,6 @@ async function spyOnArtifactFlush() {
   return { flushSpy };
 }
 
-/**
- * The snapshot a resumable run carries on its aggregate. Only its presence
- * is read here; the workflow command owns the rule that reads its fields.
- */
-function checkpointSnapshot(): RunSnapshotPayload {
-  return {
-    family: 'toolUse',
-    runtime: {
-      modelId: 'deepseek/deepseek-v4-flash',
-      backend: 'deepseek',
-      declinedRoutes: [],
-    },
-    state: {},
-  };
-}
-
 async function stubExecuteCliDeps(): Promise<void> {
   vi.clearAllMocks();
   mocks.close.mockReturnValue(Effect.void);
@@ -332,10 +316,7 @@ async function stubExecuteCliDeps(): Promise<void> {
     outcome: 'completed',
     outcomePersisted: true,
   });
-  mocks.deriveResumability.mockResolvedValue({
-    kind: 'checkpoint',
-    snapshot: checkpointSnapshot(),
-  });
+  mocks.deriveResumability.mockResolvedValue({ kind: 'checkpoint' });
   mocks.finalizeRun.mockResolvedValue({ ok: true });
   mocks.runAgent.mockImplementation(async (_request, options) => {
     options.onRunClaimed?.('exec-1' as RunId);

@@ -1312,18 +1312,10 @@ const TURN_USAGE = {
   cachedInputTokens: 4,
   cacheMissInputTokens: 6,
 };
-const RUNTIME = {
-  modelId: 'gpt-test',
-  backend: 'openai',
-  declinedRoutes: [],
-};
-const toolUseSnapshot = (runtime: Record<string, unknown> = {}) => ({
-  type: 'run.snapshot',
-  payload: {
-    family: 'toolUse',
-    runtime: { ...RUNTIME, ...runtime },
-    state: {},
-  },
+/** Where the loop stands: its first position opens the run. */
+const position = (at: string, turn: number) => ({
+  type: 'run.position',
+  payload: { family: 'toolUse', at, turn },
 });
 
 /** The row a call's body starts with. */
@@ -1414,7 +1406,7 @@ const TURN_ROWS: readonly RunHistoryRow[] = [
     messages: [USER('list the files')],
     sourceResponse: null,
   }),
-  toolUseSnapshot(),
+  position('turn.ready', 0),
   message({
     kind: 'attempt',
     request: '0'.repeat(64),
@@ -1443,7 +1435,7 @@ const TURN_ROWS: readonly RunHistoryRow[] = [
     messages: [TOOL_GROUP],
     sourceResponse: RESPONSE_ID,
   }),
-  toolUseSnapshot(),
+  position('results.ready', 1),
   {
     type: 'run.position',
     payload: { family: 'toolUse', at: 'turn.end', turn: 1 },
@@ -1699,7 +1691,6 @@ describe('foldRunState', () => {
         );
         expect(state?.outcome).toBe('completed');
         expect(state?.family).toBe('toolUse');
-        expect(state?.lastSnapshot).not.toBeNull();
       },
     ],
     [
@@ -1918,6 +1909,36 @@ describe('foldRunState', () => {
     expect(reasonOf(run())).toBe(reason);
   });
 
+  // A `submit_output` a script issued is the run's structured output, read
+  // off the same settlement as a direct call's: under codemode the model
+  // submits from inside its script, and losing it would leave the run with
+  // no output and a latch that refuses a second submission.
+  it('folds a structured output a script submitted', () => {
+    const state = stateOf(
+      through(
+        5,
+        {
+          type: 'script.call',
+          payload: {
+            scriptCallId: 'call-a',
+            seq: 0,
+            callId: 'call-a/0',
+            toolName: 'submit_output',
+            input: {},
+            replay: 'unsafe',
+            logId: 'log-s0',
+            stageId: 'stage-s',
+            phase: null,
+          },
+        },
+        settlement('call-a/0', {
+          result: { status: 'executed', output: 'ok', value: { a: 1 } },
+        }),
+      ),
+    );
+    expect(state?.structured).toEqual({ value: { a: 1 } });
+  });
+
   it('keeps the private run history types out of the listing and off the transport, and lists run.position', () => {
     const runHistoryTypes = [
       'model.message',
@@ -1925,7 +1946,6 @@ describe('foldRunState', () => {
       'tool.intent',
       'tool.binding',
       'tool.result',
-      'run.snapshot',
     ] as const;
     for (const type of runHistoryTypes)
       expect(listingTypeOf({ type })).toBeNull();

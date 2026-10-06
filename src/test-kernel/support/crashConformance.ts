@@ -224,9 +224,9 @@ function outcome(rows: readonly Row[], root: string) {
       );
       return [`${control.kind} consumed ${consumed.length}`];
     }),
-    model: of(root, 'run.snapshot')
+    model: of(root, 'run.config')
       .flatMap((row) => [
-        (payload(row).runtime as { readonly modelId: string }).modelId,
+        (json(row).config as { readonly model: string }).model,
       ])
       .at(-1),
     // What each executed call returned, by call: a retried call returns
@@ -821,7 +821,7 @@ export function crashConformanceSuite(plugins: string): void {
               `Model saw: ${HANDOFF} (+0)`,
               'Model saw: [Previous conversation summary]\n\nThe golden chat so far. (+0)',
             ],
-            edits: ['handoff', 'compaction', 'compaction'],
+            edits: ['handoff', 'compaction'],
             requests: ['model consumed 1', 'compact consumed 1'],
             model: SWITCH_TO,
             children: 1,

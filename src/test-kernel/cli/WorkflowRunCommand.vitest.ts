@@ -29,7 +29,6 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   aggregateId,
   RUN_OUTCOME,
-  type RunSnapshotPayload,
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
@@ -328,19 +327,6 @@ async function setupCancelledOutput(
   );
 }
 
-/** The snapshot a round writes. */
-function workflowSnapshot(): RunSnapshotPayload {
-  return {
-    family: 'toolUse',
-    runtime: {
-      modelId: 'deepseek/deepseek-v4-flash',
-      backend: 'deepseek',
-      declinedRoutes: [],
-    },
-    state: {},
-  };
-}
-
 /** The metadata the command last persisted for a run, read back for real. */
 const readResultMeta = (session: SessionHandle, runId: string) =>
   getRunRecords(session, runId as RunId).readResultMeta();
@@ -377,9 +363,9 @@ const seedResumableCheckpoint = (session: SessionHandle, runId: string) =>
     yield* session.runHistory.acquire(runId as RunId);
     yield* session.runHistory.appendBatch(runId as RunId, null, [
       {
-        type: 'run.snapshot',
+        type: 'run.position',
         aggregateId: aggregateId('run', runId as RunId),
-        payload: workflowSnapshot(),
+        payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
       },
     ]);
   });

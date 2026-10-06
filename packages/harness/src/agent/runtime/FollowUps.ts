@@ -58,10 +58,8 @@ import { blobRows } from './run/requestContext';
 import {
   appendRow,
   rowAggregate,
-  snapshotRow,
   positionRow,
   type Message,
-  type ToolUseLoopState,
 } from './loop/rows';
 import { promptHooks } from './loop/hooks';
 import { resolveActivations } from './loop/step';
@@ -69,15 +67,11 @@ import type { AgentRunShape } from './run/AgentRun';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** A batch as the rows that consume it, for a caller that commits them in
- *  its own batch with a snapshot carrying `recorded`, the address of the
- *  instruction they store and the activated skills' names: the one record
- *  of what the
- *  delivery changes. `delivered` logs them once durable. */
+ *  its own batch: its message's `append` carries what the delivery changes
+ *  (the instruction it stores, the skills it activates). `delivered` logs
+ *  them once durable. */
 export interface JoinedFollowUps {
   readonly rows: readonly RunHistoryDraft[];
-  readonly recorded: Partial<
-    Pick<ToolUseLoopState, 'instruction' | 'activated'>
-  >;
   /** Whether the rows carry a message a turn answers. */
   readonly turn: boolean;
   readonly delivered: () => void;
@@ -86,7 +80,6 @@ export interface JoinedFollowUps {
 /** A turn's end, committed in the batch that consumes the next input. */
 export interface Boundary {
   readonly rows: readonly RunHistoryDraft[];
-  readonly loop: ToolUseLoopState;
 }
 
 export interface ConsumedFollowUps {
@@ -136,8 +129,7 @@ export interface FollowUps {
      *  must precede it (a background compaction a reset settles). */
     prepare?: (state: RunState) => Effect.Effect<RunState, Error>,
     /** The turn boundary this batch commits with (input already queued
-     *  when the turn ended): its rows, and the loop state its one
-     *  snapshot records. */
+     *  when the turn ended). */
     boundary?: Boundary,
   ) => Effect.Effect<
     ConsumedFollowUps,
@@ -210,7 +202,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
 
   /** The rows that consume one batch: its `followup.consumed` rows, the one
    *  user message they become, and the instruction and skill activations
-   *  they carry, stored in the same batch so the snapshot that names them
+   *  they carry, stored in the same batch so the append that names them
    *  never outlives them. */
   const batchRows = Effect.fn('FollowUps.batchRows')(function* (
     state: RunState,
@@ -291,7 +283,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
           .map(({ content }) => content.text),
       ),
     );
-    const current = state.loop?.activated ?? [];
+    const current = state.input.activated ?? [];
     const activated = found.some((name) => !current.includes(name))
       ? [
           ...new Set([
@@ -300,21 +292,17 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
           ]),
         ].slice(-ACTIVATED_SKILLS_MAX)
       : undefined;
+    // The pointers commit beside the blobs: no crash separates them. The
+    // launch's instruction is `null`.
+    const input = {
+      ...(instruction !== undefined && {
+        instruction:
+          instruction === run.config.instruction ? null : sha256(instruction),
+      }),
+      ...(activated !== undefined && { activated }),
+    };
     return {
       turn,
-      // The pointers commit beside the blobs: no crash separates them. The
-      // launch's instruction is the absence of one.
-      recorded: {
-        ...(instruction === undefined
-          ? {}
-          : {
-              instruction:
-                instruction === run.config.instruction
-                  ? undefined
-                  : sha256(instruction),
-            }),
-        ...(activated === undefined ? {} : { activated }),
-      },
       rows: [
         // A reset replaces the whole view, the context updates in it too:
         // the next step renders them anew.
@@ -346,7 +334,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
           followUpId: followUp.followUpId,
         })),
         ...hooked.rows,
-        ...(turn ? [appendRow(runId, [message])] : []),
+        ...(turn ? [appendRow(runId, [message], { input })] : []),
       ],
       // The user's rows are durable; the transcript shows what was asked.
       delivered: () => logFollowUps(followUps, built.kinds),
@@ -368,16 +356,10 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     > {
       const state = prepare === undefined ? current : yield* prepare(current);
       const joined = yield* batchRows(state, batch);
-      const loop = boundary?.loop ?? state.loop;
       const committed = yield* Effect.uninterruptible(
         runHistory.appendBatch(runId, state, [
           ...(boundary?.rows ?? []),
           ...joined.rows,
-          ...(joined.turn || boundary
-            ? snapshotRow(runId, state, {
-                ...(loop ? { state: { ...loop, ...joined.recorded } } : {}),
-              })
-            : []),
           ...(joined.turn ? [positionRow(runId, state, 'turn.ready')] : []),
         ]),
       );

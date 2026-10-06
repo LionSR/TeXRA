@@ -31,7 +31,7 @@ Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as 
 ## 3. Run loop / agent runtime
 
 - **A second copy of the conversation** held by a loop, a service, or a test helper instead of the `RunState` that `RunHistory.appendBatch` returns → the live and resume paths must stay one function (AGENTS.md "Run loop architecture").
-- **A side effect before its row**: a model request before its `attempt` row, a tool dispatched before its `response` row commits, a tool body that starts before its `tool.intent` (or an intent committed before the guard and approval, which turns a crash there into a false "did it run?"), a wait without a `run.position`, a `run.snapshot` authored from in-process state.
+- **A side effect before its row**: a model request before its `attempt` row, a tool dispatched before its `response` row commits, a tool body that starts before its `tool.intent` (or an intent committed before the guard and approval, which turns a crash there into a false "did it run?"), a wait without a `run.position`, a fact the loop branches on held only in memory instead of on the row that records it.
 - **Lifecycle leak**: agent init/finalize logic appearing inside the loops. `executeAgent` / `AgentRunLifecycle` own lifecycle; the loops execute and fail typed.
 - **Retry outside `ModelInvoker`** (a `p-retry` around a model call, a provider SDK retry re-enabled, a hand-rolled prompt loop) → the two owners live in the invoker only.
 - **Plain `console.log` or untagged `logger.info` in agent flows** → use `AgentTrace` (`@agent/trace`) for grouped, tool-use-aware channels; route non-agent logging through `@logger/logUtils`.

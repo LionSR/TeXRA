@@ -25,7 +25,7 @@ import { Rejected } from '@shared/session/requestErrors';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import { generateRunId } from '@utils/core';
 
-import { positionRow, rowAggregate, snapshotRow } from './loop/rows';
+import { configRow, positionRow, rowAggregate } from './loop/rows';
 import type { SessionHandle } from './SessionHandle';
 
 /**
@@ -83,8 +83,8 @@ export const forkRun = Effect.fn('forkRun')(function* (
   );
   const settledAt = (seq: number) =>
     Effect.map(session.runHistory.load(from.id, seq), (state) =>
-      state !== null && state.loop !== null && isSettled(state)
-        ? { seq, state, loop: state.loop }
+      state !== null && state.phase !== null && isSettled(state)
+        ? { seq, state }
         : null,
     );
   let found: Effect.Success<ReturnType<typeof settledAt>> = null;
@@ -105,14 +105,23 @@ export const forkRun = Effect.fn('forkRun')(function* (
   }
   const { seq: cut, state } = found;
   const runId = generateRunId();
-  // The view, and the loop state a resume restores with the content it
-  // names (its base system text and instruction), less the structured
-  // result of a turn the fork never ran. The offered tools and the system
+  // The view, and the input it answers with the content it names (its
+  // base system text and instruction). The structured result of a turn the
+  // fork never ran stays the source's. The offered tools and the system
   // text a step adds are the fork's first step's to record, as for any run.
-  const { structured: _, ...loop } = found.loop;
-  const named = [loop.system, loop.instruction].flatMap((digest) =>
+  const { input } = state;
+  const named = [input.system, input.instruction].flatMap((digest) =>
     digest === undefined ? [] : [digest],
   );
+  // A child's fork is a root: the task its ancestors were given, and the
+  // structured result its parent's call asked for, are not its. It runs on
+  // the model its source was on at the cut, bound as it was.
+  const {
+    rootUserInstruction: _root,
+    outputSchema: _schema,
+    ...launched
+  } = config;
+  const record = { ...launched, model: state.modelId ?? launched.model };
   const rows: RunHistoryDraft[] = [
     {
       type: 'context.edit',
@@ -124,6 +133,7 @@ export const forkRun = Effect.fn('forkRun')(function* (
         range: { from: 0, to: 0 },
         messages: state.messages,
         usage: null,
+        input,
       },
     },
     ...named.map((digest): RunHistoryDraft => ({
@@ -131,16 +141,16 @@ export const forkRun = Effect.fn('forkRun')(function* (
       aggregateId: rowAggregate(runId),
       payload: { digest, value: state.contents[digest] },
     })),
-    ...snapshotRow(runId, { ...state, lastSnapshot: null }, { state: loop }),
+    ...(state.backend === null
+      ? []
+      : [
+          configRow(runId, record, record.model, {
+            backend: state.backend,
+            declinedRoutes: state.declinedRoutes,
+          }),
+        ]),
     positionRow(runId, state, 'waiting'),
   ];
-  // A child's fork is a root: the task its ancestors were given, and the
-  // structured result its parent's call asked for, are not its.
-  const {
-    rootUserInstruction: _root,
-    outputSchema: _schema,
-    ...record
-  } = config;
   const registration = yield* registrationRows(session, runId, record, {
     identity: start.identity,
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,

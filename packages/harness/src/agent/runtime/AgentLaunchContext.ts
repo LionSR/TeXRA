@@ -21,6 +21,7 @@ import {
   type StageHandle,
 } from '@agent/trace';
 import { commitResumedActivation } from '@agent/storage/runLifecycle';
+import { deriveResumability } from '@agent/storage/resumability';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
@@ -353,12 +354,10 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     // and carried in, so a delegated launch inherits the parent run's session
     // policy and a root launch gets the process default exactly once.
     const { session, runId } = input;
-    // A resumed run's latest snapshot (one indexed read): whether its rows
-    // hold its opening, and that opening's memory misses.
-    const snapshot = input.resumed
-      ? yield* session.runHistory.latestSnapshot(runId)
-      : null;
-    const recorded = snapshot?.payload.state;
+    // Whether a resumed run's rows hold its opening.
+    const opened =
+      input.resumed &&
+      (yield* deriveResumability(runId, session)).kind === 'checkpoint';
     // The run's model is bound from the stores the launch already has: the
     // session's own setting slots, so routing and the provider switches
     // answer for this run's workspace, and the process secret store.
@@ -437,7 +436,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     // resumed run's included.
     const opening = yield* Effect.suspend(() => {
       if (documentTask === null)
-        return recorded === undefined ? buildVars() : Effect.succeed(null);
+        return opened ? Effect.succeed(null) : buildVars();
 
       const initStage = parentStage.child('Init');
       return buildVars(initStage.id).pipe(
@@ -472,8 +471,9 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
       logger: agentLogger,
       parentStage,
       opening,
-      attachedMemoryMisses:
-        opening?.attachedMemoryMisses ?? recorded?.memoryMisses ?? [],
+      // A resumed run's are on its opening's `append`, which its loop
+      // reports with its result.
+      attachedMemoryMisses: opening?.attachedMemoryMisses ?? [],
       initialUserMessageForTranscript: initialMediaMayBeInserted
         ? initialInstruction
         : undefined,

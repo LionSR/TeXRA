@@ -40,8 +40,8 @@ interface RunListingBase {
   paused?: true;
   /** AI-generated summary of what the session aimed to accomplish. */
   description?: string;
-  /** The model the run is on, as the view folds it: its latest snapshot's
-   *  (`run.model`), else the one it was launched with. */
+  /** The model the run is on, as the view folds it: its newest
+   *  `run.config`'s. */
   model?: string;
   /** `deriveResumability` finds a point to continue from. Ownership and
    *  loadability are settled when the run is opened. */

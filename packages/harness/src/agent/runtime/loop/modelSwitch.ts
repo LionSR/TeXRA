@@ -10,32 +10,26 @@ import { resolveModelRoute, routeBackend } from '@agent/runtime/modelRoutes';
 import { decideReasoning } from '@model/reasoningLevel';
 import { LanguageModel } from '@platform/languageModel';
 import type { QueuedFollowUp } from '@shared/session/runRows';
-import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
+import type { RunState } from '@shared/session/runStateFold';
 
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
 import { bindModel, PROTOCOL_BY_BACKEND } from '../run/modelBinding';
-import { consumedRows, rowAggregate, type SnapshotPatch } from './rows';
+import { configRow, consumedRows } from './rows';
 import type { HttpClient } from 'effect/http';
 import type { RunCell } from './runProgram';
 
 /** Apply the model switches the run's input queues (the latest wins): the
- *  edit that drops the continuation, the snapshot naming the new model and
- *  the requests' `followup.consumed`, committed inside the swap, so the new
- *  binding goes into force only once its rows have. The snapshot's `modelId`
- *  is the run's one model fact; the run's configuration row keeps the model
- *  it was launched with. */
+ *  `run.config` naming the new model and the requests' `followup.consumed`,
+ *  committed inside the swap, so the new binding goes into force only once
+ *  its rows have. The newest `run.config` is the run's one model fact; the
+ *  fold drops the old model's continuation with it. */
 export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
   function* (
     state: RunState,
     cell: RunCell,
-    /** The loop's snapshot row, family state included. */
-    snapshot: (
-      state: RunState,
-      patch: Omit<SnapshotPatch, 'state'>,
-    ) => readonly RunHistoryDraft[],
-    /** What must settle on the view before the switch's edit: a background
-     *  compaction, which lands or stops. */
-    beforeEdit: (state: RunState) => Effect.Effect<RunState, Error>,
+    /** What must settle before the old binding closes: a background
+     *  compaction on it, which lands or stops. */
+    beforeSwap: (state: RunState) => Effect.Effect<RunState, Error>,
     /** The run's pending requests; its model switches are applied. */
     controls: readonly QueuedFollowUp[],
   ): Effect.fn.Return<
@@ -58,7 +52,7 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
     if (!selected) {
       return yield* Effect.fail(new Error(`Model ${model} is not registered`));
     }
-    state = yield* cell.adopt(yield* beforeEdit(state));
+    state = yield* cell.adopt(yield* beforeSwap(state));
     let switched = state;
     yield* run.swapModel(() =>
       Effect.gen(function* () {
@@ -73,26 +67,9 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
         });
         switched = yield* cell.append([
           ...consumed,
-          {
-            type: 'context.edit',
-            aggregateId: rowAggregate(run.runId),
-            payload: {
-              cause: 'compaction',
-              trigger: 'model-switch',
-              base: state.lastEdit,
-              range: {
-                from: state.messages.length,
-                to: state.messages.length,
-              },
-              messages: [],
-              usage: null,
-            },
-          },
-          ...snapshot(state, {
-            runtime: {
-              modelId: next.modelId,
-              backend: next.backend,
-            },
+          configRow(run.runId, run.config, next.modelId, {
+            backend: next.backend,
+            declinedRoutes: run.declinedRoutes,
           }),
         ]);
         return next;

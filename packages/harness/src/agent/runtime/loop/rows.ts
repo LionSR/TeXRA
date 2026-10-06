@@ -1,28 +1,28 @@
 /**
- * The loops' row constructors: every run history draft a loop appends, built from
- * the folded `RunState` and nothing else. A `run.position` is the one record
- * of where the loop stands; a `run.snapshot` carries the loop state and what
- * the loop runs on (model, declined routes); every fact a row already
- * carries (the pending response, its intents, their approval bindings, the
- * invocation's attempts and failures) is folded from that row and never
- * restated here.
+ * The loops' row constructors: every run history draft a loop appends, built
+ * from the folded `RunState` and nothing else. A `run.position` is the one
+ * record of where the loop stands; a `run.config` is what the run runs on
+ * (its model and binding); an `append` carries what its messages change
+ * about the run's input. Every fact a row already carries (the pending
+ * response, its intents, their approval bindings, the invocation's attempts
+ * and failures) is folded from that row and never restated here.
  */
 
 import { randomUUID } from 'node:crypto';
-import { isDeepStrictEqual } from 'node:util';
 
 import { Effect, SynchronizedRef } from 'effect';
 
+import type { RunRecord } from '@agent/core/definition/RunRecord';
 import {
   aggregateId as qualifyAggregateId,
   type JsonValue,
   type PositionAt,
-  type RunSnapshotPayload,
+  type RunBinding,
   type RunId,
+  type RunInput,
   type RunOutcome,
   type SessionEvent,
   type SessionEventDraft,
-  type SnapshotRuntime,
   type ToolBindingPayload,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
@@ -38,25 +38,14 @@ import type { SessionHandle } from '../SessionHandle';
 
 export type Message = z.infer<typeof MessageSchema>;
 
-export type ToolUseLoopState = RunSnapshotPayload['state'];
-
 export function rowAggregate(runId: RunId) {
   return qualifyAggregateId('run', runId);
 }
 
 /** The coordinates a `run.position` row is stamped with. */
-export type PositionCoordinates = Pick<RunState, 'family' | 'turn'>;
+export type PositionCoordinates = Pick<RunState, 'turn'>;
 
-/** A position never lands on an unopened run: the family is the state's. */
-function familyOf(
-  state: Pick<RunState, 'family'>,
-): RunSnapshotPayload['family'] {
-  if (state.family === null) {
-    throw new Error('A run.position presupposes an opened run with a family.');
-  }
-  return state.family;
-}
-
+/** Where the loop stands; a run's first one opens it. */
 export function positionRow(
   runId: RunId,
   state: PositionCoordinates,
@@ -65,11 +54,7 @@ export function positionRow(
   return {
     type: 'run.position',
     aggregateId: rowAggregate(runId),
-    payload: {
-      family: familyOf(state),
-      at,
-      turn: state.turn,
-    },
+    payload: { family: 'toolUse', at, turn: state.turn },
   };
 }
 
@@ -88,64 +73,50 @@ export function haltedPositionRow(
   };
 }
 
+/** Messages appended to the run's history: `input` is what they change
+ *  about what the run answers, `reason` names a message the loop wrote
+ *  itself (`model.message` `append`). */
 export function appendRow(
   runId: RunId,
   messages: readonly Message[],
-  sourceResponse: string | null = null,
+  options: {
+    readonly sourceResponse?: string | null;
+    readonly input?: RunInput;
+    readonly reason?: 'blank-continuation' | 'final-tool';
+  } = {},
 ): RunHistoryDraft {
+  const { sourceResponse = null, input, reason } = options;
   return {
     type: 'model.message',
     aggregateId: rowAggregate(runId),
-    payload: { kind: 'append', messages, sourceResponse },
+    payload: {
+      kind: 'append',
+      messages,
+      sourceResponse,
+      ...(input !== undefined && Object.keys(input).length > 0 && { input }),
+      ...(reason !== undefined && { reason }),
+    },
   };
-}
-
-export interface SnapshotPatch {
-  readonly runtime?: Partial<
-    Pick<SnapshotRuntime, 'modelId' | 'backend' | 'declinedRoutes'>
-  >;
-  /** Defaults to the loop state the run last wrote. */
-  readonly state?: ToolUseLoopState;
 }
 
 /**
- * The one `run.snapshot` constructor. Runtime fields come from the folded
- * state unless the patch moves them; the loop state is the one the run last
- * wrote unless the patch rewrites it. A snapshot that would record exactly
- * what the latest one written holds is not written: the answer is empty, and
- * a caller spreads it into its batch. The comparison is against that row, not
- * the folded loop state, which a `tool.result` has already moved.
+ * The run's `run.config` on `model` and `binding`: the configuration the run
+ * was launched (or resumed) with, and what the loop bound, written when the
+ * run first binds and at a model switch, in the batch that puts the binding
+ * in force.
  */
-export function snapshotRow(
+export function configRow(
   runId: RunId,
-  state: RunState,
-  patch: SnapshotPatch,
-): readonly RunHistoryDraft[] {
-  const loop = patch.state ?? state.loop;
-  if (loop === null) {
-    throw new Error('A run.snapshot presupposes an opened run.');
-  }
-  // A snapshot's model id and backend are required durable facts (resume
-  // and every listing read them back); no caller may reach here without
-  // them, so refuse at the constructor rather than let `appendBatch` reject
-  // the batch on a schema refinement far from whatever lost the binding.
-  const modelId = patch.runtime?.modelId ?? state.modelId;
-  const backend = patch.runtime?.backend ?? state.backend;
-  if (!modelId || backend === null) {
-    throw new Error('A run.snapshot presupposes a bound model.');
-  }
-  const runtime: SnapshotRuntime = {
-    modelId,
-    backend,
-    declinedRoutes: patch.runtime?.declinedRoutes ?? state.declinedRoutes,
+  config: RunRecord,
+  model: string,
+  binding: RunBinding,
+): RunHistoryDraft {
+  return {
+    type: 'run.config',
+    aggregateId: rowAggregate(runId),
+    config: { ...config, model },
+    binding,
   };
-  const payload: RunSnapshotPayload = {
-    family: 'toolUse',
-    runtime,
-    state: loop,
-  };
-  if (isDeepStrictEqual(payload, state.lastSnapshot)) return [];
-  return [{ type: 'run.snapshot', aggregateId: rowAggregate(runId), payload }];
 }
 
 /**

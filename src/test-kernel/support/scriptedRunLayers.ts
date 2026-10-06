@@ -26,7 +26,6 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter } from '@agent/trace';
 import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  type JsonValue,
   type RetryErrorInfo,
   type RunId,
 } from '@shared/schemas';
@@ -279,7 +278,6 @@ export function testAgentRun(
     fileService: new RunFileService(runId, session.roots),
     ...testRunTools(hostStores()),
     finalToolName: null,
-    structured: { value: undefined },
     swapModel: (next) =>
       SynchronizedRef.updateAndGetEffect(model, (current) =>
         Effect.scoped(next(current)),
@@ -304,8 +302,6 @@ export interface ScriptedRunInit {
   readonly stopAfterCycle?: boolean;
   /** The terminal structured-output tool, when the run has one. */
   readonly finalToolName?: string | null;
-  /** The slot the terminal tool captures into, shared with the scenario. */
-  readonly structured?: { value: JsonValue | undefined };
   readonly mediaFiles?: readonly string[];
   /** Absent means the launch had no transcript row to write. */
   readonly initialUserMessageForTranscript?: string | undefined;
@@ -344,7 +340,6 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
           toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
           ...testRunTools(hostStores(), tools),
           finalToolName: init.finalToolName ?? null,
-          structured: init.structured ?? { value: undefined },
           callbacks: init.onIdle ? { onIdle: init.onIdle } : {},
           ...('initialUserMessageForTranscript' in init
             ? {

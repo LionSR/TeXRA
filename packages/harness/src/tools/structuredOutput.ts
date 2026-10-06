@@ -8,7 +8,7 @@ import { convertToolSchema } from '@agent/core/tools/toolSchema';
 import {
   ToolError,
   JsonValueSchema,
-  type JsonValue,
+  STRUCTURED_OUTPUT_TOOL_NAME,
   type ToolResult,
 } from '@shared/schemas';
 
@@ -19,9 +19,6 @@ type StructuredOutputSchema = {
   readonly jsonSchema: Record<string, unknown>;
   readonly zodSchema: z.ZodType;
 };
-
-/** Name of the synthetic tool the model calls to submit its final result. */
-const SUBMIT_OUTPUT_TOOL_NAME = 'submit_output';
 
 // A sandbox schema crosses into host Zod compilation via z.fromJSONSchema, so
 // an unbounded tree is a host DoS. These caps keep compilation cheap; 12 levels
@@ -152,7 +149,7 @@ export function normalizeStructuredOutputSchema(
   if (!fromZod) assertSafeSandboxSchema(input);
   const zodSchema = fromZod ? input : (z.fromJSONSchema(input) as z.ZodType);
   const jsonSchema = convertToolSchema({
-    name: SUBMIT_OUTPUT_TOOL_NAME,
+    name: STRUCTURED_OUTPUT_TOOL_NAME,
     zodSchema,
   });
   if (jsonSchema?.type !== 'object') {
@@ -173,21 +170,18 @@ export function normalizeStructuredOutputSchema(
  * The guarantee is the tool layer's own spine: `defineTool` validates
  * the model's call before `execute` runs, and an invalid call surfaces a
  * `ZodError` the model self-corrects. `execute` then enforces the persisted
- * JSON-value contract and hands the result to `capture`.
- *
- * `capture` is closed over by a tool built per call, not a module-level
- * global, so concurrent runs never share a sink.
+ * JSON-value contract and returns it as the result's `value`: the settled
+ * result is the run's structured output (`RunState.structured`).
  */
 export function buildTerminalTool(
   input: z.ZodType | Record<string, unknown>,
-  capture: (value: JsonValue) => void,
 ): ITool<Error, never> {
   const { zodSchema } = normalizeStructuredOutputSchema(input);
 
-  // Built per call, so `captured` and `capture` belong to this run alone.
+  // Built per run, so `captured` belongs to this run's loop alone.
   let captured = false;
   return defineTool<unknown, never>({
-    name: SUBMIT_OUTPUT_TOOL_NAME,
+    name: STRUCTURED_OUTPUT_TOOL_NAME,
     description:
       'Submit the final result. Call this exactly once, with the complete result, when the task is done.',
     schema: zodSchema,
@@ -203,10 +197,10 @@ export function buildTerminalTool(
         const parsed = JsonValueSchema.safeParse(input);
         if (!parsed.success) return Effect.fail(parsed.error);
         captured = true;
-        capture(parsed.data);
         return Effect.succeed<ToolResult>({
           status: 'executed',
           endTurn: true,
+          value: parsed.data,
           summary: 'Structured output captured.',
           output: 'Structured output captured.',
         });

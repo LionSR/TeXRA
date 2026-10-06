@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Task history is stored without per-turn snapshots.** A task now resumes
+  from the rows that record each fact (its configuration, its messages, its
+  tool results), so a resumed task picks up exactly where its rows left it.
+  Tasks saved by an earlier build open as made by an older TeXRA and cannot
+  be resumed.
 - **No more "Did it finish before TeXRA stopped?" question after a crash.**
   When TeXRA stops while a command, an edit or another call that is not
   safe to repeat is running, the resumed task no longer asks you whether to

@@ -42,7 +42,7 @@ import {
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { appendRow, snapshotRow } from '@agent/runtime/loop/rows';
+import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import {
   ModelInvoker,
   modelInvokerLayer,
@@ -332,9 +332,7 @@ const openRun = Effect.fn('openRun')(function* (
     appendRow(runId, [
       { role: 'user', content: [{ kind: 'text', text: 'go' }] },
     ]),
-    ...snapshotRow(runId, freshState(), {
-      state: {},
-    }),
+    positionRow(runId, freshState(), 'turn.ready'),
   ]);
   // The retries the binding carries, read from the session as `bindModel`
   // reads them.

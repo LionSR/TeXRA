@@ -56,11 +56,11 @@ function pinRunWorkingDirectory(
  * The `run.config` row an activation owes, or null when the run's newest
  * row already says it. A run's configuration is written with its
  * registration and afterwards only when it changes, so the newest row is the
- * configuration and no activation restates it. Its model stays the one the
- * run was launched with: the model the run is on is its snapshot's, which a
- * resume's configuration carries and this row never restates. Its caller
- * holds the run's claim, so no other writer can move the row between the
- * read and the write.
+ * configuration and no activation restates it. Its model stays the stored
+ * row's: the model the run is on is the newest config's, which only a
+ * switch moves, and its binding is the fold's, which a config without one
+ * leaves as it was. Its caller holds the run's claim, so no other writer
+ * can move the row between the read and the write.
  */
 export const configChange = Effect.fn('configChange')(function* (
   session: SessionHandle,

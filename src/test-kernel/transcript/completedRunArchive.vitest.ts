@@ -19,12 +19,7 @@ import {
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { withProcessServices } from '@platform/processRuntime';
-import {
-  LOG_LEVELS,
-  MESSAGE_TYPES,
-  aggregateId,
-  RunSnapshotPayloadSchema,
-} from '@shared/schemas';
+import { LOG_LEVELS, MESSAGE_TYPES, aggregateId } from '@shared/schemas';
 import type { JsonValue, LogLevel, MessageType, RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -334,21 +329,12 @@ describe('completedRunArchive facade', () => {
           }),
         );
 
-        // The one fact a resume reads: the run aggregate's latest
-        // `run.snapshot`, committed here as this run's opening row.
+        // The one fact a resume reads: the run's opening `run.position`.
         yield* session.commit([
           {
-            type: 'run.snapshot',
+            type: 'run.position',
             aggregateId: aggregateId('run', runId),
-            payload: RunSnapshotPayloadSchema.parse({
-              family: 'toolUse',
-              runtime: {
-                modelId: config.model,
-                backend: 'openai',
-                declinedRoutes: [],
-              },
-              state: {},
-            }),
+            payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
           },
         ]);
 

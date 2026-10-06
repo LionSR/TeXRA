@@ -11,12 +11,7 @@ import { describe, expect, vi } from 'vitest';
 // Local imports
 import type { InboxItem } from '@agent/followUp/Inbox';
 import { type InvokeRequest } from '@agent/runtime/ModelInvoker';
-import {
-  appendRow,
-  rowAggregate,
-  snapshotRow,
-  positionRow,
-} from '@agent/runtime/loop/rows';
+import { appendRow, rowAggregate, positionRow } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import type { RunControls } from '@agent/runtime/RunHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -206,9 +201,6 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       appendRow(runId, [
         { role: 'user', content: [{ kind: 'text', text: 'Do the thing.' }] },
       ]),
-      ...snapshotRow(runId, fresh, {
-        state: {},
-      }),
       positionRow(runId, { ...fresh, turn: 1 }, 'turn.begin'),
     ]);
     const invocation = { invocationId: randomUUID(), attempt: 1 };
