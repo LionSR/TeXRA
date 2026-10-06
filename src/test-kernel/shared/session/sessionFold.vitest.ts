@@ -29,6 +29,7 @@ import {
 } from '@shared/schemas';
 
 import type { RunHistoryRow } from '@shared/session/historyTurns';
+import { callRequestId } from '@shared/session/inFlight';
 import {
   foldRunState,
   unboundRequests,
@@ -1327,11 +1328,6 @@ const intent = (callId: string, attempt = 1) => ({
     attempt,
   },
 });
-/** The binding row an approval commits beside its `request.opened`. */
-const toolBinding = (callId: string, requestId: string, attempt = 1) => ({
-  type: 'tool.binding',
-  payload: { callId, attempt, requestId, role: 'call' },
-});
 const message = (payload: Record<string, unknown>) => ({
   type: 'model.message',
   payload,
@@ -1464,7 +1460,6 @@ describe('foldRunState', () => {
         expect(state?.pendingResponse?.records['call-a']?.status).toEqual({
           kind: 'started',
           attempt: 1,
-          binding: null,
         });
         expect(state?.pendingResponse?.records['call-b']?.status).toEqual({
           kind: 'issued',
@@ -1490,39 +1485,40 @@ describe('foldRunState', () => {
       },
     ],
     [
-      'approval requested before the body, never resolved: the binding rides its own row',
+      'approval requested before the body, never resolved: its derived id binds it',
       () => {
-        const approval = [
-          {
-            type: 'request.opened',
-            requestId: 'req-1',
-            payload: {
-              kind: 'bash',
-              data: {
-                requestId: 'req-1',
-                command: 'ls',
-                allowBypass: true,
-                runId: RUN_HISTORY_RUN,
-              },
+        const requestId = callRequestId(
+          { responseId: RESPONSE_ID, callId: 'call-a', attempt: 1 },
+          1,
+        );
+        const approval = {
+          type: 'request.opened',
+          requestId,
+          payload: {
+            kind: 'bash',
+            data: {
+              requestId,
+              command: 'ls',
+              allowBypass: true,
+              runId: RUN_HISTORY_RUN,
             },
           },
-          toolBinding('call-a', 'req-1'),
-        ];
-        // Asked before its body started: nothing ran, whatever the answer.
-        const asking = stateOf(through(5, ...approval));
-        expect(asking?.requests['req-1']?.resolved).toBe(false);
+        };
+        // Asked before its body started: nothing ran, whatever the answer,
+        // and a resume re-enters the request rather than retiring it.
+        const asking = stateOf(through(5, approval));
+        expect(asking?.requests[requestId]?.resolved).toBe(false);
         expect(asking?.pendingResponse?.records['call-a']?.status).toEqual({
-          kind: 'asking',
-          attempt: 1,
-          requestId: 'req-1',
+          kind: 'issued',
         });
-        // The body starts under it: the request is the attempt's binding.
-        const started = stateOf(through(5, ...approval, intent('call-a')));
+        expect(asking === null ? [] : unboundRequests(asking)).toEqual([]);
+        // The body starts under it: still the attempt's own request.
+        const started = stateOf(through(5, approval, intent('call-a')));
         expect(started?.pendingResponse?.records['call-a']?.status).toEqual({
           kind: 'started',
           attempt: 1,
-          binding: { requestId: 'req-1', role: 'call' },
         });
+        expect(started === null ? [] : unboundRequests(started)).toEqual([]);
       },
     ],
     [
@@ -1786,7 +1782,6 @@ describe('foldRunState', () => {
         expect(state?.pendingResponse?.records['__proto__']?.status).toEqual({
           kind: 'started',
           attempt: 1,
-          binding: null,
         });
       },
     ],
@@ -1872,21 +1867,6 @@ describe('foldRunState', () => {
       () => through(6, intent('call-a', 2), settlement('call-a')),
     ],
     [
-      // The outcome question asks whether a body ran: one that never
-      // started is a row out of order.
-      'out-of-order',
-      () =>
-        through(5, {
-          type: 'tool.binding',
-          payload: {
-            callId: 'call-a',
-            attempt: 1,
-            requestId: 'req-9',
-            role: 'outcome',
-          },
-        }),
-    ],
-    [
       // A call settles once.
       'orphan-settlement',
       () => through(7, settlement('call-a', { attempt: 2 })),
@@ -1942,7 +1922,6 @@ describe('foldRunState', () => {
       'model.message',
       'context.edit',
       'tool.intent',
-      'tool.binding',
       'tool.result',
     ] as const;
     for (const type of runHistoryTypes)

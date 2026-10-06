@@ -330,9 +330,9 @@ export const runHistoryLayer: Layer.Layer<
             : error,
         ),
       );
-      // A tool call's own request is bound to the call (`tool.binding`), so
-      // the resume re-enters it; what the previous owner left open unbound
-      // is a later request of an attempt already past its first answer,
+      // A tool call's own request carries an id its attempt derives, so the
+      // resume re-enters it; what else the previous owner left open is a
+      // later request of an attempt already past its own answer,
       // whose body died with that owner. Taking the claim retires exactly
       // those as cancelled, so no surface outlives the process that asked.
       // Rows that do not fold are `load`'s refusal, from the same read.

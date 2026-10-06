@@ -42,7 +42,6 @@ import {
   RunPositionPayloadSchema,
   ContextEditPayloadSchema,
   ModelMessagePayloadSchema,
-  ToolBindingPayloadSchema,
   ScriptCallPayloadSchema,
   ToolIntentPayloadSchema,
   ToolResultPayloadSchema,
@@ -435,8 +434,6 @@ const RunHistoryEventDraftSchema = z.discriminatedUnion('type', [
   durable('tool.intent', { payload: ToolIntentPayloadSchema }),
   /** A call a script issued, with its arguments: committed with its intent. */
   durable('script.call', { payload: ScriptCallPayloadSchema }),
-  /** Binds a call attempt to its own request; commits with the request. */
-  durable('tool.binding', { payload: ToolBindingPayloadSchema }),
   durable('tool.result', { payload: ToolResultPayloadSchema }),
   durable('tools.offered', { payload: ToolsOfferedPayloadSchema }),
   durable('context.blob', { payload: ContextBlobSchema }),
@@ -583,7 +580,6 @@ export function listingTypeOf(
     case 'context.edit':
     case 'tool.intent':
     case 'script.call':
-    case 'tool.binding':
     case 'tool.result':
     case 'tools.offered':
     case 'context.blob':

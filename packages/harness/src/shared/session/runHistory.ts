@@ -123,8 +123,8 @@ export class RunHistory extends Context.Service<
      *
      * Preconditions, checked before publish; a violation is a defect:
      * - a batch on an unopened run carries the `run.position` that opens
-     *   it. A `request.opened` PRECEDES the `tool.binding` or the `failed`
-     *   attempt that binds it, so the fold resolves the binding against a request
+     *   it. A `request.opened` PRECEDES the `failed`
+     *   attempt that asks it, so the fold resolves the ask against a request
      *   it already holds;
      * - a `context.edit` immediately precedes the `model.message`
      *   `response` row that used it, when both are present;

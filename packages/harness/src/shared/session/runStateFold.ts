@@ -42,7 +42,7 @@ import {
 } from './runRows';
 import {
   attemptOf,
-  boundRequestOf,
+  attemptRequests,
   invocationAfter,
   pendingResponseOf,
   settlementOf,
@@ -55,13 +55,11 @@ import type { HistoryMessage, Live, RunHistoryRow } from './historyTurns';
 /**
  * The rows `RunHistory.appendBatch` commits: the six run history arms plus the
  * display arms a batch has to commit atomically with them. A tool call's card
- * settles with its `tool.result`; an approval's recovery binding is the
- * `tool.binding` in the same batch; a streaming row open when the loop parks
+ * settles with its `tool.result`; a streaming row open when the loop parks
  * closes with the `waiting` step; a run's binding and a model switch are its
  * `run.config`; a child turn's settlement commits with its boundary.
  * Publishing those companions separately is the crash window where a settled
- * tool keeps an active card, a card claims a result no row holds, an approval
- * has nothing to recover it by, or a listing names a model the history does
+ * tool keeps an active card, a card claims a result no row holds, or a listing names a model the history does
  * not. An explicit list narrowed from `SessionEventDraft`.
  */
 export type RunHistoryDraft = Live<
@@ -73,7 +71,6 @@ type RunHistoryDraftType =
   | 'context.edit'
   | 'tool.intent'
   | 'script.call'
-  | 'tool.binding'
   | 'tool.result'
   | 'run.config'
   | 'tools.offered'
@@ -253,31 +250,40 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
 });
 
 /**
- * The undecided requests nothing can recover: no binding names them, and
- * they are not the one kind that outlives the process that asked. A tool
- * call's own request (a command, an edit, a plan, a delegation, a question)
- * is bound to the call it parks, and a resume re-enters it; what is left
- * unbound is a later request of an attempt already past its first, which
- * parks a body nothing can re-enter, so a resume retires those as cancelled
- * before it continues the run (`RunHistory.acquire`). An `externalInquiry` is
- * the exception by contract:
- * its tool returns at once and its answer arrives as a follow-up, whichever
- * process is running the run by then, so it stands unbound across every
- * batch its run writes.
+ * The undecided requests nothing can recover. A tool call attempt's own
+ * request (a command, an edit, a plan, a delegation, a question) carries
+ * an id derived from the attempt, and a resume re-enters it: the started
+ * attempt's own, or the next attempt's, asked before its body started.
+ * What is left is a later request of an attempt already past its own
+ * answer, which parks a body nothing can re-enter, so a resume retires
+ * those as cancelled before it continues the run (`RunHistory.acquire`).
+ * An `externalInquiry` is the exception by contract: its tool returns at
+ * once and its answer arrives as a follow-up, whichever process is running
+ * the run by then, so it stands across every batch its run writes.
  */
 export function unboundRequests(state: RunState): readonly string[] {
-  // The recovery bindings the rows carry (R5): the retry request the turn's
-  // failed attempt asks and every pending call's `tool.binding`.
-  const bindings = new Set<string | undefined>(
-    Object.values(state.pendingResponse?.records ?? {}).map(
-      ({ status }) => boundRequestOf(status)?.requestId,
+  // What the rows can recover (R5): the retry request the turn's failed
+  // attempt asks and every pending call's own requests.
+  const pending = state.pendingResponse;
+  const own = new Set<string | undefined>(
+    Object.entries(pending?.records ?? {}).flatMap(([callId, { status }]) =>
+      pending === null || status.kind === 'settled'
+        ? []
+        : [attemptOf(status), attemptOf(status) + 1].map(
+            (attempt) =>
+              attemptRequests(state.requests, {
+                responseId: pending.responseId,
+                callId,
+                attempt,
+              }).own?.requestId,
+          ),
     ),
   );
   const asked = state.invocation?.current.failed?.next;
-  if (asked?.kind === 'ask') bindings.add(asked.requestId);
+  if (asked?.kind === 'ask') own.add(asked.requestId);
   return Object.entries(state.requests).flatMap(([requestId, request]) =>
     request.resolved ||
-    bindings.has(requestId) ||
+    own.has(requestId) ||
     !requestParksItsCaller(request.payload)
       ? []
       : [requestId],
@@ -643,8 +649,7 @@ function foldRow(
     }
     case 'tool.intent': {
       // The call's body begins: from here it may have run. Once per
-      // attempt, an attempt never goes back, and a call asking for this
-      // attempt keeps its own request as the attempt's binding.
+      // attempt, and an attempt never goes back.
       if (!opened(current)) return beforeOpening(row.type);
       const p = row.payload;
       const pending = current.pendingResponse;
@@ -668,50 +673,7 @@ function foldRow(
       return Result.succeed(
         withCall(current, pending, p.callId, {
           ...call,
-          status: {
-            kind: 'started',
-            attempt: p.attempt,
-            binding:
-              status.kind === 'asking' && status.attempt === p.attempt
-                ? { requestId: status.requestId, role: 'call' }
-                : null,
-          },
-        }),
-      );
-    }
-    case 'tool.binding': {
-      // The request that guards one call attempt, committed with the
-      // `request.opened` it names. The call's own request may come before
-      // the attempt's body starts (its guard's approval) or after (the
-      // first its body raised); the outcome question only after. A later
-      // binding of the same attempt replaces it (a request retired as
-      // cancelled, asked again under a new id).
-      if (!opened(current)) return beforeOpening(row.type);
-      const p = row.payload;
-      const pending = current.pendingResponse;
-      const call = pending?.records[p.callId];
-      if (pending === null || call === undefined) {
-        return outOfOrder(`binding ${p.requestId} names no pending call`);
-      }
-      const { status } = call;
-      const refusal = openFor(p.callId, status, p.attempt);
-      if (refusal !== null) return outOfOrder(refusal);
-      const running = status.kind === 'started' && status.attempt === p.attempt;
-      if (p.role === 'outcome' && !running) {
-        return outOfOrder(
-          `outcome question ${p.requestId} for ${p.callId}, whose attempt ${p.attempt} never started`,
-        );
-      }
-      return Result.succeed(
-        withCall(current, pending, p.callId, {
-          ...call,
-          status: running
-            ? {
-                kind: 'started',
-                attempt: p.attempt,
-                binding: { requestId: p.requestId, role: p.role },
-              }
-            : { kind: 'asking', attempt: p.attempt, requestId: p.requestId },
+          status: { kind: 'started', attempt: p.attempt },
         }),
       );
     }

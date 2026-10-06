@@ -4,7 +4,7 @@
  * record of where the loop stands; a `run.config` is what the run runs on
  * (its model and binding); an `append` carries what its messages change
  * about the run's input. Every fact a row already carries (the pending
- * response, its intents, their approval bindings, the invocation's attempts
+ * response, its intents, the invocation's attempts
  * and failures) is folded from that row and never restated here.
  */
 
@@ -23,7 +23,6 @@ import {
   type RunOutcome,
   type SessionEvent,
   type SessionEventDraft,
-  type ToolBindingPayload,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import type { QueuedFollowUp } from '@shared/session/runRows';
@@ -116,22 +115,6 @@ export function configRow(
     aggregateId: rowAggregate(runId),
     config: { ...config, model },
     binding,
-  };
-}
-
-/**
- * The request that guards one call attempt: committed in the batch that
- * opens the request it names, and the one carrier of the binding the fold
- * reads back.
- */
-export function bindingRow(
-  runId: RunId,
-  binding: ToolBindingPayload,
-): RunHistoryDraft {
-  return {
-    type: 'tool.binding',
-    aggregateId: rowAggregate(runId),
-    payload: binding,
   };
 }
 

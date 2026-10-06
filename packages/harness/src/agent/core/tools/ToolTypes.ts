@@ -168,16 +168,17 @@ export class MapToolRegistry<E = Error, R = never> implements IToolRegistry<
 }
 
 /**
- * The requests one tool call raises, opened through its run's loop. The first
- * request an attempt raises commits with the `tool.binding` that ties it to
- * the call, so a person's pending approval outlives the process that asked:
- * a resume re-enters the call, and the call re-enters that same request.
+ * The requests one tool call raises, opened through its run's loop. Each
+ * carries an id its attempt derives, so a person's pending approval outlives
+ * the process that asked: a resume re-enters the call, and the call opens
+ * that same request again, joining it instead of asking twice.
  */
 export interface CallRequests {
-  /** The id the call's next request opens under: the request a resumed call
-   *  left standing, when its id has this prefix, else a fresh
-   *  `<prefix>-<id>`. A request is staged under this id before it opens. */
-  readonly nextId: (prefix: string) => string;
+  /** The id the call's next request of `kind` opens under: the request a
+   *  resumed call left standing, when it is of this kind, else the
+   *  attempt's next derived id. A request is staged under this id before
+   *  it opens. */
+  readonly nextId: (kind: PermissionPayload['kind']) => string;
   /** Open the request (or re-enter the standing one) and wait for its
    *  decision, as `SessionRequests.ask` does. */
   readonly open: (
