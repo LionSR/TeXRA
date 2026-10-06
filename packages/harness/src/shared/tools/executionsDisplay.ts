@@ -1,4 +1,4 @@
-import { isObject } from '@utils/core';
+import { Predicate } from 'effect';
 
 const EXECUTIONS_DEFAULT_ACTION = 'view';
 
@@ -46,7 +46,7 @@ export function executionsSubagentSummary(
   input: unknown,
   labels: RunLabels,
 ): string | undefined {
-  if (!isObject(input)) return undefined;
+  if (!Predicate.isObject(input)) return undefined;
 
   const listedIds = Array.isArray(input.ids)
     ? input.ids.filter((id): id is string => typeof id === 'string' && !!id)

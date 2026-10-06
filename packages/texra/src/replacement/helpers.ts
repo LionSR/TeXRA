@@ -1,8 +1,7 @@
 /**
  * Helper functions for generating replacement patterns
  */
-// Local imports
-import { capitalize } from '@utils/text/stringUtils';
+import { String as Str } from 'effect';
 
 // ============================================================================
 // Core factory functions for pattern generation
@@ -152,7 +151,7 @@ export function generateReferenceSpacing(
   return createPatterns(referenceTypes, (type) => {
     const entries: [string, string][] = [[`${type} \\ref{`, `${type}~\\ref{`]];
     if (/^[a-z]/.test(type)) {
-      const capitalizedType = capitalize(type);
+      const capitalizedType = Str.capitalize(type);
       entries.push(
         [`${capitalizedType} \\ref{`, `${capitalizedType}~\\ref{`],
         [`${capitalizedType}\\ref{`, `${capitalizedType}~\\ref{`],

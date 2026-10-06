@@ -2,14 +2,13 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Result } from 'effect';
+import { Effect, FileSystem, Predicate, Result } from 'effect';
 import { ZodError } from 'zod';
 
 // Local imports - common
 import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
 import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import { SkillNameSchema } from '@shared/schemas';
-import { isObject } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - skill parsing
@@ -183,7 +182,7 @@ export function loadCommandFile(
       const frontmatter =
         parsed !== undefined &&
         Result.isSuccess(parsed) &&
-        isObject(parsed.success)
+        Predicate.isObject(parsed.success)
           ? parsed.success
           : {};
       const body = (split.kind === 'ok' ? split.body : content).trim();
@@ -255,7 +254,7 @@ export function loadSkillDirectory(
       Effect.try({
         try: (): LoadedSkill => {
           const { frontmatter, body } = extractFrontmatter(content);
-          if (!isObject(frontmatter)) {
+          if (!Predicate.isObject(frontmatter)) {
             return {
               errors: [
                 issue(

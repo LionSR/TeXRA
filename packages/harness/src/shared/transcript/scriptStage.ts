@@ -11,6 +11,7 @@
  * its answer is its card's delivery (`deliveredResponse`); its duration and
  * cost are its child's rows.
  */
+import { Predicate } from 'effect';
 import {
   agentName,
   TOOL_CALL_STATUS,
@@ -27,7 +28,7 @@ import {
 } from '@shared/session/sessionView';
 import { deliveredResponse } from '@shared/subagentFollowup';
 import { formatWorkflowCallFiles } from '@shared/transcript/workflowCall';
-import { assertNever, getBasename, isObject } from '@utils/core';
+import { assertNever, getBasename } from '@utils/core';
 import {
   formatCompactDuration,
   formatCostUsd,
@@ -181,7 +182,7 @@ function statusOf(
   child: RunView | undefined,
   interrupted: boolean,
 ): ScriptCallStatus {
-  const output = isObject(row.log.output) ? row.log.output : {};
+  const output = Predicate.isObject(row.log.output) ? row.log.output : {};
   switch (row.toolUse.status) {
     case TOOL_CALL_STATUS.COMPLETED:
       return stringOf(output.reusedFrom) === undefined ? 'finished' : 'reused';
@@ -207,7 +208,7 @@ function callView(
   host: FollowUpHost,
 ): ScriptCallView {
   const agent = row.toolUse.toolName === AGENT_TOOL;
-  const input = isObject(row.toolUse.input) ? row.toolUse.input : {};
+  const input = Predicate.isObject(row.toolUse.input) ? row.toolUse.input : {};
   // The newest child this card launched: a re-run attempt launches its own.
   const child = run.childIds
     .map((id) => view.runs.get(id))

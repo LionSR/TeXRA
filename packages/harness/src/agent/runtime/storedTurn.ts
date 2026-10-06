@@ -8,7 +8,7 @@
  * the package's own schemas parse them back here, so a turn another build of
  * the package can no longer read is a refusal of that run, never a default.
  */
-import { Result } from 'effect';
+import { Predicate, Result } from 'effect';
 
 import {
   MessageSchema,
@@ -32,7 +32,6 @@ import {
   RunHistoryInconsistent,
   type RunHistoryDraft,
 } from '@shared/session/runStateFold';
-import { isObject } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { z } from 'zod';
 
@@ -52,11 +51,11 @@ const mapEvidence = (
   rewrite: (evidence: Record<string, unknown>, key: string) => unknown,
 ): unknown => {
   if (Array.isArray(value)) return value.map((v) => mapEvidence(v, rewrite));
-  if (!isObject(value)) return value;
+  if (!Predicate.isObject(value)) return value;
   return Object.fromEntries(
     Object.entries(value).map(([key, v]) => [
       key,
-      EVIDENCE.has(key) && isObject(v)
+      EVIDENCE.has(key) && Predicate.isObject(v)
         ? rewrite(v, key)
         : mapEvidence(v, rewrite),
     ]),

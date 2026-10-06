@@ -1,4 +1,4 @@
-import { isObject } from '@utils/core';
+import { Predicate } from 'effect';
 
 /** Merge inherited agent config blocks with child arrays replacing parent arrays. */
 export function mergeInheritedAgentObject<T extends object>(
@@ -11,7 +11,7 @@ export function mergeInheritedAgentObject<T extends object>(
   for (const [key, childValue] of Object.entries(child)) {
     const parentValue = merged[key];
     merged[key] =
-      isObject(parentValue) && isObject(childValue)
+      Predicate.isObject(parentValue) && Predicate.isObject(childValue)
         ? mergeInheritedAgentObject(parentValue, childValue)
         : childValue;
   }

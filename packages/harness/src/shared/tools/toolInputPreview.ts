@@ -13,8 +13,8 @@
  * showed a clean truncated prompt. This module is the single source of
  * truth for the tool-name-specific half of that mapping.
  */
-import { isObject } from '@utils/core';
 
+import { Predicate } from 'effect';
 import { executionsAction } from './executionsDisplay';
 import { normalizeToolName } from './toolDisplayName';
 import { toolDisplayKind } from './toolKind';
@@ -58,7 +58,7 @@ export function deriveToolInputPreview(
   toolName: string,
   input: unknown,
 ): string {
-  if (!isObject(input)) return '';
+  if (!Predicate.isObject(input)) return '';
   const name = normalizeToolName(toolName);
   if (name === 'executions') return executionsInputPreview(input);
   // A script is named by its title; its source is the card's code section.

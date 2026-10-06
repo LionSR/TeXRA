@@ -5,11 +5,11 @@
  * stripped). The tool catalog builds the package's uniform tool
  * definitions from it; the structured-output tool builder shares it.
  */
+import { Predicate } from 'effect';
 import { toJSONSchema } from 'zod';
 
 import type { ToolDefinition } from '@shared/schemas';
 import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
-import { isObject } from '@utils/core';
 
 interface JSONSchemaObject {
   type?: string | string[];
@@ -58,7 +58,7 @@ function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
 
   const rawVariants = schema[variantKey] as unknown[];
   const variants = rawVariants.filter(
-    (v): v is JSONSchemaObject => isObject(v) && v.type === 'object',
+    (v): v is JSONSchemaObject => Predicate.isObject(v) && v.type === 'object',
   );
   if (variants.length === 0 || variants.length !== rawVariants.length) {
     return schema;

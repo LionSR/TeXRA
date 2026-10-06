@@ -1,5 +1,5 @@
 // Third-party imports
-import { Clock, Effect, Result } from 'effect';
+import { Clock, Effect, Predicate, Result } from 'effect';
 
 // Local imports
 import type { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
@@ -16,7 +16,7 @@ import {
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { type AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
-import { byName, isObject } from '@utils/core';
+import { byName } from '@utils/core';
 import type { StateStore } from '@texra-ai/harness';
 
 interface SettingsAgentCatalogEntry {
@@ -146,7 +146,8 @@ export class SettingsAgentCatalogController {
             .modify(WorkspaceStateKey.CUSTOM_TEAMS, (stored) =>
               Result.succeed(
                 presetRecords(stored).filter(
-                  (record) => !isObject(record) || record.id !== presetId,
+                  (record) =>
+                    !Predicate.isObject(record) || record.id !== presetId,
                 ),
               ),
             )

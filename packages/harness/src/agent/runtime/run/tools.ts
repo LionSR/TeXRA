@@ -6,14 +6,13 @@
  * runs alone; a call whose name and arguments repeat an earlier one in the same
  * window is a duplicate that never executes.
  */
-import { Effect, Result } from 'effect';
+import { Effect, Predicate, Result } from 'effect';
 import type { RuntimeToolRegistry as IToolRegistry } from '@agent/runtime/ToolServices';
 import { partitionDuplicateCalls } from '@agent/core/tools/toolCallParsing';
 import type { AgentTrace } from '@agent/trace';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { DispatchFacts } from '@shared/schemas';
 import type { HistoryMessage } from '@shared/session/historyTurns';
-import { isObject } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
 /** One local call of a pending response. */
@@ -121,7 +120,7 @@ export const replayable = Effect.fn('toolUse.replayable')(function* (
   const tool = registry.get(fact.toolName);
   if (fact.replay !== 'safe' || tool?.replay !== 'safe') return false;
   const schema = tool.definition.zodSchema;
-  if (schema === undefined) return isObject(input);
+  if (schema === undefined) return Predicate.isObject(input);
   const parsed = yield* Effect.tryPromise({
     try: () => schema.safeParseAsync(input),
     catch: ensureError,

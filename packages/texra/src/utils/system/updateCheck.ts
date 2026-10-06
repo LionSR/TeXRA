@@ -1,4 +1,4 @@
-import { Clock, Context, Duration, Effect } from 'effect';
+import { Clock, Context, Duration, Effect, Predicate } from 'effect';
 import { HttpClient, HttpClientResponse } from 'effect/http';
 
 import { withLogChannel } from '@logger/effectLog';
@@ -8,7 +8,6 @@ import {
   type UpdateCheckRecord,
 } from '@shared/schemas';
 import type { ValueFamily } from '@shared/session/valueFamily';
-import { isObject } from '@utils/core';
 
 import {
   DAILY_UPDATE_CHECK_INTERVAL_MS,
@@ -134,7 +133,7 @@ export const fetchJsonStringField = ({
     Effect.flatMap(HttpClientResponse.filterStatusOk),
     Effect.flatMap((response) => response.json),
     Effect.map((body) => {
-      const value = isObject(body) ? body[field] : undefined;
+      const value = Predicate.isObject(body) ? body[field] : undefined;
       return typeof value === 'string' && value !== '' ? value : undefined;
     }),
     Effect.timeout(Duration.millis(timeoutMs)),

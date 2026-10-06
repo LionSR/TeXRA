@@ -9,11 +9,11 @@
  * sentence as a doc comment and no field descriptions. The full form is what
  * `describeTool` returns: the whole description, a doc comment per field.
  */
+import { Predicate } from 'effect';
 import { toJSONSchema } from 'zod';
 
 import type { ToolDefinition } from '@shared/schemas';
 import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
-import { isObject } from '@utils/core';
 
 type Schema = Record<string, unknown>;
 
@@ -60,7 +60,8 @@ function typeOf(
   indent: string,
   resolving: ReadonlySet<string> = new Set(),
 ): string {
-  if (!isObject(schema)) return schema === false ? 'never' : 'unknown';
+  if (!Predicate.isObject(schema))
+    return schema === false ? 'never' : 'unknown';
   const recur = (inner: unknown, at = indent) =>
     typeOf(inner, root, full, at, resolving);
   if (typeof schema.$ref === 'string') {
@@ -70,7 +71,7 @@ function typeOf(
           .slice(2)
           .split('/')
           .reduce<unknown>(
-            (node, key) => (isObject(node) ? node[key] : undefined),
+            (node, key) => (Predicate.isObject(node) ? node[key] : undefined),
             root,
           )
       : undefined;
@@ -86,14 +87,15 @@ function typeOf(
     const spread =
       full &&
       variants.some(
-        (variant) => isObject(variant) && isObject(variant.properties),
+        (variant) =>
+          Predicate.isObject(variant) && Predicate.isObject(variant.properties),
       );
     if (!spread) return union(variants.map((variant) => recur(variant)));
     // One object branch per line, its description as its doc comment.
     return variants
       .map((variant) => {
         const doc =
-          isObject(variant) && typeof variant.description === 'string'
+          Predicate.isObject(variant) && typeof variant.description === 'string'
             ? docComment(variant.description, indent).join('\n') + '\n'
             : '';
         return `\n${doc}${indent}| ${recur(variant)}`;
@@ -119,9 +121,11 @@ function typeOf(
       return /^[\w"]+$/.test(item) ? `${item}[]` : `Array<${item}>`;
     }
   }
-  if (schema.type !== 'object' && !isObject(schema.properties))
+  if (schema.type !== 'object' && !Predicate.isObject(schema.properties))
     return 'unknown';
-  const properties = isObject(schema.properties) ? schema.properties : {};
+  const properties = Predicate.isObject(schema.properties)
+    ? schema.properties
+    : {};
   const required = new Set(
     Array.isArray(schema.required) ? schema.required : [],
   );
@@ -131,7 +135,7 @@ function typeOf(
     const head = `${key}${required.has(name) ? '' : '?'}: `;
     if (!full) return `${head}${recur(property)}`;
     const inner = `${indent}${INDENT}`;
-    const notes = isObject(property)
+    const notes = Predicate.isObject(property)
       ? [
           typeof property.description === 'string' ? property.description : '',
           'default' in property
@@ -149,7 +153,7 @@ function typeOf(
   if (
     fields.length === 0
       ? extra !== false
-      : isObject(extra) && Object.keys(extra).length > 0
+      : Predicate.isObject(extra) && Object.keys(extra).length > 0
   )
     fields.push(
       `${full ? `${indent}${INDENT}` : ''}[key: string]: ${recur(extra)}${full ? ';' : ''}`,
@@ -171,7 +175,7 @@ export function declarationOf(
   indent = '',
 ): string {
   const schema = inputSchema(definition);
-  const root = isObject(schema) ? schema : {};
+  const root = Predicate.isObject(schema) ? schema : {};
   const args = typeOf(root, root, full, indent);
   const name = IDENTIFIER.test(definition.name)
     ? definition.name
@@ -195,8 +199,8 @@ export function globalDeclarationOf(
   positional: string,
 ): string {
   const schema = inputSchema(definition);
-  const root = isObject(schema) ? schema : {};
-  const properties = isObject(root.properties) ? root.properties : {};
+  const root = Predicate.isObject(schema) ? schema : {};
+  const properties = Predicate.isObject(root.properties) ? root.properties : {};
   const first = typeOf(properties[positional], root, false, '');
   const member = IDENTIFIER.test(definition.name)
     ? `tools.${definition.name}`

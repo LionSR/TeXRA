@@ -10,7 +10,7 @@
  * route; the secret reaches the package's transport and never a row. The
  * `credentialScope` on the origin is a non-secret name of the route.
  */
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 
 import { Effect, type Scope } from 'effect';
 import {
@@ -137,11 +137,7 @@ function routeKeys(wire: readonly string[], model: string) {
 }
 
 function credentialFingerprint(route: string, secret: string): string {
-  return createHash('sha256')
-    .update(route)
-    .update('\0')
-    .update(secret)
-    .digest('base64url');
+  return hash('sha256', `${route}\0${secret}`, 'base64url');
 }
 
 /**

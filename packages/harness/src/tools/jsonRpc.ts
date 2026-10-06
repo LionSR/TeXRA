@@ -26,6 +26,7 @@ import {
   Data,
   Deferred,
   Effect,
+  Predicate,
   Queue,
   Ref,
   type Sink,
@@ -33,7 +34,6 @@ import {
 } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import { isObject } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'JsonRpcConnection';
@@ -173,7 +173,7 @@ const parseBody = (
       }),
   }).pipe(
     Effect.flatMap((value) =>
-      isObject(value)
+      Predicate.isObject(value)
         ? Effect.succeed(value as JsonRpcMessage)
         : Effect.fail(
             new JsonRpcFrameError({

@@ -1,6 +1,7 @@
 /** Declarative task group list — renders groups, headers, and log entries inline. */
 
 // Third-party imports
+import { String as Str } from 'effect';
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -45,7 +46,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
-import { capitalize, formatDuration, pluralize } from '@utils/text/stringUtils';
+import { formatDuration, pluralize } from '@utils/text/stringUtils';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS, GROUP_DOM_IDS } from '../constants';
@@ -585,7 +586,7 @@ export class TaskGroupList extends LitElement {
         <div class="log-placeholder">
           ${
             active
-              ? `${capitalize(noun)} is starting. Progress updates will appear here.`
+              ? `${Str.capitalize(noun)} is starting. Progress updates will appear here.`
               : `No log output for this ${noun} yet.`
           }
         </div>

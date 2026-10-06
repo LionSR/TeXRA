@@ -1,7 +1,6 @@
 import { getReasonPhrase } from 'http-status-codes';
-import { Result } from 'effect';
+import { Predicate, Result } from 'effect';
 import { safeParseJson } from '@common/parsing/safeParseJson';
-import { isObject } from '@utils/core';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { pickStatus } from './sdkErrorKinds';
@@ -15,8 +14,8 @@ function candidateList(
   value: unknown,
   keys: readonly string[],
 ): Record<string, unknown>[] {
-  if (!isObject(value)) return [];
-  return [value, ...keys.map((key) => value[key])].filter(isObject);
+  if (!Predicate.isObject(value)) return [];
+  return [value, ...keys.map((key) => value[key])].filter(Predicate.isObject);
 }
 
 /** First non-blank string `key` field across a raw error body and its
@@ -36,7 +35,7 @@ export function safeGetReasonPhrase(statusCode: number): string | undefined {
 }
 
 export function getErrorClassNames(err: unknown): string[] {
-  if (!isObject(err)) return [];
+  if (!Predicate.isObject(err)) return [];
 
   const classNames = new Set<string>();
   let prototype = Object.getPrototypeOf(err);
@@ -90,7 +89,7 @@ export function detectStatusText(
 
 /** Extract raw error body from SDK errors for error debugging. */
 export function detectRawErrorBody(err: unknown): unknown {
-  if (!isObject(err)) {
+  if (!Predicate.isObject(err)) {
     return undefined;
   }
 

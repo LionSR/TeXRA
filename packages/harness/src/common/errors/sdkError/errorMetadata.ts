@@ -1,5 +1,5 @@
+import { Predicate } from 'effect';
 import { ProviderErrorSchema, type ProviderError } from '@shared/schemas';
-import { isObject } from '@utils/core';
 
 import { causeChain } from '../errorPredicates';
 
@@ -16,12 +16,12 @@ function createErrorMetadata<T>(
   const key = Symbol.for(`texra.${name}`);
   return {
     attach: (err, value) => {
-      if (isObject(err)) {
+      if (Predicate.isObject(err)) {
         (err as Record<symbol, unknown>)[key] = value;
       }
     },
     detect: (err) => {
-      if (!isObject(err)) return undefined;
+      if (!Predicate.isObject(err)) return undefined;
       const value = (err as Record<symbol, unknown>)[key];
       if (typeGuard) {
         return typeGuard(value) ? value : undefined;

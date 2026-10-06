@@ -1,5 +1,5 @@
 /** Completed-run display reads, keyed by run id. */
-import { Effect } from 'effect';
+import { Effect, Predicate } from 'effect';
 import type { ExportNode } from '@agent/export/schemas';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatToolResultAsText } from '@agent/runtime/run/toolResultText';
@@ -12,7 +12,7 @@ import {
   type ToolUseLog,
 } from '@shared/schemas';
 import type { TranscriptView } from '@shared/session/sessionView';
-import { assertNever, isObject } from '@utils/core';
+import { assertNever } from '@utils/core';
 import { readRunTranscript } from './runTranscript';
 
 // ============================================================================
@@ -28,7 +28,7 @@ import { readRunTranscript } from './runTranscript';
 function toolResultText(tool: ToolUseLog): string | undefined {
   if (tool.error !== undefined) return tool.error;
   if (typeof tool.output === 'string') return tool.output;
-  if (isObject(tool.output)) {
+  if (Predicate.isObject(tool.output)) {
     const result = ToolResultSchema.safeParse({
       ...tool.output,
       status: tool.status === TOOL_CALL_STATUS.FAILED ? 'error' : 'executed',

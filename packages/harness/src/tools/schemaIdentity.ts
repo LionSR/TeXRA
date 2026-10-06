@@ -3,7 +3,7 @@
  * digest covers (`toolDigests` in `@tools/catalogEntries`), so a reworded
  * description never invalidates a call the model already made.
  */
-import { isObject } from '@utils/core';
+import { Predicate } from 'effect';
 
 /** Keywords whose value is one schema, or an array of schemas. */
 const SUBSCHEMA_KEYWORDS: ReadonlySet<string> = new Set([
@@ -42,13 +42,13 @@ const SCHEMA_MAP_KEYWORDS: ReadonlySet<string> = new Set([
  */
 export function withoutSchemaDescriptions(node: unknown): unknown {
   if (Array.isArray(node)) return node.map(withoutSchemaDescriptions);
-  if (!isObject(node)) return node;
+  if (!Predicate.isObject(node)) return node;
   const out: Record<string, unknown> = {};
   for (const [keyword, value] of Object.entries(node)) {
     if (keyword === 'description') continue;
     if (SUBSCHEMA_KEYWORDS.has(keyword)) {
       out[keyword] = withoutSchemaDescriptions(value);
-    } else if (SCHEMA_MAP_KEYWORDS.has(keyword) && isObject(value)) {
+    } else if (SCHEMA_MAP_KEYWORDS.has(keyword) && Predicate.isObject(value)) {
       out[keyword] = Object.fromEntries(
         Object.entries(value).map(([name, schema]) => [
           name,

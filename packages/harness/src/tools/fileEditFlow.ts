@@ -38,50 +38,6 @@ function countOccurrences(haystack: string, needle: string): number {
 }
 
 /**
- * Replace the first literal occurrence of `oldStr` with `newStr`.
- *
- * `newStr` is inserted verbatim — replacement patterns are NOT interpreted.
- * Returns the content unchanged when `oldStr` does not occur; callers that
- * require a match should validate occurrences first with `countOccurrences`.
- */
-function replaceFirstLiteral(
-  content: string,
-  oldStr: string,
-  newStr: string,
-): string {
-  if (oldStr.length === 0) {
-    throw new ToolError(
-      'replaceFirstLiteral requires a non-empty search string.',
-    );
-  }
-  const idx = content.indexOf(oldStr);
-  if (idx === -1) {
-    return content;
-  }
-  return content.slice(0, idx) + newStr + content.slice(idx + oldStr.length);
-}
-
-/**
- * Replace every literal occurrence of `oldStr` with `newStr`.
- *
- * `newStr` is inserted verbatim — replacement patterns are NOT interpreted.
- * `oldStr` must be non-empty; an empty needle throws to avoid the pathological
- * `''.split('')` behavior.
- */
-function replaceAllLiteral(
-  content: string,
-  oldStr: string,
-  newStr: string,
-): string {
-  if (oldStr.length === 0) {
-    throw new ToolError(
-      'replaceAllLiteral requires a non-empty search string.',
-    );
-  }
-  return content.split(oldStr).join(newStr);
-}
-
-/**
  * 1-indexed line numbers of every line that contains `needle`. Used to build
  * the "not unique — found in lines X, Y" guidance when a search string matches
  * more than once.
@@ -221,13 +177,14 @@ export function replaceLiteralMatches({
     );
   }
 
+  // A function replacer inserts its result verbatim: dollar patterns in LaTeX
+  // or code are never interpreted.
+  const verbatim = (): string => replacement;
   return {
-    // Slice/split-based primitives insert replacement strings verbatim; unlike
-    // String.replace, dollar patterns in LaTeX or code are never interpreted.
     content:
       mode === 'all'
-        ? replaceAllLiteral(content, search, replacement)
-        : replaceFirstLiteral(content, search, replacement),
+        ? content.replaceAll(search, verbatim)
+        : content.replace(search, verbatim),
     count: mode === 'all' ? count : 1,
   };
 }

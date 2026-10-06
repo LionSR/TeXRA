@@ -6,6 +6,7 @@
  * with `// prettier-ignore` to prevent whitespace issues.
  */
 
+import { Predicate } from 'effect';
 import { html, nothing, type TemplateResult } from 'lit';
 import { classMap, type ClassInfo } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
@@ -24,7 +25,6 @@ import {
 } from '@shared/toolUse';
 import type { TeXRAIconName } from '@shared/iconNames';
 import type { TranscriptRowBase } from '@shared/transcript';
-import { isObject } from '@utils/core';
 
 // Side-effect import to register <terminal-output> custom element
 import '@progressView/frontend/components/TerminalOutput';
@@ -58,7 +58,7 @@ export function getToolTimeoutMs(
 ): number | undefined {
   const spec = TOOL_DEFAULT_TIMEOUTS[toolName];
   if (spec === undefined) return undefined;
-  if (!isObject(input)) return spec.ms;
+  if (!Predicate.isObject(input)) return spec.ms;
 
   // Some tools only have a meaningful timeout for a specific action
   if (spec.action && input.action !== spec.action) return undefined;
