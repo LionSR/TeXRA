@@ -11,6 +11,8 @@ import { homedir, userInfo } from 'node:os';
 
 import { Effect } from 'effect';
 
+import { toErrorMessage } from '@utils/errors/errorMessage';
+
 /** What the shell prints before its environment, so profile noise ahead of
  *  it is skipped. */
 const MARKER = '__TEXRA_LOGIN_ENVIRONMENT__';
@@ -66,7 +68,7 @@ function loginShellEnvironment(
     },
     catch: (cause) =>
       new Error(
-        `The login shell's environment was not read: ${cause instanceof Error ? cause.message : String(cause)}`,
+        `The login shell's environment was not read: ${toErrorMessage(cause)}`,
       ),
   });
 }
