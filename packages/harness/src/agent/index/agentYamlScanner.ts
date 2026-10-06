@@ -3,7 +3,7 @@
 import * as path from 'node:path';
 
 import { glob } from 'glob';
-import { ZodError, type ZodIssue } from 'zod';
+import { ZodError, type z, type ZodIssue } from 'zod';
 
 import { Data, Effect, FileSystem, Result } from 'effect';
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
@@ -275,7 +275,8 @@ function inheritedFields(
  * tools it would never be offered. Throws the validation's error.
  */
 export function agentEntryOf(
-  definition: Omit<AgentDefinition, 'inherits'>,
+  // As written (a file's tools are parsed, an inline persona's are names).
+  definition: Omit<z.input<typeof AgentDefinitionSchema>, 'inherits'>,
   at: Pick<AgentEntry, 'source' | 'path' | 'digest'>,
 ): AgentEntry {
   const {

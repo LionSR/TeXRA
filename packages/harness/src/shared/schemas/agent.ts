@@ -214,6 +214,10 @@ export const InlinePersonaSchema = AgentDefinitionSchema.omit({
   inherits: true,
   basedOn: true,
   task: true,
+}).extend({
+  /** The tools it is offered, by name, as a file names them: what the run
+   *  records is plain data, never a runtime tool definition. */
+  tools: z.array(z.string().min(1)).optional(),
 });
 /** An inline persona as an embedder writes it (before defaults). */
 export type InlinePersona = z.input<typeof InlinePersonaSchema>;

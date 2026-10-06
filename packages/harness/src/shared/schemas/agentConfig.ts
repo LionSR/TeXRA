@@ -95,9 +95,17 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.extend({
     .nullish(),
 });
 
-/** Canonical current configuration: at most as many outputs as inputs. */
+/** Canonical current configuration: at most as many outputs as inputs, and
+ *  a persona exactly when the agent is inline. */
 export const AgentConfigFieldsSchema = AgentConfigObjectSchema.superRefine(
   (config, ctx) => {
+    if ((config.agentSource === 'inline') !== (config.persona != null)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['persona'],
+        message: 'An inline agent carries its persona, and only it does.',
+      });
+    }
     if (config.outputFiles.length > config.inputFiles.length) {
       ctx.addIssue({
         code: 'custom',
