@@ -20,9 +20,7 @@ import {
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { ContinuationSchema } from '../../../packages/llm/src/message.js';
 import { openaiResponsesModel } from '../../../packages/llm/src/api/openaiResponses.js';
-import { RESPONSES_PREFIX_DOMAIN } from '../../../packages/llm/src/api/openaiResponsesLower.js';
 import { openaiResponsesWebSocketModel } from '../../../packages/llm/src/api/openaiResponsesWebSocket.js';
-import { admittedFingerprint } from '../../../packages/llm/src/api/prefixFingerprint.js';
 import type { OpenAIResponsesConfiguration } from '../../../packages/llm/src/turn.js';
 
 const CONFIG: OpenAIResponsesConfiguration = {
@@ -102,11 +100,6 @@ const OPERATION: RemoteOperation = {
   },
   providerResponseId: 'resp_1',
   afterSequence: null,
-  // A handle only: cancellation never reads the digest, and every case that
-  // observes takes the operation `backgroundTurn` derives from its own
-  // admitted turn.
-  admittedFingerprint: 'f'.repeat(64),
-  store: false,
 };
 const REASONING = {
   type: 'reasoning',
@@ -200,17 +193,7 @@ function backgroundTurn(model: ReturnType<typeof modelWith>) {
       assert(
         turn.mode === 'background' && turn.protocol === 'openai-responses',
       );
-      return {
-        admitted: turn,
-        operation: {
-          ...OPERATION,
-          admittedFingerprint: admittedFingerprint(
-            RESPONSES_PREFIX_DOMAIN,
-            turn,
-          ),
-          store: turn.controls.store,
-        },
-      };
+      return { admitted: turn, operation: OPERATION };
     },
   );
 }
@@ -1143,15 +1126,6 @@ describe('native OpenAI Responses protocol', () => {
           },
           providerResponseId: 'resp_1',
           afterSequence: 0,
-          // Recorded at admission, so the resumed observation below can tell
-          // that this turn is still the one the provider answered.
-          admittedFingerprint: admittedFingerprint(
-            RESPONSES_PREFIX_DOMAIN,
-            turn,
-          ),
-          // The storage mode the provider admitted, which a resumed
-          // observation re-prepares with instead of the current setting.
-          store: true,
         });
         // observe subtracts Clock.currentTimeMillis, which TestClock starts at 0.
         const policy = { deadlineAtMs: 60_000 };
@@ -1907,15 +1881,15 @@ describe('native OpenAI Responses protocol', () => {
   );
 
   it.effect.each([
-    ['cancelled', 'confirmed-cancelled'],
-    ['completed', 'observed-terminal'],
-    ['failed', 'observed-terminal'],
-    ['incomplete', 'observed-terminal'],
-    ['queued', 'unconfirmed'],
-    ['in_progress', 'unconfirmed'],
+    'cancelled',
+    'completed',
+    'failed',
+    'incomplete',
+    'queued',
+    'in_progress',
   ])(
-    'reports cancellation status %s as %s without claiming ordering',
-    ([status, kind]) =>
+    'confirms a cancel only when the response reports %s as cancelled',
+    (status) =>
       Effect.gen(function* () {
         const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
           new Response(JSON.stringify(snapshot([], { status })), {
@@ -1924,16 +1898,11 @@ describe('native OpenAI Responses protocol', () => {
         );
         const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
         assert(model.background);
-        const result = yield* model.background.cancel({
-          ...OPERATION,
-          afterSequence: 0,
-        });
-        expect(result).toMatchObject({
-          kind,
-          providerResponseId: 'resp_1',
-          returnedModel: 'returned-model',
-        });
-        expect(result).not.toHaveProperty('result');
+        const exit = yield* Effect.exit(
+          model.background.cancel({ ...OPERATION, afterSequence: 0 }),
+        );
+        // Anything but a confirmed cancel leaves the operation observable.
+        expect(exit._tag).toBe(status === 'cancelled' ? 'Success' : 'Failure');
         expect(fetch).toHaveBeenCalledTimes(1);
         expect(String(fetch.mock.calls[0]?.[0])).toContain(
           '/responses/resp_1/cancel',

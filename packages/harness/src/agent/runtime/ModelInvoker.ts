@@ -79,11 +79,11 @@ import { contextTokens } from './run/contextTokens';
 import { priceTurnUsage, reportUsage } from './run/pricing';
 import { turnReasoning, turnText } from './run/turnText';
 import {
+  admittedTurn,
   attemptRequest,
   attemptRows,
   chainedContinuation,
   checkRecordedRequest,
-  recordedRequest,
 } from './run/requestContext';
 import { dispatchFactsFor, localCallsOf } from './run/tools';
 import { rowAggregate, positionRow } from './loop/rows';
@@ -580,8 +580,8 @@ export const modelInvokerLayer = (): Layer.Layer<
 
       /**
        * A resumed attempt whose background operation the rows hold: observe
-       * it under its recorded deadline, never resubmit, whatever the settings
-       * now say; unbilled, so outside the route gate.
+       * the turn they recorded under its recorded deadline, never resubmit;
+       * unbilled, so outside the route gate.
        */
       const observeAccepted = Effect.fn('ModelInvoker.observeAccepted')(
         function* (
@@ -606,30 +606,7 @@ export const modelInvokerLayer = (): Layer.Layer<
               bound,
             );
           }
-          // The admitted request as its rows record it, and its storage mode,
-          // govern the observation turn, not current code or settings:
-          // re-preparing a temporary background turn as stored would let the
-          // completion mint an anchor for a response the provider never kept. The prior continuation stays out: observing needs no
-          // anchor, and its fingerprint check would reject the turn before
-          // observe can compare the admitted fingerprint and deliver the result.
-          const state = yield* cell.current;
-          const { continuation: _prior, ...admitted } = yield* Effect.sync(() =>
-            recordedRequest(state),
-          );
-          const resolved = yield* prepareAttempt(bound, {
-            ...admitted,
-            store: accepted.operation.store,
-          });
-          if (resolved.mode !== 'background') {
-            return yield* failAttempt(
-              new ModelError({
-                kind: 'unsupported',
-                message:
-                  'The resumed background operation re-prepared as a foreground turn.',
-              }),
-              bound,
-            );
-          }
+          const resolved = admittedTurn(yield* cell.current);
           const trace = openTrace();
           const started = yield* Clock.currentTimeMillis;
           const completed: AttemptOutcome = { value: null, streamedText: '' };

@@ -155,8 +155,6 @@ function rowOrigins(row: RunHistoryDraft): readonly ModelOrigin[] {
       return [p.origin];
     case 'accepted':
       return [p.operation.origin];
-    case 'cancelled':
-      return [p.evidence.requestedOrigin];
     case 'response': {
       const continuation =
         p.turn.kind === 'http' ? (p.turn.continuation ?? null) : null;

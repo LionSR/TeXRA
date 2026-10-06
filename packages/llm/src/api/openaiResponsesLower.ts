@@ -270,7 +270,7 @@ const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
   return input;
 });
 
-export const RESPONSES_PREFIX_DOMAIN = 'texra-openai-responses-prefix-v1';
+const RESPONSES_PREFIX_DOMAIN = 'texra-openai-responses-prefix-v1';
 
 /**
  * The completed turn with the stored anchor its next round chains on, if the

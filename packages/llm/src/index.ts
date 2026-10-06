@@ -12,15 +12,14 @@
 // The turn contract: request, result, events and the `Model` that runs a turn.
 export {
   assistantMessageFromResult,
-  CancellationEvidenceSchema,
   completedTurn,
+  ResolvedTurnSchema,
   TurnRequestSchema,
   TurnResultSchema,
   VscodeLanguageModelConfigurationSchema,
 } from './turn.js';
 export type {
   BackgroundEvent,
-  CancellationEvidence,
   Model,
   ResolvedTurn,
   TurnEvent,

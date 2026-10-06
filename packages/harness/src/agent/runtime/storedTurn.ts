@@ -11,7 +11,6 @@
 import { Result } from 'effect';
 
 import {
-  CancellationEvidenceSchema,
   MessageSchema,
   ModelOriginSchema,
   RemoteOperationSchema,
@@ -122,18 +121,11 @@ function livePayload(
   switch (p.kind) {
     case 'identified':
     case 'failed':
+    case 'cancelled':
     case 'handed-down':
       return p;
     case 'attempt':
       return { ...p, origin: ModelOriginSchema.parse(p.origin) };
-    case 'cancelled':
-      return {
-        ...p,
-        evidence: CancellationEvidenceSchema.parse({
-          kind: p.evidence.kind,
-          ...p.evidence.data,
-        }),
-      };
     case 'response':
       return { ...p, turn: TurnResultSchema.parse(live(p.turn)) };
     case 'append':

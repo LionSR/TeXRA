@@ -22,7 +22,6 @@ import { Sha256Schema } from './offeredTools';
 import { RunOutcomeSchema } from './run';
 import { NormalizedUsageSchema, RunInputSchema } from './runFacts';
 import {
-  ProviderEvidenceSchema,
   StoredMessageSchema,
   StoredOperationSchema,
   StoredOriginSchema,
@@ -173,14 +172,13 @@ export const ModelMessagePayloadSchema = z
       operation: StoredOperationSchema,
       deadlineAtMs: z.int().positive(),
     }),
-    /** A user stop cancelled the accepted operation; `evidence` is the
-     *  provider's reply verbatim. It retires the operation, so a resume starts
-     *  a new attempt instead of observing work the user stopped. A cancel that
-     *  failed leaves no row, and the still-live operation stays observable. */
+    /** A user stop cancelled the accepted operation, as the provider
+     *  confirmed. It retires the operation, so a resume starts a new attempt
+     *  instead of observing work the user stopped. A cancel not confirmed
+     *  leaves no row, and the operation stays observable. */
     z.strictObject({
       kind: z.literal('cancelled'),
       invocation: InvocationRefSchema,
-      evidence: ProviderEvidenceSchema,
     }),
     /**
      * A completed provider turn, committed once and reused after restart.

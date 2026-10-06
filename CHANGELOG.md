@@ -860,6 +860,10 @@ show` print the same notice, and the new `texra agents customize`,
   output yet reads "Agent is starting", the `agent` tool's transcript row is
   headed "Agent", and the CLI's `/config` category for these settings reads
   "Tasks and agents" (it read "Subagents").
+- **Stopping a long background request no longer retires it unless the
+  provider confirms the cancel.** If the provider reports the request
+  already finished or still running, the task keeps it and a resume
+  collects its answer instead of paying for a new one.
 - **A model retry you approved is not sent again after a crash without
   asking.** If the app stopped while a retry you approved was running, the
   resumed task now asks again instead of resending a request that may
