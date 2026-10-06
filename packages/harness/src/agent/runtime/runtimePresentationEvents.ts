@@ -23,6 +23,8 @@ export interface RuntimePresentationEventPayloads {
   showAgentConfigBanner: ShowAgentConfigBannerPayload;
   requestShowError: RequestShowErrorPayload;
   requestEnsureProgressView: RequestEnsureProgressViewPayload;
+  /** A run wrote these workspace files: a window badges them. */
+  workspaceFilesWritten: { readonly absolutePaths: readonly string[] };
 }
 
 export type RuntimePresentationEvent = keyof RuntimePresentationEventPayloads;

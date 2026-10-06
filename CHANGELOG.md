@@ -799,6 +799,12 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Files a background task accepts are badged again.** When the
+  background service ran a task that accepted a run's output files
+  (`accept_run_files`), the window never heard of it, so VS Code's "T"
+  badge and the desktop app's file tree stayed unmarked. The task now
+  tells its project's window through the service, as it already does
+  for its other notices.
 - **The CLI's progress line no longer goes blank for a task with an empty
   description.** It shows the run's status instead.
 - **A task with an empty description no longer shows a blank title in

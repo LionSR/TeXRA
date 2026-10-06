@@ -19,6 +19,7 @@ import {
   type SessionHandle,
   type ValidatedRunRequest,
 } from '@agent/runtime';
+import { emitAppSignal } from '@eventBus/AppSignals';
 import {
   type ProcessRuntime,
   withProcessServices,
@@ -128,6 +129,11 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
       // resolved path goes to the preview-with-fallback host directly.
       requestOpenFile: (data: RequestOpenFilePayload) =>
         host.openPath(data.location.absolutePath),
+      // The workspace tree marks them, whichever process ran the task.
+      workspaceFilesWritten: ({ absolutePaths }) =>
+        emitAppSignal('workspaceFilesWritten', {
+          absolutePaths: [...absolutePaths],
+        }),
     };
 
     function handlePresentationEvent<K extends RuntimePresentationEvent>(

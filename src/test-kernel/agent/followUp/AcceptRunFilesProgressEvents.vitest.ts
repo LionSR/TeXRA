@@ -1,7 +1,7 @@
 import '@test/support/sessionGraphTestSetup';
 
 import * as path from 'node:path';
-import { Deferred, Effect, FileSystem } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { it } from '@effect/vitest';
 // Test composition imports
 
@@ -17,7 +17,6 @@ import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { closeSession } from '@agent/runtime/sessionGraph';
-import { onAppSignal } from '@eventBus/AppSignals';
 import { WorkspaceFs } from '@platform/rootedFs';
 import type { RequestDecision, RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -36,6 +35,12 @@ import { autoDecideRequests, createRecordingHost } from '../progressTestUtils';
  * reaches the host through `presentToolEdit`.
  */
 const stagedToolEdits = new Map<string, ToolEditApprovalRequest>();
+/**
+ * The accepted files the session's host was told of: the notice reaches a
+ * window through the host interactions, the one channel that also crosses
+ * from the background service to the window that badges them.
+ */
+const written: string[][] = [];
 let session: SessionHandle;
 let detachHostInteractions = (): void => {};
 let detachDecider = (): void => {};
@@ -85,6 +90,10 @@ function installTestPlatform(): Promise<void> {
       session.interactions.use({
         presentToolEdit: (request) => {
           stagedToolEdits.set(request.permission.requestId, request);
+        },
+        emit: (event, payload) => {
+          if (event === 'workspaceFilesWritten' && 'absolutePaths' in payload)
+            written.push([...payload.absolutePaths]);
         },
       }),
     );
@@ -218,34 +227,10 @@ function runAccept(
   );
 }
 
-/**
- * Collect workspaceFilesWritten payloads on a fiber of the running test,
- * which its completion interrupts. The yield lets that fiber register before
- * the tool publishes: a subscription only receives what is published after
- * it exists.
- */
-function recordWrittenFiles(): Effect.Effect<{
-  written: string[][];
-  /** Completes when the next `workspaceFilesWritten` payload is delivered. */
-  delivered: Effect.Effect<void>;
-}> {
-  return Effect.gen(function* () {
-    const written: string[][] = [];
-    const delivered = yield* Deferred.make<void>();
-    yield* Effect.forkChild(
-      onAppSignal('workspaceFilesWritten', ({ absolutePaths }) => {
-        written.push(absolutePaths);
-        Deferred.doneUnsafe(delivered, Effect.void);
-      }),
-    );
-    yield* Effect.yieldNow;
-    return { written, delivered: Deferred.await(delivered) };
-  });
-}
-
 describe('accept_run_files progress events', () => {
   beforeEach(async () => {
     stagedToolEdits.clear();
+    written.length = 0;
     workspaceWrites.mockReset();
     workspaceReads.clear();
     absoluteFilePaths.clear();
@@ -266,12 +251,11 @@ describe('accept_run_files progress events', () => {
     await Effect.runPromise(closeSession(session.roots.storage));
   });
 
-  it.live('publishes accepted workspace files through app signals', () =>
+  it.live("tells the session's host which workspace files it accepted", () =>
     Effect.gen(function* () {
       const explicit = createRecordingHost();
       const tool = AcceptRunFilesTool;
       const workspace = AgentWorkspaceState.create();
-      const { written, delivered } = yield* recordWrittenFiles();
 
       setRunStorageEntries({
         [`executions/${runId}/output.tex`]: 'File',
@@ -288,8 +272,6 @@ describe('accept_run_files progress events', () => {
 
       expect(result.status).toBe('executed');
       expect(explicit.events).toEqual([]);
-      // Delivery runs on the recorder's own fiber, a turn after the publish.
-      yield* delivered;
       expect(written).toEqual([[path.join(workspacePath, 'paper.tex')]]);
       expect(workspace.interactions.hasRead('paper.tex')).toBe(true);
     }).pipe(Effect.provide(nativeToolTestLayer())),
@@ -443,7 +425,6 @@ describe('accept_run_files progress events', () => {
         const snapshot = `original project\n${body}tail\n`;
         let approvalOriginal = '';
         let approvalProposed = '';
-        const { written, delivered } = yield* recordWrittenFiles();
 
         setRunStorageEntries({}, projectRoots.storage);
         workspaceReads.set('draft.tex', {
@@ -483,8 +464,6 @@ describe('accept_run_files progress events', () => {
         );
 
         expect(result.status).toBe('executed');
-        // Delivery runs on the recorder's own fiber, a turn after the publish.
-        yield* delivered;
         expect({ approvalOriginal, approvalProposed, written }).toEqual({
           approvalOriginal: snapshot,
           approvalProposed: `proposed project\n${body}tail\n`,

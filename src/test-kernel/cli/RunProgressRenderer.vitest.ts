@@ -115,6 +115,10 @@ const RUNTIME_PRESENTATION_NDJSON_CASES = {
     payload: {},
     policy: { kind: 'suppressed' },
   },
+  workspaceFilesWritten: {
+    payload: { absolutePaths: ['/tmp/paper.tex'] },
+    policy: { kind: 'suppressed' },
+  },
 } satisfies RuntimePresentationNdjsonCases;
 
 // context() always sets renderRunProgress: true, so the factory never

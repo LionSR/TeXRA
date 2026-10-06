@@ -69,8 +69,8 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
    * `RuntimePresentationEventPayloads` addition is a compile error to decide
    * on rather than a silent fall-through.
    *
-   * `requestOpenFile` and `requestEnsureProgressView` have no presentation of
-   * their own in either mode.
+   * `requestOpenFile`, `requestEnsureProgressView` and `workspaceFilesWritten`
+   * have no presentation of their own in either mode.
    * `RUNTIME_PRESENTATION_NDJSON_CASES` in
    * `src/test-kernel/cli/RunProgressRenderer.vitest.ts` pins the exact record
    * set each event may emit in NDJSON mode.
@@ -106,6 +106,8 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
         return true;
       },
       requestEnsureProgressView: () => false,
+      // A terminal has no file tree to badge.
+      workspaceFilesWritten: () => false,
     };
 
   return {

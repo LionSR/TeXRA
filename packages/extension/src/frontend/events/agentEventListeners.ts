@@ -20,6 +20,7 @@ import {
   type RuntimePresentationEventPayloads,
   type SessionHandle,
 } from '@agent/runtime';
+import { emitAppSignal } from '@eventBus/AppSignals';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -224,6 +225,11 @@ export function createAgentPresentationHost(
     requestShowError: handleRequestShowError,
     requestEnsureProgressView: (payload) =>
       handleRequestEnsureProgressView(payload, progressViewProvider),
+    // The file decorations badge them, whichever process ran the task.
+    workspaceFilesWritten: ({ absolutePaths }) =>
+      emitAppSignal('workspaceFilesWritten', {
+        absolutePaths: [...absolutePaths],
+      }),
   };
   return {
     emit<K extends RuntimePresentationEvent>(

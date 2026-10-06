@@ -18,7 +18,7 @@ import { ToolContext, type ToolContextShape } from '@texra-ai/harness';
 import { getRunRecords } from '@agent/storage';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { requireToolRun, type RunCall } from '@agent/runtime/RunCall';
-import { emitAppSignal } from '@eventBus/AppSignals';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
@@ -201,13 +201,14 @@ function executeAcceptRunFilesTool(
         ),
       );
     }
-    return yield* acceptFiles(input, call);
+    return yield* acceptFiles(input, call, session);
   });
 }
 
 const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
   input: AcceptRunFilesInput,
   call: ToolContextShape,
+  session: SessionHandle,
 ): Effect.fn.Return<
   ToolResult,
   Error,
@@ -365,12 +366,12 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
     });
   }
 
-  // Badge all accepted workspace files
-  if (acceptedEntries.length > 0) {
-    emitAppSignal('workspaceFilesWritten', {
+  // Badge all accepted workspace files, in whichever window shows this
+  // session's runs: a task the service runs tells its window this way.
+  if (acceptedEntries.length > 0)
+    yield* session.interactions.emit('workspaceFilesWritten', {
       absolutePaths: acceptedEntries.map((e) => e.destAbsolutePath),
     });
-  }
 
   const changed = files.length - unchanged;
   const detailedOutput = (summary: string): string =>

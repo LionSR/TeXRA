@@ -113,6 +113,10 @@ const NoticeSchema = z.discriminatedUnion('event', [
         .optional(),
     }) satisfies z.ZodType<RequestEnsureProgressViewPayload>,
   }),
+  z.object({
+    event: z.literal('workspaceFilesWritten'),
+    payload: z.object({ absolutePaths: z.array(z.string()) }),
+  }),
 ]);
 export type Notice = z.infer<typeof NoticeSchema>;
 
