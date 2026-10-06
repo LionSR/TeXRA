@@ -11,7 +11,7 @@ All notable changes to this project will be documented in this file.
   safe to repeat is running, the resumed task no longer asks you whether to
   run it again. The call is reported to the model as interrupted with an
   unknown outcome, and the model checks the result itself, asks you in the
-  chat, or calls it again, which goes through the usual approval. A
+  chat, or calls it again under the run's approval policy. A
   subagent left in an inconsistent state after a crash is resumed under its
   own id, or comes back as an ordinary failed call. An approval this build
   asked for is still waiting after a restart. A task saved by an earlier
