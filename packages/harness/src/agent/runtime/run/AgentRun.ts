@@ -9,7 +9,6 @@
  */
 import { Context, Effect, Exit, Layer, Scope, SynchronizedRef } from 'effect';
 
-import { selectModel } from '@texra-ai/llm';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type {
   DocumentTask,
@@ -23,6 +22,7 @@ import {
   type StepToolInputs,
 } from '@agent/runtime/agentToolResolution';
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
+import { getRunRecords } from '@agent/storage/runRecords';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
 import {
@@ -30,12 +30,10 @@ import {
   DeclinableUsageRouteSchema,
   type AgentDelegationScope,
   type DeclinableUsageRoute,
-  type JsonValue,
   type OfferedTool,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import { RunHistory } from '@shared/session/runHistory';
 import { LiveTools } from '@tools/liveTools';
 import { buildTerminalTool } from '@tools/structuredOutput';
 import { RunFileService } from '@utils/files/runStorage';
@@ -110,9 +108,6 @@ export interface AgentRunShape {
   readonly steps: SynchronizedRef.SynchronizedRef<OpenStep | null>;
   /** The synthetic terminal tool, when the config declares an output schema. */
   readonly finalToolName: string | null;
-  /** The value the terminal tool captured, read by the loop at its exit. A
-   *  plain slot: the tool's capture callback is synchronous. */
-  readonly structured: { value: JsonValue | undefined };
   /** The run's live model binding; replaced only through `swapModel`. */
   readonly model: SynchronizedRef.SynchronizedRef<BoundModel>;
   /**
@@ -128,11 +123,11 @@ export interface AgentRunShape {
     next: (current: BoundModel) => Effect.Effect<BoundModel, E, R>,
   ) => Effect.Effect<BoundModel, E, Exclude<R, Scope.Scope>>;
   /**
-   * Subscription routes this run must not bind: the launch's own-API-key
-   * fallback, plus every retry the user answered with their own key. The
-   * run's opening snapshot records them and each retry appends to the
-   * recorded set, so a resume rebinds under the same choice — and the user's
-   * stored preferences are never rewritten to express it.
+   * Subscription routes this run's launch declined (its own-API-key
+   * fallback). Its `run.config` binding records them, and the fold adds
+   * every retry the user answered with their own key, so a resume rebinds
+   * under the same choice and the user's stored preferences are never
+   * rewritten to express it.
    */
   readonly declinedRoutes: readonly DeclinableUsageRoute[];
   /**
@@ -156,10 +151,9 @@ interface AgentRunLayerInput {
 }
 
 /**
- * Build the run's service from its launch context. The model identity of a
- * resumed run comes from the latest `run.snapshot` (the one indexed read
- * L0 provided), never from a file; a fresh run binds the launch's model
- * under the route the launch context already resolved.
+ * Build the run's service from its launch context. A resumed run is on its
+ * newest `run.config`'s model and backend, never a file's; a fresh run binds
+ * the launch's model under the route the launch context already resolved.
  */
 export const agentRunLayer = (
   ctx: AgentLaunchContext,
@@ -167,14 +161,13 @@ export const agentRunLayer = (
 ): Layer.Layer<
   AgentRun,
   Error,
-  RunHistory | LanguageModel | HttpClient.HttpClient | LiveTools
+  LanguageModel | HttpClient.HttpClient | LiveTools
 > =>
   Layer.effect(
     AgentRun,
     Effect.gen(function* () {
       const { runId, session } = ctx;
       const { logger, config } = ctx;
-      const runHistory = yield* RunHistory;
       const layerScope = yield* Effect.scope;
       // One parallel child holds what the run holds for its life; at close
       // each release runs concurrently under its own deadline.
@@ -185,16 +178,11 @@ export const agentRunLayer = (
       // Unforced structured-output floor: when the config declares an output
       // schema, a synthetic `submit_output` terminal tool joins the run's own
       // tools. The model finishes by calling it; its own Zod schema
-      // validates the call and `capture` records the value into the run's
-      // slot, which the loop reads at exit.
-      const structured: { value: JsonValue | undefined } = {
-        value: undefined,
-      };
+      // validates the call, and its settled result is the run's structured
+      // output (`RunState.structured`).
       const outputSchema = config.outputSchema ?? undefined;
       const terminalTool = outputSchema
-        ? buildTerminalTool(outputSchema, (value) => {
-            structured.value = value;
-          })
+        ? buildTerminalTool(outputSchema)
         : undefined;
       const finalToolName = terminalTool?.definition.name ?? null;
       // A script's run offers its script and exactly the tools its launch
@@ -256,22 +244,15 @@ export const agentRunLayer = (
         parentOffered,
         held,
       };
-      const snapshot = yield* runHistory.latestSnapshot(runId);
-      // The model and route of a resumed run are the ones its latest snapshot
-      // names; a fresh run binds the launch model under today's default route.
-      const persisted = snapshot === null ? null : snapshot.payload.runtime;
-      const modelId = persisted?.modelId ?? config.model;
+      // A resumed run rebinds what its newest `run.config` records (its
+      // model is that config's); a fresh run binds the launch model under
+      // today's default route.
+      const persisted = yield* getRunRecords(session, runId).readBinding();
+      const modelId = config.model;
       const backend = persisted?.backend;
-      const selected = selectModel(modelId);
-      const modelConfig =
-        modelId === config.model ? ctx.modelConfig : selected?.config;
-      if (!modelConfig) {
-        return yield* Effect.fail(
-          new Error(`Model ${modelId} is not registered`),
-        );
-      }
-      // The routes this run declines: a resumed run replays the set its
-      // snapshot recorded, a fresh own-API-key fallback declines every
+      const modelConfig = ctx.modelConfig;
+      // The routes this run's launch declines: a resumed run replays the set
+      // its binding recorded, a fresh own-API-key fallback declines every
       // subscription route from its first binding (the user answered a quota
       // prompt by choosing to pay with their own key). Nothing here reads or
       // writes the user's stored preferences.
@@ -331,7 +312,6 @@ export const agentRunLayer = (
         toolInputs,
         steps: yield* SynchronizedRef.make<OpenStep | null>(null),
         finalToolName,
-        structured,
         model,
         swapModel,
         declinedRoutes,

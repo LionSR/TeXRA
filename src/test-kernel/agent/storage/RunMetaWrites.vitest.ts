@@ -5,8 +5,8 @@ import { finalizeRun, getRunRecords } from '@agent/storage';
 import {
   appendRow,
   handedDown,
+  positionRow,
   rowAggregate,
-  snapshotRow,
 } from '@agent/runtime/loop/rows';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { aggregateId, type RunId } from '@shared/schemas';
@@ -117,9 +117,7 @@ describe('run metadata updates', () => {
           appendRow(id, [
             { role: 'user', content: [{ kind: 'text', text: 'go' }] },
           ]),
-          ...snapshotRow(id, opening, {
-            state: {},
-          }),
+          positionRow(id, opening, 'turn.ready'),
         ]);
         yield* session.runHistory.appendBatch(id, opened, [
           {
@@ -188,16 +186,7 @@ describe('run metadata updates', () => {
           appendRow(id, [
             { role: 'user', content: [{ kind: 'text', text: 'polish' }] },
           ]),
-          ...snapshotRow(
-            id,
-            {
-              ...freshRunState(0),
-              family: 'toolUse',
-              modelId: 'copilot/gpt-test',
-              backend: 'copilot',
-            },
-            { state: {} },
-          ),
+          positionRow(id, freshRunState(0), 'turn.ready'),
         ]);
         const run = {
           runId: id,

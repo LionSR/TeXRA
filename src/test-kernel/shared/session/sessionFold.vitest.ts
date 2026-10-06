@@ -1312,18 +1312,10 @@ const TURN_USAGE = {
   cachedInputTokens: 4,
   cacheMissInputTokens: 6,
 };
-const RUNTIME = {
-  modelId: 'gpt-test',
-  backend: 'openai',
-  declinedRoutes: [],
-};
-const toolUseSnapshot = (runtime: Record<string, unknown> = {}) => ({
-  type: 'run.snapshot',
-  payload: {
-    family: 'toolUse',
-    runtime: { ...RUNTIME, ...runtime },
-    state: {},
-  },
+/** Where the loop stands: its first position opens the run. */
+const position = (at: string, turn: number) => ({
+  type: 'run.position',
+  payload: { family: 'toolUse', at, turn },
 });
 
 /** The row a call's body starts with. */
@@ -1414,7 +1406,7 @@ const TURN_ROWS: readonly RunHistoryRow[] = [
     messages: [USER('list the files')],
     sourceResponse: null,
   }),
-  toolUseSnapshot(),
+  position('turn.ready', 0),
   message({
     kind: 'attempt',
     request: '0'.repeat(64),
@@ -1443,7 +1435,7 @@ const TURN_ROWS: readonly RunHistoryRow[] = [
     messages: [TOOL_GROUP],
     sourceResponse: RESPONSE_ID,
   }),
-  toolUseSnapshot(),
+  position('results.ready', 1),
   {
     type: 'run.position',
     payload: { family: 'toolUse', at: 'turn.end', turn: 1 },
@@ -1699,7 +1691,6 @@ describe('foldRunState', () => {
         );
         expect(state?.outcome).toBe('completed');
         expect(state?.family).toBe('toolUse');
-        expect(state?.lastSnapshot).not.toBeNull();
       },
     ],
     [
@@ -1925,7 +1916,6 @@ describe('foldRunState', () => {
       'tool.intent',
       'tool.binding',
       'tool.result',
-      'run.snapshot',
     ] as const;
     for (const type of runHistoryTypes)
       expect(listingTypeOf({ type })).toBeNull();

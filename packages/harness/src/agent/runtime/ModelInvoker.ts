@@ -86,7 +86,7 @@ import {
   recordedRequest,
 } from './run/requestContext';
 import { dispatchFactsFor, localCallsOf } from './run/tools';
-import { rowAggregate, snapshotRow, positionRow } from './loop/rows';
+import { rowAggregate, positionRow } from './loop/rows';
 import type { CellError, RunCell } from './loop/runProgram';
 import type { HttpClient } from 'effect/http';
 
@@ -543,19 +543,11 @@ export const modelInvokerLayer = (): Layer.Layer<
             });
           }
         }
-        // The durable fact before the billed request (F1), and the routes a
-        // person's own-key answer declines, restated for a resume to bind.
-        yield* cell.append((state) => [
-          ...attemptRows(
-            run,
-            state,
-            invocation,
-            'turn',
-            bound.origin,
-            resolved,
-          ),
-          ...snapshotRow(runId, state, {}),
-        ]);
+        // The durable fact before the billed request (F1), with the prepared
+        // turn it sends, which the rows alone must rebuild.
+        yield* cell.append((state) =>
+          attemptRows(run, state, invocation, 'turn', bound.origin, resolved),
+        );
         yield* checkRecordedRequest(run, resolved);
         const trace = openTrace();
         const started = yield* Clock.currentTimeMillis;

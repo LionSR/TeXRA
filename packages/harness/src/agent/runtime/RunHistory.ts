@@ -3,9 +3,9 @@
  * `Database`, writes through `SessionEvents.publish` (the one transaction),
  * `foldRunState` on both paths. Mirrors `sessionEventsLayer`'s placement.
  *
- * Reads use `Database.readAggregate` and `Database.readRunSnapshot`, never
- * `SessionEvents.aggregate`: the latter filters to display rows and would
- * silently drop every run-history-private row.
+ * Reads use `Database.readAggregate`, never `SessionEvents.aggregate`: the
+ * latter filters to display rows and would silently drop every
+ * run-history-private row.
  */
 import { Effect, Layer, Result } from 'effect';
 
@@ -36,20 +36,6 @@ import type {
 } from '@shared/session/historyTurns';
 import { SessionEvents } from '@shared/session/sessionEvents';
 import { runHistoryRows, storedDraft } from './storedTurn';
-
-/** Rows that may follow a `run.snapshot` in its batch, none moving what it
- *  records, so each folded field has one writer whose last row a resume
- *  reads: positions, card ends, decisions, a parked row's `stream.end`, a
- *  child turn's settlement. */
-const AFTER_SNAPSHOT = new Set<RunHistoryDraft['type']>([
-  'run.position',
-  'tool.end',
-  'request.decided',
-  'stream.end',
-  'run.report',
-  'run.result',
-  'child.turn',
-]);
 
 const isResponse = (row: RunHistoryDraft): boolean =>
   row.type === 'model.message' && row.payload.kind === 'response';
@@ -90,24 +76,16 @@ function contractViolation(
     return `a ${foreign.type} targets ${foreign.aggregateId}, not ${aggregate}`;
   }
   // The one opening rule, stated here rather than only in `load`: the fold
-  // lets a `run.position` or an undelivered `append` land on a fresh run and
-  // `load` refuses exactly those rows, so the batch that opens a run carries
-  // its `run.snapshot`.
+  // lets an undelivered `append` land on a fresh run and `load` refuses
+  // run history rows with no position, so the batch that opens a run
+  // carries its first `run.position`.
   if (
     (state === null || state.phase === null) &&
-    !rows.some((row) => row.type === 'run.snapshot')
+    !rows.some((row) => row.type === 'run.position')
   ) {
-    return 'a batch on an unopened run carries no opening run.snapshot';
+    return 'a batch on an unopened run carries no opening run.position';
   }
   for (const [index, row] of rows.entries()) {
-    if (row.type === 'run.snapshot') {
-      const trailing = rows
-        .slice(index + 1)
-        .find((later) => !AFTER_SNAPSHOT.has(later.type));
-      if (trailing !== undefined) {
-        return `${trailing.type} follows the run.snapshot of its batch`;
-      }
-    }
     if (row.type === 'context.edit') {
       if (hasResponse) {
         const next = rows[index + 1];
@@ -303,7 +281,7 @@ const loaded = (
         run,
         new RunHistoryInconsistent({
           reason: 'out-of-order',
-          detail: 'run history rows without an opening run.snapshot',
+          detail: 'run history rows without an opening run.position',
           commit: state.commit,
         }),
       );
@@ -395,12 +373,6 @@ export const runHistoryLayer: Layer.Layer<
         );
       // The cancellations fold onto the same read: the run is read once.
       return yield* loaded(run, foldStored(folded.success, cancelled));
-    });
-
-    const latestSnapshot = Effect.fn('RunHistory.latestSnapshot')(function* (
-      run: RunId,
-    ) {
-      return yield* log.readRunSnapshot(qualifyAggregateId('run', run));
     });
 
     const load = Effect.fn('RunHistory.load')(function* (
@@ -530,6 +502,6 @@ export const runHistoryLayer: Layer.Layer<
       return folded.success;
     });
 
-    return { acquire, load, latestSnapshot, appendBatch };
+    return { acquire, load, appendBatch };
   }),
 );

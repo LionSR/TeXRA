@@ -10,7 +10,7 @@ import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { TraceEmitter } from '@agent/trace';
-import { RUN_OUTCOME, type JsonValue } from '@shared/schemas';
+import { RUN_OUTCOME } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runStateFold';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -173,17 +173,15 @@ describe('the tool-use turn', () => {
   it.effect('returns the text that accompanied the terminal tool', () =>
     Effect.gen(function* () {
       const session = yield* quietSession();
-      const structured: { value: JsonValue | undefined } = { value: undefined };
+      // Its settled value is the run's structured output.
       const submitOutput: ITool = {
         definition: { name: 'submit_output' },
         call: vi.fn(() =>
-          Effect.sync(() => {
-            structured.value = { answer: 'done' };
-            return {
-              status: 'executed' as const,
-              output: 'recorded',
-              endTurn: true,
-            };
+          Effect.succeed({
+            status: 'executed' as const,
+            output: 'recorded',
+            endTurn: true,
+            value: { answer: 'done' },
           }),
         ),
       } as ITool;
@@ -192,7 +190,6 @@ describe('the tool-use turn', () => {
         runId: startedRun(session),
         session,
         finalToolName: 'submit_output',
-        structured,
         tools: { submit_output: submitOutput },
         script: [
           toolCallTurn(

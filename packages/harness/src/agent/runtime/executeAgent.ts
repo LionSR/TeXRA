@@ -141,9 +141,9 @@ function launchRun(
     runId: ctx.runId,
     usage: result.usage,
     ...(result.error ? { error: result.error } : {}),
-    ...(ctx.attachedMemoryMisses.length
-      ? { memoryMisses: ctx.attachedMemoryMisses }
-      : {}),
+    ...(result.memoryMisses.length > 0 && {
+      memoryMisses: [...result.memoryMisses],
+    }),
   });
   const { turns } = shared;
   /** A document task's result, with its revisions' spend, published by the

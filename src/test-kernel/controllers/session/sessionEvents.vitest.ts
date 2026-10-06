@@ -2915,17 +2915,9 @@ describe('RunHistory', () => {
     },
   ] as const;
   const snapshot = (): RunHistoryDraft => ({
-    type: 'run.snapshot',
+    type: 'run.position',
     aggregateId: AGGREGATE,
-    payload: {
-      family: 'toolUse',
-      runtime: {
-        modelId: 'gpt-test',
-        backend: 'openai',
-        declinedRoutes: [],
-      },
-      state: {},
-    },
+    payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
   });
   const refusalOf = (error: unknown): RunHistoryRefused | null =>
     error instanceof RunHistoryRefused ? error : null;

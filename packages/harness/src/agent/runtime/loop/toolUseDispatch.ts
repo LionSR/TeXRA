@@ -106,7 +106,6 @@ import {
   bindingRow,
   displayRow,
   rowAggregate,
-  snapshotRow,
   positionRow,
   type Message,
 } from './rows';
@@ -391,7 +390,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   /** The files the run read since its loop started (`RunCall.readFiles`). */
   readFiles: Set<string>,
   step: StepTools,
-  joined?: Pick<JoinedFollowUps, 'rows' | 'recorded'> | null,
+  joined?: Pick<JoinedFollowUps, 'rows'> | null,
 ): Effect.fn.Return<
   DispatchOutcome,
   InvokeError,
@@ -409,7 +408,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const replan = cell.opened.pendingResponse?.responseId === responseId;
   const calls = localCallsOf(pending.assistant.content);
   // The calls answer the instruction the committed state records.
-  const at = initial.loop?.instruction;
+  const at = initial.input.instruction;
   const userInstruction =
     run.config.rootUserInstruction ??
     (at ? stored(initial, at, z.string()) : run.config.instruction);
@@ -1287,15 +1286,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     );
   }
   const group: Message = { role: 'tool', results };
-  const saved = settledState.loop;
-  if (saved === null)
-    return yield* Effect.die(new Error('Delivery needs an opened run.'));
   const delivered = yield* cell.append((state) => [
-    appendRow(runId, [group], responseId),
+    appendRow(runId, [group], { sourceResponse: responseId }),
     ...(joined?.rows ?? []),
-    ...snapshotRow(runId, state, {
-      state: { ...saved, ...joined?.recorded },
-    }),
     positionRow(runId, state, 'results.ready'),
   ]);
   return { state: delivered, endTurn };

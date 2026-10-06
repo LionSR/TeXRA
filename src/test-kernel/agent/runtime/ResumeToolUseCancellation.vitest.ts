@@ -172,6 +172,7 @@ function completedTurn() {
     files: [],
     usage: NO_USAGE,
     structured: undefined,
+    memoryMisses: [],
   };
 }
 

@@ -8,6 +8,8 @@ export function createFakeRunRecords(
   return {
     exists: () => Effect.succeed(false),
     readRunRecord: () => Effect.succeed(null),
+    isOpened: () => Effect.succeed(false),
+    readBinding: () => Effect.succeed(null),
     readConfig: () => Effect.succeed(null),
     readReport: () => Effect.succeed(null),
     readWorkspaceFiles: () => Effect.succeed([]),

@@ -94,7 +94,7 @@ interface CliHistoryDetails {
   readonly conversationPreview: CliHistoryConversationPreview | null;
   readonly conversation?: CliHistoryConversationPreview | null;
   readonly files: readonly RunGeneratedFile[];
-  /** Whether the run aggregate carries a `run.snapshot`. */
+  /** Whether the run's loop opened it: its rows hold a `run.position`. */
   readonly checkpointPresent: boolean;
   /** The model the run is on; `config.model` is its launch model. */
   readonly currentModel?: string;

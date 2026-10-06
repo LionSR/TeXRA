@@ -14,8 +14,8 @@
  * - `usage`: a `usage` display row per priced `model.message` response and
  *   `context.edit` summary (a run with a run history stores its spend there,
  *   never as a `usage` row), and each run's spend summed by `sumUsageStats`.
- * - `model`: a `run.model` display row at each `run.snapshot` whose model
- *   differs from the snapshot before it, and each run's latest switch.
+ * - `model`: a `run.model` display row at each `run.config` whose model
+ *   differs from the one before it, and each run's latest switch.
  *
  * This module reads decoded events only, never `event.data`.
  */
@@ -167,12 +167,13 @@ export const PROJECTORS = {
   },
   model: {
     version: 1,
-    inputs: ['run.snapshot'],
+    inputs: ['run.config'],
     prior: 'run_model',
     projects: ['run.model'],
     project: (event, prior) => {
-      if (event.type !== 'run.snapshot') return [];
-      const model = event.payload.runtime.modelId;
+      if (event.type !== 'run.config') return [];
+      const model = event.config.model;
+      if (model === undefined) return [];
       const switched = prior.model !== undefined && prior.model.model !== model;
       return [
         ...(switched

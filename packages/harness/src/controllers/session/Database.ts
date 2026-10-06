@@ -279,11 +279,6 @@ export const databaseLayer = (
         'kind = ? AND logicalId = ? AND seq >= ?',
         'seq',
       );
-      // The latest `run.snapshot` of one open run, off `event_aggregate_type`.
-      const runSnapshot = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
-        WHERE s.kind = ? AND s.logical_id = ? AND e.type = 'run.snapshot'
-          AND s.closed_by IS NULL
-        ORDER BY e.seq DESC LIMIT 1`;
       const inputTypes = JSON.stringify([
         ...PROJECTORS.listing.inputs,
         'usage',
@@ -941,16 +936,6 @@ export const databaseLayer = (
         readPendingDeletions: () => query(decodedRows(pendingDeletions, [])),
         readRunRecords: (id) =>
           projected(decodedRows(READ_RUN_RECORDS, aggregateColumns(id))),
-        readRunSnapshot: (id) =>
-          Effect.gen(function* () {
-            const [event] = yield* query(
-              decodedRows(runSnapshot, aggregateColumns(id), true),
-            );
-            if (event === undefined) return null;
-            if (event.type !== 'run.snapshot')
-              return yield* invariant('Invalid run snapshot row');
-            return event;
-          }),
         ...currentValues({
           exec,
           execOne,

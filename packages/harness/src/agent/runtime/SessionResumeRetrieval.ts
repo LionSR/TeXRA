@@ -1,10 +1,9 @@
 /**
  * Session resume data retrieval: the identity a host needs to launch a
- * resumed run, read from the durable run facts. Every run resumes from the
- * same fact: the run aggregate's latest `run.snapshot`, one indexed read,
- * or, for a run registered and never opened, its registration. The run's
- * state is `RunHistory.load`, folded by the loop that continues it; nothing
- * here parses a checkpoint.
+ * resumed run, read from the durable run facts: whether the run can resume,
+ * and its configuration, whose model is the one the run is on (a switch
+ * writes a new `run.config`). The run's state is `RunHistory.load`, folded
+ * by the loop that continues it.
  */
 
 import { Effect } from 'effect';
@@ -19,8 +18,7 @@ const CHANNEL = 'SessionResumeRetrieval';
 
 /** What resuming a run needs, whichever category it is. */
 export interface ResumeData {
-  /** The run's configuration: its model the one its latest snapshot names,
-   *  or, for a run never opened, the one it was registered with. */
+  /** The run's configuration, as its newest `run.config` holds it. */
   readonly agentConfig: AgentConfig;
   readonly runId: RunId;
 }
@@ -29,7 +27,7 @@ export interface ResumeData {
  * Retrieve resume data for a run.
  *
  * @returns The resume identity, or `null` when there is nothing to resume
- *   (no `run.snapshot`, and not a run that was never opened). Fails when the durable facts
+ *   (never opened by its loop, and not a run waiting to be). Fails when the durable facts
  *   cannot be read, so the caller can distinguish "nothing to resume" from
  *   "resume failed" instead of silently abandoning the session.
  */
@@ -57,15 +55,6 @@ export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
     yield* Effect.logDebug(`Retrieved resume data for run: ${runId}`).pipe(
       withLogChannel(CHANNEL),
     );
-    // A run never opened is on the model it was registered with.
-    return resumability.kind === 'unopened'
-      ? { runId, agentConfig }
-      : {
-          runId,
-          agentConfig: {
-            ...agentConfig,
-            model: resumability.snapshot.runtime.modelId,
-          },
-        };
+    return { runId, agentConfig };
   },
 );

@@ -19,13 +19,14 @@ import {
   type HookOutcomes,
   type JsonValue,
   type ModelBackend,
+  type DeclinableUsageRoute,
   type OfferedTool,
-  type RunSnapshotPayload,
   type RetryErrorInfo,
+  type RunInput,
   type RunUsageTotals,
   type SessionEvent,
   type SessionEventDraft,
-  type SnapshotRuntime,
+  STRUCTURED_OUTPUT_TOOL_NAME,
 } from '@shared/schemas';
 import {
   applyRunRow,
@@ -57,8 +58,8 @@ import type { HistoryMessage, Live, RunHistoryRow } from './historyTurns';
  * display arms a batch has to commit atomically with them. A tool call's card
  * settles with its `tool.result`; an approval's recovery binding is the
  * `tool.binding` in the same batch; a streaming row open when the loop parks
- * closes with the `waiting` step; a model switch's `run.config` restates the
- * snapshot's model id; a child turn's settlement commits with its boundary.
+ * closes with the `waiting` step; a run's binding and a model switch are its
+ * `run.config`; a child turn's settlement commits with its boundary.
  * Publishing those companions separately is the crash window where a settled
  * tool keeps an active card, a card claims a result no row holds, an approval
  * has nothing to recover it by, or a listing names a model the history does
@@ -75,7 +76,7 @@ type RunHistoryDraftType =
   | 'script.call'
   | 'tool.binding'
   | 'tool.result'
-  | 'run.snapshot'
+  | 'run.config'
   | 'tools.offered'
   | 'context.blob'
   | 'hook.outcome'
@@ -100,9 +101,6 @@ export class RunHistoryInconsistent extends Data.TaggedError(
   readonly commit: CommitOrdinal | null;
 }> {}
 
-/** The loop state a `run.snapshot` restores. */
-type LoopState = RunSnapshotPayload['state'];
-
 /**
  * What the loop continues from. A plain type with no schema of its own,
  * because giving it one invites persisting it (C10). Every field is derived
@@ -114,24 +112,23 @@ export type RunState = RunPosition & {
   readonly round: number;
   /** The last folded row. */
   readonly commit: CommitOrdinal;
-  /** The latest `run.snapshot` as written: the loop state beside it moves
-   *  with each `tool.result` mutation, this does not. */
-  readonly lastSnapshot: RunSnapshotPayload | null;
-  /** Run history rows folded into this state, before and after any snapshot:
-   *  zero means only queued input has folded (an unopened, not broken, run). */
+  /** Run history rows folded into this state: zero means only queued input
+   *  has folded (an unopened, not broken, run). */
   readonly runHistoryRows: number;
-  /** `null` until the opening `run.snapshot` (then `initial`, moved by
+  /** `null` until the opening `run.position` (then moved by
    *  {@link phaseAfter}): no row that presupposes an opened run precedes it. */
   readonly phase: RunLoopPhase | null;
+  /** The model the run is on: its newest `run.config`'s. */
   readonly modelId: string | null;
+  /** The backend that config's `binding` names; null before the run binds. */
   readonly backend: ModelBackend | null;
   /** The failure that stopped the turn's invocation or that a person was
    *  asked about, until a response or the input of a new turn retires it. */
   readonly lastError: RetryErrorInfo | null;
-  /** Subscription routes this run declines: the launch's seed, as its
-   *  snapshot restates it, plus each retry the user answered with their own
+  /** Subscription routes this run declines: the launch's seed, on its
+   *  `run.config` binding, plus each retry the user answered with their own
    *  API key, folded from that answer. */
-  readonly declinedRoutes: SnapshotRuntime['declinedRoutes'];
+  readonly declinedRoutes: readonly DeclinableUsageRoute[];
   /** Canonical provider history, in order. The pending response's assistant
    *  message enters only with its delivering `append`. */
   readonly messages: readonly HistoryMessage[];
@@ -153,7 +150,7 @@ export type RunState = RunPosition & {
    *  read by the process that asked, whose body went on with it. */
   readonly decidedSinceActivation: ReadonlySet<string>;
   /** Derived (D12): the priced usage on every `response` and `context.edit`
-   *  row. No snapshot carries it. */
+   *  row. */
   readonly usage: RunUsageTotals;
   /** The workspace files the run's calls edited, first edit first: the
    *  paths of every executed `tool.result`'s `edits`. */
@@ -162,7 +159,22 @@ export type RunState = RunPosition & {
   readonly toolCalls: number;
   /** The latest `context.edit`'s `seq`: the next edit's `base`. */
   readonly lastEdit: number | null;
-  readonly loop: LoopState | null;
+  /** What the run's turns answer besides their messages: the latest value
+   *  of each field an `append` or a fork's edit recorded; an instruction
+   *  absent is the launch's. */
+  readonly input: Omit<RunInput, 'instruction'> & {
+    readonly instruction?: string;
+  };
+  /** The structured output the run submitted: the settled value of its
+   *  `submit_output` call, or of a script run's handed-down call. */
+  readonly structured: { readonly value: JsonValue } | null;
+  /** The turn whose final-tool nudge was appended, so it is asked once. */
+  readonly finalToolTurn: number | null;
+  /** The next response must call the final tool: its nudge was appended
+   *  and no response has answered it. */
+  readonly forceFinalTool: boolean;
+  /** The latest response's answer was finalized for display. */
+  readonly answerFinalized: boolean;
   /** The latest `tools.offered` row's set; `null` before the first. */
   readonly offeredTools: readonly OfferedTool[] | null;
   /** The plugin whose continuation the latest `tools.offered` row pinned. */
@@ -189,7 +201,8 @@ type SettlementType = 'run.report' | 'run.result' | 'child.turn';
 type FoldedRowType =
   | SharedRunRow['type']
   | Exclude<RunHistoryDraft['type'], CardRowType>
-  | 'run.activate';
+  | 'run.activate'
+  | 'response.finalized';
 
 /**
  * Display rows ignored by name. Anything on the run aggregate that is neither
@@ -204,7 +217,6 @@ const IGNORED_ROW_TYPES: Readonly<
   'tool.end': true,
   'stream.end': true,
   'run.start': true,
-  'run.config': true,
   'run.model': true,
   'run.detach': true,
   'run.end': true,
@@ -221,7 +233,6 @@ const IGNORED_ROW_TYPES: Readonly<
   usage: true,
   'context.state': true,
   'stream.start': true,
-  'response.finalized': true,
   'run.report': true,
   'run.result': true,
   'followup.closed': true,
@@ -236,7 +247,6 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   ...freshRunPosition(),
   round: 0,
   commit,
-  lastSnapshot: null,
   runHistoryRows: 0,
   phase: null,
   modelId: null,
@@ -253,8 +263,12 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   usage: EMPTY_RUN_USAGE_TOTALS,
   edited: [],
   toolCalls: 0,
-  loop: null,
   lastEdit: null,
+  input: {},
+  structured: null,
+  finalToolTurn: null,
+  forceFinalTool: false,
+  answerFinalized: false,
   offeredTools: null,
   offeredContinuation: null,
   offeredSkills: [],
@@ -276,7 +290,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
  * the exception by contract:
  * its tool returns at once and its answer arrives as a follow-up, whichever
  * process is running the run by then, so it stands unbound across every
- * snapshot its run writes.
+ * batch its run writes.
  */
 export function unboundRequests(state: RunState): readonly string[] {
   // The recovery bindings the rows carry (R5): the retry request the turn's
@@ -318,6 +332,25 @@ function declinedBy(
 }
 
 type Fold = Result.Result<RunState, RunHistoryInconsistent>;
+
+/** `input` with what a row recorded: each field it names replaces the
+ *  last, and a `null` instruction returns to the launch's. */
+function withInput(
+  input: RunState['input'],
+  recorded: RunInput | null | undefined,
+): RunState['input'] {
+  if (recorded == null) return input;
+  const { instruction: was, ...kept } = input;
+  const { instruction, system, activated, memoryMisses } = recorded;
+  const next = instruction === undefined ? was : (instruction ?? undefined);
+  return {
+    ...kept,
+    ...(system !== undefined && { system }),
+    ...(activated !== undefined && { activated }),
+    ...(memoryMisses !== undefined && { memoryMisses }),
+    ...(next !== undefined && { instruction: next }),
+  };
+}
 
 const refuse = (
   reason: RunHistoryInconsistent['reason'],
@@ -362,9 +395,9 @@ function foldRow(
   if (current !== null && commit <= current.commit) {
     return outOfOrder(`commit ${commit} is not above ${current.commit}`);
   }
-  /** A row that presupposes the opening snapshot, folded before it. */
+  /** A row that presupposes the opening position, folded before it. */
   const beforeOpening = (what: string) =>
-    outOfOrder(`${what} before the opening run.snapshot`);
+    outOfOrder(`${what} before the opening run.position`);
   /** The state with this run history row counted in. */
   const advance = (state: RunState): RunState => ({
     ...state,
@@ -432,21 +465,39 @@ function foldRow(
             commit,
             decidedSinceActivation: new Set(),
           });
-    case 'run.snapshot': {
-      // The loop state and what the loop runs on, and nothing else: no
-      // position and no reference set, so there is no way for a snapshot to
-      // disagree with the rows below it (single-owner note, section 3.3).
-      const p = row.payload;
+    case 'run.config': {
+      // What the run runs on: its model, and once it binds, its backend and
+      // the routes its launch declined. Its registration writes one before
+      // the run opens and a switch the next; a new model drops the old one's
+      // continuation, and the next step renders the system text anew.
       const state = current ?? freshRunState(commit);
+      const modelId = row.config.model ?? state.modelId;
+      const binding = row.binding ?? null;
+      const switched = state.modelId !== null && modelId !== state.modelId;
       return Result.succeed({
-        ...advance(state),
-        lastSnapshot: p,
-        phase: state.phase ?? 'initial',
-        family: p.family,
-        ...p.runtime,
-        loop: p.state,
+        ...state,
+        commit,
+        modelId,
+        backend: binding?.backend ?? state.backend,
+        declinedRoutes:
+          binding === null
+            ? state.declinedRoutes
+            : [
+                ...new Set([
+                  ...state.declinedRoutes,
+                  ...binding.declinedRoutes,
+                ]),
+              ],
+        ...(switched
+          ? { continuation: null, offeredSystem: null, offeredContext: null }
+          : {}),
       });
     }
+    case 'response.finalized':
+      // The answer the loop finalized for display: its policy ran.
+      return current === null
+        ? null
+        : Result.succeed({ ...current, commit, answerFinalized: true });
     case 'model.message': {
       const p = row.payload;
       // A summary's attempts record its billed calls; the loop continues
@@ -463,6 +514,10 @@ function foldRow(
         return Result.succeed({
           ...advance(state),
           messages: appended(state, ...p.messages),
+          input: withInput(state.input, p.input),
+          ...(p.reason === 'final-tool'
+            ? { finalToolTurn: state.turn, forceFinalTool: true }
+            : {}),
           invocation: null,
           lastError: null,
         });
@@ -514,6 +569,8 @@ function foldRow(
             lastTurn: p.turn,
             countStale: false,
             usage: addTurnUsage(state.usage, p.usage),
+            forceFinalTool: false,
+            answerFinalized: false,
           };
           if (p.calls.length === 0) {
             return Result.succeed({
@@ -567,7 +624,7 @@ function foldRow(
     case 'context.edit': {
       const p = row.payload;
       // A fork's seed is its run's first view: it opens nothing, like an
-      // undelivered append, and comes before the opening snapshot. Every
+      // undelivered append, and comes before the opening position. Every
       // other edit edits a view an opened run already holds.
       if ((p.cause === 'fork') === opened(current)) {
         return p.cause === 'fork'
@@ -582,6 +639,7 @@ function foldRow(
         return Result.succeed({
           ...advance(state),
           messages: appended(state, ...p.messages),
+          input: withInput(state.input, p.input),
           lastEdit: row.seq,
         });
       }
@@ -775,6 +833,17 @@ function foldRow(
         },
       });
       const ran = p.disposition === 'executed' || p.disposition === 'failed';
+      // The run's structured output: its `submit_output` call's value, or
+      // a script run's handed-down call's (no model produced that response:
+      // its message has no origin).
+      const own = pending.calls.find(({ callId }) => callId === p.callId);
+      const submitted =
+        p.result.status === 'executed' &&
+        p.result.value !== undefined &&
+        (own?.toolName === STRUCTURED_OUTPUT_TOOL_NAME ||
+          (own !== undefined && pending.assistant.origin === null))
+          ? { value: p.result.value }
+          : null;
       const edits = p.result.status === 'executed' ? p.result.edits : [];
       const fresh = [
         ...new Set((edits ?? []).map(({ path }) => path).filter(Boolean)),
@@ -784,6 +853,7 @@ function foldRow(
         edited:
           fresh.length === 0 ? settled.edited : [...settled.edited, ...fresh],
         toolCalls: settled.toolCalls + (ran ? 1 : 0),
+        structured: submitted ?? settled.structured,
       });
     }
     default:
@@ -799,8 +869,7 @@ function foldRow(
  * what the run history test pins. `null` out means no run history row has folded.
  *
  * Returns a typed inconsistency rather than throwing or defaulting: a row
- * the fold cannot apply is corruption, not a state to degrade into. A
- * snapshot restates no row fact, so it cannot disagree with the rows.
+ * the fold cannot apply is corruption, not a state to degrade into.
  */
 export function foldRunState(
   state: RunState | null,

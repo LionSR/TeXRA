@@ -19,10 +19,9 @@ import { withProcessServices } from '@platform/processRuntime';
 import {
   aggregateId,
   CLI_RUN_STATUS,
-  RunSnapshotPayloadSchema,
   HISTORY_RUN_STATUS,
 } from '@shared/schemas';
-import type { RunSnapshotPayload, RunId, RunOutcome } from '@shared/schemas';
+import type { RunId, RunOutcome } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -61,22 +60,7 @@ beforeEach(async () => {
   );
 });
 
-const SNAPSHOT_RUNTIME = {
-  modelId: 'deepseek/deepseek-v4-flash',
-  backend: 'deepseek',
-  declinedRoutes: [],
-};
-
-/** A run's opening `run.snapshot`. */
-function snapshotPayload(): RunSnapshotPayload {
-  return RunSnapshotPayloadSchema.parse({
-    family: 'toolUse',
-    runtime: SNAPSHOT_RUNTIME,
-    state: {},
-  });
-}
-
-/** Commits a run's opening snapshot — the fact resume reads — then releases its lease. */
+/** Commits the position that opens a run — the fact resume reads — then releases its lease. */
 async function seedSnapshot(
   id: RunId,
   config: AgentConfig,
@@ -90,9 +74,9 @@ async function seedSnapshot(
   await Effect.runPromise(
     testDefaultSession().commit([
       {
-        type: 'run.snapshot',
+        type: 'run.position',
         aggregateId: aggregateId('run', id),
-        payload: snapshotPayload(),
+        payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
       },
     ]),
   );
@@ -199,9 +183,9 @@ describe('CLI history status formatting', () => {
       ]);
       yield* testDefaultSession().commit([
         {
-          type: 'run.snapshot',
+          type: 'run.position',
           aggregateId: aggregateId('run', id),
-          payload: snapshotPayload(),
+          payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
         },
       ]);
 

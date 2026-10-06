@@ -81,16 +81,11 @@ export type RunPosition = {
 
 /**
  * Where the loop stands, as its own branches read it: a settled boundary
- * (`initial`, `waiting`, `halted`) or somewhere inside a turn. Fold-only,
+ * (`waiting`, `halted`) or somewhere inside a turn. Fold-only,
  * never written: derived from the run's `run.position` rows.
  */
 export type RunLoopPhase =
-  | 'initial'
-  | 'model.ready'
-  | 'model.submitted'
-  | 'results.ready'
-  | 'waiting'
-  | 'halted';
+  'model.ready' | 'model.submitted' | 'results.ready' | 'waiting' | 'halted';
 
 /**
  * The phase a position leaves an opened loop in. A `halted` position moves
@@ -98,7 +93,8 @@ export type RunLoopPhase =
  * from there. `turn.ready` is input consumed at a park, still a boundary;
  * a `turn.end` that no `waiting` or `turn.begin` follows in its batch is the
  * round loop's last round closed, the run concluded before its terminal
- * row. An unopened run stays unopened, for `load` to refuse.
+ * row. A run's first position opens it: its opening batch's `turn.ready`,
+ * or a fork's `waiting`. A halt opens nothing.
  */
 const PHASE_AT: Readonly<Record<Exclude<PositionAt, 'halted'>, RunLoopPhase>> =
   {
@@ -113,7 +109,7 @@ export const phaseAfter = (
   phase: RunLoopPhase | null,
   at: PositionAt | null | undefined,
 ): RunLoopPhase | null =>
-  at == null || at === 'halted' || phase === null ? phase : PHASE_AT[at];
+  at == null || at === 'halted' ? phase : PHASE_AT[at];
 
 /**
  * What these rows say about one run: its position and the input it has not

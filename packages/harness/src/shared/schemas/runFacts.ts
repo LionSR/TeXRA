@@ -1,17 +1,17 @@
 /**
- * The agent flow state a `run.snapshot` row restores: the model backend
- * and the message-free core of the tool-use flow. Host-neutral so the
- * run history (`runHistoryEvent.ts`) composes them without reaching the agent
+ * The facts a run's rows carry beside its messages: its usage, its input
+ * (system text, instruction, activated skills) and what it is bound to.
+ * Host-neutral so the run history (`runHistoryEvent.ts`) composes them without reaching the agent
  * layer; the agent modules import them back.
  */
 import { z } from 'zod';
 
 import { ACTIVATED_SKILLS_MAX } from './activeSkills';
-import { JsonValueSchema } from './jsonValue';
 import { Sha256Schema } from './offeredTools';
 import { QualifiedSkillNameSchema } from './skillName';
 import { StoredProtocolSchema } from './storedTurn';
 import {
+  DeclinableUsageRouteSchema,
   type RunUsageTotals,
   TokenCountSchema,
   TokenUsageStatsSchema,
@@ -140,38 +140,44 @@ export const ModelBackendSchema = z.enum([
 /** Who serves a run's conversation ({@link ModelBackendSchema}). */
 export type ModelBackend = z.infer<typeof ModelBackendSchema>;
 
-// ------------------------------------------------------------ flow core
+// ------------------------------------------------------------ run input
 
 /**
- * The message-free state of a run's flow: the messages are folded from the
- * run's `model.message` rows.
- *
- * Default `z.object` semantics by decision (#10641): unknown top-level keys
- * in a persisted record are accepted but stripped at this parse boundary,
- * and the resumed flow's first persisted step then rewrites the stripped
- * record. Deliberately not `z.strictObject`
- * — a record written by a newer build carrying keys this build does not know
- * must still resume — and no `.catch`: malformed known fields must keep
- * failing loudly.
+ * What a run's turns answer besides their messages, recorded on the row that
+ * changes it: a fresh run's opening `append`, a delivery's `append`, or a
+ * fork's seeding `context.edit`. The fold keeps the latest value of each
+ * field (`RunState.input`); a row names only what it changes.
  */
-export const ToolUseSnapshotStateSchema = z.object({
+export const RunInputSchema = z.strictObject({
   /** The address of the run's system text, before what each step adds
-   *  (`stepInstructions`): a `context.blob` of the run, never restated in
-   *  every snapshot. */
+   *  (`stepInstructions`): a `context.blob` of the run. */
   system: Sha256Schema.optional(),
   /** The address of the instruction the run's latest turn answers, a
-   *  `context.blob` recorded when a delivery changes it; absent while it is
-   *  the launch's. */
-  instruction: Sha256Schema.optional(),
-  /** The names of the skills the run's user activated, recorded with the
-   *  delivery that activated them: each step resolves them against its own
-   *  catalog, and grants one while its plugin, if any, still contributes. */
+   *  `context.blob`; `null` returns to the launch's instruction. */
+  instruction: Sha256Schema.nullable().optional(),
+  /** The names of the skills the run's user activated: each step resolves
+   *  them against its own catalog, and grants one while its plugin, if any,
+   *  still contributes. */
   activated: z
     .array(QualifiedSkillNameSchema)
     .max(ACTIVATED_SKILLS_MAX)
     .optional(),
   /** The attached memories the opening could not read. */
   memoryMisses: z.array(AttachedMemoryMissSchema).optional(),
-  /** Validated terminal-tool result retained across interrupt and resume. */
-  structured: JsonValueSchema.optional(),
 });
+/** What a run's turns answer besides their messages ({@link RunInputSchema}). */
+export type RunInput = z.infer<typeof RunInputSchema>;
+
+/**
+ * What a run is bound to beyond its model id, recorded on its `run.config`
+ * once it binds: the backend a resume or a switch rebinds on, whatever the
+ * provider preferences say by then, and the subscription routes its launch
+ * declined (an own-API-key fallback declines them all). Routes declined by a
+ * later retry are folded from that retry's decision.
+ */
+export const RunBindingSchema = z.strictObject({
+  backend: ModelBackendSchema,
+  declinedRoutes: z.array(DeclinableUsageRouteSchema).readonly(),
+});
+/** What a run is bound to beyond its model id ({@link RunBindingSchema}). */
+export type RunBinding = z.infer<typeof RunBindingSchema>;

@@ -10,12 +10,11 @@
  * resume, and it keeps a session-root service free of per-run mutable cache.
  *
  * Deliberately absent: no `append` (a one-row case is a one-element batch),
- * no `messages()` (the folded state holds them), no snapshot writer helper
- * (a snapshot is a row like any other), no subscribe surface.
+ * no `messages()` (the folded state holds them), no subscribe surface.
  */
 import { Cause, Context, Data, type Effect } from 'effect';
 
-import type { RunId, SessionEvent, SessionEventDraft } from '@shared/schemas';
+import type { RunId, SessionEventDraft } from '@shared/schemas';
 import { type DatabaseReadFailed, DatabaseWriteFailed } from './database';
 import type {
   RunHistoryDraft,
@@ -106,13 +105,11 @@ export class RunHistory extends Context.Service<
      * run history, the honest answer, distinct from "checkpoint corrupt".
      * Queued follow-ups alone still return that unopened state (`phase` is
      * null) so the caller can deliver them; they do not open the run. Run history
-     * rows without an opening `run.snapshot` are not that case: they are a
+     * rows without an opening `run.position` are not that case: they are a
      * malformed aggregate and fail `inconsistent`, because folding an
      * `attempt` or a `response` into a fresh run is how a paid invocation
-     * gets issued twice. Reads the run aggregate in full: a `run.snapshot`
-     * carries no reference to the message history below it (D5 dropped
-     * `messageBaseCommit`), so a fold anchored at the latest snapshot would
-     * restore a run with no conversation and no error to say so.
+     * gets issued twice. Reads the run aggregate in full: the state is the
+     * fold of every row, nothing restates it.
      */
     readonly load: (
       run: RunId,
@@ -120,28 +117,12 @@ export class RunHistory extends Context.Service<
       through?: number,
     ) => Effect.Effect<RunState | null, RunHistoryRefused | DatabaseReadFailed>;
     /**
-     * The latest `run.snapshot` on the run aggregate, one indexed row read
-     * and no fold: what every reader of the retired `flow_<id>.json` becomes.
-     * `null` when the run has never written one, or is closed. Existence,
-     * `payload.family`, and `payload.runtime` (model id, backend,
-     * declined routes) are the facts it answers; a run's
-     * position and state are `load`.
-     */
-    readonly latestSnapshot: (
-      run: RunId,
-    ) => Effect.Effect<
-      Extract<SessionEvent, { type: 'run.snapshot' }> | null,
-      DatabaseReadFailed
-    >;
-    /**
      * Commit one ordered batch in one transaction, and return the state the
      * loop continues from: `state` folded with the rows the publisher
      * actually committed. Failure of any member commits none.
      *
      * Preconditions, checked before publish; a violation is a defect:
-     * - a `run.snapshot` is the last run history row of its batch, except when a
-     *   `run.position`, a companion `tool.end`, a `request.decided`, or the
-     *   stream.end` closing the row a `waiting` step parks beside follows
+     * - a batch on an unopened run carries the `run.position` that opens
      *   it. A `request.opened` PRECEDES the `tool.binding` or the `failed`
      *   attempt that binds it, so the fold resolves the binding against a request
      *   it already holds;

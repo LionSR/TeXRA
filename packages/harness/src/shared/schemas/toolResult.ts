@@ -158,6 +158,10 @@ const ErrorToolResultSchema = z.object({
   ...ToolResultSharedFields,
 });
 
+/** The synthetic tool a run with an output schema submits its structured
+ *  output through: its settled result's `value` is the run's output. */
+export const STRUCTURED_OUTPUT_TOOL_NAME = 'submit_output';
+
 export const ToolResultSchema = z.discriminatedUnion('status', [
   ExecutedToolResultSchema,
   ErrorToolResultSchema,

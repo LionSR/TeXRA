@@ -20,11 +20,7 @@ import { RetryErrorInfoSchema } from './errors';
 import { JsonValueSchema } from './jsonValue';
 import { Sha256Schema } from './offeredTools';
 import { RunOutcomeSchema } from './run';
-import {
-  ModelBackendSchema,
-  NormalizedUsageSchema,
-  ToolUseSnapshotStateSchema,
-} from './runSnapshotState';
+import { NormalizedUsageSchema, RunInputSchema } from './runFacts';
 import {
   ProviderEvidenceSchema,
   StoredMessageSchema,
@@ -33,7 +29,6 @@ import {
   StoredTurnSchema,
 } from './storedTurn';
 import { SettledAttachmentSchema, SettledToolResultSchema } from './toolResult';
-import { DeclinableUsageRouteSchema } from './usage';
 
 /* ------------------------------------------------------------------ ids */
 
@@ -209,7 +204,7 @@ export const ModelMessagePayloadSchema = z
        * produced for this invocation and the fold sums it into
        * `RunState.usage` (D12). `null` only when the invocation produced no
        * usage at all: an editor turn, or a provider that reported none.
-       * Never restored from a snapshot; the rows are the only carrier.
+       * The rows are the only carrier.
        */
       usage: NormalizedUsageSchema.nullable(),
     }),
@@ -227,12 +222,19 @@ export const ModelMessagePayloadSchema = z
      * by the fold from the pending response's own row, so the paid turn is
      * stored once on an aggregate that never rewrites and never deletes, and
      * no partial group or independently appended pending assistant enters
-     * provider history.
+     * provider history. `input` is what the appended messages change about
+     * what the run answers (a fresh run's opening and a delivery record it
+     * here); `reason` names a message the loop appended itself, so the turn's
+     * policy is read off the rows: `blank-continuation` after a blank turn
+     * that followed a tool result, `final-tool` before the forced turn that
+     * must submit the structured output.
      */
     z.strictObject({
       kind: z.literal('append'),
       messages: z.array(StoredMessageSchema).min(1).readonly(),
       sourceResponse: ResponseIdSchema.nullable(),
+      input: RunInputSchema.nullish(),
+      reason: z.enum(['blank-continuation', 'final-tool']).nullish(),
     }),
   ])
   .superRefine((p, ctx) => {
@@ -306,13 +308,12 @@ export const ModelMessagePayloadSchema = z
  * applies to) are replaced by `messages`. An edit drops the provider-side
  * continuation, which was over the old view, and the offered system text.
  * `trigger` says what asked for a compaction: the threshold
- * (`context-limit`), a model switch (`model-switch`, an empty range: the history stays, the
- * continuation goes) or the user's `/compact` (`user`); null for the other
- * causes. `base` is the `seq` of the edit the view stood at when this one
+ * (`context-limit`) or the user's `/compact` (`user`); null for the other
+ * causes. A fork's seed carries the source's `input` with its messages. `base` is the `seq` of the edit the view stood at when this one
  * was computed (`null`: none), and the fold refuses an edit whose base is no
  * longer the latest. `usage` is a summary call's priced usage, folded as a
- * response's (`null` when no model was called). Compaction (`run/compaction.ts`,
- * `loop/modelSwitch.ts`), reset and handoff (`FollowUps.ts`) and the fork
+ * response's (`null` when no model was called). Compaction (`run/compaction.ts`),
+ * reset and handoff (`FollowUps.ts`) and the fork
  * seed (`forkRun.ts`) write it. Whether the result is preparable is the run
  * history's check (D11), at write and cold load: a payload cannot see the
  * history it edits.
@@ -320,7 +321,7 @@ export const ModelMessagePayloadSchema = z
 export const ContextEditPayloadSchema = z
   .strictObject({
     cause: z.enum(['compaction', 'reset', 'handoff', 'fork']),
-    trigger: z.enum(['context-limit', 'model-switch', 'user']).nullable(),
+    trigger: z.enum(['context-limit', 'user']).nullable(),
     base: z.int().positive().nullable(),
     range: z.strictObject({
       from: z.int().nonnegative(),
@@ -328,6 +329,7 @@ export const ContextEditPayloadSchema = z
     }),
     messages: z.array(StoredMessageSchema).readonly(),
     usage: NormalizedUsageSchema.nullable(),
+    input: RunInputSchema.nullish(),
   })
   .refine(({ range }) => range.from <= range.to, {
     path: ['range'],
@@ -471,34 +473,3 @@ export const ToolResultPayloadSchema = z
     }
   });
 export type ToolResultPayload = z.infer<typeof ToolResultPayloadSchema>;
-
-/* ----------------------------------------------------------- run.snapshot */
-
-/**
- * What the loop runs on, apart from where it stands: `run.position` is the
- * one record of the loop's position and coordinates, so a snapshot never
- * restates them and is written only when one of these, or the loop state
- * beside them, changes.
- */
-const SnapshotRuntimeSchema = z.strictObject({
-  modelId: z.string().min(1),
-  backend: ModelBackendSchema,
-  /**
-   * Subscription routes this run must not bind again: one per retry the user
-   * answered with their own API key, plus the launch's own seed. Durable so a
-   * resume rebinds under the same choice; run-scoped so the user's stored
-   * preference is never rewritten on their behalf.
-   */
-  declinedRoutes: z.array(DeclinableUsageRouteSchema).readonly(),
-});
-export type SnapshotRuntime = z.infer<typeof SnapshotRuntimeSchema>;
-
-/** A snapshot restates nothing the rows carry (single-owner note, 3.3): the
- *  pending response, its intents and their approval bindings are folded from
- *  `model.message`, `tool.intent` and `tool.binding`. */
-export const RunSnapshotPayloadSchema = z.strictObject({
-  family: RunFamilySchema,
-  runtime: SnapshotRuntimeSchema,
-  state: ToolUseSnapshotStateSchema,
-});
-export type RunSnapshotPayload = z.infer<typeof RunSnapshotPayloadSchema>;

@@ -37,8 +37,8 @@ import { PermissionPayloadSchema } from './progressView/data';
 import { RunFactSchema } from './rowValues';
 import { RequestDecisionSchema } from './request';
 import { RunIdentitySchema } from './runIdentity';
+import { RunBindingSchema } from './runFacts';
 import {
-  RunSnapshotPayloadSchema,
   RunPositionPayloadSchema,
   ContextEditPayloadSchema,
   ModelMessagePayloadSchema,
@@ -321,8 +321,13 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
    *  item 8); `run.start` is the creation fact and happens once. */
   durable('run.activate', {}),
   /** What the run runs with, written at registration and then only when it
-   *  changes: the newest row is the configuration every reader reads. */
-  durable('run.config', { config: RunRecordFieldsSchema }),
+   *  changes: the newest row is the configuration every reader reads, its
+   *  model the one the run is on (a switch writes a new row). `binding`
+   *  joins once the run's loop binds its model. */
+  durable('run.config', {
+    config: RunRecordFieldsSchema,
+    binding: RunBindingSchema.nullish(),
+  }),
   durable('run.model', { model: z.string().min(1) }), // projected (`projections.ts`), never stored
   /** The parent edge severed by a stop that detaches the run: the only
    *  fact after `run.start` that moves the edge. */
@@ -436,7 +441,6 @@ const RunHistoryEventDraftSchema = z.discriminatedUnion('type', [
   /** Binds a call attempt to its own request; commits with the request. */
   durable('tool.binding', { payload: ToolBindingPayloadSchema }),
   durable('tool.result', { payload: ToolResultPayloadSchema }),
-  durable('run.snapshot', { payload: RunSnapshotPayloadSchema }),
   durable('tools.offered', { payload: ToolsOfferedPayloadSchema }),
   durable('context.blob', { payload: ContextBlobSchema }),
   durable('hook.outcome', { payload: HookOutcomePayloadSchema }),
@@ -584,13 +588,12 @@ export function listingTypeOf(
     case 'script.call':
     case 'tool.binding':
     case 'tool.result':
-    case 'run.snapshot':
     case 'tools.offered':
     case 'context.blob':
     case 'hook.outcome':
     case 'child.turn':
       // A priced turn is never "latest of type" (`listingKeyOf`). Run-history
-      // rows stay out: a cold hydrate never pulls a `run.snapshot` into every
+      // rows stay out: a cold hydrate never pulls one into every
       // renderer (`run.position` is a listing row). Keyed
       // records fold whole; the fold suite pins this list.
       return null;

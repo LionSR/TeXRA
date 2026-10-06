@@ -81,7 +81,7 @@ export * from './subscriptionUsage';
 
 // Layer 7: Composite schemas (depend on multiple layers)
 export * from './runState';
-export * from './runSnapshotState';
+export * from './runFacts';
 export * from './rowValues';
 export * from './runHistoryEvent';
 export * from './storedTurn';

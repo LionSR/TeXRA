@@ -181,9 +181,8 @@ export function createSessionExitController(
       ctx.interruptActive('user');
       armExit();
     } else if (session.isResumableIdle()) {
-      // Exit WITHOUT a user stop. The suspended tool-use run keeps its latest
-      // `run.snapshot` on the run aggregate, so `texra resume` can continue
-      // it. Preserve the session's current terminal status too; an
+      // Exit WITHOUT a user stop. The suspended tool-use run keeps its rows
+      // on the run aggregate, so `texra resume` can continue it. Preserve the session's current terminal status too; an
       // intentional idle exit after a successful turn should not report
       // SIGINT/130. The platform shutdown's session close still ends the
       // generation with its cancelled `run.end` (see
@@ -195,7 +194,7 @@ export function createSessionExitController(
     }
   };
   // Only interrupt an actively-running turn; an idle/WAITING session is left
-  // suspended so its `run.snapshot` stays resumable (see handleSigint).
+  // suspended so its rows stay resumable (see handleSigint).
   const handleTermSignal = (exitCode: number) => (): void => {
     if (session.canStopVisibleRun()) {
       ctx.interruptActive('shutdown');

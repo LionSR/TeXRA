@@ -93,7 +93,7 @@ export interface StepTools {
  *  holds, all recorded in its rows: its base text, the names of the skills
  *  its user activated, and whether it is a child. */
 export interface RunSystem {
-  readonly base: () => string | undefined;
+  readonly base: (state: RunState) => string | undefined;
   readonly activated: (state: RunState) => readonly string[];
   readonly isChild: () => boolean;
 }
@@ -407,7 +407,7 @@ const openStep = Effect.fn('Step.open')(function* (
     }),
     ...(delegation && { delegation }),
   };
-  const base = runSystem.base();
+  const base = runSystem.base(state);
   const { system, update } = contextAt(state, base, context);
   const toolsChanged = !sameSet(state.offeredTools, step.tools.offered);
   const skills = listed.map(({ name }) => name);
@@ -448,7 +448,7 @@ const openStep = Effect.fn('Step.open')(function* (
     // The content the set names is stored before the row that names it.
     rows: changed
       ? [
-          // The base text is what a snapshot names.
+          // The base text is what the opening's `append` input names.
           ...blobRows(run.runId, state, [
             ...(base === undefined ? [] : [base]),
             ...(system === undefined ? [] : [system]),

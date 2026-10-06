@@ -52,8 +52,8 @@ import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
 import {
   appendRow,
   bindingRow,
+  positionRow,
   rowAggregate,
-  snapshotRow,
 } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
@@ -278,7 +278,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
     appendRow(runId, [
       { role: 'user', content: [{ kind: 'text', text: 'go' }] },
     ]),
-    ...snapshotRow(runId, freshState(), { state: {} }),
+    positionRow(runId, freshState(), 'turn.ready'),
   ]);
   const turn = turnWithCalls(options.calls);
   const state = yield* session.runHistory.appendBatch(runId, opened, [

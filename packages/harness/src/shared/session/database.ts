@@ -299,16 +299,6 @@ export class Database extends Context.Service<
     readonly readRunRecords: (
       id: AggregateId,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
-    /** The latest `run.snapshot` on one open run, through the
-     *  `(aggregate_id, type, seq)` index: the run history's existence and
-     *  coordinates read, never a fold. A closed (tombstoned) run reads as
-     *  absent, as `readRunRecords` does. */
-    readonly readRunSnapshot: (
-      id: AggregateId,
-    ) => Effect.Effect<
-      Extract<SessionEvent, { type: 'run.snapshot' }> | null,
-      DatabaseReadFailed
-    >;
     /** Bounded current CLI input rows, ordered oldest first. */
     readonly readInputHistory: () => Effect.Effect<
       readonly InputHistoryRecord[],

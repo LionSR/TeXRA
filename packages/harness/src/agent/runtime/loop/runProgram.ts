@@ -46,8 +46,8 @@ export interface RunCell {
   readonly opened: RunState;
   /**
    * Commit one batch against the current state and adopt what the run history
-   * folds back. Rows that read the state (a snapshot, a step, a settlement
-   * carrying the workspace) are built from the state the batch commits
+   * folds back. Rows that read the state (a step, a settlement, a delivery)
+   * are built from the state the batch commits
    * against. Read-append-write is one uninterruptible region under the
    * cell's lock, so a stop can never leave the cell behind the rows, and
    * concurrent settlements of one parallel partition each fold onto the
@@ -158,13 +158,12 @@ export const loadRun = (
     const bound = yield* SynchronizedRef.get(run.model);
     return {
       _tag: 'fresh',
+      // What the opening batch records (`run.config` with its binding): the
+      // state its first step is opened on.
       opening: {
         ...freshRunState(0),
-        family: 'toolUse',
         modelId: bound.modelId,
         backend: bound.backend,
-        // The launch's own-API-key choice enters the run history with the opening
-        // snapshot, so every later binding and every resume reads it back.
         declinedRoutes: run.declinedRoutes,
       },
     } satisfies RunEntry;

@@ -18,7 +18,7 @@ import {
   emptyRunEndOutput,
   storedRunOutput,
 } from '@shared/schemas';
-import type { RunSnapshotPayload, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createProcessSession } from '@test/support/sessionTestUtils';
@@ -79,35 +79,6 @@ const WORKFLOW_CONFIG = AgentConfigSchema.parse(
   }),
 );
 
-/** The opening snapshot of a tool-use run, as the loop's first batch writes it. */
-const OPENING_SNAPSHOT: RunSnapshotPayload = {
-  family: 'toolUse',
-  runtime: {
-    modelId: 'openai/gpt-5.4-2026-03-05',
-    backend: 'openai',
-    declinedRoutes: [],
-  },
-  state: {},
-};
-
-/**
- * The checkpoint a workflow run's aggregate carries. The real
- * `retrieveSessionResumeData` reads it: the runtime's model fields are what
- * the resumed launch pins.
- */
-const workflowSnapshot = (
-  modelId: string,
-  backend: RunSnapshotPayload['runtime']['backend'] = 'openai',
-): RunSnapshotPayload => ({
-  family: 'toolUse',
-  runtime: {
-    modelId,
-    backend,
-    declinedRoutes: [],
-  },
-  state: {},
-});
-
 /** The session the seeded run lives in, as the command resolves it. */
 let seededSession: SessionHandle;
 
@@ -115,7 +86,6 @@ let seededSession: SessionHandle;
 async function seedRunRecord(seed: {
   readonly config?: AgentConfig | null;
   readonly checkpoint?: boolean;
-  readonly backend?: RunSnapshotPayload['runtime']['backend'];
 }): Promise<void> {
   const session = await Effect.runPromise(createProcessSession());
   seededSession = session;
@@ -141,18 +111,14 @@ async function seedRunRecord(seed: {
   if (seed.config)
     await Effect.runPromise(commitRunRecord(session, RUN_ID, seed.config));
   if (seed.checkpoint !== false) {
-    // A document task's snapshot pins the model its config names.
-    const snapshot =
-      seed.config?.script?.kind === 'recipe'
-        ? workflowSnapshot(seed.config.model, seed.backend)
-        : OPENING_SNAPSHOT;
+    // The position that opens the run: its rows hold a checkpoint.
     await Effect.runPromise(session.runHistory.acquire(RUN_ID));
     await Effect.runPromise(
       session.runHistory.appendBatch(RUN_ID, null, [
         {
-          type: 'run.snapshot',
+          type: 'run.position',
           aggregateId: aggregateId('run', RUN_ID),
-          payload: snapshot,
+          payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
         },
       ]),
     );
