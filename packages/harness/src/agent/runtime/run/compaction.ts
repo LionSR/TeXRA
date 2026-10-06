@@ -7,8 +7,7 @@
  * a `/compact` waits for its own. The replacement is a summary the bound
  * model produces through the invoker's priced `call`, its attempts recorded
  * on the run's history, folded back as one user message. Every skip and
- * every failure is logged and shown as a compaction activity, never silent.
- * The compaction prompts and the summary cap live here, with their reader.
+ * failure is logged and shown as a compaction activity, never silent.
  */
 import { Cause, Effect, Exit, Fiber, type Scope } from 'effect';
 
@@ -133,8 +132,7 @@ interface Summary {
   readonly tokensBefore: number;
   readonly contextWindow: number;
   readonly activity: ReturnType<typeof startCompactionActivity>;
-  /** The run's cell its attempts committed through, which lands it. */
-  readonly cell: RunCell;
+  readonly cell: RunCell; // its attempts committed through it; it lands here
 }
 
 /** Whether the history has reached the threshold share of the window. */
@@ -258,8 +256,7 @@ const land = Effect.fn('compaction.land')(function* (
   base: number | null,
   reason: Reason,
 ) {
-  // Through the cell the summary's attempts committed through, onto the
-  // state that holds them, not the state the summary started from.
+  // Onto the cell's state, which holds the summary's own attempt rows.
   const state = yield* summary.cell.current;
   const compacted = yield* summary.cell.append([
     ...(input.answers ?? []),
