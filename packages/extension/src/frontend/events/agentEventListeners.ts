@@ -192,7 +192,7 @@ function handleRequestEnsureProgressView(
  * `PresentationEventHandlers<RuntimePresentationEventPayloads, HostPresentation>`
  * — omitting one here is a compile error rather than a silently dropped event
  * (CLAUDE.md, silent degradation), replacing the previous `switch`'s
- * `never`-typed `default` guard. The five presentation events handled here are
+ * `never`-typed `default` guard. The presentation events handled here are
  * the extension's own dispatch, replacing a previous per-host
  * presentation-event bus and its static router (a duplicate replay mechanism —
  * see #9251). `SessionHostInteractions` (the runtime) owns replaying an event

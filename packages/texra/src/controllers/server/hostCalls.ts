@@ -10,6 +10,7 @@
 import { z } from 'zod';
 
 import type { ManualCriticismEntry } from '@agent/runtime/HostInteractions';
+import type { RuntimePresentationEventPayloads } from '@agent/runtime/runtimePresentationEvents';
 import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import {
   FileLocationSchema,
@@ -115,11 +116,17 @@ const NoticeSchema = z.discriminatedUnion('event', [
   }),
   z.object({
     event: z.literal('workspaceFilesWritten'),
-    payload: z.object({ absolutePaths: z.array(z.string()) }),
+    payload: z.object({
+      absolutePaths: z.array(z.string()),
+    }) satisfies z.ZodType<
+      RuntimePresentationEventPayloads['workspaceFilesWritten']
+    >,
   }),
   z.object({
     event: z.literal('workspaceAgentsChanged'),
-    payload: z.object({}),
+    payload: z.object({}) satisfies z.ZodType<
+      RuntimePresentationEventPayloads['workspaceAgentsChanged']
+    >,
   }),
 ]);
 export type Notice = z.infer<typeof NoticeSchema>;
