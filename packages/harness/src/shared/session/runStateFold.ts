@@ -326,7 +326,6 @@ const refuse = (
 ): Result.Result<never, RunHistoryInconsistent> =>
   Result.fail(new RunHistoryInconsistent({ reason, detail, commit }));
 
-
 /** Why a row of `attempt` cannot move a call standing at `status`, or null:
  *  a settled call is closed, and a call's attempt never goes back. */
 const openFor = (

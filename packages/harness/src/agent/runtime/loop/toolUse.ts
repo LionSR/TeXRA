@@ -141,7 +141,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const followUps = yield* claimFollowUps(run, runHistory);
   const compaction = yield* backgroundCompaction({
     runId,
-    runHistory,
     logger,
     invoker,
     stores: session.roots,

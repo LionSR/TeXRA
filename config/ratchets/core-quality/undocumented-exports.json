@@ -99,7 +99,7 @@
   "packages/harness/src/shared/schemas/proposalFields.ts": 3,
   "packages/harness/src/shared/schemas/request.ts": 2,
   "packages/harness/src/shared/schemas/run.ts": 17,
-  "packages/harness/src/shared/schemas/runHistoryEvent.ts": 11,
+  "packages/harness/src/shared/schemas/runHistoryEvent.ts": 10,
   "packages/harness/src/shared/schemas/runIdentity.ts": 1,
   "packages/harness/src/shared/schemas/runRecords.ts": 7,
   "packages/harness/src/shared/schemas/runSnapshotState.ts": 3,

@@ -38,7 +38,9 @@ const V1 = { version: 1, upcast: [] } as const satisfies RowKind;
  * (`DatabaseRowCorrupt`) and the rest of the store opens. A kind moves here
  * from `ROW_KINDS` in the change that deletes it.
  */
-export const RETIRED_ROW_KINDS: ReadonlySet<string> = new Set<string>([]);
+export const RETIRED_ROW_KINDS: ReadonlySet<string> = new Set<string>([
+  'model.retry',
+]);
 
 /** The version every current-value family writes and reads
  *  (each `ValueFamily`), until one gains an upcaster. */

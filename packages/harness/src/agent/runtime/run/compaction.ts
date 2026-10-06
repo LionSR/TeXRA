@@ -24,7 +24,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import type { DatabaseWriteFailed } from '@shared/session/database';
-import type { RunHistory, RunHistoryRefused } from '@shared/session/runHistory';
+import type { RunHistoryRefused } from '@shared/session/runHistory';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -96,7 +96,6 @@ function logCompactionEvent({
 
 interface CompactionInput {
   readonly runId: RunId;
-  readonly runHistory: RunHistory['Service'];
   readonly logger: AgentTrace;
   readonly bound: BoundModel;
   /** The run's invoker, which makes the summary call. */
@@ -134,6 +133,8 @@ interface Summary {
   readonly tokensBefore: number;
   readonly contextWindow: number;
   readonly activity: ReturnType<typeof startCompactionActivity>;
+  /** The run's cell its attempts committed through, which lands it. */
+  readonly cell: RunCell;
 }
 
 /** Whether the history has reached the threshold share of the window. */
@@ -242,6 +243,7 @@ const summarize = Effect.fn('compaction.summarize')(function* (
     tokensBefore,
     contextWindow,
     activity,
+    cell: input.cell,
   };
 });
 
@@ -251,13 +253,15 @@ const summarize = Effect.fn('compaction.summarize')(function* (
  * dropped with them. What the loop appended since stays after it.
  */
 const land = Effect.fn('compaction.land')(function* (
-  state: RunState,
-  input: Pick<CompactionInput, 'runId' | 'runHistory' | 'logger' | 'answers'>,
+  input: Pick<CompactionInput, 'runId' | 'logger' | 'answers'>,
   summary: Summary,
   base: number | null,
   reason: Reason,
 ) {
-  const compacted = yield* input.runHistory.appendBatch(input.runId, state, [
+  // Through the cell the summary's attempts committed through, onto the
+  // state that holds them, not the state the summary started from.
+  const state = yield* summary.cell.current;
+  const compacted = yield* summary.cell.append([
     ...(input.answers ?? []),
     {
       type: 'context.edit',
@@ -304,7 +308,7 @@ const compactIfNeeded = Effect.fn('compaction.check')(function* (
     return state;
   const summary = yield* summarize(state, input, reason);
   if (summary === null) return state;
-  return yield* land(state, input, summary, state.lastEdit, reason);
+  return yield* land(input, summary, state.lastEdit, reason);
 });
 
 /**
@@ -365,7 +369,7 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
       if (Exit.isSuccess(exit))
         return exit.value === null
           ? Effect.succeed(state)
-          : land(state, input, exit.value, base, 'threshold');
+          : land(input, exit.value, base, 'threshold');
       // A failed summary call is the summary's own warning; this is a
       // defect in making one.
       input.logger.warn(
