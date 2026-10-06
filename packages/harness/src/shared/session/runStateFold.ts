@@ -492,15 +492,13 @@ function foldRow(
               state.requests[p.next.requestId] === undefined
             )
               return outOfOrder(`a failed attempt asks ${p.next.requestId}`);
-            // An unchained resend drops the response the vendor no longer
-            // holds: the next attempt sends the whole transcript.
-            // The run's failure is one that ends it or a person sees.
-            const shown = p.next.kind === 'stop' || p.next.kind === 'ask';
+            // A failure that ends the turn or asks; a lost chain is dropped.
+            const { kind } = p.next;
             return Result.succeed({
               ...moved,
-              lastError: shown ? p.error : state.lastError,
-              continuation:
-                p.next.kind === 'unchain' ? null : state.continuation,
+              lastError:
+                kind === 'stop' || kind === 'ask' ? p.error : state.lastError,
+              continuation: kind === 'unchain' ? null : state.continuation,
             });
           }
           if (p.kind !== 'response') return Result.succeed(moved);

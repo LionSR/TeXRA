@@ -115,8 +115,7 @@ function reducedOutputBudget(available: number, buffer: number): number {
 const EMPTY_RESPONSE_ERROR_MESSAGE =
   'Model response was empty or aborted; this may indicate a server issue or network problem.';
 
-/** What a person is asked again when an attempt they admitted has no
- *  recorded outcome: the process stopped while it ran. */
+/** What a person is asked again about an admitted attempt a stop cut. */
 const INTERRUPTED_RETRY_MESSAGE =
   'The process stopped while the retry you approved was running, so it may have been billed without an answer. Retry again?';
 
@@ -544,9 +543,8 @@ export const modelInvokerLayer = (): Layer.Layer<
             });
           }
         }
-        // The durable fact before the billed request (F1), with the prepared
-        // turn it sends, which the rows alone must rebuild. A retry a person
-        // answered with their own key restates the routes the run declines.
+        // The durable fact before the billed request (F1), and the routes a
+        // person's own-key answer declines, restated for a resume to bind.
         yield* cell.append((state) => [
           ...attemptRows(
             run,
@@ -589,12 +587,9 @@ export const modelInvokerLayer = (): Layer.Layer<
       });
 
       /**
-       * A resumed attempt whose background operation the run history holds: observe
-       * it under the deadline recorded with its `accepted` row, never resubmit,
-       * even if the background settings changed since. Unbilled, so it runs
-       * outside the route gate. The admitted turn is rebuilt from the rows
-       * below the attempt, which are its history, so the observed completion
-       * can anchor the next round exactly as a live submission does.
+       * A resumed attempt whose background operation the rows hold: observe
+       * it under its recorded deadline, never resubmit, whatever the settings
+       * now say; unbilled, so outside the route gate.
        */
       const observeAccepted = Effect.fn('ModelInvoker.observeAccepted')(
         function* (
@@ -816,9 +811,8 @@ export const modelInvokerLayer = (): Layer.Layer<
             await: (requestId) =>
               Effect.gen(function* () {
                 logger.debug('Waiting for manual retry');
-                // The decision is the `request.decided` row (R5): the one the
-                // decide command lands while this fiber waits; a closing
-                // plane cancels.
+                // The answer is the `request.decided` row (R5) the decide
+                // command lands; a closing plane cancels.
                 const row = yield* session
                   .decisionFor(runId, requestId, (yield* cell.current).commit)
                   .pipe(
