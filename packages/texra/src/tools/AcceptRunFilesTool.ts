@@ -11,17 +11,17 @@
 
 // Third-party imports
 import { z } from 'zod';
-import { Effect, FileSystem } from 'effect';
+import { Clock, Effect, FileSystem } from 'effect';
 
 // Local imports
 import { ToolContext, type ToolContextShape } from '@texra-ai/harness';
 import { getRunRecords } from '@agent/storage';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { requireToolRun, type RunCall } from '@agent/runtime/RunCall';
-import { emitAppSignal } from '@eventBus/AppSignals';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
+import { documentsAcceptedRow } from '@shared/plugins/documents';
 import {
   RunIdSchema,
   ToolError,
@@ -365,11 +365,17 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
     });
   }
 
-  // Badge all accepted workspace files
+  // The files it wrote, as a fact on this run: every process that folds the
+  // run (a window over a service task among them) badges and refreshes them.
   if (acceptedEntries.length > 0) {
-    emitAppSignal('workspaceFilesWritten', {
-      absolutePaths: acceptedEntries.map((e) => e.destAbsolutePath),
-    });
+    const { run } = yield* requireToolRun('accept_run_files');
+    yield* run.session.log.transact([
+      documentsAcceptedRow(
+        run.runId,
+        acceptedEntries.map((e) => e.destAbsolutePath),
+        yield* Clock.currentTimeMillis,
+      ),
+    ]);
   }
 
   const changed = files.length - unchanged;

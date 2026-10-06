@@ -18,7 +18,6 @@ import { ToolContext } from '@texra-ai/harness';
 import { createWorkspaceAgentsController } from '@agent/index/agentRegistry';
 import { teamPresets } from '@common/teams/TeamPresets';
 import { missingMemberNames } from '@common/teams/TeamPlan';
-import { emitAppSignal } from '@eventBus/AppSignals';
 import { agentName, ToolError } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 
@@ -67,10 +66,10 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   }
 
   const { preset } = result;
+  // The setup agent runs this mid-conversation: every process sharing the
+  // store, a window over this task among them, repaints its agent lists
+  // from the default team's change (`agentCatalogFollower`).
   yield* workspaceAgents.setDefaultTeam(preset.id);
-  // The setup agent runs this mid-conversation, so an open settings view is
-  // showing an agent list this call just replaced.
-  emitAppSignal('workspaceAgentsChanged', undefined);
   const active = result.resolution.agentKeys;
   // `agentKeys` holds only the agent keys that resolved in the registry. Names
   // that didn't resolve are not dropped: the agent list stores the team

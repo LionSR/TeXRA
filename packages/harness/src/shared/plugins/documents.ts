@@ -1,10 +1,11 @@
 /**
- * The documents plugin's row (`PLUGIN_EVENT_ARMS` in `@tools/pluginArms`): a
+ * The documents plugin's rows (`PLUGIN_EVENT_ARMS` in `@tools/pluginArms`): a
  * document task's documents are its latest `plugin.fact` of kind
- * `documents/output`, which carries every revision's outputs. Core stores
- * and folds the row without reading it (`RunView.facts`); this module is its
- * schema and its one reader, which hosts, webviews and the plugin's own
- * tools share. Browser-safe: it imports only schemas.
+ * `documents/output`, which carries every revision's outputs, and the files
+ * a run last accepted into the workspace are its `documents/accepted`. Core
+ * stores and folds the rows without reading them (`RunView.facts`); this
+ * module is their schemas and their one reader, which hosts, webviews and the
+ * plugin's own tools share. Browser-safe: it imports only schemas.
  */
 import { z } from 'zod';
 
@@ -55,6 +56,52 @@ export function documentsOutputRow(
     value: DocumentsOutputSchema.parse({ rounds }),
     parent: null,
   };
+}
+
+const DocumentsAcceptedSchema = z.strictObject({
+  /** The workspace files the acceptance wrote. */
+  absolutePaths: z.array(z.string()),
+  /** When it wrote them, so a second acceptance of the same files is new. */
+  acceptedAt: z.number(),
+});
+
+/** The files a run last accepted into the workspace, past the editor's own
+ *  write path: what every process that folds the run announces
+ *  (`workspaceFilesWritten`). */
+export const DOCUMENTS_ACCEPTED_ARM = {
+  plugin: 'documents',
+  kind: 'accepted',
+  version: 1,
+  schema: DocumentsAcceptedSchema,
+  upcasters: [],
+} as const;
+
+/** The key a run's accepted files fold under in `RunView.facts`. */
+export const DOCUMENTS_ACCEPTED_KEY = `${DOCUMENTS_ACCEPTED_ARM.plugin}/${DOCUMENTS_ACCEPTED_ARM.kind}`;
+
+/** The row recording that `runId` accepted `absolutePaths` at `acceptedAt`. */
+export function documentsAcceptedRow(
+  runId: RunId,
+  absolutePaths: readonly string[],
+  acceptedAt: number,
+): SessionEventDraft {
+  return {
+    type: 'plugin.fact',
+    aggregateId: aggregateId('run', runId),
+    plugin: DOCUMENTS_ACCEPTED_ARM.plugin,
+    kind: DOCUMENTS_ACCEPTED_ARM.kind,
+    version: DOCUMENTS_ACCEPTED_ARM.version,
+    value: DocumentsAcceptedSchema.parse({
+      absolutePaths: [...absolutePaths],
+      acceptedAt,
+    }),
+    parent: null,
+  };
+}
+
+/** The workspace files a stored accepted row names. */
+export function acceptedPathsOf(value: unknown): string[] {
+  return DocumentsAcceptedSchema.parse(value).absolutePaths;
 }
 
 /** A stored documents row's rounds; none for a value that is not one. */

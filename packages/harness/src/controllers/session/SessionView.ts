@@ -24,6 +24,7 @@ import {
   Fiber,
   Layer,
   Option,
+  type Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -36,6 +37,7 @@ import {
   emptySessionView,
   type SessionView,
 } from '@shared/session/sessionView';
+import { announceRunFacts } from '@tools/pluginArms';
 import { LocalRuntimeSource, TranscriptSubscriptions } from './sessionSources';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
@@ -118,6 +120,8 @@ export class SessionViewService extends Context.Service<
  * A session's view as its handle carries it (`SessionHandle.view`): the
  * fold's level, the replay it is folded from, the transcript subscriptions
  * that decide what it folds, and the local truth it folds beside the rows.
+ * For the session's scope it announces what its runs' facts tell this
+ * process (`announceRunFacts`).
  * `closed` is the session's: once its doors shut, a subscription or a mark
  * writes nothing.
  */
@@ -127,6 +131,7 @@ export const makeSessionViewAccess = (
 ): Effect.Effect<
   SessionViewAccess,
   never,
+  | Scope.Scope
   | SessionViewService
   | SessionInputs
   | TranscriptSubscriptions
@@ -137,6 +142,16 @@ export const makeSessionViewAccess = (
     const inputs = yield* SessionInputs;
     const subscriptions = yield* TranscriptSubscriptions;
     const local = yield* LocalRuntimeSource;
+    // What the session's runs announce, to this process's listeners, for
+    // the session's life.
+    yield* announceRunFacts(changes).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning(
+          `Session ${storage} stopped announcing its runs' facts`,
+        ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
+      ),
+      Effect.forkScoped,
+    );
     /** Update the local truth unless the session has closed. */
     const updateLocal = (
       next: (state: LocalRuntimeState) => LocalRuntimeState,

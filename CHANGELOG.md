@@ -896,6 +896,13 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A window shows the files a background task accepts.** When a task in the
+  TeXRA service (`texra serve`) accepted files into the project, or the setup
+  agent applied an agent team there, the desktop file tree and the editor's
+  file badges and agent lists did not update until you refreshed them. The
+  change is now recorded on the task, and every window that shows the
+  project picks it up.
+
 - **The TeXRA service no longer grows with every project it ever
   opened.** A project's session in the service now closes once no window
   or terminal is attached to it and none of its tasks is running or

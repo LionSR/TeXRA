@@ -8,8 +8,8 @@ import { Context, Effect, Layer, type Stream, type Scope } from 'effect';
 import type { AgentEvent } from '@agent/trace';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
-import { SessionOwner } from '@agent/runtime/SessionOwner';
 import { processLayer } from '@controllers/session/sessionLayer';
+import { SessionOwner } from '@platform/processRuntime';
 import {
   AppState,
   AgentDirectories,

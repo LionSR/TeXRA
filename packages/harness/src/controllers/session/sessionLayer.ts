@@ -50,13 +50,13 @@ import type {
   SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
 import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
-import { SessionOwner } from '@agent/runtime/SessionOwner';
 import { presentTerminalResult } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
 import {
   effectDiagnosticsLayer,
   type MinimumLogLevel,
 } from '@logger/effectDiagnostics';
+import { SessionOwner } from '@platform/processRuntime';
 import type { ProcessServices } from '@platform/processRuntime';
 import {
   AgentDirectories,

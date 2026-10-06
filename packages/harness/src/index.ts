@@ -41,7 +41,7 @@ export type { InlinePersona } from '@shared/schemas';
 
 // The process the hosts compose and the session owner it serves: one
 // `processLayer` for every TeXRA host and for `Sessions.layer` above.
-export { SessionOwner } from '@agent/runtime/SessionOwner';
+export { SessionOwner } from '@platform/processRuntime';
 export {
   processLayer,
   type ProcessLayerOptions,

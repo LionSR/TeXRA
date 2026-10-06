@@ -134,6 +134,16 @@ function goldenTurn(
         ? [call('diagnostics', { command: 'list', path: 'main.tex' })]
         : text('The diagnostics read came back.'),
     );
+  // A service task accepting a file from the run its instruction names.
+  if (system.includes('GOLDEN-ACCEPT')) {
+    const source = /\b([0-9a-f]{12})\b/.exec(said)?.[1];
+    const files = [{ path: 'draft.tex', original: 'accepted.tex' }];
+    return Effect.succeed(
+      results.length > 0 || source === undefined
+        ? text('Accepted.')
+        : [call('accept_run_files', { execution_id: source, files })],
+    );
+  }
   if (system.includes('GOLDEN-CHILD')) {
     // The delegated child looks its parent up and messages it while the
     // parent waits on the delegation: refused, since the headless parent
@@ -165,10 +175,9 @@ function goldenTurn(
         : text('Child result.'),
     );
   }
-  // The interactive chat: a plan the user runs as a goal, the goal
-  // completed, a reply to the message sent after a `/model` switch, and one
-  // to the message a `/compact` summarized. The compacted history has no
-  // tool results, so its turns are told apart by what they say.
+  // The interactive chat: a plan run as a goal, the goal completed, replies
+  // after a `/model` switch and after a `/compact`, told apart by what they
+  // say (the compacted history has no tool results).
   if (system.includes('GOLDEN-CHAT')) {
     // The last turn launches a Codex child, then is held until the user's
     // stop detaches it; the message typed behind stays queued on the run.
@@ -264,12 +273,10 @@ function goldenTurn(
           ]
         : text('Noted.'),
     );
-  // The crash-point conformance run: a response with two calls, then a
-  // script, then the echo's text. A step a crash cut off before it started
-  // (its calls settled as not started) is asked for again, as a model
-  // decides to retry. A view an edit replaced (a handoff, a compaction, a
-  // fork of either) no longer holds the task, and the echo answers it: what
-  // it says shows the view the edit left.
+  // The crash-point conformance run: two calls, a script, the echo's text.
+  // A step a crash cut off before it started is asked for again, as a model
+  // retries; a view an edit replaced (handoff, compaction, a fork of either)
+  // no longer holds the task, and the echo shows the view the edit left.
   if (system.includes('GOLDEN-CRASH')) {
     const done = results.filter(
       (message) =>
@@ -359,15 +366,12 @@ export const shouldUseInternalValidationModel = Effect.fn(
 )(function* (): Effect.fn.Return<boolean> {
   if (process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL !== '1')
     return false;
-
   const envKey = process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_ENV ?? '';
   const flagEnvKey =
     process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_ENV ?? '';
   const expectedFlagContent =
     process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_CONTENT ?? '';
-
   if ((yield* envVar(envKey)) !== '1') return false;
-
   const flagPath = yield* envVar(flagEnvKey);
   if (!flagPath || !path.isAbsolute(flagPath)) {
     return yield* Effect.die(
@@ -376,7 +380,6 @@ export const shouldUseInternalValidationModel = Effect.fn(
       ),
     );
   }
-
   // An unreadable flag file dies with the filesystem error, which names it.
   const flagContent = yield* Effect.sync(() => readFileSync(flagPath, 'utf8'));
   if (flagContent.trim() !== expectedFlagContent) {
