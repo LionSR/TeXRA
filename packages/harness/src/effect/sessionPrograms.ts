@@ -127,7 +127,7 @@ function admitInput(
     // than a defect: an instruction this surface will not accept reaches an
     // embedder's `catchTag` in the vocabulary the surface names, as the
     // agent scan's failure above does.
-    return yield* Effect.try({
+    const config = yield* Effect.try({
       try: () =>
         AgentConfigSchema.parse({
           agent: resolved.name,
@@ -139,6 +139,10 @@ function admitInput(
       catch: (cause) =>
         new RunFailure({ cause, message: toErrorMessage(cause) }),
     });
+    // The run is named as its persona's schema spells the name (trimmed).
+    return config.persona == null
+      ? config
+      : { ...config, agent: config.persona.name };
   });
 }
 
