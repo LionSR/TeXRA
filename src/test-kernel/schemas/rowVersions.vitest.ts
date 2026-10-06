@@ -83,7 +83,7 @@ const VERSIONED: readonly Versioned[] = [
     schema: arm.schema,
   })),
   ...VALUE_FAMILIES.map(({ name, schema }) => ({
-    name: `current-value.${name}`,
+    name: `current-value.${name.replace('/', '.')}`,
     version: CURRENT_VALUE_VERSION,
     upcasts: 0,
     schema,
