@@ -171,7 +171,7 @@
   "packages/harness/src/tools/web/WebSearchTool.ts": 1,
   "packages/llm/src/api/googleInteractions.ts": 1,
   "packages/llm/src/api/openaiResponsesCodec.ts": 3,
-  "packages/llm/src/api/openaiResponsesLower.ts": 2,
+  "packages/llm/src/api/openaiResponsesLower.ts": 1,
   "packages/llm/src/api/openaiResponsesRequest.ts": 1,
   "packages/llm/src/errors.ts": 2,
   "packages/llm/src/message.ts": 10,
@@ -188,5 +188,5 @@
   "packages/llm/src/oauth/xai/xaiSessionPolicy.ts": 1,
   "packages/llm/src/oauth/xai/xaiSessionTypes.ts": 1,
   "packages/llm/src/protocol.ts": 6,
-  "packages/llm/src/turn.ts": 15
+  "packages/llm/src/turn.ts": 14
 }

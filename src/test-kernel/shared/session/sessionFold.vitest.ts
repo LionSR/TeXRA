@@ -1818,8 +1818,6 @@ describe('foldRunState', () => {
       origin: ORIGIN,
       providerResponseId: 'resp-remote',
       afterSequence: 7,
-      admittedFingerprint: 'b'.repeat(64),
-      store: true,
     };
     const accepted = message({
       kind: 'accepted',
@@ -1836,7 +1834,7 @@ describe('foldRunState', () => {
       operation: {
         evidence: {
           kind: 'openai-responses',
-          data: { afterSequence: 7, admittedFingerprint: 'b'.repeat(64) },
+          data: { afterSequence: 7 },
         },
       },
     });

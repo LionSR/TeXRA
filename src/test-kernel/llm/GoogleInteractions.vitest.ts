@@ -16,11 +16,7 @@ import {
 } from '@texra-ai/llm';
 import { longRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
 import { createDeferred } from '@test/support/asyncTestUtils';
-import {
-  GOOGLE_PREFIX_DOMAIN,
-  googleInteractionsModel,
-} from '../../../packages/llm/src/api/googleInteractions.js';
-import { admittedFingerprint } from '../../../packages/llm/src/api/prefixFingerprint.js';
+import { googleInteractionsModel } from '../../../packages/llm/src/api/googleInteractions.js';
 import type { AddressInfo } from 'node:net';
 
 function model(
@@ -62,8 +58,6 @@ function backgroundFixture() {
       },
       providerResponseId: 'int_1',
       afterSequence: null,
-      admittedFingerprint: admittedFingerprint(GOOGLE_PREFIX_DOMAIN, turn),
-      store: turn.controls.store,
     });
     return { configured, turn, background: configured.background, operation };
   });
@@ -443,72 +437,22 @@ describe('canonical Google Interactions protocol', () => {
       }),
   );
 
-  it.effect(
-    'delivers an observation the admitted system text no longer matches, without an anchor',
-    () =>
+  it.effect.each(['cancelled', 'completed', 'requires_action', 'in_progress'])(
+    'confirms a cancel only when the work reports %s as cancelled',
+    (status) =>
       Effect.gen(function* () {
-        const { configured, background, operation } =
-          yield* backgroundFixture();
-        // What a resume rebuilds after the agent prompt changed under it.
-        const rebuilt = yield* configured.prepareTurn({
-          ...request(),
-          system: 'Use neither tool.',
-          mode: 'background',
-        });
-        assert(rebuilt.mode === 'background');
+        const { background, operation } = yield* backgroundFixture();
         fetchModel.mockImplementationOnce(async () =>
-          Response.json({
-            id: 'int_1',
-            status: 'completed',
-            model: 'gemini-returned',
-            steps: [
-              { type: 'model_output', content: [{ type: 'text', text: 'ok' }] },
-            ],
-            usage: {
-              total_input_tokens: 3,
-              total_output_tokens: 1,
-              total_tokens: 4,
-            },
-          }),
+          Response.json({ id: 'int_1', status, model: 'gemini-returned' }),
         );
-        const observation = yield* Stream.runCollect(
-          background.observe(rebuilt, operation, { deadlineAtMs: 10_000 }),
-        ).pipe(Effect.forkChild);
-        yield* TestClock.adjust('5 seconds');
-        const completed = (yield* Fiber.join(observation)).at(-1);
-        assert(completed?.kind === 'completed');
-        // The answer is delivered; the next round resends its transcript
-        // rather than chaining on instructions the answer never saw.
-        expect(completed.result).toMatchObject({
-          providerResponseId: 'int_1',
-          finishReason: 'stop',
-        });
-        expect(completed.result.continuation).toBeUndefined();
+        const exit = yield* Effect.exit(background.cancel(operation));
+        // Anything but a confirmed cancel leaves the operation observable.
+        expect(exit._tag).toBe(status === 'cancelled' ? 'Success' : 'Failure');
+        expect(fetchModel).toHaveBeenCalledTimes(1);
+        expect((fetchModel.mock.calls[0][0] as Request).url).toContain(
+          '/int_1/cancel',
+        );
       }),
-  );
-
-  it.effect.each([
-    ['cancelled', 'confirmed-cancelled'],
-    ['completed', 'observed-terminal'],
-    ['requires_action', 'observed-terminal'],
-    ['in_progress', 'unconfirmed'],
-  ] as const)('reports cancellation state %s as %s', ([status, kind]) =>
-    Effect.gen(function* () {
-      const { background, operation } = yield* backgroundFixture();
-      fetchModel.mockImplementationOnce(async () =>
-        Response.json({ id: 'int_1', status, model: 'gemini-returned' }),
-      );
-      expect(yield* background.cancel(operation)).toMatchObject({
-        kind,
-        providerResponseId: 'int_1',
-        returnedModel: 'gemini-returned',
-        ...(status === 'cancelled' ? {} : { status }),
-      });
-      expect(fetchModel).toHaveBeenCalledTimes(1);
-      expect((fetchModel.mock.calls[0][0] as Request).url).toContain(
-        '/int_1/cancel',
-      );
-    }),
   );
 
   // The SDK hands fetch a global `Request`; the harness transport is a

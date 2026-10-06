@@ -37,12 +37,12 @@ const BACKGROUND_CANCEL_TIMEOUT_MS = 15_000;
 
 /**
  * Observe an accepted operation, cancelling it if the run unwinds from a user
- * stop: the reply commits as the `cancelled` row that retires the operation,
- * so a resume starts anew. Any other interrupt (a shutdown, an unanswered
- * recovery question) has no `user` stop reason and leaves the operation for a
- * resume to observe. A cancel that fails or outlasts its budget is logged
- * loudly and leaves no row, so the still-live operation stays observable; the
- * stop proceeds either way.
+ * stop: a confirmed cancel commits the `cancelled` row that retires the
+ * operation, so a resume starts anew. Any other interrupt (a shutdown, an
+ * unanswered recovery question) has no `user` stop reason and leaves the
+ * operation for a resume to observe. A cancel the provider does not confirm,
+ * that fails, or that outlasts its budget is logged loudly and leaves no
+ * row, so the operation stays observable; the stop proceeds either way.
  */
 export const observeBackground = <E>(
   run: AgentRunShape,
@@ -60,22 +60,14 @@ export const observeBackground = <E>(
   const id = operation.providerResponseId;
   const cancel = background.cancel(operation).pipe(
     Effect.timeout(BACKGROUND_CANCEL_TIMEOUT_MS),
-    Effect.tap((evidence) =>
+    Effect.andThen(
       cell.append([
         {
           type: 'model.message',
           aggregateId: rowAggregate(run.runId),
-          payload: { kind: 'cancelled', invocation, evidence },
+          payload: { kind: 'cancelled', invocation },
         },
       ]),
-    ),
-    Effect.flatMap((evidence) =>
-      Effect.sync(() => {
-        if (evidence.kind !== 'confirmed-cancelled')
-          run.logger.warn(
-            `The stopped background response ${id} was not confirmed cancelled (${evidence.kind}: ${evidence.status}).`,
-          );
-      }),
     ),
     Effect.catchCause((cause) =>
       Effect.sync(() =>

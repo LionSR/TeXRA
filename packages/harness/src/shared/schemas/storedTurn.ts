@@ -19,7 +19,7 @@ import { z } from 'zod';
 import { JsonValueSchema } from './jsonValue';
 
 /** Provider bytes, kept verbatim and never interpreted by storage. */
-export const ProviderEvidenceSchema = z.strictObject({
+const ProviderEvidenceSchema = z.strictObject({
   kind: z.string().min(1),
   data: z.record(z.string(), JsonValueSchema),
 });

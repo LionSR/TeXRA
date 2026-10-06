@@ -11,7 +11,7 @@
  * What is recorded is the turn the bound model prepared, the provider's own
  * input, so no adapter normalization falls between the record and the wire.
  * `recordedTurn` is the one reading of that record: a resumed background
- * observation re-prepares the request it admitted from it, never from what
+ * observation rebuilds the turn it admitted from it, never from what
  * current code would render, and in development and CI the invoker checks,
  * before a request leaves the process, that the rows it just committed,
  * read back from the store, rebuild that turn exactly.
@@ -21,10 +21,10 @@ import stableStringify from 'safe-stable-stringify';
 import { z } from 'zod';
 import {
   JsonObjectSchema,
+  ResolvedTurnSchema,
   sameModelOrigin,
   type ModelOrigin,
   type ResolvedTurn,
-  type TurnRequest,
 } from '@texra-ai/llm';
 
 import { contextUpdate } from '@agent/prompt/PromptBuilder';
@@ -72,16 +72,6 @@ export const chainedContinuation = (state: RunState, origin: ModelOrigin) =>
   sameModelOrigin(state.continuation.origin, origin)
     ? { continuation: state.continuation }
     : {};
-
-/** The controls a re-prepared request restates, where the protocol has them. */
-const RestatedControlsSchema = z.looseObject({
-  toolChoice: z.union([
-    z.literal('auto'),
-    z.strictObject({ name: z.string().min(1) }),
-  ]),
-  maxOutputTokens: z.int().positive().nullish(),
-  promptCacheKey: z.string().min(1).nullish(),
-});
 
 const DeclarationSchema = z.strictObject({
   name: z.string().min(1),
@@ -243,6 +233,7 @@ function recordedTurn(state: RunState) {
   blob(state, recorded.agent);
   return {
     recorded,
+    origin: open.origin,
     turn: {
       mode: recorded.mode,
       ...(recorded.system === null
@@ -259,19 +250,26 @@ function recordedTurn(state: RunState) {
 }
 
 /**
- * The request that prepares again to the turn the open attempt admitted:
- * its recorded content and controls, never what current code would render.
+ * The background turn the open attempt admitted, rebuilt from its rows on
+ * the binding origin it recorded, never prepared again: what current code or
+ * settings would render plays no part, so the observed completion anchors
+ * the next round exactly as a live submission does. Throws on a record that
+ * cannot rebuild one.
  */
-export function recordedRequest(state: RunState): TurnRequest {
-  const { controls, ...content } = recordedTurn(state).turn;
-  const { toolChoice, maxOutputTokens, promptCacheKey } =
-    RestatedControlsSchema.parse(controls);
-  return {
-    ...content,
-    toolChoice,
-    ...(maxOutputTokens == null ? {} : { maxOutputTokens }),
-    ...(promptCacheKey == null ? {} : { cacheKey: promptCacheKey }),
-  };
+export function admittedTurn(
+  state: RunState,
+): Extract<ResolvedTurn, { mode: 'background' }> {
+  const { origin, turn } = recordedTurn(state);
+  const admitted = ResolvedTurnSchema.parse({
+    ...origin,
+    ...turn,
+    ...(origin.protocol === 'openai-responses'
+      ? { transport: { kind: 'http' } }
+      : {}),
+  });
+  if (admitted.mode !== 'background')
+    throw new Error('the open attempt admitted no background turn');
+  return admitted;
 }
 
 /** Why the rows at `state` do not rebuild `sent`, or null when they do. */

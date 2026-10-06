@@ -1182,8 +1182,6 @@ describe('ModelInvoker retry', () => {
           origin: ORIGIN,
           providerResponseId: PROVIDER_RESPONSE_ID,
           afterSequence: 0,
-          admittedFingerprint: 'a'.repeat(64),
-          store: false,
         });
         const scenario = Effect.fn('scenario')(function* (
           reason: 'user' | 'shutdown',
@@ -1217,15 +1215,9 @@ describe('ModelInvoker retry', () => {
                       }),
                     );
               },
-              cancel: (op) =>
+              cancel: () =>
                 Effect.sync(() => {
                   calls.cancel += 1;
-                  return {
-                    kind: 'confirmed-cancelled',
-                    providerResponseId: op.providerResponseId,
-                    requestedOrigin: ORIGIN,
-                    returnedModel: null,
-                  };
                 }),
             },
           };

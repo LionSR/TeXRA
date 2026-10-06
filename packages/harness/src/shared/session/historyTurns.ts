@@ -12,7 +12,6 @@ import type {
   SessionEvent,
 } from '@shared/schemas';
 import type {
-  CancellationEvidence,
   MessageSchema,
   ModelOrigin,
   RemoteOperation,
@@ -33,10 +32,7 @@ export type ModelMessagePayload =
   | StoredMessage<'failed'>
   | Replace<StoredMessage<'attempt'>, { readonly origin: ModelOrigin }>
   | Replace<StoredMessage<'accepted'>, { readonly operation: RemoteOperation }>
-  | Replace<
-      StoredMessage<'cancelled'>,
-      { readonly evidence: CancellationEvidence }
-    >
+  | StoredMessage<'cancelled'>
   | Replace<StoredMessage<'response'>, { readonly turn: TurnResult }>
   | StoredMessage<'handed-down'>
   | Replace<
