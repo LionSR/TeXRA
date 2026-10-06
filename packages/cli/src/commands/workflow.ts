@@ -322,10 +322,13 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const outputDir = resumeWorkflowOutputDirectory(config);
     const recoveryProcessCwd = tryReadCliCwd();
     const recoveryInputIsDurable = options.recoveryInputIsDurable ?? true;
-    // Not a run a model failure stopped (`runtime.lastError`): read from the
-    // rows, so no verdict held in memory can be missed by an interrupt.
-    const canAdvertiseInterruptedRun: CheckpointRefinement = ({ snapshot }) =>
-      Effect.succeed(snapshot.runtime.lastError == null);
+    // Not a run a model failure stopped (its folded `lastError`): read from
+    // the rows, so no verdict held in memory can be missed by an interrupt.
+    const canAdvertiseInterruptedRun: CheckpointRefinement = (_, runId) =>
+      Effect.map(
+        session.runHistory.load(runId),
+        (state) => state?.lastError == null,
+      );
     const writeResumeHint = (
       runId: RunId,
       waitForWrite = false,

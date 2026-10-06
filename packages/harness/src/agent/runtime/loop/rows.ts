@@ -2,9 +2,10 @@
  * The loops' row constructors: every run history draft a loop appends, built from
  * the folded `RunState` and nothing else. A `run.position` is the one record
  * of where the loop stands; a `run.snapshot` carries the loop state and what
- * the loop runs on (model, failure, declined routes); every fact a row already
+ * the loop runs on (model, declined routes); every fact a row already
  * carries (the pending response, its intents, their approval bindings, the
- * retry permit) is folded from that row and never restated here.
+ * invocation's attempts and failures) is folded from that row and never
+ * restated here.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -17,7 +18,6 @@ import {
   type JsonValue,
   type PositionAt,
   type RunSnapshotPayload,
-  type PendingRetry,
   type RunId,
   type RunOutcome,
   type SessionEvent,
@@ -102,10 +102,7 @@ export function appendRow(
 
 export interface SnapshotPatch {
   readonly runtime?: Partial<
-    Pick<
-      SnapshotRuntime,
-      'modelId' | 'backend' | 'lastError' | 'declinedRoutes'
-    >
+    Pick<SnapshotRuntime, 'modelId' | 'backend' | 'declinedRoutes'>
   >;
   /** Defaults to the loop state the run last wrote. */
   readonly state?: ToolUseLoopState;
@@ -140,10 +137,6 @@ export function snapshotRow(
   const runtime: SnapshotRuntime = {
     modelId,
     backend,
-    lastError:
-      patch.runtime !== undefined && 'lastError' in patch.runtime
-        ? (patch.runtime.lastError ?? null)
-        : state.lastError,
     declinedRoutes: patch.runtime?.declinedRoutes ?? state.declinedRoutes,
   };
   const payload: RunSnapshotPayload = {
@@ -169,29 +162,6 @@ export function bindingRow(
     aggregateId: rowAggregate(runId),
     payload: binding,
   };
-}
-
-/** The retry owner's durable gate, its one carrier: `null` retires it. */
-export function retryRow(
-  runId: RunId,
-  permit: PendingRetry | null,
-): RunHistoryDraft {
-  return {
-    type: 'model.retry',
-    aggregateId: rowAggregate(runId),
-    payload: { permit },
-  };
-}
-
-/** One move of the retry gate: the permit on its own row, and the failure it
- *  presents on the snapshot that owns `lastError`. */
-export function retryRows(
-  runId: RunId,
-  state: RunState,
-  permit: PendingRetry | null,
-  runtime: Partial<Pick<SnapshotRuntime, 'lastError' | 'declinedRoutes'>>,
-): readonly RunHistoryDraft[] {
-  return [retryRow(runId, permit), ...snapshotRow(runId, state, { runtime })];
 }
 
 /** Each arm of a draft union keeps its own required fields. */

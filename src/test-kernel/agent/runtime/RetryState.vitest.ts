@@ -1,12 +1,11 @@
 /**
  * The invoker's two owners of retry, over the run history.
  *
- * Owner A is automatic and route-scoped: `classifyModelFailure` decides
- * whether an attempt repeats at all and what the session's recovery gate is
- * told about the wire route. Owner B is a human and durable: a
- * `request.opened` row, a `model.retry` permit that walks
- * `waiting` -> `authorized` -> `started`, and a decision that is a retry, a
- * denial (failed, never cancelled — #7331) or a cancellation.
+ * Automatic resends are route-scoped: `classifyModelFailure` decides whether
+ * an attempt repeats at all and what the process's recovery gate is told
+ * about the wire route. Past the budget a person decides, durably: a
+ * `failed` row that asks, its `request.opened`, and a decision that is a
+ * retry, a denial (failed, never cancelled — #7331) or a cancellation.
  */
 
 // Test composition imports
@@ -171,7 +170,9 @@ type AttemptOutcome =
   | { readonly ok: TurnResult }
   | { readonly fail: unknown }
   /** The stream ends without a `completed` event. */
-  | { readonly silent: true };
+  | { readonly silent: true }
+  /** The stream never ends: the process stops while it runs. */
+  | { readonly hang: true };
 
 interface StubModel {
   readonly model: Model;
@@ -211,6 +212,7 @@ function stubModel(outcomes: readonly AttemptOutcome[]): StubModel {
             );
           }
           if ('silent' in outcome) return Stream.empty;
+          if ('hang' in outcome) return Stream.never;
           const events: TurnEvent[] = [
             {
               kind: 'identified',
@@ -850,10 +852,10 @@ describe('ModelInvoker retry', () => {
           model: GPT54,
         }),
       });
-      // The permit is retired by the response it admitted: a resumed run
-      // cannot spend it a second time.
+      // The response the answer admitted closes the invocation: a resumed
+      // run cannot spend the answer a second time.
       if (outcome.kind === 'response') {
-        expect(outcome.state.pendingRetry).toBeNull();
+        expect(outcome.state.invocation).toBeNull();
       }
       // The response retires the failure the gate recorded in its own batch:
       // a crash before the loop's next snapshot resumes a recovered run, not
@@ -913,6 +915,78 @@ describe('ModelInvoker retry', () => {
       }),
   );
 
+  // Failure mode: a 404 on a request that chained nothing reads as a lost
+  // chain, and the "resend once" repeats without end.
+  it.effect(
+    'treats a gone continuation it never sent as an ordinary failure',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
+        );
+        const session = yield* sessionWithInteractions(undefined);
+        const denied = autoDecideRequests(session, () => ({
+          action: 'deny',
+          reason: 'Denied by TeXRA approval policy.',
+        }));
+        const stub = stubModel([
+          {
+            fail: new ModelError({
+              kind: 'continuation-gone',
+              status: 404,
+              message: 'No endpoints found for this model.',
+            }),
+          },
+        ]);
+
+        const outcome = yield* invokeOn(yield* openRun(session, stub.model));
+
+        expect(outcome.kind).toBe('failed');
+        expect(stub.attempts()).toBe(1);
+        denied.detach();
+        yield* closeSessionOf(session);
+      }),
+  );
+
+  // Failure modes: a resume resends a billed attempt a person admitted
+  // without asking again; it refills the automatic budget the rows spent.
+  it.effect(
+    'asks again about an approved retry the process stopped during',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
+        );
+        const session = yield* sessionWithInteractions(undefined);
+        const pump = yield* pumpClock;
+        const requests = autoDecideRequests(session, () => ({
+          action: 'retry',
+        }));
+        const stub = stubModel([
+          { fail: httpError('temporary provider failure', 503) },
+          { hang: true },
+          { ok: completedTurn('recovered') },
+        ]);
+        const kit = yield* openRun(session, stub.model);
+        yield* Effect.promise(() => seedActiveRun(session, kit.runId));
+        const fiber = yield* Effect.forkChild(invokeOn(kit));
+        while (stub.attempts() < 2) yield* settle;
+        yield* Fiber.interrupt(fiber);
+
+        const state = yield* session.runHistory.load(kit.runId);
+        if (state === null) throw new Error('The run has no run history.');
+        const resumed = yield* invokeOn({ ...kit, state });
+
+        expect(resumed.kind).toBe('response');
+        // The interrupted attempt was asked about again, then sent once.
+        expect(requests.opened).toHaveLength(2);
+        expect(stub.attempts()).toBe(3);
+        requests.detach();
+        yield* Fiber.interrupt(pump);
+        yield* closeSessionOf(session);
+      }),
+  );
+
   // A denial does not retry and — crucially — is NOT a user cancel, so the
   // run resumes to RUNNING to let the failure terminalize (#7331); a
   // cancelled zero-output run would report COMPLETED. The session's policy
@@ -938,7 +1012,7 @@ describe('ModelInvoker retry', () => {
         expect(outcome.error.message).toContain(
           'stream dropped before first token',
         );
-        expect(outcome.state.pendingRetry).toBeNull();
+        expect(outcome.state.invocation?.current.failed?.next.kind).toBe('ask');
       }
       // A denial is not a cancel: the run stays running so the failure can
       // terminalize (#7331).
@@ -1089,15 +1163,6 @@ describe('ModelInvoker retry', () => {
 
         expect(outcome.kind).toBe('response');
         expect(chained).toEqual([false, true, false]);
-        const rows = yield* session.runHistory.load(kit.runId);
-        expect(
-          Object.values(rows?.contents ?? {}).filter(
-            (value) =>
-              typeof value === 'object' &&
-              value !== null &&
-              'fullTranscript' in value,
-          ),
-        ).toHaveLength(1);
         yield* Fiber.interrupt(pump);
         yield* closeSessionOf(session);
       }),
@@ -1175,7 +1240,11 @@ describe('ModelInvoker retry', () => {
           if (state === null)
             throw new Error('The run has no run history state.');
           const resumed = yield* invokeOn({ ...kit, state });
-          return { calls, accepted: state.openAttempt?.accepted, resumed };
+          return {
+            calls,
+            accepted: state.invocation?.current.accepted,
+            resumed,
+          };
         });
 
         const user = yield* scenario('user');

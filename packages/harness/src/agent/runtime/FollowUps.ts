@@ -373,12 +373,8 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
         runHistory.appendBatch(runId, state, [
           ...(boundary?.rows ?? []),
           ...joined.rows,
-          // The input that recovers a failed run clears the error fact in
-          // the same transaction, so a resume taken between this batch and
-          // the next turn's snapshot does not read the run as still failed.
           ...(joined.turn || boundary
             ? snapshotRow(runId, state, {
-                ...(joined.turn ? { runtime: { lastError: null } } : {}),
                 ...(loop ? { state: { ...loop, ...joined.recorded } } : {}),
               })
             : []),

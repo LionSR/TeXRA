@@ -27,7 +27,6 @@ const OPENING_SNAPSHOT: RunSnapshotPayload = {
   runtime: {
     modelId: 'test-model',
     backend: 'validation',
-    lastError: null,
     declinedRoutes: [],
   },
   state: {},

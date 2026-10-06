@@ -346,7 +346,6 @@ describe('completedRunArchive facade', () => {
               runtime: {
                 modelId: config.model,
                 backend: 'openai',
-                lastError: null,
                 declinedRoutes: [],
               },
               state: {},

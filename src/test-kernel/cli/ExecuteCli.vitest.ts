@@ -298,7 +298,6 @@ function checkpointSnapshot(): RunSnapshotPayload {
     runtime: {
       modelId: 'deepseek/deepseek-v4-flash',
       backend: 'deepseek',
-      lastError: null,
       declinedRoutes: [],
     },
     state: {},

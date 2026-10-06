@@ -19,8 +19,9 @@ import type { UsageLog } from '@shared/usageLog';
 
 import { getHelperModelName } from './helperModelName';
 import { bindModel, type BoundModel } from './run/modelBinding';
-import { callModel, type UsageAttribution } from './run/modelCall';
+import { callModel } from './run/modelCall';
 import { turnText } from './run/turnText';
+import type { UsageAttribution } from './run/pricing';
 import type { SessionHandle } from './SessionHandle';
 import type { HttpClient } from 'effect/http';
 
@@ -75,7 +76,7 @@ interface HelperPrompt {
 
 /**
  * One helper call: bind the configured helper model for this call alone and
- * run one completion through the invoker's call path (`run/modelCall.ts`),
+ * run one completion through the one retry loop (`run/invocation.ts`),
  * gated on the process's retry gate, priced and reported to the usage log as
  * `attribution`. No row is written. Returns the turn's assistant text. The
  * binding, the retry limit and the usage consent read one set of stores: the
@@ -132,9 +133,12 @@ export const helperCall = Effect.fn('helperCall')(
       },
       gate: session.modelRetries,
       settings: session.roots,
+      secrets,
       attribution,
       // No run's trace: diagnostics go to the Effect logger.
       logger: null,
+      // A helper call belongs to no run's history.
+      record: null,
     });
     // The turn's assistant text, from the same leaf the run loop reads.
     return turnText(turn);

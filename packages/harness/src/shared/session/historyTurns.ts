@@ -30,6 +30,7 @@ type StoredMessage<K> = Extract<
 
 export type ModelMessagePayload =
   | StoredMessage<'identified'>
+  | StoredMessage<'failed'>
   | Replace<StoredMessage<'attempt'>, { readonly origin: ModelOrigin }>
   | Replace<StoredMessage<'accepted'>, { readonly operation: RemoteOperation }>
   | Replace<

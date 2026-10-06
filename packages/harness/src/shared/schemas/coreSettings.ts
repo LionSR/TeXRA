@@ -53,7 +53,7 @@ export const MODEL_RETRY_MAX_ATTEMPTS_SETTING = Object.freeze({
   min: 0,
   max: 5,
   description:
-    'Additional automatic retries after the initial model request (0–5). Long-running background requests retain at least two recovery retries.',
+    'Additional automatic retries after the initial model request (0–5). A resumed request keeps the retries it already used.',
 } as const);
 
 /**

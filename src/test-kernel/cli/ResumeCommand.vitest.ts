@@ -85,7 +85,6 @@ const OPENING_SNAPSHOT: RunSnapshotPayload = {
   runtime: {
     modelId: 'openai/gpt-5.4-2026-03-05',
     backend: 'openai',
-    lastError: null,
     declinedRoutes: [],
   },
   state: {},
@@ -104,7 +103,6 @@ const workflowSnapshot = (
   runtime: {
     modelId,
     backend,
-    lastError: null,
     declinedRoutes: [],
   },
   state: {},

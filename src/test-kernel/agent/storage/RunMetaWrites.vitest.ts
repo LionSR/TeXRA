@@ -130,7 +130,7 @@ describe('run metadata updates', () => {
               request: '0'.repeat(64),
               invocation,
               origin,
-              delivery: 'stream',
+              purpose: 'turn',
             },
           },
           {

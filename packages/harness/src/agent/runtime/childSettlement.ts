@@ -22,6 +22,7 @@ import {
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import type { AgentTrace } from '@agent/trace';
+import type { AttemptKey } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
 import {
   aggregateId,
@@ -29,7 +30,6 @@ import {
   type DeliveredResult,
   type RunId,
 } from '@shared/schemas';
-import type { AttemptKey } from '@shared/session/attemptFold';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft } from '@shared/session/runStateFold';
 import type { SessionHandle } from './SessionHandle';

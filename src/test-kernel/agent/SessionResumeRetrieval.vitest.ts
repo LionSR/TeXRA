@@ -41,7 +41,6 @@ const runtimeOf = (
 ): RunSnapshotPayload['runtime'] => ({
   modelId,
   backend,
-  lastError: null,
   declinedRoutes: [],
 });
 

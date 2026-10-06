@@ -1315,7 +1315,6 @@ const TURN_USAGE = {
 const RUNTIME = {
   modelId: 'gpt-test',
   backend: 'openai',
-  lastError: null,
   declinedRoutes: [],
 };
 const toolUseSnapshot = (runtime: Record<string, unknown> = {}) => ({
@@ -1421,13 +1420,12 @@ const TURN_ROWS: readonly RunHistoryRow[] = [
     request: '0'.repeat(64),
     invocation: INVOCATION,
     origin: ORIGIN,
-    delivery: 'stream',
+    purpose: 'turn',
   }),
   message({
     kind: 'identified',
     invocation: INVOCATION,
     providerResponseId: 'resp-1',
-    returnedModel: null,
   }),
   message({
     kind: 'response',
@@ -1485,7 +1483,7 @@ describe('foldRunState', () => {
       'after a paid response, before the turn-end snapshot: process, never re-invoke',
       () => {
         const state = stateOf(through(5));
-        expect(state?.openAttempt).toBeNull();
+        expect(state?.invocation).toBeNull();
         expect(state?.pendingResponse?.responseId).toBe(RESPONSE_ID);
         expect(state?.phase).toBe('model.submitted');
         expect(state?.messages).toHaveLength(1);
@@ -1495,7 +1493,7 @@ describe('foldRunState', () => {
       'during generation, before the response row: the invocation is attributable',
       () => {
         const state = stateOf(through(4));
-        expect(state?.openAttempt?.providerResponseId).toBe('resp-1');
+        expect(state?.invocation?.current.providerResponseId).toBe('resp-1');
         expect(state?.pendingResponse).toBeNull();
       },
     ],
@@ -1589,7 +1587,7 @@ describe('foldRunState', () => {
       'an edit that replaced history mid-run: the range spliced by the row',
       () => {
         const held = stateOf(through(11))?.messages.length ?? 0;
-        const compacted = (trigger: 'context-limit' | 'context-window') =>
+        const compacted = (trigger: 'context-limit') =>
           stateOf(
             through(11, {
               type: 'context.edit',
@@ -1607,11 +1605,6 @@ describe('foldRunState', () => {
         expect(state?.messages.map((m) => m.role)).toEqual(['user', 'user']);
         // The edit is the next one's base.
         expect(state?.lastEdit).toBe(12);
-        // Only an overflow compaction spends the round's one overflow retry.
-        expect(state?.overflowRecoveredAtTurn).toBeNull();
-        const overflow = compacted('context-window');
-        expect(overflow?.turn).toBeTypeOf('number');
-        expect(overflow?.overflowRecoveredAtTurn).toBe(overflow?.turn);
       },
     ],
     [
@@ -1659,7 +1652,7 @@ describe('foldRunState', () => {
                 request: '0'.repeat(64),
                 invocation: INVOCATION,
                 origin: continuationOrigin,
-                delivery: 'stream',
+                purpose: 'turn',
               }),
             ),
             ...TURN_ROWS.slice(3, 4),
@@ -1724,7 +1717,7 @@ describe('foldRunState', () => {
               request: '0'.repeat(64),
               invocation: second,
               origin: ORIGIN,
-              delivery: 'stream',
+              purpose: 'turn',
             }),
             message({
               kind: 'response',
@@ -1932,7 +1925,6 @@ describe('foldRunState', () => {
       'tool.intent',
       'tool.binding',
       'tool.result',
-      'model.retry',
       'run.snapshot',
     ] as const;
     for (const type of runHistoryTypes)

@@ -221,7 +221,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
           request: '0'.repeat(64),
           invocation,
           origin: TEST_ORIGIN,
-          delivery: 'stream',
+          purpose: 'turn',
         },
       },
       {
@@ -565,7 +565,6 @@ describe('a parked root run', () => {
         appendRow(runId, [
           { role: 'user', content: [{ kind: 'text', text: 'answer me' }] },
         ]),
-        ...snapshotRow(runId, parked, { runtime: { lastError: null } }),
         positionRow(runId, parked, 'turn.ready'),
       ]);
 

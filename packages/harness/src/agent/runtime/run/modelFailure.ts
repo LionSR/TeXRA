@@ -7,6 +7,7 @@
  * route could not resolve, a cancelled request) is formatted as any error.
  */
 import { StatusCodes } from 'http-status-codes';
+import { Data } from 'effect';
 import { ModelError } from '@texra-ai/llm';
 
 import {
@@ -37,6 +38,7 @@ import {
 import { capitalize } from '@utils/text/stringUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
+import type { RoutePolicy } from '../ModelRetryGate';
 import type { BoundModel } from './modelBinding';
 
 /** What a failure's reading needs of its binding: the provider it names. */
@@ -48,7 +50,7 @@ type Bound = { readonly config: Pick<BoundModel['config'], 'provider'> };
  * route and the model-specific limit scope — so the call site classifies once
  * and reads the verdict.
  */
-export interface ModelRouteVerdict {
+interface ModelRouteVerdict {
   /** The scope that owns the limit. Defined only for a 429. */
   readonly rateLimitScope: 'model' | 'wire' | undefined;
   /** Credential exhaustion (subscription quota, upstream credit). */
@@ -242,4 +244,46 @@ export function classifyModelFailure(
       : localFailure(cause, bound, partialText);
   attachProviderError(failure.error, failure.formatted);
   return failure;
+}
+
+/** A failed attempt's classification; the rows it left are its driver's. */
+export class AttemptFailed extends Data.TaggedError('AttemptFailed')<{
+  readonly failure: ModelFailure;
+}> {
+  override get message(): string {
+    return this.failure.formatted.message;
+  }
+}
+
+/**
+ * The retry gate's two routes for one binding, narrowest first: the model on
+ * its wire route, then the wire route (provider, credential, endpoint).
+ */
+export function routePolicies(bound: BoundModel): [RoutePolicy, RoutePolicy] {
+  const verdictOf = (error: Error) =>
+    error instanceof AttemptFailed
+      ? error.failure.verdict
+      : classifyModelFailure(error, bound).verdict;
+  return [
+    {
+      key: bound.modelRetryRouteKey,
+      classifyFailure: (error) => {
+        const verdict = verdictOf(error);
+        return verdict.rateLimitScope === 'model'
+          ? { retryAfterMs: verdict.retryAfterMs }
+          : undefined;
+      },
+    },
+    {
+      key: bound.wireRouteKey,
+      classifyFailure: (error) => {
+        const verdict = verdictOf(error);
+        return verdict.wireRouteFailure
+          ? { retryAfterMs: verdict.retryAfterMs }
+          : undefined;
+      },
+      isReachableFailure: (error) =>
+        verdictOf(error).rateLimitScope === 'model',
+    },
+  ];
 }

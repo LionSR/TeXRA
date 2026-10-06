@@ -30,16 +30,15 @@ import type { SessionHandle } from './SessionHandle';
 
 /**
  * Whether the run stands at a settled position (HQ4): at a turn boundary,
- * with no open attempt, response (nor its calls), undecided request or retry
- * permit. A cut anywhere else would carry a result nobody produced.
+ * with no invocation (nor its retry), response (nor its calls) or undecided
+ * request. A cut anywhere else would carry a result nobody produced.
  */
 const isSettled = (state: RunState): boolean =>
   (state.phase === 'waiting' || state.phase === 'halted') &&
   // Input consumed for a turn that has not run is inside that turn.
   state.at !== 'turn.ready' &&
-  state.openAttempt === null &&
+  state.invocation === null &&
   state.pendingResponse === null &&
-  state.pendingRetry === null &&
   Object.values(state.requests).every((request) => request.decision !== null);
 
 const refused = (reason: string) => new Rejected({ reason });
@@ -132,11 +131,7 @@ export const forkRun = Effect.fn('forkRun')(function* (
       aggregateId: rowAggregate(runId),
       payload: { digest, value: state.contents[digest] },
     })),
-    ...snapshotRow(
-      runId,
-      { ...state, lastSnapshot: null },
-      { runtime: { lastError: null }, state: loop },
-    ),
+    ...snapshotRow(runId, { ...state, lastSnapshot: null }, { state: loop }),
     positionRow(runId, state, 'waiting'),
   ];
   // A child's fork is a root: the task its ancestors were given, and the

@@ -121,6 +121,7 @@ function livePayload(
 ): ModelMessagePayload {
   switch (p.kind) {
     case 'identified':
+    case 'failed':
     case 'handed-down':
       return p;
     case 'attempt':

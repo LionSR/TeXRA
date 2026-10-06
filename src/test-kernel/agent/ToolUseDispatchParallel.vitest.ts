@@ -290,7 +290,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
         request: '0'.repeat(64),
         invocation: INVOCATION,
         origin: ORIGIN,
-        delivery: 'stream',
+        purpose: 'turn',
       },
     },
     {

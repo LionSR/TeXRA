@@ -1,13 +1,11 @@
 /**
- * What a run has in flight between asking and delivering. The attempt it
- * has sent and not yet seen answered, and how the provider rows committed
- * before its response move it: `identified` names the provider's response,
- * `accepted` holds the background operation a resume observes, and
- * `cancelled` retires that operation after a user stop, so a resume submits
- * anew instead of observing work the user stopped. Then the response it
- * stands on until its calls settle: a model's `response`, or the
- * `handed-down` call a script's run opens on, which no model made, so its
- * assistant message has a null origin.
+ * What a run has in flight between asking and delivering. First the model
+ * invocation: its attempts as their rows left them, and the one function
+ * that reads its next move off them (`nextAttempt`), so the invoker's retry
+ * loop holds no state of its own and a resume continues exactly where the
+ * rows stand. Then the response it stands on until its calls settle: a
+ * model's `response`, or the `handed-down` call a script's run opens on,
+ * which no model made, so its assistant message has a null origin.
  */
 import {
   assistantMessageFromResult,
@@ -17,55 +15,274 @@ import {
 import type {
   CommitOrdinal,
   DispatchFacts,
+  FailedNext,
   InvocationRef,
+  RequestDecision,
+  RetryErrorInfo,
   ScriptCallPayload,
   ToolBindingPayload,
   ToolResultPayload,
 } from '@shared/schemas';
-import { byId } from './runRows';
+import { byId, type RunPosition } from './runRows';
 import type { HistoryMessage, ModelMessagePayload } from './historyTurns';
 
-/** The attempt a run has sent and not yet seen answered. */
-export type OpenAttempt = {
-  readonly invocation: InvocationRef;
-  readonly request: string; // its recorded request's address
-  readonly origin: ModelOrigin;
-  readonly delivery: 'stream' | 'blocking' | 'background';
+/** How an attempt ended, as its `failed` row records it. */
+export type Failure = {
+  readonly error: RetryErrorInfo;
+  readonly next: FailedNext;
+};
+
+/** One attempt, as its rows left it. */
+export type Attempt = {
+  readonly ref: InvocationRef;
+  /** What its `attempt` row recorded before the request was billed: the
+   *  recorded request's address and the binding's origin. Null for an
+   *  attempt that failed before it was sent, which no provider billed. */
+  readonly sent: {
+    readonly request: string;
+    readonly origin: ModelOrigin;
+  } | null;
   readonly providerResponseId: string | null;
-  readonly returnedModel: string | null;
+  /** The background operation a resume observes; `cancelled` retires it. */
   readonly accepted: {
     readonly operation: RemoteOperation;
     readonly deadlineAtMs: number;
   } | null;
+  /** Its `failed` row, or null while its outcome is unknown. */
+  readonly failed: Failure | null;
 };
 
-type ProviderRow = Extract<
+/**
+ * A model invocation: the attempt its rows last opened and how each earlier
+ * one ended (`null`: it never recorded an outcome, a crash or a refreshed
+ * credential sent the next one). It closes with its response, or, once it
+ * stopped, with the input of the next turn.
+ */
+export type Invocation = {
+  readonly current: Attempt;
+  readonly earlier: readonly (Failure | null)[];
+};
+
+type InvocationRow = Extract<
   ModelMessagePayload,
-  { kind: 'identified' | 'accepted' | 'cancelled' }
+  {
+    kind:
+      | 'attempt'
+      | 'identified'
+      | 'accepted'
+      | 'cancelled'
+      | 'failed'
+      | 'response';
+  }
 >;
 
-/** The open attempt after provider row `p`, or why `p` cannot follow it. */
-export function openAttemptAfter(
-  open: OpenAttempt,
-  p: ProviderRow,
-): OpenAttempt | string {
+const sameRef = (a: InvocationRef, b: InvocationRef): boolean =>
+  a.invocationId === b.invocationId && a.attempt === b.attempt;
+
+/**
+ * How each attempt of `invocation` before `ref` ended: its earlier ones,
+ * and its current one unless `ref` is that one.
+ */
+export function failuresBefore(
+  invocation: Invocation | null,
+  ref: InvocationRef,
+): readonly (Failure | null)[] {
+  if (invocation === null) return [];
+  return sameRef(invocation.current.ref, ref)
+    ? invocation.earlier
+    : [...invocation.earlier, invocation.current.failed];
+}
+
+/** The invocation after its row `p` (null: its response closed it), or why
+ *  `p` cannot follow it. An `attempt` row opens the next attempt; so does a
+ *  `failed` row naming it, for an attempt that failed before it was sent. */
+export function invocationAfter(
+  invocation: Invocation | null,
+  p: InvocationRow,
+): Invocation | null | string {
+  const current = invocation?.current;
+  return p.kind === 'attempt' ||
+    (p.kind === 'failed' &&
+      (current === undefined || !sameRef(current.ref, p.invocation)))
+    ? openedBy(invocation, p)
+    : movedBy(invocation, p);
+}
+
+/** The invocation `p` opens its next attempt in. */
+function openedBy(
+  invocation: Invocation | null,
+  p: Extract<InvocationRow, { kind: 'attempt' | 'failed' }>,
+): Invocation | string {
+  const { invocationId, attempt } = p.invocation;
+  const prior = invocation?.current.ref;
+  const follows =
+    attempt === 1
+      ? invocation === null
+      : prior?.invocationId === invocationId && attempt === prior.attempt + 1;
+  if (!follows)
+    return `${p.kind} ${attempt} of ${invocationId} does not follow ${prior?.attempt ?? 'no attempt'}`;
+  return {
+    current: {
+      ref: p.invocation,
+      sent:
+        p.kind === 'attempt' ? { request: p.request, origin: p.origin } : null,
+      providerResponseId: null,
+      accepted: null,
+      failed: p.kind === 'failed' ? { error: p.error, next: p.next } : null,
+    },
+    earlier: failuresBefore(invocation, p.invocation),
+  };
+}
+
+/** The invocation after `p` moves or closes its open attempt. */
+function movedBy(
+  invocation: Invocation | null,
+  p: InvocationRow,
+): Invocation | null | string {
+  const current = invocation?.current;
+  if (
+    invocation == null ||
+    current === undefined ||
+    current.failed !== null ||
+    !sameRef(current.ref, p.invocation)
+  )
+    return `${p.kind} names no open attempt`;
+  const moved = (patch: Partial<Attempt>): Invocation => ({
+    ...invocation,
+    current: { ...current, ...patch },
+  });
   switch (p.kind) {
+    case 'attempt':
+      return 'an attempt row moves no attempt';
     case 'identified':
-      return {
-        ...open,
-        providerResponseId: p.providerResponseId,
-        returnedModel: p.returnedModel,
-      };
+      return moved({ providerResponseId: p.providerResponseId });
     case 'accepted':
-      return {
-        ...open,
+      return moved({
         accepted: { operation: p.operation, deadlineAtMs: p.deadlineAtMs },
-      };
+      });
     case 'cancelled':
-      return open.accepted === null
+      return current.accepted === null
         ? 'cancelled names no accepted operation'
-        : { ...open, accepted: null };
+        : moved({ accepted: null });
+    case 'failed':
+      return moved({ failed: { error: p.error, next: p.next } });
+    case 'response':
+      return null;
   }
+}
+
+/** The credentials a person's retry answer picked. */
+export type RetryCredentials = NonNullable<
+  Extract<RequestDecision, { action: 'retry' }>['credentials']
+>;
+
+/**
+ * An invocation's next move: `send` a new attempt (`retry`: after a
+ * person's answer, which rebinds first), `observe` the accepted background
+ * operation, ask again (`reask`) for an attempt a person admitted whose
+ * outcome no row recorded, `await` the answer to the open retry request, or
+ * end it (`fail`, `cancel`).
+ */
+export type Move =
+  | { readonly kind: 'send'; readonly retry: RetryCredentials | null }
+  | {
+      readonly kind: 'observe';
+      readonly attempt: Attempt & {
+        readonly accepted: NonNullable<Attempt['accepted']>;
+      };
+    }
+  | { readonly kind: 'reask'; readonly attempt: Attempt }
+  | { readonly kind: 'await'; readonly requestId: string }
+  | { readonly kind: 'fail'; readonly error: RetryErrorInfo }
+  | { readonly kind: 'cancel' };
+
+const SEND: Move = { kind: 'send', retry: null };
+
+/**
+ * The next move of `invocation` (null: a new one), from its rows and the
+ * run's `requests` alone. An attempt with no recorded outcome is the one a
+ * process never saw end: resent unasked, as any automatic attempt is, except
+ * one a person admitted, which is asked again rather than resent, and an
+ * accepted background operation, which is observed, never resubmitted.
+ */
+export function nextAttempt(
+  invocation: Invocation | null,
+  requests: RunPosition['requests'],
+): Move {
+  if (invocation === null) return SEND;
+  const { current, earlier } = invocation;
+  const { failed, accepted } = current;
+  if (failed === null) {
+    if (accepted !== null)
+      return { kind: 'observe', attempt: { ...current, accepted } };
+    // A person admitted an attempt of this invocation: whatever ran since
+    // was billed on their word, so they are asked before it is sent again.
+    return earlier.some((failure) => failure?.next.kind === 'ask')
+      ? { kind: 'reask', attempt: current }
+      : SEND;
+  }
+  switch (failed.next.kind) {
+    case 'retry':
+    case 'unchain':
+      return SEND;
+    case 'stop':
+      return { kind: 'fail', error: failed.error };
+    case 'cancel':
+      return { kind: 'cancel' };
+    case 'ask': {
+      const { requestId } = failed.next;
+      const decision = requests[requestId]?.decision ?? null;
+      if (decision === null) return { kind: 'await', requestId };
+      if (decision.action === 'retry')
+        return { kind: 'send', retry: decision.credentials ?? 'configured' };
+      return decision.action === 'deny'
+        ? { kind: 'fail', error: failed.error }
+        : { kind: 'cancel' };
+    }
+  }
+}
+
+/** What one failure says about the move after it. */
+export interface FailureFacts {
+  /** The user aborted the request. */
+  readonly abort: boolean;
+  /** The vendor no longer holds the response this attempt chained on;
+   *  true only for an attempt that sent a continuation. */
+  readonly unchain: boolean;
+  /** The same request may succeed when sent again. */
+  readonly automatic: boolean;
+  /** A person may be offered a retry. */
+  readonly offered: boolean;
+}
+
+/**
+ * What follows a failed attempt, recorded on its `failed` row, given how the
+ * attempts before it ended (`failuresBefore`). `retries` automatic resends
+ * per invocation, counted from its rows, so a resume keeps the budget a
+ * crash interrupted; a lost chain is resent once outside it; past it, the
+ * person is asked under `requestId`, or, where nobody can be asked (null),
+ * it stops.
+ */
+export function failedNext(
+  before: readonly (Failure | null)[],
+  facts: FailureFacts,
+  retries: number,
+  requestId: string | null,
+): FailedNext {
+  if (facts.abort) return { kind: 'cancel' };
+  // Once per invocation: the resend after it carries no continuation.
+  if (
+    facts.unchain &&
+    !before.some((failure) => failure?.next.kind === 'unchain')
+  )
+    return { kind: 'unchain' };
+  const spent = before.filter(
+    (failure) => failure !== null && failure.next.kind !== 'unchain',
+  ).length;
+  if (facts.automatic && spent < retries) return { kind: 'retry' };
+  return facts.offered && requestId !== null
+    ? { kind: 'ask', requestId }
+    : { kind: 'stop' };
 }
 
 type Settlement = Pick<

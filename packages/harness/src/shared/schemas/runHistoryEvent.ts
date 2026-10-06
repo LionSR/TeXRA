@@ -58,6 +58,28 @@ const InvocationRefSchema = z.strictObject({
 });
 export type InvocationRef = z.infer<typeof InvocationRefSchema>;
 
+/** Why an invocation is made: a run's turn, or a compaction's summary,
+ *  whose rows record its billed calls and nothing the loop continues from. */
+const InvocationPurposeSchema = z.enum(['turn', 'summary']);
+/** Why an invocation is made, as its attempt rows record it. */
+export type InvocationPurpose = z.infer<typeof InvocationPurposeSchema>;
+
+/**
+ * What follows a failed attempt: another attempt (`retry`, or `unchain`,
+ * which also drops the provider continuation the vendor no longer holds),
+ * the person's answer to the retry request `requestId` (`ask`), the end of
+ * the invocation as failed (`stop`) or as a user abort (`cancel`).
+ */
+const FailedNextSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('retry') }),
+  z.strictObject({ kind: z.literal('unchain') }),
+  z.strictObject({ kind: z.literal('ask'), requestId: z.string().min(1) }),
+  z.strictObject({ kind: z.literal('stop') }),
+  z.strictObject({ kind: z.literal('cancel') }),
+]);
+/** The move a `failed` row records after its attempt. */
+export type FailedNext = z.infer<typeof FailedNextSchema>;
+
 /** The canonical call key: `providerCallId`, non-nullable since L5, so a
  *  completed turn cannot carry a call without an identity. */
 const CallIdSchema = z.string().min(1);
@@ -126,16 +148,25 @@ export const ModelMessagePayloadSchema = z
     z.strictObject({
       kind: z.literal('attempt'),
       invocation: InvocationRefSchema,
+      purpose: InvocationPurposeSchema,
       request: Sha256Schema,
       origin: StoredOriginSchema,
-      delivery: z.enum(['stream', 'blocking', 'background']),
     }),
     /** Provider identity observed before completion. */
     z.strictObject({
       kind: z.literal('identified'),
       invocation: InvocationRefSchema,
       providerResponseId: z.string().min(1),
-      returnedModel: z.string().min(1).nullable(),
+    }),
+    /** The attempt failed: what went wrong, in the runtime's own failure
+     *  vocabulary (deliberately not the package's `ModelError`, D3), and what
+     *  the invoker does next, decided once here so a resume replays it. */
+    z.strictObject({
+      kind: z.literal('failed'),
+      invocation: InvocationRefSchema,
+      purpose: InvocationPurposeSchema,
+      error: RetryErrorInfoSchema,
+      next: FailedNextSchema,
     }),
     /** The commit barrier: the accepted remote operation, committed before
      *  `observe` is called. `deadlineAtMs` is the limit admitted with the
@@ -275,8 +306,7 @@ export const ModelMessagePayloadSchema = z
  * applies to) are replaced by `messages`. An edit drops the provider-side
  * continuation, which was over the old view, and the offered system text.
  * `trigger` says what asked for a compaction: the threshold
- * (`context-limit`), an overflowed window (`context-window`), a model
- * switch (`model-switch`, an empty range: the history stays, the
+ * (`context-limit`), a model switch (`model-switch`, an empty range: the history stays, the
  * continuation goes) or the user's `/compact` (`user`); null for the other
  * causes. `base` is the `seq` of the edit the view stood at when this one
  * was computed (`null`: none), and the fold refuses an edit whose base is no
@@ -290,9 +320,7 @@ export const ModelMessagePayloadSchema = z
 export const ContextEditPayloadSchema = z
   .strictObject({
     cause: z.enum(['compaction', 'reset', 'handoff', 'fork']),
-    trigger: z
-      .enum(['context-limit', 'context-window', 'model-switch', 'user'])
-      .nullable(),
+    trigger: z.enum(['context-limit', 'model-switch', 'user']).nullable(),
     base: z.int().positive().nullable(),
     range: z.strictObject({
       from: z.int().nonnegative(),
@@ -444,28 +472,6 @@ export const ToolResultPayloadSchema = z
   });
 export type ToolResultPayload = z.infer<typeof ToolResultPayloadSchema>;
 
-/* ------------------------------------------------------------ model.retry */
-
-const PendingRetrySchema = z.strictObject({
-  requestId: z.string().min(1),
-  invocation: InvocationRefSchema,
-  failedModelId: z.string().min(1),
-  /** Route requirements without secrets: a scope, never a credential. */
-  credentialScope: z.string().min(1),
-  /** No default and no `.catch`. A spent permit that reads as an unused one
-   *  silently buys a second billed attempt: `waiting` = a decision is
-   *  outstanding, `authorized` = one unused permit, `started` = consumed. */
-  substate: z.enum(['waiting', 'authorized', 'started']),
-});
-export type PendingRetry = z.infer<typeof PendingRetrySchema>;
-
-/** The durable human retry permit: the one carrier of the gate the retry
- *  owner (`ModelInvoker`) walks through `waiting` -> `authorized` ->
- *  `started`; `null` retires it. */
-export const ModelRetryPayloadSchema = z.strictObject({
-  permit: PendingRetrySchema.nullable(),
-});
-
 /* ----------------------------------------------------------- run.snapshot */
 
 /**
@@ -477,12 +483,6 @@ export const ModelRetryPayloadSchema = z.strictObject({
 const SnapshotRuntimeSchema = z.strictObject({
   modelId: z.string().min(1),
   backend: ModelBackendSchema,
-  /**
-   * Runtime-owned failure vocabulary, already persisted today and already
-   * carrying the exhaustion classification that drives retry and route-switch
-   * policy. Deliberately NOT derived from the package's `ModelError` (D3).
-   */
-  lastError: RetryErrorInfoSchema.nullable(),
   /**
    * Subscription routes this run must not bind again: one per retry the user
    * answered with their own API key, plus the launch's own seed. Durable so a
