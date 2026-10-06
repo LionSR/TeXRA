@@ -268,7 +268,6 @@ export const serviceSessionBackend = Effect.fn('serviceSessionBackend')(
                   debug: null,
                   replayComplete: false,
                   existence: null,
-                  blocked: [],
                 })),
               ),
             );

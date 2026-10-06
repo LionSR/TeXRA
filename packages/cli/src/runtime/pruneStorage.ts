@@ -6,22 +6,20 @@
  * automatically, since an unmounted drive looks exactly like a deleted root.
  *
  * A store is an orphan when the root its `workspace-store` record names no
- * longer exists, or, with no record (no 1.0 host opened it), when nothing in
- * it changed for 90 days. The store of no workspace has no root and is never
- * one. An old aside copy (`oldAsides`) is a pre-1.0 build's `.format<N>`,
- * which nothing else removes, or a `.pre1` or `.corrupt-` copy over 30 days
- * old beside a store no host has opened since.
+ * longer exists. The store of no workspace has no root and is never one. An
+ * aside copy (`asideCopies`) is a `.pre1` or `.corrupt-` copy a store open
+ * moved beside a store that remains.
  */
 import { basename, dirname, join } from 'node:path';
 
-import { Clock, Effect, FileSystem, Option } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
 import { storeOpenElsewhere } from '@controllers/session/Database';
-import { oldAsides } from '@controllers/session/storeAside';
+import { asideCopies } from '@controllers/session/storeAside';
 import { GlobalDatabase } from '@shared/session/database';
 import { WORKSPACE_STORES } from '@shared/session/valueFamily';
 import { formatBytes, formatResultCount } from '@utils/text/stringUtils';
@@ -29,8 +27,6 @@ import { formatBytes, formatResultCount } from '@utils/text/stringUtils';
 import { CliExitCode } from './exitCodes';
 import { askCliQuestion, writeTextStderr, writeTextStdout } from './logSinks';
 import type { CliContext } from './cliContext';
-
-const UNRECORDED_ORPHAN_MS = 90 * 24 * 60 * 60 * 1000;
 
 export const pruneStorage = Effect.fn('pruneStorage')(function* (
   context: CliContext,
@@ -43,30 +39,19 @@ export const pruneStorage = Effect.fn('pruneStorage')(function* (
   const records = new Map(
     (yield* values.list(WORKSPACE_STORES)).map((row) => [row.key, row.value]),
   );
-  const now = yield* Clock.currentTimeMillis;
   /** Why a store directory is an orphan, with its size, or null while its
    *  root stands. A store whose database is not SQLite is still an orphan. */
   const inspect = Effect.fnUntraced(function* (directory: string, id: string) {
+    const record = records.get(id);
+    if (record === undefined || (yield* fs.exists(record.root))) return null;
+    let why = `${record.root} no longer exists`;
     let bytes = 0;
-    let latest = 0;
     for (const name of yield* fs.readDirectory(directory, {
       recursive: true,
     })) {
       const info = yield* fs.stat(join(directory, name));
-      if (info.type !== 'File') continue;
-      bytes += Number(info.size);
-      latest = Math.max(
-        latest,
-        Option.getOrElse(info.mtime, () => new Date(now)).getTime(),
-      );
+      if (info.type === 'File') bytes += Number(info.size);
     }
-    const record = records.get(id);
-    let why: string | null = null;
-    if (record !== undefined && !(yield* fs.exists(record.root)))
-      why = `${record.root} no longer exists`;
-    else if (record === undefined && now - latest > UNRECORDED_ORPHAN_MS)
-      why = 'no record, unchanged for 90 days';
-    if (why === null) return null;
     const database = join(directory, 'texra.db');
     if (
       (yield* fs.exists(database)) &&
@@ -81,7 +66,7 @@ export const pruneStorage = Effect.fn('pruneStorage')(function* (
       writeTextStderr(`Skipped ${directory}: ${error.message}`);
     });
   const orphans: { directory: string; bytes: number; why: string }[] = [];
-  const asides: { path: string; bytes: number; legacy: boolean }[] = [];
+  const asides: { path: string; bytes: number }[] = [];
   const ids = (yield* fs.exists(parent)) ? yield* fs.readDirectory(parent) : [];
   const global = resolveGlobalStoragePath(context.storageRoot);
   const directories = [
@@ -97,11 +82,11 @@ export const pruneStorage = Effect.fn('pruneStorage')(function* (
           ? null
           : yield* inspect(directory, id);
       if (orphan !== null) orphans.push(orphan);
-      else asides.push(...(yield* oldAsides(join(directory, 'texra.db'))));
+      else asides.push(...(yield* asideCopies(join(directory, 'texra.db'))));
     }).pipe(Effect.catch(skipped(directory)));
   }
   if (orphans.length === 0 && asides.length === 0) {
-    writeTextStdout('No orphaned workspace stores and no old aside copies.');
+    writeTextStdout('No orphaned workspace stores and no aside copies.');
     return CliExitCode.Success;
   }
   const listed = (
@@ -127,15 +112,8 @@ export const pruneStorage = Effect.fn('pruneStorage')(function* (
       ...(asides.length === 0
         ? []
         : listed(
-            formatResultCount(
-              asides.length,
-              'old aside copy',
-              'old aside copies',
-            ),
-            asides.map((aside) => ({
-              bytes: aside.bytes,
-              line: `${aside.path}${aside.legacy ? '  (pre-1.0 history copy)' : ''}`,
-            })),
+            formatResultCount(asides.length, 'aside copy', 'aside copies'),
+            asides.map((aside) => ({ bytes: aside.bytes, line: aside.path })),
           )),
     ].join('\n'),
   );

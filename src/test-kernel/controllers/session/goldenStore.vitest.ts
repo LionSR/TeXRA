@@ -47,7 +47,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Fiber, Layer, Stream, SubscriptionRef } from 'effect';
+import { Effect, Fiber, Layer, Result, Stream, SubscriptionRef } from 'effect';
 import { afterAll, afterEach, beforeEach, describe, expect } from 'vitest';
 
 import { refresh } from '@agent/index';
@@ -217,7 +217,6 @@ const runsOf = (view: SessionView) =>
     outcome: run.durableOutcome,
     parent: run.parentId,
     children: run.childIds,
-    blocked: run.blocked,
   }));
 
 const TABLES = {
@@ -247,11 +246,11 @@ describe('the golden 1.0 store', () => {
         )
         .all(),
     );
-    const verdicts = rows.map(decodeRow);
-    expect(verdicts.filter((verdict) => verdict._tag !== 'event')).toEqual([]);
-    const events = verdicts.flatMap((v) =>
-      v._tag === 'event' ? [v.event] : [],
-    );
+    const events = rows.flatMap((row) => {
+      const decoded = Result.getOrThrow(decodeRow(row));
+      return '_tag' in decoded ? [] : [decoded];
+    });
+    expect(events).toHaveLength(rows.length);
     const types = new Set(events.map((event) => event.type));
     for (const type of [
       'tool.result',
@@ -371,7 +370,6 @@ describe('the golden 1.0 store', () => {
     expect(shared.length).toBeGreaterThan(0);
     return Effect.gen(function* () {
       const db = yield* Database;
-      expect(yield* db.readBlocked()).toEqual([]);
       expect(yield* db.readAll(0)).toHaveLength(rows.length);
     }).pipe(Effect.provide(substrate(storage)));
   });
@@ -385,7 +383,7 @@ describe('the golden 1.0 store', () => {
         Stream.runDrain,
       );
       const folded = yield* SubscriptionRef.get(view.ref);
-      const done = { status: 'completed', outcome: 'completed', blocked: null };
+      const done = { status: 'completed', outcome: 'completed' };
       const run = (
         id: string,
         label: string,
@@ -498,83 +496,53 @@ describe('the golden 1.0 store', () => {
   });
 
   it.effect(
-    'blocks only the aggregates a newer build wrote to, and rewrites nothing',
+    'refuses a store a newer build wrote to, and rewrites nothing',
     () => {
-      // A newer build's `model.message` (one version past this build's) on
-      // one review run, and a core kind this build lacks on the other, each
+      // A newer build's `model.message` (one version past this build's),
       // committed as that build would: the row, its sequence, `stored_kind`.
       const storage = goldenRoot();
-      const NEWER = RunIdSchema.parse('a00000000004');
-      const UNKNOWN = RunIdSchema.parse('a00000000005');
       raw(storage, (db) => {
-        const inject = (run: RunId, type: string, version: number) => {
-          const { id, seq } = db
-            .prepare('SELECT id, seq FROM event_sequence WHERE logical_id = ?')
-            .get(run) as { id: number; seq: number };
-          db.prepare(
-            `INSERT INTO event (aggregate, seq, type, version, origin, at, data)
-             VALUES (?, ?, ?, ?, '["newer-build",1,"later"]', 1767312000000, '{}')`,
-          ).run(id, seq + 1, type, version);
-          db.prepare('UPDATE event_sequence SET seq = ? WHERE id = ?').run(
-            seq + 1,
-            id,
-          );
-          db.prepare(
-            `INSERT INTO stored_kind VALUES (?, ?)
-             ON CONFLICT (type) DO UPDATE SET version = max(version, excluded.version)`,
-          ).run(type, version);
-        };
+        const { id, seq } = db
+          .prepare('SELECT id, seq FROM event_sequence WHERE logical_id = ?')
+          .get('a00000000004') as { id: number; seq: number };
+        const version = ROW_KINDS['model.message'].version + 1;
         db.exec('BEGIN');
-        inject(NEWER, 'model.message', ROW_KINDS['model.message'].version + 1);
-        inject(UNKNOWN, 'golden.unknown', 1);
+        db.prepare(
+          `INSERT INTO event (aggregate, seq, type, version, origin, at, data)
+         VALUES (?, ?, 'model.message', ?, '["newer-build",1,"later"]', 1767312000000, '{}')`,
+        ).run(id, seq + 1, version);
+        db.prepare('UPDATE event_sequence SET seq = ? WHERE id = ?').run(
+          seq + 1,
+          id,
+        );
+        db.prepare(
+          `UPDATE stored_kind SET version = ? WHERE type = 'model.message'`,
+        ).run(version);
         db.exec('COMMIT');
       });
       const stored = () =>
         raw(storage, (db) =>
-          ['event', 'event_sequence', 'blob', 'event_blob'].map((table) =>
-            db.prepare(`SELECT * FROM ${table} ORDER BY 1, 2`).all(),
+          ['event', 'event_sequence', 'blob', 'event_blob', 'stored_kind'].map(
+            (table) => db.prepare(`SELECT * FROM ${table} ORDER BY 1, 2`).all(),
           ),
         );
       const before = stored();
       return Effect.gen(function* () {
-        const view = yield* SessionViewService;
-        yield* SubscriptionRef.changes(view.ref).pipe(
-          Stream.takeUntil((v) => v.runs.size > 0),
-          Stream.runDrain,
-        );
-        const runs = runsOf(yield* SubscriptionRef.get(view.ref));
-        expect(runs.filter((run) => run.blocked !== null)).toEqual([
-          expect.objectContaining({ id: NEWER, blocked: 'newer' }),
-          expect.objectContaining({ id: UNKNOWN, blocked: 'newer' }),
-        ]);
         expect(
-          runs.filter((run) => run.blocked === null).map((run) => run.status),
-        ).toEqual([
-          'running',
-          ...Array.from({ length: 2 }, () => 'completed'),
-          'cancelled',
-          ...Array.from({ length: 3 }, () => 'running'),
-          'completed',
-          'running',
-          'waiting',
-          'running',
-          'running',
-          'completed',
-          'cancelled',
-        ]);
-        const db = yield* Database;
-        for (const [run, type] of [
-          [NEWER, 'model.message'],
-          [UNKNOWN, 'golden.unknown'],
-        ] as const)
-          expect(
-            yield* Effect.flip(db.acquireClaims([aggregateId('run', run)])),
-          ).toMatchObject({
-            _tag: 'DatabaseWriteFailed',
-            cause: { _tag: 'DatabaseAggregateBlocked', type },
-          });
+          yield* Effect.flip(
+            Effect.provide(
+              Effect.gen(function* () {
+                yield* Database;
+              }),
+              substrate(storage),
+            ),
+          ),
+        ).toMatchObject({
+          _tag: 'DatabaseOpenFailed',
+          cause: { _tag: 'DatabaseStoreNewer', type: 'model.message' },
+        });
         expect(stored()).toEqual(before);
-      }).pipe(Effect.provide(graph(storage)), Effect.scoped);
+      });
     },
   );
 

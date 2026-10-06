@@ -73,7 +73,6 @@ import {
   isTranscriptSettlementPhase,
 } from '@shared/runs/runStatus';
 import {
-  RUN_BLOCKED_COPY,
   runHeldMessage,
   runInterruptedMessage,
   runResumeBlockedMessage,
@@ -158,14 +157,6 @@ function foldWith(view: SessionView, input: FoldInput): SessionView {
       reconcileExistence(next, input.existence);
       next.cursor = input.cursor;
       return next;
-    case 'blocked': {
-      const runId = runIdOf(input.aggregateId);
-      const run = runId === null ? undefined : next.runs.get(runId);
-      if (run === undefined || run.blocked !== null) return view;
-      setRun(next, { ...run, blocked: input.reason });
-      walkUp(next, run.id);
-      return next;
-    }
     case 'replay.complete': {
       // The input reader releases the completed replay as one batch (7.2). Its
       // marker closes the listing ahead of it: a run no listing row of this
@@ -198,7 +189,11 @@ function reconcileExistence(
     setRun(view, { ...run, ownerId });
     walkUp(view, run.id);
   }
-  for (const id of existence.removedAggregateIds) {
+  const present = new Set(
+    existence.claims.map(({ aggregateId }) => aggregateId),
+  );
+  for (const id of existence.checkedAggregateIds) {
+    if (present.has(id)) continue;
     claims.delete(id);
     // The transcript tier belongs to the subscription set alone (5.2,
     // "Residency"): `foldSubscriptions` opens the `folded` entry and closes
@@ -357,7 +352,6 @@ function createRun(
     approval: 'none' as const,
     ownedHere: false,
     readOnly: false,
-    blocked: null,
     resumeBlocked: null,
     actions: [],
     forceExpanded: false,
@@ -547,9 +541,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     (!own || sessionIndexesOf(view).ended.has(run.id))
       ? run.status
       : null;
-  const unreadable = run.blocked
-    ? RUN_BLOCKED_COPY[run.blocked]
-    : local.unreadable.find((u) => u.runId === run.id)?.detail;
+  const unreadable = local.unreadable.find((u) => u.runId === run.id)?.detail;
   const children = run.childIds.flatMap((id) => view.runs.get(id) ?? []);
   const rollup = rollupOf(children);
   const treeUsage = sumUsageStats([

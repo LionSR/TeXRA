@@ -208,11 +208,9 @@ export const PROJECTION_TABLE: Readonly<Record<ProjectionName, string>> = {
   model: 'run_model',
 };
 /**
- * One projection's checkpoint. `version` is the projector's version, negated
- * when the build that projected it skipped rows it could not read (a newer
- * or unknown kind): a build that reads every row then rebuilds it, and one
- * that skips the same rows keeps it. A name this build does not know is a
- * later build's projection and is left alone.
+ * One projection's checkpoint: the projector's version and the commit it has
+ * read through. A name this build does not know is a later build's
+ * projection and is left alone.
  */
 const ProjectionStateSchema = z.object({
   name: z.string(),
@@ -232,16 +230,11 @@ export function projectionStates(
   );
 }
 
-/** Whether `state` is this build's projection: its version, or the skipping
- *  mark when this build skips rows too (`skips`). */
+/** Whether `state` is this build's projection: its version. */
 export const isOwn = (
   name: ProjectionName,
   state: ProjectionState | undefined,
-  skips: boolean,
-) =>
-  state !== undefined &&
-  (state.version === PROJECTORS[name].version ||
-    (skips && state.version === -PROJECTORS[name].version));
+): boolean => state?.version === PROJECTORS[name].version;
 
 /** A projection this build owns and that has read every row through `top`;
  *  one with no state yet is current only on a store that never held a row,
@@ -250,11 +243,8 @@ export const isCurrent = (
   name: ProjectionName,
   state: ProjectionState | undefined,
   top: number,
-  skips: boolean,
-) =>
-  state === undefined
-    ? top === 0
-    : isOwn(name, state, skips) && state.through >= top;
+): boolean =>
+  state === undefined ? top === 0 : isOwn(name, state) && state.through >= top;
 
 const RunUsageSchema = z.object({ usage: TokenUsageStatsSchema });
 const RunModelSchema = z.object({

@@ -139,16 +139,6 @@ export function runResumeBlockedMessage(
   }
 }
 
-/** Banner copy for a run whose rows this build cannot read whole, by why
- *  (`BlockedAggregate`): it is shown, never opened. */
-export const RUN_BLOCKED_COPY = {
-  newer: 'This task was written by a newer TeXRA; update TeXRA to open it.',
-  older:
-    "This task was made by an older TeXRA and can't be opened by this version.",
-  corrupt:
-    'A stored row of this task is corrupt, so it cannot be opened or resumed.',
-} as const;
-
 /** Banner and tooltip copy for a run another TeXRA process holds, named by
  *  its pid: the one part of a process identity a user can act on. */
 export function runHeldMessage(pid: number): string {

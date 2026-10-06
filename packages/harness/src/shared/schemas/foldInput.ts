@@ -1,8 +1,8 @@
 /**
  * The fold's transient input arms (.agents/docs/implemented/architecture/2026-09-03-prd-one-fold-three-renderers.md
  * sections 5.2 and 6): the read a durable row came from, live text chunks,
- * the local runtime snapshot, the transcript subscription set, the replay
- * and drain markers, and the store's blocked verdicts. None carries a seq.
+ * the local runtime snapshot, the transcript subscription set, and the
+ * replay and drain markers. None carries a seq.
  */
 import { z } from 'zod';
 
@@ -90,10 +90,12 @@ export type TranscriptSubscription = z.infer<
   typeof TranscriptSubscriptionSchema
 >;
 
-/** Current ownership and removals for exactly the scope checked by a finite read. */
+/**
+ * Current ownership for exactly the scope a finite read checked: a checked
+ * aggregate with no claim entry no longer exists.
+ */
 export const ExistenceReconciliationSchema = z.object({
   checkedAggregateIds: z.array(AggregateIdSchema),
-  removedAggregateIds: z.array(AggregateIdSchema),
   claims: z.array(
     z.object({
       aggregateId: AggregateIdSchema,
@@ -105,31 +107,7 @@ export type ExistenceReconciliation = z.infer<
   typeof ExistenceReconciliationSchema
 >;
 
-/**
- * An aggregate whose rows this build cannot read whole: a row a later build
- * wrote (`newer`: a newer version or an unknown kind), an earlier shape of
- * its version (`older`), or one not JSON or with a blob missing or altered
- * (`corrupt`). The listing delivers what decodes and this
- * verdict beside it; the fold marks the run blocked, and every run history read
- * and claim of it is refused.
- */
-export const BlockedAggregateSchema = z.object({
-  _tag: z.literal('blocked'),
-  aggregateId: AggregateIdSchema,
-  /** The incarnation the verdict is about. */
-  uid: z.string(),
-  reason: z.enum(['newer', 'older', 'corrupt']),
-  type: z.string(),
-  version: z.int().nonnegative(),
-  /** The envelope of the row that blocked it: for a run whose `run.start`
-   *  is the unreadable row, its creation, which the fold lists it at. */
-  commit: CommitOrdinalSchema,
-  at: z.int(),
-});
-export type BlockedAggregate = z.infer<typeof BlockedAggregateSchema>;
-
 const FoldInputSchema = z.discriminatedUnion('_tag', [
-  BlockedAggregateSchema,
   FoldEventSchema,
   TextChunkSchema,
   z.object({ _tag: z.literal('debug'), enabled: z.boolean() }),

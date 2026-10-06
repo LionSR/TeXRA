@@ -15,8 +15,6 @@ export interface CliRunFacts {
   readonly phase?: RunLifecycleStatus;
   /** A stop rested the run instead of ending it (a paused child). */
   readonly paused?: boolean;
-  /** A row of the run this build cannot read: it is never resumed here. */
-  readonly blocked?: boolean;
 }
 
 /** A run's CLI history standing: the frozen `status` and the `resumable`
@@ -37,8 +35,6 @@ export function cliRunStanding(facts: CliRunFacts): CliRunStanding {
   // A paused child is continued by its parent's model, never by `resume`.
   if (facts.paused)
     return { status: HISTORY_RUN_STATUS.PAUSED, resumable: false };
-  if (facts.blocked)
-    return { status: HISTORY_RUN_STATUS.BLOCKED, resumable: false };
   const outcome = isTerminalOutcomePhase(facts.phase) ? facts.phase : undefined;
   const status =
     facts.resumable &&

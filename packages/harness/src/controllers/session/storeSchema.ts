@@ -5,11 +5,11 @@
  * brings a file to them, and `SCHEMA_VERSION` in SQLite's `user_version`.
  *
  * `SCHEMA_VERSION` names the DDL, never the row vocabulary: rows carry
- * their own versions (`rowVersions.ts`, read by `rowCodec.ts`), so it moves
- * only for a change an older build cannot write around. The 1.0 baseline is
- * 101. A stamp from 1 to 99 is a store written before 1.0, and 100 a
- * pre-release of the 1.0 store that never shipped; this build reads
- * neither and moves them aside whole.
+ * their own versions (`rowVersions.ts`), and the kinds a store holds are
+ * gated by `rowCodec.ts`, so it moves only for a change an older build
+ * cannot write around. The 1.0 baseline is 101. A file below it holding
+ * tables was written before 1.0 (100 a pre-release that never shipped);
+ * this build reads none and moves it aside whole.
  *
  * This module knows no row kind and no payload field.
  */
@@ -20,7 +20,6 @@ import {
   freeName,
   isDamaged,
   pragmaValue,
-  removeOldAsides,
   retryBusy,
   run,
   underCopy,
@@ -167,28 +166,10 @@ const userTables = (sql: Sql) =>
     )
     .pipe(Effect.map((rows) => rows.map((row) => row.name)));
 
-/** The refusal of a file this build did not write: nothing in it is touched. */
-const foreignStore = (path: string, why: string) =>
+/** The refusal of a file this build must not touch. */
+const refused = (path: string, why: string) =>
   Effect.fail(
-    new Error(
-      `${path} is not a TeXRA session store (${why}); nothing in it was changed. Move it away to let TeXRA create its store there.`,
-    ),
-  );
-
-/** Whether a file below schema 100 is a TeXRA store from before 1.0: its
- *  `event` and `event_sequence`, each keyed by the `aggregate_id` column
- *  every pre-1.0 format had. Any other file is foreign, never retired. */
-const PRE1_SIGNATURE = `SELECT
-  (SELECT count(*) FROM pragma_table_info('event') WHERE name = 'aggregate_id') +
-  (SELECT count(*) FROM pragma_table_info('event_sequence')
-    WHERE name = 'aggregate_id') AS keyed`;
-
-/** The refusal of a store a newer build wrote: nothing in it is touched. */
-const newerStore = (path: string, stored: number) =>
-  Effect.fail(
-    new Error(
-      `Session store ${path} was written by a newer TeXRA build (schema ${stored}); this build writes schema ${SCHEMA_VERSION}. Update TeXRA to open it. Nothing in the store was changed.`,
-    ),
+    new Error(`Session store ${path} ${why}; nothing in it was changed.`),
   );
 
 /** Give an empty file the 1.0 header: `auto_vacuum` is fixed when the first
@@ -200,32 +181,36 @@ const incrementalVacuum = Effect.fnUntraced(function* (sql: Sql) {
 });
 
 /**
- * Refuse a file this build must not touch: another application's (its
- * `application_id`, or tables below schema 100 that are no pre-1.0 TeXRA
- * store's) or a newer TeXRA's. Run on a read-only connection before the
- * store's own connection opens, which switches the file to WAL, and again
- * under it, where another process may have changed the file since.
+ * Refuse a file this build must not touch, answering whether it is a store
+ * written before 1.0 (tables under a stamp below the baseline). Refused:
+ * another application's `application_id`, a 1.0-stamped file without
+ * TeXRA's, a newer schema, and a released one this build has no step from.
+ * Run on a read-only connection before the store's own connection opens
+ * (which switches the file to WAL), and again under it, where another
+ * process may have changed the file since.
  */
-const refuseUnowned = Effect.fnUntraced(function* (sql: Sql, path: string) {
+const checkStamps = Effect.fnUntraced(function* (sql: Sql, path: string) {
   const application = Number(yield* pragmaValue(sql, 'application_id'));
-  if (application !== 0 && application !== APPLICATION_ID)
-    return yield* foreignStore(path, `application id ${application}`);
   const stored = Number(yield* pragmaValue(sql, 'user_version'));
-  // Every 1.0 store is stamped with the application id in the transaction
-  // that stamps its schema: a schema-100 file without it is not TeXRA's.
-  if (stored >= 100 && application !== APPLICATION_ID)
-    return yield* foreignStore(path, `user_version ${stored}, no TeXRA id`);
-  if (stored > SCHEMA_VERSION) return yield* newerStore(path, stored);
-  const tables = yield* userTables(sql);
   if (
-    stored < 100 &&
-    tables.length > 0 &&
-    (yield* sql.unsafe<{ keyed: number }>(PRE1_SIGNATURE, []))[0]?.keyed !== 2
+    (application !== 0 && application !== APPLICATION_ID) ||
+    (stored >= BASELINE_1_0 && application !== APPLICATION_ID)
   )
-    return yield* foreignStore(
+    return yield* refused(
       path,
-      `user_version ${stored}, tables ${tables.join(', ')}`,
+      `is not a TeXRA store (application id ${application}, schema ${stored}); move it away to let TeXRA create its store there`,
     );
+  if (stored > SCHEMA_VERSION)
+    return yield* refused(
+      path,
+      `was written by a newer TeXRA build (schema ${stored}; this build writes ${SCHEMA_VERSION}); update TeXRA to open it`,
+    );
+  if (stored >= BASELINE_1_0 && stored !== SCHEMA_VERSION)
+    return yield* refused(
+      path,
+      `has schema ${stored}, and this build has no step from it to schema ${SCHEMA_VERSION}`,
+    );
+  return stored < BASELINE_1_0 && (yield* userTables(sql)).length > 0;
 });
 
 /**
@@ -240,9 +225,7 @@ const refuseUnowned = Effect.fnUntraced(function* (sql: Sql, path: string) {
  * thread in SQLite. `synchronous = NORMAL` is the WAL-safe setting: `FULL` cost
  * 1.4x to 1.8x, and `kill -9` mid-transaction lost nothing at `NORMAL`.
  *
- * - A foreign `application_id` or a newer `SCHEMA_VERSION` is refused
- *   untouched, and so is any other file below 100 that is not a pre-1.0
- *   TeXRA store by its own tables (`PRE1_SIGNATURE`).
+ * - What `checkStamps` refuses is refused untouched.
  * - A store written before 1.0 (below 101, the never-shipped 100
  *   included) is copied whole to `<file>.pre1` (or the
  *   first free `.pre1.<n>`), every table is dropped, and the file starts
@@ -266,16 +249,16 @@ const prepareStore = Effect.fnUntraced(function* (
   yield* verifyPragma(sql, 'foreign_keys', 1);
   let movedAside: SessionStoreMovedAside | null = null;
   for (;;) {
-    // An in-memory store is this process's own, never another's file.
-    if (mode === 'persistent') yield* refuseUnowned(sql, path);
+    const pre1 = yield* checkStamps(sql, path);
     const stored = Number(yield* pragmaValue(sql, 'user_version'));
     if (stored === SCHEMA_VERSION) break;
-    const tables = yield* userTables(sql);
-    if (stored === 0 && tables.length === 0) {
+    if (!pre1) {
       if (mode === 'persistent') yield* incrementalVacuum(sql);
       yield* run(sql, 'BEGIN IMMEDIATE');
       yield* Effect.gen(function* () {
-        if (Number(yield* pragmaValue(sql, 'user_version')) !== 0) return;
+        // Another process stamped the file while this one waited: the
+        // loop checks it again.
+        if (Number(yield* pragmaValue(sql, 'user_version')) !== stored) return;
         for (const statement of [...TABLES, ...ADDITIVE])
           yield* run(sql, statement);
         yield* run(sql, `PRAGMA application_id = ${APPLICATION_ID}`);
@@ -284,39 +267,26 @@ const prepareStore = Effect.fnUntraced(function* (
       yield* run(sql, 'COMMIT');
       continue;
     }
-    if (stored < BASELINE_1_0) {
-      // Off outside the transaction (a no-op inside one): a drop then
-      // neither checks nor cascades a foreign key it removes anyway.
-      yield* run(sql, 'PRAGMA foreign_keys = OFF');
-      const aside = yield* underCopy(
-        sql,
-        `${filename}.pre1`,
-        Effect.gen(function* () {
-          for (const table of yield* userTables(sql))
-            yield* run(sql, `DROP TABLE "${table}"`);
-          yield* run(sql, 'PRAGMA user_version = 0');
-        }),
-      ).pipe(
-        Effect.ensuring(
-          run(sql, 'PRAGMA foreign_keys = ON').pipe(Effect.ignore),
-        ),
-      );
-      if (aside === null) continue;
-      yield* incrementalVacuum(sql);
-      yield* Effect.logWarning(
-        `Session store ${path} was written before TeXRA 1.0 (format ${stored}); this build keeps no compatibility with it, so the whole store was moved to ${aside} and starts fresh.`,
-      ).pipe(withLogChannel(CHANNEL));
-      movedAside = { path, aside, reason: 'pre-1.0' };
-      continue;
-    }
-    if (stored > SCHEMA_VERSION) return yield* newerStore(path, stored);
-    // A released store below this build: it is upgraded by forward steps,
-    // and none exists yet. Never moved aside or wiped.
-    return yield* Effect.fail(
-      new Error(
-        `Session store ${path} has schema ${stored}, and this build has no step from it to schema ${SCHEMA_VERSION}. Nothing in the store was changed.`,
-      ),
+    // Off outside the transaction (a no-op inside one): a drop then
+    // neither checks nor cascades a foreign key it removes anyway.
+    yield* run(sql, 'PRAGMA foreign_keys = OFF');
+    const aside = yield* underCopy(
+      sql,
+      `${filename}.pre1`,
+      Effect.gen(function* () {
+        for (const table of yield* userTables(sql))
+          yield* run(sql, `DROP TABLE "${table}"`);
+        yield* run(sql, 'PRAGMA user_version = 0');
+      }),
+    ).pipe(
+      Effect.ensuring(run(sql, 'PRAGMA foreign_keys = ON').pipe(Effect.ignore)),
     );
+    if (aside === null) continue;
+    yield* incrementalVacuum(sql);
+    yield* Effect.logWarning(
+      `Session store ${path} was written before TeXRA 1.0 (format ${stored}); this build keeps no compatibility with it, so the whole store was moved to ${aside} and starts fresh.`,
+    ).pipe(withLogChannel(CHANNEL));
+    movedAside = { path, aside, reason: 'pre-1.0' };
   }
   for (const statement of ADDITIVE) yield* run(sql, statement);
   if (mode === 'persistent') {
@@ -375,22 +345,12 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
   filename: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  // An aside copy over 30 days old goes at open (the design's §7).
-  if (mode === 'persistent')
-    yield* removeOldAsides(filename).pipe(
-      Effect.catch((error) =>
-        Effect.logWarning(`Could not remove old copies of ${path}.`).pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
-        ),
-      ),
-    );
   // A file the probe cannot open (none yet) is the store's open to create,
   // and one whose first read SQLite reports damaged (a store cut short
   // inside its first page) is the attempt's below to move aside.
   if (mode === 'persistent')
     yield* Effect.scoped(
-      Effect.flatMap(probe, (sql) => refuseUnowned(sql, path)),
+      Effect.flatMap(probe, (sql) => checkStamps(sql, path)),
     ).pipe(
       Effect.catchCause((cause) =>
         Cause.hasDies(cause) || isDamaged(cause)
@@ -449,21 +409,4 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
     sql,
     movedAside: { path, aside, reason: 'corrupt' as const },
   };
-});
-
-/** Refuse a write once another build has re-stamped the store under this
- *  process; read inside the write transaction, so the check and the append
- *  see one stamp. */
-export const assertStoreFormat = Effect.fnUntraced(function* (
-  sql: Sql,
-  path: string,
-) {
-  const stored = yield* pragmaValue(sql, 'user_version');
-  if (stored !== SCHEMA_VERSION) {
-    return yield* Effect.fail(
-      new Error(
-        `Session store ${path} is stamped with schema ${String(stored)}; this process writes schema ${SCHEMA_VERSION} and stops writing to it.`,
-      ),
-    );
-  }
 });

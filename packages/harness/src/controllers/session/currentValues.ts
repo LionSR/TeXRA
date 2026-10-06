@@ -22,17 +22,17 @@ import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { withLogChannel } from '@logger/effectLog';
 import { CURRENT_VALUE_VERSION as VALUE_VERSION } from '@shared/schemas';
 import {
-  CurrentValueNewer,
   InputHistoryRecordSchema,
   INPUT_HISTORY_LIMIT,
   type CurrentValues,
   type Database,
   type DatabaseReadFailed,
+  DatabaseStoreNewer,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
 import type { ValueFamily } from '@shared/session/valueFamily';
+import { CURRENT_VALUE_KIND, type SqlRow } from './rowCodec';
 import type { SqlError } from 'effect/sql/SqlError';
-import type { SqlRow } from './rowCodec';
 
 /** Replace one current value in place. */
 const UPSERT_VALUE = `
@@ -54,17 +54,13 @@ const READ_RETRY = Schedule.exponential('250 millis').pipe(
   ),
 );
 
-/** A row a newer build wrote: never decoded as this build's shape. */
-const newerValue = (family: string, row: SqlRow) => {
-  const version = z.int().parse(row.version);
-  return version > VALUE_VERSION
-    ? new CurrentValueNewer({ family, key: String(row.key), version })
-    : null;
-};
-
-/** One current value, decoded by its family's schema: a row that no longer
+/** One current value, decoded by its family's schema: a row a newer build
+ *  wrote is never read as this build's shape, and one that no longer
  *  decodes fails the read naming itself. */
 function decodeValue<T>(family: ValueFamily<T, boolean>, row: SqlRow): T {
+  const version = z.int().parse(row.version);
+  if (version > VALUE_VERSION)
+    throw new DatabaseStoreNewer({ type: CURRENT_VALUE_KIND, version });
   const parsed = parseJsonWith(z.string().parse(row.value), family.schema);
   if (Result.isSuccess(parsed)) return parsed.success;
   throw new Error(
@@ -88,21 +84,20 @@ export function currentValues(store: {
     read: Effect.Effect<A, E>,
   ) => Effect.Effect<A, DatabaseReadFailed>;
   readonly level: SubscriptionRef.SubscriptionRef<number>;
+  /** The store gate, run inside each change's transaction. */
+  readonly gate: Effect.Effect<void, SqlError | DatabaseStoreNewer>;
+  /** Record for the gate that a value was written at this build's version. */
+  readonly valueWritten: Effect.Effect<void, SqlError>;
 }): Pick<
   Database['Service'],
   'values' | 'readInputHistory' | 'appendInputHistory'
 > {
-  const { exec, execOne, transact, query, level } = store;
-  /** One value's row; a newer one refuses the read or change. */
+  const { exec, execOne, transact, query, level, gate, valueWritten } = store;
+  /** One value's row. */
   const valueRow = (family: string, key: string) =>
     execOne(
       'SELECT key, version, value FROM current_value WHERE family = ? AND key = ?',
       [family, key],
-    ).pipe(
-      Effect.flatMap((row) => {
-        const newer = row === undefined ? null : newerValue(family, row);
-        return newer === null ? Effect.succeed(row) : Effect.fail(newer);
-      }),
     );
   const values: CurrentValues = {
     get: (family, key) =>
@@ -116,6 +111,7 @@ export function currentValues(store: {
     modify: (family, key, change) =>
       transact(
         Effect.gen(function* () {
+          yield* gate;
           const row = yield* valueRow(family.name, key);
           const result = change(
             row === undefined ? undefined : decodeValue(family, row),
@@ -138,6 +134,7 @@ export function currentValues(store: {
               value,
               yield* Clock.currentTimeMillis,
             ]);
+            yield* valueWritten;
           }
           return result;
         }),
@@ -151,23 +148,12 @@ export function currentValues(store: {
           'SELECT key, version, value FROM current_value WHERE family = ? ORDER BY at DESC',
           [family.name],
         ).pipe(
-          Effect.flatMap((rows) =>
-            Effect.forEach(rows, (row) => {
-              const newer = newerValue(family.name, row);
-              return newer === null
-                ? Effect.succeed([
-                    {
-                      key: z.string().parse(row.key),
-                      value: decodeValue(family, row),
-                    },
-                  ])
-                : Effect.logWarning(newer.message).pipe(
-                    withLogChannel('sessionDatabase'),
-                    Effect.as([]),
-                  );
-            }),
+          Effect.map((rows) =>
+            rows.map((row) => ({
+              key: z.string().parse(row.key),
+              value: decodeValue(family, row),
+            })),
           ),
-          Effect.map((listed) => listed.flat()),
         ),
       ),
     /** Each wake reads the keys' rows, and only a changed snapshot emits. A

@@ -17,7 +17,6 @@ import {
   isDisplaySessionEvent,
   RunIdSchema,
   type AggregateId,
-  type BlockedAggregate,
   type ExistenceReconciliation,
   type FoldInput,
   type TextChunk,
@@ -86,14 +85,11 @@ export const sessionInputsLayer = Layer.effect(
             const listing = (yield* foldRead(log.readListing())).filter(
               isDisplaySessionEvent,
             );
-            // After the listing: a row it found unreadable is among them.
-            const blocked = yield* foldRead(log.readBlocked());
             let checked = new Set<AggregateId>(
               effectiveAggregates.map(({ id }) => id),
             );
             for (const event of listing)
               for (const id of referencedAggregates(event)) checked.add(id);
-            for (const { aggregateId } of blocked) checked.add(aggregateId);
             const replay: FoldInput[] = [
               {
                 _tag: 'debug',
@@ -104,7 +100,6 @@ export const sessionInputsLayer = Layer.effect(
                 read: 'listing' as const,
                 event,
               })),
-              ...blockedInputs(blocked),
             ];
             replay.push({
               _tag: 'subscriptions',
@@ -157,9 +152,6 @@ export const sessionInputsLayer = Layer.effect(
                   // The first drain must publish the anchor: replay.complete
                   // reconciles existence but does not advance the view cursor.
                   existence: undefined as ExistenceReconciliation | undefined,
-                  blocked: new Set(
-                    blocked.map(({ aggregateId }) => aggregateId),
-                  ),
                 }),
                 (previous) =>
                   Effect.gen(function* () {
@@ -181,11 +173,7 @@ export const sessionInputsLayer = Layer.effect(
                     checked = new Set(
                       existence.claims.map(({ aggregateId }) => aggregateId),
                     );
-                    const inputs: FoldInput[] = blockedInputs(
-                      read.blocked.filter(
-                        ({ aggregateId }) => !previous.blocked.has(aggregateId),
-                      ),
-                    );
+                    const inputs: FoldInput[] = [];
                     for (const [key, value] of nextText) {
                       const held = previous.text.get(key);
                       if (value === held) continue;
@@ -239,9 +227,6 @@ export const sessionInputsLayer = Layer.effect(
                         text: nextText,
                         local: snapshot,
                         existence,
-                        blocked: new Set(
-                          read.blocked.map(({ aggregateId }) => aggregateId),
-                        ),
                       },
                       batch.length === 0 ? [] : [batch],
                     ] as const;
@@ -255,50 +240,14 @@ export const sessionInputsLayer = Layer.effect(
   }),
 );
 
-/**
- * The fold inputs of blocked verdicts. A run whose own `run.start` is the
- * unreadable row has no row that creates it: it is listed from a
- * `run.start` on its verdict's envelope, with no identity but its id, so it
- * shows as blocked instead of vanishing.
- */
-function blockedInputs(verdicts: readonly BlockedAggregate[]): FoldInput[] {
-  return verdicts.flatMap((verdict): FoldInput[] =>
-    verdict.type === 'run.start'
-      ? [
-          {
-            _tag: 'event',
-            read: 'listing',
-            event: {
-              type: 'run.start',
-              aggregateId: verdict.aggregateId,
-              seq: 1,
-              commit: verdict.commit,
-              origin: null,
-              at: verdict.at,
-              identity: { kind: 'agent', agent: 'unknown' },
-              userFollowUpSupport: 'unsupported',
-              parent: null,
-              provenance: null,
-            },
-          },
-          verdict,
-        ]
-      : [verdict],
-  );
-}
-
 /** Closed sequence rows are no longer live, even while their tombstones remain stored. */
 function reconcileExistence(read: {
   readonly checkedAggregateIds: readonly AggregateId[];
   readonly state: readonly AggregateState[];
 }): ExistenceReconciliation {
   const surviving = read.state.filter((state) => !state.closed);
-  const present = new Set(surviving.map(({ aggregateId }) => aggregateId));
   return {
     checkedAggregateIds: [...read.checkedAggregateIds],
-    removedAggregateIds: read.checkedAggregateIds.filter(
-      (id) => !present.has(id),
-    ),
     claims: surviving.map(({ aggregateId, ownerId }) => ({
       aggregateId,
       ownerId,

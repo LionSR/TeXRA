@@ -8,7 +8,7 @@
  * open is an error, never the ephemeral mode.
  *
  * `storeSchema.ts` owns the DDL and the open sequence; `rowCodec.ts` every
- * stored shape (this module hands it drafts, gets events or verdicts back,
+ * stored shape (this module hands it drafts, gets events or refusals back,
  * and reads no payload field); `projections.ts` the projectors whose
  * operations run in the append transaction. This module owns the envelope:
  * the writer (C5, `ProcessIdentity`), the publish clock, and the `seq` and
@@ -38,6 +38,7 @@ import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
+  CURRENT_VALUE_VERSION,
   edgesOf,
   isDisplaySessionEvent,
   RunIdSchema,
@@ -58,7 +59,6 @@ import {
   type AggregateState,
   Database,
   GlobalDatabase,
-  DatabaseAggregateBlocked,
   DatabaseOpenFailed,
   DatabaseClaimRefused,
   DatabaseNotOwner,
@@ -94,21 +94,21 @@ import {
   EVENT_COLUMNS,
   EVENT_FROM,
   EVENT_JOINS,
-  STORED_KINDS,
   aggregateColumns,
   aggregateLists,
   aggregateOf,
+  CURRENT_VALUE_KIND,
   decodeRow,
   encodeDraft,
+  pluginKind,
   prepareEventDraft,
-  settleCards,
-  unreadableKinds,
-  verdictBook,
+  rowReader,
+  storeGate,
   type EncodedRow,
   type SqlRow,
 } from './rowCodec';
 import { isBusy, isDamaged, retryBusy } from './storeAside';
-import { assertStoreFormat, openStore, reclaimFreePages } from './storeSchema';
+import { openStore, reclaimFreePages } from './storeSchema';
 /** The database file of a session root, beside the stores it replaces. */
 const SESSION_DATABASE_FILE = 'texra.db';
 const CHANNEL = 'sessionDatabase';
@@ -206,12 +206,16 @@ export const databaseLayer = (
       /** The first row a statement returns, if any. */
       const execOne = (statement: string, params?: readonly unknown[]) =>
         exec(statement, params).pipe(Effect.map((rows) => rows[0]));
-      const verdicts = verdictBook(path, exec);
-      /** The rows a read statement returns, decoded (`verdictBook`). */
-      const decodedRows = (statement: string, params: readonly unknown[]) =>
+      /** The store gate (`storeGate`), in the caller's transaction. */
+      const gate = storeGate(exec);
+      const decoded = rowReader(path);
+      const decodedRows = (
+        statement: string,
+        params: readonly unknown[],
+        whole = false,
+      ) =>
         exec(statement, params).pipe(
-          Effect.flatMap(verdicts.decodeAll),
-          Effect.map(({ events }) => settleCards(events)),
+          Effect.flatMap((rows) => decoded(rows, whole)),
         );
       const currentCommit = exec(highWater, []).pipe(
         Effect.map(commitFromRows),
@@ -220,7 +224,7 @@ export const databaseLayer = (
         observedCommit,
         yield* currentCommit.pipe(mapDatabaseFailure(openFailed)),
       );
-      yield* verdicts.refresh.pipe(mapDatabaseFailure(openFailed));
+      yield* gate.pipe(mapDatabaseFailure(openFailed));
       const dependents = `WITH RECURSIVE dependents(id) AS (
         SELECT id FROM event_sequence WHERE kind = ? AND logical_id = ?
         UNION ALL
@@ -308,7 +312,6 @@ export const databaseLayer = (
                 ?.data_version;
               if (next !== version) {
                 const commit = yield* query(currentCommit);
-                yield* query(verdicts.refresh);
                 version = next;
                 yield* observe(commit);
                 yield* SubscriptionRef.update(level, (wake) => wake + 1);
@@ -428,6 +431,9 @@ export const databaseLayer = (
         SELECT id FROM event_sequence
         WHERE id IN (SELECT id FROM dependents)
           AND closed_by IS NULL LIMIT 1`;
+      // An aggregate's plugin rows, for its arms' transition rules.
+      const pluginRows = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
+        WHERE e.aggregate = ? AND e.type = 'plugin.fact' ORDER BY e.seq`;
       const readState = (ids: readonly AggregateId[]) =>
         Effect.gen(function* () {
           return (yield* exec(READ_STATE, aggregateLists(ids))).map((row) =>
@@ -511,30 +517,20 @@ export const databaseLayer = (
       const projectionStates = exec(
         'SELECT name, version, through_commit AS through FROM projection_state',
       ).pipe(Effect.map(parseProjectionStates));
-      /** Whether this build skips rows of this store: a kind it lacks, or a
-       *  newer version of one it has. */
-      const skipsRows = exec(STORED_KINDS).pipe(
-        Effect.map((rows) => unreadableKinds(rows).length > 0),
-      );
       /** Every projection current in the caller's transaction. */
       const projectionsCurrent = Effect.gen(function* () {
         const states = yield* projectionStates;
         const top = yield* currentCommit;
-        const skips = yield* skipsRows;
         return PROJECTION_NAMES.every((name) =>
-          isCurrent(name, states.get(name), top, skips),
+          isCurrent(name, states.get(name), top),
         );
       });
-      const setProjectionState = (
-        name: ProjectionName,
-        through: number,
-        skipped: boolean,
-      ) =>
+      const setProjectionState = (name: ProjectionName, through: number) =>
         exec(
           `INSERT INTO projection_state (name, version, through_commit)
            VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET
            version = excluded.version, through_commit = excluded.through_commit`,
-          [name, (skipped ? -1 : 1) * PROJECTORS[name].version, through],
+          [name, PROJECTORS[name].version, through],
         );
       const applyOp = (op: ProjectionOp) => {
         switch (op.table) {
@@ -609,12 +605,11 @@ export const databaseLayer = (
             Effect.gen(function* () {
               const current = yield* projectionStates;
               const top = yield* currentCommit;
-              const skips = yield* skipsRows;
               let all = true;
               for (const name of PROJECTION_NAMES) {
                 const state = current.get(name);
-                if (isCurrent(name, state, top, skips)) continue;
-                const own = isOwn(name, state, skips);
+                if (isCurrent(name, state, top)) continue;
+                const own = isOwn(name, state);
                 if (state !== undefined && !own)
                   yield* Effect.logInfo(
                     `Rebuilding the ${name} projection of ${path} (stored version ${state.version}, this build's ${PROJECTORS[name].version}).`,
@@ -635,17 +630,10 @@ export const databaseLayer = (
                         through,
                         top,
                       ]);
-                // A row of a newer or unknown kind skipped here marks the
-                // projection, so a build that reads the row rebuilds it.
-                const { events, skipped } = yield* verdicts.decodeAll(rows);
-                yield* project(events, [name]);
+                yield* project(yield* decoded(rows, false), [name]);
                 const reached =
                   rows.length < 1000 ? top : z.int().parse(rows.at(-1)?.commit);
-                yield* setProjectionState(
-                  name,
-                  reached,
-                  skipped || (own && state !== undefined && state.version < 0),
-                );
+                yield* setProjectionState(name, reached);
                 all &&= reached >= top;
               }
               return all;
@@ -683,29 +671,33 @@ export const databaseLayer = (
             appendRow(draft, row, at),
           );
           const kinds = new Map(
-            prepared.map(({ row }) => [row.type, row.version]),
+            prepared.flatMap(({ draft, row }) => [
+              [row.type, row.version] as const,
+              ...(draft.type === 'plugin.fact'
+                ? [
+                    [
+                      pluginKind(draft.plugin, draft.kind),
+                      draft.version,
+                    ] as const,
+                  ]
+                : []),
+            ]),
           );
           for (const [type, version] of kinds)
             yield* exec(UPSERT_KIND, [type, version]);
           // A projection of this build's version that has read every row
-          // before the batch follows it, keeping its skipping mark; any
-          // other is left for its owner's next read to catch up.
+          // before the batch follows it; any other is left for its owner's
+          // next read to catch up.
           const states = yield* projectionStates;
           const current = PROJECTION_NAMES.filter((name) => {
             const state = states.get(name);
             return state === undefined
               ? before === 0
-              : Math.abs(state.version) === PROJECTORS[name].version &&
-                  state.through === before;
+              : isOwn(name, state) && state.through === before;
           });
           yield* project(committed, current);
           const through = yield* currentCommit;
-          for (const name of current)
-            yield* setProjectionState(
-              name,
-              through,
-              (states.get(name)?.version ?? 0) < 0,
-            );
+          for (const name of current) yield* setProjectionState(name, through);
           return committed;
         });
       const appendRow = (
@@ -753,19 +745,21 @@ export const databaseLayer = (
           }
           if (draft.type === 'plugin.fact') {
             const name = `${draft.plugin}/${draft.kind}`;
-            const held = yield* verdicts.pluginRows(aggregate, name);
-            // Never over a later build's value of the kind, or a corrupt one.
-            const stop = held.find((v) => v._tag !== 'event');
-            const refusal = stop?._tag === 'leftOut' ? stop.newer : stop;
-            if (refusal) return yield* new DatabaseAggregateBlocked(refusal);
-            const last = held.at(-1);
+            // Never over a corrupt row of the aggregate: it fails whole.
+            const last = (yield* decoded(
+              yield* exec(pluginRows, [aggregate]),
+              true,
+            )).findLast(
+              (row) =>
+                row.type === 'plugin.fact' &&
+                row.plugin === draft.plugin &&
+                row.kind === draft.kind,
+            );
             const refused =
               target.kind === 'run' && draft.parent !== null
                 ? `A run's own plugin fact names no parent: ${name}`
                 : PLUGIN_ARMS.get(name)?.admits?.(
-                    last?._tag === 'event' && last.event.type === 'plugin.fact'
-                      ? last.event
-                      : undefined,
+                    last?.type === 'plugin.fact' ? last : undefined,
                     draft,
                   );
             if (refused) return yield* invariant(refused);
@@ -889,13 +883,12 @@ export const databaseLayer = (
             at,
           };
         });
-      // Every append checks the store's stamp first: a build that no longer
-      // matches it (another re-stamped it) fails instead of writing rows.
+      // Every append passes the store gate in its transaction: no build
+      // writes beside rows it cannot read.
       const appendPrepared = (
         prepared: readonly ReturnType<typeof prepareEventDraft>[],
         at: number,
-      ) =>
-        Effect.andThen(assertStoreFormat(sql, path), appendRows(prepared, at));
+      ) => Effect.andThen(gate, appendRows(prepared, at));
       return {
         observedCommit,
         movedAside,
@@ -945,39 +938,40 @@ export const databaseLayer = (
           );
         },
         readListing: () => projected(decodedRows(READ_LISTING, [])),
-        readBlocked: () => Effect.sync(() => [...verdicts.blocked.values()]),
         readPendingDeletions: () => query(decodedRows(pendingDeletions, [])),
         readRunRecords: (id) =>
           projected(decodedRows(READ_RUN_RECORDS, aggregateColumns(id))),
         readRunSnapshot: (id) =>
           Effect.gen(function* () {
-            yield* verdicts.refuse(id, readFailed);
             const [event] = yield* query(
-              decodedRows(runSnapshot, aggregateColumns(id)),
+              decodedRows(runSnapshot, aggregateColumns(id), true),
             );
-            yield* verdicts.refuse(id, readFailed);
             if (event === undefined) return null;
             if (event.type !== 'run.snapshot')
               return yield* invariant('Invalid run snapshot row');
             return event;
           }),
-        ...currentValues({ exec, execOne, transact, query, level }),
+        ...currentValues({
+          exec,
+          execOne,
+          transact,
+          query,
+          level,
+          gate,
+          valueWritten: Effect.asVoid(
+            exec(UPSERT_KIND, [CURRENT_VALUE_KIND, CURRENT_VALUE_VERSION]),
+          ),
+        }),
         readAggregate: (id, fromSeq, types) =>
-          Effect.gen(function* () {
-            yield* verdicts.refuse(id, readFailed);
-            const events = yield* query(
-              types === undefined
-                ? decodedRows(aggregate, [...aggregateColumns(id), fromSeq])
-                : decodedRows(typedRows, [
-                    ...aggregateColumns(id),
-                    fromSeq,
-                    JSON.stringify(types),
-                  ]),
-            );
-            // A row this read found unreadable blocks the whole aggregate.
-            yield* verdicts.refuse(id, readFailed);
-            return events;
-          }),
+          query(
+            types === undefined
+              ? decodedRows(aggregate, [...aggregateColumns(id), fromSeq], true)
+              : decodedRows(
+                  typedRows,
+                  [...aggregateColumns(id), fromSeq, JSON.stringify(types)],
+                  true,
+                ),
+          ),
         readDisplayAggregate: (id, fromSeq) =>
           projected(
             decodedRows(displayAggregate, [
@@ -1023,14 +1017,12 @@ export const databaseLayer = (
                 events,
                 checkedAggregateIds,
                 state: yield* readState(checkedAggregateIds),
-                blocked: [...verdicts.blocked.values()],
               };
             }),
           ),
         acquireClaims: (ids) =>
           Effect.gen(function* () {
             if (ids.length === 0) return [];
-            for (const id of ids) yield* verdicts.refuse(id, writeFailed);
             const observed = yield* query(readState(ids));
             if (
               observed.length !== new Set(ids).size ||
@@ -1043,11 +1035,8 @@ export const databaseLayer = (
             yield* proveReclaimable(observed);
             return yield* transact(
               Effect.gen(function* () {
-                // Under the lock, not the cache: a newer build may have
-                // written a row this build cannot read since the poll.
-                for (const id of ids)
-                  for (const verdict of yield* verdicts.scan(id))
-                    return yield* new DatabaseAggregateBlocked(verdict);
+                // A store a newer build wrote is not this build's to drive.
+                yield* gate;
                 yield* claimObserved(
                   observed,
                   'Claim changed before acquisition',
@@ -1140,14 +1129,11 @@ export const databaseLayer = (
                   return yield* invariant(
                     `Deletion record is no longer current: ${id}`,
                   );
-                const tombstone = decodeRow(row);
-                if (
-                  tombstone._tag !== 'event' ||
-                  tombstone.event.type !== 'run.removed'
-                )
+                const tombstone = yield* Effect.fromResult(decodeRow(row));
+                if (!('type' in tombstone) || tombstone.type !== 'run.removed')
                   return yield* invariant(`Expected a deletion record: ${id}`);
                 return {
-                  tombstone: tombstone.event,
+                  tombstone,
                   owner: OwnerIdSchema.nullable().parse(row.claimOwner),
                 };
               }),
@@ -1213,7 +1199,6 @@ export const databaseLayer = (
                     }),
                   );
                   yield* reclaimFreePages(sql, path);
-                  yield* query(verdicts.retain);
                 }),
               (_, exit) =>
                 Exit.isFailure(exit)

@@ -17,7 +17,6 @@ import type { SessionTitleState } from '@shared/sessionTitle';
 import {
   AggregateIdSchema,
   ApprovalPolicySnapshotSchema,
-  BlockedAggregateSchema,
   ResumeBlockerSchema,
   CommitOrdinalSchema,
   ContextStateDataSchema,
@@ -178,10 +177,8 @@ const RunViewSchema = z.object({
     finished: z.int().nonnegative(),
   }),
   approval: z.enum(['none', 'own', 'descendant']),
-  /** This process cannot act on it: another live owner, unreadable (5.2), or
-   *  `blocked`, a row this build cannot read (a newer or older TeXRA's, or corrupt). */
+  /** This process cannot act on it: another live owner, or unreadable (5.2). */
   readOnly: z.boolean(),
-  blocked: BlockedAggregateSchema.shape.reason.nullable(),
   /** What a resume of this run waits for in this process (`statusDetail`
    *  words it); null when nothing blocks it. */
   resumeBlocked: ResumeBlockerSchema.nullable(),

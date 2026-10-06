@@ -16,7 +16,6 @@ import {
   type RunId,
   type RunIdentity,
   RUN_SUBSTATE,
-  type BlockedAggregate,
   type RunLifecycleStatus,
 } from '@shared/schemas';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
@@ -39,8 +38,6 @@ interface RunListingBase {
   status: RunLifecycleStatus;
   /** A stop rested the run (the fold's paused substate), a status of its own. */
   paused?: true;
-  /** Why this build cannot read the run whole (`RunView.blocked`). */
-  blocked?: BlockedAggregate['reason'];
   /** AI-generated summary of what the session aimed to accomplish. */
   description?: string;
   /** The model the run is on, as the view folds it: its latest snapshot's
@@ -65,15 +62,7 @@ export type RunListingEntry =
       kind: 'run';
       identity: Exclude<RunIdentity, { kind: 'agent' }>;
       record: RunRecord;
-    })
-  | BlockedRunListingEntry;
-
-/** A run whose record a newer or older TeXRA wrote (or is corrupt): listed with its
- *  status `blocked`, never opened. */
-export type BlockedRunListingEntry = RunListingBase & {
-  kind: 'blocked';
-  identity: RunIdentity;
-};
+    });
 
 /** Narrow to the agent arm; nested `identity.kind` cannot discriminate the
  *  entry union for TypeScript, so this is the one spelled-out guard. */
@@ -89,7 +78,6 @@ function isAgentRunEntry(
  * background scripts — `identity.kind` decides) and runs an agent
  * spawned (delegated subagents, a script's children, team members),
  * which belong to their parent's transcript rather than to the history list.
- * A blocked run is kept, as `blocked`.
  *
  * Every host's history listing must apply this filter. Lookups by explicit id
  * (`texra history show <id>`, export, resume) must not: naming a child run is
@@ -98,11 +86,8 @@ function isAgentRunEntry(
  */
 export function isUserVisibleRun(
   entry: RunListingEntry,
-): entry is AgentRunListingEntry | BlockedRunListingEntry {
-  return (
-    (isAgentRunEntry(entry) || entry.kind === 'blocked') &&
-    entry.parentRunId === undefined
-  );
+): entry is AgentRunListingEntry {
+  return isAgentRunEntry(entry) && entry.parentRunId === undefined;
 }
 
 /** The latest `run.config` row of each run in one committed listing. */
@@ -148,7 +133,6 @@ export const listRuns = Effect.fn('listRuns')(function* (
           ...(run.parentId === null ? {} : { parentRunId: run.parentId }),
           status: run.status,
           ...(run.substate === RUN_SUBSTATE.PAUSED && { paused: true }),
-          ...(run.blocked === null ? {} : { blocked: run.blocked }),
           ...(run.description === null ? {} : { description: run.description }),
           ...(run.model === null ? {} : { model: run.model }),
           resumable:
@@ -158,11 +142,7 @@ export const listRuns = Effect.fn('listRuns')(function* (
         // Registration commits `run.config` in the `run.start` batch, so a
         // readable run without one, or an agent run without an AgentConfig,
         // is corrupt: skipped loudly below.
-        if (!record) {
-          if (run.blocked !== null)
-            return { ...base, kind: 'blocked', identity };
-          return yield* Effect.fail(new Error('no run.config row'));
-        }
+        if (!record) return yield* Effect.fail(new Error('no run.config row'));
         if (identity.kind === 'agent') {
           if (!isAgentRunRecord(record))
             return yield* Effect.fail(

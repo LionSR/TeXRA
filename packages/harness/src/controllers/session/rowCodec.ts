@@ -3,15 +3,16 @@
  * (`.agents/docs/proposed/architecture/2026-09-28-storage-v1-design.md` §1,
  * §3): the one module that knows a stored shape. It turns a validated draft
  * into the column tuple `Database` inserts, and a selected column tuple back
- * into a typed event or a verdict, so nothing above it sees a `version`, a
+ * into a typed event or a typed refusal, so nothing above it sees a `version`, a
  * `data` text, an integer aggregate id or the `blob` table, and nothing
  * below it reads a payload field.
  *
- * - **Versions.** A row is written at its kind's version (`ROW_KINDS`); an
- *   older one is upcast step by step. One of a newer version or unknown kind
- *   blocks its aggregate `newer`, one failing its version's schema `older`
- *   (an earlier shape), one unreadable `corrupt`. A plugin value carries
- *   its arm's version and is upcast through the arm.
+ * - **Versions.** A row is written at its kind's version (`ROW_KINDS`), and
+ *   `stored_kind` records the highest version each kind (a plugin's kind and
+ *   the current values among them) was written at. That table is the store
+ *   gate (`storeGate`): a store holding a kind or version this build does
+ *   not read is refused whole, never read in part. A row that does not
+ *   decode fails its read, naming itself.
  * - **Blobs.** A payload string of 4096+ characters is stored once per store,
  *   zstd of its JSON encoding (lone surrogates survive) under that text's
  *   sha256; the row keeps `{"$b": digest}` (a payload's own `$b` key is
@@ -23,29 +24,28 @@
 import { hash } from 'node:crypto';
 import { constants, zstdCompressSync, zstdDecompressSync } from 'node:zlib';
 import stableStringify from 'safe-stable-stringify';
-import { Effect } from 'effect';
+import { Effect, Result } from 'effect';
 import { z } from 'zod';
 import { withLogChannel } from '@logger/effectLog';
 import {
   AggregateIdSchema,
   aggregateTarget,
-  BlockedAggregateSchema,
+  CURRENT_VALUE_VERSION,
   DISPLAY_EVENT_TYPES,
   ROW_KINDS,
   SessionEventDraftSchema,
   SessionEventSchema,
   type AggregateId,
-  type BlockedAggregate,
   type JsonValue,
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
-import { DatabaseAggregateBlocked } from '@shared/session/database';
+import {
+  DatabaseRowCorrupt,
+  DatabaseStoreNewer,
+} from '@shared/session/database';
 import { PLUGIN_ARMS } from '@tools/pluginArms';
 import { isObject } from '@utils/core';
-import type { SqlError } from 'effect/sql/SqlError';
-
-const CHANNEL = 'sessionDatabase';
 
 /** One selected store row, its columns by name, decoded where it is read. */
 export type SqlRow = Readonly<Record<string, unknown>>;
@@ -96,19 +96,6 @@ export const DISPLAY_READ_TYPES = JSON.stringify([
   ...DISPLAY_EVENT_TYPES,
   'tool.result',
 ]);
-
-/** Every kind this store holds, at the highest version it was written at. */
-export const STORED_KINDS = 'SELECT type, version FROM stored_kind';
-/** The aggregates holding rows of one kind above one version, with the
- *  envelope of each one's first row. */
-const AGGREGATES_ABOVE = `SELECT s.kind AS kind,
-  s.logical_id AS logicalId, s.uid AS uid, MAX(e.version) AS version,
-  s.start_commit AS "commit",
-  (SELECT f.at FROM event f WHERE f."commit" = s.start_commit) AS at
-  FROM event e INDEXED BY event_type_commit
-  JOIN event_sequence s ON s.id = e.aggregate
-  WHERE e.type = ? AND e.version > ?
-  GROUP BY e.aggregate`;
 
 /** A draft as `Database` inserts it, with the blobs it references. */
 export interface EncodedRow {
@@ -192,22 +179,6 @@ export function encodeDraft(draft: SessionEventDraft): EncodedRow {
   };
 }
 
-/**
- * A selected row: its event; a plugin row this build does not read (its
- * plugin absent, or its value newer than the arm), kept as written; or the
- * verdict that blocks its aggregate, with the error its row failed on.
- */
-export type RowVerdict =
-  | { readonly _tag: 'event'; readonly event: SessionEvent }
-  | {
-      readonly _tag: 'leftOut';
-      readonly kind: string;
-      /** Its plugin is installed but a later build wrote this value: the
-       *  plugin must not write the kind over it. */
-      readonly newer: BlockedAggregate | null;
-    }
-  | (BlockedAggregate & { readonly error?: unknown });
-
 /** Where a row failed, never its stored text (a JSON parse error quotes it). */
 function causeOf(error: unknown): string {
   if (error instanceof SyntaxError) return 'not JSON';
@@ -250,30 +221,47 @@ function parseData({ data, blobs }: z.infer<typeof RowSchema>): unknown {
   });
 }
 
-export function decodeRow(input: SqlRow): RowVerdict {
+/** A plugin row whose plugin this build lacks: kept as written and left
+ *  out of every read, named by its `plugin/kind`. */
+interface LeftOut {
+  readonly _tag: 'leftOut';
+  readonly kind: string;
+}
+
+/**
+ * A selected row as its event, or {@link LeftOut}. A row of a kind or
+ * version this build does not read fails `DatabaseStoreNewer`: another build
+ * wrote it after this one passed the store gate. A row that does not decode
+ * fails `DatabaseRowCorrupt` naming it.
+ */
+export function decodeRow(
+  input: SqlRow,
+): Result.Result<
+  SessionEvent | LeftOut,
+  DatabaseStoreNewer | DatabaseRowCorrupt
+> {
   const row = RowSchema.parse(input);
-  const aggregateId = aggregateOf(row.kind, row.logicalId);
-  const blocked = (
-    reason: BlockedAggregate['reason'],
-    version = row.version ?? 0,
-  ): BlockedAggregate => ({
-    _tag: 'blocked',
-    aggregateId,
-    uid: row.uid,
-    reason,
-    type: row.type,
-    version,
-    commit: row.commit,
-    at: row.at,
-  });
-  if (!hasKind(row.type)) return blocked('newer');
-  const kind = ROW_KINDS[row.type];
-  const stored = row.version ?? kind.version;
-  if (stored > kind.version) return blocked('newer');
+  if (!hasKind(row.type))
+    return Result.fail(
+      new DatabaseStoreNewer({ type: row.type, version: row.version ?? 0 }),
+    );
+  // A projected row has no version: this build's projector wrote it.
+  const version = row.version ?? ROW_KINDS[row.type].version;
+  if (version > ROW_KINDS[row.type].version)
+    return Result.fail(new DatabaseStoreNewer({ type: row.type, version }));
+  const corrupt = (error: unknown, type = row.type) =>
+    Result.fail(
+      new DatabaseRowCorrupt({
+        commit: row.commit,
+        type,
+        detail: causeOf(error),
+      }),
+    );
   let data: Record<string, JsonValue>;
   try {
     data = JsonObjectSchema.parse(parseData(row));
-    for (const step of kind.upcast.slice(stored - 1)) data = { ...step(data) };
+    for (const step of ROW_KINDS[row.type].upcast.slice(version - 1))
+      data = { ...step(data) };
     if (row.type === 'context.blob') {
       const field = JsonObjectSchema.parse(data.payload);
       // The value is stored canonical, so its text hashes to its address.
@@ -282,40 +270,87 @@ export function decodeRow(input: SqlRow): RowVerdict {
       data = { ...data, payload: { ...field, value: JSON.parse(text) } };
     }
   } catch (error) {
-    return { ...blocked('corrupt'), error };
+    return corrupt(error);
   }
   const parsed = SessionEventSchema.safeParse({
     ...data,
-    aggregateId,
+    aggregateId: aggregateOf(row.kind, row.logicalId),
     seq: row.seq,
     commit: row.commit,
     origin: row.origin,
     at: row.at,
     type: row.type,
   });
-  if (!parsed.success) return { ...blocked('older'), error: parsed.error };
+  if (!parsed.success) return corrupt(parsed.error);
   const event = parsed.data;
-  if (event.type !== 'plugin.fact') return { _tag: 'event', event };
+  if (event.type !== 'plugin.fact') return Result.succeed(event);
   const name = `${event.plugin}/${event.kind}`;
   const arm = PLUGIN_ARMS.get(name);
-  if (arm === undefined || event.version > arm.version)
-    return {
-      _tag: 'leftOut',
-      kind: name,
-      newer:
-        arm === undefined
-          ? null
-          : { ...blocked('newer', event.version), type: `plugin.fact/${name}` },
-    };
+  if (arm === undefined) return Result.succeed({ _tag: 'leftOut', kind: name });
+  if (event.version > arm.version)
+    return Result.fail(
+      new DatabaseStoreNewer({
+        type: `plugin.fact/${name}`,
+        version: event.version,
+      }),
+    );
   let value = event.value;
   for (const step of arm.upcasters.slice(event.version - 1))
     value = step(value);
   const { error } = arm.schema.safeParse(value);
-  if (error) return { ...blocked('older'), error, type: `plugin.fact/${name}` };
-  return {
-    _tag: 'event',
-    event: { ...event, version: arm.version, value },
-  };
+  if (error) return corrupt(error, `plugin.fact/${name}`);
+  return Result.succeed({ ...event, version: arm.version, value });
+}
+
+/**
+ * One connection's reader of selected rows, answering their events with
+ * each tool card's output projected (`settleCards`). A row of a kind or
+ * version this build does not read fails the read: the store is not this
+ * build's. A row that does not decode fails a run history read (`whole`), so
+ * no run is folded from part of its rows; a wide read (the tail, the
+ * listing, the projections) leaves it out with one warning per connection,
+ * so one damaged row never costs the session. A plugin kind whose plugin
+ * this build lacks is left out with one warning.
+ */
+export function rowReader(
+  path: string,
+): (
+  rows: readonly SqlRow[],
+  whole: boolean,
+) => Effect.Effect<
+  readonly SessionEvent[],
+  DatabaseStoreNewer | DatabaseRowCorrupt
+> {
+  const warned = new Set<string>();
+  const warnOnce = (key: string, message: string) =>
+    warned.has(key)
+      ? Effect.void
+      : Effect.sync(() => warned.add(key)).pipe(
+          Effect.andThen(Effect.logWarning(message)),
+          withLogChannel('sessionDatabase'),
+        );
+  return (rows, whole) =>
+    Effect.gen(function* () {
+      const events: SessionEvent[] = [];
+      for (const row of rows) {
+        const decoded = decodeRow(row);
+        if (Result.isSuccess(decoded)) {
+          if (!('_tag' in decoded.success)) events.push(decoded.success);
+          else
+            yield* warnOnce(
+              decoded.success.kind,
+              `${path} holds rows of the plugin kind ${decoded.success.kind}, whose plugin this build lacks; they stay in the store and are left out of every read.`,
+            );
+        } else if (whole || decoded.failure._tag === 'DatabaseStoreNewer')
+          return yield* Effect.fail(decoded.failure);
+        else
+          yield* warnOnce(
+            `${decoded.failure.commit}`,
+            `${path}: ${decoded.failure.message} It is left out of the listing and the tail, and its run cannot be read whole.`,
+          );
+      }
+      return settleCards(events);
+    });
 }
 
 /**
@@ -324,9 +359,7 @@ export function decodeRow(input: SqlRow): RowVerdict {
  * just before it in the same batch (bar the card's `tool.start`). The card
  * keeps its `files`; the fold keeps the name and input it opened with.
  */
-export function settleCards(
-  events: readonly SessionEvent[],
-): readonly SessionEvent[] {
+function settleCards(events: readonly SessionEvent[]): readonly SessionEvent[] {
   const settled = new Map<
     AggregateId,
     SessionEvent & { type: 'tool.result' }
@@ -357,141 +390,41 @@ function cardResult(
   );
 }
 
-/** The stored kinds a later build wrote, with the version above which their
- *  rows are newer: every row of an unknown type, or those above this build's. */
-export function unreadableKinds(
-  stored: readonly SqlRow[],
-): readonly { readonly type: string; readonly above: number }[] {
-  return stored.flatMap((input) => {
-    const { type, version } = z
-      .object({ type: z.string(), version: z.int() })
-      .parse(input);
-    if (!hasKind(type)) return [{ type, above: 0 }];
-    const current = ROW_KINDS[type].version;
-    return version > current ? [{ type, above: current }] : [];
-  });
+/** The `stored_kind` entry a plugin value is recorded under: each arm
+ *  versions its kind on its own. */
+export const pluginKind = (plugin: string, kind: string): string =>
+  `plugin.fact/${plugin}/${kind}`;
+
+/** The `stored_kind` entry every current value is recorded under. */
+export const CURRENT_VALUE_KIND = 'current_value';
+
+/** The highest version of a `stored_kind` entry this build reads, or
+ *  `Infinity` for a plugin's kind whose plugin it lacks (left out of every
+ *  read), or 0 for a core kind it lacks. */
+function readableVersion(type: string): number {
+  if (type === CURRENT_VALUE_KIND) return CURRENT_VALUE_VERSION;
+  if (type.startsWith('plugin.fact/'))
+    return (
+      PLUGIN_ARMS.get(type.slice('plugin.fact/'.length))?.version ?? Infinity
+    );
+  return hasKind(type) ? ROW_KINDS[type].version : 0;
 }
 
-/** One connection's record of what its reads could not decode: the
- *  aggregates blocked (warned once each) and the plugin kinds left out (once
- *  per kind). `decodeAll` answers a read's events and records the rest;
- *  `refresh` adds what `stored_kind` names; `retain` drops the verdicts of
- *  collected ones. */
-export function verdictBook(
-  path: string,
-  exec: (
-    statement: string,
-    params?: readonly unknown[],
-  ) => Effect.Effect<readonly SqlRow[], SqlError>,
-) {
-  const leftOut = new Set<string>();
-  const blocked = new Map<AggregateId, BlockedAggregate>();
-  /** Keep only the verdicts whose incarnation (`uid`) still exists: a
-   *  collected aggregate's verdict must not block a later one of its id. */
-  const retain = Effect.gen(function* () {
-    if (blocked.size === 0) return;
-    const live = yield* exec(
-      'SELECT uid FROM event_sequence WHERE uid IN (SELECT value FROM json_each(?))',
-      [JSON.stringify([...blocked.values()].map((verdict) => verdict.uid))],
-    );
-    const uids = new Set(live.map((row) => row.uid));
-    for (const [id, verdict] of blocked)
-      if (!uids.has(verdict.uid)) blocked.delete(id);
+/**
+ * The store gate: fails on the first kind `stored_kind` names at a version
+ * this build does not read. Run at open and inside every write
+ * transaction, so no build reads part of a store or writes beside rows it
+ * cannot read.
+ */
+export const storeGate = <E>(
+  exec: (statement: string) => Effect.Effect<readonly SqlRow[], E>,
+): Effect.Effect<void, E | DatabaseStoreNewer> =>
+  Effect.gen(function* () {
+    for (const input of yield* exec('SELECT type, version FROM stored_kind')) {
+      const { type, version } = z
+        .object({ type: z.string(), version: z.int() })
+        .parse(input);
+      if (version > readableVersion(type))
+        return yield* Effect.fail(new DatabaseStoreNewer({ type, version }));
+    }
   });
-  const block = (verdict: BlockedAggregate, error?: unknown) =>
-    blocked.has(verdict.aggregateId)
-      ? Effect.void
-      : Effect.sync(() => blocked.set(verdict.aggregateId, verdict)).pipe(
-          Effect.andThen(
-            Effect.logWarning(
-              `${path} holds a ${verdict.reason} ${verdict.type} row (version ${verdict.version}) of ${verdict.aggregateId}${error === undefined ? '' : ` (${causeOf(error)})`}; it stays in the store, and the aggregate is shown blocked and refused to every run history read and claim.`,
-            ),
-          ),
-          withLogChannel(CHANNEL),
-        );
-  /** A read's events, and whether it skipped a newer row (a later build
-   *  can read it; an older or corrupt one no build can). */
-  const decodeAll = (rows: readonly SqlRow[]) =>
-    Effect.gen(function* () {
-      const fresh: string[] = [];
-      const events: SessionEvent[] = [];
-      let skipped = false;
-      for (const row of rows) {
-        const verdict = decodeRow(row);
-        if (verdict._tag === 'event') events.push(verdict.event);
-        else if (verdict._tag === 'blocked') {
-          const { error, ...aggregate } = verdict;
-          skipped ||= aggregate.reason === 'newer';
-          yield* block(aggregate, error);
-        } else if (!leftOut.has(verdict.kind)) {
-          leftOut.add(verdict.kind);
-          fresh.push(verdict.kind);
-        }
-      }
-      if (fresh.length > 0)
-        yield* Effect.logWarning(
-          `${path} holds rows of plugin kinds this build does not read (${fresh.join(', ')}); they stay in the store and are left out of every read.`,
-        ).pipe(withLogChannel(CHANNEL));
-      return { events, skipped };
-    });
-  /** The aggregates (every one, or `only`) holding a row of a kind this
-   *  build lacks or of a newer version, read in the caller's transaction:
-   *  `stored_kind` says whether any exist, so the normal store checks no
-   *  row. Each is recorded, and answered. */
-  const scan = (only?: AggregateId) =>
-    Effect.gen(function* () {
-      const found: BlockedAggregate[] = [];
-      for (const kind of unreadableKinds(yield* exec(STORED_KINDS))) {
-        const rows = yield* only === undefined
-          ? exec(AGGREGATES_ABOVE, [kind.type, kind.above])
-          : exec(`${AGGREGATES_ABOVE} HAVING s.kind = ? AND s.logical_id = ?`, [
-              kind.type,
-              kind.above,
-              ...aggregateColumns(only),
-            ]);
-        for (const row of rows) {
-          const verdict = BlockedAggregateSchema.parse({
-            ...row,
-            _tag: 'blocked',
-            aggregateId: aggregateOf(row.kind, row.logicalId),
-            reason: 'newer',
-            type: kind.type,
-          });
-          found.push(verdict);
-          yield* block(verdict);
-        }
-      }
-      return found;
-    });
-  const refresh = Effect.andThen(retain, scan());
-  /** A run history read or claim of a blocked aggregate is refused whole. */
-  const refuse = <E>(
-    id: AggregateId,
-    failed: (cause: DatabaseAggregateBlocked) => E,
-  ) => {
-    const verdict = blocked.get(id);
-    return verdict === undefined
-      ? Effect.void
-      : Effect.fail(failed(new DatabaseAggregateBlocked(verdict)));
-  };
-  /** The rows bearing on writing kind `name`; a row too corrupt to name
-   *  its kind bears on every kind. */
-  const concerns = (v: RowVerdict, name: string): boolean => {
-    if (v._tag === 'leftOut') return v.kind === name;
-    if (v._tag === 'blocked')
-      return v.type === 'plugin.fact' || v.type === `plugin.fact/${name}`;
-    const e = v.event;
-    return e.type === 'plugin.fact' && `${e.plugin}/${e.kind}` === name;
-  };
-  const pluginRows = (aggregate: number, name: string) =>
-    exec(
-      `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
-       WHERE e.aggregate = ? AND e.type = 'plugin.fact' ORDER BY e.seq`,
-      [aggregate],
-    ).pipe(
-      Effect.map((rows) =>
-        rows.map(decodeRow).filter((v) => concerns(v, name)),
-      ),
-    );
-  return { blocked, decodeAll, pluginRows, refresh, refuse, retain, scan };
-}
