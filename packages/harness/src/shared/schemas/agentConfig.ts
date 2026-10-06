@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
-import { AgentSourceSchema } from './agent';
+import { AgentSourceSchema, InlinePersonaSchema } from './agent';
 import { AgentDelegationScopeSchema } from './workspaceAgents';
 import { NullableFileFieldsSchema } from './fileFields';
 import { ToolConfigSchema } from './toolConfig';
@@ -43,6 +43,11 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.extend({
    * payload not yet launched, which launch resolves by name.
    */
   agentSource: AgentSourceSchema.nullish(),
+  /**
+   * The persona the launch carried instead of naming a file (source
+   * `inline`), named `agent`; recorded so a resume runs it with no file.
+   */
+  persona: InlinePersonaSchema.nullish(),
   model: z.string().prefault(DEFAULT_AGENT_MODEL),
   instruction: z.string().prefault(''),
   /** Original user instruction preserved across nested tool-use delegation. */
@@ -90,9 +95,21 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.extend({
     .nullish(),
 });
 
-/** Canonical current configuration: at most as many outputs as inputs. */
+/** Canonical current configuration: at most as many outputs as inputs, and
+ *  a persona exactly when the agent is inline, named as the agent is. */
 export const AgentConfigFieldsSchema = AgentConfigObjectSchema.superRefine(
   (config, ctx) => {
+    if (
+      (config.agentSource === 'inline') !== (config.persona != null) ||
+      (config.persona != null && config.persona.name !== config.agent)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['persona'],
+        message:
+          'An inline agent carries its persona, named as the agent, and only it does.',
+      });
+    }
     if (config.outputFiles.length > config.inputFiles.length) {
       ctx.addIssue({
         code: 'custom',

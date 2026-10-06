@@ -13,7 +13,6 @@ import { Effect, FileSystem, Result } from 'effect';
 import { z } from 'zod';
 
 // Local imports - common
-import { PersonaSchema } from '@agent/core/definition/AgentDataclass';
 import {
   readInstalledPluginLoad,
   type InstalledPluginLoad,
@@ -22,6 +21,7 @@ import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
+import { PersonaSchema } from '@shared/schemas';
 import { AgentNameSchema } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';

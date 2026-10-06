@@ -78,6 +78,34 @@ const result = await Effect.runPromise(program);
 console.log(result.outcome);
 ```
 
+### An inline persona
+
+`agent` names an agent file in the platform's agent directories, or it is the
+persona itself, written in the same format as the file
+(`InlinePersonaSchema` from `@texra-ai/harness/schemas`): `name`,
+`description`, `prompt`, `tools` and `temperature`. The run records the
+persona with its configuration, so nothing has to be written to disk. An
+inline persona has no file to `inherits` from, no bundled original
+(`basedOn`) and no `task:` block; each is refused with a `RunFailure`. A tool
+it names that no plugin offers fails the run before any model call, as it
+would in a file.
+
+```ts
+const program = Effect.gen(function* () {
+  const session = yield* (yield* Sessions).open();
+  const run = yield* session.start({
+    agent: {
+      name: 'abstract_editor',
+      description: 'Reviews abstracts.',
+      prompt: 'You review LaTeX abstracts for concision. Keep every claim.',
+      tools: ['read_file', 'grep'],
+    },
+    instruction: 'Suggest a tighter abstract for paper.tex.',
+  });
+  return yield* run.result;
+});
+```
+
 Nothing in the package calls `Effect.runPromise` itself: the
 `Effect.runPromise` above is the embedder's own boundary, as is any host
 entry that runs the program.

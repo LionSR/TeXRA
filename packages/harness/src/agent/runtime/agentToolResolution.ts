@@ -41,9 +41,9 @@ import {
   MapToolRegistry,
   type HostToolCapability,
 } from '@agent/core/tools/ToolTypes';
-import type { Persona } from '@agent/core/definition/AgentDataclass';
 import { isInstalledPluginId } from '@common/plugins/pluginTrust';
 import type { ModelOptionStores } from '@model/computeModelOptions';
+import type { Persona } from '@shared/schemas';
 import type { SettingHost } from '@shared/state/stateSettings';
 import {
   sameIdentity,

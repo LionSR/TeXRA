@@ -39,7 +39,7 @@
   "packages/harness/src/shared/session/surface.ts": 488,
   "packages/harness/src/shared/session/transcriptState.ts": 412,
   "packages/harness/src/tools/bash.ts": 566,
-  "packages/harness/src/tools/delegation/AgentTool.ts": 746,
+  "packages/harness/src/tools/delegation/AgentTool.ts": 738,
   "packages/harness/src/tools/delegation/inBandSubagentRun.ts": 455,
   "packages/harness/src/tools/ExecutionsTool.ts": 869,
   "packages/harness/src/tools/liveTools.ts": 409,

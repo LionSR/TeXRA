@@ -12,6 +12,7 @@ import {
   resolveAgentForLaunch,
   settledCatalog,
 } from '@agent/index';
+import { agentEntryOf } from '@agent/index/agentYamlScanner';
 import { requirePluginAgentLoads } from '@agent/index/pluginAgents';
 import {
   logUserMessage,
@@ -228,29 +229,28 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     const fullConfig = input.config;
     const interactions = input.session.interactions;
     // Single launch resolution rule (see resolveAgentForLaunch): pinned
-    // (source, name), else the visible set validation used, else the
-    // catalog; never blind source-priority on a bare name. The catalog is settled
-    // first (a saved edit inside the watcher's debounce is loaded now), and a
-    // miss rescans once more.
+    // (source, name), else the visible set, else the catalog; never blind
+    // source-priority on a bare name. The catalog is settled first (a saved
+    // edit inside the watcher's debounce is loaded now), and a miss rescans.
     const resolve = resolveAgentForLaunch(
       input.session.roots,
       fullConfig.agent,
       fullConfig.agentSource,
     );
-    yield* settledCatalog;
+    // A persona the config carries (its schema admitted it) is the agent.
     const agentEntry =
-      (yield* resolve) ??
-      (yield* Effect.andThen(refresh(), resolve)) ??
-      (yield* presentLaunchError(
-        interactions,
-        new AgentError(
-          `Could not find agent: ${fullConfig.agent}${missNote()}`,
-        ),
-        'showAgentConfigBanner',
-        {
-          agentName: fullConfig.agent,
-        },
-      ));
+      fullConfig.persona != null
+        ? agentEntryOf(fullConfig.persona, { source: 'inline', path: '' })
+        : ((yield* Effect.andThen(settledCatalog, resolve)) ??
+          (yield* Effect.andThen(refresh(), resolve)) ??
+          (yield* presentLaunchError(
+            interactions,
+            new AgentError(
+              `Could not find agent: ${fullConfig.agent}${missNote()}`,
+            ),
+            'showAgentConfigBanner',
+            { agentName: fullConfig.agent },
+          )));
     if (agentEntry.source === 'plugin')
       yield* requirePluginAgentLoads(
         agentEntry,
@@ -270,7 +270,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     if (unknown.length > 0)
       return yield* Effect.fail(
         new AgentError(
-          `Agent '${agentEntry.name}' declares ${unknown.length === 1 ? 'a tool' : 'tools'} TeXRA does not have: ${unknown.join(', ')}. Edit ${agentEntry.path} to remove or rename ${unknown.length === 1 ? 'it' : 'them'}; \`delegate_agent\` and \`delegate_workflow\` are now \`agent\`, and \`delegate_multi_agents\` is \`script\` with \`agent\`.`,
+          `Agent '${agentEntry.name}' declares ${unknown.length === 1 ? 'a tool' : 'tools'} TeXRA does not have: ${unknown.join(', ')}. Edit ${agentEntry.path || 'the persona'} to remove or rename ${unknown.length === 1 ? 'it' : 'them'}; \`delegate_agent\` and \`delegate_workflow\` are now \`agent\`, and \`delegate_multi_agents\` is \`script\` with \`agent\`.`,
         ),
       );
 

@@ -410,7 +410,7 @@ For good separation of concerns and platform independence, core business logic s
 
 **Agent execution and tool-use**
 
-- Define agents using `AgentDataclass` and `AgentConfig` (`packages/harness/src/agent/core/`) and compose them via the factories in `packages/harness/src/agent/runtime`.
+- An agent is written in the one definition format (`AgentDefinitionSchema` in `@shared/schemas`, a YAML file or an SDK inline persona) and launched with an `AgentConfig` (`packages/harness/src/agent/core/definition/`); compose runs via the factories in `packages/harness/src/agent/runtime`.
 - Launch executions via `runAgent` and resume via `resumeRun` (see CLAUDE.md "Agent system"); use the lower-level `executeAgent` only when you already own the `runId` (e.g. subagent dispatch in `packages/harness/src/tools/delegation/inBandSubagentRun.ts`). Attach presentation and approval behavior to the run's `SessionHandle.interactions`.
 - A new provider is a protocol arm in `packages/llm` plus a route row in `packages/harness/src/agent/runtime/modelRoutes.ts` and `packages/harness/src/agent/runtime/run/modelBinding.ts`; there is no per-provider handler class. Register capabilities/pricing in `packages/harness/src/model/computeModelOptions.ts`.
 

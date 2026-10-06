@@ -4,8 +4,8 @@ import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 
 import { logFileCategory, logFilesLoaded, type AgentTrace } from '@agent/trace';
-import type { DocumentTask } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { DocumentTask } from '@shared/schemas';
 import type { AttachedMemoryMiss, FileListEntry } from '@shared/schemas';
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';

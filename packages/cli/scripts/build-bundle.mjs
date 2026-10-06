@@ -22,20 +22,27 @@ const serve = process.argv.includes('--serve');
 // `--host-harness` bundles the validator's editor-less window
 // (scripts/service-host-harness.ts), which attaches to the service.
 const hostHarness = process.argv.includes('--host-harness');
+// `--sdk-harness` bundles the validator's SDK embedder
+// (scripts/sdk-harness.ts), which runs an inline persona.
+const sdkHarness = process.argv.includes('--sdk-harness');
 const configuredOutfile = process.env.TEXRA_CLI_BUNDLE_OUTFILE?.trim();
 const entryPoint = harness
   ? 'scripts/tui-harness.tsx'
   : hostHarness
     ? 'scripts/service-host-harness.ts'
-    : serve
-      ? 'src/bin/texraServe.ts'
-      : 'src/bin/texra.ts';
+    : sdkHarness
+      ? 'scripts/sdk-harness.ts'
+      : serve
+        ? 'src/bin/texraServe.ts'
+        : 'src/bin/texra.ts';
 const outfile = harness
   ? 'dist/bin/tui-harness.js'
   : hostHarness
     ? configuredOutfile || 'dist/bin/service-host-harness.js'
-    : configuredOutfile ||
-      (serve ? 'dist/bin/texra-serve.js' : 'dist/bin/texra.js');
+    : sdkHarness
+      ? configuredOutfile || 'dist/bin/sdk-harness.js'
+      : configuredOutfile ||
+        (serve ? 'dist/bin/texra-serve.js' : 'dist/bin/texra.js');
 const includeInternalValidationModel =
   process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL === '1';
 

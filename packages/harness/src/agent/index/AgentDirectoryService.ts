@@ -276,6 +276,7 @@ export function agentSourceRoots(
         ([workflow, toolUse]) => [workflow, ...toolUse],
       );
     case 'plugin':
+    case 'inline':
       return Effect.succeed([]);
   }
 }

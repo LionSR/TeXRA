@@ -21,6 +21,7 @@ import type { ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
+  InlinePersona,
   RunId,
   SessionCloseReport,
   TranscriptSubscription,
@@ -101,7 +102,10 @@ export type TranscriptView = ReadonlyDeep<RuntimeTranscriptView>;
 
 /** What starting a run on a session takes. */
 export interface StartInput {
-  readonly agent: string;
+  /** The agent: a name the agent directories list, or a persona written
+   *  inline in the agent file format (`InlinePersonaSchema`), which the run
+   *  records so a resume needs no file. */
+  readonly agent: string | InlinePersona;
   readonly instruction: string;
   readonly model?: string;
   readonly tools?: readonly ITool[];

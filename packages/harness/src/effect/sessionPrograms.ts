@@ -46,7 +46,11 @@ import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  InlinePersonaSchema,
+  type RunId,
+} from '@shared/schemas';
 import { descendantRuns } from '@shared/session/sessionView';
 import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -99,7 +103,9 @@ function admitTools(
 }
 
 /** The run's configuration, or the refusal that stops it before any model
- *  work: the three the package states. */
+ *  work: the three the package states. A named agent is looked up; an
+ *  inline persona is the agent, recorded on the config and validated by its
+ *  schema there. */
 function admitInput(
   input: StartInput,
 ): Effect.Effect<
@@ -109,11 +115,15 @@ function admitInput(
   return Effect.gen(function* () {
     const tools = input.tools ?? [];
     yield* admitTools(tools);
-    const resolved = getAgent(input.agent);
+    const { agent } = input;
+    const resolved =
+      typeof agent === 'string'
+        ? getAgent(agent)
+        : { name: null, source: 'inline' as const };
     if (!resolved) {
       return yield* new AgentNotFound({
-        agent: input.agent,
-        message: `Agent "${input.agent}" was not found in the configured agent directory.`,
+        agent: String(agent),
+        message: `Agent "${String(agent)}" was not found in the configured agent directory.`,
       });
     }
     // The schema is the launch's last refusal, and it is a refusal rather
@@ -121,13 +131,18 @@ function admitInput(
     // embedder's `catchTag` in the vocabulary the surface names, as the
     // agent scan's failure above does.
     return yield* Effect.try({
-      try: () =>
-        AgentConfigSchema.parse({
-          agent: resolved.name,
+      try: () => {
+        // The run is named as its persona's schema spells the name.
+        const persona =
+          typeof agent === 'string' ? null : InlinePersonaSchema.parse(agent);
+        return AgentConfigSchema.parse({
+          agent: persona?.name ?? resolved.name,
           agentSource: resolved.source,
+          persona,
           instruction: input.instruction,
           ...(input.model ? { model: input.model } : {}),
-        }),
+        });
+      },
       catch: (cause) =>
         new RunFailure({ cause, message: toErrorMessage(cause) }),
     });
