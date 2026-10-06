@@ -235,7 +235,7 @@ interface LeftOut {
  * this one passed the store gate); one that does not decode, or of a kind
  * this build lacks, fails `DatabaseRowCorrupt` naming it.
  */
-export function decodeRow(
+function decodeRow(
   input: SqlRow,
 ): Result.Result<
   SessionEvent | LeftOut,

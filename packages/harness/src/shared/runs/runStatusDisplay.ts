@@ -168,11 +168,6 @@ export function runHeldByProcessMessage(
   return `Task ${runId} is ${runHeldClause(ownerId)}.`;
 }
 
-/** Banner and tooltip copy for a run whose saved state could not be read. */
-export function runUnreadableMessage(cause: string): string {
-  return `Could not read this task's state: ${cause}. Delete removes it.`;
-}
-
 export function formatRunStatusLabel(status: RunLifecycleStatus): string {
   return RUN_STATUS_LABELS[runStatusDisplayKey(status)];
 }

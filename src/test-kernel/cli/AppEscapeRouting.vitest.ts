@@ -34,7 +34,7 @@ import {
   type RunIdentity,
   type RunPhase,
 } from '@shared/schemas';
-import { runUnreadableMessage } from '@shared/runs/runStatusDisplay';
+import { runHeldMessage } from '@shared/runs/runStatusDisplay';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -555,10 +555,10 @@ describe('App foreground Escape ownership', () => {
     }
   });
 
-  it('shows an unreadable root as read-only', async () => {
+  it('shows a root another process holds as read-only', async () => {
     seedChildHierarchy();
     const onSubmit = vi.fn();
-    const detail = runUnreadableMessage('checkpoint is malformed');
+    const detail = runHeldMessage(4321);
     const { instance, stdin, stdout } = await renderDebugApp(
       { ...appProps(), onSubmit },
       { columns: 240, rows: 30 },

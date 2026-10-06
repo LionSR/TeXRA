@@ -190,9 +190,6 @@ export interface SessionViewAccess {
     port: string,
     set: readonly TranscriptSubscription[],
   ): Effect.Effect<void>;
-  /** Record why this process cannot act on a run (`unreadable`), or clear
-   *  it with null: local truth the fold reads as `readOnly`, never a row. */
-  markUnreadable(runId: RunId, detail: string | null): Effect.Effect<void>;
   /** Record what a resume of a run waits for (durable harness D5), or null
    *  when nothing blocks it any more: local truth, never a row. */
   markResumeBlocked(

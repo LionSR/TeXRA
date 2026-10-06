@@ -1,16 +1,12 @@
 /**
  * `SessionRequests`: one handler for every request a surface issues to its
  * session's runtime (PRD one-fold-three-renderers, 7.6 and 8.2), answered
- * exactly once: an `Outcome` the host renders, or a request error.
- * Existence is read from the log's sequence table before any arm runs (C2:
- * a run exists iff its sequence row exists and is not closed), so a stop
- * issued the moment a launch exposes its run is admitted, and a run with no
- * row is `Unavailable`, never a defect. Ownership comes from that same row:
- * a foreign claim without a death proof is `NotOwner`. A collaborator that
- * rejects is a handler defect (`Effect.orDie`), which `SessionBridge` logs
- * under the request id and answers `Internal`. In process (the TUI,
- * headless) the Effect's own result is the response; a bridge posts it as
- * the `Response` of 8.4. Built per session by `sessionLayer.ts`.
+ * once with an `Outcome` or a request error. Existence is read from the
+ * sequence table first (C2), so a stop issued as a launch exposes its run is
+ * admitted, and a run with no row is `Unavailable`, never a defect. A foreign claim without a death
+ * proof is `NotOwner`. A collaborator that rejects is a handler defect
+ * (`Effect.orDie`): `SessionBridge` logs it and answers `Internal`. In
+ * process the Effect's result is the response; a bridge posts it (8.4).
  */
 import { Effect, SubscriptionRef, type Context } from 'effect';
 
@@ -60,7 +56,7 @@ const done: Outcome = Object.freeze({ kind: 'done' } as const);
 /** The log's reads, and removal through the session's publisher. */
 type SessionRequestLog = Pick<
   Context.Service.Shape<typeof Database>,
-  'aggregateState' | 'readAll'
+  'aggregateState' | 'claimOwner' | 'readAll'
 > &
   Pick<SessionEventsShape, 'removeRun' | 'detach'>;
 
@@ -151,10 +147,8 @@ const requireRunAction = (
     : Effect.fail(new Rejected({ reason: runActionRefusal(run, action) }));
 };
 
-/** Admit against current sequence-row existence and claims. A foreign
- *  owner absent from the liveness snapshot is unprovable, so it cannot be
- *  admitted. Deletion uses the database transaction for its explicit
- *  single-run exception. */
+/** Admit on current sequence rows and claims: a foreign owner once proved
+ *  dead now, as the snapshot may lag (deletion's exception is its own). */
 const admit = (
   deps: RequestDeps,
   req: RuntimeRequest,
@@ -183,7 +177,13 @@ const admit = (
         !liveness.self.includes(state.ownerId) &&
         !liveness.dead.includes(state.ownerId)
       ) {
-        return Effect.fail(new NotOwner({ runId }));
+        return Effect.orDie(deps.log.claimOwner(state.aggregateId)).pipe(
+          Effect.filterOrFail(
+            (claim) => claim.liveness === 'dead',
+            () => new NotOwner({ runId }),
+          ),
+          Effect.as(state),
+        );
       }
       return Effect.succeed(state);
     },

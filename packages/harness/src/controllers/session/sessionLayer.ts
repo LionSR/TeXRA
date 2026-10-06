@@ -23,7 +23,6 @@ import {
   Layer,
   LayerMap,
   Option,
-  Schedule,
   RcMap,
   Stream,
   SubscriptionRef,
@@ -108,7 +107,7 @@ import { followInterruptedTasks } from '@tools/interruptedTasks';
 import { processEnvConfigLayer } from '@utils/system/envFlags';
 import { databaseLayer, globalDatabaseLayer } from './Database';
 import { projectDatabaseLayer } from './projectDatabase';
-import { collectPendingDeletions } from './deletionCleanup';
+import { deletionCollector } from './deletionCleanup';
 import { ownerLiveness } from './ownerLiveness';
 import { sessionRequests } from './SessionRequests';
 import { makeSessionStore } from './sessionStore';
@@ -184,6 +183,8 @@ const sessionHandleLayer = (key: SessionKey) =>
         (scope, exit) => Scope.close(scope, exit),
       );
       const store = yield* makeSessionStore(key.storage);
+      // A pass over the pending tombstones, at open and after each removal.
+      const collectDeletions = yield* deletionCollector(database, key.storage);
       const view = yield* makeSessionViewAccess(key.storage, store.closed);
       // Capture the startup cohort before callers can publish new launches.
       const initialListing = yield* database.readListing();
@@ -205,7 +206,11 @@ const sessionHandleLayer = (key: SessionKey) =>
           session: () => session,
           log: {
             ...database,
-            removeRun: events.removeRun,
+            removeRun: (id, mode, start) =>
+              Effect.tap(
+                events.removeRun(id, mode, start),
+                () => collectDeletions,
+              ),
             detach: store.detach,
           },
           local: local.ref,
@@ -309,16 +314,7 @@ const sessionHandleLayer = (key: SessionKey) =>
           ),
           Effect.forkScoped,
         );
-      // The session owns retries and waits for in-flight removal on close.
-      yield* collectPendingDeletions(database, key.storage).pipe(
-        Effect.catch(
-          logFailure(
-            'Deletion records could not be read; cleanup remains pending.',
-          ),
-        ),
-        Effect.repeat({ schedule: Schedule.spaced('30 seconds') }),
-        Effect.forkScoped,
-      );
+      yield* collectDeletions;
       // Held for the session's life and probed beside the open, so no step
       // waits for it (the gate withholds nothing until it answers).
       yield* (yield* ToolAvailability).hold(key.open.roots);

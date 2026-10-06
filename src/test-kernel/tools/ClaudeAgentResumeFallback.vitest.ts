@@ -552,25 +552,6 @@ describe('claude_agent tool launch and resume fallback', () => {
       ),
   );
 
-  it.live('declares its CLI process to the shared shutdown drain', () =>
-    Effect.gen(function* () {
-      const captured = captureStrategy();
-
-      yield* ClaudeAgentTool.call({
-        prompt: 'start a long initial turn',
-      });
-
-      expect(captured.strategy?.ownsBackgroundProcess).toBe(true);
-      captured.strategy?.releaseSessionOwnership?.();
-    }).pipe(
-      Effect.provide(
-        toolLayer({
-          run: { session: testSession, runId: parentRunId, toolPolicy: {} },
-        }),
-      ),
-    ),
-  );
-
   it.live(
     'lets a waiting caller own the fallback after the first launch fails',
     () =>

@@ -6,9 +6,8 @@
  *
  * - `LocalRuntimeSource`: what this process knows that the events cannot
  *   say: its own owner id, the owners whose runs it may not touch (alive or
- *   unprovable, written by the liveness prober in `sessionLayer.ts`), and
- *   the runs whose run state it could not read (written by
- *   `SessionHandle.view.markUnreadable`).
+ *   unprovable, written by the liveness prober in `ownerLiveness.ts`), and
+ *   the runs whose `run.start` is damaged (written by the session inputs).
  * - `TextChunkSource`: the in-flight text per streaming row, keyed
  *   `${runId}/${rowId}`; the ordered input reader derives suffixes from
  *   successive chunk tails after reading the events committed before them.

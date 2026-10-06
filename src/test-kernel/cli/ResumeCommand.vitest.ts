@@ -320,22 +320,6 @@ describe('runResumeCommand', () => {
     }),
   );
 
-  it.effect('reports a live run instead of failing silently', () =>
-    Effect.gen(function* () {
-      // The case's hold on the run's claim, handed back whatever the resume
-      // probe does below: the test's scope close releases it.
-      yield* seededSession.log.hold(RUN_ID, { ends: true });
-
-      // The command's program runs on the runtime its boundary holds, which
-      // the `run` helper stands in for.
-      expect(yield* Effect.promise(() => run(cliContext()))).toBe(2);
-
-      expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-        `Run ${RUN_ID} is already running in this process.`,
-      );
-    }),
-  );
-
   it('refuses a run another live TeXRA process holds, naming its pid', async () => {
     vi.spyOn(seededSession.log, 'owner').mockReturnValue(
       Effect.succeed({
@@ -361,13 +345,11 @@ describe('runResumeCommand', () => {
       ),
     );
 
-    await expect(run(cliContext())).resolves.toBe(1);
-
-    // An unreadable claim says nothing about the checkpoint, so it keeps the
-    // operational wording rather than telling the user to delete the run.
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      `Could not read the state of run ${RUN_ID}: claim unreadable (claim disk offline)`,
-    );
+    // An unreadable claim fails the command with the read's own error,
+    // never a refusal that would tell the user to delete the run.
+    await expect(run(cliContext())).rejects.toMatchObject({
+      _tag: 'DatabaseReadFailed',
+    });
   });
 
   // One reader now: the classification and the resume both read the run's

@@ -463,7 +463,7 @@ interface AgentCliLoopParams<TTurn> {
  * (codex, claudeAgent): a dedup'd session/thread registration closure, the
  * `lastPrompt` capture feeding `formatDelivery`/`formatError`, and the
  * boilerplate-identical strategy fields (`isTerminal`, `getUsage`,
- * `ownsBackgroundProcess`, `onTurnSuccess`, `publishUsage`,
+ * `onTurnSuccess`, `publishUsage`,
  * `releaseSessionOwnership`).
  * Callers supply only their provider-specific turn run, usage/delivery
  * formatting, and registry entry construction.
@@ -528,9 +528,6 @@ export function buildAgentCliLaunch<TTurn>(
       getUsage,
       isTurnError,
       turnErrorMessage,
-      // The provider's CLI process is this child's OS process: shutdown
-      // drain stops it through the run's one background-process slot.
-      ownsBackgroundProcess: true,
       onTurnSuccess: (turn) => {
         for (const id of resolveSessionIds(turn)) {
           if (id) registerSessionId(id);

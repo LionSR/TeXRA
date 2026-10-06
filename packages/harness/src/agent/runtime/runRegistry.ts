@@ -949,16 +949,13 @@ export class RunRegistry {
   // ----------------------------------------------------------------- close
 
   /**
-   * The session is closing: refuse every run registered from here on, and
-   * kill the background OS process of every run whose child loop declared one
-   * (`RunHandle.backgroundProcess`), leaving every other run untouched
-   * (#8155): a native agent run is left running for restart recovery. The
+   * The session is closing: refuse every run registered from here on. The
    * runs already tracked keep their handles until they settle
-   * ({@link awaitDrained}).
+   * ({@link awaitDrained}); the close's `stopAll` interrupts each, and a
+   * process child's OS process ends with its loop's scope.
    */
   close(): void {
     this.closing = true;
-    for (const handle of this.handles()) handle.backgroundProcess?.kill();
   }
 
   /** Resolve once every owner of `runId` (or of every run) has left. */

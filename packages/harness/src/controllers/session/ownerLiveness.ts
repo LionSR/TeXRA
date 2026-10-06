@@ -32,7 +32,7 @@ function foreignOwners(view: SessionView, self: OwnerId): OwnerId[] {
  * The liveness prober (PRD 5.2, contract C5): every owner the view names on a
  * non-terminal run other than this process, proved by `kill(pid, 0)` plus the
  * start-identity check per distinct owner, never per run. Probed whenever that
- * owner set changes and on an interval between changes. Alive and unprovable
+ * owner set changes and, while it is not empty, on an interval. Alive and unprovable
  * owners hold their runs; only an explicit death verdict permits an
  * interrupted classification. It writes `dead`; `unreadable` is the status
  * machine's.
@@ -61,17 +61,20 @@ export const ownerLiveness = Layer.effectDiscard(
       }
       yield* SubscriptionRef.set(local.ref, { ...snapshot, dead });
     });
-    const ownerSetChanges = SubscriptionRef.changes(view.ref).pipe(
-      Stream.map((current) =>
-        foreignOwners(current, identity.ownerId).join(' '),
-      ),
-      Stream.changes,
-    );
     yield* Effect.forkScoped(
-      Stream.merge(
-        ownerSetChanges,
-        Stream.tick(OWNER_LIVENESS_PROBE_INTERVAL),
-      ).pipe(
+      SubscriptionRef.changes(view.ref).pipe(
+        Stream.map((current) =>
+          foreignOwners(current, identity.ownerId).join(' '),
+        ),
+        Stream.changes,
+        // Probed on every change, and again on an interval only while some
+        // foreign owner holds a run: a session nobody else writes to runs
+        // no timer.
+        Stream.switchMap((owners) =>
+          owners === ''
+            ? Stream.make(undefined)
+            : Stream.tick(OWNER_LIVENESS_PROBE_INTERVAL),
+        ),
         Stream.mapEffect(() => probe),
         Stream.runDrain,
       ),

@@ -28,16 +28,16 @@ import { DatabaseSync } from 'node:sqlite';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Layer, Result, Stream, SubscriptionRef } from 'effect';
+import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
 import { afterAll, describe, expect } from 'vitest';
 
 import { runHistoryLayer } from '@agent/runtime/RunHistory';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import { databaseLayer } from '@controllers/session/Database';
 import {
-  decodeRow,
   EVENT_COLUMNS,
   EVENT_FROM,
+  rowReader,
 } from '@controllers/session/rowCodec';
 import {
   LocalRuntimeSource,
@@ -184,139 +184,136 @@ describe('the golden 1.0 store', () => {
         )
         .all(),
     );
-    const events = rows.flatMap((row) => {
-      const decoded = Result.getOrThrow(decodeRow(row));
-      return '_tag' in decoded ? [] : [decoded];
-    });
-    expect(events).toHaveLength(rows.length);
-    const types = new Set(events.map((event) => event.type));
-    // Every row kind is in the fixture, the decode test of a released store,
-    // but these: projected at read time (`usage`, `run.model`), or not yet
-    // in a clean scenario. The list only shrinks.
-    const notStored = [
-      'child.park',
-      'followup.closed',
-      'hook.outcome',
-      'run.detach',
-      'run.model',
-      'usage',
-    ];
-    expect(
-      Object.keys(ROW_KINDS)
-        .filter((kind) => !types.has(kind as (typeof events)[number]['type']))
-        .toSorted(),
-    ).toEqual(notStored);
-    for (const type of [
-      'tool.result',
-      'request.decided',
-      'followup.queued',
-      'script.call',
-      'context.edit',
-      'run.removed',
-    ] as const)
-      expect(types, type).toContain(type);
-    // The chat's `/model` switch: the configs naming the model before and
-    // after it; and its `/compact`, the one edit.
-    const chat = aggregateId('run', CHAT);
-    expect(
-      events.flatMap((event) =>
-        event.type === 'context.edit' && event.aggregateId === chat
-          ? [event.payload.trigger]
-          : [],
-      ),
-    ).toEqual(['user']);
-    expect([
-      ...new Set(
+    return Effect.gen(function* () {
+      const events = yield* rowReader(storage).read(rows, true);
+      expect(events).toHaveLength(rows.length);
+      const types = new Set(events.map((event) => event.type));
+      // Every row kind is in the fixture, the decode test of a released store,
+      // but these: projected at read time (`usage`, `run.model`), or not yet
+      // in a clean scenario. The list only shrinks.
+      const notStored = [
+        'child.park',
+        'followup.closed',
+        'hook.outcome',
+        'run.detach',
+        'run.model',
+        'usage',
+      ];
+      expect(
+        Object.keys(ROW_KINDS)
+          .filter((kind) => !types.has(kind as (typeof events)[number]['type']))
+          .toSorted(),
+      ).toEqual(notStored);
+      for (const type of [
+        'tool.result',
+        'request.decided',
+        'followup.queued',
+        'script.call',
+        'context.edit',
+        'run.removed',
+      ] as const)
+        expect(types, type).toContain(type);
+      // The chat's `/model` switch: the configs naming the model before and
+      // after it; and its `/compact`, the one edit.
+      const chat = aggregateId('run', CHAT);
+      expect(
         events.flatMap((event) =>
-          event.type === 'run.config' && event.aggregateId === chat
-            ? [event.config.model]
+          event.type === 'context.edit' && event.aggregateId === chat
+            ? [event.payload.trigger]
             : [],
         ),
-      ),
-    ]).toEqual(['openai/gpt-5.6-sol@medium', 'gemini38f']);
-    // Each request is a queued control, consumed in the batch that applies
-    // it: the switch's `run.config` (no edit), then the compaction's edit,
-    // right after its consumption.
-    const applied = raw(storage, (db) =>
-      db
-        .prepare(
-          `SELECT json_extract(q.data, '$.control.kind') AS kind,
-             (SELECT json_extract(x.data, '$.payload.trigger') FROM event c
-              JOIN event x ON x.aggregate = c.aggregate AND x.seq = c.seq + 1
-                AND x.type = 'context.edit'
-              WHERE c.type = 'followup.consumed' AND c.aggregate = q.aggregate
-                AND json_extract(c.data, '$.followUpId')
-                  = json_extract(q.data, '$.followUpId')) AS trigger
-           FROM event q JOIN event_sequence s ON s.id = q.aggregate
-           WHERE s.logical_id = ? AND q.type = 'followup.queued'
-             AND json_extract(q.data, '$.control') IS NOT NULL
-           ORDER BY q."commit"`,
-        )
-        .all(CHAT),
-    );
-    expect(applied).toEqual([
-      { kind: 'model', trigger: null },
-      { kind: 'compact', trigger: 'user' },
-    ]);
-    // The durable harness's row shapes (H2): a fork's start names its
-    // source, and its first history row seeds the source's view; a handoff
-    // cuts the fork's view to its note; an awaited child names the call
-    // that owns it.
-    const forked = aggregateId('run', FORKED);
-    expect(
-      events.flatMap((event) =>
-        event.type === 'run.start' && event.aggregateId === forked
-          ? [event.provenance]
-          : [],
-      ),
-    ).toEqual([
-      {
-        kind: 'fork',
-        from: { id: FORK_SOURCE, uid: expect.any(String) },
-        at: expect.any(Number),
-      },
-    ]);
-    expect(
-      events.flatMap((event) =>
-        event.type === 'context.edit' && event.aggregateId === forked
-          ? [[event.payload.cause, event.payload.messages.length > 0]]
-          : [],
-      ),
-    ).toEqual([
-      ['fork', true],
-      ['handoff', false],
-    ]);
-    expect(
-      events.flatMap((event) =>
-        event.type === 'run.start' && event.parent !== null
-          ? [[event.parent.id, event.parent.callId]]
-          : [],
-      ),
-    ).toEqual([[PARENT, 'validation-agent-3']]);
-    // The plan the chat ran as a goal: the goal plugin's fact, active, then
-    // completed.
-    expect(
-      events.flatMap((event) =>
-        event.type === 'plugin.fact' &&
-        event.aggregateId === chat &&
-        event.plugin === 'goal' &&
-        event.kind === 'state'
-          ? [(event.value as { active: boolean }).active]
-          : [],
-      ),
-    ).toEqual([true, false]);
-    // Context blobs two runs share: one stored value, referenced by rows of
-    // two aggregates.
-    const shared = raw(storage, (db) =>
-      db
-        .prepare(
-          `SELECT r.digest FROM event_blob r JOIN event e ON e."commit" = r."commit"
-           GROUP BY r.digest HAVING count(DISTINCT e.aggregate) > 1`,
-        )
-        .all(),
-    );
-    expect(shared.length).toBeGreaterThan(0);
-    return Effect.gen(function* () {
+      ).toEqual(['user']);
+      expect([
+        ...new Set(
+          events.flatMap((event) =>
+            event.type === 'run.config' && event.aggregateId === chat
+              ? [event.config.model]
+              : [],
+          ),
+        ),
+      ]).toEqual(['openai/gpt-5.6-sol@medium', 'gemini38f']);
+      // Each request is a queued control, consumed in the batch that applies
+      // it: the switch's `run.config` (no edit), then the compaction's edit,
+      // right after its consumption.
+      const applied = raw(storage, (db) =>
+        db
+          .prepare(
+            `SELECT json_extract(q.data, '$.control.kind') AS kind,
+               (SELECT json_extract(x.data, '$.payload.trigger') FROM event c
+                JOIN event x ON x.aggregate = c.aggregate AND x.seq = c.seq + 1
+                  AND x.type = 'context.edit'
+                WHERE c.type = 'followup.consumed' AND c.aggregate = q.aggregate
+                  AND json_extract(c.data, '$.followUpId')
+                    = json_extract(q.data, '$.followUpId')) AS trigger
+             FROM event q JOIN event_sequence s ON s.id = q.aggregate
+             WHERE s.logical_id = ? AND q.type = 'followup.queued'
+               AND json_extract(q.data, '$.control') IS NOT NULL
+             ORDER BY q."commit"`,
+          )
+          .all(CHAT),
+      );
+      expect(applied).toEqual([
+        { kind: 'model', trigger: null },
+        { kind: 'compact', trigger: 'user' },
+      ]);
+      // The durable harness's row shapes (H2): a fork's start names its
+      // source, and its first history row seeds the source's view; a handoff
+      // cuts the fork's view to its note; an awaited child names the call
+      // that owns it.
+      const forked = aggregateId('run', FORKED);
+      expect(
+        events.flatMap((event) =>
+          event.type === 'run.start' && event.aggregateId === forked
+            ? [event.provenance]
+            : [],
+        ),
+      ).toEqual([
+        {
+          kind: 'fork',
+          from: { id: FORK_SOURCE, uid: expect.any(String) },
+          at: expect.any(Number),
+        },
+      ]);
+      expect(
+        events.flatMap((event) =>
+          event.type === 'context.edit' && event.aggregateId === forked
+            ? [[event.payload.cause, event.payload.messages.length > 0]]
+            : [],
+        ),
+      ).toEqual([
+        ['fork', true],
+        ['handoff', false],
+      ]);
+      expect(
+        events.flatMap((event) =>
+          event.type === 'run.start' && event.parent !== null
+            ? [[event.parent.id, event.parent.callId]]
+            : [],
+        ),
+      ).toEqual([[PARENT, 'validation-agent-3']]);
+      // The plan the chat ran as a goal: the goal plugin's fact, active, then
+      // completed.
+      expect(
+        events.flatMap((event) =>
+          event.type === 'plugin.fact' &&
+          event.aggregateId === chat &&
+          event.plugin === 'goal' &&
+          event.kind === 'state'
+            ? [(event.value as { active: boolean }).active]
+            : [],
+        ),
+      ).toEqual([true, false]);
+      // Context blobs two runs share: one stored value, referenced by rows of
+      // two aggregates.
+      const shared = raw(storage, (db) =>
+        db
+          .prepare(
+            `SELECT r.digest FROM event_blob r JOIN event e ON e."commit" = r."commit"
+             GROUP BY r.digest HAVING count(DISTINCT e.aggregate) > 1`,
+          )
+          .all(),
+      );
+      expect(shared.length).toBeGreaterThan(0);
       const db = yield* Database;
       expect(yield* db.readAll(0)).toHaveLength(rows.length);
     }).pipe(Effect.provide(substrate(storage)));

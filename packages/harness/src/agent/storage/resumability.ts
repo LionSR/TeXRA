@@ -24,7 +24,7 @@ export type ResumabilityDecision =
   | { readonly kind: 'unreadable'; readonly cause: string };
 
 /**
- * The one answer to "can this run resume?", before ownership (`classifyRun`
+ * The one answer to "can this run resume?", before ownership (`runRefusal`
  * adds the claim). An opened run continues whatever its outcome: rows live
  * until deletion, so a failed or cancelled run continues from where they
  * left it. A document task that ended does not: its recipe's result is

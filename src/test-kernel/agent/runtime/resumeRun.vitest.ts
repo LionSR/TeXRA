@@ -14,7 +14,6 @@ import {
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { RunHistoryRefused } from '@shared/session/runHistory';
-import { runHeldMessage } from '@shared/runs/runStatusDisplay';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { createFakeRunRecords } from '@test/support/FakeRunRecords';
 import {
@@ -57,15 +56,6 @@ vi.mock('@agent/storage/runRecords', async (importActual) => ({
       readConfig: () => readConfigMock(),
       exists: () => runExistsMock(),
     }),
-}));
-
-// The refusal path re-reads the durable facts, which the fixtures below do
-// not seed: every other reader on the records double answers empty.
-const classifyRunMock = vi.hoisted(() => vi.fn());
-vi.mock('@agent/runtime/runClassification', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/runtime/runClassification')>()),
-  classifyRun: (...args: unknown[]) =>
-    Effect.promise(() => classifyRunMock(...args)),
 }));
 
 const RUN = 'aabbcc' as RunId;
@@ -154,7 +144,6 @@ describe('resumeRun tool-use queue ownership', () => {
       .mockReturnValue(Effect.succeed(snapshot().agentConfig));
     runExistsMock.mockReset().mockReturnValue(Effect.succeed(true));
     retrieveSessionResumeDataMock.mockReset().mockResolvedValue(snapshot());
-    classifyRunMock.mockReset().mockResolvedValue({ kind: 'finished' });
     resumeToolUseFromResumeDataMock.mockReset();
     taken.length = 0;
     resumeToolUseFromResumeDataMock.mockImplementation(
@@ -437,43 +426,13 @@ describe('resumeRun tool-use queue ownership', () => {
   it.effect('refuses with `finished` when no checkpoint remains', () =>
     Effect.gen(function* () {
       const session = yield* createSession();
-      const markUnreadable = vi.spyOn(session.view, 'markUnreadable');
       retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
 
       expect(yield* resumeOne(RUN, { session })).toEqual({
         failed: 'finished',
       });
       expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
-      // Clearing a stale detail (`null`) is not a mark.
-      expect(
-        markUnreadable.mock.calls.filter(([, detail]) => detail !== null),
-      ).toEqual([]);
     }),
-  );
-
-  // An empty retrieval is also what a torn read of the owner's rewrite looks
-  // like, so the refusal is decided from the claim: a run another process is
-  // executing keeps its hold instead of being reported finished.
-  it.effect(
-    'refuses an empty retrieval held elsewhere as owned elsewhere',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* createSession();
-        const markUnreadable = vi.spyOn(session.view, 'markUnreadable');
-        retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
-        classifyRunMock.mockResolvedValueOnce({
-          kind: 'held_elsewhere',
-          owner: JSON.stringify(['other-host', 4321, null]),
-        });
-
-        expect(yield* resumeOne(RUN, { session })).toEqual({
-          failed: 'owned_elsewhere',
-        });
-        expect(markUnreadable).toHaveBeenCalledWith(
-          RUN,
-          expect.stringContaining('4321'),
-        );
-      }),
   );
 
   // The fold that continues a run is the one reader of its rows, so an
@@ -529,7 +488,6 @@ describe('resumeRun tool-use queue ownership', () => {
     () =>
       Effect.gen(function* () {
         const session = yield* createSession();
-        const markUnreadable = vi.spyOn(session.view, 'markUnreadable');
         const ownerId = JSON.stringify(['other-host', 4321, 'start-1']);
         // The claim the host's resume takes is refused by its live owner.
         vi.spyOn(session.log, 'hold').mockReturnValue(
@@ -550,7 +508,6 @@ describe('resumeRun tool-use queue ownership', () => {
         ).toEqual({ failed: 'owned_elsewhere' });
         expect(onResumeResolved).not.toHaveBeenCalled();
         expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
-        expect(markUnreadable).toHaveBeenCalledWith(RUN, runHeldMessage(4321));
       }),
   );
 });

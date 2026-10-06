@@ -387,51 +387,33 @@ describe('childRunLoop E2E fixtures', () => {
       Effect.gen(function* () {
         const runId = loopRunId();
         const releaseSessionOwnership = vi.fn();
-        trackChildHandle(runId, PARENT_RUN_ID);
-        const interruptRun = vi.spyOn(session.runs, 'interrupt');
-        // The setup's own step fails: the handle refuses the process slot.
-        Object.defineProperty(
-          session.runs.getHandle(runId),
-          'backgroundProcess',
-          {
-            set: () => {
-              throw new Error('loop registration failed');
-            },
-          },
-        );
+        const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
+          run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
+        }).pipe(Effect.provideService(Runs, session.runs));
+        trackedRunIds.add(runId);
+        // The setup's own step fails: the run refuses its tracking.
+        vi.spyOn(childRun, 'track').mockImplementation(() => {
+          throw new Error('loop registration failed');
+        });
         const { strategy } = createFakeStrategy();
-
-        try {
-          const error = yield* Effect.flip(
-            startLoop(
-              runId,
-              {
-                ...strategy,
-                ownsBackgroundProcess: true,
-                releaseSessionOwnership,
-              },
-              { agentName: 'fake-cli' },
-            ),
-          );
-          expect(error.message).toContain('loop registration failed');
-
-          expect(releaseSessionOwnership).toHaveBeenCalledOnce();
-          expect(session.runs.isLive(runId)).toBe(false);
-          // The failed setup left no generation fiber behind, and the
-          // shutdown drain reaches nothing of it.
-          expect(session.runs.interrupt(runId)).toBe(false);
-          interruptRun.mockClear();
-          session.runs.getHandle(runId)?.backgroundProcess?.kill();
-          expect(interruptRun).not.toHaveBeenCalled();
-          expect(yield* queuedFollowUps(session, runId)).toEqual([]);
-        } finally {
-          interruptRun.mockRestore();
-        }
+        const error = yield* Effect.flip(
+          startLoop(
+            runId,
+            { ...strategy, releaseSessionOwnership },
+            { agentName: 'fake-cli', childRun },
+          ),
+        );
+        expect(error.message).toContain('loop registration failed');
+        expect(releaseSessionOwnership).toHaveBeenCalledOnce();
+        expect(session.runs.isLive(runId)).toBe(false);
+        // The failed setup left no generation fiber behind.
+        expect(session.runs.interrupt(runId)).toBe(false);
+        expect(yield* queuedFollowUps(session, runId)).toEqual([]);
       }),
   );
 
   it.effect(
-    'shutdown drain interrupts a real agent-CLI initial-turn loop and releases ownership once',
+    'a shutdown stop interrupts a real agent-CLI initial-turn loop and releases ownership once',
     () =>
       Effect.gen(function* () {
         const runId = loopRunId();
@@ -451,7 +433,6 @@ describe('childRunLoop E2E fixtures', () => {
 
         const strategy: ChildRunStrategy<FakeTurn> = {
           stageLabel: 'fake-cli session',
-          ownsBackgroundProcess: true,
           launch: (_ports, signal) =>
             Effect.gen(function* () {
               yield* Deferred.succeed(launched, undefined);
@@ -480,7 +461,7 @@ describe('childRunLoop E2E fixtures', () => {
         // The loop body is a generation on the run's lane: it starts once
         // the lane admits it, not inside `startChildRunLoop`.
         yield* Deferred.await(launched);
-        session.runs.getHandle(runId)?.backgroundProcess?.kill();
+        yield* session.runs.stopAll();
 
         // A process child's loop fiber survives the stop: the aborted turn
         // ends the loop as interrupted and it finalizes CANCELLED.

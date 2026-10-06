@@ -129,14 +129,6 @@ export interface ChildRunStrategy<TTurn, R = never> {
   /** Stage label opened on the child trace (e.g. "Codex session"). */
   readonly stageLabel: string;
 
-  /**
-   * This child's turns drive a live OS process (a background bash command,
-   * an agent-CLI provider): shutdown drain reaches it through
-   * `RunHandle.backgroundProcess` (#8155) without disturbing native agent
-   * children left running for restart recovery.
-   */
-  readonly ownsBackgroundProcess?: boolean;
-
   /** Deliver a settled turn even when the loop was interrupted: only a
    *  killed OS process, whose exit code and output are a complete result. */
   readonly deliverAfterInterrupt?: boolean;
@@ -610,14 +602,6 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
       Effect.sync(() => {
         // A stop sees the handle only from here, with its target reserved.
         childRun?.track();
-        if (strategy.ownsBackgroundProcess === true) {
-          // The one handle slot shutdown drain reads (#8155): kill the
-          // leaked OS process without touching the loop that reports it.
-          const handle = runs.getHandle(runId);
-          if (handle) {
-            handle.backgroundProcess = { kill: () => loop.interrupt() };
-          }
-        }
         sessionStage = trace?.openStage(strategy.stageLabel);
       }),
     );

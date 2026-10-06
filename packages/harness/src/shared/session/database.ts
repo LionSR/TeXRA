@@ -357,12 +357,11 @@ export class Database extends Context.Service<
       readonly SessionEvent[],
       DatabaseReadFailed
     >;
-    /** C9: claim a closed root, clean its recorded runs, then cascade
-     *  only if the same tombstone and claim still hold. Cleanup failure keeps
-     *  the deletion record. The callback runs outside the SQLite transaction. */
+    /** C9: `cleanup` removes a tombstone's run directories, then its closed
+     *  aggregate, dependents, rows and orphaned blobs go. Every step may run
+     *  twice; a failed cleanup keeps the tombstone for the next pass. */
     readonly collectDeletion: (
-      id: AggregateId,
-      tombstoneCommit: CommitOrdinal,
+      tombstone: Extract<SessionEvent, { type: 'run.removed' }>,
       cleanup: (runIds: readonly RunId[]) => Effect.Effect<void, Error>,
     ) => Effect.Effect<void, Error>;
     /** Clear only this process's claims, in one transaction. */

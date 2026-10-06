@@ -2,11 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, PlatformError, Result } from 'effect';
 
-import {
-  classifyRun,
-  describeFollowUpFailure,
-  resumeRun,
-} from '@agent/runtime';
+import { describeFollowUpFailure, resumeRun, runRefusal } from '@agent/runtime';
 import { getRunRecords } from '@agent/storage';
 import {
   agentKey,
@@ -160,37 +156,20 @@ export function runResumeCommand(
     }
     // Gate resume on ownership: a run held by any owner that is alive or cannot
     // be proven dead refuses, naming that owner.
-    const classification = yield* classifyRun(id, session);
-    switch (classification.kind) {
-      case 'held_elsewhere':
-        // A conversation the service holds continues there: the chat is
-        // its client, so the service stays the run's one writer.
-        if (
-          !documentTask &&
-          (yield* heldByService(context.storageRoot, classification.owner))
-        )
-          break;
-        writeTextStderr(runHeldByProcessMessage(id, classification.owner));
-        return CliExitCode.Usage;
-      case 'owned_here':
-        writeTextStderr(`Run ${id} is already running in this process.`);
-        return CliExitCode.Usage;
-      case 'unclassified':
-        // `unclassified` names a durable fact that could not be read — the
-        // claim, the run metadata, its rows — and nothing else.
-        // Rows that do not fold are refused by the run history's own load at the
-        // open below, and come back from `resumeRun` worded
-        // `unusable_checkpoint`; this arm never guesses at content it did
-        // not read.
-        writeTextStderr(
-          `Could not read the state of run ${id}: ${classification.cause}`,
-        );
-        return CliExitCode.AgentError;
-      case 'finished':
-        writeTextStderr(describeFollowUpFailure('finished'));
-        return CliExitCode.Usage;
-      case 'resumable':
-        break;
+    const refusal = yield* runRefusal(id, session);
+    if (refusal?.kind === 'finished') {
+      writeTextStderr(describeFollowUpFailure('finished'));
+      return CliExitCode.Usage;
+    }
+    // A conversation the service holds continues there: the chat is its
+    // client, so the service stays the run's one writer.
+    if (
+      refusal?.kind === 'held_elsewhere' &&
+      (documentTask ||
+        !(yield* heldByService(context.storageRoot, refusal.owner)))
+    ) {
+      writeTextStderr(runHeldByProcessMessage(id, refusal.owner));
+      return CliExitCode.Usage;
     }
 
     // A chat resume reopens the interactive TUI, so headless callers are
