@@ -674,8 +674,11 @@ show` print the same notice, and the new `texra agents customize`,
   it.
 - **Plugins with hooks can be enabled** — a Claude Code or Codex plugin
   that ships hooks now works in TeXRA. Its hooks can add notes to what you
-  ask, block a tool call they object to (the agent is told why), and add
-  notes to a tool's result. They cannot approve anything on your behalf:
+  ask, block a tool call they object to (the agent is told why), add
+  notes to a tool's result, and act as a quality gate: a `Stop` hook that
+  blocks keeps the agent going for one more turn, with the hook's reason
+  as its next instruction, even in `texra run`. The turn after that can
+  end. They cannot approve anything on your behalf:
   your approval setting still decides. Enabling such a plugin shows each
   hook and the scripts it runs; anything whose script TeXRA cannot pin down
   is shown as its exact command, and changing a hook or its scripts asks

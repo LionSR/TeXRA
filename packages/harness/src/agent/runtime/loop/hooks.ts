@@ -12,6 +12,7 @@ import * as path from 'node:path';
 
 import { Clock, Effect, FileSystem, SynchronizedRef } from 'effect';
 
+import type { FollowUpBatch } from '@agent/followUp/RunInput';
 import {
   claudeToolCall,
   matchesHook,
@@ -26,7 +27,6 @@ import { pluginDataDir, runHook } from '@common/plugins/pluginHooks';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import {
   SUPPORTED_HOOK_EVENTS,
-  type HookEvent,
   type HookOutcomePayload,
   type ToolResult,
 } from '@shared/schemas';
@@ -62,12 +62,9 @@ const identityOf = (step: StepHook) =>
 const staleHook = (identity: string): StepHook => {
   const [head = '', id = ''] = identity.split('#');
   const [plugin = '', revision = ''] = head.split('@');
-  const named = id.split('/').at(-3) ?? '';
-  const event: HookEvent = (
-    SUPPORTED_HOOK_EVENTS as readonly string[]
-  ).includes(named)
-    ? (named as HookEvent)
-    : 'PreToolUse';
+  const named = id.split('/').at(-3);
+  const event =
+    SUPPORTED_HOOK_EVENTS.find((known) => known === named) ?? 'PreToolUse';
   return {
     plugin,
     name: plugin,
@@ -137,10 +134,8 @@ interface HookPoint {
 
 type Services = ChildProcessSpawner | FileSystem.FileSystem;
 
-const NONE: HookPoint = { rows: [], deny: null, context: null };
-
-/** The start of a failed hook's stderr the row keeps. */
-const STDERR_KEPT = 2_000;
+/** A turn's stop: its rows, and the turn a block opens next. */
+type StopPoint = Omit<PromptPoint, 'parts'> & { block: FollowUpBatch | null };
 
 const effectOf = (
   outcomes: readonly HookOutcomePayload[],
@@ -180,13 +175,13 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
       hook.event === event &&
       (names === undefined || matchesHook(hook.matcher, names)),
   );
-  if (matched.length === 0) return NONE;
+  if (matched.length === 0) return { rows: [], deny: null, context: null };
   const { workspace, globalStorage } = run.session.roots;
   if (workspace === undefined) {
     run.logger.warn(
       `Not running ${matched.length} ${event} hook(s): this run has no workspace to run them in.`,
     );
-    return NONE;
+    return { rows: [], deny: null, context: null };
   }
   const stdin = encodeHookInput(input);
   const outcomes = yield* Effect.forEach(
@@ -207,7 +202,7 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
               projectDir: workspace,
               pluginData: pluginDataDir(globalStorage, step.name),
             });
-        const verdict = interpretHookRun(event, ended);
+        const verdict = interpretHookRun(input, ended);
         if (verdict.warning !== null)
           run.logger.warn(`${verdict.warning} (plugin ${step.name})`);
         if (verdict.systemMessage !== null)
@@ -221,7 +216,7 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
             : (ended.kind === 'unstartable'
                 ? ended.message
                 : ended.stderr
-              ).slice(0, STDERR_KEPT);
+              ).slice(0, 2_000);
         return {
           point,
           event,
@@ -346,23 +341,28 @@ export const promptHooks = Effect.fn('Hooks.prompt')(function* (
   return { rows: submit.rows, parts: partsOf(submit.context) };
 });
 
-/** A completed turn's `Stop` (a root) or `SubagentStop` (a child): a
- *  notification in v1, so only its rows, which commit before the turn's
- *  `waiting` position; none for a turn that did not complete. */
+/**
+ * A completed turn's `Stop` (a root) or `SubagentStop` (a child), if any:
+ * its rows, which commit before `waiting`, and the turn a block opens with
+ * its reason, even in a one-shot run. `stop_hook_active` (after a block's
+ * turn, or in a script's run) is not blocked, which bounds the loop.
+ */
 export const stopHooks = Effect.fn('Hooks.stop')(function* (
   run: AgentRunShape,
   turn: { readonly state: RunState; readonly outcome: string },
   lastMessage: string,
-): Effect.fn.Return<readonly RunHistoryDraft[], never, Services> {
-  if (turn.outcome !== 'completed') return [];
+): Effect.fn.Return<StopPoint, never, Services> {
+  if (turn.outcome !== 'completed') return { rows: [], block: null };
   const { state } = turn;
   const base = inputBase(run);
   const child = rootOf(run) !== run.runId;
+  const blocked = state.hookOutcomes[`Stop:${state.turn - 1}`] ?? [];
   const common = {
-    stop_hook_active: false,
+    stop_hook_active:
+      run.config.script != null || blocked.some((o) => o.context !== null),
     last_assistant_message: lastMessage,
   } as const;
-  const stopped = yield* hooksAt(
+  const { rows, context: text } = yield* hooksAt(
     run,
     state,
     yield* currentHooks(run),
@@ -378,7 +378,7 @@ export const stopHooks = Effect.fn('Hooks.stop')(function* (
       : { ...base, ...common, hook_event_name: 'Stop' },
     child ? [run.config.agent] : undefined,
   );
-  return stopped.rows;
+  return { rows, block: text === null ? null : { kind: 'synthetic', text } };
 });
 
 /**

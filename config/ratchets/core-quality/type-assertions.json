@@ -4,7 +4,6 @@
   "packages/harness/src/agent/core/tools/toolSchema.ts": 3,
   "packages/harness/src/agent/prompt/templateInputs.ts": 3,
   "packages/harness/src/agent/runtime/FollowUps.ts": 1,
-  "packages/harness/src/agent/runtime/loop/hooks.ts": 2,
   "packages/harness/src/agent/runtime/loop/toolGuard.ts": 1,
   "packages/harness/src/agent/runtime/loop/toolUseDispatch.ts": 2,
   "packages/harness/src/agent/runtime/RunHandle.ts": 1,

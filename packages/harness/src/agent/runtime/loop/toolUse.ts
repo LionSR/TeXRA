@@ -82,11 +82,9 @@ const BLANK_TOOL_RESULT_CONTINUATION =
   'The previous assistant turn after a tool result was blank. Continue now with the final answer or next required action.';
 const FINAL_TOOL_INSTRUCTION = 'Submit the final structured output now.';
 
-type HistoryMessage = RunState['messages'][number];
-
 /** The text an assistant message answers with. */
 const answerOf = (
-  message: Extract<HistoryMessage, { readonly role: 'assistant' }>,
+  message: Extract<RunState['messages'][number], { role: 'assistant' }>,
 ): string =>
   message.content
     .flatMap((part) =>
@@ -705,24 +703,24 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // ends the run, the `artifact-drain` marker on its last row.
         yield* session.settlePublications(runId, { consume: false });
         // The turn boundary, in one batch: Stop hooks, the snapshot, the
-        // steps (`waiting` closes open streams), a child's settlement, and
-        // input already queued, admitted under a fresh step as a park's is.
+        // steps (`waiting` closes open streams), a child's settlement, and a
+        // Stop hook's block or input already queued, under a fresh step.
+        const { rows: hooks, block } = yield* stopHooks(run, turn, response);
         const goesOn =
           script === null &&
           !run.toolPolicy.stopAfterCycle &&
           turn.outcome === 'completed';
         const settlement =
-          start.turns && goesOn
+          start.turns && goesOn && block === null
             ? yield* start.turns.settleBoundary(result(turn.outcome, state))
             : null;
-        const hooks = yield* stopHooks(run, turn, response);
         const ending = [
           positionRow(runId, state, 'turn.end'),
           ...session.streamClosureFacts(runId),
           positionRow(runId, state, 'waiting'),
           ...(settlement?.rows ?? []),
         ];
-        const next = goesOn ? followUps.takeQueued() : null;
+        const next = block ?? (goesOn ? followUps.takeQueued() : null);
         const pin =
           next !== null && !isChild() ? yield* openStep(state, 'park') : null;
         state =
@@ -746,6 +744,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             cost: cost > 0 ? cost : undefined,
           });
         }
+        if (block !== null) continue;
         if (run.toolPolicy.stopAfterCycle && turn.outcome === 'completed')
           return finish(state, turn.outcome);
         if (script !== null) return finish(state, turn.outcome);

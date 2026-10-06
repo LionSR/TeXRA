@@ -57,13 +57,13 @@ const HookInputSchema = z.discriminatedUnion('hook_event_name', [
   z.object({
     ...CommonInput,
     hook_event_name: z.literal('Stop'),
-    stop_hook_active: z.literal(false),
+    stop_hook_active: z.boolean(),
     last_assistant_message: z.string(),
   }),
   z.object({
     ...CommonInput,
     hook_event_name: z.literal('SubagentStop'),
-    stop_hook_active: z.literal(false),
+    stop_hook_active: z.boolean(),
     agent_id: z.string(),
     agent_type: z.string(),
     last_assistant_message: z.string(),
@@ -168,12 +168,19 @@ export type HookRun =
     }
   | { readonly kind: 'unstartable'; readonly message: string };
 
+/** What reading a run depends on in the input the hook was given: its
+ *  event, and for a stop whether a block already continued the run. */
+type HookAsked = Pick<HookInput, 'hook_event_name'> & {
+  readonly stop_hook_active?: boolean;
+};
+
 /** What one hook invocation does in v1, before it is recorded. */
 interface HookVerdict {
   readonly status: HookStatus;
   /** A `PreToolUse` denial's reason. */
   readonly deny: string | null;
-  /** Text the model reads beside the prompt or the tool result. */
+  /** Text the model reads beside the prompt or the tool result; for a
+   *  stop, the instruction its block continues the run with. */
   readonly context: string | null;
   /** What it asked for that v1 parses and does not act on. */
   readonly ignored: readonly string[];
@@ -196,8 +203,28 @@ const joined = (parts: readonly (string | undefined)[]) => {
   return text === '' ? null : text;
 };
 
+const SECOND_BLOCK =
+  'a second block in a row (blocking a stop a block continued)';
+
+/**
+ * Whether a stop's block continues the run, and with what: a stop that ends
+ * a turn a block opened (`stop_hook_active`) is not blocked again, which is
+ * what bounds the loop; its block is named as ignored instead.
+ */
+function stopBlock(
+  asked: HookAsked,
+  reason: string,
+  ignored: string[],
+): string | null {
+  if (asked.stop_hook_active !== true) return reason;
+  // Exit 2 with a JSON block reaches here twice; it is one thing ignored.
+  if (!ignored.includes(SECOND_BLOCK)) ignored.push(SECOND_BLOCK);
+  return null;
+}
+
 /** The effect of output that parsed and validated. */
-function effectOf(event: HookEvent, output: HookOutput) {
+function effectOf(asked: HookAsked, output: HookOutput) {
+  const event = asked.hook_event_name;
   const ignored: string[] = [];
   if (output.continue === false) ignored.push('continue: false');
   for (const field of [
@@ -270,9 +297,15 @@ function effectOf(event: HookEvent, output: HookOutput) {
     case 'Stop':
     case 'SubagentStop': {
       const stop = HookOutputSchemas[event].parse(output);
+      const extra = stop.hookSpecificOutput?.additionalContext;
+      const reason = stop.reason ?? `A ${event} hook blocked the stop.`;
       if (stop.decision === 'block')
-        ignored.push('decision: "block" (blocking a stop)');
-      if (stop.hookSpecificOutput?.additionalContext !== undefined)
+        context = stopBlock(
+          asked,
+          extra === undefined ? reason : `${reason}\n${extra}`,
+          ignored,
+        );
+      else if (extra !== undefined)
         ignored.push('additionalContext (continuing past a stop)');
       break;
     }
@@ -291,16 +324,19 @@ const ignoredWarning = (event: HookEvent, ignored: readonly string[]) =>
     : `A ${event} hook asked for ${ignored.join(', ')}, which TeXRA does not act on in v1.`;
 
 /**
- * Read one hook run the way the reference does, for the v1 events: stdout
- * that starts with `{` and ends with `}` is JSON, validated against the
- * event's schema; exit 2 blocks (only `PreToolUse` in v1; the stop and
- * prompt blocks are named as ignored); another non-zero exit with valid JSON
- * lets the JSON decide, and without it is a non-blocking failure; plain
- * stdout is context on `SessionStart` and `UserPromptSubmit` only. Malformed
- * output, a timeout and a process that never started have no effect and
- * always carry a warning.
+ * Read one hook run the way the reference does, for the v1 events, against
+ * the input it was `asked` with: stdout that starts with `{` and ends with
+ * `}` is JSON, validated against the event's schema; exit 2 blocks a tool
+ * call or a stop (the prompt block is named as ignored), and a stop's block,
+ * by exit 2 or `decision: "block"`, is the instruction the run continues
+ * with, once (`stopBlock`); another non-zero exit with valid JSON lets the
+ * JSON decide, and without it is a non-blocking failure; plain stdout is
+ * context on `SessionStart` and `UserPromptSubmit` only. Malformed output, a
+ * timeout and a process that never started have no effect and always carry
+ * a warning.
  */
-export function interpretHookRun(event: HookEvent, run: HookRun): HookVerdict {
+export function interpretHookRun(asked: HookAsked, run: HookRun): HookVerdict {
+  const event = asked.hook_event_name;
   const none = {
     deny: null,
     context: null,
@@ -334,7 +370,7 @@ export function interpretHookRun(event: HookEvent, run: HookRun): HookVerdict {
         malformed = `its output does not match the ${event} output: ${z.prettifyError(result.error)}`;
     }
   }
-  const effect = parsed === undefined ? null : effectOf(event, parsed);
+  const effect = parsed === undefined ? null : effectOf(asked, parsed);
   if (run.exitCode === 2) {
     const ignored = [...(effect?.ignored ?? [])];
     let deny: string | null = null;
@@ -344,10 +380,14 @@ export function interpretHookRun(event: HookEvent, run: HookRun): HookVerdict {
     if (event === 'PreToolUse') deny = reason;
     else if (event === 'PostToolUse')
       context = joined([context ?? undefined, stderr]);
-    else if (event !== 'SessionStart')
-      ignored.push(
-        `exit code 2 (blocking a ${event === 'UserPromptSubmit' ? 'prompt' : 'stop'})`,
+    else if ((event === 'Stop' || event === 'SubagentStop') && context === null)
+      context = stopBlock(
+        asked,
+        stderr || `A ${event} hook exited with code 2.`,
+        ignored,
       );
+    else if (event === 'UserPromptSubmit')
+      ignored.push('exit code 2 (blocking a prompt)');
     const warnings = [
       malformed === undefined
         ? null
