@@ -247,9 +247,10 @@ const settle = Effect.fn('llm.settleTurn')(function* (
   const named = names(snapshot);
   if (parts.some((part) => !named.has(keyOf(part))))
     return yield* fail(turn, 'returned a snapshot that omits its output');
-  // One item per name, so a repeated call can never dispatch twice.
-  if (named.size < snapshot.length)
-    return yield* fail(turn, 'returned a snapshot repeating an item');
+  // One item per name on each side, so the match below is one-to-one and a
+  // repeated call can never dispatch twice.
+  if (named.size < snapshot.length || names(parts).size < parts.length)
+    return yield* fail(turn, 'repeated an output item');
   const done = new Map(
     streamed.flatMap(([, slot]) =>
       slot.closed && slot.part ? [[keyOf(slot.part), slot.part] as const] : [],
