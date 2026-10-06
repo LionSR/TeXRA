@@ -64,8 +64,9 @@ export const progressAppStyles = css`
   /* Workspace controls live in the desktop's separate title bar. This
      header belongs to the task and aligns with the file-tab strip. */
   :host([placement='desktop']) .shell-header {
-    --wa-height-header: 36px;
-    min-height: 36px;
+    --wa-height-header: 44px;
+    min-height: 44px;
+    border-bottom: 0;
   }
   /* The desktop rail lists each project's tasks, so the sessions button
      and drawer would be a second list there. */
@@ -76,7 +77,7 @@ export const progressAppStyles = css`
   /* One readable column, as the wide editor tab has: the desktop window
      is wide and a launcher stretched edge to edge reads as packed. */
   :host([placement='desktop']) .reading > .empty {
-    width: min(720px, 100%);
+    width: min(740px, 100%);
     margin: 0 auto;
   }
   /* The desktop's new task is one centred group: hero, attachments and
@@ -86,14 +87,18 @@ export const progressAppStyles = css`
   :host([placement='desktop']) .empty {
     /* \`safe\`: a group taller than the pane starts at the top, not clipped. */
     justify-content: safe center;
+    --hero-align: start;
+    --hero-text-align: start;
+    --hero-heading-size: 28px;
+    --hero-padding-inline: 0;
     box-sizing: border-box;
-    padding: var(--wa-space-l) var(--wa-space-m);
+    padding: 32px 28px 80px;
   }
   :host([placement='desktop']) .hero-wrap {
-    padding-block: var(--wa-space-m);
+    padding-block: 0 24px;
   }
   :host([placement='desktop']) .header-main {
-    padding-inline: var(--wa-space-xs);
+    padding-inline: 24px;
   }
   :host([placement='desktop']) .launch-banners {
     margin-top: 0;

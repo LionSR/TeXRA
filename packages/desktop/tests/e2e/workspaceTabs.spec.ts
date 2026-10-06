@@ -129,6 +129,8 @@ const ACTIVE_PROJECT_ROW = '.shell-project-row[aria-current="true"]';
  */
 async function clickTreeRow(path: string): Promise<void> {
   const { page } = launched;
+  if (!(await page.locator('.shell-workspace-view').isVisible()))
+    await page.locator('#shellWorkspaceView').click();
   const row = page.locator(
     `.shell-project-workbench:not([hidden]) .desktop-editor-tree-row[data-path="${path}"]`,
   );
@@ -224,7 +226,7 @@ test('collapses and restores project navigation', async () => {
   await expect(page.locator('.shell-sidebar')).toBeVisible();
 });
 
-test('opens settings as a popup over the permanent conversation', async () => {
+test('opens settings over either main view', async () => {
   const { page } = launched;
 
   await openSettings();
@@ -239,8 +241,9 @@ test('opens settings as a popup over the permanent conversation', async () => {
     page.locator('.shell-workbench-tab[data-kind="settings"]'),
   ).toHaveCount(0);
 
-  // Closing the popup leaves the task canvas mounted and visible.
   await closeSettings('escape');
+  await expect(page.locator('.shell-workspace-view')).toBeVisible();
+  await page.locator('#shellTaskView').click();
   await expect(page.locator('.shell-conversation')).toBeVisible();
 });
 
@@ -249,7 +252,10 @@ test('toggles and restores the bottom and side bars', async () => {
 
   await openTool('logs');
   const sideToggle = page.locator('#shellToggleSidePanel');
-  await expect(sideToggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#shellWorkspaceView')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
 
   await openTool('terminal');
   const bottomWorkbench = page.locator(
@@ -277,11 +283,14 @@ test('toggles and restores the bottom and side bars', async () => {
 
   await page.locator(hideWorkbench('right')).click();
   await expect(page.locator('.shell-workbench:visible')).toHaveCount(0);
-  await expect(sideToggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('.shell-workspace-empty')).toBeVisible();
   await expect(sideToggle).toBeVisible();
   await sideToggle.click();
   await expect(page.locator(activeWorkbenchTab('files'))).toBeVisible();
-  await expect(sideToggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#shellWorkspaceView')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
 });
 
 test('moves tabs between Bottom and Right from the context menu', async () => {
@@ -484,6 +493,11 @@ test('workbench menus remain usable above an embedded browser', async () => {
   });
   await page.keyboard.press('Escape');
   await expect.poll(attachedViews).toBe(viewsWithoutBrowser + 1);
+  await page.locator('#shellTaskView').click();
+  await expect(page.locator('.shell-conversation')).toBeVisible();
+  await expect.poll(attachedViews).toBe(viewsWithoutBrowser);
+  await page.locator('#shellWorkspaceView').click();
+  await expect.poll(attachedViews).toBe(viewsWithoutBrowser + 1);
   await add.locator('wa-button[slot="trigger"]').click();
   await add.locator('wa-dropdown-item[value="files"]').click();
   await expect(
@@ -527,9 +541,7 @@ test('switches layout without losing the editor and keeps narrow panes usable', 
     await app.evaluate(({ BrowserWindow }, contentWidth) => {
       BrowserWindow.getAllWindows()[0].setContentSize(contentWidth, 800);
     }, width);
-    await page
-      .getByRole('button', { name: 'Expand editor', exact: true })
-      .click();
+    await page.locator('#shellWorkspaceView').click();
     await expect(page.locator('.shell-conversation')).toBeHidden();
     await expect(
       page.locator('.desktop-editor-surface .view-lines'),
@@ -541,20 +553,13 @@ test('switches layout without losing the editor and keeps narrow panes usable', 
       path: test.info().outputPath(`workspace-${width}.png`),
     });
 
-    await page
-      .getByRole('button', { name: 'Show conversation', exact: true })
-      .click();
+    await page.locator('#shellTaskView').click();
     await expect(page.locator('.shell-conversation')).toBeVisible();
-    await expect
-      .poll(
-        async () =>
-          (await page.locator('.desktop-editor-surface:visible').boundingBox())
-            ?.width ?? 0,
-      )
-      .toBeGreaterThan(240);
+    await expect(page.locator('.desktop-editor-surface')).toBeHidden();
+    await page.locator('#shellWorkspaceView').click();
     await expect(
-      page.locator('.shell-editor-workspace .shell-editor-tree'),
-    ).toBeVisible();
+      page.locator('.desktop-editor-surface .view-lines'),
+    ).toContainText('documentclass');
     await page.locator('#shellToggleTerminalPanel').click();
     await expect(
       page.locator('.shell-workbench[data-placement="bottom"]'),
@@ -706,6 +711,7 @@ test('closes a bottom tab and falls back within the same pane', async () => {
       '.shell-workbench[data-placement="bottom"] .shell-workbench-pane',
     ),
   ).toBeVisible();
+  await page.locator('#shellTaskView').click();
   await expect(page.locator('.shell-conversation')).toBeVisible();
 });
 

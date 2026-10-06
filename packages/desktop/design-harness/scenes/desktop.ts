@@ -139,7 +139,6 @@ const sidebarCallbacks = {
   onOpenFolder: noop,
   onSelectProject: noop,
   onProjectAction: noop,
-  onToggleProjectCollapsed: noop,
   onOpenSettings: noop,
 };
 const workbenchCallbacks = {

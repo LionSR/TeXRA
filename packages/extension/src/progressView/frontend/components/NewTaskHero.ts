@@ -13,10 +13,10 @@ import { designTokens } from '@ui/styles';
 export const heroStyles = css`
   .hero {
     display: grid;
-    justify-items: center;
+    justify-items: var(--hero-align, center);
     gap: var(--wa-space-xs);
-    padding: 0 var(--wa-space-xs);
-    text-align: center;
+    padding: 0 var(--hero-padding-inline, var(--wa-space-xs));
+    text-align: var(--hero-text-align, center);
   }
 
   .hero-mark {
@@ -30,7 +30,7 @@ export const heroStyles = css`
 
   .hero h1 {
     margin: var(--wa-space-3xs) 0 0;
-    font-size: var(--font-size-h1);
+    font-size: var(--hero-heading-size, var(--font-size-h1));
     font-weight: var(--font-weight-semibold);
     letter-spacing: -0.025em;
     line-height: var(--line-height-heading, 1.25);
@@ -71,8 +71,8 @@ export class NewTaskHero extends LitElement {
 
   override render(): TemplateResult {
     return html`<section class="hero" aria-labelledby="new-task-hero-title">
-      <h1 id="new-task-hero-title">What are you working on?</h1>
-      <p>Describe the outcome you want for ${this.projectName}.</p>
+      <h1 id="new-task-hero-title">What would you like to do?</h1>
+      <p>Work with TeXRA on ${this.projectName}.</p>
     </section>`;
   }
 }

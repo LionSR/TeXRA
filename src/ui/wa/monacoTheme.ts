@@ -77,6 +77,10 @@ export function applyMonacoTheme(
       'editor.inactiveSelectionBackground': color(
         '--wa-color-editor-inactive-selection',
       ),
+      'diffEditor.insertedTextBackground': color('--wa-color-diff-inserted'),
+      'diffEditor.removedTextBackground': color('--wa-color-diff-removed'),
+      'diffEditor.insertedLineBackground': color('--wa-color-diff-inserted'),
+      'diffEditor.removedLineBackground': color('--wa-color-diff-removed'),
       'editor.lineHighlightBorder': '#00000000',
       'editor.findMatchBackground': color('--wa-color-editor-find-match'),
       'editor.findMatchHighlightBackground': color(

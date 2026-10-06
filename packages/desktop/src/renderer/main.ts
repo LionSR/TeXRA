@@ -24,7 +24,7 @@ import type { ProgressApp } from '@progressView/frontend/ProgressApp';
 import { createSessionSurfaces } from '@progressView/frontend/sessionSurfaces';
 import { hostBridge, postMessage } from '@shared/hostBridge';
 import { DESKTOP_THEME_KIND } from '@shared/schemas';
-import { applyShellAction, type Shell } from '@shared/session/shell';
+import type { Shell } from '@shared/session/shell';
 import {
   PersistedState,
   type KeyValueStore,
@@ -63,7 +63,6 @@ import {
   renameWorkbenchTab,
   setBottomPanelHeight,
   setSidebarWidth,
-  setWorkbenchWidth,
   toggleSidebar,
   WORKBENCH_PLACEMENTS,
   type DesktopShellState,
@@ -439,16 +438,39 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
         : nothing
     }
   </span>`;
-  const rightTab = activeWorkbenchTab(shellState(), 'right');
-  const expandLabel = shellState().focusWorkspace
-    ? 'Show conversation'
-    : `Expand ${rightTab?.kind === 'editor' ? 'editor' : 'file pane'}`;
+  const workspace = shellState().focusWorkspace;
+  function showWorkspace(): void {
+    if (!activeWorkbenchTab(shellState(), 'right'))
+      currentWorkbench().workbench.openKind('files');
+    else updateShell({ ...shellState(), focusWorkspace: true });
+  }
   return html`
     <header class="shell-workspace-toolbar">
+      <span class="shell-wordmark">TeXRA</span>
       ${sidebarToggle}
       <span class="shell-workspace-project"
-        >${activeProject?.display.name ?? 'TeXRA'}</span
+        >${activeProject?.display.name ?? 'Research workspace'}</span
       >
+      <nav class="shell-view-switch" aria-label="Main view">
+        ${renderLabeledActionButton({
+          id: 'shellTaskView',
+          text: 'Tasks',
+          icon: 'comment',
+          kind: 'ghost',
+          pressed: !workspace,
+          onClick: () =>
+            updateShell({ ...shellState(), focusWorkspace: false }),
+        })}
+        ${renderLabeledActionButton({
+          id: 'shellWorkspaceView',
+          text: 'Workspace',
+          icon: 'table-columns',
+          kind: 'ghost',
+          pressed: workspace,
+          disabled: !hasWorkspace(),
+          onClick: showWorkspace,
+        })}
+      </nav>
       <div class="shell-workspace-tools">
         ${renderLabeledActionButton({
           id: 'shellToggleSidePanel',
@@ -456,7 +478,6 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
           text: 'Files',
           kind: 'ghost',
           className: 'is-compact',
-          pressed: activeWorkbenchTab(shellState(), 'right')?.kind === 'files',
           disabled: !hasWorkspace(),
           onClick: () => currentWorkbench().workbench.openKind('files'),
         })}
@@ -466,27 +487,17 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
           text: 'Terminal',
           kind: 'ghost',
           className: 'is-compact',
-          pressed: activeWorkbenchTab(shellState(), 'bottom') != null,
+          pressed:
+            workspace && activeWorkbenchTab(shellState(), 'bottom') != null,
           disabled: !hasWorkspace(),
-          onClick: toggleBottomBarVisibility,
+          onClick: () => {
+            if (!workspace) {
+              if (activeWorkbenchTab(shellState(), 'bottom'))
+                updateShell({ ...shellState(), focusWorkspace: true });
+              else currentWorkbench().workbench.openKind('terminal');
+            } else toggleBottomBarVisibility();
+          },
         })}
-        ${
-          rightTab
-            ? renderIconActionButton({
-                id: 'shellExpandFilePane',
-                icon: shellState().focusWorkspace
-                  ? 'compress'
-                  : 'window-maximize',
-                label: expandLabel,
-                tooltip: expandLabel,
-                onClick: () =>
-                  updateShell({
-                    ...shellState(),
-                    focusWorkspace: !shellState().focusWorkspace,
-                  }),
-              })
-            : nothing
-        }
       </div>
     </header>
   `;
@@ -557,14 +568,6 @@ function rememberBottomPanelHeight(event: Event): void {
   recordLayoutMeasurement(setBottomPanelHeight(shellState(), height));
 }
 
-function rememberWorkbenchWidth(event: Event): void {
-  if (!activeWorkbenchTab(shellState(), 'right')) return;
-  if (shellState().focusWorkspace) return;
-  const width = measuredSplitPosition(event);
-  if (width == null) return;
-  recordLayoutMeasurement(setWorkbenchWidth(shellState(), width));
-}
-
 function projectWorkbenchesTemplate(
   placement: WorkbenchPlacement,
 ): TemplateResult {
@@ -589,58 +592,46 @@ function projectWorkbenchesTemplate(
  */
 const CLOSED_SPLIT_STYLE = '--divider-width: 0px; --min: 0px';
 
-function shellRightLayoutTemplate(
-  rightTab: WorkbenchTab | undefined,
-): TemplateResult {
-  const focused = rightTab != null && shellState().focusWorkspace;
-  let paneWidth: number | typeof nothing = 0;
-  if (focused) paneWidth = nothing;
-  else if (rightTab) paneWidth = shellState().workbenchWidth;
-  let splitStyle: string | typeof nothing = CLOSED_SPLIT_STYLE;
-  if (focused) splitStyle = '--divider-width: 0px; --min: 0px; --max: 100%';
-  else if (rightTab) splitStyle = nothing;
-  return html`
-    <wa-split-panel
-      class="shell-main-split ${focused ? 'is-workspace-focus' : ''}"
-      data-kind=${rightTab?.kind ?? nothing}
-      orientation="horizontal"
-      primary="end"
-      position-in-pixels=${paneWidth}
-      ?disabled=${!rightTab || focused}
-      style=${splitStyle}
-      @wa-reposition=${rememberWorkbenchWidth}
-    >
-      <div slot="start" class="shell-main-panel" ?hidden=${focused}>
-        ${shellConversationTemplate()}
-      </div>
-      <div slot="end" class="shell-workbench-panel">
-        ${projectWorkbenchesTemplate('right')}
-      </div>
-    </wa-split-panel>
-  `;
-}
-
 function shellMainTemplate(
   rightTab: WorkbenchTab | undefined,
   bottomTab: WorkbenchTab | undefined,
 ): TemplateResult {
-  const rightLayout = shellRightLayoutTemplate(rightTab);
-  return html`
-    <wa-split-panel
-      class="shell-bottom-split"
-      orientation="vertical"
-      primary="end"
-      position-in-pixels=${bottomTab ? shellState().bottomPanelHeight : 0}
-      ?disabled=${!bottomTab}
-      style=${bottomTab ? nothing : CLOSED_SPLIT_STYLE}
-      @wa-reposition=${rememberBottomPanelHeight}
+  const workspace = shellState().focusWorkspace;
+  return html` <div class="shell-view-stack">
+    <section class="shell-task-view" ?hidden=${workspace}>
+      ${shellConversationTemplate()}
+    </section>
+    <section
+      class="shell-workspace-view"
+      ?hidden=${!workspace}
+      aria-label="Workspace"
     >
-      <div slot="start" class="shell-main-panel">${rightLayout}</div>
-      <div slot="end" class="shell-bottom-workbench-panel">
-        ${projectWorkbenchesTemplate('bottom')}
-      </div>
-    </wa-split-panel>
-  `;
+      <wa-split-panel
+        class="shell-bottom-split"
+        orientation="vertical"
+        primary="end"
+        position-in-pixels=${bottomTab ? shellState().bottomPanelHeight : 0}
+        ?disabled=${!bottomTab}
+        style=${bottomTab ? nothing : CLOSED_SPLIT_STYLE}
+        @wa-reposition=${rememberBottomPanelHeight}
+      >
+        <div slot="start" class="shell-workbench-panel">
+          ${projectWorkbenchesTemplate('right')}
+          ${
+            rightTab
+              ? nothing
+              : html`<div class="shell-workspace-empty">
+                  <h2>Your workspace</h2>
+                  <p>Open Files to browse this project's documents and code.</p>
+                </div>`
+          }
+        </div>
+        <div slot="end" class="shell-bottom-workbench-panel">
+          ${projectWorkbenchesTemplate('bottom')}
+        </div>
+      </wa-split-panel>
+    </section>
+  </div>`;
 }
 
 function shellTemplate(): TemplateResult {
@@ -650,68 +641,62 @@ function shellTemplate(): TemplateResult {
   const workbenchOpen = rightTab != null || bottomTab != null;
 
   return html`
-    <wa-split-panel
-      class="shell-frame ${shellState().sidebarCollapsed ? 'shell-frame-collapsed' : ''}"
-      orientation="horizontal"
-      primary="start"
-      position-in-pixels=${shellState().sidebarCollapsed ? 0 : shellState().sidebarWidth}
-      ?disabled=${shellState().sidebarCollapsed}
-      style=${shellState().sidebarCollapsed ? CLOSED_SPLIT_STYLE : nothing}
-      data-workbench-open=${String(workbenchOpen)}
-      data-right-panel-open=${String(rightTab != null)}
-      data-bottom-panel-open=${String(bottomTab != null)}
-      @wa-reposition=${rememberSidebarWidth}
-    >
-      <div
-        slot="start"
-        class="shell-sidebar-slot"
-        ?hidden=${shellState().sidebarCollapsed}
+    <div class="desktop-app">
+      ${shellWorkspaceToolbarTemplate()}
+      <wa-split-panel
+        class="shell-frame ${shellState().sidebarCollapsed ? 'shell-frame-collapsed' : ''}"
+        orientation="horizontal"
+        primary="start"
+        position-in-pixels=${shellState().sidebarCollapsed ? 0 : shellState().sidebarWidth}
+        ?disabled=${shellState().sidebarCollapsed}
+        style=${shellState().sidebarCollapsed ? CLOSED_SPLIT_STYLE : nothing}
+        data-workbench-open=${String(workbenchOpen)}
+        data-right-panel-open=${String(rightTab != null)}
+        data-bottom-panel-open=${String(bottomTab != null)}
+        @wa-reposition=${rememberSidebarWidth}
       >
-        ${shellSidebarTemplate(
-          {
-            projects: railProjects(),
-            renamingProjectKey,
-            shell,
-            commandsLabel: commandLabel(DESKTOP_COMMAND_PALETTE_ID),
-            commandsTitle: commandTitle(DESKTOP_COMMAND_PALETTE_ID),
-          },
-          {
-            onNewTask: returnToLauncher,
-            onOpenCommands: () => palette.open(),
-            onOpenFolder: () =>
-              postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
-            onSelectProject: selectProject,
-            onProjectAction: (key, action) => {
-              if (action !== 'rename')
-                return projectRail.runProjectAction(key, action);
-              renamingProjectKey = key;
-              rerenderShell();
-              requestAnimationFrame(() => {
-                const input = appRoot.querySelector<HTMLInputElement>(
-                  '.shell-project-rename',
-                );
-                input?.focus();
-                input?.select();
-              });
+        <div
+          slot="start"
+          class="shell-sidebar-slot"
+          ?hidden=${shellState().sidebarCollapsed}
+        >
+          ${shellSidebarTemplate(
+            {
+              projects: railProjects(),
+              renamingProjectKey,
+              shell,
+              commandsLabel: commandLabel(DESKTOP_COMMAND_PALETTE_ID),
+              commandsTitle: commandTitle(DESKTOP_COMMAND_PALETTE_ID),
             },
-            onRenameProject: finishProjectRename,
-            onToggleProjectCollapsed: (key) =>
-              setShell(
-                applyShellAction(shell, {
-                  kind: 'collapse',
-                  session: key,
-                  collapsed: !shell.collapsed.includes(key),
-                }),
-              ),
-            onOpenSettings: () => settingsDialog.open(),
-          },
-        )}
-      </div>
-      <div slot="end" class="shell-frame-main-panel">
-        ${shellWorkspaceToolbarTemplate()}
-        <div class="shell-workspace-layout">${main}</div>
-      </div>
-    </wa-split-panel>
+            {
+              onNewTask: returnToLauncher,
+              onOpenCommands: () => palette.open(),
+              onOpenFolder: () =>
+                postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
+              onSelectProject: selectProject,
+              onProjectAction: (key, action) => {
+                if (action !== 'rename')
+                  return projectRail.runProjectAction(key, action);
+                renamingProjectKey = key;
+                rerenderShell();
+                requestAnimationFrame(() => {
+                  const input = appRoot.querySelector<HTMLInputElement>(
+                    '.shell-project-rename',
+                  );
+                  input?.focus();
+                  input?.select();
+                });
+              },
+              onRenameProject: finishProjectRename,
+              onOpenSettings: () => settingsDialog.open(),
+            },
+          )}
+        </div>
+        <div slot="end" class="shell-frame-main-panel">
+          <div class="shell-workspace-layout">${main}</div>
+        </div>
+      </wa-split-panel>
+    </div>
   `;
 }
 

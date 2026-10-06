@@ -61,12 +61,14 @@ export const toolUseStyles = css`
     overflow-wrap: anywhere;
   }
 
-  .banner-details--error::part(summary) {
+  wa-details:is(.banner-details--error, .banner-details--assistant)::part(
+      summary
+    ) {
     width: 100%;
     min-width: 0;
   }
 
-  .banner-details--error > .details-summary {
+  :is(.banner-details--error, .banner-details--assistant) > .details-summary {
     --message-actions-width: var(--control-size-s);
     width: 100%;
     padding: 0;
@@ -80,14 +82,18 @@ export const toolUseStyles = css`
     ${panelFrameStyles}
   }
 
-  wa-details.banner-details--error::part(header) {
+  wa-details:is(.banner-details--error, .banner-details--assistant)::part(
+      header
+    ) {
     ${panelHeaderStyles}
     display: grid;
     grid-template-columns: minmax(0, 1fr) var(--control-size-s);
     gap: var(--wa-space-xs);
   }
 
-  wa-details.banner-details--error::part(icon) {
+  wa-details:is(.banner-details--error, .banner-details--assistant)::part(
+      icon
+    ) {
     display: grid;
     place-items: center;
     width: var(--control-size-s);
@@ -95,11 +101,25 @@ export const toolUseStyles = css`
     margin: 0;
   }
 
-  wa-details.banner-details--error::part(content) {
+  wa-details:is(.banner-details--error, .banner-details--assistant)::part(
+      content
+    ) {
     ${panelContentStyles}
   }
 
   .banner-content--error {
+    padding: 0;
+  }
+
+  .banner-details--assistant {
+    margin-block-end: var(--message-gap);
+  }
+
+  .banner-details--assistant::part(base) {
+    border: var(--border-thin) solid transparent;
+  }
+
+  .banner-details--assistant .banner-content {
     padding: 0;
   }
 

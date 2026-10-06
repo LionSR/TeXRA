@@ -92,7 +92,11 @@ export function createWorkbenchController({
     const tab = WORKBENCH_PLACEMENTS.map((placement) =>
       activeWorkbenchTab(getState(), placement),
     ).find((candidate) => candidate?.kind === 'browser');
-    if (tab?.kind !== 'browser' || isBrowserCovered()) {
+    if (
+      !getState().focusWorkspace ||
+      tab?.kind !== 'browser' ||
+      isBrowserCovered()
+    ) {
       postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_HIDE);
       return;
     }
@@ -100,7 +104,8 @@ export function createWorkbenchController({
     // Measure after layout settles; a workbench that just appeared has no box
     // until the browser has flushed the style change.
     requestAnimationFrame(() => {
-      if (!isActive() || isBrowserCovered()) return;
+      if (!isActive() || !getState().focusWorkspace || isBrowserCovered())
+        return;
       const slot = document.querySelector(
         `[data-session="${CSS.escape(session)}"] [data-browser-slot="${CSS.escape(tabId)}"]`,
       );
@@ -128,6 +133,7 @@ export function createWorkbenchController({
     focus = false,
     activate = WORKBENCH_PLACEMENTS,
   }: { focus?: boolean; activate?: readonly WorkbenchPlacement[] } = {}): void {
+    if (!getState().focusWorkspace) return;
     for (const placement of WORKBENCH_PLACEMENTS) {
       const tab = activeWorkbenchTab(getState(), placement);
       if (!tab) continue;
@@ -236,7 +242,7 @@ export function createWorkbenchController({
     return renderEmptyState({
       icon: 'file-code',
       title: 'Choose a file',
-      body: 'Open a file from Files to inspect or edit it beside this task.',
+      body: 'Choose a document or source file from the explorer.',
       headingTag: 'h2',
       className: 'shell-workbench-placeholder',
       iconSurfaceSize: 'l',

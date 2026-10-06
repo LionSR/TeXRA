@@ -105,21 +105,21 @@ export class SessionComposer extends LitElement {
         flex-direction: column;
         gap: var(--wa-space-2xs);
         min-width: 0;
-        padding: var(--wa-space-xs);
+        padding: var(--wa-space-s);
         border: var(--border-thin) solid var(--wa-form-control-border-color);
-        border-radius: var(--wa-border-radius-l);
+        border-radius: var(--wa-border-radius-xl);
         background: var(--composer-background, var(--wa-color-surface-raised));
         transition: border-color var(--transition-fast);
       }
       /* The shared field focus (selectStyles.ts), at card radius. */
       .composer:focus-within {
         border-color: var(--wa-color-focus);
-        box-shadow: var(--field-focus-halo);
+        box-shadow: 0 0 0 1px var(--wa-color-focus);
       }
       /* Follow-ups keep a writing area above the same action row as launch.
          Controls never move into the text line or appear only on focus. */
       .composer.is-compact textarea {
-        --textarea-min-height: calc(2lh + 2 * var(--wa-space-2xs));
+        --textarea-min-height: calc(3lh + 2 * var(--wa-space-2xs));
         --textarea-max-height: clamp(var(--textarea-min-height), 24vh, 200px);
       }
       .composer.is-compact .row {
@@ -160,7 +160,7 @@ export class SessionComposer extends LitElement {
         color: var(--wa-color-text-quiet);
       }
       .composer:not(.is-compact) textarea {
-        --textarea-min-height: calc(2lh + 2 * var(--wa-space-2xs));
+        --textarea-min-height: calc(3lh + 2 * var(--wa-space-2xs));
         --textarea-max-height: clamp(var(--textarea-min-height), 32vh, 240px);
       }
 

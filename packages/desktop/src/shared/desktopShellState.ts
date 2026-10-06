@@ -169,7 +169,7 @@ function activateWorkbenchTab(
     ).findLast((candidate) => candidate.kind !== tab.kind)?.id;
   }
   activeWorkbenchTabIds[tab.placement] = tab.id;
-  return { ...state, activeWorkbenchTabIds };
+  return { ...state, activeWorkbenchTabIds, focusWorkspace: true };
 }
 
 function tabId(kind: WorkbenchKind, target?: string): string {

@@ -28,9 +28,9 @@ two halves:
 1. **Palette:** per host. The desktop has `--desktop-*` in
    `packages/desktop/src/renderer/themeTokens.css`. It carries the TeXRA
    brand:
-   - warm paper surfaces;
+   - cool neutral surfaces;
    - neutral ink for text;
-   - purple as the single interaction accent.
+   - blue as the single interaction accent.
 
    The extension maps the VS Code theme in
    `packages/extension/src/common/styles/common.css`. Inside someone's
@@ -134,3 +134,16 @@ two halves:
 - Define all three Web Awesome variant levels (`quiet`, `normal`, `loud`).
   Leaving `normal` unmapped lets native controls fall back to a different
   palette even when the custom button skins look correct.
+
+## Desktop workspace composition
+
+The title bar contains the Tasks / Workspace view switch. These are full-width
+views; opening Files or Terminal enters Workspace, and selecting a task returns
+to Tasks. Both stay mounted, so draft text, editor models and terminal scrollback
+survive switching. Native browser content is hidden while Tasks is selected.
+
+The rail lists open projects first, followed by the active project's task history.
+There are no nested project/task disclosure trees. Project rows and task rows
+share trailing status and action columns. Tool tabs use a compact selected surface
+rather than an accent underline. Files remain beside the editor; the terminal
+uses a separate bottom region.

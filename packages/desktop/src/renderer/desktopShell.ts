@@ -18,7 +18,10 @@ import type { Shell } from '@shared/session/shell';
 import type { Surface } from '@shared/session/surface';
 import { unseenRuns } from '@shared/session/unseenRuns';
 import type { TeXRAIconName } from '@shared/iconNames';
-import { renderIconActionButton } from '@ui/wa/actionButtons';
+import {
+  renderIconActionButton,
+  renderLabeledActionButton,
+} from '@ui/wa/actionButtons';
 import { nextTablistIndex } from '@ui/wa/tablistKeyboardNav';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -57,7 +60,6 @@ interface ShellSidebarCallbacks {
   onSelectProject(key: string): void;
   onProjectAction(key: string, action: ProjectAction): void;
   onRenameProject?(key: string, name: string | null): void;
-  onToggleProjectCollapsed(key: string): void;
   onOpenSettings(): void;
 }
 
@@ -105,14 +107,7 @@ function projectStatus(
   return undefined;
 }
 
-/**
- * One section per open project: the row, then that project's conversations
- * (its top-level runs; a run's agents live on its script and dispatch
- * cards) unless
- * the user folded the section shut. Every row has the same controls, so the
- * shown project differs only by its weight. The row chooses the project;
- * its menu starts a task or closes the project.
- */
+/** Project selection is separate from the active project's task history. */
 function projectSection(
   project: RailProject,
   model: ShellSidebarModel,
@@ -120,22 +115,11 @@ function projectSection(
 ): TemplateResult {
   const { key, name } = project.display;
   const active = key === model.shell.active;
-  const collapsed = model.shell.collapsed.includes(key);
-  const foldLabel = `${collapsed ? 'Expand' : 'Collapse'} ${name}`;
   // Tooltip anchors: the key is a path, so it is encoded into the DOM id.
   const idBase = `shell-project-${encodeURIComponent(key)}`;
   const status = projectStatus(project);
   return html`
     <div class="shell-project-item ${active ? 'is-active' : ''}">
-      ${renderIconActionButton({
-        id: `${idBase}-fold`,
-        icon: collapsed ? 'chevron-right' : 'chevron-down',
-        label: foldLabel,
-        tooltip: foldLabel,
-        expanded: !collapsed,
-        className: 'shell-project-fold icon-button is-size-s',
-        onClick: () => callbacks.onToggleProjectCollapsed(key),
-      })}
       ${
         model.renamingProjectKey === key
           ? html`<input
@@ -171,7 +155,10 @@ function projectSection(
                 }
               }}
             >
-              <span class="shell-project-name">${name}</span>
+              ${waIcon('folder', { slot: 'start' })}<span
+                class="shell-project-name"
+                >${name}</span
+              >
             </wa-button>`
       }
       ${
@@ -217,22 +204,6 @@ function projectSection(
         </wa-dropdown-item>
       </wa-dropdown>
     </div>
-    ${
-      // An empty project lists nothing: its `+` is the way to start.
-      collapsed || project.view.order.length === 0
-        ? nothing
-        : html`<div
-            class="shell-sidebar-sessions shell-project-runs"
-            data-session=${key}
-          >
-            <run-tabs
-              .view=${project.view}
-              .surface=${project.surface}
-              .topLevelOnly=${true}
-              removable
-            ></run-tabs>
-          </div>`
-    }
   `;
 }
 
@@ -240,66 +211,83 @@ export function shellSidebarTemplate(
   model: ShellSidebarModel,
   callbacks: ShellSidebarCallbacks,
 ): TemplateResult {
+  const active = model.projects.find(
+    (project) => project.display.key === model.shell.active,
+  );
   return html`
     <aside class="shell-sidebar" aria-label="Projects and tasks">
-      <div class="shell-sidebar-brand" aria-hidden="true"></div>
-
       <nav class="shell-sidebar-primary" aria-label="Task actions">
         ${sidebarAction({
-          icon: 'plus',
-          label: 'New task',
-          emphasized: true,
-          onClick: callbacks.onNewTask,
-        })}
-        ${renderIconActionButton({
-          id: 'shellCommands',
           icon: 'magnifying-glass',
           label: model.commandsLabel,
-          tooltip: model.commandsTitle,
-          className: 'shell-sidebar-action shell-sidebar-command',
-          size: 'l',
+          title: model.commandsTitle,
           onClick: callbacks.onOpenCommands,
         })}
       </nav>
-
       <div class="shell-sidebar-scroll">
-        <section class="shell-sidebar-section shell-project-section">
+        <section
+          class="shell-sidebar-section shell-project-section"
+          aria-label="Open projects"
+        >
           <div class="shell-sidebar-section-heading">
             <span class="shell-sidebar-section-label">Projects</span>
             ${renderIconActionButton({
               id: 'shellProjectAdd',
-              icon: 'plus',
+              icon: 'folder-open',
               label: 'Open project folder',
               tooltip: 'Open project folder',
-              className: 'shell-project-add icon-button is-size-s',
+              className: 'shell-project-add',
               onClick: callbacks.onOpenFolder,
             })}
           </div>
           ${
             model.projects.length === 0
-              ? html`<wa-button
-                  type="button"
-                  class="shell-project-empty btn-ghost"
-                  appearance="plain"
-                  size="s"
-                  @click=${callbacks.onOpenFolder}
-                >
-                  ${waIcon('folder-open', { slot: 'start' })}
-                  <span>Open a project folder</span>
-                </wa-button>`
+              ? sidebarAction({
+                  icon: 'folder-open',
+                  label: 'Open a project',
+                  onClick: callbacks.onOpenFolder,
+                })
               : model.projects.map((project) =>
                   projectSection(project, model, callbacks),
                 )
           }
         </section>
+        <section
+          class="shell-sidebar-section shell-history-section"
+          aria-label="Task history"
+        >
+          <div class="shell-sidebar-section-heading">
+            <span class="shell-sidebar-section-label">Task history</span>
+            ${renderLabeledActionButton({
+              id: 'shellNewTask',
+              icon: 'plus',
+              text: 'New task',
+              kind: 'ghost',
+              className: 'is-compact',
+              onClick: callbacks.onNewTask,
+            })}
+          </div>
+          ${
+            active && active.view.order.length > 0
+              ? html` <div
+                  class="shell-sidebar-sessions shell-project-runs"
+                  data-session=${active.display.key}
+                >
+                  <run-tabs
+                    .view=${active.view}
+                    .surface=${active.surface}
+                    .topLevelOnly=${true}
+                    removable
+                  ></run-tabs>
+                </div>`
+              : html`<p class="shell-history-empty">
+                  Your tasks will appear here.
+                </p>`
+          }
+        </section>
       </div>
-
       <footer class="shell-sidebar-footer">
-        ${sidebarAction({
-          icon: 'gear',
-          label: 'Settings',
-          onClick: callbacks.onOpenSettings,
-        })}
+        ${sidebarAction({ icon: 'gear', label: 'Settings', onClick: callbacks.onOpenSettings })}
       </footer>
     </aside>
   `;
@@ -415,13 +403,12 @@ export function workbenchTabsTemplate(
   callbacks: WorkbenchTabsCallbacks,
   session: string,
 ): TemplateResult {
-  const hideDirection =
-    placement === 'right' ? 'chevron-right' : 'chevron-down';
+  const hideDirection = 'xmark';
   return html`
     <div
       class="shell-workbench-tabs"
       role="tablist"
-      aria-label=${`${placement === 'right' ? 'Side' : 'Bottom'} panel tabs`}
+      aria-label=${`${placement === 'right' ? 'Workspace' : 'Terminal'} tabs`}
       @keydown=${(event: KeyboardEvent) =>
         handleTablistKeydown(event, tabs, activeTabId, callbacks)}
     >
@@ -551,8 +538,8 @@ export function workbenchTabsTemplate(
       ${renderIconActionButton({
         id: `${workbenchPanelDomId(placement, session)}-hide`,
         icon: hideDirection,
-        label: `Hide ${placement === 'right' ? 'side' : 'bottom'} panel`,
-        tooltip: `Hide ${placement === 'right' ? 'side' : 'bottom'} panel`,
+        label: `Hide ${placement === 'right' ? 'workspace tools' : 'bottom panel'}`,
+        tooltip: `Hide ${placement === 'right' ? 'workspace tools' : 'bottom panel'}`,
         className: 'shell-workbench-close icon-button focus-ring-inset',
         size: 'm',
         onClick: callbacks.onHide,

@@ -87,6 +87,8 @@ export class UserMessage extends LitElement {
 
       .user-message {
         ${panelFrameStyles}
+        border-color: transparent;
+        background: var(--wa-color-surface-raised);
         position: relative;
         width: 100%;
         padding: var(--panel-padding-block) var(--panel-padding-inline);

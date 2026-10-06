@@ -64,9 +64,8 @@ export class UsagePanel extends LitElement {
       }
 
       .usage-summary-footer {
-        border-top: var(--border-thin) solid var(--color-border);
-        background-color: var(--wa-color-surface-lowered);
-        padding: var(--wa-space-2xs) var(--wa-space-xs);
+        padding: var(--wa-space-xs) 0;
+        column-gap: var(--wa-space-s);
         display: flex;
         flex-wrap: wrap;
         row-gap: var(--wa-space-3xs);
@@ -110,12 +109,12 @@ export class UsagePanel extends LitElement {
       }
 
       .run-summary__route {
-        font-weight: var(--wa-font-weight-semibold);
+        font-weight: var(--font-weight-normal);
         white-space: nowrap;
       }
 
       .run-summary__route--covered {
-        color: var(--color-success);
+        color: var(--color-text-secondary);
       }
 
       /* Context gauge bar */
@@ -337,7 +336,7 @@ export class UsagePanel extends LitElement {
 
     return html`
       <span id="usage-context-gauge" class="context-gauge" tabindex="0">
-        ${waIcon('window-maximize')}
+        <span class="context-label">Context</span>
         <span class="context-gauge__track">
           <wa-progress-bar
             class="context-gauge__bar"

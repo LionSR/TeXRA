@@ -4,6 +4,8 @@ import { css } from 'lit';
 export const monacoStyles = css`
   /* Context menus may be portaled outside the editor's shadow/slot tree.
      Give those portals the same host palette as the editor theme adapter. */
+  :root,
+  :host,
   .monaco-component {
     --vscode-menu-background: var(--wa-color-menu-background);
     --vscode-menu-foreground: var(--wa-color-text-normal);

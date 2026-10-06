@@ -226,9 +226,7 @@ test('the rail deletes a finished conversation at once, and it stays deleted', a
     const row = railRow(currentLaunch, WAITING_RUN);
     await expect(row).toHaveCount(1);
     const page = currentLaunch.page;
-    const newTask = page
-      .locator('.shell-sidebar-primary wa-button')
-      .filter({ hasText: 'New task' });
+    const newTask = page.locator('#shellNewTask');
     await newTask.click();
     const launcherInput = page.locator(
       'session-composer.launch-composer textarea',
@@ -303,12 +301,9 @@ test('the rail deletes a finished conversation at once, and it stays deleted', a
     ]);
     const centerX = centers.map((box) => box!.x + box!.width / 2);
     expect(Math.max(...centerX) - Math.min(...centerX)).toBeLessThan(1);
-    const nameBox = await currentLaunch.page
-      .locator('.shell-project-name')
-      .first()
-      .boundingBox();
+    const rowBox = await row.boundingBox();
     const titleBox = await row.locator('.tab-title').boundingBox();
-    expect(Math.abs(nameBox!.x - titleBox!.x)).toBeLessThan(1);
+    expect(Math.abs(titleBox!.x - rowBox!.x - 8)).toBeLessThan(1);
     const projectStatus = await page
       .locator('.shell-project-status')
       .boundingBox();

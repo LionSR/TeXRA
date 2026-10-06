@@ -131,6 +131,47 @@ test('renders the dev app from a cold cache and restores the editor after reload
       path: testInfo.outputPath('editor-gutter-three-digits.png'),
       animations: 'disabled',
     });
+    // The embedded preview uses the same editor styling through a component
+    // slot. Its visible frame must size both diff editors, including on resize.
+    await page.evaluate(() => {
+      const preview = document.createElement(
+        'texra-diff-view',
+      ) as HTMLElement & {
+        originalText: string;
+        proposedText: string;
+        language: string;
+        fill: boolean;
+      };
+      preview.originalText = 'const result = theorem(input);';
+      preview.proposedText = 'const result = theorem(input, assumptions);';
+      preview.language = 'typescript';
+      preview.fill = true;
+      preview.style.cssText =
+        'position:fixed;inset:100px 100px auto;height:320px;z-index:3000';
+      document.body.append(preview);
+    });
+    const diff = page.locator('texra-diff-view');
+    await expect
+      .poll(
+        async () =>
+          (await diff.locator('.monaco-diff-editor').boundingBox())?.height ??
+          0,
+      )
+      .toBeGreaterThanOrEqual(300);
+    await expect(diff.locator('.modified-in-monaco-diff-editor')).toContainText(
+      'assumptions',
+    );
+    for (const theme of ['dark', 'light'] as const) {
+      await page.emulateMedia({ colorScheme: theme });
+      await diff.evaluate((preview, value) => {
+        (preview as HTMLElement & { hostTheme: string }).hostTheme = value;
+      }, theme);
+      await page.screenshot({
+        path: testInfo.outputPath(`diff-preview-${theme}.png`),
+        animations: 'disabled',
+      });
+    }
+    await diff.evaluate((preview) => preview.remove());
     expect(errors, 'Uncaught development renderer errors').toEqual([]);
   } finally {
     try {
