@@ -6,9 +6,7 @@ import { Effect, Fiber } from 'effect';
 import { afterEach, beforeEach, describe, expect } from 'vitest';
 
 // Local imports
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { planSummaryLine } from '@shared/schemas';
 import type { Goal } from '@shared/plugins/goal';
 import type { Plan, RequestDecision, RunId } from '@shared/schemas';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -94,16 +92,24 @@ function startPlanUpdate(
   return Effect.gen(function* () {
     const { session, awaitPlanRequest } = yield* planSession(runId);
     if (seed) yield* seed(session);
-    const workspace = AgentWorkspaceState.create();
-    const workPlanState = workspace.workPlan;
+    // The plans the run shows, in order: what its parent and its view read.
+    const shown: (Plan | null)[] = [];
     const tool = PlanTool;
 
     const resultFiber = yield* Effect.forkScoped(
       tool.call({ command: 'update', objective }).pipe(
         Effect.provide(
           nativeToolTestLayer({
-            run: { runId, session, toolPolicy: {} },
-            workspace,
+            run: {
+              runId,
+              session,
+              toolPolicy: {},
+              callbacks: {
+                onProgress: (update) => {
+                  if (update.kind === 'plan') shown.push(update.plan);
+                },
+              },
+            },
           }),
         ),
       ),
@@ -115,7 +121,7 @@ function startPlanUpdate(
     return {
       result: Fiber.join(resultFiber),
       session,
-      workPlanState,
+      shown,
       permission,
       decide,
     };
@@ -131,8 +137,10 @@ describe('PlanTool — update (plan approval)', () => {
     Effect.scoped(
       Effect.gen(function* () {
         yield* Effect.tryPromise(() => installFakePlatform());
-        const { result, workPlanState, permission, decide } =
-          yield* startPlanUpdate(generateRunId(), plan.objective);
+        const { result, shown, permission, decide } = yield* startPlanUpdate(
+          generateRunId(),
+          plan.objective,
+        );
 
         expect(permission.plan).toEqual(plan);
         decide({ action: 'approve' });
@@ -140,10 +148,7 @@ describe('PlanTool — update (plan approval)', () => {
         const outcome = yield* result;
         expect(outcome.status).toBe('executed');
         expect(outcome.output).toContain('Plan approved');
-        expect(workPlanState.plan).toEqual(plan);
-        expect(workPlanState.toSnapshot().planSummary).toBe(
-          planSummaryLine(plan.objective),
-        );
+        expect(shown.at(-1)).toEqual(plan);
       }),
     ),
   );
@@ -156,7 +161,6 @@ describe('PlanTool — update (plan approval)', () => {
           yield* Effect.tryPromise(() => installFakePlatform());
           const runId = generateRunId();
           const { session, awaitPlanRequest } = yield* planSession(runId);
-          const workspace = AgentWorkspaceState.create();
 
           yield* Effect.addFinalizer(() =>
             Effect.sync(() => releaseRunResources(runId, session)),
@@ -170,7 +174,6 @@ describe('PlanTool — update (plan approval)', () => {
               Effect.provide(
                 nativeToolTestLayer({
                   run: { runId, session, toolPolicy: {} },
-                  workspace,
                 }),
               ),
             ),
@@ -193,7 +196,7 @@ describe('PlanTool — update (plan approval)', () => {
     Effect.scoped(
       Effect.gen(function* () {
         yield* Effect.tryPromise(() => installFakePlatform());
-        const { result, workPlanState, decide } = yield* startPlanUpdate(
+        const { result, shown, decide } = yield* startPlanUpdate(
           generateRunId(),
           plan.objective,
         );
@@ -202,8 +205,7 @@ describe('PlanTool — update (plan approval)', () => {
 
         const outcome = yield* result;
         expect(outcome.status).toBe('error');
-        expect(workPlanState.plan).toBeNull();
-        expect(workPlanState.toSnapshot().planSummary).toBeNull();
+        expect(shown).toEqual([plan, null]);
       }),
     ),
   );

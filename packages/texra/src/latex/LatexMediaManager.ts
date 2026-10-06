@@ -46,9 +46,8 @@ const USEPACKAGE_PATTERN =
 const LATEX_CONCURRENCY = 4;
 
 /**
- * The slice of agent workspace state this manager writes media results into.
- * Structurally satisfied by `AgentWorkspaceState`; declared here so LaTeX
- * processing stays independent of agent execution internals.
+ * Where this manager writes the media it extracts or compiles: a revision
+ * collects them for its request.
  */
 export interface MediaWorkspaceState {
   media: { addMediaFiles(locations: readonly FileLocation[]): void };

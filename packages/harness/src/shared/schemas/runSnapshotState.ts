@@ -1,7 +1,6 @@
 /**
- * The agent flow state a `run.snapshot` row restores: the run-state and
- * workspace snapshots, the model backend, and the message-free
- * core of the tool-use flow. Host-neutral so the
+ * The agent flow state a `run.snapshot` row restores: the model backend
+ * and the message-free core of the tool-use flow. Host-neutral so the
  * run history (`runHistoryEvent.ts`) composes them without reaching the agent
  * layer; the agent modules import them back.
  */
@@ -9,9 +8,7 @@ import { z } from 'zod';
 
 import { ACTIVATED_SKILLS_MAX } from './activeSkills';
 import { JsonValueSchema } from './jsonValue';
-import { LineCountSchema } from './lineChanges';
 import { Sha256Schema } from './offeredTools';
-import { FileLocationSchema } from './output';
 import { QualifiedSkillNameSchema } from './skillName';
 import { StoredProtocolSchema } from './storedTurn';
 import {
@@ -20,7 +17,6 @@ import {
   TokenUsageStatsSchema,
   UsageRouteSchema,
 } from './usage';
-import { WorkPlanSnapshotSchema } from './workPlan';
 
 // ---------------------------------------------------------------- usage
 
@@ -97,41 +93,6 @@ export function addTurnUsage(
   };
 }
 
-// ------------------------------------------------------------ workspace
-
-/** Flattened file-edit records. */
-const FileEditSnapshotSchema = z.object({
-  path: z.string(),
-  added: LineCountSchema.prefault(0),
-  removed: LineCountSchema.prefault(0),
-});
-
-/** File interaction state snapshot. */
-const FileInteractionStateSnapshotSchema = z.object({
-  readFiles: z.array(z.string()).prefault([]),
-  edits: z.array(FileEditSnapshotSchema).prefault([]),
-  toolCallCount: z.int().nonnegative().prefault(0),
-});
-
-/** Media attachment state snapshot. */
-const MediaAttachmentStateSnapshotSchema = z.object({
-  files: z.array(FileLocationSchema).prefault([]),
-});
-
-/**
- * Canonical shape of an `AgentWorkspaceState` snapshot. Persisted workspace
- * state has one supported format; an older record (one written before
- * `workPlan` entered the shape) fails its resume parse here.
- */
-export const AgentWorkspaceStateSnapshotSchema = z.object({
-  media: MediaAttachmentStateSnapshotSchema.prefault({}),
-  interactions: FileInteractionStateSnapshotSchema.prefault({}),
-  workPlan: WorkPlanSnapshotSchema,
-});
-export type AgentWorkspaceSnapshot = z.output<
-  typeof AgentWorkspaceStateSnapshotSchema
->;
-
 // ------------------------------------------------------------ launch facts
 
 export const AttachedMemoryMissSchema = z.object({
@@ -181,10 +142,6 @@ export type ModelBackend = z.infer<typeof ModelBackendSchema>;
 
 // ------------------------------------------------------------ flow core
 
-const StateSlicesSchema = z.object({
-  workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
-});
-
 /**
  * The message-free state of a run's flow: the messages are folded from the
  * run's `model.message` rows.
@@ -198,7 +155,6 @@ const StateSlicesSchema = z.object({
  * failing loudly.
  */
 export const ToolUseSnapshotStateSchema = z.object({
-  stateSlices: StateSlicesSchema.nullable(),
   /** The address of the run's system text, before what each step adds
    *  (`stepInstructions`): a `context.blob` of the run, never restated in
    *  every snapshot. */

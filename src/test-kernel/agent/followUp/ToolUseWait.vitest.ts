@@ -207,9 +207,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
         { role: 'user', content: [{ kind: 'text', text: 'Do the thing.' }] },
       ]),
       ...snapshotRow(runId, fresh, {
-        state: {
-          stateSlices: null,
-        },
+        state: {},
       }),
       positionRow(runId, { ...fresh, turn: 1 }, 'turn.begin'),
     ]);

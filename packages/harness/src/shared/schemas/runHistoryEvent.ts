@@ -388,26 +388,10 @@ export type ToolBindingPayload = z.infer<typeof ToolBindingPayloadSchema>;
 /* ------------------------------------------------------------ tool.result */
 
 /**
- * Per-call state operations over the run's mutable `state` slice, never a
- * whole-state copy that could overwrite a concurrent call. Folding a result
- * applies its mutation exactly once. The run's `usage` is not a slice a call
- * can touch: it is derived from the priced usage of the run's own response
- * rows (D12) and nothing else, so a child's spend stays on the child's run and
- * a parent's or session's total is the sum over the run tree.
+ * One call's settlement: what it returned and the attachments captured with
+ * it. What the call did to the run (the files it edited, that it ran) is
+ * folded from these fields, never restated beside them.
  */
-const StateOperationSchema = z.strictObject({
-  op: z.literal('set'),
-  path: z
-    .array(z.string().min(1))
-    .min(1)
-    .refine(
-      (path) => path[0] === 'state',
-      'A tool result sets only the run state slice; the usage totals are derived.',
-    ),
-  value: JsonValueSchema,
-});
-export type StateOperation = z.infer<typeof StateOperationSchema>;
-
 export const ToolResultPayloadSchema = z
   .strictObject({
     responseId: ResponseIdSchema,
@@ -425,7 +409,6 @@ export const ToolResultPayloadSchema = z
     duplicateOf: CallIdSchema.nullable(),
     result: SettledToolResultSchema,
     attachments: z.array(SettledAttachmentSchema).readonly(),
-    stateMutation: z.array(StateOperationSchema).readonly(),
   })
   .superRefine((p, ctx) => {
     if ((p.disposition === 'duplicate') !== (p.duplicateOf != null)) {
@@ -452,10 +435,7 @@ export const ToolResultPayloadSchema = z
           'An executed disposition requires an executed result, and every other non-duplicate disposition an error result.',
       });
     }
-    if (
-      p.disposition === 'duplicate' &&
-      (p.attachments.length > 0 || p.stateMutation.length > 0)
-    ) {
+    if (p.disposition === 'duplicate' && p.attachments.length > 0) {
       ctx.addIssue({
         code: 'custom',
         message: "A duplicate never reapplies its primary's effects.",

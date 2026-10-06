@@ -13,7 +13,6 @@ import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { WorkspaceFs } from '@platform/rootedFs';
@@ -208,12 +207,12 @@ function stubWorkspaceFiles(exists: boolean, content: string) {
 function runAccept(
   tool: typeof AcceptRunFilesTool,
   files: { path: string; original: string }[],
-  workspace = AgentWorkspaceState.create(),
+  readFiles = new Set<string>(),
 ) {
   return withStubbedFiles(tool.call({ execution_id: runId, files })).pipe(
     Effect.provide(
       nativeToolTestLayer({
-        workspace,
+        readFiles,
         run: { runId, session: session, toolPolicy: {} },
       }),
     ),
@@ -272,7 +271,7 @@ describe('accept_run_files progress events', () => {
     Effect.gen(function* () {
       const explicit = createRecordingHost();
       const tool = AcceptRunFilesTool;
-      const workspace = AgentWorkspaceState.create();
+      const readFiles = new Set<string>();
       const { written, delivered } = yield* recordWrittenFiles();
 
       setRunStorageEntries({
@@ -285,7 +284,7 @@ describe('accept_run_files progress events', () => {
       const result = yield* runAccept(
         tool,
         [{ path: 'output.tex', original: 'paper.tex' }],
-        workspace,
+        readFiles,
       );
 
       expect(result.status).toBe('executed');
@@ -293,7 +292,7 @@ describe('accept_run_files progress events', () => {
       // Delivery runs on the recorder's own fiber, a turn after the publish.
       yield* delivered;
       expect(written).toEqual([[path.join(workspacePath, 'paper.tex')]]);
-      expect(workspace.interactions.hasRead('paper.tex')).toBe(true);
+      expect(readFiles.has('paper.tex')).toBe(true);
     }).pipe(Effect.provide(nativeToolTestLayer())),
   );
 
@@ -431,7 +430,7 @@ describe('accept_run_files progress events', () => {
           storage: '/project-storage',
         };
         const tool = AcceptRunFilesTool;
-        const workspace = AgentWorkspaceState.create();
+        const readFiles = new Set<string>();
         const snapshotPath = path.join(
           projectRoots.storage,
           'executions',
@@ -477,7 +476,7 @@ describe('accept_run_files progress events', () => {
         ).pipe(
           Effect.provide(
             nativeToolTestLayer({
-              workspace,
+              readFiles,
               run: { runId, session: session, toolPolicy: {} },
               roots: projectRoots,
             }),

@@ -5,7 +5,6 @@ import { it } from '@effect/vitest';
 import { Effect, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { RunToolCall } from '@agent/runtime/RunCall';
@@ -73,7 +72,7 @@ describe('launchDetachedSubagent child run launch', () => {
     callId: 'parent-call',
     env: { roots },
     emit: () => undefined,
-    workspace: AgentWorkspaceState.create(),
+    readFiles: new Set<string>(),
     responseId: 'parent-response',
     instruction: undefined,
     attempt: 1,
@@ -87,6 +86,7 @@ describe('launchDetachedSubagent child run launch', () => {
       session: { tag: 'parent-session' } as never,
       task: null,
       opening: null,
+      callbacks: {},
       fileService: new RunFileService('parent-exec' as RunId, roots),
       steps: noStep(),
       scope: Scope.makeUnsafe(),

@@ -349,9 +349,7 @@ describe('completedRunArchive facade', () => {
                 lastError: null,
                 declinedRoutes: [],
               },
-              state: {
-                stateSlices: null,
-              },
+              state: {},
             }),
           },
         ]);

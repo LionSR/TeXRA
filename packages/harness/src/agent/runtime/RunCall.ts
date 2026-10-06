@@ -8,7 +8,6 @@
  */
 import { Context, Data, Effect } from 'effect';
 
-import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
 import {
   ToolContext,
@@ -126,6 +125,7 @@ export type ToolRun = Pick<
   | 'task'
   | 'opening'
   | 'logger'
+  | 'callbacks'
   | 'fileService'
 >;
 
@@ -134,8 +134,9 @@ export interface RunCallShape {
   /** The run the call works for: the loop's own `AgentRun`, seen through
    *  the window its tools read. */
   readonly run: ToolRun;
-  /** The run's file interactions and work plan, which the call may change. */
-  readonly workspace: AgentWorkspaceState;
+  /** The files the run read since its loop started, which an edit of an
+   *  existing file requires. Memory only: a resumed run reads again. */
+  readonly readFiles: Set<string>;
   /** The response whose call this is; a script's calls are its script's.
    *  A provider's call ids are unique within one response only. */
   readonly responseId: string;

@@ -331,9 +331,7 @@ const openRun = Effect.fn('openRun')(function* (
       { role: 'user', content: [{ kind: 'text', text: 'go' }] },
     ]),
     ...snapshotRow(runId, freshState(), {
-      state: {
-        stateSlices: null,
-      },
+      state: {},
     }),
   ]);
   // The retries the binding carries, read from the session as `bindModel`

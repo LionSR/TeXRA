@@ -236,7 +236,6 @@
       "@utils/text/stringUtils"
     ],
     "texra": [
-      "@agent/core/state/AgentWorkspaceState",
       "@agent/core/state/runRequests",
       "@agent/export/schemas",
       "@agent/followUp/followUpSender",

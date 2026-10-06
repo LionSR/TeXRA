@@ -2922,9 +2922,7 @@ describe('RunHistory', () => {
         lastError: null,
         declinedRoutes: [],
       },
-      state: {
-        stateSlices: null,
-      },
+      state: {},
     },
   });
   const refusalOf = (error: unknown): RunHistoryRefused | null =>
@@ -2971,7 +2969,6 @@ describe('RunHistory', () => {
       duplicateOf: null,
       result: { status: 'executed', output: 'ok' },
       attachments: [],
-      stateMutation: [],
       ...body,
     },
   });

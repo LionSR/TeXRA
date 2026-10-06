@@ -14,7 +14,6 @@ import {
 import {
   addTurnUsage,
   EMPTY_RUN_USAGE_TOTALS,
-  RunSnapshotPayloadSchema,
   requestParksItsCaller,
   type CommitOrdinal,
   type HookOutcomes,
@@ -29,9 +28,7 @@ import {
   type SessionEvent,
   type SessionEventDraft,
   type SnapshotRuntime,
-  type StateOperation,
 } from '@shared/schemas';
-import { isObject } from '@utils/core';
 import {
   applyRunRow,
   copyById,
@@ -55,9 +52,7 @@ import {
   type PendingCall,
   type PendingResponse,
 } from './inFlight';
-import { mutate } from './stateOperation';
 import type { HistoryMessage, Live, RunHistoryRow } from './historyTurns';
-import type { z } from 'zod';
 
 /**
  * The rows `RunHistory.appendBatch` commits: the six run history arms plus the
@@ -103,15 +98,13 @@ export class RunHistoryInconsistent extends Data.TaggedError(
     | 'orphan-settlement' // a tool.result under no pending response
     | 'unknown-run-row' // an unrecognized type on the run aggregate
     | 'mismatched-delivery' // a delivering append does not settle its response
-    | 'invalid-mutation' // a tool.result state operation names no slice or leaves an invalid state
     | 'unreadable-turn'; // a stored turn this build of the package cannot parse
   readonly detail: string;
   readonly commit: CommitOrdinal | null;
 }> {}
 
 /** The loop state a `run.snapshot` restores. */
-const LoopStateSchema = RunSnapshotPayloadSchema.shape.state;
-type LoopState = z.output<typeof LoopStateSchema>;
+type LoopState = RunSnapshotPayload['state'];
 
 /**
  * What the loop continues from. A plain type with no schema of its own,
@@ -160,8 +153,13 @@ export type RunState = RunPosition & {
    *  read by the process that asked, whose body went on with it. */
   readonly decidedSinceActivation: ReadonlySet<string>;
   /** Derived (D12): the priced usage on every `response` and `context.edit`
-   *  row plus `tool.result` `add` operations. No snapshot carries it. */
+   *  row. No snapshot carries it. */
   readonly usage: RunUsageTotals;
+  /** The workspace files the run's calls edited, first edit first: the
+   *  paths of every executed `tool.result`'s `edits`. */
+  readonly edited: readonly string[];
+  /** The calls that ran a tool: every `executed` or `failed` settlement. */
+  readonly toolCalls: number;
   /** The latest `context.edit`'s `seq`: the next edit's `base`. */
   readonly lastEdit: number | null;
   /** The turn the last `context-window` compaction (one per round) hit. */
@@ -256,6 +254,8 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   pendingResponse: null,
   decidedSinceActivation: new Set(),
   usage: EMPTY_RUN_USAGE_TOTALS,
+  edited: [],
+  toolCalls: 0,
   loop: null,
   lastEdit: null,
   overflowRecoveredAtTurn: null,
@@ -311,40 +311,6 @@ const refuse = (
 
 const sameInvocation = (a: InvocationRef, b: InvocationRef): boolean =>
   a.invocationId === b.invocationId && a.attempt === b.attempt;
-
-/**
- * Apply a settlement's operations over the loop `state` (the only slice a
- * call may set; `StateOperationSchema` refuses any other path), and
- * re-validate it through its schema so the state stays typed without a cast.
- */
-function applyMutations(
-  state: RunState,
-  ops: readonly StateOperation[],
-  commit: CommitOrdinal,
-): Fold {
-  if (ops.length === 0) return Result.succeed(state);
-  let document: unknown = { state: state.loop };
-  for (const op of ops) {
-    const next = mutate(document, op.path, op);
-    if (Result.isFailure(next)) {
-      return refuse('invalid-mutation', next.failure, commit);
-    }
-    document = next.success;
-  }
-  if (!isObject(document)) {
-    return refuse('invalid-mutation', 'the slices are not an object', commit);
-  }
-  if (state.loop === null) {
-    return document.state === null
-      ? Result.succeed(state)
-      : refuse('invalid-mutation', 'no loop state to mutate', commit);
-  }
-  const loop = LoopStateSchema.safeParse(document.state);
-  if (!loop.success) {
-    return refuse('invalid-mutation', loop.error.message, commit);
-  }
-  return Result.succeed({ ...state, loop: loop.data });
-}
 
 /** Why a row of `attempt` cannot move a call standing at `status`, or null:
  *  a settled call is closed, and a call's attempt never goes back. */
@@ -796,22 +762,29 @@ function foldRow(
           ? refuse('orphan-settlement', refusal, commit)
           : outOfOrder(refusal);
       }
-      return applyMutations(
-        withCall(current, pending, p.callId, {
-          ...call,
-          status: {
-            kind: 'settled',
-            at: commit,
-            attempt: p.attempt,
-            disposition: p.disposition,
-            duplicateOf: p.duplicateOf,
-            result: p.result,
-            attachments: p.attachments,
-          },
-        }),
-        p.stateMutation,
-        commit,
-      );
+      const settled = withCall(current, pending, p.callId, {
+        ...call,
+        status: {
+          kind: 'settled',
+          at: commit,
+          attempt: p.attempt,
+          disposition: p.disposition,
+          duplicateOf: p.duplicateOf,
+          result: p.result,
+          attachments: p.attachments,
+        },
+      });
+      const ran = p.disposition === 'executed' || p.disposition === 'failed';
+      const edits = p.result.status === 'executed' ? p.result.edits : [];
+      const fresh = [
+        ...new Set((edits ?? []).map(({ path }) => path).filter(Boolean)),
+      ].filter((path) => !settled.edited.includes(path));
+      return Result.succeed({
+        ...settled,
+        edited:
+          fresh.length === 0 ? settled.edited : [...settled.edited, ...fresh],
+        toolCalls: settled.toolCalls + (ran ? 1 : 0),
+      });
     }
     default:
       if (IGNORED.has(row.type)) return null;

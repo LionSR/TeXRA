@@ -30,7 +30,7 @@ const OPENING_SNAPSHOT: RunSnapshotPayload = {
     lastError: null,
     declinedRoutes: [],
   },
-  state: { stateSlices: null },
+  state: {},
 };
 
 describe('deriveResumability', () => {

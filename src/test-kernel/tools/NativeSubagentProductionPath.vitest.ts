@@ -43,7 +43,6 @@ import { refresh } from '@agent/index';
 import { getRunRecords, registerRun } from '@agent/storage';
 import { readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { requireToolRun } from '@agent/runtime/RunCall';
@@ -583,7 +582,7 @@ async function launchWaitingChild(options: {
     callId: 'parent-call',
     env: { roots: session.roots, workingDirectory: process.cwd() },
     emit: () => undefined,
-    workspace: AgentWorkspaceState.create(),
+    readFiles: new Set<string>(),
     responseId: 'parent-response',
     instruction: undefined,
     attempt: 1,
@@ -597,6 +596,7 @@ async function launchWaitingChild(options: {
       session,
       task: null,
       opening: null,
+      callbacks: {},
       fileService: new RunFileService(PARENT_RUN_ID, session.roots),
       scope: Scope.makeUnsafe(),
       config: AgentConfigSchema.parse({

@@ -12,7 +12,6 @@ import { describe, beforeEach, afterEach, vi } from 'vitest';
 
 // Local imports
 import type { ToolServices } from '@agent/runtime/ToolServices';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 
 import { WorkspaceFs } from '@platform/rootedFs';
 import type { RequestDecision, RunId } from '@shared/schemas';
@@ -52,7 +51,7 @@ let nextDecision: () => RequestDecision | null = () => ({ action: 'approve' });
 let decisions: ReturnType<typeof autoDecideRequests> | undefined;
 let detachHostInteractions = (): void => {};
 let policyDenials = 0;
-let workspace = AgentWorkspaceState.create();
+let readFiles = new Set<string>();
 // The previews the host staged; tests override the decision when they need to
 // reject or adjust, and assert on this list otherwise.
 let approvalRequests: ToolEditApprovalRequest[] = [];
@@ -139,7 +138,7 @@ function stubWorkspaceFile(
   if (options.exists) {
     mkdirSync(path.dirname(absolutePath), { recursive: true });
     writeFileSync(absolutePath, options.content);
-    workspace.interactions.recordRead(absolutePath);
+    readFiles.add(absolutePath);
   }
   relativeFiles.set(filePath, {
     exists: options.exists,
@@ -154,7 +153,7 @@ function inRun<A, E>(effect: Effect.Effect<A, E, ToolServices>) {
     Effect.provide(
       nativeToolTestLayer({
         workingDirectory: WORKSPACE_PATH,
-        workspace,
+        readFiles,
         run: {
           runId,
           session: testDefaultSession(),
@@ -172,7 +171,7 @@ describe('Tool edit approval gating', () => {
     policyDenials = 0;
     workspaceWrites.mockReset();
     relativeFiles.clear();
-    workspace = AgentWorkspaceState.create();
+    readFiles = new Set<string>();
     testDefaultSession().approvals.clearAll();
     runId = publishTestRunStart(testDefaultSession(), generateRunId());
     await Effect.runPromise(testDefaultSession().settlePublications());
@@ -257,7 +256,7 @@ describe('Tool edit approval gating', () => {
       ).pipe(
         Effect.provide(
           nativeToolTestLayer({
-            workspace,
+            readFiles,
             run: { runId, session: testDefaultSession(), toolPolicy: {} },
             roots: project.roots,
           }),

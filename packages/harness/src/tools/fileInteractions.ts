@@ -8,7 +8,7 @@ import { errorResult } from '@tools/core/result';
 
 export const recordToolFileRead = Effect.fn('fileInteractions.recordRead')(
   function* (path: string): Effect.fn.Return<void, never, RunCall> {
-    (yield* RunCall)?.workspace.interactions.recordRead(path);
+    if (path) (yield* RunCall)?.readFiles.add(path);
   },
 );
 
@@ -22,7 +22,7 @@ export const requireFileReadForEdit = Effect.fn(
   displayPath: string = path,
 ): Effect.fn.Return<ToolResult | null, never, RunCall> {
   const call = yield* RunCall;
-  if (!exists || call?.workspace.interactions.hasRead(path)) {
+  if (!exists || call?.readFiles.has(path) === true) {
     return null;
   }
   return errorResult(

@@ -18,7 +18,6 @@ import { Clock, Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import type { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
 import { requireToolRun, type RunToolCall } from '@agent/runtime/RunCall';
 import { withLogChannel } from '@logger/effectLog';
 import { goalElapsedMs, type Goal } from '@shared/plugins/goal';
@@ -191,11 +190,17 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
 /**
  * Request user approval for a new plan. Pauses run until approved/rejected.
  */
+/** Show `plan` as the run's plan (null clears it): the run's `plan` fact,
+ *  and the progress a parent of this run reads. */
+const showPlan = (call: RunToolCall, plan: Plan | null): void => {
+  call.run.logger.emit({ type: 'run.fact', fact: { key: 'plan', plan } });
+  call.run.callbacks.onProgress?.({ kind: 'plan', plan });
+};
+
 const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
   call: RunToolCall,
   plan: Plan,
   runId: RunId,
-  workPlanState: WorkPlanState,
 ) {
   const requestId = call.requests.nextId('plan');
 
@@ -230,7 +235,7 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
   }
 
   // Rejected — clear the plan from UI
-  workPlanState.updatePlan(null);
+  showPlan(call, null);
 
   const refusal = refusalOf('planApproval', result);
 
@@ -286,13 +291,12 @@ const executeUpdate = Effect.fn('PlanTool.executeUpdate')(function* (
   call: RunToolCall,
   plan: Plan,
 ) {
-  const { workPlan } = call.workspace;
-  workPlan.updatePlan(plan);
+  showPlan(call, plan);
 
   // Every update is a (re-)proposal: with no step statuses to record,
   // the only reason to call update is a new or changed objective, and
   // that decision belongs to the user.
-  return yield* requestApproval(call, plan, call.run.runId, workPlan);
+  return yield* requestApproval(call, plan, call.run.runId);
 });
 
 const executePause = Effect.fn('PlanTool.executePause')(function* (

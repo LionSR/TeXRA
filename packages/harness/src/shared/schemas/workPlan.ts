@@ -1,7 +1,3 @@
-import { z } from 'zod';
-
-import { PlanSchema } from './plan';
-
 const MARKDOWN_HEADING_RE = /^#{1,6}\s+/;
 
 /** One-line label for a plan document: its first line of prose. A markdown
@@ -17,17 +13,3 @@ export function planSummaryLine(objective: string): string {
     prose ?? lines.at(0)?.replace(MARKDOWN_HEADING_RE, '') ?? '(empty plan)'
   );
 }
-
-/** Raw work-plan field types; callers apply their own fallback policy. */
-const WorkPlanSnapshotShape = {
-  plan: PlanSchema.nullable(),
-  planSummary: z.string().nullable(),
-} satisfies z.ZodRawShape;
-
-/** Current serializable shape for workspace plan state. */
-export const WorkPlanSnapshotSchema = z.strictObject({
-  plan: WorkPlanSnapshotShape.plan.prefault(null),
-  planSummary: WorkPlanSnapshotShape.planSummary.prefault(null),
-});
-
-export type WorkPlanSnapshot = z.output<typeof WorkPlanSnapshotSchema>;

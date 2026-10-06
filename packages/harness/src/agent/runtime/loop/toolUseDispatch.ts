@@ -41,7 +41,6 @@ import {
 } from 'effect';
 import { z } from 'zod';
 
-import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
 import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
@@ -62,10 +61,8 @@ import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
   type DispatchFacts,
   type FileListEntry,
-  type FileLocation,
   type RequestDecision,
   type ScriptCallPayload,
-  type StateOperation,
   type ToolCallStatus,
   type ToolFileAttachment,
   type ToolResult,
@@ -85,10 +82,8 @@ import {
   type PendingCall,
 } from '@shared/session/inFlight';
 import { generateShortId, getBasename } from '@utils/core';
-import { isNonEmptyString } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
-import { entryExists } from '@utils/files/fsEntryExists';
 
 import { AgentRun } from '../run/AgentRun';
 import { inlineMediaPart, type InputPart } from '../run/mediaInput';
@@ -144,7 +139,7 @@ const scriptOf = (fact: CallFacts): ScriptCallPayload | null =>
 
 type Settlement = Pick<
   ToolResultPayload,
-  'disposition' | 'duplicateOf' | 'result' | 'attachments' | 'stateMutation'
+  'disposition' | 'duplicateOf' | 'result' | 'attachments'
 >;
 
 type SettledAttachment = ToolResultPayload['attachments'][number];
@@ -393,7 +388,8 @@ const makeScheduler = Effect.gen(function* () {
  *  then deliver, with the `joined` rows and what they record. */
 export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   cell: RunCell,
-  workspace: AgentWorkspaceState,
+  /** The files the run read since its loop started (`RunCall.readFiles`). */
+  readFiles: Set<string>,
   step: StepTools,
   joined?: Pick<JoinedFollowUps, 'rows' | 'recorded'> | null,
 ): Effect.fn.Return<
@@ -418,8 +414,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     run.config.rootUserInstruction ??
     (at ? stored(initial, at, z.string()) : run.config.instruction);
   // Concurrent settlements of one parallel partition serialize under the
-  // cell's lock and each folds onto the latest state, so a settlement that
-  // carries the workspace it mutated records it in the order batches commit.
+  // cell's lock and each folds onto the latest state.
   const { append } = cell;
   const recordOf = (state: RunState, callId: string): PendingCall | null =>
     state.pendingResponse?.responseId === responseId
@@ -451,34 +446,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         : own;
     });
 
-  /**
-   * The workspace the call mutated, as the settlement's own operation. The
-   * recorded edits, the media it added, the tool-call count and the work plan
-   * are in-memory state until a snapshot carries them, and the delivering
-   * snapshot lands only after every call of the response has settled: without
-   * this a process exit between a `tool.result` and that delivery leaves a
-   * call the resume will not run again whose effects on the run are gone.
-   */
-  const workspaceMutation = (state: RunState): readonly StateOperation[] => {
-    if (state.loop?.stateSlices == null) return [];
-    return [
-      {
-        op: 'set',
-        path: ['state', 'stateSlices', 'workspaceSnapshot'],
-        value: workspace.toSnapshot(),
-      },
-    ];
-  };
-
   const settle = (
     fact: CallFacts,
     attempt: number,
     settlement: Settlement,
     cards: (state: RunState) => readonly RunHistoryDraft[] = () => [],
-    /** An executed call carries the workspace with its result. A synthetic
-     *  settlement ran no tool, and a duplicate reapplies no effect — the
-     *  payload schema refuses one that claims otherwise. */
-    ranTool = false,
   ) =>
     commit(fact, (state) => [
       {
@@ -489,14 +461,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           callId: fact.callId,
           attempt,
           ...settlement,
-          ...(ranTool
-            ? {
-                stateMutation: [
-                  ...settlement.stateMutation,
-                  ...workspaceMutation(state),
-                ],
-              }
-            : {}),
         },
       },
       ...cards(state),
@@ -570,7 +534,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     duplicateOf: null,
     result: { status: 'error', error },
     attachments: [],
-    stateMutation: [],
   });
 
   /** Execute one call and commit its settlement. Never fails: a throwing
@@ -595,7 +558,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     | FileSystem.FileSystem
     | ScriptServices
   > {
-    const fs = yield* FileSystem.FileSystem;
     const tool: ITool | undefined = step.registry.get(fact.toolName);
     const stageId = fact.stageId ?? undefined;
     // A slow tool's card opens as its body starts. What the tool prints
@@ -707,7 +669,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           });
         }),
     };
-    workspace.interactions.recordToolCall();
     // Its step's PreToolUse hooks, recorded before the approval and the body.
     const pre =
       tool &&
@@ -755,7 +716,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             }),
             Effect.provideService(RunCall, {
               run,
-              workspace,
+              readFiles,
               responseId,
               instruction: userInstruction,
               attempt,
@@ -810,41 +771,17 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         }),
       ),
     );
-    const trackedEdits = workspace.interactions.recordEdits(
-      result.status === 'executed' ? result.edits : undefined,
+    const edited = new Set(
+      result.status === 'executed'
+        ? (result.edits ?? []).flatMap(({ path }) => (path ? [path] : []))
+        : [],
     );
-    const editedFiles = trackedEdits.map((path) => ({
+    const editedFiles = [...edited].map((path) => ({
       path,
       ok: true,
       source: 'tool',
       sourceDisplay: 'Tool use',
     }));
-    // Media a tool produced joins the workspace's media set when it exists.
-    if (result.status === 'executed' && result.files?.length) {
-      const validLocations: FileLocation[] = [];
-      for (const attachment of result.files) {
-        if (!isNonEmptyString(attachment.path)) continue;
-        const location = pathToLocationIn(
-          run.session.roots.workspace,
-          attachment.path,
-        );
-        const exists = yield* entryExists(fs, location.absolutePath).pipe(
-          Effect.catch((cause) =>
-            Effect.sync(() => {
-              logger.debug(
-                `Skipping inaccessible media file: ${attachment.path}`,
-                { data: cause },
-              );
-              return false;
-            }),
-          ),
-        );
-        if (exists) validLocations.push(location);
-      }
-      if (validLocations.length) {
-        workspace.media.addMediaFiles(validLocations);
-      }
-    }
     const attachments = yield* captureAttachments(
       extracted.attachments,
       run.session.roots.workspace,
@@ -871,10 +808,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         duplicateOf: null,
         result: settledResult(extracted.sanitizedResult),
         attachments,
-        stateMutation: [],
       },
       (state) => [...cards(state), ...post],
-      true,
     );
   });
 
@@ -1093,7 +1028,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               duplicateOf: null,
               result,
               attachments: [],
-              stateMutation: [],
             });
             return { result, attachments: [] };
           }
@@ -1216,7 +1150,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           duplicateOf: fact.duplicateOf,
           result: withoutEffects(primary.result),
           attachments: [],
-          stateMutation: [],
         });
     } else if (endedBefore) {
       yield* settle(fact, attempt, syntheticSettlement(SKIPPED_AFTER_END_TURN));
@@ -1357,18 +1290,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const saved = settledState.loop;
   if (saved === null)
     return yield* Effect.die(new Error('Delivery needs an opened run.'));
-  const stateSlices =
-    saved.stateSlices === null
-      ? null
-      : {
-          ...saved.stateSlices,
-          workspaceSnapshot: workspace.toSnapshot(),
-        };
   const delivered = yield* cell.append((state) => [
     appendRow(runId, [group], responseId),
     ...(joined?.rows ?? []),
     ...snapshotRow(runId, state, {
-      state: { ...saved, stateSlices, ...joined?.recorded },
+      state: { ...saved, ...joined?.recorded },
     }),
     positionRow(runId, state, 'results.ready'),
   ]);

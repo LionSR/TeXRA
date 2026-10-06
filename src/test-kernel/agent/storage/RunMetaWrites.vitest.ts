@@ -118,9 +118,7 @@ describe('run metadata updates', () => {
             { role: 'user', content: [{ kind: 'text', text: 'go' }] },
           ]),
           ...snapshotRow(id, opening, {
-            state: {
-              stateSlices: null,
-            },
+            state: {},
           }),
         ]);
         yield* session.runHistory.appendBatch(id, opened, [
@@ -198,7 +196,7 @@ describe('run metadata updates', () => {
               modelId: 'copilot/gpt-test',
               backend: 'copilot',
             },
-            { state: { stateSlices: null } },
+            { state: {} },
           ),
         ]);
         const run = {

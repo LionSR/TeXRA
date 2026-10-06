@@ -301,7 +301,7 @@ function checkpointSnapshot(): RunSnapshotPayload {
       lastError: null,
       declinedRoutes: [],
     },
-    state: { stateSlices: null },
+    state: {},
   };
 }
 

@@ -25,9 +25,7 @@ function openingSnapshot(runId: RunId): RunHistoryDraft {
         lastError: null,
         declinedRoutes: [],
       },
-      state: {
-        stateSlices: null,
-      },
+      state: {},
     },
   };
 }
