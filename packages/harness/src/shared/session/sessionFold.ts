@@ -316,13 +316,15 @@ function createRun(
 ): RunView {
   const status = RUN_LIFECYCLE_READY;
   const identity = event.identity;
+  const label = runIdentityDisplayName(identity);
   const common = {
     id,
     identity,
     ownerId: sessionIndexesOf(view).claims.get(event.aggregateId) ?? null,
-    label: runIdentityDisplayName(identity),
+    label,
     description: null,
     descriptionBy: null,
+    title: label,
     model: null,
     modelLabel: null,
     command: null,
@@ -868,11 +870,9 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
           ),
         },
       };
-    case 'run.fact': {
+    case 'run.fact':
       // Each family (and `plugin.fact` kind) is its own latest-only key.
-      const fact = event.fact;
-      return { ...run, plan: fact.plan };
-    }
+      return { ...run, plan: event.fact.plan };
     case 'plugin.fact':
       return {
         ...run,
@@ -891,17 +891,17 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
       // summary does not overwrite it.
       return event.by === 'model' && run.descriptionBy === 'user'
         ? run
-        : { ...run, description: event.description, descriptionBy: event.by };
+        : {
+            ...run,
+            description: event.description,
+            descriptionBy: event.by,
+            title: event.description || run.label,
+          };
     case 'run.end':
       // The terminal fact: the phase is its outcome (one run model, section
       // 3.3). The caller records that the run ended.
       return withSettledTranscript(
-        {
-          ...run,
-          status: event.outcome,
-          substate: null,
-          runStartedAt: null,
-        },
+        { ...run, status: event.outcome, substate: null, runStartedAt: null },
         event.at,
       );
   }

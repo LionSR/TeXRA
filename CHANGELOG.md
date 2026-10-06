@@ -799,6 +799,10 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A task with an empty description no longer shows a blank title in
+  desktop notifications.** The desktop app's "is waiting for you" and
+  finished notices now name the task by its agent, as every other surface
+  already did.
 - **One warning per media file a model can't read.** Attaching an image
   or PDF to a model without vision used to log two warnings: a
   launch-time "Model has no vision support" summary, repeated on every

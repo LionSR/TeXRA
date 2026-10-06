@@ -276,7 +276,7 @@ function forkCliTask(context: SlashCommandContext): SlashCommandEffect {
       return;
     }
     yield* context.resumeRun(fork);
-    const title = source ? source.description || source.label : runId;
+    const title = source ? source.title : runId;
     appendLocalNotice(
       `${TASK_ACTIONS.forkedFrom(title)}. The model holds that conversation; the original is in /resume.`,
       fork,

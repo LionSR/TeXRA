@@ -134,7 +134,7 @@ export class RunTab extends LitElement {
     const accessibleStatusLabel = pendingApproval
       ? 'Needs approval'
       : run.statusLabel;
-    const runTitle = run.description || run.label;
+    const runTitle = run.title;
     const tooltip = buildTooltip(run);
     const childCountLabel = formatResultCount(
       run.rollup.total,

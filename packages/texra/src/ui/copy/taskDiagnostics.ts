@@ -22,7 +22,7 @@ export function formatTaskDiagnostics(run: RunView): string {
   );
 
   const lines: (string | undefined)[] = [
-    `Task: ${run.description || run.label}`,
+    `Task: ${run.title}`,
     `Agent: ${model ? `${run.label} (${model})` : run.label}`,
     `Status: ${run.statusLabel}`,
     run.statusDetail ?? undefined,

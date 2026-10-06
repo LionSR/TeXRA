@@ -178,7 +178,7 @@ export abstract class BaseRunContent extends LitElement {
     const source = run.forkedFrom;
     if (source === null) return nothing;
     const from = this.view?.runs.get(source.id);
-    const title = from ? from.description || from.label : 'a deleted task';
+    const title = from ? from.title : 'a deleted task';
     return html`<p class="forked-from-line">
       ${waIcon('code-branch')} ${TASK_ACTIONS.forkedFrom(title)} at step
       ${source.at}: the model holds that conversation up to there.
