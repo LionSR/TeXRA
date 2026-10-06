@@ -20,7 +20,6 @@ import {
   type DatabaseNotOwner,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
-import { foldAttempts, type AttemptKey } from '@shared/session/attemptFold';
 import { attemptOf } from '@shared/session/inFlight';
 import { foldRunState, type RunState } from '@shared/session/runStateFold';
 import {
@@ -43,25 +42,25 @@ import { deriveRunId } from '@utils/core/idHash';
 
 import { deliveredOutput, type RunResult } from './resultMeta';
 
-/**
- * Turn attribution for a child run's single latest-value report/result
- * slots: the turn currently running (or interrupted mid-flight before its
- * delivery ran) versus the latest turn whose delivery ran. Both null on a
- * run whose loop never accepted a turn. Its keys are the shared
- * {@link AttemptKey}: `key` is the child-run attempt that accepted the turn,
- * `index` the turn's position in that attempt.
- */
+/** One child turn's identity: `key` names the child-run attempt that
+ *  accepted it and `index` its position in that attempt. */
+export interface AttemptKey {
+  readonly key: string;
+  readonly index: number;
+}
+
+/** Turn attribution for a child run's report/result slots: the turn
+ *  running (or cut short before its delivery ran) and the latest delivered
+ *  one, both null before the loop accepted a turn. */
 interface ChildTurnState {
   readonly active: AttemptKey | null;
   readonly lastCompleted: AttemptKey | null;
 }
 
 /**
- * Fold the run's `child.turn` rows through the shared attempt fold:
- * `accepted` opens the turn, `settled` closes it and becomes the last
- * completed one. Reads every `child.turn` row, because the last completed
- * turn can belong to an earlier attempt than the active one: a child's series
- * restarts with every attempt.
+ * Fold the run's `child.turn` rows, in commit order: `accepted` opens the
+ * turn, `settled` closes it and becomes the last completed one, which can
+ * belong to an earlier attempt than the active one.
  */
 export function readChildTurnState(
   session: SessionHandle,
@@ -69,15 +68,17 @@ export function readChildTurnState(
 ): Effect.Effect<ChildTurnState, DatabaseReadFailed> {
   return session.readAggregate(aggregateId('run', runId), ['child.turn']).pipe(
     Effect.map((rows) => {
-      const turns = foldAttempts(rows, (row) =>
-        row.type === 'child.turn'
-          ? {
-              attempt: { key: row.attemptId, index: row.turnIndex },
-              settled: row.phase === 'settled',
-            }
-          : null,
-      );
-      return { active: turns.open, lastCompleted: turns.settled };
+      let active: AttemptKey | null = null;
+      let lastCompleted: AttemptKey | null = null;
+      for (const row of rows) {
+        if (row.type !== 'child.turn') continue;
+        const turn = { key: row.attemptId, index: row.turnIndex };
+        if (row.phase !== 'settled') active = turn;
+        else if (active?.key === turn.key && active.index === turn.index)
+          active = null;
+        if (row.phase === 'settled') lastCompleted = turn;
+      }
+      return { active, lastCompleted };
     }),
   );
 }

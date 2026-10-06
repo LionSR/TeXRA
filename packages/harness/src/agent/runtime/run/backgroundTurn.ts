@@ -135,7 +135,6 @@ export const submitAndObserve = Effect.fn('ModelInvoker.background')(function* (
         kind: 'identified',
         invocation,
         providerResponseId: operation.providerResponseId,
-        returnedModel: submission.returnedModel,
       },
     },
     {

@@ -64,7 +64,6 @@ beforeEach(async () => {
 const SNAPSHOT_RUNTIME = {
   modelId: 'deepseek/deepseek-v4-flash',
   backend: 'deepseek',
-  lastError: null,
   declinedRoutes: [],
 };
 

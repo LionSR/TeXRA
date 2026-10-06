@@ -20,6 +20,7 @@ import {
   type ChildSettlement,
   type SettlementRow,
 } from '@agent/runtime/childSettlement';
+import type { AttemptKey } from '@agent/storage/runRecords';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -32,7 +33,6 @@ import {
   type SubagentProgressUpdate,
   type TokenUsageStats,
 } from '@shared/schemas';
-import type { AttemptKey } from '@shared/session/attemptFold';
 import {
   DatabaseNotOwner,
   type DatabaseWriteFailed,

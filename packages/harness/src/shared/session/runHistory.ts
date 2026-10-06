@@ -142,8 +142,8 @@ export class RunHistory extends Context.Service<
      * - a `run.snapshot` is the last run history row of its batch, except when a
      *   `run.position`, a companion `tool.end`, a `request.decided`, or the
      *   stream.end` closing the row a `waiting` step parks beside follows
-     *   it. A `request.opened` PRECEDES the `tool.binding` or `model.retry`
-     *   that binds it, so the fold resolves the binding against a request
+     *   it. A `request.opened` PRECEDES the `tool.binding` or the `failed`
+     *   attempt that binds it, so the fold resolves the binding against a request
      *   it already holds;
      * - a `context.edit` immediately precedes the `model.message`
      *   `response` row that used it, when both are present;

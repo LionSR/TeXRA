@@ -33,6 +33,7 @@ import {
   RunContextSchema,
   Sha256Schema,
   type RunContext,
+  type InvocationPurpose,
   type InvocationRef,
   type RunId,
 } from '@shared/schemas';
@@ -61,19 +62,12 @@ const RecordedRequestSchema = z.strictObject({
   controls: JsonValueSchema,
   /** The resolved agent definition the run was launched with. */
   agent: Sha256Schema,
-  /** Set when the run's continuation matched the binding yet the request
-   *  omitted it: the retry after the vendor dropped the chained response. */
-  fullTranscript: z.literal(true).optional(),
 });
 
 /** The continuation a request bound to `origin` chains on, as a spreadable
- *  field; empty when the origin differs or `omit` (the full-transcript retry). */
-export const chainedContinuation = (
-  state: RunState,
-  origin: ModelOrigin,
-  omit?: boolean,
-) =>
-  omit !== true &&
+ *  field; empty when the origin differs or the run holds none (a failed
+ *  attempt whose chained response the vendor dropped retires it). */
+export const chainedContinuation = (state: RunState, origin: ModelOrigin) =>
   state.continuation !== null &&
   sameModelOrigin(state.continuation.origin, origin)
     ? { continuation: state.continuation }
@@ -117,18 +111,12 @@ export function blobRows(
   });
 }
 
-/**
- * The rows of an attempt that sends `resolved`, the turn the bound model
- * prepared: the blobs the rows do not hold yet, then the `attempt` row, which
- * names the request's recorded context and the binding's origin.
- */
-export function attemptRows(
-  run: Pick<AgentRunShape, 'runId' | 'config' | 'persona' | 'task'>,
-  state: RunState,
-  invocation: InvocationRef,
-  origin: ModelOrigin,
+/** The recorded context of a request that sends `resolved`, and the
+ *  resolved agent definition it names. */
+function recorded(
+  run: Pick<AgentRunShape, 'config' | 'persona' | 'task'>,
   resolved: ResolvedTurn,
-): RunHistoryDraft[] {
+) {
   const agent = {
     agent: run.config.agent,
     persona: run.persona,
@@ -140,11 +128,31 @@ export function attemptRows(
     tools: resolved.tools.map((tool) => sha256(tool)),
     controls: resolved.controls,
     agent: sha256(agent),
-    ...(!('continuation' in resolved) &&
-    'continuation' in chainedContinuation(state, origin)
-      ? { fullTranscript: true as const }
-      : {}),
   };
+  return { agent, request };
+}
+
+/** The address of the recorded context of a request that sends `resolved`:
+ *  what its `attempt` row names. */
+export const attemptRequest = (
+  run: Pick<AgentRunShape, 'config' | 'persona' | 'task'>,
+  resolved: ResolvedTurn,
+): string => sha256(recorded(run, resolved).request);
+
+/**
+ * The rows of an attempt that sends `resolved`, the turn the bound model
+ * prepared: the blobs the rows do not hold yet, then the `attempt` row, which
+ * names the request's recorded context and the binding's origin.
+ */
+export function attemptRows(
+  run: Pick<AgentRunShape, 'runId' | 'config' | 'persona' | 'task'>,
+  state: RunState,
+  invocation: InvocationRef,
+  purpose: InvocationPurpose,
+  origin: ModelOrigin,
+  resolved: ResolvedTurn,
+): RunHistoryDraft[] {
+  const { agent, request } = recorded(run, resolved);
   return [
     ...blobRows(run.runId, state, [
       ...(resolved.system === undefined ? [] : [resolved.system]),
@@ -158,9 +166,9 @@ export function attemptRows(
       payload: {
         kind: 'attempt',
         invocation,
+        purpose,
         request: sha256(request),
         origin,
-        delivery: resolved.mode === 'background' ? 'background' : 'stream',
       },
     },
   ];
@@ -229,8 +237,8 @@ function blob(state: RunState, digest: string): unknown {
  * Throws on a record that cannot rebuild it.
  */
 function recordedTurn(state: RunState) {
-  const open = state.openAttempt;
-  if (open === null) throw new Error('no open attempt to rebuild');
+  const open = state.invocation?.current.sent;
+  if (open == null) throw new Error('no sent attempt to rebuild');
   const recorded = RecordedRequestSchema.parse(blob(state, open.request));
   blob(state, recorded.agent);
   return {
@@ -245,7 +253,7 @@ function recordedTurn(state: RunState) {
         DeclarationSchema.parse(blob(state, digest)),
       ),
       controls: recorded.controls,
-      ...chainedContinuation(state, open.origin, recorded.fullTranscript),
+      ...chainedContinuation(state, open.origin),
     },
   };
 }

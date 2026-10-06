@@ -6,14 +6,16 @@
  * `identified` when the provider names the response, the stream bridged into
  * the trace, and the `response` row with its dispatch facts and priced usage
  * committed before any tool runs. `call` is a compaction summary on the same
- * binding, gate and pricing, recorded by its caller.
+ * binding, gate and pricing, its attempts recorded on the run's history and
+ * landed by its caller.
  *
- * Two owners of retry. Owner A is automatic and route-scoped: a bounded batch
- * of attempts under the process's `ModelRetryGate`, so every run on one
- * credential shares cooling. Owner B is a human, indefinite and durable: a
- * `request.opened` row whose `model.retry` permit walks `waiting` ->
- * `authorized` -> `started`. A decision and an unused permit survive a
- * restart; a consumed permit never buys a second billed attempt implicitly.
+ * Retry is the one loop (`run/modelCall.ts`) over the invocation's rows:
+ * each failed attempt commits a `failed` row with the move after it, an
+ * automatic resend under the process's `ModelRetryGate` while the budget the
+ * rows count lasts, then a person's answer to a `request.opened` the same
+ * batch opens. The answer is the `request.decided` row, and the attempt
+ * after it consumes it; an attempt a person admitted whose outcome no row
+ * recorded is asked about again, never resent unasked.
  */
 import { randomUUID } from 'node:crypto';
 
@@ -21,12 +23,10 @@ import {
   Cause,
   Clock,
   Context,
-  Data,
   Effect,
   Exit,
   type FileSystem,
   Layer,
-  Result,
   Stream,
   SynchronizedRef,
 } from 'effect';
@@ -46,8 +46,6 @@ import {
   logProviderError,
   type StreamHandle,
 } from '@agent/trace';
-import { hasMissingApiKeyErrorMarker } from '@common/errors/sdkError/errorMetadata';
-import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { routeCredentialSwitch } from '@model/modelRoute';
 import type { StateReadFailed } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
@@ -55,65 +53,42 @@ import { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
   MESSAGE_TYPES,
-  toRetryErrorInfo,
-  type DeclinableUsageRoute,
+  type FailedNext,
   type InvocationRef,
   type NormalizedUsage,
-  type ProviderError,
-  type RequestDecision,
   type RetryErrorInfo,
 } from '@shared/schemas';
+import type { Attempt, RetryCredentials } from '@shared/session/inFlight';
 import { findStorageRefusal } from '@shared/session/runHistory';
-import type { RunState } from '@shared/session/runStateFold';
+import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import { UsageLog, usageAgentName } from '@shared/usageLog';
 import { generateShortId } from '@utils/core';
 
 import { policyDecidedRows } from './requestPolicy';
-import { rejectedTokenRecovery } from './rejectedTokenRecovery';
 import { AgentRun } from './run/AgentRun';
 import {
   backgroundDelivery,
   bindModel,
   type BoundModel,
 } from './run/modelBinding';
-import { classifyModelFailure, type ModelFailure } from './run/modelFailure';
-import {
-  beforeNextAttempt,
-  callModel,
-  reportUsage,
-  RETRY_BACKOFF_MS,
-  routePolicies,
-  type CallResult,
-} from './run/modelCall';
+import { AttemptFailed, classifyModelFailure } from './run/modelFailure';
+import { runInvocation } from './run/invocation';
+import { callModel, type CallResult } from './run/modelCall';
 import { observeBackground, submitAndObserve } from './run/backgroundTurn';
 import { contextTokens } from './run/contextTokens';
-import { priceTurnUsage } from './run/pricing';
+import { priceTurnUsage, reportUsage } from './run/pricing';
 import { turnReasoning, turnText } from './run/turnText';
 import {
+  attemptRequest,
   attemptRows,
   chainedContinuation,
   checkRecordedRequest,
   recordedRequest,
 } from './run/requestContext';
 import { dispatchFactsFor, localCallsOf } from './run/tools';
-import {
-  retryRow,
-  retryRows,
-  rowAggregate,
-  snapshotRow,
-  positionRow,
-} from './loop/rows';
+import { rowAggregate, snapshotRow, positionRow } from './loop/rows';
 import type { CellError, RunCell } from './loop/runProgram';
 import type { HttpClient } from 'effect/http';
-
-/**
- * Credential source a retry decision picked: the account the run is already
- * configured with, or the user's personal credential. Derived from the one
- * request vocabulary so the retry arm stays the only definition.
- */
-type RetryCredentials = NonNullable<
-  Extract<RequestDecision, { action: 'retry' }>['credentials']
->;
 
 /** The answer the invoker gives itself for an automatic quota fallback. */
 const PERSONAL_RETRY = {
@@ -140,6 +115,11 @@ function reducedOutputBudget(available: number, buffer: number): number {
 const EMPTY_RESPONSE_ERROR_MESSAGE =
   'Model response was empty or aborted; this may indicate a server issue or network problem.';
 
+/** What a person is asked again when an attempt they admitted has no
+ *  recorded outcome: the process stopped while it ran. */
+const INTERRUPTED_RETRY_MESSAGE =
+  'The process stopped while the retry you approved was running, so it may have been billed without an answer. Retry again?';
+
 /**
  * How much of a failed attempt's streamed output the failure carries. The
  * retry surface shows the tail so the user sees the work was not lost; the
@@ -156,7 +136,6 @@ export interface InvokeRequest {
   readonly round: number;
   /** The debug file base name of the family issuing the turn. */
   readonly debugName: string;
-  readonly fullTranscript?: boolean;
 }
 
 interface InvocationResponse {
@@ -197,22 +176,14 @@ export class ModelInvoker extends Context.Service<
       InvokeError,
       FileSystem.FileSystem | LanguageModel | HttpClient.HttpClient
     >;
-    /** A compaction summary: one call outside a turn, on the run's binding. */
+    /** A compaction summary: one call outside a turn, on the run's binding,
+     *  its attempts recorded on the run's history. */
     readonly call: (
+      cell: RunCell,
       request: TurnRequest,
-      declinedRoutes: readonly DeclinableUsageRoute[],
     ) => Effect.Effect<CallResult, Error>;
   }
 >()('@texra/agent/ModelInvoker') {}
-
-/** A failed attempt's classification; the rows it left are in the cell. */
-class AttemptFailed extends Data.TaggedError('AttemptFailed')<{
-  readonly failure: ModelFailure;
-}> {
-  override get message(): string {
-    return this.failure.formatted.message;
-  }
-}
 
 /**
  * Build a request service for one run; its model is run-owned, and every row
@@ -284,7 +255,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         ...(request.toolChoice !== undefined
           ? { toolChoice: request.toolChoice }
           : {}),
-        ...chainedContinuation(state, bound.origin, request.fullTranscript),
+        ...chainedContinuation(state, bound.origin),
         cacheKey: run.runId,
       });
 
@@ -301,7 +272,7 @@ export const modelInvokerLayer = (): Layer.Layer<
 
       /**
        * Prepare one attempt's turn. A preparation that fails is this
-       * attempt's own failure; an interruption stays an interruption.
+       * attempt's own failure, unsent; an interruption stays an interruption.
        */
       const prepareAttempt = Effect.fn('ModelInvoker.prepare')(function* (
         bound: BoundModel,
@@ -353,7 +324,7 @@ export const modelInvokerLayer = (): Layer.Layer<
               case 'identified': {
                 const current = yield* cell.current;
                 if (
-                  current.openAttempt?.providerResponseId ===
+                  current.invocation?.current.providerResponseId ===
                   event.providerResponseId
                 ) {
                   return;
@@ -366,7 +337,6 @@ export const modelInvokerLayer = (): Layer.Layer<
                       kind: 'identified',
                       invocation,
                       providerResponseId: event.providerResponseId,
-                      returnedModel: event.returnedModel,
                     },
                   },
                 ]);
@@ -455,9 +425,8 @@ export const modelInvokerLayer = (): Layer.Layer<
           logger,
           generateShortId,
         );
-        // The completed turn, committed once before any local tool runs. A
-        // response retires the failure a retry was recovering from in the
-        // same transaction, so no resume reads a delivered turn as failed.
+        // The completed turn, committed once before any local tool runs; it
+        // closes the invocation and retires its failure in the fold.
         const next = yield* cell.append((state) => [
           {
             type: 'model.message',
@@ -471,7 +440,6 @@ export const modelInvokerLayer = (): Layer.Layer<
               usage,
             },
           },
-          ...snapshotRow(runId, state, { runtime: { lastError: null } }),
           positionRow(runId, state, 'response.ready'),
         ]);
         const contextSize = contextTokens(next);
@@ -577,10 +545,19 @@ export const modelInvokerLayer = (): Layer.Layer<
           }
         }
         // The durable fact before the billed request (F1), with the prepared
-        // turn it sends, which the rows alone must rebuild.
-        yield* cell.append((state) =>
-          attemptRows(run, state, invocation, bound.origin, resolved),
-        );
+        // turn it sends, which the rows alone must rebuild. A retry a person
+        // answered with their own key restates the routes the run declines.
+        yield* cell.append((state) => [
+          ...attemptRows(
+            run,
+            state,
+            invocation,
+            'turn',
+            bound.origin,
+            resolved,
+          ),
+          ...snapshotRow(runId, state, {}),
+        ]);
         yield* checkRecordedRequest(run, resolved);
         const trace = openTrace();
         const started = yield* Clock.currentTimeMillis;
@@ -625,9 +602,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           invocation: InvocationRef,
           request: InvokeRequest,
           bound: BoundModel,
-          accepted: NonNullable<
-            NonNullable<RunState['openAttempt']>['accepted']
-          >,
+          accepted: NonNullable<Attempt['accepted']>,
         ): Effect.fn.Return<
           InvocationResponse,
           AttemptFailed | InvokeError,
@@ -696,58 +671,31 @@ export const modelInvokerLayer = (): Layer.Layer<
       );
 
       /**
-       * One attempt under the process's route gate, which every session's
-       * runs share (one cooling per route), and the attempt runs inside its
-       * permits on this fiber. Cancelling the run interrupts the fiber, which
-       * the gate reads as the waiting or in-flight attempt being abandoned.
+       * Rebind on `selection`, retiring the failed binding, on the routes
+       * the run declines as its rows now stand; a failure keeps it, loudly.
        */
-      const gatedAttempt = (
-        cell: RunCell,
-        invocation: InvocationRef,
-        request: InvokeRequest,
-        bound: BoundModel,
-      ): Effect.Effect<
-        InvocationResponse,
-        AttemptFailed | InvokeError,
-        FileSystem.FileSystem
-      > => {
-        const routes = routePolicies(bound, (error) =>
-          error instanceof AttemptFailed
-            ? error.failure.verdict
-            : classifyModelFailure(error, bound).verdict,
-        );
-        return session.modelRetries.withRoutes(routes, {
-          baseBackoffMs: RETRY_BACKOFF_MS,
-          onWait: (delayMs) =>
-            logger.debug(`Waiting ${delayMs}ms for the model recovery probe.`),
-        })(attemptOnce(cell, invocation, request, bound));
-      };
-
-      /** Rebind a retry, retiring the failed binding; a failure keeps it, loudly. */
-      const rebind = (
-        selection: RetryCredentials,
-        failed: BoundModel,
-        declinedRoutes: readonly DeclinableUsageRoute[],
-      ) =>
-        run
-          .swapModel((current) =>
-            // A switch may have landed while the panel waited; never undo it.
-            current !== failed
-              ? Effect.succeed(current)
-              : bindModel({
-                  modelId: failed.modelId,
-                  // A personal-key retry leaves the failed route's overlay
-                  // behind (subscription window, prices, PDF admission, a
-                  // Kimi coding endpoint) and binds the catalog model.
-                  config: selection === 'personal' ? undefined : failed.config,
-                  stores: run.stores,
-                  backend: failed.backend,
-                  declinedRoutes,
-                  textOnly: failed.textOnly,
-                  temperature: run.persona.temperature,
-                }),
-          )
-          .pipe(
+      const rebind =
+        (cell: RunCell) => (selection: RetryCredentials, failed: BoundModel) =>
+          Effect.flatMap(cell.current, ({ declinedRoutes }) =>
+            run.swapModel((current) =>
+              // A switch may have landed while the panel waited; never undo it.
+              current !== failed
+                ? Effect.succeed(current)
+                : bindModel({
+                    modelId: failed.modelId,
+                    // A personal-key retry leaves the failed route's overlay
+                    // behind (subscription window, prices, PDF admission, a
+                    // Kimi coding endpoint) and binds the catalog model.
+                    config:
+                      selection === 'personal' ? undefined : failed.config,
+                    stores: run.stores,
+                    backend: failed.backend,
+                    declinedRoutes,
+                    textOnly: failed.textOnly,
+                    temperature: run.persona.temperature,
+                  }),
+            ),
+          ).pipe(
             Effect.provideContext(binders),
             Effect.tapError((error) =>
               Effect.sync(() =>
@@ -759,148 +707,74 @@ export const modelInvokerLayer = (): Layer.Layer<
             Effect.result,
           );
 
-      type Decision = 'retry' | 'deny' | 'cancel';
-
       /**
-       * The durable manual-retry admission. `requestId` is the outstanding
-       * request when the run resumed with a `waiting` gate, else a new one is
-       * committed with its binding before the prompt is shown.
+       * The batch that ends attempt `ref` as `failed` with `error`. One that
+       * asks opens its retry request first, with the credential move the
+       * failure offers and, where the policy or an automatic quota fallback
+       * answers at once, that answer, so no surface lists it pending.
        */
-      const manualRetry = Effect.fn('ModelInvoker.manualRetry')(function* (
+      const failedRows = Effect.fn('ModelInvoker.failedRows')(function* (
         cell: RunCell,
-        failed: BoundModel,
-        // The failure as it is recorded, live or recovered from the run history:
-        // the prompt, the row and the reported error all read this one value,
-        // so a restart re-presents the same facts the first prompt showed.
-        recorded: ProviderError,
-        failedAttempt: InvocationRef,
-        outstanding: string | null,
-      ): Effect.fn.Return<
-        Decision,
-        InvokeError,
-        LanguageModel | HttpClient.HttpClient
-      > {
-        const requestId = outstanding ?? `retry-${generateShortId()}`;
-        const info = toRetryErrorInfo(recorded);
-        const pendingRetry = (substate: 'waiting' | 'authorized' | 'started') =>
-          ({
-            requestId,
-            invocation: failedAttempt,
-            failedModelId: failed.modelId,
-            credentialScope:
-              failed.origin.protocol === 'vscode-lm'
-                ? 'editor'
-                : failed.origin.deployment.credentialScope,
-            substate,
-          }) as const;
-        if (outstanding === null) {
-          const credentialSwitch = yield* routeCredentialSwitch(
-            failed,
-            recorded,
-            (yield* cell.current).declinedRoutes,
-            run.stores.secrets,
+        ref: InvocationRef,
+        error: RetryErrorInfo,
+        next: FailedNext,
+        bound: BoundModel,
+      ): Effect.fn.Return<readonly RunHistoryDraft[]> {
+        const failed: RunHistoryDraft = {
+          type: 'model.message',
+          aggregateId,
+          payload: {
+            kind: 'failed',
+            invocation: ref,
+            purpose: 'turn',
+            error,
+            next,
+          },
+        };
+        if (next.kind !== 'ask') return [failed];
+        const { requestId } = next;
+        const credentialSwitch = yield* routeCredentialSwitch(
+          bound,
+          error,
+          (yield* cell.current).declinedRoutes,
+          run.stores.secrets,
+        );
+        const automatic =
+          credentialSwitch?.kind === 'decline-route' &&
+          credentialSwitch.automatic
+            ? quotaFallbackRouteFor(credentialSwitch.route)
+            : null;
+        if (automatic !== null) {
+          logProgressStatus(
+            logger,
+            `${automatic.retrySourceName} usage limit reached; retrying with ${automatic.retryFallbackName}.`,
           );
-          const automatic =
-            credentialSwitch?.kind === 'decline-route' &&
-            credentialSwitch.automatic
-              ? quotaFallbackRouteFor(credentialSwitch.route)
-              : null;
-          const request = {
+        }
+        const payload = {
+          kind: 'retry',
+          data: {
             requestId,
             runId,
             operation: 'Model request',
-            model: failed.modelId,
-            errorMessage: info.message,
-            errorDetails: info,
+            model: bound.modelId,
+            errorMessage: error.message,
+            errorDetails: error,
             credentialSwitch,
-          };
-          const payload = { kind: 'retry', data: request } as const;
-          yield* logProviderError(logger, 'Model request failed', recorded);
-          if (automatic !== null) {
-            logProgressStatus(
-              logger,
-              `${automatic.retrySourceName} usage limit reached; retrying with ${automatic.retryFallbackName}.`,
-            );
-          }
-          yield* cell.append((state) => [
-            {
-              type: 'request.opened',
-              aggregateId,
-              requestId,
-              payload,
-              thread: null,
-            },
-            ...retryRows(runId, state, pendingRetry('waiting'), {
-              lastError: info,
-            }),
-            ...(automatic
-              ? [{ ...PERSONAL_RETRY, aggregateId, requestId }]
-              : policyDecidedRows(session, runId, payload)),
-          ]);
-        }
-        const state = yield* cell.current;
-        logger.debug('Waiting for manual retry', { data: info.message });
-        // The decision is the `request.decided` row (R5): one already landed
-        // (the invoker's own, or a surface's before a crash), else the one the
-        // decide command lands while this fiber waits; a closing plane cancels.
-        let decision = state.requests[requestId]?.decision ?? null;
-        if (decision === null) {
-          const row = yield* session
-            .decisionFor(runId, requestId, state.commit)
-            .pipe(
-              Effect.catch((error) =>
-                Effect.sync(() => {
-                  logger.warn('The retry prompt closed before a decision', {
-                    data: error,
-                  });
-                  return null;
-                }),
-              ),
-            );
-          if (row === null) {
-            decision = { action: 'cancel', cause: 'The session closed.' };
-          } else {
-            yield* cell.refresh;
-            decision = row.decision;
-          }
-        }
-        if (decision.action === 'retry') {
-          logger.debug('Manual retry triggered');
-          const selection = decision.credentials ?? 'configured';
-          // A personal retry declines the route its offer named, on this
-          // run's history only: no concurrent run or stored preference changes.
-          const { declinedRoutes: declined, requests } = yield* cell.current;
-          const opened = requests[requestId]?.payload;
-          const offer =
-            opened?.kind === 'retry' ? opened.data.credentialSwitch : null;
-          const declinedRoutes =
-            selection === 'personal' &&
-            offer?.kind === 'decline-route' &&
-            !declined.includes(offer.route)
-              ? [...declined, offer.route]
-              : declined;
-          // Always rebuild the binding: a key or preference may have changed
-          // while the panel waited; a personal answer declines the route.
-          yield* rebind(selection, failed, declinedRoutes);
-          yield* cell.append((state) =>
-            retryRows(runId, state, pendingRetry('authorized'), {
-              lastError: info,
-              declinedRoutes,
-            }),
-          );
-          return 'retry';
-        }
-        logProgressStatus(
-          logger,
-          decision.action === 'deny'
-            ? decision.reason
-            : 'Retry cancelled by user',
-        );
-        // Either answer clears the gate, keeping the failure it recorded.
-        yield* cell.append((state) =>
-          retryRows(runId, state, null, { lastError: info }),
-        );
-        return decision.action === 'deny' ? 'deny' : 'cancel';
+          },
+        } as const;
+        return [
+          {
+            type: 'request.opened',
+            aggregateId,
+            requestId,
+            payload,
+            thread: null,
+          },
+          failed,
+          ...(automatic
+            ? [{ ...PERSONAL_RETRY, aggregateId, requestId }]
+            : policyDecidedRows(session, runId, payload)),
+        ];
       });
 
       const invoke = Effect.fn('ModelInvoker.invoke')(function* (
@@ -911,211 +785,135 @@ export const modelInvokerLayer = (): Layer.Layer<
         InvokeError,
         FileSystem.FileSystem | LanguageModel | HttpClient.HttpClient
       > {
-        const state = yield* cell.current;
-        // One initial attempt plus the binding's automatic retries; the
-        // setting is bounded to [0, 5], so the limit is always >= 1.
-        const limit =
-          1 + (yield* SynchronizedRef.get(run.model)).automaticRetries;
-        let automaticAttempts = 0;
-        const recoverToken = rejectedTokenRecovery(run, cell.current, rebind);
-        let sent = request;
-        // An open attempt with no response is an invocation the process never
-        // saw finish: the next attempt continues its numbering, and its gate
-        // state below says whether a human must admit it first.
-        const open = state.openAttempt;
-        const invocationId = open?.invocation.invocationId ?? randomUUID();
-        let attempt = open === null ? 1 : open.invocation.attempt + 1;
-        // An open attempt accepted as background work is observed first, under
-        // its recorded deadline; only its failure (or a held gate) starts anew.
-        let observing =
-          open !== null && open.accepted !== null && state.pendingRetry === null
-            ? { invocation: open.invocation, accepted: open.accepted }
-            : null;
-        // The manual gate as resumed: `waiting` re-presents the request,
-        // `authorized` holds one unused permit, `started` needs a new decision.
-        let admission: 'automatic' | 'authorized' | 'decision' | 'waiting' =
-          'automatic';
-        let outstanding: string | null = null;
-        // The failure the manual gate presents: the live attempt's own record,
-        // or, on a resume, the one the snapshot committed with the gate.
-        let lastFailure: ProviderError | null = null;
-        let failedAttempt: InvocationRef = {
-          invocationId,
-          attempt: Math.max(1, attempt - 1),
-        };
-        if (state.pendingRetry !== null) {
-          const gate = state.pendingRetry;
-          failedAttempt = gate.invocation;
-          if (gate.substate === 'waiting') {
-            admission = 'waiting';
-            outstanding = gate.requestId;
-          } else if (gate.substate === 'authorized') {
-            admission = 'authorized';
-          } else {
-            admission = 'decision';
-          }
-          // Every gate write commits `lastError` with it, so a gate without
-          // one is malformed: refuse loudly rather than fabricate a failure.
-          if (state.lastError === null) {
-            return yield* Effect.die(
-              new Error('A manual retry gate has no recorded failure.'),
-            );
-          }
-          lastFailure = state.lastError;
-        }
-        for (;;) {
-          if (admission !== 'automatic') {
-            if (admission === 'waiting' || admission === 'decision') {
-              const failure = lastFailure;
-              if (failure === null) {
-                return yield* Effect.die(
-                  new Error('A manual retry gate has no failure to present.'),
+        const ended = yield* runInvocation<
+          InvocationResponse,
+          InvokeError,
+          FileSystem.FileSystem
+        >({
+          read: cell.current,
+          binding: SynchronizedRef.get(run.model),
+          rebind: rebind(cell),
+          attempt: (bound, ref, accepted) =>
+            accepted === null
+              ? attemptOnce(cell, ref, request, bound)
+              : observeAccepted(cell, ref, request, bound, accepted),
+          failed: (ref, failure, next, bound) =>
+            Effect.gen(function* () {
+              if (next.kind === 'ask' || next.kind === 'stop')
+                yield* logProviderError(
+                  logger,
+                  next.kind === 'ask'
+                    ? 'Model request failed'
+                    : 'Model request failed (no retry available)',
+                  failure.formatted,
                 );
-              }
-              const decision = yield* manualRetry(
-                cell,
-                yield* SynchronizedRef.get(run.model),
-                failure,
-                failedAttempt,
-                outstanding,
+              yield* cell.append(
+                yield* failedRows(cell, ref, failure.info, next, bound),
               );
-              outstanding = null;
-              if (decision === 'deny') {
-                return {
-                  kind: 'failed',
-                  state: yield* cell.current,
-                  error: toRetryErrorInfo(failure),
-                };
-              }
-              if (decision === 'cancel')
-                return { kind: 'cancelled', state: yield* cell.current };
-            }
-            // Consume the permit: `started` commits with the attempt row, so a
-            // crash cannot reuse the authorization.
-            const gate = (yield* cell.current).pendingRetry;
-            if (gate === null) {
-              return yield* Effect.die(
-                new Error('An authorized retry has no gate.'),
-              );
-            }
-            yield* cell.append([
-              retryRow(runId, { ...gate, substate: 'started' }),
-            ]);
-            admission = 'automatic';
-          }
-          // Read after the gate: a manual retry rebinds the model.
-          const bound = yield* SynchronizedRef.get(run.model);
-          let carried = false;
-          let invocation: InvocationRef;
-          let exit: Exit.Exit<InvocationResponse, AttemptFailed | InvokeError>;
-          // The accepted operation this round observed, if any: a recovered
-          // token re-observes it rather than resubmitting an admitted turn.
-          const observed = observing;
-          if (observed !== null) {
-            invocation = observed.invocation;
-            exit = yield* Effect.exit(
-              observeAccepted(
-                cell,
-                invocation,
-                request,
-                bound,
-                observed.accepted,
-              ),
-            );
-            observing = null;
-          } else {
-            invocation = { invocationId, attempt };
-            attempt += 1;
-            carried =
-              'continuation' in
-              chainedContinuation(
-                yield* cell.current,
-                bound.origin,
-                sent.fullTranscript,
-              );
-            exit = yield* Effect.exit(
-              gatedAttempt(cell, invocation, sent, bound),
-            );
-          }
-          if (Exit.isSuccess(exit)) return exit.value;
-          if (Cause.hasInterrupts(exit.cause)) return yield* Effect.interrupt;
-          const found = Cause.findError(exit.cause);
-          const error = Result.isSuccess(found) ? found.success : undefined;
-          if (error?._tag !== 'AttemptFailed') {
-            const runHistory =
-              error?._tag === 'RunHistoryRefused' ||
-              error?._tag === 'DatabaseWriteFailed';
-            return yield* runHistory
-              ? Effect.fail(error)
-              : Effect.die(error ?? Cause.squash(exit.cause));
-          }
-          const failure = yield* recoverToken(error.failure, bound);
-          if (failure === null) {
-            observing = observed;
-            continue;
-          }
-          lastFailure = failure.formatted;
-          failedAttempt = invocation;
-          const dropChain = carried && failure.storedResponseGone;
-          if (dropChain) {
-            logger.warn(
-              `Chained response gone (${failure.info.message}); retrying once with the full transcript.`,
-            );
-            sent = { ...request, fullTranscript: true };
-          } else automaticAttempts += 1;
-          if (isUserAbort(failure.error))
-            return { kind: 'cancelled', state: yield* cell.current };
-          if (
-            dropChain ||
-            (failure.autoRetryable && automaticAttempts < limit)
-          ) {
-            if (!dropChain)
-              logger.debug(
-                `Model request failed; automatic retry ${automaticAttempts} of ${limit - 1} in ${RETRY_BACKOFF_MS}ms.`,
-                { data: failure.info.message },
-              );
-            const { declinedRoutes: declined } = yield* cell.current;
-            yield* beforeNextAttempt(bound, (b) =>
-              rebind('configured', b, declined),
-            );
-            continue;
-          }
-          if (
-            !failure.formatted.userRetryable ||
-            hasMissingApiKeyErrorMarker(failure.error)
-          ) {
-            yield* logProviderError(
-              logger,
-              'Model request failed (no retry available)',
-              failure.formatted,
-            );
-            // The invoker is the one writer of the run's failure fact.
-            const failed = yield* cell.append((state) =>
-              snapshotRow(runId, state, {
-                runtime: { lastError: failure.info },
+            }),
+          asker: {
+            requestId: () => `retry-${generateShortId()}`,
+            await: (requestId) =>
+              Effect.gen(function* () {
+                logger.debug('Waiting for manual retry');
+                // The decision is the `request.decided` row (R5): the one the
+                // decide command lands while this fiber waits; a closing
+                // plane cancels.
+                const row = yield* session
+                  .decisionFor(runId, requestId, (yield* cell.current).commit)
+                  .pipe(
+                    Effect.catch((error) =>
+                      Effect.sync(() => {
+                        logger.warn(
+                          'The retry prompt closed before a decision',
+                          { data: error },
+                        );
+                        return null;
+                      }),
+                    ),
+                  );
+                if (row === null) return false;
+                yield* cell.refresh;
+                return true;
               }),
-            );
-            return { kind: 'failed', state: failed, error: failure.info };
-          }
-          admission = 'decision';
-        }
+            reask: (attempt) =>
+              Effect.gen(function* () {
+                const bound = yield* SynchronizedRef.get(run.model);
+                yield* cell.append(
+                  yield* failedRows(
+                    cell,
+                    attempt.ref,
+                    {
+                      message: INTERRUPTED_RETRY_MESSAGE,
+                      provider: bound.config.provider,
+                      userRetryable: true,
+                    },
+                    { kind: 'ask', requestId: `retry-${generateShortId()}` },
+                    bound,
+                  ),
+                );
+              }),
+          },
+          retries: (yield* SynchronizedRef.get(run.model)).automaticRetries,
+          gate: session.modelRetries,
+          secrets: run.stores.secrets,
+          logger,
+        });
+        if (ended.kind === 'response') return ended;
+        const state = yield* cell.current;
+        if (ended.kind === 'failed')
+          return { kind: 'failed', state, error: ended.error };
+        logProgressStatus(logger, 'Retry cancelled by user');
+        return { kind: 'cancelled', state };
       });
 
-      /** A compaction summary on the run's binding; its caller records it. */
-      const call = (
-        request: TurnRequest,
-        declinedRoutes: readonly DeclinableUsageRoute[],
-      ) =>
+      /** A compaction summary on the run's binding; its caller lands it. */
+      const call = (cell: RunCell, request: TurnRequest) =>
         callModel({
           purpose: 'compaction',
           binding: SynchronizedRef.get(run.model),
-          reacquire: (failed) => rebind('configured', failed, declinedRoutes),
+          reacquire: (failed) => rebind(cell)('configured', failed),
           request,
           gate: session.modelRetries,
           settings: session.roots,
+          secrets: run.stores.secrets,
           attribution,
           logger,
-        }).pipe(Effect.provideService(UsageLog, usageLog));
+          record: {
+            attempt: (ref, bound, resolved) =>
+              cell
+                .append((state) =>
+                  attemptRows(
+                    run,
+                    state,
+                    ref,
+                    'summary',
+                    bound.origin,
+                    resolved,
+                  ),
+                )
+                .pipe(Effect.as(attemptRequest(run, resolved))),
+            failed: (ref, error, next) =>
+              Effect.asVoid(
+                cell.append([
+                  {
+                    type: 'model.message',
+                    aggregateId,
+                    payload: {
+                      kind: 'failed',
+                      invocation: ref,
+                      purpose: 'summary',
+                      error,
+                      next,
+                    },
+                  },
+                ]),
+              ),
+          },
+        }).pipe(
+          Effect.provideService(UsageLog, usageLog),
+          Effect.provideContext(binders),
+        );
 
       return { invoke, call };
     }),

@@ -22,7 +22,6 @@ function openingSnapshot(runId: RunId): RunHistoryDraft {
       runtime: {
         modelId: 'test-model',
         backend: 'validation',
-        lastError: null,
         declinedRoutes: [],
       },
       state: {},

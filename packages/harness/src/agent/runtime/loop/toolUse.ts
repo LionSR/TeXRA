@@ -485,7 +485,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (replayCommitted) {
           replayCommitted = false;
           const last =
-            state.at === 'response.ready' && state.openAttempt === null
+            state.at === 'response.ready' && state.invocation === null
               ? state.messages.at(-1)
               : undefined;
           if (last?.role === 'assistant') {
@@ -530,12 +530,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // One round: the compaction the history may need, the snapshot that
         // admits the round, then the invocation. An open attempt's history
         // is fixed; it is neither compacted nor re-admitted.
-        if (state.openAttempt === null) {
+        if (state.invocation === null) {
           // The queued `/compact`s are consumed by the edit that answers
           // them, or, with nothing to summarize, by this round's admission.
           const requests = consumedRows(runId, followUps.controls(), 'compact');
           state = yield* cell.adopt(
-            yield* compaction.atBoundary(state, bound, requests),
+            yield* compaction.atBoundary(state, cell, bound, requests),
           );
           // A compaction replaced the history, the context updates in it
           // too: a new step renders the system text anew, each one in it.
@@ -566,7 +566,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           system: step.system,
           // The model call this request is: the attempt row counts a new
           // one, a retry of the open attempt is the same call.
-          round: state.openAttempt === null ? state.round + 1 : state.round,
+          round: state.invocation === null ? state.round + 1 : state.round,
           debugName: 'tooluse',
         });
         state = outcome.state;

@@ -43,7 +43,6 @@ import {
   RunPositionPayloadSchema,
   ContextEditPayloadSchema,
   ModelMessagePayloadSchema,
-  ModelRetryPayloadSchema,
   ToolBindingPayloadSchema,
   ScriptCallPayloadSchema,
   ToolIntentPayloadSchema,
@@ -396,9 +395,9 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   }),
   /**
    * The answer, whatever surface gave it and whatever its provenance. The
-   * decision is the durable recovery fact (R5): a `model-retry` binding
-   * reads its consent off this row, never off a snapshot alone, and an
-   * automatic close names its cause here.
+   * decision is the durable recovery fact (R5): a model retry (the `failed`
+   * row that asks) reads its consent off this row, never off a snapshot
+   * alone, and an automatic close names its cause here.
    */
   durable('request.decided', {
     requestId: z.string().min(1),
@@ -443,9 +442,6 @@ const RunHistoryEventDraftSchema = z.discriminatedUnion('type', [
   /** Binds a call attempt to its own request; commits with the request. */
   durable('tool.binding', { payload: ToolBindingPayloadSchema }),
   durable('tool.result', { payload: ToolResultPayloadSchema }),
-  /** The human retry permit, written by the one retry owner
-   *  (`ModelInvoker`): the gate a restart reads back. */
-  durable('model.retry', { payload: ModelRetryPayloadSchema }),
   durable('run.snapshot', { payload: RunSnapshotPayloadSchema }),
   durable('tools.offered', { payload: ToolsOfferedPayloadSchema }),
   durable('context.blob', { payload: ContextBlobSchema }),
@@ -594,7 +590,6 @@ export function listingTypeOf(
     case 'script.call':
     case 'tool.binding':
     case 'tool.result':
-    case 'model.retry':
     case 'run.snapshot':
     case 'tools.offered':
     case 'context.blob':

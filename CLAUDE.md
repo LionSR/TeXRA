@@ -259,10 +259,13 @@ the run history (`packages/harness/src/shared/session/runHistory.ts`) and contin
 folded `RunState` each `appendBatch` returns; resume is the same function
 reading the same rows. Every wait writes a `run.position`; a response row is
 committed before its tools dispatch and a `tool.result` before the loop
-continues. Retry has two owners inside `ModelInvoker`: an automatic
-route-scoped batch under the process's `ModelRetryGate`, and a durable human
-permit (`request.opened` + the snapshot's `pendingRetry`). Do not add a
-node, a cursor, a services bag, or a second writer of the run history.
+continues. Every model call retries in one loop (`run/modelCall.ts`) whose
+next move is `nextAttempt` over the invocation's rows: a failed attempt
+commits a `failed` row naming the move after it, automatic resends run
+under the process's `ModelRetryGate` within a budget the rows count, and a
+person's answer is the `request.decided` on the retry request that row
+opened. Do not add a node, a cursor, a services bag, or a second writer of
+the run history.
 
 ## Design guardrails
 

@@ -845,6 +845,13 @@ show` print the same notice, and the new `texra agents customize`,
   output yet reads "Agent is starting", the `agent` tool's transcript row is
   headed "Agent", and the CLI's `/config` category for these settings reads
   "Tasks and agents" (it read "Subagents").
+- **A model retry you approved is not sent again after a crash without
+  asking.** If the app stopped while a retry you approved was running, the
+  resumed task now asks again instead of resending a request that may
+  already have been billed. Automatic retries also keep their count across
+  a restart, so a crash no longer grants a fresh set of paid retries, and a
+  denied retry stays denied when the task is resumed. Compaction summaries
+  now leave a record of each billed attempt in the task's history.
 - **Projects that share an API key back off together after a rate
   limit.** The background service runs every project's tasks, but each
   project waited out a provider's 429 on its own, so a second project kept

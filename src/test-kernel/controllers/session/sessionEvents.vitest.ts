@@ -2934,7 +2934,6 @@ describe('RunHistory', () => {
       runtime: {
         modelId: 'gpt-test',
         backend: 'openai',
-        lastError: null,
         declinedRoutes: [],
       },
       state: {},
@@ -3038,7 +3037,7 @@ describe('RunHistory', () => {
             request: '0'.repeat(64),
             invocation: INVOCATION,
             origin: ORIGIN,
-            delivery: 'stream',
+            purpose: 'turn',
           },
         },
       ]);
@@ -3050,7 +3049,6 @@ describe('RunHistory', () => {
             kind: 'identified',
             invocation: INVOCATION,
             providerResponseId: 'resp-1',
-            returnedModel: null,
           },
         },
       ]);
@@ -3224,7 +3222,7 @@ describe('RunHistory', () => {
                     endpoint: `https://api.example.test/v1?api-key=${SECRET}`,
                   },
                 },
-                delivery: 'stream',
+                purpose: 'turn',
               },
             },
           ])

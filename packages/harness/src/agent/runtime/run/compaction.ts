@@ -1,20 +1,14 @@
 /**
  * Conversation compaction for the tool-use loop: a run-scoped step beside
- * the loop that writes a `context.edit` with cause `compaction` (triggered
- * by `context-limit`, `context-window` when a turn overflowed the window, or
- * `user` for a `/compact`), replacing the history it summarized, from the
- * history retained by the run history and nothing else. A threshold
- * compaction of a conversation runs in the background
- * ({@link backgroundCompaction}); a `/compact` and an overflow wait for
- * theirs. The trigger is
- * the compaction threshold setting measured against the bound model's
- * context window (the run's `contextTokens`), a `/compact` request, or an
- * overflow; the replacement is a summary the bound model produces through the
- * invoker's priced `call`, folded back as one user message. Every skip and
+ * the loop that writes a `context.edit` with cause `compaction` (trigger
+ * `context-limit` at the threshold share of the bound model's window, or
+ * `user` for a `/compact`), replacing the history it summarized. A
+ * threshold compaction runs in the background ({@link backgroundCompaction});
+ * a `/compact` waits for its own. The replacement is a summary the bound
+ * model produces through the invoker's priced `call`, its attempts recorded
+ * on the run's history, folded back as one user message. Every skip and
  * every failure is logged and shown as a compaction activity, never silent.
- *
- * The compaction prompts and the summary cap live here because this is the
- * reader that owns them on the run loop.
+ * The compaction prompts and the summary cap live here, with their reader.
  */
 import { Cause, Effect, Exit, Fiber, type Scope } from 'effect';
 
@@ -42,6 +36,7 @@ import { turnText } from './turnText';
 import type { ModelInvoker } from '../ModelInvoker';
 import type { CallResult } from './modelCall';
 import type { BoundModel } from './modelBinding';
+import type { RunCell } from '../loop/runProgram';
 
 /**
  * Prefix prepended to a compaction summary when it is folded back into the
@@ -106,15 +101,13 @@ interface CompactionInput {
   readonly bound: BoundModel;
   /** The run's invoker, which makes the summary call. */
   readonly invoker: ModelInvoker['Service'];
+  /** The run's cell, which the summary's attempt rows commit through. */
+  readonly cell: RunCell;
   /** The session's setting slots: the threshold is a live per-check read. */
   readonly stores: SettingsStores;
-  /**
-   * Compact regardless of the threshold: a `/compact` request, or a turn that
-   * overflowed the context window (recorded as trigger `context-window`, which
-   * the fold reads as the round's one overflow recovery). `null` leaves the
-   * decision to the threshold.
-   */
-  readonly force: 'request' | 'overflow' | null;
+  /** Compact regardless of the threshold: a `/compact` request. `null`
+   *  leaves the decision to the threshold. */
+  readonly force: 'request' | null;
   /** The `/compact` requests it answers, consumed with its edit. */
   readonly answers?: readonly RunHistoryDraft[];
 }
@@ -122,14 +115,12 @@ interface CompactionInput {
 /** Why a compaction runs, as its `context.edit` records it. */
 const COMPACTION_TRIGGER = {
   request: 'user',
-  overflow: 'context-window',
   threshold: 'context-limit',
 } as const;
 
 /** Why a compaction runs, as its debug line names it. */
 const COMPACTION_REASON = {
   request: 'manually requested',
-  overflow: 'context window exceeded',
   threshold: 'token threshold exceeded',
 } as const;
 
@@ -169,7 +160,7 @@ const overThreshold = Effect.fn('compaction.overThreshold')(function* (
  */
 const summarize = Effect.fn('compaction.summarize')(function* (
   state: RunState,
-  input: Pick<CompactionInput, 'logger' | 'bound' | 'invoker'>,
+  input: Pick<CompactionInput, 'logger' | 'bound' | 'invoker' | 'cell'>,
   reason: Reason,
 ): Effect.fn.Return<Summary | null> {
   const { logger, bound } = input;
@@ -200,28 +191,25 @@ const summarize = Effect.fn('compaction.summarize')(function* (
   // the model's own limit; a limit too small for a manual thinking budget
   // runs without thinking (the model's rule, not this one's).
   const summarized = yield* Effect.exit(
-    input.invoker.call(
-      {
-        mode: 'foreground',
-        system: COMPACTION_SYSTEM_PROMPT,
-        messages: [
-          ...conversation.filter(({ role }) => role !== 'system'),
-          {
-            role: 'user',
-            content: [{ kind: 'text', text: COMPACTION_USER_PROMPT }],
-          },
-        ],
-        tools: [],
-        maxOutputTokens: Math.max(
-          1,
-          Math.min(
-            bound.config.maxOutputTokens,
-            contextWindow > 0 ? contextWindow - tokensBefore : Infinity,
-          ),
+    input.invoker.call(input.cell, {
+      mode: 'foreground',
+      system: COMPACTION_SYSTEM_PROMPT,
+      messages: [
+        ...conversation.filter(({ role }) => role !== 'system'),
+        {
+          role: 'user',
+          content: [{ kind: 'text', text: COMPACTION_USER_PROMPT }],
+        },
+      ],
+      tools: [],
+      maxOutputTokens: Math.max(
+        1,
+        Math.min(
+          bound.config.maxOutputTokens,
+          contextWindow > 0 ? contextWindow - tokensBefore : Infinity,
         ),
-      },
-      state.declinedRoutes,
-    ),
+      ),
+    }),
   );
   if (Exit.isFailure(summarized)) {
     if (Cause.hasInterrupts(summarized.cause)) {
@@ -331,9 +319,11 @@ const compactIfNeeded = Effect.fn('compaction.check')(function* (
  * summarizes the whole history.
  */
 export interface BackgroundCompaction {
-  /** At a request boundary, no attempt open; `requests` consume `/compact`s. */
+  /** At a request boundary, no attempt open; `requests` consume `/compact`s.
+   *  A summary's attempts commit through `cell`. */
   readonly atBoundary: (
     state: RunState,
+    cell: RunCell,
     bound: BoundModel,
     requests: readonly RunHistoryDraft[],
   ) => Effect.Effect<
@@ -359,7 +349,7 @@ export interface BackgroundCompaction {
 
 export const backgroundCompaction = Effect.fn('compaction.background')(
   function* (
-    input: Omit<CompactionInput, 'force' | 'bound'>,
+    input: Omit<CompactionInput, 'force' | 'bound' | 'cell'>,
   ): Effect.fn.Return<BackgroundCompaction, never, Scope.Scope> {
     const scope = yield* Effect.scope;
     /** The summary being made off the loop, of the view at `base`. */
@@ -407,6 +397,7 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
 
     const atBoundary = Effect.fn('compaction.atBoundary')(function* (
       state: RunState,
+      cell: RunCell,
       bound: BoundModel,
       requests: readonly RunHistoryDraft[],
     ) {
@@ -414,6 +405,7 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
         const settled = yield* settle(state, 'a /compact replaces it');
         return yield* compactIfNeeded(settled, {
           ...input,
+          cell,
           bound,
           force: 'request',
           answers: requests,
@@ -436,13 +428,20 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
       // A binding that carries one turn at a time (a Responses WebSocket)
       // cannot make the summary beside the request: it waits.
       if (bound.persistentConnection)
-        return yield* compactIfNeeded(state, { ...input, bound, force: null });
+        return yield* compactIfNeeded(state, {
+          ...input,
+          cell,
+          bound,
+          force: null,
+        });
       if (!(yield* overThreshold(state, { ...input, bound }))) return state;
       pending = {
         base: state.lastEdit,
-        fiber: yield* summarize(state, { ...input, bound }, 'threshold').pipe(
-          Effect.forkIn(scope),
-        ),
+        fiber: yield* summarize(
+          state,
+          { ...input, cell, bound },
+          'threshold',
+        ).pipe(Effect.forkIn(scope)),
       };
       return full ? yield* finish(state) : state;
     });

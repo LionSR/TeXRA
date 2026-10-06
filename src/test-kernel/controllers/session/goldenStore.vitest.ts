@@ -135,13 +135,13 @@ const APPROVAL = RunIdSchema.parse('a00000000007');
 const SCRIPTED = RunIdSchema.parse('a00000000008');
 const FANOUT = RunIdSchema.parse('a00000000009');
 /** The fan-out's children: the first completed, the second ran at the kill. */
-const FANNED = RunIdSchema.parse('674df3406d49cb87ac052f8d');
-const RUNNING = RunIdSchema.parse('62b892712262356a13ec07d6');
+const FANNED = RunIdSchema.parse('9463cb52760d99fece60c92f');
+const RUNNING = RunIdSchema.parse('4ae6c5b6a3ba78d298e88a81');
 /** The chat that sent a script to the background, the script's run, and
  *  the script's one `agent()` child, which ran at the kill. */
 const BACKGROUND = RunIdSchema.parse('a0000000000c');
-const SCRIPT_RUN = RunIdSchema.parse('b6ad534870fc2cbaaf68c6d4');
-const SCRIPT_CHILD = RunIdSchema.parse('f78651c27293f7c98b9fc84c');
+const SCRIPT_RUN = RunIdSchema.parse('1b5014994bfd518ff934368c');
+const SCRIPT_CHILD = RunIdSchema.parse('147055d1286486e2aa492584');
 /** A headless run, the fork `texra resume --fork` made of it, and the
  *  handoff that continued the fork. */
 const FORK_SOURCE = RunIdSchema.parse('a0000000000f');
@@ -465,7 +465,7 @@ describe('the golden 1.0 store', () => {
           round: state?.round,
           modelId: state?.modelId,
           messages: state?.messages.map((message) => message.role),
-          openAttempt: state?.openAttempt != null,
+          openAttempt: state?.invocation != null,
         }));
       expect(yield* stateOf(PARKED)).toEqual({
         at: 'turn.begin',
@@ -1269,7 +1269,7 @@ describe('the interrupted golden runs', () => {
       );
       expect(delivered).toHaveLength(1);
       const text = String(delivered[0]?.content.text);
-      expect(text).toMatch(/^<script-result id="b6ad534870fc2cbaaf68c6d4"/);
+      expect(text).toMatch(/^<script-result id="1b5014994bfd518ff934368c"/);
       expect(text).toContain('Background child answer.');
       expect(parseScriptDeliverySummary(text)).toMatchObject({
         name: 'Background',

@@ -25,7 +25,6 @@ import type {
   CliConfigExecuteResult,
 } from '@cli/runtime/executeCli';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import type { CheckpointRefinement } from '@cli/runtime/interruptedResumeHint';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   aggregateId,
@@ -329,18 +328,14 @@ async function setupCancelledOutput(
   );
 }
 
-/** The snapshot a round writes, with the runtime fields a case sets. */
-function workflowSnapshot(
-  runtime: Partial<RunSnapshotPayload['runtime']> = {},
-): RunSnapshotPayload {
+/** The snapshot a round writes. */
+function workflowSnapshot(): RunSnapshotPayload {
   return {
     family: 'toolUse',
     runtime: {
       modelId: 'deepseek/deepseek-v4-flash',
       backend: 'deepseek',
-      lastError: null,
       declinedRoutes: [],
-      ...runtime,
     },
     state: {},
   };
@@ -1332,33 +1327,6 @@ describe('CLI run command, workflow agents', () => {
           mocks.executeCliConfig.mock.calls[0]?.[2].onInterruptedRunFinalized,
         ).toBeTypeOf('function');
         expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledOnce();
-      }),
-  );
-
-  it.effect(
-    'rejects recovery advertising for a snapshot carrying a round failure',
-    () =>
-      Effect.gen(function* () {
-        mockWorkflowRun(workflowRun('abc001'));
-
-        yield* workflowProgram();
-        const canAdvertise: CheckpointRefinement | undefined =
-          mocks.executeCliConfig.mock.calls[0]?.[2].canAdvertiseInterruptedRun;
-
-        expect(
-          yield* canAdvertise!(
-            {
-              kind: 'checkpoint',
-              snapshot: workflowSnapshot({
-                lastError: {
-                  message: 'provider failed',
-                  userRetryable: true,
-                },
-              }),
-            },
-            'abc001' as RunId,
-          ),
-        ).toBe(false);
       }),
   );
 

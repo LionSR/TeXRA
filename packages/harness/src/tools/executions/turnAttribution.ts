@@ -1,9 +1,9 @@
 import { Effect } from 'effect';
 import { readChildTurnState } from '@agent/storage/runRecords';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { AttemptKey } from '@agent/storage/runRecords';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import type { RunId } from '@shared/schemas';
-import type { AttemptKey } from '@shared/session/attemptFold';
 import type { RunView } from '@shared/session/sessionView';
 /**
  * Turn attribution for the executions tool's single latest-value slots.

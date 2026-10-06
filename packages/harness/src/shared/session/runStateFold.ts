@@ -17,11 +17,9 @@ import {
   requestParksItsCaller,
   type CommitOrdinal,
   type HookOutcomes,
-  type InvocationRef,
   type JsonValue,
   type ModelBackend,
   type OfferedTool,
-  type PendingRetry,
   type RunSnapshotPayload,
   type RetryErrorInfo,
   type RunUsageTotals,
@@ -45,10 +43,10 @@ import {
 import {
   attemptOf,
   boundRequestOf,
-  openAttemptAfter,
+  invocationAfter,
   pendingResponseOf,
   settlementOf,
-  type OpenAttempt,
+  type Invocation,
   type PendingCall,
   type PendingResponse,
 } from './inFlight';
@@ -77,7 +75,6 @@ type RunHistoryDraftType =
   | 'script.call'
   | 'tool.binding'
   | 'tool.result'
-  | 'model.retry'
   | 'run.snapshot'
   | 'tools.offered'
   | 'context.blob'
@@ -112,8 +109,8 @@ type LoopState = RunSnapshotPayload['state'];
  * from the row that produced it.
  */
 export type RunState = RunPosition & {
-  /** Responses: a new invocation's `attempt` row counts one, a retry none,
-   *  and a script run's `handed-down` call one. */
+  /** Responses: a new turn invocation's `attempt` row counts one, a retry
+   *  none, and a script run's `handed-down` call one. */
   readonly round: number;
   /** The last folded row. */
   readonly commit: CommitOrdinal;
@@ -128,17 +125,20 @@ export type RunState = RunPosition & {
   readonly phase: RunLoopPhase | null;
   readonly modelId: string | null;
   readonly backend: ModelBackend | null;
+  /** The newest failed attempt's error, until a response or the input of
+   *  a new turn retires it. */
   readonly lastError: RetryErrorInfo | null;
-  /** The human retry permit, as the last `model.retry` row left it. */
-  readonly pendingRetry: PendingRetry | null;
-  /** Subscription routes this run declines: the retries the user answered
-   *  with their own API key, plus the launch's seed. */
+  /** Subscription routes this run declines: the launch's seed, as its
+   *  snapshot restates it, plus each retry the user answered with their own
+   *  API key, folded from that answer. */
   readonly declinedRoutes: SnapshotRuntime['declinedRoutes'];
   /** Canonical provider history, in order. The pending response's assistant
    *  message enters only with its delivering `append`. */
   readonly messages: readonly HistoryMessage[];
   readonly continuation: Continuation | null;
-  readonly openAttempt: OpenAttempt | null;
+  /** The turn's model invocation, from its first attempt until its response
+   *  or the next turn's input. */
+  readonly invocation: Invocation | null;
   /** The last completed turn, from its `response` row: the finish reason a
    *  loop reads when it processes a response it did not just receive. */
   readonly lastTurn: TurnResult | null;
@@ -162,8 +162,6 @@ export type RunState = RunPosition & {
   readonly toolCalls: number;
   /** The latest `context.edit`'s `seq`: the next edit's `base`. */
   readonly lastEdit: number | null;
-  /** The turn the last `context-window` compaction (one per round) hit. */
-  readonly overflowRecoveredAtTurn: number | null;
   readonly loop: LoopState | null;
   /** The latest `tools.offered` row's set; `null` before the first. */
   readonly offeredTools: readonly OfferedTool[] | null;
@@ -244,11 +242,10 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   modelId: null,
   backend: null,
   lastError: null,
-  pendingRetry: null,
   declinedRoutes: [],
   messages: [],
   continuation: null,
-  openAttempt: null,
+  invocation: null,
   lastTurn: null,
   countStale: false,
   pendingResponse: null,
@@ -258,7 +255,6 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   toolCalls: 0,
   loop: null,
   lastEdit: null,
-  overflowRecoveredAtTurn: null,
   offeredTools: null,
   offeredContinuation: null,
   offeredSkills: [],
@@ -283,14 +279,15 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
  * snapshot its run writes.
  */
 export function unboundRequests(state: RunState): readonly string[] {
-  // The recovery bindings the rows carry (R5): the `model.retry` permit's
-  // request and every pending call's `tool.binding`.
+  // The recovery bindings the rows carry (R5): the retry request the turn's
+  // failed attempt asks and every pending call's `tool.binding`.
   const bindings = new Set<string | undefined>(
     Object.values(state.pendingResponse?.records ?? {}).map(
       ({ status }) => boundRequestOf(status)?.requestId,
     ),
   );
-  if (state.pendingRetry !== null) bindings.add(state.pendingRetry.requestId);
+  const asked = state.invocation?.current.failed?.next;
+  if (asked?.kind === 'ask') bindings.add(asked.requestId);
   return Object.entries(state.requests).flatMap(([requestId, request]) =>
     request.resolved ||
     bindings.has(requestId) ||
@@ -298,6 +295,26 @@ export function unboundRequests(state: RunState): readonly string[] {
       ? []
       : [requestId],
   );
+}
+
+/**
+ * The routes the run declines once `decided` lands: a retry answered with
+ * the user's own API key declines the route its offer named, on this run's
+ * history only, so no concurrent run or stored preference changes.
+ */
+function declinedBy(
+  state: RunState,
+  decided: Extract<RunHistoryRow, { type: 'request.decided' }>,
+): RunState['declinedRoutes'] {
+  const opened = state.requests[decided.requestId]?.payload;
+  const offer = opened?.kind === 'retry' ? opened.data.credentialSwitch : null;
+  const { decision } = decided;
+  return decision.action === 'retry' &&
+    decision.credentials === 'personal' &&
+    offer?.kind === 'decline-route' &&
+    !state.declinedRoutes.includes(offer.route)
+    ? [...state.declinedRoutes, offer.route]
+    : state.declinedRoutes;
 }
 
 type Fold = Result.Result<RunState, RunHistoryInconsistent>;
@@ -309,8 +326,6 @@ const refuse = (
 ): Result.Result<never, RunHistoryInconsistent> =>
   Result.fail(new RunHistoryInconsistent({ reason, detail, commit }));
 
-const sameInvocation = (a: InvocationRef, b: InvocationRef): boolean =>
-  a.invocationId === b.invocationId && a.attempt === b.attempt;
 
 /** Why a row of `attempt` cannot move a call standing at `status`, or null:
  *  a settled call is closed, and a call's attempt never goes back. */
@@ -396,6 +411,7 @@ function foldRow(
               ...state.decidedSinceActivation,
               row.requestId,
             ]),
+            declinedRoutes: declinedBy(state, row),
           }
         : {}),
       commit,
@@ -434,69 +450,70 @@ function foldRow(
     }
     case 'model.message': {
       const p = row.payload;
+      // A summary's attempts record its billed calls; the loop continues
+      // from none of them (its `context.edit` carries its usage).
+      if (
+        (p.kind === 'attempt' || p.kind === 'failed') &&
+        p.purpose === 'summary'
+      )
+        return null;
       if (p.kind === 'append' && p.sourceResponse === null) {
+        // Input: a new turn, which retires the last one's invocation and
+        // its failure.
         const state = current ?? freshRunState(commit);
         return Result.succeed({
           ...advance(state),
           messages: appended(state, ...p.messages),
+          invocation: null,
+          lastError: null,
         });
       }
       if (!opened(current)) return beforeOpening(`${row.type} ${p.kind}`);
       const state = advance(current);
       switch (p.kind) {
-        case 'attempt': {
-          const open = state.openAttempt;
-          if (
-            open !== null &&
-            open.invocation.invocationId === p.invocation.invocationId &&
-            p.invocation.attempt <= open.invocation.attempt
-          ) {
-            return outOfOrder(
-              `attempt ${p.invocation.attempt} does not follow ${open.invocation.attempt}`,
-            );
-          }
-          return Result.succeed({
-            ...state,
-            phase: 'model.submitted',
-            round: p.invocation.attempt === 1 ? state.round + 1 : state.round,
-            openAttempt: {
-              invocation: p.invocation,
-              request: p.request,
-              origin: p.origin,
-              delivery: p.delivery,
-              providerResponseId: null,
-              returnedModel: null,
-              accepted: null,
-            },
-          });
-        }
+        case 'attempt':
         case 'identified':
         case 'accepted':
         case 'cancelled':
+        case 'failed':
         case 'response': {
-          const open = state.openAttempt;
-          if (open === null || !sameInvocation(open.invocation, p.invocation)) {
-            return outOfOrder(`${p.kind} names no open attempt`);
+          const invocation = invocationAfter(state.invocation, p);
+          if (typeof invocation === 'string') return outOfOrder(invocation);
+          const moved = { ...state, invocation };
+          if (p.kind === 'attempt')
+            return Result.succeed({
+              ...moved,
+              phase: 'model.submitted',
+              round: p.invocation.attempt === 1 ? state.round + 1 : state.round,
+            });
+          if (p.kind === 'failed') {
+            if (
+              p.next.kind === 'ask' &&
+              state.requests[p.next.requestId] === undefined
+            )
+              return outOfOrder(`a failed attempt asks ${p.next.requestId}`);
+            // An unchained resend drops the response the vendor no longer
+            // holds: the next attempt sends the whole transcript.
+            const unchained = p.next.kind === 'unchain';
+            return Result.succeed({
+              ...moved,
+              lastError: p.error,
+              continuation: unchained ? null : state.continuation,
+            });
           }
-          if (p.kind !== 'response') {
-            const next = openAttemptAfter(open, p);
-            return typeof next === 'string'
-              ? outOfOrder(next)
-              : Result.succeed({ ...state, openAttempt: next });
-          }
+          if (p.kind !== 'response') return Result.succeed(moved);
           if (state.pendingResponse !== null) {
             return outOfOrder(
               `response ${p.responseId} while ${state.pendingResponse.responseId} is undelivered`,
             );
           }
           const settled: RunState = {
-            ...state,
+            ...moved,
             continuation:
               p.turn.kind === 'http' ? (p.turn.continuation ?? null) : null,
-            openAttempt: null,
+            lastError: null,
             lastTurn: p.turn,
             countStale: false,
-            pendingRetry: null,
             usage: addTurnUsage(state.usage, p.usage),
           };
           if (p.calls.length === 0) {
@@ -511,7 +528,7 @@ function foldRow(
           });
         }
         case 'handed-down':
-          if (state.openAttempt !== null || state.pendingResponse !== null)
+          if (state.invocation !== null || state.pendingResponse !== null)
             return outOfOrder(`handed-down ${p.responseId} over an open call`);
           return Result.succeed({
             ...state,
@@ -599,9 +616,6 @@ function foldRow(
           p.range.from !== p.range.to ||
           p.messages.length > 0,
         lastEdit: row.seq,
-        ...(p.trigger === 'context-window'
-          ? { overflowRecoveredAtTurn: current.turn }
-          : {}),
       });
     }
     case 'script.call': {
@@ -725,19 +739,6 @@ function foldRow(
       const byPoint = writable(pass, state.hookOutcomes, (h) => ({ ...h }));
       byPoint[p.point] = [...(byPoint[p.point] ?? []), p];
       return Result.succeed({ ...state, hookOutcomes: byPoint });
-    }
-    case 'model.retry': {
-      if (!opened(current)) return beforeOpening(row.type);
-      const permit = row.payload.permit;
-      // A permit presupposes the request.opened it names.
-      if (permit !== null && current.requests[permit.requestId] === undefined) {
-        return outOfOrder(`dangling ${permit.requestId}`);
-      }
-      // The retry owner's durable gate, its one carrier: `null` retires it.
-      return Result.succeed({
-        ...advance(current),
-        pendingRetry: permit,
-      });
     }
     case 'tool.result': {
       if (!opened(current)) return beforeOpening(row.type);

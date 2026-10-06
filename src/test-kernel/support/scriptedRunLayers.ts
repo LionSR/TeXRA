@@ -14,7 +14,6 @@ import type { ITool } from '@agent/core/tools/ToolTypes';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import {
   rowAggregate,
-  snapshotRow,
   positionRow,
   type Message,
 } from '@agent/runtime/loop/rows';
@@ -170,16 +169,21 @@ export function scriptedInvokerLayer(
             }
             if ('failWith' in scripted) {
               // As the invoker does: the failure commits before it returns,
-              // as the runtime snapshot a resumed run reads back off the fold.
+              // as the `failed` row a resumed run reads back off the fold.
               return {
                 kind: 'failed' as const,
                 state: yield* cell.append([
-                  ...snapshotRow(run.runId, state, {
-                    runtime: {
-                      lastError: scripted.failWith,
-                      declinedRoutes: [],
+                  {
+                    type: 'model.message',
+                    aggregateId,
+                    payload: {
+                      kind: 'failed',
+                      invocation: { invocationId: randomUUID(), attempt: 1 },
+                      purpose: 'turn',
+                      error: scripted.failWith,
+                      next: { kind: 'stop' },
                     },
-                  }),
+                  },
                 ]),
                 error: scripted.failWith,
               };
@@ -197,7 +201,7 @@ export function scriptedInvokerLayer(
                   request: '0'.repeat(64),
                   invocation,
                   origin: bound.origin,
-                  delivery: 'stream',
+                  purpose: 'turn',
                 },
               },
               ...('compactTo' in scripted
