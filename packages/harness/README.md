@@ -3,9 +3,9 @@
 The embeddable [TeXRA](https://texra.ai) agent runtime: run a TeXRA agent from a
 Node program and consume its trace as a stream.
 
-> **Not published to npm.** This package builds and is consumed inside the
-> repository; the publish job is deliberately disabled until a named external
-> consumer exists. The surface below is real and typechecked, but it is **not
+> **Not published to npm yet.** This package builds, packs and is consumed
+> inside the repository; publication is planned for TeXRA 1.0. It is versioned
+> on its own (`0.1.0`), not with the app. The surface below is real and typechecked, but it is **not
 > yet a stability promise** — treat it as `0.x` and expect the gaps in
 > [Current limits](#current-limits) to move.
 
@@ -19,16 +19,19 @@ Not on the registry yet. Inside this workspace, depend on it by name:
 { "dependencies": { "@texra-ai/harness": "workspace:*" } }
 ```
 
-`effect` and `zod` (v4) are peer dependencies of the whole package: the bundle
+It depends on [`@texra-ai/llm`](../llm/README.md), the model package, which a
+pack resolves to the same-numbered release.
+
+`effect` and `zod` (v4) are peer dependencies of both packages: the bundle
 imports `effect` at runtime (`dist/index.js` opens with
-`import ... from 'effect'`). Install both alongside it, `effect` at the exact
-version the package pins (`4.0.0`). Two copies of `effect` in one
+`import ... from 'effect'`). Install both alongside it, `effect` at any 4.x
+release (`^4.0.0`). Two copies of `effect` in one
 process do not work at all: Streams, Fibers and Context built by one copy do
 not interoperate with another's, and a peer dependency is how a consumer gets
 one copy rather than a second nested one.
 
 ```jsonc
-{ "dependencies": { "effect": "4.0.0", "zod": "^4.4.3" } }
+{ "dependencies": { "effect": "^4.0.0", "zod": "^4.4.3" } }
 ```
 
 ## Usage

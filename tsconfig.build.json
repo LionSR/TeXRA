@@ -14,7 +14,6 @@
     "packages/harness/src/plugins.ts",
     "packages/harness/src/schemas.ts",
     "packages/harness/src/effect/**/*.ts",
-    "packages/llm/src/**/*.ts",
     "packages/harness/src/types/ambient.d.ts"
   ],
   "exclude": ["node_modules", "src/test-kernel"]

@@ -1,7 +1,7 @@
 # Packed-tarball example
 
 Runs [`@texra-ai/harness`](../README.md) the way a consumer off the
-registry would: the package is packed, installed into this folder, and imported
+registry would: it and `@texra-ai/llm` are packed, installed into this folder, and imported
 by package name. No repository path alias appears in `effectSession.mjs`, so a
 resolution the published artifact could not satisfy fails here.
 
@@ -16,16 +16,20 @@ which is, step by step:
 ```bash
 # from the repository root
 corepack pnpm --filter @texra-ai/harness build
-cd packages/harness && rm -f example/*.tgz && corepack pnpm pack --pack-destination example
+cd packages/harness && rm -f example/*.tgz
+corepack pnpm --filter @texra-ai/llm pack --pack-destination "$PWD/example"
+corepack pnpm pack --pack-destination example
 mv example/texra-ai-harness-*.tgz example/harness.tgz
-cd example && npm install ./harness.tgz && npm start
+mv example/texra-ai-llm-*.tgz example/llm.tgz
+cd example && npm install ./llm.tgz ./harness.tgz && npm start
 ```
 
-The pack is renamed to a fixed `harness.tgz` so this folder's `package.json`
-pins one filename rather than a second copy of the package version, which a
-release would silently move.
+The packs are renamed to fixed `harness.tgz` and `llm.tgz` so this folder's
+`package.json` pins filenames rather than a second copy of the package
+versions. The harness pack names `@texra-ai/llm` at its exact version, which
+the llm tarball installed beside it satisfies.
 
-`npm install` rather than `pnpm` on purpose: it installs the tarball and the two
+`npm install` rather than `pnpm` on purpose: it installs the tarballs and the two
 peer dependencies (`effect`, `zod`) into a plain `node_modules`, with no
 workspace link that could hide a missing export.
 

@@ -7,13 +7,13 @@ import semver from 'semver';
 
 import { readJson } from './extension-package-utils.mjs';
 
+// The app's manifests. `@texra-ai/harness` and `@texra-ai/llm` are versioned
+// on their own, as the npm packages they are, so a release leaves them be.
 const MANIFEST_PATHS = [
   'package.json',
-  'packages/harness/package.json',
   'packages/cli/package.json',
   'packages/desktop/package.json',
   'packages/extension/package.json',
-  'packages/llm/package.json',
   'packages/texra/package.json',
 ];
 
