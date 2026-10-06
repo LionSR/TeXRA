@@ -803,6 +803,7 @@ INSERT INTO stored_kind VALUES('followup.queued',1);
 INSERT INTO stored_kind VALUES('log',1);
 INSERT INTO stored_kind VALUES('model.message',1);
 INSERT INTO stored_kind VALUES('plugin.fact',1);
+INSERT INTO stored_kind VALUES('plugin.fact/goal/state',1);
 INSERT INTO stored_kind VALUES('request.decided',1);
 INSERT INTO stored_kind VALUES('request.opened',1);
 INSERT INTO stored_kind VALUES('response.finalized',1);
