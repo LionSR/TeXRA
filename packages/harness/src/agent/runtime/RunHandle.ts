@@ -63,16 +63,6 @@ export class RunHandle<
   parentState: RunParent;
   private liveControls?: RunControls;
 
-  /**
-   * The background OS process this run owns, when a strategy declared one
-   * (a background bash child, an agent-CLI child): the narrow survivor of
-   * the interrupt-handler slot, read only by
-   * `RunRegistry.close` to reach a leaked process at
-   * shutdown WITHOUT ending native agent runs (#8155), the opposite contract
-   * of a run stop, which is the run fiber's interruption.
-   */
-  backgroundProcess?: { kill(): void };
-
   constructor(
     /**
      * The run's birth facts, the same object its `run.start` published and its

@@ -68,7 +68,7 @@ import {
   storeOpenElsewhere,
 } from '@controllers/session/Database';
 import { openProjectStateStore } from '@controllers/session/appStateStore';
-import { collectPendingDeletions } from '@controllers/session/deletionCleanup';
+import { deletionCollector } from '@controllers/session/deletionCleanup';
 import { openStore } from '@controllers/session/storeSchema';
 import { sessionRequests } from '@controllers/session/SessionRequests';
 import {
@@ -2248,7 +2248,7 @@ describe('the C1 event table and the C6 publisher', () => {
               aggregateId: qualifyAggregateId('run', run),
             },
           ]);
-          yield* collectPendingDeletions(db, storage);
+          yield* Fiber.join(yield* yield* deletionCollector(db, storage));
         });
       return Effect.gen(function* () {
         const db = yield* Database;
@@ -2518,51 +2518,31 @@ describe('the C1 event table and the C6 publisher', () => {
         const cleanupError = new Error(
           'The generated directory is not writable.',
         );
+        if (tombstone.type !== 'run.removed') throw new Error('no tombstone');
+        // A failed cleanup keeps the tombstone for the next pass.
         expect(
           yield* Effect.flip(
-            first.collectDeletion(root, tombstone.commit, () =>
-              Effect.gen(function* () {
-                yield* Effect.gen(function* () {
-                  const second = yield* Database;
-                  const remove = vi.fn(() => Effect.void);
-                  expect(
-                    yield* Effect.result(
-                      second.collectDeletion(root, tombstone.commit, remove),
-                    ),
-                  ).toMatchObject({
-                    _tag: 'Failure',
-                    failure: { _tag: 'DatabaseWriteFailed' },
-                  });
-                  expect(remove).not.toHaveBeenCalled();
-                }).pipe(Effect.provide(substrate(storage, OTHER)));
-                return yield* Effect.fail(cleanupError);
-              }),
-            ),
+            first.collectDeletion(tombstone, () => Effect.fail(cleanupError)),
           ),
         ).toBe(cleanupError);
-        expect((yield* first.readAggregate(root, 0)).at(-1)).toEqual(tombstone);
-        // Losing the claim during file removal preserves the database record.
-        expect(
-          yield* Effect.flip(
-            first.collectDeletion(root, tombstone.commit, () =>
-              first.releaseClaims([root]),
-            ),
-          ),
-        ).toMatchObject({ _tag: 'DatabaseWriteFailed' });
         expect((yield* first.readAggregate(root, 0)).at(-1)).toEqual(tombstone);
         const unrelated: SessionEventDraft = {
           ...runStart,
           aggregateId: qualifyAggregateId('run', NEWER),
         };
-        yield* first.collectDeletion(root, tombstone.commit, (ids) =>
+        yield* first.collectDeletion(tombstone, (ids) =>
           Effect.gen(function* () {
             expect(ids).toEqual([RUN]);
-            // Cleanup holds its root claim, not the database write permit.
-            // Unrelated runs remain writable while generated files are removed.
+            // Cleanup runs outside the database write permit: unrelated
+            // runs remain writable while generated files are removed.
             yield* first.appendAll([unrelated]);
           }),
         );
         expect(yield* first.aggregateState([root, inquiry])).toEqual([]);
+        // Collecting it again, as a second process would, is a no-op.
+        const again = vi.fn(() => Effect.void);
+        yield* first.collectDeletion(tombstone, again);
+        expect(again).not.toHaveBeenCalled();
         expect(
           (yield* first.readAll(0)).map((event) => event.aggregateId),
         ).toEqual([olderStart.aggregateId, unrelated.aggregateId]);
@@ -2588,11 +2568,11 @@ describe('the C1 event table and the C6 publisher', () => {
         yield* first.appendAll([
           { type: 'run.removed', aggregateId: unrelated.aggregateId },
         ]);
-        yield* collectPendingDeletions(first, storage);
+        yield* Fiber.join(yield* yield* deletionCollector(first, storage));
         expect(existsSync(join(outside, 'keep.tex'))).toBe(true);
         expect(
           yield* first.aggregateState([unrelated.aggregateId]),
-        ).toMatchObject([{ closed: true, ownerId: null }]);
+        ).toMatchObject([{ closed: true }]);
         yield* Effect.sync(() => rmSync(runs));
         const generated = join(
           storage,
@@ -2608,7 +2588,7 @@ describe('the C1 event table and the C6 publisher', () => {
           writeFileSync(accepted, 'accepted workspace output');
           symlinkSync(accepted, join(generated, 'reference.tex'));
         });
-        yield* collectPendingDeletions(first, storage);
+        yield* Fiber.join(yield* yield* deletionCollector(first, storage));
         expect(existsSync(generated)).toBe(false);
         expect(existsSync(sibling)).toBe(true);
         expect(existsSync(accepted)).toBe(true);

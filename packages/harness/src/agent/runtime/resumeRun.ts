@@ -8,10 +8,7 @@ import { Effect, Exit, Fiber, Latch, Result, Scope } from 'effect';
  * same continuous delivery driver as newly launched children and
  * acknowledge each resumed turn separately.
  */
-import {
-  recordRunRefusal,
-  type FollowUpFailureReason,
-} from '@agent/followUp/ToolUseFollowUp';
+import type { FollowUpFailureReason } from '@agent/followUp/ToolUseFollowUp';
 import {
   getRunRecords,
   owningCall,
@@ -19,8 +16,7 @@ import {
 } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
-import { aggregateId, ownerPid, RUN_PHASE, type RunId } from '@shared/schemas';
-import { runHeldMessage } from '@shared/runs/runStatusDisplay';
+import { aggregateId, RUN_PHASE, type RunId } from '@shared/schemas';
 import { heldElsewhereBy } from '@shared/session/database';
 import { RunHistoryRefused } from '@shared/session/runHistory';
 import { FOLLOW_UP_TYPES, foldRunRows } from '@shared/session/runRows';
@@ -35,7 +31,6 @@ import {
   resumeToolUseFromResumeData,
   type ResumeToolUseFromResumeDataOptions,
 } from './executeAgent';
-import { classifyRun } from './runClassification';
 import { relayChildDeliveries } from './childSettlement';
 import { startChildRunLoop } from './childRunLoop';
 import { Runs } from './runRegistry';
@@ -186,22 +181,11 @@ const resumeHere = Effect.fn('resumeHere')(function* (
   const claim = yield* Scope.make();
   yield* Effect.addFinalizer(() => Scope.close(claim, Exit.void));
   const heldBy = yield* holdClaim(session, runId).pipe(Scope.provide(claim));
-  if (heldBy !== null) {
-    yield* session.view.markUnreadable(runId, runHeldMessage(ownerPid(heldBy)));
-    return { failed: 'owned_elsewhere' };
-  }
-  const retrieved = yield* retrieveSessionResumeData(runId, config, session);
+  if (heldBy !== null) return { failed: 'owned_elsewhere' };
+  const resume = yield* retrieveSessionResumeData(runId, config, session);
   if (cancelled()) return REFUSED;
-  if (!retrieved) {
-    // Classified free of the hold taken here, which it would read as ours.
-    yield* Scope.close(claim, Exit.void);
-    const classification = yield* classifyRun(runId, session);
-    return {
-      failed: yield* recordRunRefusal(runId, session, classification),
-    };
-  }
-  yield* session.view.markUnreadable(runId, null);
-  const resume = retrieved;
+  // Nothing to continue from.
+  if (!resume) return { failed: 'finished' };
   // An agent or plugin this process cannot run now leaves the run
   // interrupted with the reason (D5), for the session's follower to
   // resume once it is back; nothing is launched. Another process's run
@@ -243,17 +227,12 @@ const queuedFollowUps = (session: SessionHandle, runId: RunId) =>
 /** Classify the expected launch refusals; unexpected failures propagate. */
 function refusalFor(
   error: unknown,
-  session: SessionHandle,
   runId: RunId,
 ): Effect.Effect<ResumeRunResult | undefined> {
   if (error instanceof RunLive) return Effect.succeed(REFUSED);
   // A live owner refused the claim, or took it after its owner was proved dead.
-  const holder = heldElsewhereBy(error);
-  if (holder !== null) {
-    return session.view
-      .markUnreadable(runId, runHeldMessage(ownerPid(holder)))
-      .pipe(Effect.as({ failed: 'owned_elsewhere' } as const));
-  }
+  if (heldElsewhereBy(error) !== null)
+    return Effect.succeed({ failed: 'owned_elsewhere' });
   if (error instanceof ResumeSessionUnavailableError) {
     return Effect.succeed({ failed: 'finished' });
   }
@@ -362,7 +341,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
     }),
   );
   if (Result.isFailure(resumed)) {
-    const refusal = yield* refusalFor(resumed.failure, session, runId);
+    const refusal = yield* refusalFor(resumed.failure, runId);
     if (refusal) return refusal;
     return yield* Effect.fail(resumed.failure);
   }

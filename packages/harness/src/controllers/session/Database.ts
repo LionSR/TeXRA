@@ -42,7 +42,6 @@ import {
   edgesOf,
   isDisplaySessionEvent,
   RunIdSchema,
-  OwnerIdSchema,
   ownerIdentity,
   aggregateTarget,
   referencedAggregates,
@@ -66,7 +65,6 @@ import {
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { PLUGIN_ARMS } from '@tools/pluginArms';
-import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { currentValues } from './currentValues';
 import { localDatabasePath } from './localDatabasePath';
 import {
@@ -99,7 +97,6 @@ import {
   aggregateLists,
   aggregateOf,
   CURRENT_VALUE_KIND,
-  decodeRow,
   encodeDraft,
   pluginKind,
   prepareEventDraft,
@@ -410,22 +407,12 @@ export const databaseLayer = (
         WHERE id IN (${AGGREGATE_LIST}) AND owner_id = ?`;
       const reparent = `UPDATE event_sequence SET parent_id = ${AGGREGATE}
         WHERE id = ? AND owner_id = ? AND closed_by IS NULL`;
-      const cleanupLanes = new Map<AggregateId, PerKeyLane>();
-      // The tombstone predicate: the aggregate closed by exactly this commit.
-      const closedTombstone = `SELECT ${EVENT_COLUMNS},
-        s.owner_id AS claimOwner FROM ${EVENT_FROM}
-        WHERE s.kind = ? AND s.logical_id = ? AND e."commit" = ?
-          AND s.closed_by = e."commit" AND e.type = 'run.removed'`;
-      const claimCleanup = `UPDATE event_sequence SET owner_id = ?
-        WHERE kind = ? AND logical_id = ? AND owner_id IS ? AND closed_by = ?
-        RETURNING id`;
+      // A closed aggregate's sequence row, collected with its dependents
+      // and rows by the foreign keys' cascade.
+      const closedBy = `SELECT id FROM event_sequence
+        WHERE kind = ? AND logical_id = ? AND closed_by = ?`;
       const collectClosed = `DELETE FROM event_sequence
-        WHERE kind = ? AND logical_id = ? AND owner_id = ? AND closed_by = ?
-        RETURNING id`;
-      const openDependent = `${dependents}
-        SELECT id FROM event_sequence
-        WHERE id IN (SELECT id FROM dependents)
-          AND closed_by IS NULL LIMIT 1`;
+        WHERE kind = ? AND logical_id = ? AND closed_by = ?`;
       // An aggregate's plugin rows, for its arms' transition rules.
       const pluginRows = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
         WHERE e.aggregate = ? AND e.type = 'plugin.fact' ORDER BY e.seq`;
@@ -1101,105 +1088,30 @@ export const databaseLayer = (
               }),
             );
           }),
-        collectDeletion: (id, tombstoneCommit, cleanup) =>
+        collectDeletion: (tombstone, cleanup) =>
           Effect.gen(function* () {
-            const columns = aggregateColumns(id);
-            const observed = yield* query(
+            const columns = aggregateColumns(tombstone.aggregateId);
+            // Already collected (by this pass before, or another process).
+            if (
+              (yield* query(
+                execOne(closedBy, [...columns, tombstone.commit]),
+              )) === undefined
+            )
+              return;
+            // Filesystem promises cannot be undone by fiber interruption.
+            yield* cleanup(tombstone.runIds).pipe(Effect.uninterruptible);
+            yield* transact(
               Effect.gen(function* () {
-                const row = yield* execOne(closedTombstone, [
-                  ...columns,
-                  tombstoneCommit,
-                ]);
-                if (!row)
-                  return yield* invariant(
-                    `Deletion record is no longer current: ${id}`,
-                  );
-                const tombstone = yield* Effect.fromResult(decodeRow(row));
-                if (!('type' in tombstone) || tombstone.type !== 'run.removed')
-                  return yield* invariant(`Expected a deletion record: ${id}`);
-                return {
-                  tombstone,
-                  owner: OwnerIdSchema.nullable().parse(row.claimOwner),
-                };
+                const digests = (yield* exec(dependentBlobs, columns)).map(
+                  (row) => row.digest,
+                );
+                yield* exec(collectClosed, [...columns, tombstone.commit]);
+                if (digests.length > 0)
+                  yield* exec(collectBlobs, [JSON.stringify(digests)]);
               }),
             );
-            const owner = observed.owner;
-            if (owner !== null && owner !== identity.ownerId) {
-              const verdict = yield* liveness(owner);
-              if (verdict !== 'dead') {
-                return yield* Effect.fail(
-                  writeFailed(
-                    new Error(`Cleanup owner is ${verdict}: ${observed.owner}`),
-                  ),
-                );
-              }
-            }
-            yield* Effect.acquireUseRelease(
-              transact(
-                Effect.gen(function* () {
-                  if (
-                    (yield* exec(claimCleanup, [
-                      identity.ownerId,
-                      ...columns,
-                      observed.owner,
-                      tombstoneCommit,
-                    ])).length !== 1
-                  ) {
-                    return yield* invariant(
-                      `Deletion claim changed before cleanup: ${id}`,
-                    );
-                  }
-                }),
-              ),
-              () =>
-                Effect.gen(function* () {
-                  // Filesystem promises cannot be undone by fiber interruption.
-                  // Keep the local claim lane until that work has actually settled.
-                  yield* cleanup(observed.tombstone.runIds).pipe(
-                    Effect.uninterruptible,
-                  );
-                  yield* transact(
-                    Effect.gen(function* () {
-                      if (yield* execOne(openDependent, columns))
-                        return yield* invariant(
-                          `Deletion has an open dependent: ${id}`,
-                        );
-                      const digests = (yield* exec(
-                        dependentBlobs,
-                        columns,
-                      )).map((row) => row.digest);
-                      if (
-                        (yield* exec(collectClosed, [
-                          ...columns,
-                          identity.ownerId,
-                          tombstoneCommit,
-                        ])).length !== 1
-                      ) {
-                        return yield* invariant(
-                          `Deletion claim or tombstone changed during cleanup: ${id}`,
-                        );
-                      }
-                      if (digests.length > 0)
-                        yield* exec(collectBlobs, [JSON.stringify(digests)]);
-                    }),
-                  );
-                  yield* reclaimFreePages(sql, path);
-                }),
-              (_, exit) =>
-                Exit.isFailure(exit)
-                  ? transact(
-                      Effect.gen(function* () {
-                        yield* exec(claimCleanup, [
-                          null,
-                          ...columns,
-                          identity.ownerId,
-                          tombstoneCommit,
-                        ]);
-                      }),
-                    )
-                  : Effect.void,
-            );
-          }).pipe(withPerKeyLane(cleanupLanes, id)),
+            yield* reclaimFreePages(sql, path);
+          }),
         releaseClaims: (ids) =>
           ids.length === 0
             ? Effect.void

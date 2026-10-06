@@ -1,20 +1,13 @@
 import { Cause, Effect, Fiber } from 'effect';
 /** Tool-use follow-up routing and continuation ownership. */
 
-import {
-  classifyRun,
-  type RunClassification,
-} from '@agent/runtime/runClassification';
+import { runRefusal } from '@agent/runtime/runClassification';
 import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { ResumeRunResult } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
-import { ownerPid, type RunId } from '@shared/schemas';
-import {
-  runHeldMessage,
-  runUnreadableMessage,
-} from '@shared/runs/runStatusDisplay';
+import type { RunId } from '@shared/schemas';
 import type { InboxItem } from './Inbox';
 
 /**
@@ -29,8 +22,8 @@ import type { InboxItem } from './Inbox';
  *   would claim the run ended normally.
  * - `owned_elsewhere`: another TeXRA process holds the run.
  * - `not_resumable`: the run has no running loop here and the submission was
- *   refused (a terminalized queue, a disposed session, a run this process
- *   cannot classify).
+ *   refused (a terminalized queue, a disposed session, or a message that
+ *   is not the user's own).
  * - `blocked`: the run's agent, or its agent's plugin, is missing, off or
  *   not trusted here (`RunView.resumeBlocked` says which).
  */
@@ -256,64 +249,12 @@ function admitQueued(
   );
 }
 
-/**
- * The one mapping from a run classification to what the user's run shows
- * and what the refusal is called. Both refusal paths use it — a follow-up
- * with no running loop here, and a resume whose checkpoint read came back empty
- * — so the two cannot word or settle the same fact differently.
- *
- * A refusal the user can see again is recorded on the run: the two
- * classifications that mean "no loop here can execute this run" — another
- * process holds it, or this process holds a lease with no live run behind it
- * — become the run's read-only detail, so the tab keeps saying why after
- * the toast is gone. A classification that read the run's state and found it
- * free (`finished`, `resumable`) DROPS any hold an earlier refusal left, and
- * with it the phase that hold retained: a run that is readable and
- * unowned must neither stay read-only nor show the WAITING a failed resume
- * rolled back to, on facts that have since changed.
- *
- * An `unclassified` run deliberately records nothing: `classifyRun` reports it
- * for any failed read, including a transient one (EMFILE, a partial read
- * racing another process's atomic rewrite), and a hold is sticky, so a blip
- * would leave the tab permanently read-only — and dropping the hold on one
- * would report a run another process is executing as finished. The unreadable
- * display fact has its own producer in the run tuple's `authorityFailure`,
- * which every later hydration re-reads.
- *
- * Nothing is written to disk.
- */
-export function recordRunRefusal(
-  runId: RunId,
-  session: SessionHandle,
-  classification: RunClassification,
-): Effect.Effect<FollowUpFailureReason> {
-  switch (classification.kind) {
-    case 'held_elsewhere':
-      return session.view
-        .markUnreadable(runId, runHeldMessage(ownerPid(classification.owner)))
-        .pipe(Effect.as('owned_elsewhere'));
-    case 'owned_here':
-      // A claim this process holds for a run with no running loop here is
-      // a registry/claim disagreement, not a free run: it stays read-only
-      // with a diagnostic naming that disagreement.
-      return session.view
-        .markUnreadable(
-          runId,
-          runUnreadableMessage('run claimed by this process with no live run'),
-        )
-        .pipe(Effect.as('not_resumable'));
-    case 'finished':
-      return session.view
-        .markUnreadable(runId, null)
-        .pipe(Effect.as('finished'));
-    case 'resumable':
-      return session.view
-        .markUnreadable(runId, null)
-        .pipe(Effect.as('not_resumable'));
-    case 'unclassified':
-      return Effect.succeed('not_resumable');
-  }
-}
+/** How a run's refusal reads to whoever sent the input. */
+const REFUSAL_REASON = {
+  held_elsewhere: 'owned_elsewhere',
+  finished: 'finished',
+  unreadable: 'unusable_checkpoint',
+} as const satisfies Record<string, FollowUpFailureReason>;
 
 export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   runId: RunId,
@@ -329,17 +270,20 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     // way a waiting run's is: a run's message never restarts work the user
     // stopped. Anything else refuses with its worded reason. Only the one
     // run addressed is inspected.
-    const classification = yield* classifyRun(runId, ownerSession);
-    if (
-      classification.kind !== 'resumable' ||
-      options.mode !== undefined ||
-      item.from.kind !== 'user'
-    ) {
-      return {
-        status: 'failed',
-        reason: yield* recordRunRefusal(runId, ownerSession, classification),
-      };
-    }
+    // A state that cannot be read cannot be continued.
+    const refusal = yield* runRefusal(runId, ownerSession).pipe(
+      Effect.catch((error) =>
+        Effect.logWarning(`Cannot read whether ${runId} can continue`).pipe(
+          Effect.annotateLogs({ data: error }),
+          withLogChannel(CHANNEL),
+          Effect.as({ kind: 'unreadable' } as const),
+        ),
+      ),
+    );
+    if (refusal !== null)
+      return { status: 'failed', reason: REFUSAL_REASON[refusal.kind] };
+    if (options.mode !== undefined || item.from.kind !== 'user')
+      return { status: 'failed', reason: 'not_resumable' };
     dispatch = yield* admitQueued(runId, item, 'wake', ownerSession);
   } else {
     dispatch = routed;

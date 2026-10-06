@@ -43,7 +43,7 @@ export type { RunAgentOptions, RunAgentRequest } from './runAgent';
 // SessionResumeRetrieval
 
 // runClassification
-export { classifyRun } from './runClassification';
+export { runRefusal } from './runClassification';
 
 // terminalResultToast
 export {

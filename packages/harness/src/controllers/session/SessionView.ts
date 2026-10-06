@@ -176,16 +176,6 @@ export const makeSessionViewAccess = (
         Effect.suspend(() =>
           closed() ? Effect.void : subscriptions.set(port, set),
         ),
-      markUnreadable: (runId, detail) =>
-        updateLocal((state) => {
-          const rest = state.unreadable.filter((u) => u.runId !== runId);
-          if (detail === null && rest.length === state.unreadable.length)
-            return state;
-          return {
-            ...state,
-            unreadable: detail === null ? rest : [...rest, { runId, detail }],
-          };
-        }),
       markResumeBlocked: (runId, blocked) =>
         updateLocal((state) => {
           const rest = state.resumeBlocked.filter((b) => b.runId !== runId);

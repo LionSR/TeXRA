@@ -300,51 +300,6 @@ describe('runRegistry', () => {
       }),
   );
 
-  it('drains a background-bash RunHandle on shutdown without disturbing a resumable agent run (issue #8155)', () => {
-    // A background `bash` run is registered as an RunHandle (see
-    // createChildRun in tools/bash.ts) with its OS-process kill reachable
-    // only via the `backgroundProcess` slot a background-process child's
-    // loop sets. The two RunHandles below are tracked concurrently,
-    // mirroring the real interleaving at shutdown: a background bash child
-    // run alongside an ordinary resumable agent run (e.g. a native subagent
-    // loop, whose own run must stay untouched so restart recovery can resume
-    // it). Drain must reach only the former.
-    const { phases, registry } = createRegistry();
-    const bashParentRunId = generateRunId();
-    const bashRunId = generateRunId();
-    const agentParentRunId = generateRunId();
-    const agentRunId = generateRunId();
-    const bashKill = vi.fn();
-
-    try {
-      // Background bash: an RunHandle whose strategy declared a live OS
-      // process (mirrors background bash's child run).
-      const bashHandle = createHandle(bashRunId, bashParentRunId, {
-        agentName: 'bash',
-      });
-      bashHandle.backgroundProcess = { kill: bashKill };
-      registry.track(bashHandle);
-      phases.set(bashRunId, RUN_PHASE.RUNNING);
-
-      // Ordinary agent run: no background-process slot, so shutdown drain
-      // must leave it alone for restart recovery.
-      const agentHandle = createHandle(agentRunId, agentParentRunId);
-      registry.track(agentHandle);
-      phases.set(agentRunId, RUN_PHASE.RUNNING);
-
-      registry.close();
-
-      expect(bashKill).toHaveBeenCalledOnce();
-      // Neither handle is untracked: killing a background OS process
-      // bypasses the generic terminate()/kill() path, so restart recovery
-      // still finds both handles exactly as it would have before shutdown.
-      expect(registry.getHandle(bashRunId)).toBe(bashHandle);
-      expect(registry.getHandle(agentRunId)).toBe(agentHandle);
-    } finally {
-      registry.dispose();
-    }
-  });
-
   it.effect('interrupts the run fiber when terminating agent handles', () =>
     Effect.gen(function* () {
       const { registry } = createRegistry();

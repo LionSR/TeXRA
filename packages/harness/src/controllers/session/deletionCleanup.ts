@@ -6,7 +6,9 @@ import {
   Effect,
   FileSystem,
   type Context,
+  type Fiber,
   type PlatformError,
+  type Scope,
 } from 'effect';
 
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
@@ -80,31 +82,53 @@ const removeRunDirectories = (
     ),
   );
 
-/** One indexed pass. A failed record stays closed and available for retry. */
-export const collectPendingDeletions = Effect.fn('collectPendingDeletions')(
-  function* (
-    database: Pick<
-      Context.Service.Shape<typeof Database>,
-      'readPendingDeletions' | 'collectDeletion'
-    >,
-    storage: string,
-  ) {
+/**
+ * The session's deletion collector, bound to the caller's scope: each run
+ * of the answered effect forks one pass over the pending tombstones there,
+ * answering its fiber (the session runs one at open and one after each
+ * removal). Every step of a pass may run twice, in one process or two, so
+ * passes never conflict; a failed record stays closed and pending for the
+ * next pass, and a failed read of the records is logged.
+ */
+export const deletionCollector = (
+  database: Pick<
+    Context.Service.Shape<typeof Database>,
+    'readPendingDeletions' | 'collectDeletion'
+  >,
+  storage: string,
+): Effect.Effect<
+  Effect.Effect<Fiber.Fiber<void>>,
+  never,
+  FileSystem.FileSystem | Scope.Scope
+> =>
+  Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    for (const event of yield* database.readPendingDeletions()) {
-      yield* database
-        .collectDeletion(event.aggregateId, event.commit, (ids) =>
-          removeRunDirectories(fs, storage, ids),
-        )
-        .pipe(
-          Effect.catch((error) =>
-            Effect.logWarning(
-              `Deletion cleanup remains pending for ${event.aggregateId}`,
-            ).pipe(
-              Effect.annotateLogs({ data: error }),
-              withLogChannel(CHANNEL),
+    const scope = yield* Effect.scope;
+    const pass = Effect.gen(function* () {
+      for (const event of yield* database.readPendingDeletions()) {
+        if (event.type !== 'run.removed') continue;
+        yield* database
+          .collectDeletion(event, (ids) =>
+            removeRunDirectories(fs, storage, ids),
+          )
+          .pipe(
+            Effect.catch((error) =>
+              Effect.logWarning(
+                `Deletion cleanup remains pending for ${event.aggregateId}`,
+              ).pipe(
+                Effect.annotateLogs({ data: error }),
+                withLogChannel(CHANNEL),
+              ),
             ),
-          ),
-        );
-    }
-  },
-);
+          );
+      }
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.logWarning('Deletion records could not be read.').pipe(
+          Effect.annotateLogs({ data: error }),
+          withLogChannel(CHANNEL),
+        ),
+      ),
+    );
+    return Effect.forkIn(pass, scope);
+  });
