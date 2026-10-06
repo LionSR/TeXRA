@@ -6,7 +6,7 @@
  * `ModelInvoker` owns every model call. A turn is its `invoke`, with rows; a
  * compaction summary is its `call`, on the run's binding; a helper call (a
  * session description, a draft polish) runs before or beside any run, so it
- * reaches {@link callModel} directly with its session's gate. Each is gated,
+ * reaches {@link callModel} directly with the process's gate. Each is gated,
  * priced and reported under one retry owner; only a turn writes rows.
  */
 import { Cause, Clock, Effect, Exit } from 'effect';
@@ -158,7 +158,7 @@ export interface ModelCall<R = never> {
   readonly reacquire: (failed: BoundModel) => Effect.Effect<unknown, never, R>;
   /** A foreground request; each attempt prepares it on its binding. */
   readonly request: TurnRequest;
-  /** The session's retry gate: sibling calls on one credential share it. */
+  /** The process's retry gate: every call on one credential shares it. */
   readonly gate: ModelRetryGate;
   /** The session's settings: usage consent reads them. */
   readonly settings: SettingsStores;
@@ -171,7 +171,7 @@ export interface ModelCall<R = never> {
 
 /**
  * One completed call outside a turn: prepared, streamed to its completed
- * result under the session's route gate, retried automatically as a turn's
+ * result under the process's route gate, retried automatically as a turn's
  * attempts are (the batch, over failures classified retryable on the bound
  * route, reacquiring a dead connection first), then priced and reported. It
  * writes no row; a caller that records the call stamps the usage on its own.

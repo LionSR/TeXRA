@@ -21,7 +21,7 @@ const CHANNEL = 'TextEnhancement';
  *
  * The helper model is resolved and bound against the requesting session's
  * setting slots and the process secret store, and the call is gated on the
- * session's retry gate.
+ * process's retry gate.
  */
 export const polishTextWithAI = Effect.fn('polishTextWithAI')(function* (
   text: string,

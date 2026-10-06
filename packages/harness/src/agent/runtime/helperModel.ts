@@ -76,7 +76,7 @@ interface HelperPrompt {
 /**
  * One helper call: bind the configured helper model for this call alone and
  * run one completion through the invoker's call path (`run/modelCall.ts`),
- * gated on the session's retry gate, priced and reported to the usage log as
+ * gated on the process's retry gate, priced and reported to the usage log as
  * `attribution`. No row is written. Returns the turn's assistant text. The
  * binding, the retry limit and the usage consent read one set of stores: the
  * session's setting slots and the process `secrets`.
