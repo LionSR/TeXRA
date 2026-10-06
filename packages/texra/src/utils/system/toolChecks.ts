@@ -35,7 +35,7 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 interface ToolConfig {
   command?: string | string[]; // Optional - defaults to "${toolName} --version"
   errorMessage: string;
-  openDocsCommand?: string; // Optional command to open documentation
+  docsPage?: string; // The texra.ai guide page that covers installing it
   label?: string; // Display name for missing-dependency lists; defaults to the id
 }
 
@@ -46,13 +46,13 @@ interface ToolConfig {
  */
 function reportMissingTool(
   message: string,
-  openDocsCommand?: string,
+  docsPage?: string,
 ): Effect.Effect<void> {
   return Effect.serviceOption(ToolMissingReporter).pipe(
     Effect.flatMap(
       Option.match({
         onNone: () => Effect.void,
-        onSome: (report) => report(message, openDocsCommand),
+        onSome: (report) => report(message, docsPage),
       }),
     ),
   );
@@ -75,10 +75,10 @@ const MAGICK_INSTRUCTIONS = installGuide(IMAGEMAGICK_INSTALL_GUIDE);
 const PDFLATEX_INSTRUCTIONS = installGuide(PDFLATEX_INSTALL_GUIDE);
 const LATEXMK_INSTRUCTIONS = installGuide(LATEXMK_INSTALL_GUIDE);
 
-// Most tool entries share the same "open installation docs" link and the same
+// Most tool entries share the same installation docs page and the same
 // "<tool> is not installed…" phrasing; only the label, install guide, and the
 // occasional reason/command differ. These builders capture just that variance.
-const INSTALL_DOCS = 'texra.openDoc,installation';
+const INSTALL_DOCS = 'installation';
 
 function featureTool(name: string, guide: string): string {
   return `${name} is not installed. Please install it to use this feature.\n${guide}`;
@@ -88,7 +88,7 @@ function texTool(name: string, guide: string): string {
   return `${name} is not installed. Please install a TeX distribution to use this feature.\n${guide}`;
 }
 
-/** Build a ToolConfig with the default install-docs link unless `docs: false`. */
+/** Build a ToolConfig with the default install-docs page unless `docs: false`. */
 function withDocs(
   errorMessage: string,
   extra: { command?: string | string[]; docs?: false; label?: string } = {},
@@ -96,7 +96,7 @@ function withDocs(
   return {
     errorMessage,
     ...(extra.command ? { command: extra.command } : {}),
-    ...(extra.docs === false ? {} : { openDocsCommand: INSTALL_DOCS }),
+    ...(extra.docs === false ? {} : { docsPage: INSTALL_DOCS }),
     ...(extra.label ? { label: extra.label } : {}),
   };
 }
@@ -180,7 +180,7 @@ export const checkToolInstalled = Effect.fn('toolChecks.checkToolInstalled')(
     if (!outcome.installed && showError) {
       yield* reportMissingTool(
         config.errorMessage,
-        outcome.probeFailed ? undefined : config.openDocsCommand,
+        outcome.probeFailed ? undefined : config.docsPage,
       );
     }
 
@@ -221,13 +221,9 @@ export const runToolWithCheck = Effect.fn('toolChecks.runToolWithCheck')(
   },
 );
 
-/**
- * Get the documentation command for a given tool.
- * @param tool Tool identifier
- * @returns Command string or undefined if not available
- */
-export function getToolDocsCommand(tool: string): string | undefined {
-  return TOOL_CONFIGS[tool]?.openDocsCommand;
+/** The guide page that covers installing `tool`, when one is registered. */
+export function getToolDocsPage(tool: string): string | undefined {
+  return TOOL_CONFIGS[tool]?.docsPage;
 }
 
 /** Display label for `id` from TOOL_CONFIGS, defaulting to the id itself. */

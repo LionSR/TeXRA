@@ -32,22 +32,21 @@ export function safeExecuteCommand<T>(
   );
 }
 
-/** The VS Code host's `ToolMissingReporter`: log and show the message, and run
- *  the tool's docs command (`command,arg,...`) when the user asks for it. */
+/** The VS Code host's `ToolMissingReporter`: log and show the message, and
+ *  open the tool's docs page when the user asks for it. */
 export const vscodeToolMissingReporter: ToolMissingHandler = (
   message,
-  openDocsCommand,
-) => {
-  const [command, ...args] = openDocsCommand?.split(',') ?? [];
-  return Effect.logError(message).pipe(
+  docsPage,
+) =>
+  Effect.logError(message).pipe(
     Effect.andThen(
       vscodeUi.error(message, {
-        items: command ? ['View Installation Guide'] : [],
+        items: docsPage ? ['View Installation Guide'] : [],
       }),
     ),
     Effect.flatMap((choice) =>
-      choice && command
-        ? Effect.asVoid(safeExecuteCommand(command, args))
+      choice && docsPage
+        ? Effect.asVoid(safeExecuteCommand('texra.openDoc', [docsPage]))
         : Effect.void,
     ),
     Effect.catch((error) =>
@@ -55,4 +54,3 @@ export const vscodeToolMissingReporter: ToolMissingHandler = (
     ),
     withLogChannel(DEFAULT_CHANNEL),
   );
-};
