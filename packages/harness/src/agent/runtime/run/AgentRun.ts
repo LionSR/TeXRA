@@ -10,10 +10,6 @@
 import { Context, Effect, Exit, Layer, Scope, SynchronizedRef } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type {
-  DocumentTask,
-  Persona,
-} from '@agent/core/definition/AgentDataclass';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { PLUGIN_AGENT_DEFAULT_TOOLS } from '@agent/index/pluginAgents';
 import type { AgentTrace, StageHandle } from '@agent/trace';
@@ -24,6 +20,7 @@ import {
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
+import type { DocumentTask, Persona } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import {
   AGENT_SOURCE,

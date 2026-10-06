@@ -99,7 +99,9 @@ function admitTools(
 }
 
 /** The run's configuration, or the refusal that stops it before any model
- *  work: the three the package states. */
+ *  work: the three the package states. A named agent is looked up; an
+ *  inline persona is the agent, recorded on the config and validated by its
+ *  schema there. */
 function admitInput(
   input: StartInput,
 ): Effect.Effect<
@@ -109,11 +111,16 @@ function admitInput(
   return Effect.gen(function* () {
     const tools = input.tools ?? [];
     yield* admitTools(tools);
-    const resolved = getAgent(input.agent);
+    const { agent } = input;
+    const persona = typeof agent === 'string' ? null : agent;
+    const resolved =
+      typeof agent === 'string'
+        ? getAgent(agent)
+        : { name: agent.name, source: 'inline' as const };
     if (!resolved) {
       return yield* new AgentNotFound({
-        agent: input.agent,
-        message: `Agent "${input.agent}" was not found in the configured agent directory.`,
+        agent: String(agent),
+        message: `Agent "${String(agent)}" was not found in the configured agent directory.`,
       });
     }
     // The schema is the launch's last refusal, and it is a refusal rather
@@ -125,6 +132,7 @@ function admitInput(
         AgentConfigSchema.parse({
           agent: resolved.name,
           agentSource: resolved.source,
+          persona,
           instruction: input.instruction,
           ...(input.model ? { model: input.model } : {}),
         }),

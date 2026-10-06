@@ -9,7 +9,6 @@ import { randomUUID } from 'node:crypto';
 import { Effect, Layer, type Scope, SynchronizedRef } from 'effect';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { PersonaSchema } from '@agent/core/definition/AgentDataclass';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import {
@@ -24,6 +23,7 @@ import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter } from '@agent/trace';
+import { PersonaSchema } from '@shared/schemas';
 import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   type RetryErrorInfo,

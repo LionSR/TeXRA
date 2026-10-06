@@ -7,14 +7,14 @@ import { ZodError, type ZodIssue } from 'zod';
 
 import { Data, Effect, FileSystem, Result } from 'effect';
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
+import { parseYamlWith } from '@common/parsing/safeParseYaml';
+import { withLogChannel } from '@logger/effectLog';
 import {
   AgentDefinitionSchema,
   DocumentTaskSchema,
   PersonaSchema,
   type AgentDefinition,
-} from '@agent/core/definition/AgentDataclass';
-import { parseYamlWith } from '@common/parsing/safeParseYaml';
-import { withLogChannel } from '@logger/effectLog';
+} from '@shared/schemas';
 import type { AgentSource } from '@shared/schemas';
 import type { AgentScanIssue } from '@shared/schemas';
 import { truncatedHexId } from '@utils/core/idHash';
@@ -267,44 +267,61 @@ function inheritedFields(
 }
 
 /**
- * The entry a definition file makes: its persona and task with the
- * inheritance chain merged and the schema's defaults applied, the one
- * validation a launch reads. A task's persona works text-only: the recipe
- * owns extraction, compilation and the proposal, so a task file that names
- * tools is refused rather than run with tools it would never be offered.
+ * The entry a definition makes, its inheritance already merged: its persona
+ * and task with the schema's defaults applied, the one validation a launch
+ * reads, for a file and an inline persona alike. A task's persona works
+ * text-only: the recipe owns extraction, compilation and the proposal, so a
+ * definition that names tools beside a task is refused rather than run with
+ * tools it would never be offered. Throws the validation's error.
  */
+export function agentEntryOf(
+  definition: Omit<AgentDefinition, 'inherits'>,
+  at: Pick<AgentEntry, 'source' | 'path' | 'digest'>,
+): AgentEntry {
+  const {
+    name,
+    description,
+    basedOn,
+    task: taskFields,
+    ...fields
+  } = definition;
+  const persona = PersonaSchema.parse(fields);
+  const task =
+    taskFields === undefined ? null : DocumentTaskSchema.parse(taskFields);
+  if (task !== null && persona.tools.length > 0)
+    throw new Error(
+      'A document task works text-only, so `tools` and `task` cannot be combined: remove one.',
+    );
+  const tools = persona.tools.map((tool) => tool.name);
+  return {
+    name,
+    ...at,
+    description,
+    tools: tools.length ? tools : undefined,
+    rounds: task?.requests.length,
+    basedOn,
+    persona,
+    task,
+  };
+}
+
+/** The entry a definition file makes, with its inheritance chain merged. */
 function scanYaml(
   entry: ParsedAgentYaml,
   source: AgentSource,
   definitions: Map<string, ParsedAgentYaml>,
 ): Effect.Effect<AgentEntry, AgentScanError> {
   return Effect.try({
-    try: (): AgentEntry => {
-      const { task: taskFields, ...personaFields } = inheritedFields(
-        entry,
-        definitions,
-      );
-      const persona = PersonaSchema.parse(personaFields);
-      const task =
-        taskFields === undefined ? null : DocumentTaskSchema.parse(taskFields);
-      if (task !== null && persona.tools.length > 0)
-        throw new Error(
-          'A document task works text-only, so `tools` and `task` cannot be combined: remove one.',
-        );
-      const tools = persona.tools.map((tool) => tool.name);
-      return {
-        name: entry.name,
-        source,
-        path: entry.path,
-        description: entry.definition.description,
-        tools: tools.length ? tools : undefined,
-        rounds: task?.requests.length,
-        digest: entry.digest,
-        basedOn: entry.definition.basedOn,
-        persona,
-        task,
-      };
-    },
+    try: (): AgentEntry =>
+      agentEntryOf(
+        {
+          ...inheritedFields(entry, definitions),
+          name: entry.name,
+          description: entry.definition.description,
+          basedOn: entry.definition.basedOn,
+        },
+        { source, path: entry.path, digest: entry.digest },
+      ),
     catch: (cause) =>
       new AgentScanError({
         path: entry.path,

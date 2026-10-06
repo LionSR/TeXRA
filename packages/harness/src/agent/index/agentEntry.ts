@@ -1,9 +1,6 @@
 /** Agent registry value objects (canonical AgentSource: @shared/schemas/agent). */
 
-import type {
-  DocumentTask,
-  Persona,
-} from '@agent/core/definition/AgentDataclass';
+import type { DocumentTask, Persona } from '@shared/schemas';
 import type { AgentSource } from '@shared/schemas';
 
 /**

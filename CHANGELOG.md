@@ -393,6 +393,11 @@ All notable changes to this project will be documented in this file.
   within one second now reports an error instead of merging into the first
   snapshot.
 
+- **Agent SDK: an agent can be written inline.** `session.start({ agent })`
+  takes the persona itself (`name`, `description`, `prompt`, `tools`,
+  `temperature`, in the agent file format, `InlinePersonaSchema`) instead of
+  the name of an agent file. The run records the persona, so nothing is
+  written to disk. `inherits` and `task:` are refused.
 - **Agent SDK: a `Plugin` says what it contributes, not how an app shows
   it.** `Plugin` keeps `id`, `tools`, `availability`, `toggle`,
   `injectedWhen`, `continuation`, `prompt`, `processLayer` and

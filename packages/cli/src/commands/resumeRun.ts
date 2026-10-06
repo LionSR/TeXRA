@@ -210,14 +210,17 @@ export function runResumeCommand(
     }
 
     // The launch pinned the resolved source on the record, so resume checks
-    // that exact entry rather than re-resolving the bare name.
+    // that exact entry rather than re-resolving the bare name; an inline
+    // persona travels with the record.
     const agent = yield* Effect.result(
-      resolveCliRunAgent(
-        stores,
-        config.agentSource
-          ? agentKey(config.agentSource, agentName(config.agent))
-          : config.agent,
-      ),
+      config.agentSource === 'inline'
+        ? Effect.void
+        : resolveCliRunAgent(
+            stores,
+            config.agentSource
+              ? agentKey(config.agentSource, agentName(config.agent))
+              : config.agent,
+          ),
     );
     if (Result.isFailure(agent)) return resumeFailureExit(id, agent.failure);
 

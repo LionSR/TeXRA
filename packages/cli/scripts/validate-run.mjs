@@ -42,6 +42,8 @@ const hostHarnessPath = path.join(
 // finds when an older build's service runs.
 const NEXT_BUILD = '999.0.0';
 const nextBuildPath = path.join(path.dirname(binaryPath), 'texra-next.js');
+// An SDK embedder on the validation model (scripts/sdk-harness.ts).
+const sdkHarnessPath = path.join(path.dirname(binaryPath), 'sdk-harness.js');
 const validationResourcesPath = path.join(validationRoot, 'resources');
 const validationEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL';
 const validationFlagEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_FLAG';
@@ -1301,6 +1303,58 @@ if (!input.stop_hook_active)
         outcomes[1].context === null &&
         outcomes[1].ignored === '[]',
       `the first stop should block and the second, after the block's turn, should let the run end (artifact: ${artifactPath})`,
+    );
+  } finally {
+    removeScratch(cwd);
+  }
+}
+
+/**
+ * An SDK run of an inline persona (`StartInput.agent` as an object): the
+ * embedder writes no agent file, the echo model's reply shows the
+ * instruction reached a run of that persona, and the session view names the
+ * run by the persona. The reply and the run's identity are the artifact.
+ */
+function validateSdkInlinePersona() {
+  const cwd = makeScratch('texra-sdk-inline-persona-');
+  try {
+    const home = path.join(cwd, 'home');
+    const work = path.join(cwd, 'work');
+    mkdirSync(work, { recursive: true });
+    const validationFlagPath = path.join(work, validationFlagName);
+    writeFileSync(validationFlagPath, validationFlagContent);
+    const result = run(
+      process.execPath,
+      [
+        sdkHarnessPath,
+        work,
+        path.join(cwd, 'storage'),
+        'Inline persona message',
+      ],
+      {
+        cwd: work,
+        validationModel: true,
+        validationFlagPath,
+        env: isolatedCliHomeEnv(home, { TEXRA_INTERNAL_VALIDATE_ECHO: '1' }),
+      },
+    );
+    assertSuccess(result, 'the SDK harness');
+    // The embedder's own log lines come first; its answer is the last line.
+    const { result: ended, identity } = parseJson(
+      result.stdout.trim().split('\n').at(-1),
+      'SDK harness',
+    );
+    const response = String(ended?.output?.response ?? '');
+    const artifactPath = writeArtifact('sdk-inline-persona.json', {
+      outcome: ended?.outcome,
+      response,
+      identity,
+    });
+    assert(
+      ended?.outcome === 'completed' &&
+        response === 'Model saw: Inline persona message' &&
+        identity?.agent === 'inline_echo',
+      `the inline persona's run should complete with the echoed instruction under the persona's name (artifact: ${artifactPath})`,
     );
   } finally {
     removeScratch(cwd);
@@ -2623,6 +2677,7 @@ async function validateCliRunArtifacts(options = {}) {
   validateToolUseAgentRunCommand();
   validateHistoryQueryRunCommand();
   validateStopHookBlock();
+  validateSdkInlinePersona();
   await validateForkResetHandoff();
   await validateTuiForkHandoffReset();
   await validateBackgroundCompaction();
@@ -2672,6 +2727,16 @@ function buildValidationBundle() {
       env: { TEXRA_CLI_BUNDLE_OUTFILE: hostHarnessPath },
     }),
     'build the service host harness',
+  );
+  assertSuccess(
+    run(process.execPath, ['scripts/build-bundle.mjs', '--sdk-harness'], {
+      cwd: cliRoot,
+      env: {
+        TEXRA_CLI_BUNDLE_OUTFILE: sdkHarnessPath,
+        TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1',
+      },
+    }),
+    'build the SDK harness',
   );
 }
 

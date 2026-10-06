@@ -1,7 +1,8 @@
 /**
  * What a resume of a run waits for in this process (durable harness, gap 2
  * and D5): its agent is missing from the catalog, or its agent comes from an
- * installed plugin that is off or not trusted as it is now. A resume that
+ * installed plugin that is off or not trusted as it is now. An inline
+ * persona travels with its record, so nothing blocks it. A resume that
  * meets one does not fail the run: the run stays interrupted, the reason
  * goes into the projection (`SessionHandle.view.markResumeBlocked`), and the
  * session's follower (`followInterruptedTasks`) resumes it once the catalog
@@ -32,6 +33,7 @@ export const resumeBlocker = Effect.fn('resumeBlocker')(function* (
   AgentCatalogLoadError | StateReadFailed,
   AgentCatalogServices | FileSystem.FileSystem
 > {
+  if (config.agentSource === 'inline') return null;
   // The launch's own resolution: the settled catalog, rescanned once on a
   // miss, so an agent saved a moment ago is found.
   const resolve = resolveAgentForLaunch(

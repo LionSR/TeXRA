@@ -6,13 +6,15 @@ export type {
 export {
   AgentDefinitionSchema,
   DocumentTaskSchema,
+  InlinePersonaSchema,
   PersonaSchema,
-} from '@agent/core/definition/AgentDataclass';
+} from '@shared/schemas';
 export type {
   AgentDefinition,
   DocumentTask,
+  InlinePersona,
   Persona,
-} from '@agent/core/definition/AgentDataclass';
+} from '@shared/schemas';
 export type { RunEndResult } from '@agent/runtime/RunEndResult';
 export {
   AgentNameSchema,
