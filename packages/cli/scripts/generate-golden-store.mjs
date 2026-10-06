@@ -350,14 +350,24 @@ process.stdin.on('end', function answer() {
         const client = connect(socket);
         let buffered = '';
         client.on('error', reject);
+        // A connection that ends without the exit fails the call (a settled
+        // call ignores it).
+        client.on('close', () =>
+          reject(new Error(`the service closed ${tag} unanswered\n${log}`)),
+        );
         client.on('data', (data) => {
           buffered += data;
-          for (let end; (end = buffered.indexOf('\n')) >= 0;) {
-            const message = JSON.parse(buffered.slice(0, end));
-            buffered = buffered.slice(end + 1);
-            if (message._tag !== 'Exit') continue;
-            client.end();
-            resolve(message.exit);
+          try {
+            for (let end; (end = buffered.indexOf('\n')) >= 0;) {
+              const message = JSON.parse(buffered.slice(0, end));
+              buffered = buffered.slice(end + 1);
+              if (message._tag !== 'Exit') continue;
+              resolve(message.exit);
+              client.end();
+            }
+          } catch (error) {
+            reject(error);
+            client.destroy();
           }
         });
         client.write(
