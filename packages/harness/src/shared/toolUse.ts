@@ -6,6 +6,7 @@
 // strings, and the runtime tool status. This module is the
 // single entry point for that derivation so hosts don't drift.
 
+import { Predicate } from 'effect';
 import yaml from 'yaml';
 
 import {
@@ -14,7 +15,7 @@ import {
   type NormalizedToolUse,
   type ToolUseLog,
 } from '@shared/schemas';
-import { clamp, isObject } from '@utils/core';
+import { clamp } from '@utils/core';
 import { truncateSummary } from '@utils/text/stringUtils';
 import type { z } from 'zod';
 
@@ -39,7 +40,7 @@ export const TOOL_RESULT_METADATA_FIELDS: ReadonlySet<string> = new Set([
 ]);
 
 function extractOutputContent(candidate: unknown): unknown {
-  if (!isObject(candidate)) return candidate;
+  if (!Predicate.isObject(candidate)) return candidate;
   if (candidate.output !== undefined) return candidate.output;
   return Object.fromEntries(
     Object.entries(candidate).filter(
@@ -54,7 +55,8 @@ function formatOutputText(content: unknown): string {
   // yaml.stringify(null) renders the literal string "null", which would
   // surface a spurious output section for tools that return `output: null`.
   if (content == null) return '';
-  if (isObject(content) && Object.keys(content).length === 0) return '';
+  if (Predicate.isObject(content) && Object.keys(content).length === 0)
+    return '';
   let serialized: string;
   try {
     serialized = yaml.stringify(content);
@@ -69,7 +71,7 @@ function formatOutputText(content: unknown): string {
 
 /** The flat, renderer-friendly view of a decoded tool-use payload. */
 export function normalizeToolUse(log: ToolUseLog): NormalizedToolUse {
-  const nested = isObject(log.output) ? log.output : {};
+  const nested = Predicate.isObject(log.output) ? log.output : {};
 
   const summaryText = firstTrimmed(log.summary, nested.summary);
   const errorText = firstTrimmed(log.error, nested.error);
@@ -184,7 +186,7 @@ export function backgroundBashOutputData(
 export function getBackgroundBashOutputSource(
   data: unknown,
 ): BackgroundBashOutputSource | undefined {
-  if (!isObject(data)) return undefined;
+  if (!Predicate.isObject(data)) return undefined;
   const source = data[BASH_BACKGROUND_OUTPUT_SOURCE_KEY];
   return source === 'stdout' || source === 'stderr' ? source : undefined;
 }

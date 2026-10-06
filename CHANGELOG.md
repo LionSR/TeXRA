@@ -851,6 +851,12 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **An unnamed image in an `.eml` file is named by its standard extension.**
+  Reading an email names an image attachment that has no filename after the
+  registered extension of its MIME type, so `image/x-icon` becomes
+  `image-1.ico` instead of `image-1.x-icon`. Known types such as JPEG, SVG
+  and TIFF keep the names they had.
+
 - **A resumed subagent follows its parent's later approval toggles again.**
   When a subagent ran under its parent's goal approval and was resumed on its
   own, its resume recorded that kind as turned off, as if you had refused it.

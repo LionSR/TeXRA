@@ -11,6 +11,7 @@
  * everything else. Both halves live here now — sections are data, never
  * markup, so the Lit and Ink layers are the only per-host code left.
  */
+import { Predicate } from 'effect';
 import {
   TOOL_CALL_STATUS,
   type NormalizedToolUse,
@@ -29,7 +30,6 @@ import {
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import { collapseWhitespace } from '@utils/text/stringUtils';
-import { isObject } from '@utils/core';
 
 import { dispatchSections, inputFilePath } from './toolRowSections';
 import {
@@ -222,7 +222,7 @@ function toolHeaderPreview(
   // The model's description names a command; the command itself stays in the
   // row's code section.
   const description =
-    isObject(input) && typeof input.description === 'string'
+    Predicate.isObject(input) && typeof input.description === 'string'
       ? collapseWhitespace(input.description).trim()
       : '';
   return description || inputPreview || summary;

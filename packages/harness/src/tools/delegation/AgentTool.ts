@@ -29,7 +29,6 @@ import {
   Semaphore,
   SynchronizedRef,
 } from 'effect';
-import stableStringify from 'safe-stable-stringify';
 import { z } from 'zod';
 
 // Local imports
@@ -58,6 +57,7 @@ import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { errorResult, executed } from '@tools/core/result';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
+import { sha256 } from '@utils/core/idHash';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -497,23 +497,19 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       : null;
   const key =
     awaited && script !== undefined
-      ? createHash('sha256')
-          .update(
-            stableStringify({
-              tool: launch.tool,
-              prompt: launch.prompt,
-              agent: agent.name,
-              model: launch.model ?? null,
-              schema: outputSchema ?? null,
-              ...files,
-              toolConfig: task?.toolConfig ?? null,
-              memories: launch.memories,
-              workingDirectory: launch.workingDirectory ?? null,
-              id: launch.id ?? null,
-              files: fileBytes,
-            }) ?? '',
-          )
-          .digest('hex')
+      ? sha256({
+          tool: launch.tool,
+          prompt: launch.prompt,
+          agent: agent.name,
+          model: launch.model ?? null,
+          schema: outputSchema ?? null,
+          ...files,
+          toolConfig: task?.toolConfig ?? null,
+          memories: launch.memories,
+          workingDirectory: launch.workingDirectory ?? null,
+          id: launch.id ?? null,
+          files: fileBytes,
+        })
       : undefined;
   if (key !== undefined && script !== undefined) {
     const reused = yield* reusable(call, script, key);

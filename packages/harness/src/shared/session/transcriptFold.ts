@@ -11,6 +11,7 @@
  * decode, a stream its text row, a `log` row its decoded payload
  * (`transcriptLogRows.ts`). The working state lives in `transcriptState.ts`.
  */
+import { Predicate } from 'effect';
 import {
   MESSAGE_TYPES,
   RUN_PHASE,
@@ -27,7 +28,6 @@ import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { taskGroupOnStage } from '@shared/runs/taskGroupProjection';
 import { decodeToolUseLog } from '@shared/toolUse';
 import { TOOL_CUT_BY_RUN_END } from '@shared/transcript';
-import { isObject } from '@utils/core';
 
 import { recordLogRow, STREAMING_TEXT_ROW_KIND } from './transcriptLogRows';
 import {
@@ -174,7 +174,7 @@ function record(d: Draft, event: TranscriptEvent): void {
       slot.log = decodeToolUseLog({
         toolName: slot.log.toolName,
         input: slot.log.input,
-        ...(isObject(event.result) ? event.result : {}),
+        ...(Predicate.isObject(event.result) ? event.result : {}),
         status: event.status,
       });
       if (!inProgress) {

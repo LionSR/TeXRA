@@ -7,7 +7,7 @@
  * route could not resolve, a cancelled request) is formatted as any error.
  */
 import { StatusCodes } from 'http-status-codes';
-import { Data } from 'effect';
+import { Data, String as Str } from 'effect';
 import { ModelError } from '@texra-ai/llm';
 
 import {
@@ -35,7 +35,6 @@ import {
   type ProviderErrorClassification,
   type RetryErrorInfo,
 } from '@shared/schemas';
-import { capitalize } from '@utils/text/stringUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import type { RoutePolicy } from '../ModelRetryGate';
@@ -113,7 +112,9 @@ function failureMessage(error: ModelError): string {
   const { quota } = error;
   if (quota !== undefined && quota.plan !== null) {
     const route = quotaFallbackRouteFor(quota.plan);
-    const plan = quota.planType ? ` (${capitalize(quota.planType)} plan)` : '';
+    const plan = quota.planType
+      ? ` (${Str.capitalize(quota.planType)} plan)`
+      : '';
     const reset =
       quota.resetsInMs === undefined
         ? ''

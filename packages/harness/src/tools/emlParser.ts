@@ -1,5 +1,6 @@
 // Third-party imports
 import { Data, Effect } from 'effect';
+import mime from 'mime-types';
 import PostalMime from 'postal-mime';
 
 // Local imports
@@ -150,7 +151,7 @@ function partitionAttachments(attachments: Attachment[]): AttachmentPartition {
 
     const filename =
       att.filename ||
-      `image-${++unnamedCounter}.${extensionFromMime(att.mimeType)}`;
+      `image-${++unnamedCounter}.${mime.extension(att.mimeType) || att.mimeType.slice(IMAGE_MIME_PREFIX.length)}`;
     images.push({ filename, mimeType: att.mimeType, bytes });
   }
 
@@ -162,17 +163,6 @@ function toUint8Array(content: ArrayBuffer | Uint8Array | string): Uint8Array {
   if (content instanceof ArrayBuffer) return new Uint8Array(content);
   // base64-encoded string — Buffer.from decodes in place, wrap as Uint8Array view
   return new Uint8Array(Buffer.from(content, 'base64'));
-}
-
-const MIME_SUBTYPE_TO_EXT: Record<string, string> = {
-  jpeg: 'jpg',
-  'svg+xml': 'svg',
-  tiff: 'tif',
-};
-
-function extensionFromMime(mimeType: string): string {
-  const sub = mimeType.split('/')[1] ?? 'bin';
-  return MIME_SUBTYPE_TO_EXT[sub] ?? sub;
 }
 
 function formatAddress(addr: Address): string {

@@ -5,6 +5,7 @@
  * keeps the section type definitions, the header preview, output suppression,
  * and the fold itself — the dispatch table is the only seam between them.
  */
+import { Predicate } from 'effect';
 import {
   CODEX_FILE_CHANGE_TOOL,
   CODEX_THREAD_TOOL,
@@ -28,7 +29,7 @@ import {
   normalizeToolName,
 } from '@shared/tools/toolDisplayName';
 import { isEditLikeToolName, toolDisplayKind } from '@shared/tools/toolKind';
-import { filterNotNullish, isObject } from '@utils/core';
+import { filterNotNullish } from '@utils/core';
 import { formatDuration } from '@utils/text/stringUtils';
 
 import { stringifyPayload, transcriptText } from './transcriptText';
@@ -88,7 +89,9 @@ function fileGroupsSection(
 
 /** Typed `edits` array a tool attaches to its structured output. */
 function outputEdits<T>(output: unknown): T[] | undefined {
-  return isObject(output) ? (output.edits as T[] | undefined) : undefined;
+  return Predicate.isObject(output)
+    ? (output.edits as T[] | undefined)
+    : undefined;
 }
 
 /**
@@ -100,11 +103,11 @@ function outputEdits<T>(output: unknown): T[] | undefined {
 function editCandidates(
   input: unknown,
 ): { oldText: string; newText: string; path?: string }[] {
-  if (!isObject(input)) return [];
+  if (!Predicate.isObject(input)) return [];
   const source = Array.isArray(input.edits) ? input.edits : [input];
   return source
     .map((raw) => {
-      if (!isObject(raw)) return undefined;
+      if (!Predicate.isObject(raw)) return undefined;
       const oldText = asString(raw.old_str) ?? asString(raw.old_string);
       const newText = asString(raw.new_str) ?? asString(raw.new_string);
       if (oldText === undefined || newText === undefined) return undefined;
@@ -169,7 +172,7 @@ function buildEditSections(ctx: SectionContext): ToolSection[] {
 function buildReadSections(ctx: SectionContext): ToolSection[] {
   if (!ctx.filePath) return [];
   const range =
-    isObject(ctx.input) && isObject(ctx.input.range)
+    Predicate.isObject(ctx.input) && Predicate.isObject(ctx.input.range)
       ? ctx.input.range
       : undefined;
   const start = typeof range?.start === 'number' ? range.start : undefined;
@@ -197,7 +200,7 @@ function buildWriteSections(ctx: SectionContext): ToolSection[] {
     },
   ];
   const content =
-    isObject(ctx.input) && typeof ctx.input.content === 'string'
+    Predicate.isObject(ctx.input) && typeof ctx.input.content === 'string'
       ? ctx.input.content
       : undefined;
   if (content !== undefined) sections.push(codeSection('', content, 'file'));
@@ -211,7 +214,8 @@ function buildWriteSections(ctx: SectionContext): ToolSection[] {
  */
 function buildMemorySections(ctx: SectionContext): ToolSection[] {
   const { input } = ctx;
-  if (!isObject(input) || typeof input.command !== 'string') return [];
+  if (!Predicate.isObject(input) || typeof input.command !== 'string')
+    return [];
   const command = input.command;
   const path = asString(input.path);
   const memPath = command === 'rename' ? '' : (path ?? '');
@@ -257,7 +261,7 @@ function buildMemorySections(ctx: SectionContext): ToolSection[] {
 
 function buildExecutionsSections(ctx: SectionContext): ToolSection[] {
   const { input } = ctx;
-  if (!isObject(input)) return [];
+  if (!Predicate.isObject(input)) return [];
   const sections: ToolSection[] = [];
   const path = asString(input.path) ?? '';
   if (path) {
@@ -302,7 +306,7 @@ function buildExecutionsSections(ctx: SectionContext): ToolSection[] {
 
 function buildAcceptRunFilesSections(ctx: SectionContext): ToolSection[] {
   const { input } = ctx;
-  if (!isObject(input)) return [];
+  if (!Predicate.isObject(input)) return [];
   // The files name what is accepted; the source agent's raw id is left out
   // (ids are for bug reports, not the card).
   const sections: ToolSection[] = [];
@@ -318,8 +322,12 @@ function buildAcceptRunFilesSections(ctx: SectionContext): ToolSection[] {
       .map((edit) => [edit.path as string, edit] as const),
   );
   const files: ToolSectionFile[] = raw.map((entry) => {
-    const source = isObject(entry) ? (asString(entry.path) ?? '') : '';
-    const original = isObject(entry) ? asString(entry.original) : undefined;
+    const source = Predicate.isObject(entry)
+      ? (asString(entry.path) ?? '')
+      : '';
+    const original = Predicate.isObject(entry)
+      ? asString(entry.original)
+      : undefined;
     const dest = original ?? source;
     const lineChanges = editsByPath.get(dest)?.lineChanges;
     return {
@@ -338,7 +346,7 @@ function buildAcceptRunFilesSections(ctx: SectionContext): ToolSection[] {
  */
 function buildDelegationSections(ctx: SectionContext): ToolSection[] {
   const { input } = ctx;
-  if (!isObject(input)) return [];
+  if (!Predicate.isObject(input)) return [];
   const sections: ToolSection[] = [];
 
   const agent = asString(input.agentName);
@@ -384,7 +392,9 @@ function buildDelegationSections(ctx: SectionContext): ToolSection[] {
 
 function isMcpTextBlock(block: unknown): block is { text: string } {
   return (
-    isObject(block) && block.type === 'text' && typeof block.text === 'string'
+    Predicate.isObject(block) &&
+    block.type === 'text' &&
+    typeof block.text === 'string'
   );
 }
 
@@ -460,7 +470,7 @@ function buildMcpSections(ctx: SectionContext): ToolSection[] {
     if (ctx.outputText) sections.push(textSection('Result:', ctx.outputText));
     return sections;
   }
-  const unrendered = isObject(ctx.parsedOutput)
+  const unrendered = Predicate.isObject(ctx.parsedOutput)
     ? Object.fromEntries(
         Object.entries(ctx.parsedOutput).filter(
           ([field]) =>
@@ -489,7 +499,7 @@ function buildMcpSections(ctx: SectionContext): ToolSection[] {
  */
 function buildCodexSections(ctx: SectionContext): ToolSection[] {
   const { input } = ctx;
-  if (!isObject(input)) return [];
+  if (!Predicate.isObject(input)) return [];
   const sections: ToolSection[] = [];
   const prompt = asString(input.prompt);
   if (prompt) sections.push(textSection('Prompt:', prompt));
@@ -545,14 +555,16 @@ function buildCodexTurnSections(ctx: SectionContext): ToolSection[] {
 }
 
 function buildScriptSections(ctx: SectionContext): ToolSection[] {
-  const code = isObject(ctx.input) ? asString(ctx.input.code) : undefined;
+  const code = Predicate.isObject(ctx.input)
+    ? asString(ctx.input.code)
+    : undefined;
   return code === undefined ? [] : [codeSection('', code, 'javascript')];
 }
 
 function buildDefaultSections(ctx: SectionContext): ToolSection[] {
   const { input } = ctx;
   if (input == null) return [];
-  if (isObject(input)) {
+  if (Predicate.isObject(input)) {
     const code = input.code ?? input.command;
     if (typeof code === 'string') return [codeSection('', code, 'shell')];
   }
@@ -566,7 +578,7 @@ function buildDefaultSections(ctx: SectionContext): ToolSection[] {
 /** TeXRA's native tools name the target file `path`; a delegated sub-agent's
  *  built-in Read/Write/Edit tools use Anthropic's own `file_path`. */
 export function inputFilePath(input: unknown): string {
-  if (!isObject(input)) return '';
+  if (!Predicate.isObject(input)) return '';
   return asString(input.path) ?? asString(input.file_path) ?? '';
 }
 
@@ -582,7 +594,8 @@ const SECTION_BUILDERS: readonly {
   readonly fileLinkKind?: 'read' | 'write';
 }[] = [
   {
-    match: (ctx) => isEditLikeToolName(ctx.toolName) && isObject(ctx.input),
+    match: (ctx) =>
+      isEditLikeToolName(ctx.toolName) && Predicate.isObject(ctx.input),
     build: buildEditSections,
   },
   {
@@ -614,7 +627,8 @@ const SECTION_BUILDERS: readonly {
     build: buildAcceptRunFilesSections,
   },
   {
-    match: (ctx) => ctx.toolName === AGENT_TOOL_NAME && isObject(ctx.input),
+    match: (ctx) =>
+      ctx.toolName === AGENT_TOOL_NAME && Predicate.isObject(ctx.input),
     build: buildDelegationSections,
   },
   { match: (ctx) => isMcpToolName(ctx.toolName), build: buildMcpSections },

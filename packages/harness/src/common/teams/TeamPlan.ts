@@ -1,4 +1,4 @@
-import { Array as Arr, Result } from 'effect';
+import { Array as Arr, Result, String as Str } from 'effect';
 import {
   AGENT_MODE_PRESETS,
   agentKeyOf,
@@ -12,7 +12,6 @@ import {
   implicitDefaultToolUseAgents,
 } from '@shared/constants/agents';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
-import { capitalize } from '@utils/text/stringUtils';
 
 import {
   findTeamPreset,
@@ -313,5 +312,5 @@ function presetAgentAvailability(
 
 function formatTeamOptionDisabledReason(reason: string): string {
   if (reason === 'no runnable team root') return 'No runnable team lead.';
-  return `${capitalize(reason)}.`;
+  return `${Str.capitalize(reason)}.`;
 }

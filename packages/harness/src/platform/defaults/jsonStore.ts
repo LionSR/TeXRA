@@ -3,7 +3,14 @@ import { Buffer } from 'node:buffer';
 import { readFileSync, statSync } from 'node:fs';
 
 // Third-party imports
-import { Effect, FileSystem, Layer, Path, type PlatformError } from 'effect';
+import {
+  Effect,
+  FileSystem,
+  Layer,
+  Path,
+  type PlatformError,
+  Predicate,
+} from 'effect';
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import writeFileAtomic from 'write-file-atomic';
 
@@ -47,10 +54,6 @@ interface JsonStoreOptions {
   follow?: (error: Error) => void;
 }
 
-function isJsonRecord(value: unknown): value is JsonRecord {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
 /** The file's version as a read compares it: absent, or its identity. */
 function fileVersion(filePath: string): string {
   const stat = statSync(filePath, { throwIfNoEntry: false });
@@ -69,7 +72,7 @@ function readJsonRecordSync(filePath: string): JsonRecord {
     throw error;
   }
   const parsed: unknown = JSON.parse(content);
-  if (isJsonRecord(parsed)) return parsed;
+  if (Predicate.isObject(parsed)) return parsed;
   throw new TypeError(`Expected ${filePath} to contain a JSON object.`);
 }
 
@@ -96,9 +99,7 @@ const readJsonRecord = Effect.fn('JsonStore.readJsonRecord')(function* (
     try: () => JSON.parse(content) as unknown,
     catch: (cause) => cause as SyntaxError,
   });
-  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-    return parsed as JsonRecord;
-  }
+  if (Predicate.isObject(parsed)) return parsed;
   return yield* Effect.fail(
     new TypeError(`Expected ${filePath} to contain a JSON object.`),
   );

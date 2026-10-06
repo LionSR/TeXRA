@@ -1,3 +1,4 @@
+import { String as Str } from 'effect';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -22,7 +23,7 @@ import { designTokens } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { getBasename, normalizeFilePath } from '@utils/core';
-import { capitalize, formatResultCount } from '@utils/text/stringUtils';
+import { formatResultCount } from '@utils/text/stringUtils';
 import { FileDropController, postDroppedFiles } from '../fileDropHandler';
 import { fileSelectStyles } from '../fileSelectStyles';
 
@@ -329,7 +330,7 @@ export class FileSelectGroup extends LitElement {
 
   override render(): TemplateResult {
     const { config } = this;
-    const typeLabel = capitalize(config.type);
+    const typeLabel = Str.capitalize(config.type);
     const labelId = `${this.listId}Label`;
 
     return html`

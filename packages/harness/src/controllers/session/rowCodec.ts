@@ -24,7 +24,7 @@
 import { hash } from 'node:crypto';
 import { constants, zstdCompressSync, zstdDecompressSync } from 'node:zlib';
 import stableStringify from 'safe-stable-stringify';
-import { Effect, Result } from 'effect';
+import { Effect, Predicate, Result } from 'effect';
 import { z } from 'zod';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -46,7 +46,6 @@ import {
   DatabaseStoreNewer,
 } from '@shared/session/database';
 import { PLUGIN_ARMS } from '@tools/pluginArms';
-import { isObject } from '@utils/core';
 
 /** One selected store row, its columns by name, decoded where it is read. */
 export type SqlRow = Readonly<Record<string, unknown>>;
@@ -167,7 +166,8 @@ export function encodeDraft(draft: SessionEventDraft): EncodedRow {
       blobs.set(digest, json);
       return { $b: digest };
     }
-    return isObject(value) ? renameRefShaped(value, (key) => `$${key}`) : value;
+    if (!Predicate.isObject(value)) return value;
+    return renameRefShaped(value, (key) => `$${key}`);
   });
   return {
     type,

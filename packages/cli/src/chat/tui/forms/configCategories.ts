@@ -1,6 +1,7 @@
+import { String as Str } from 'effect';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import type { SurfacedSettingEntry } from '@shared/state/stateSettings';
-import { capitalize, formatResultCount } from '@utils/text/stringUtils';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 const CONFIG_CATEGORY_LABELS: Readonly<Record<string, string>> = {
   git: 'Git and worktrees',
@@ -18,7 +19,7 @@ const CONFIG_CATEGORY_LABELS: Readonly<Record<string, string>> = {
 export function configCategoryLabel(category: string): string {
   return (
     CONFIG_CATEGORY_LABELS[category] ??
-    category.split('-').filter(Boolean).map(capitalize).join(' ')
+    category.split('-').filter(Boolean).map(Str.capitalize).join(' ')
   );
 }
 

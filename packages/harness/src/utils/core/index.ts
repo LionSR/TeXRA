@@ -27,11 +27,6 @@ import type { RunId } from '@shared/schemas';
  * Type guards for common value structures.
  */
 
-/** Check if value is a non-null object (not array). */
-export function isObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
 /** Predicate for filtering null values from arrays while narrowing the element type. */
 export function filterNotNull<T>(item: T | null): item is T {
   return item !== null;

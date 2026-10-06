@@ -1,5 +1,5 @@
 // Local imports - core
-import { isObject } from '@utils/core';
+import { Predicate } from 'effect';
 import { isNonEmptyString, truncateSummary } from '@utils/text/stringUtils';
 
 export type LanguageModelResearchToolName = 'arxiv_search' | 'web_fetch';
@@ -7,7 +7,7 @@ export type LanguageModelResearchToolName = 'arxiv_search' | 'web_fetch';
 const MAX_CONTEXT_LENGTH = 60;
 
 function readInputString(input: unknown, key: string): string | undefined {
-  if (!isObject(input)) return undefined;
+  if (!Predicate.isObject(input)) return undefined;
 
   const value = input[key];
   return isNonEmptyString(value) ? value.trim() : undefined;

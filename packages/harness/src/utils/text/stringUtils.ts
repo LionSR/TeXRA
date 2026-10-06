@@ -74,10 +74,6 @@ export function normalizeLineEndings(text: string): string {
   return text.replaceAll('\r\n', '\n');
 }
 
-export function capitalize(str: string): string {
-  return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
 /**
  * Regular English plural of a noun phrase whose head noun is its last word:
  * a consonant + `y` becomes `ies`, a sibilant ending takes `es`, everything

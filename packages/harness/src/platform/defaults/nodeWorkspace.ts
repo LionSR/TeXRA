@@ -4,10 +4,11 @@
  */
 import * as path from 'node:path';
 
+import { String as Str } from 'effect';
+
 import { normalizeFilePath } from '@utils/core';
 import { isPathWithin } from '@utils/core/pathCore';
 import { canonicalizePath } from '@utils/files/externalRoots';
-import { capitalize } from '@utils/text/stringUtils';
 
 /**
  * Resolve one physical workspace identity for storage and host adapters.
@@ -25,7 +26,7 @@ export function canonicalizeWorkspacePath(workspacePath: string): string {
     if (code !== 'EACCES' && code !== 'EPERM') throw error;
     canonical = path.resolve(workspacePath);
   }
-  return /^[a-z]:[\\/]/.test(canonical) ? capitalize(canonical) : canonical;
+  return /^[a-z]:[\\/]/.test(canonical) ? Str.capitalize(canonical) : canonical;
 }
 
 /**

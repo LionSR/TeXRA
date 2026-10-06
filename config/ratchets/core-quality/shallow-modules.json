@@ -11,6 +11,6 @@
   "packages/harness/src/tools/toolAvailabilityService.ts": 11,
   "packages/llm/src/models/kimiCodeRetryGate.ts": 8,
   "packages/llm/src/models/modelSelection.ts": 10,
-  "packages/llm/src/oauth/support.ts": 7,
+  "packages/llm/src/oauth/support.ts": 5,
   "packages/llm/src/providers/credentials.ts": 15
 }

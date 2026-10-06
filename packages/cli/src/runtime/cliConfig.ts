@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Predicate } from 'effect';
 import {
   MODEL_CONFIGS,
   ModelProvider,
@@ -30,7 +30,6 @@ import {
   readConfigSettingFrom,
   writeSettingTo,
 } from '@utils/config/platformSettings';
-import { isObject } from '@utils/core';
 import type { ConfigProvider } from '@texra-ai/harness';
 
 /**
@@ -256,7 +255,7 @@ function configFileWarnings(
         continue;
       }
       if (!isProjectFile || !COMMAND_SECTION_CONFIG_KEYS.has(key)) continue;
-      if (!isObject(value)) continue;
+      if (!Predicate.isObject(value)) continue;
       for (const nested of Object.keys(value)) {
         if (COMMAND_SECTION_KEYS.has(nested)) continue;
         warnings.push(`Ignoring unknown ${filePath} key "${key}.${nested}".`);

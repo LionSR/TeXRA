@@ -6,8 +6,8 @@
  * tokenizer does not split `inputFiles` or `read_file` the way a tool name
  * needs.
  */
+import { Predicate } from 'effect';
 import type { ScriptDoor } from '@agent/runtime/RunCall';
-import { isObject } from '@utils/core';
 
 import { declarationOf, firstSentence, inputSchema } from './declarations';
 
@@ -38,11 +38,11 @@ const tokenize = (text: string): string[] =>
 
 /** Property names and descriptions, through nested objects and unions. */
 const schemaText = (schema: unknown): string[] => {
-  if (!isObject(schema)) return [];
+  if (!Predicate.isObject(schema)) return [];
   return [
     ...(typeof schema.description === 'string' ? [schema.description] : []),
     ...Object.entries(
-      isObject(schema.properties) ? schema.properties : {},
+      Predicate.isObject(schema.properties) ? schema.properties : {},
     ).flatMap(([name, property]) => [name, ...schemaText(property)]),
     ...schemaText(schema.items),
     ...[schema.anyOf, schema.oneOf, schema.allOf].flatMap((variants) =>

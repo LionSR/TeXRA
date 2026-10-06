@@ -1,9 +1,9 @@
-import { Duration, Effect } from 'effect';
+import { Duration, Effect, Predicate } from 'effect';
 import { HttpClient, HttpClientResponse } from 'effect/http';
 import { z } from 'zod';
 
 import type { SubscriptionUsageWindow } from '@shared/schemas';
-import { clamp, isObject } from '@utils/core';
+import { clamp } from '@utils/core';
 
 import type { Cause } from 'effect';
 import type { HttpClientError } from 'effect/http';
@@ -41,7 +41,7 @@ export function fetchSubscriptionUsage(request: {
 }
 
 export function asObject(value: unknown): JsonObject | undefined {
-  return isObject(value) ? value : undefined;
+  return Predicate.isObject(value) ? value : undefined;
 }
 
 /** A loosely-typed wire number: a real number, or a non-blank numeric string
