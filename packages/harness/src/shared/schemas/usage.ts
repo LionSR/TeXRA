@@ -96,9 +96,11 @@ const CODING_PLAN_BY_USAGE_ROUTE = new Map<string, CodingPlanSubscription>(
   CODING_PLAN_SUBSCRIPTIONS.map((plan) => [plan.usageRoute, plan]),
 );
 
-const CODING_PLAN_BY_API_PROVIDER = new Map<string, CodingPlanSubscription>(
-  CODING_PLAN_SUBSCRIPTIONS.map((plan) => [plan.apiProvider, plan]),
-);
+/** The coding plan whose credential an API provider owns, by provider. */
+export const CODING_PLAN_BY_API_PROVIDER: ReadonlyMap<
+  string,
+  CodingPlanSubscription
+> = new Map(CODING_PLAN_SUBSCRIPTIONS.map((plan) => [plan.apiProvider, plan]));
 
 /** Resolve a coding plan from the route stamped on completed usage. */
 export function codingPlanForUsageRoute(
@@ -107,13 +109,6 @@ export function codingPlanForUsageRoute(
   return route === undefined
     ? undefined
     : CODING_PLAN_BY_USAGE_ROUTE.get(route);
-}
-
-/** Resolve a coding plan whose credential is owned by an API provider. */
-export function codingPlanForApiProvider(
-  provider: string,
-): CodingPlanSubscription | undefined {
-  return CODING_PLAN_BY_API_PROVIDER.get(provider);
 }
 
 export const TokenUsageStatsSchema = z.strictObject({

@@ -8,7 +8,7 @@ import {
   providerDisplayName,
 } from '@texra-ai/llm';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import { codingPlanForApiProvider } from '@shared/schemas';
+import { CODING_PLAN_BY_API_PROVIDER } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { ApiKeyEntryForm } from './ApiKeyEntryForm';
@@ -40,7 +40,7 @@ function providerApiKeyStatusLabel(
 
 function providerApiKeyFormLabel(provider: ApiKeyProviderId): string {
   const providerName = providerDisplayName(provider);
-  const codingPlan = codingPlanForApiProvider(provider);
+  const codingPlan = CODING_PLAN_BY_API_PROVIDER.get(provider);
   return codingPlan && !codingPlan.exclusiveCredential
     ? `${providerName} API/${codingPlan.displayName}`
     : providerName;

@@ -32,7 +32,7 @@ import { type StorageFs, withSessionFs } from '@platform/rootedFs';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SubscriptionUsageProvider } from '@shared/schemas';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
-import { codingPlanForApiProvider } from '@shared/schemas';
+import { CODING_PLAN_BY_API_PROVIDER } from '@shared/schemas';
 import { codingPlanForUsageSetting } from '@texra/model/codingPlanSubscriptions';
 import { UnsupportedCommandError } from '@texra/shared/utils/dispatcher';
 import {
@@ -206,7 +206,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     });
   const refreshAfterProviderKeyChange = (provider: string) =>
     refreshAfterCredentialChange(
-      codingPlanForApiProvider(provider)?.usageProvider,
+      CODING_PLAN_BY_API_PROVIDER.get(provider)?.usageProvider,
     );
   /** Run a subscription mutation, report its failure, and repaint what the
    *  subscription feeds whatever the mutation did. */

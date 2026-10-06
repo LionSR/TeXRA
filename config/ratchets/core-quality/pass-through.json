@@ -31,6 +31,5 @@
   "packages/llm/src/api/openaiResponses.ts": 1,
   "packages/llm/src/index.ts": 1,
   "packages/llm/src/models/reasoningChoice.ts": 1,
-  "packages/llm/src/providers/apiProviders.ts": 2,
-  "packages/llm/src/providers/codingPlanSubscriptions.ts": 1
+  "packages/llm/src/providers/apiProviders.ts": 2
 }
