@@ -7,14 +7,17 @@ import ts from 'typescript';
 const EMPTY_COUNTS = { files: 0, exports: 0, types: 0, duplicates: 0 };
 // The kinds whose entries each carry their own `name`. The dependency kinds
 // report a manifest (`package.json`) as the file: a declared package nothing
-// imports, or an imported package the manifest does not declare. None is
-// baselined, so any one of them fails the ratchet.
+// imports, or an imported package the manifest does not declare. knip's
+// `--include dependencies` also turns on `devDependencies` and
+// `optionalPeerDependencies`. None is baselined, so any one of them fails the
+// ratchet.
 const NAMED_KINDS = [
   'files',
   'exports',
   'types',
   'dependencies',
   'devDependencies',
+  'optionalPeerDependencies',
   'unlisted',
 ];
 const KNIP_KINDS = new Set([...NAMED_KINDS, 'duplicates']);
