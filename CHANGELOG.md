@@ -799,6 +799,8 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **The CLI's progress line no longer goes blank for a task with an empty
+  description.** It shows the run's status instead.
 - **A task with an empty description no longer shows a blank title in
   desktop notifications.** The desktop app's "is waiting for you" and
   finished notices now name the task by its agent, as every other surface

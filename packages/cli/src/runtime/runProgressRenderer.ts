@@ -303,7 +303,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
 function livePhaseText(root: RunView): string | undefined {
   if (root.status === 'ready') return undefined;
   if (root.status === RUN_PHASE.RUNNING) {
-    return root.description ?? root.statusLabel;
+    return root.description || root.statusLabel;
   }
   return root.statusLabel;
 }
