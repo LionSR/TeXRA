@@ -11,11 +11,11 @@ import { ToolContext } from '@agent/core/tools/ToolTypes';
 import type { AgentCatalogServices } from '@platform/processRuntime';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, type ToolResult } from '@shared/schemas';
+import { resolveToolPath } from '@tools/pathResolution';
 
 // Local imports - tools
 import { reloadAgentCatalog } from '@tools/agentCatalogFollower';
 import { requireFileReadForEdit } from '@tools/fileInteractions';
-import { resolveToolPath } from '@tools/pathResolution';
 import {
   appendApprovalDiffNote,
   buildApprovalRejectedResult,

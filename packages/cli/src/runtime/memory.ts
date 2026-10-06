@@ -3,9 +3,9 @@ import { Effect } from 'effect';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { withSessionFs, type StorageFs } from '@platform/rootedFs';
 import type { MemoryViewItem } from '@shared/tools/memoryView';
+import { displayToStoragePath, toDisplayPath } from '@tools/memory/memoryUtils';
 import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
 import { loadMemoryPreview } from '@tools/memory/memoryFileSystem';
-import { displayToStoragePath, toDisplayPath } from '@tools/memory/memoryUtils';
 import { filterNotNullish, normalizeFilePath } from '@utils/core';
 import {
   formatBytes,

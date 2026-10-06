@@ -16,8 +16,8 @@ import {
 } from '@latex/extractBibliography';
 import { WorkspaceFs } from '@platform/rootedFs';
 import type { ToolResult } from '@shared/schemas';
-import { formatToolOutput } from '@tools/formatting';
 import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
+import { formatToolOutput } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { toPosixPath } from '@utils/core/pathCore';

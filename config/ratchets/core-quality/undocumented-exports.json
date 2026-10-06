@@ -141,7 +141,7 @@
   "packages/harness/src/tools/attachments.ts": 2,
   "packages/harness/src/tools/bash.ts": 1,
   "packages/harness/src/tools/builtinPlugins.ts": 2,
-  "packages/harness/src/tools/catalogEntries.ts": 2,
+  "packages/harness/src/tools/catalogEntries.ts": 1,
   "packages/harness/src/tools/codemode/ScriptTool.ts": 1,
   "packages/harness/src/tools/core/definition.ts": 1,
   "packages/harness/src/tools/delegation/detachedChildRun.ts": 1,

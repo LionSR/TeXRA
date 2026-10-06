@@ -14,11 +14,11 @@ import { z } from 'zod';
 
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import type { ToolResult } from '@shared/schemas';
+import { assertWritable, resolveToolPath } from '@tools/pathResolution';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
 } from '@tools/approval/bashApproval';
-import { assertWritable, resolveToolPath } from '@tools/pathResolution';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import type { RuntimeTool, ToolServices } from '../ToolServices';

@@ -9,6 +9,10 @@ import type { RunId } from '@shared/schemas';
 
 type RunIdFields = Readonly<Record<string, string | number>>;
 
+/** Hex sha256 of a value's stable JSON form. */
+export const sha256 = (value: unknown): string =>
+  hash('sha256', stableStringify(value) ?? '', 'hex');
+
 /** Stable hex prefix of a sha256 digest. */
 export function truncatedHexId(source: BinaryLike, length: number): string {
   return hash('sha256', source, 'hex').slice(0, length);

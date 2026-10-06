@@ -4,7 +4,7 @@
  * Everything this card says about a call — its header label and preview, the
  * structured sections, whether the output block is shown at all, the error
  * text and the user instruction — comes from `ToolRow.model`
- * (`toolRowModel` in `@ui/transcript`). This file paints that model with
+ * (`toolRowModel` in `@shared/transcript`). This file paints that model with
  * Lit and applies the webview's own widths, icons, and live controls.
  *
  * IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates

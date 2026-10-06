@@ -15,11 +15,11 @@ import {
 } from '@common/plugins/pluginTrust';
 import { AppState } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { sha256 } from '@tools/catalogEntries';
 import { LiveTools, toolTableLayer } from '@tools/liveTools';
 import { mcpPlugin, mcpPluginLoader } from '@tools/mcp/mcpConfig';
 import { readDisabledTools, type Plugin } from '@tools/plugins';
 import { toolTable, type InstalledToolReader } from '@tools/toolTable';
+import { sha256 } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** A switch apply's backoff: 200 ms doubling, over six retries. */

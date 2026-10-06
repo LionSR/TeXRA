@@ -3,7 +3,7 @@
  *
  * Which sections a call produces — its file links, diffs, agent identifiers,
  * MCP structured content, and the generic input fallback — is decided once in
- * `@ui/transcript` (`toolRowModel`). This module only turns those data
+ * `@shared/transcript` (`toolRowModel`). This module only turns those data
  * sections into Lit templates, and picks the two presentation details the
  * model deliberately leaves to a host: the highlight language behind the
  * `file`/`shell` hints, and the glyph on a badge.

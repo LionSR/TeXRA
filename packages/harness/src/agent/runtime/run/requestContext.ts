@@ -37,8 +37,8 @@ import {
   type RunId,
 } from '@shared/schemas';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
-import { sha256 } from '@tools/catalogEntries';
 import { delegationSection } from '@tools/delegation/delegationAvailability';
+import { sha256 } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { envFlag } from '@utils/system/envFlags';
 

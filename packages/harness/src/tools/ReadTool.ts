@@ -6,12 +6,12 @@ import { z } from 'zod';
 import type { RunCall } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import { ToolError, type ToolResult } from '@shared/schemas';
-import { buildBytesAttachment, buildFileAttachment } from '@tools/attachments';
-import { formatFileView } from '@tools/formatting';
 import {
   resolveToolPath,
   type ToolPathResolution,
 } from '@tools/pathResolution';
+import { buildBytesAttachment, buildFileAttachment } from '@tools/attachments';
+import { formatFileView } from '@tools/formatting';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { parseEml, type EmlImageAttachment } from '@tools/emlParser';
 import {

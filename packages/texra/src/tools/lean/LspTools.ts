@@ -5,10 +5,10 @@ import { ToolContext, type ToolContextShape } from '@texra-ai/harness';
 import { callerRun, type ToolRun, type RunCall } from '@agent/runtime/RunCall';
 import { withLogChannel } from '@logger/effectLog';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
+import { resolveToolPath } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
 import { nullishWithDefault } from '@tools/core/inputSchema';
-import { resolveToolPath } from '@tools/pathResolution';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {

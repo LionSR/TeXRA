@@ -13,6 +13,17 @@ import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
 import { StorageFs } from '@platform/rootedFs';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
+import {
+  MAX_PINNED_MEMORIES,
+  DIRECTORY_LISTING_DEPTH,
+  MEMORY_DISPLAY_ROOT,
+} from '@tools/memory/constants';
+import { displayToStoragePath, toDisplayPath } from '@tools/memory/memoryUtils';
+import {
+  createMeta,
+  formatAttribution,
+  type MemoryFileMeta,
+} from '@tools/memory/memoryMeta';
 import { replaceLiteralMatches } from '@tools/fileEditFlow';
 import {
   deleteMemoryPath,
@@ -47,17 +58,6 @@ import {
   paginateToolListing,
   ViewRangeSchema,
 } from '../formatting';
-import {
-  MAX_PINNED_MEMORIES,
-  DIRECTORY_LISTING_DEPTH,
-  MEMORY_DISPLAY_ROOT,
-} from './constants';
-import { displayToStoragePath, toDisplayPath } from './memoryUtils';
-import {
-  createMeta,
-  formatAttribution,
-  type MemoryFileMeta,
-} from './memoryMeta';
 
 const CHANNEL = 'MemoryTool';
 
@@ -102,8 +102,7 @@ const MemoryToolInputSchema = z.discriminatedUnion('command', [
     old_str: z.string(),
     new_str: z.string(),
   }),
-  // Built here rather than passed as a shape: the branch carries a
-  // cross-field check.
+  // Built here, not passed as a shape: the branch carries a cross-field check.
   z
     .looseObject({
       command: z.literal('insert'),
@@ -190,8 +189,7 @@ const run = Effect.fn('MemoryTool.run')(function* (
   invocation: MemoryInvocation,
 ) {
   // Normalize a raw display path into a `{ display, storage }` pair at the
-  // dispatch boundary. Fails with a ToolError if the path is outside
-  // `/memories`.
+  // dispatch boundary; a path outside `/memories` fails with a ToolError.
   const locate = (raw: string): Effect.Effect<MemoryLocation, ToolError> =>
     Effect.try({
       try: () => {
@@ -425,8 +423,7 @@ const strReplace = Effect.fn('MemoryTool.strReplace')(function* (
   if (readGate) return readGate;
 
   const { content, meta } = yield* readMemoryFile(resolvedPath);
-  // A missing or ambiguous match is the model's error to correct: a failure,
-  // not a defect.
+  // A missing or ambiguous match is a failure the model fixes, not a defect.
   const replacement = yield* Effect.try({
     try: () =>
       replaceLiteralMatches({

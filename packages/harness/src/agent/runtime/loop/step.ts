@@ -56,12 +56,13 @@ import {
 } from '@shared/schemas';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
-import { sha256, toolDefinitionsFor, toolDigests } from '@tools/catalogEntries';
+import { toolDefinitionsFor, toolDigests } from '@tools/catalogEntries';
 import { LiveTools } from '@tools/liveTools';
 import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { readDisabledTools } from '@tools/plugins';
 import { readDelegationTargets } from '@tools/delegation/delegationAvailability';
 import type { Continuation } from '@tools/toolTable';
+import { sha256 } from '@utils/core/idHash';
 import type { StepRoot } from '@utils/files/externalRoots';
 
 import { declaredToolNames, resolveStepTools } from '../agentToolResolution';
@@ -241,8 +242,7 @@ function describedAtFreeze<
  * `recordedHooks` a resumed dispatch to the hooks its calls were offered
  * under; `holding` says the hold outlives this step (a park's). The rows
  * are what the loop appends before a request: the new offered set, when it
- * differs from `state`'s.
- */
+ * differs from `state`'s. */
 const openStep = Effect.fn('Step.open')(function* (
   run: AgentRunShape,
   state: RunState,

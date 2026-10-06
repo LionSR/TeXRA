@@ -9,9 +9,9 @@ import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports
 import { ToolError, ToolResult } from '@shared/schemas';
+import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
-import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { filterNotNull } from '@utils/core';
 import { toPosixPath } from '@utils/core/pathCore';

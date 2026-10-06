@@ -1,6 +1,6 @@
 /**
  * `<script-stage>`: the calls one `script` call issued, painted from the
- * shared script-stage model (`scriptStages` in `@ui/transcript`): the card's
+ * shared script-stage model (`scriptStages` in `@shared/transcript`): the card's
  * summary line, then each phase's calls as plain rows in issue order. An
  * `agent` row opens its child run; Review opens the run that is asking;
  * "Stop this agent", in a running row's menu, stops the call's child, which

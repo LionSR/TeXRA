@@ -8,7 +8,7 @@ import {
   type MemoryFileMeta,
 } from '@tools/memory/memoryMeta';
 
-describe('memory frontmatter (yaml-backed) (packages/harness/src/tools/memory/memoryMeta.ts)', () => {
+describe('memory frontmatter (yaml-backed) (packages/harness/src/common/memory/memoryMeta.ts)', () => {
   it('round-trips metadata through build and parse', () => {
     const meta: MemoryFileMeta = {
       modifiedBy: 'reviser-agent',

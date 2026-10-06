@@ -40,8 +40,8 @@ import {
   type AttachedMemoryMiss,
   type RunId,
 } from '@shared/schemas';
-import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { parseWorkingDirectory } from '@tools/pathResolution';
+import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { ToolRegistry } from '@tools/toolTable';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 

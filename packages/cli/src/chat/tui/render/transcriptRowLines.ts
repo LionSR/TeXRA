@@ -1,6 +1,6 @@
 // Terminal paint of a shared transcript row's body.
 //
-// `@ui/transcript` carries every text untruncated plus the measurements
+// `@shared/transcript` carries every text untruncated plus the measurements
 // needed to elide it; this module is where the terminal spends its own budget
 // — a head/tail line slice with a `N lines hidden` marker, and a terminal-safe pass
 // over text a producer wrote. Nothing here truncates the model.

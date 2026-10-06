@@ -50,7 +50,7 @@ import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 
 import { activatedSkillNames } from '@skills/runtimeSkills';
-import { sha256 } from '@tools/catalogEntries';
+import { sha256 } from '@utils/core/idHash';
 import { ensureError } from '@utils/errors/errorMessage';
 import { type InputPart, mediaInputParts } from './run/mediaInput';
 
