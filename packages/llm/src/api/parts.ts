@@ -67,7 +67,9 @@ export type PartEvent =
         HttpTurnResult,
         'stopSequence' | 'finishEvidence' | 'refusalEvidence'
       > & { readonly finishReason: HttpTurnResult['finishReason'] | null };
-      /** The provider's terminal statement of the content. */
+      /** The terminal item list. It supplies content only for a turn with
+       *  no item events, or the items a resumed observation joined too late
+       *  to see close (see `settle`). */
       readonly snapshot?: readonly Part[];
     };
 
@@ -99,8 +101,8 @@ export const sameIdentity = (left: Part, right: Part): boolean =>
 
 /**
  * A restatement may omit what it repeats but never change it. Reasoning's
- * encrypted blob is excluded: OpenAI re-encrypts the same reasoning between
- * an item's done event and the terminal snapshot, and the first is kept.
+ * encrypted blob is excluded: OpenAI re-encrypts the same reasoning each
+ * time it restates an item, and the first is kept.
  */
 export const restates = (done: unknown, again: unknown): boolean =>
   typeof again !== 'object' || again === null || Array.isArray(again)

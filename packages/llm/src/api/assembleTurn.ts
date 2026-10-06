@@ -29,7 +29,7 @@ export interface AssemblyOptions {
   /**
    * The stream may begin mid-response (a resumed observation): progress on
    * a position it never saw open is shown, not kept, and the terminal
-   * snapshot supplies what it missed.
+   * snapshot supplies the items it did not see close.
    */
   readonly partial?: boolean;
   /** What the codec adds to a completed turn: its continuation anchor. */
@@ -217,58 +217,12 @@ function step(turn: Assembly, event: PartEvent): Folded {
   }
 }
 
-/** The streamed position a snapshot item restates, in order and in agreement. */
-function restated(
-  turn: Assembly,
-  streamed: readonly (readonly [number, Slot])[],
-  item: Part,
-  previous: number,
-): Effect.Effect<readonly [number, Slot] | undefined, ModelError> {
-  const match = streamed.find(
-    ([, slot]) => slot.part && keyOf(slot.part) === keyOf(item),
-  );
-  if (match === undefined) return Effect.succeed(undefined);
-  const [index, slot] = match;
-  if (
-    index <= previous ||
-    !slot.part ||
-    !sameIdentity(slot.part, item) ||
-    (slot.closed && !restates(slot.part, item))
-  )
-    return fail(turn, 'returned a snapshot contradicting its output');
-  if (!slot.closed) Object.assign(slot, { part: item, closed: true });
-  return Effect.succeed(match);
-}
-
-/** The snapshot's items, each streamed one replaced by what streamed. */
-const reconcile = Effect.fn('llm.reconcileSnapshot')(function* (
-  turn: Assembly,
-  streamed: readonly (readonly [number, Slot])[],
-  snapshot: readonly Part[],
-  streamCovers: boolean,
-) {
-  const content: (Part | null)[] = [];
-  let previous = -1;
-  let matched = 0;
-  for (const item of snapshot) {
-    const match = yield* restated(turn, streamed, item, previous);
-    if (match === undefined && streamCovers)
-      return yield* fail(turn, 'returned a snapshot beyond its output');
-    content.push(match ? match[1].part : item);
-    previous = match?.[0] ?? previous;
-    matched += match ? 1 : 0;
-  }
-  if (!streamCovers && matched < streamed.length)
-    return yield* fail(turn, 'returned a snapshot that omits its output');
-  return content;
-});
-
 /**
- * The content a terminal snapshot settles. A stream that saw a whole
- * response covers it, and the snapshot may restate a subset of its items.
- * Otherwise (a resumed observation, or no item streamed) the snapshot covers
- * it, and every streamed item must be among its items. A matched pair keeps
- * its order and agrees; the streamed item is the one kept.
+ * The content of a finished response. Each item's done event owns its
+ * content. A stream that saw the whole response is the content; the terminal
+ * snapshot is read only when no item streamed or the stream joined late (a
+ * resumed observation), and then supplies the items the stream did not
+ * close, each streamed item standing in for the snapshot entry it names.
  */
 const settle = Effect.fn('llm.settleTurn')(function* (
   turn: Assembly,
@@ -278,19 +232,23 @@ const settle = Effect.fn('llm.settleTurn')(function* (
   const streamed = [...turn.slots].toSorted(([left], [right]) => left - right);
   if (!partial && streamed.some(([index], ordinal) => index !== ordinal))
     return yield* fail(turn, 'omitted an output position');
-  const streamCovers =
-    snapshot === undefined || (!partial && streamed.length > 0);
-  const content = yield* reconcile(
-    turn,
-    streamed,
-    snapshot ?? [],
-    streamCovers,
+  const parts = streamed.flatMap(([, slot]) => (slot.part ? [slot.part] : []));
+  if (snapshot === undefined || (!partial && streamed.length > 0)) {
+    if (streamed.some(([, slot]) => !slot.closed))
+      return yield* fail(turn, 'left an output item unfinished');
+    return parts;
+  }
+  const named = new Set(snapshot.map(keyOf));
+  if (parts.some((part) => !named.has(keyOf(part))))
+    return yield* fail(turn, 'returned a snapshot that omits its output');
+  const done = new Map(
+    streamed.flatMap(([, slot]) =>
+      slot.closed && slot.part ? [[keyOf(slot.part), slot.part] as const] : [],
+    ),
   );
-  if (streamed.some(([, slot]) => !slot.closed))
-    return yield* fail(turn, 'left an output item unfinished');
-  const parts = streamCovers ? streamed.map(([, slot]) => slot.part) : content;
-  return parts.filter((part) => part !== null);
+  return snapshot.map((item) => done.get(keyOf(item)) ?? item);
 });
+
 /** The completed turn, once the parts have ended. */
 const complete = Effect.fn('llm.completeTurn')(function* (turn: Assembly) {
   if (turn.id === undefined || turn.finish === undefined)
