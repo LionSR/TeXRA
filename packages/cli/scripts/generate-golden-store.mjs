@@ -161,7 +161,7 @@ function scenario(root) {
   );
   // The Codex CLI the Codex child runs: first on PATH, with an empty global
   // npm prefix so no installed Codex is found first. Its one turn answers
-  // once `codex.release` appears beside the flag.
+  // once it has read its prompt and `codex.release` appears beside the flag.
   const bin = path.join(root, 'bin');
   mkdirSync(bin);
   writeFileSync(
@@ -857,6 +857,8 @@ function normalize(file, root) {
     [/Shell: [^\n]*/g, 'Shell: golden'],
     [/<wall-time>[^<]*<\/wall-time>/g, '<wall-time>0s</wall-time>'],
     [/"durationMs":\d+/g, '"durationMs":0'],
+    // A process child's turn time in its run-log line.
+    [/Turn completed in [\dhms ]+/g, 'Turn completed in 1s'],
     // A call's wall time in its run-log line.
     [/ · (?:\d+m )?\d+s · \$/g, ' · 0s · $'],
   ];
