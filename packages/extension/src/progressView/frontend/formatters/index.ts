@@ -24,7 +24,6 @@ import {
   formatFileListTemplate,
   formatLatexdiffTemplate,
   formatMissingOutputsTemplate,
-  formatStatisticsTemplate,
 } from './logFormatters/dataFormatters';
 import {
   formatDefaultLogMessageTemplate,
@@ -59,7 +58,6 @@ const ROW_FORMATTERS: RowFormatters = {
   fileList: formatFileListTemplate,
   missingOutputs: formatMissingOutputsTemplate,
   latexdiff: formatLatexdiffTemplate,
-  statistics: formatStatisticsTemplate,
   contextManagement: formatContextManagementTemplate,
   progressStatus: formatProgressStatusTemplate,
   compactionActivity: formatCompactionActivityTemplate,

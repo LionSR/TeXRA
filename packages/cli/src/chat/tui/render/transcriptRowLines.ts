@@ -115,8 +115,6 @@ export function transcriptRowBodyLines(
               entry.message ? ` — ${entry.message}` : ''
             }`,
         );
-      case 'statistics':
-        return statItemLines(row.items);
       case 'contextManagement':
         return [
           ...statItemLines(row.items),

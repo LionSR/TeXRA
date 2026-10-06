@@ -97,7 +97,7 @@ const NoticeSchema = z.discriminatedUnion('event', [
     event: z.literal('requestShowError'),
     payload: z.object({
       message: z.string(),
-      docsCommand: z.string().optional(),
+      docsPage: z.string().optional(),
     }) satisfies z.ZodType<RequestShowErrorPayload>,
   }),
   z.object({

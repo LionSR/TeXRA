@@ -14,7 +14,7 @@ import {
   type HostRouteFacts,
   isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,
-  isRetiredModel,
+  modelConfig,
   type ModelRoute,
   providerDisplayName,
   resolveModelSource,
@@ -469,7 +469,7 @@ function enabledModelsOf(selection: ModelSelection): readonly string[] {
       ...DEFAULT_MODELS.filter((model) => !disabled.has(model)),
       ...selection.enabledExtras,
     ]),
-  ].filter((model) => !isRetiredModel(model));
+  ].filter((model) => !modelConfig(model)?.retired);
 }
 
 /**
@@ -513,7 +513,7 @@ export function setModelEnabled(input: {
       message,
       cause: new Error(message),
     });
-  if (input.enabled && isRetiredModel(input.model)) {
+  if (input.enabled && modelConfig(input.model)?.retired) {
     return Effect.fail(
       refuse(`Model "${input.model}" is retired and cannot be enabled.`),
     );

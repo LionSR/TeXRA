@@ -11,6 +11,8 @@ import { Data } from 'effect';
 
 import type { RunId } from '@shared/schemas';
 
+import { DatabaseNotOwner } from './database';
+
 /** Another live owner holds the run this request would act on. */
 export class NotOwner extends Data.TaggedError('NotOwner')<{
   readonly runId: RunId;
@@ -29,7 +31,7 @@ export class Cancelled extends Data.TaggedError('Cancelled') {}
 /** The runtime refused the request for a worded reason. */
 export class Rejected extends Data.TaggedError('Rejected')<{
   readonly reason: string;
-  readonly docsCommand?: string;
+  readonly docsPage?: string;
 }> {}
 
 /** A handler died. The cause is in the host log under `ref` (the request
@@ -40,6 +42,19 @@ export class Internal extends Data.TaggedError('Internal')<{
 
 export type RequestError =
   NotOwner | Unavailable | Cancelled | Rejected | Internal;
+
+/**
+ * How a session write the request made fails it: `NotOwner` when another
+ * live owner holds the run, else the `Unavailable` that `refusal` describes.
+ */
+export function writeRefused(
+  refusal: ConstructorParameters<typeof Unavailable>[0],
+): (error: unknown) => RequestError {
+  return (error) =>
+    error instanceof DatabaseNotOwner
+      ? new NotOwner({ runId: refusal.runId })
+      : new Unavailable(refusal);
+}
 
 /**
  * How a host's request handler fails (PRD one-fold-three-renderers, 8.3):

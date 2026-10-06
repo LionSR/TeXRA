@@ -2,7 +2,7 @@
 
 Generated from `packages/llm/src/index.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. A diff here is a change to the public surface.
 
-Exports: 81
+Exports: 79
 
 - `acceptedEfforts` — `function acceptedEfforts: (config: Pick<ModelConfig, "reasoning">) => ReasoningEffort[]`
 - `API_KEY_ENV_NAMES` — `const API_KEY_ENV_NAMES: readonly string[]`
@@ -36,10 +36,8 @@ Exports: 81
 - `hasUsableApiKey` — `function hasUsableApiKey: (credentials: CredentialStore, provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "openRouter" | "kimiCode") => Effect<boolean, SecretsFailed, never>`
 - `HostRouteFacts` — `type HostRouteFacts = Omit<RouteFacts, 'validation' | 'prefersCopilot' | 'copilotRoute'>; ≡ HostRouteFacts`
 - `isApiProvider` — `function isApiProvider: (provider: string) => provider is "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "openRouter" | "kimiCode"`
-- `isDeprecatedModel` — `function isDeprecatedModel: (model: string) => boolean`
 - `isKimiCodeExclusiveModel` — `function isKimiCodeExclusiveModel: (model: KimiSubscriptionModelFields) => boolean`
 - `isKimiSubscriptionEligible` — `function isKimiSubscriptionEligible: (model: KimiSubscriptionModelFields) => boolean`
-- `isRetiredModel` — `function isRetiredModel: (model: string) => boolean`
 - `JsonObjectSchema` — `const JsonObjectSchema: ZodPipe<ZodUnknown, ZodReadonly<ZodRecord<ZodString, ZodPipe<ZodJSONSchema, ZodTransform<string | number | boolean | JSONType[] | { [key: string]: JSONType; } | null, JSONType>>>>>`
 - `loadApiKeyStatusMap` — `function loadApiKeyStatusMap: <const Provider extends ApiKeyProviderId>(credentials: CredentialStore, providers: readonly Provider[]) => Effect<Record<Provider, ApiKeyStatus>, SecretsFailed, never>`
 - `lookupApiKey` — `function lookupApiKey: (credentials: CredentialStore, provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "openRouter" | "kimiCode") => Effect<Redacted<string> | undefined, SecretsFailed, never>`

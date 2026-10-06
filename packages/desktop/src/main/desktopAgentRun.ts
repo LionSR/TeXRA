@@ -116,8 +116,8 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
       // The desktop shell keeps the conversation canvas permanently on
       // screen, so there is no separate progress surface to reveal.
       requestEnsureProgressView: () => undefined,
-      requestShowError: ({ message, docsCommand }) =>
-        host.showErrorDialog(message, docsCommand),
+      requestShowError: ({ message, docsPage }) =>
+        host.showErrorDialog(message, docsPage),
       // An instruction is actionable guidance, not a failure, so it uses
       // the info-style dialog with each action token as a real button.
       requestShowInstruction: (instruction) =>

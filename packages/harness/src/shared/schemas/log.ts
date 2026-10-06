@@ -16,7 +16,6 @@ export const MESSAGE_TYPES = {
   FILE_LIST: 'fileList',
   MISSING_OUTPUTS: 'missingOutputs',
   LATEXDIFF: 'latexdiff',
-  STATISTICS: 'statistics',
   TOOL_USE: 'toolUse',
   WEB_SEARCH: 'webSearch',
   MODEL_RESPONSE: 'modelResponse',

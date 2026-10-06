@@ -14,7 +14,6 @@
 import {
   MESSAGE_TYPES,
   type ErrorLogData,
-  type ExtendedTokenUsageStats,
   type FileListEntry,
   type LogPayload,
   type ToolUseLog,
@@ -26,10 +25,7 @@ import {
 } from '@shared/subagentFollowup';
 import { formatWorkflowPhaseHeading } from '@shared/transcript/workflowCall';
 import { assertNever } from '@utils/core';
-import {
-  formatCompactTokenCount,
-  formatCostUsd,
-} from '@utils/text/stringUtils';
+import { formatCompactTokenCount } from '@utils/text/stringUtils';
 
 import { toolRowModel, type ToolRowModelContext } from './toolRowModel';
 import { stringifyPayload, transcriptText } from './transcriptText';
@@ -165,40 +161,8 @@ function loadedMedia(files: readonly FileListEntry[]): LoadedMediaRef[] {
 }
 
 // ---------------------------------------------------------------------------
-// Statistics / context management
+// Context management
 // ---------------------------------------------------------------------------
-
-type NumericStatKey = {
-  [K in keyof ExtendedTokenUsageStats]-?: NonNullable<
-    ExtendedTokenUsageStats[K]
-  > extends number
-    ? K
-    : never;
-}[keyof ExtendedTokenUsageStats];
-
-const STAT_FIELDS: readonly (readonly [
-  key: NumericStatKey,
-  label: string,
-  format: (value: number) => string,
-])[] = [
-  ['inputTokens', 'Input tokens', formatCompactTokenCount],
-  ['outputTokens', 'Output tokens', formatCompactTokenCount],
-  ['cacheReadInputTokens', 'Cache hits', formatCompactTokenCount],
-  ['cacheMissInputTokens', 'Cache misses', formatCompactTokenCount],
-  ['cacheCreationInputTokens', 'Cache writes', formatCompactTokenCount],
-  ['percentageCached', 'Cached %', (value) => `${value.toFixed(2)}%`],
-  ['reasoningTokens', 'Reasoning tokens', formatCompactTokenCount],
-  ['toolUseTokens', 'Tool tokens', formatCompactTokenCount],
-  ['elapsedTime', 'Elapsed time', (value) => `${value}s`],
-  ['cost', 'Cost', formatCostUsd],
-];
-
-function statisticsItems(stats: Partial<ExtendedTokenUsageStats>): StatItem[] {
-  return STAT_FIELDS.flatMap(([key, label, format]) => {
-    const value = stats[key];
-    return value === undefined ? [] : [{ key, label, value: format(value) }];
-  });
-}
 
 const CONTEXT_MANAGEMENT_LABEL: Readonly<Record<string, string>> = {
   clear_tool_uses: 'Cleared tool uses',
@@ -354,12 +318,6 @@ export function logPayloadRow(
         entries,
         ...(runId ? { runId } : {}),
       };
-    }
-
-    case MESSAGE_TYPES.STATISTICS: {
-      const items = statisticsItems(payload.data);
-      if (items.length === 0) return undefined;
-      return { ...base, kind: 'statistics', label: 'Statistics', items };
     }
 
     case MESSAGE_TYPES.CONTEXT_MANAGEMENT: {

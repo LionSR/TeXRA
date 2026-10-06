@@ -12,12 +12,7 @@
  */
 import { Effect } from 'effect';
 
-import {
-  isDeprecatedModel,
-  isRetiredModel,
-  modelConfig,
-  modelRefOf,
-} from '@texra-ai/llm';
+import { modelConfig, modelRefOf } from '@texra-ai/llm';
 import {
   StateWriteFailed,
   type StateReadFailed,
@@ -45,7 +40,7 @@ export function listCliEnabledModelCatalog(state: StateStore) {
   return Effect.gen(function* () {
     const enabled = new Set(yield* getEnabledModels(state));
     return knownCliModelIds()
-      .filter((id) => !isRetiredModel(id))
+      .filter((id) => !modelConfig(id)?.retired)
       .map((id) => {
         const config = modelConfig(id);
         return {
@@ -53,7 +48,7 @@ export function listCliEnabledModelCatalog(state: StateStore) {
           label: getModelLabel(id),
           provider: config?.provider ?? 'unknown',
           enabled: enabled.has(id),
-          deprecated: isDeprecatedModel(id),
+          deprecated: modelConfig(id)?.deprecated ?? false,
         };
       })
       .toSorted((a, b) => {

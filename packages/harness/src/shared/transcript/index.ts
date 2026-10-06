@@ -30,7 +30,6 @@ export {
   type PhaseRow,
   type ProgressStatusRow,
   type StatItem,
-  type StatisticsRow,
   type StreamingTextRow,
   type ToolCallFacts,
   type ToolRow,

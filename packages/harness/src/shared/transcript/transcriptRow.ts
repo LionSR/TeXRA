@@ -172,20 +172,12 @@ export interface LatexdiffRow extends TranscriptRowBase {
   readonly runId?: string;
 }
 
-/** One labeled number from a statistics or context-management row. */
+/** One labeled number from a context-management row. */
 export interface StatItem {
   /** Stable key hosts use to pick an icon; never shown as-is. */
   readonly key: string;
   readonly label: string;
   readonly value: string;
-}
-
-export interface StatisticsRow extends TranscriptRowBase {
-  readonly kind: 'statistics';
-  /** `Statistics` — the panel heading, owned here so both hosts say the same
-   *  word. Mirrors {@link ContextManagementRow.label}. */
-  readonly label: string;
-  readonly items: readonly StatItem[];
 }
 
 export interface ContextManagementRow extends TranscriptRowBase {
@@ -234,7 +226,6 @@ export type TranscriptRow =
   | FileListRow
   | MissingOutputsRow
   | LatexdiffRow
-  | StatisticsRow
   | ContextManagementRow
   | ProgressStatusRow
   | CompactionActivityRow
@@ -260,7 +251,6 @@ const IMMEDIATELY_SETTLED_ROW_KINDS = new Set<TranscriptRowKind>([
   'fileList',
   'missingOutputs',
   'latexdiff',
-  'statistics',
   'contextManagement',
   'progressStatus',
 ]);
@@ -321,7 +311,6 @@ export function isSettledRow(
     case 'fileList':
     case 'missingOutputs':
     case 'latexdiff':
-    case 'statistics':
     case 'contextManagement':
     case 'progressStatus':
     case 'phase':
@@ -350,7 +339,6 @@ export function rowHeadline(row: TranscriptRow): string {
     case 'scratchpad':
       return 'Scratchpad';
     case 'webSearch':
-    case 'statistics':
     case 'contextManagement':
     case 'compactionActivity':
       return row.label;

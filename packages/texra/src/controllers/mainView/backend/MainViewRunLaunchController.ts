@@ -41,7 +41,7 @@ type LaunchRequest = Extract<HostRequest, { kind: 'launch' }>;
 
 type LaunchPreparation =
   | { valid: true; request: ValidatedRunRequest }
-  | { valid: false; message: string; docsCommand?: string };
+  | { valid: false; message: string; docsPage?: string };
 
 /** Turn the launcher's selections into a validated run request. */
 function buildLaunchRequest(
@@ -61,7 +61,7 @@ function buildLaunchRequest(
     return {
       valid: false,
       message: 'Choose an input file first.',
-      docsCommand: 'file-management',
+      docsPage: 'file-management',
     };
   }
 
@@ -215,8 +215,8 @@ export function prepareSurfaceLaunch(
     if (!preparation.valid) {
       return yield* new Rejected({
         reason: preparation.message,
-        ...(preparation.docsCommand && {
-          docsCommand: preparation.docsCommand,
+        ...(preparation.docsPage && {
+          docsPage: preparation.docsPage,
         }),
       });
     }

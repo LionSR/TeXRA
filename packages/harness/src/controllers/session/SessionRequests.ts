@@ -44,7 +44,6 @@ import {
 import type { LocalRuntimeState, RunAction, RunId } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
-  DatabaseNotOwner,
   DatabaseWriteFailed,
   GlobalDatabase,
   type AggregateState,
@@ -55,6 +54,7 @@ import {
   NotOwner,
   Rejected,
   Unavailable,
+  writeRefused,
   type RequestError,
 } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
@@ -178,13 +178,11 @@ function rename(
       },
     ])
     .pipe(
-      Effect.mapError((error): RequestError =>
-        error instanceof DatabaseNotOwner
-          ? new NotOwner({ runId: req.runId })
-          : new Unavailable({
-              runId: req.runId,
-              reason: 'The title could not be saved.',
-            }),
+      Effect.mapError(
+        writeRefused({
+          runId: req.runId,
+          reason: 'The title could not be saved.',
+        }),
       ),
       Effect.as(done),
     );
@@ -342,13 +340,11 @@ function decide(
     const recorded = yield* session
       .decideRequest(req.runId, req.requestId, req.decision)
       .pipe(
-        Effect.mapError((error): RequestError =>
-          error instanceof DatabaseNotOwner
-            ? new NotOwner({ runId: req.runId })
-            : new Unavailable({
-                runId: req.runId,
-                reason: 'The decision could not be recorded.',
-              }),
+        Effect.mapError(
+          writeRefused({
+            runId: req.runId,
+            reason: 'The decision could not be recorded.',
+          }),
         ),
       );
     if (!recorded) return yield* Effect.fail(settled(req.runId));
@@ -417,7 +413,7 @@ function deleteAdmittedRun(
           });
         }),
       );
-    return { kind: 'deleted' as const, result: 'deleted' as const };
+    return done;
   });
 }
 

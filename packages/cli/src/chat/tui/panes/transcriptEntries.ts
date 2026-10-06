@@ -134,7 +134,6 @@ const ROW_KIND_IS_WIDGET = {
   missingOutputs: true,
   progressStatus: true,
   scratchpad: true,
-  statistics: true,
   thinking: true,
   tool: true,
   webSearch: true,

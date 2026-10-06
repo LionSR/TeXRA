@@ -8,7 +8,7 @@ import { type CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import { updateCliModelAccess } from '@cli/runtime/modelAccessSelection';
 
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { codingPlanForApiProvider } from '@shared/schemas';
+import { CODING_PLAN_BY_API_PROVIDER } from '@shared/schemas';
 import {
   type SlashCommandOutput,
   type SlashCommandContext,
@@ -30,7 +30,7 @@ export const applyCliProviderApiKey = Effect.fn('applyCliProviderApiKey')(
     key: string,
   ) {
     yield* commitCliProviderApiKey(secrets, stores, provider, key);
-    const codingPlan = codingPlanForApiProvider(provider);
+    const codingPlan = CODING_PLAN_BY_API_PROVIDER.get(provider);
     if (!codingPlan) return undefined;
     if (!codingPlan.exclusiveCredential) {
       return `Tip: ${codingPlan.retryFallbackName} is the default; enable '${codingPlan.preferenceLabel}' in \`/login\` or \`/config\` to use ${codingPlan.displayName}.`;

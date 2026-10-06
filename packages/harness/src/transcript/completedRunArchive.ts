@@ -95,7 +95,6 @@ function conversationNodesForRow(
     case 'fileList':
     case 'missingOutputs':
     case 'latexdiff':
-    case 'statistics':
     case 'contextManagement':
     case 'progressStatus':
     case 'compactionActivity':

@@ -86,7 +86,6 @@ const ROW_GEOMETRY = {
   webSearch: DETAIL_GEOMETRY,
   missingOutputs: DETAIL_GEOMETRY,
   latexdiff: DETAIL_GEOMETRY,
-  statistics: DETAIL_GEOMETRY,
   contextManagement: DETAIL_GEOMETRY,
   progressStatus: DETAIL_GEOMETRY,
   error: {

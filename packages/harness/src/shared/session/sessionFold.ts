@@ -1088,9 +1088,7 @@ function foldDurable(
 ): boolean {
   const traceChanged =
     read !== 'listing' &&
-    (isTranscriptEvent(event) ||
-      phaseMoveOf(event) !== null ||
-      ['run.config', 'run.model'].includes(event.type))
+    (isTranscriptEvent(event) || phaseMoveOf(event) !== null)
       ? foldTraceEvent(view, event)
       : false;
   const listingType = listingKeyOf(event);

@@ -117,7 +117,7 @@
   "packages/harness/src/shared/schemas/toolResult.ts": 8,
   "packages/harness/src/shared/schemas/traceEvent.ts": 1,
   "packages/harness/src/shared/schemas/updateCheck.ts": 3,
-  "packages/harness/src/shared/schemas/usage.ts": 9,
+  "packages/harness/src/shared/schemas/usage.ts": 8,
   "packages/harness/src/shared/schemas/workPlan.ts": 1,
   "packages/harness/src/shared/schemas/workspaceAgents.ts": 3,
   "packages/harness/src/shared/session/database.ts": 7,
