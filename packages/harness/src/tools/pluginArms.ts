@@ -20,7 +20,12 @@ import {
 } from '@shared/plugins/documents';
 import { EXTERNAL_INQUIRY_THREAD_ARM } from '@shared/plugins/externalInquiry';
 import { GOAL_STATE_ARM } from '@shared/plugins/goal';
-import type { JsonValue, RunId } from '@shared/schemas';
+import type {
+  CommitOrdinal,
+  JsonValue,
+  RunId,
+  SessionEvent,
+} from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import type { z } from 'zod';
 
@@ -61,11 +66,11 @@ export const PLUGIN_ARMS: ReadonlyMap<string, PluginArm> = new Map(
 );
 
 /**
- * The app signals a run's facts announce, by `RunView.facts` key. A run that
+ * The app signals a run's facts announce, by `plugin/kind`. A run that
  * changes the workspace past the editor's own write path (files it
- * accepted) records it as a fact on its own rows, and every process
- * that folds the run announces it to its own listeners: a window hears a
- * `texra serve` task's change as it hears its own, from the rows.
+ * accepted) records it as a fact on its own rows, and every process that
+ * folds the run announces each such row to its own listeners: a window hears
+ * a `texra serve` task's change as it hears its own, from the rows.
  */
 const ANNOUNCED: Readonly<Record<string, (value: unknown) => void>> = {
   [DOCUMENTS_ACCEPTED_KEY]: (value) =>
@@ -75,33 +80,42 @@ const ANNOUNCED: Readonly<Record<string, (value: unknown) => void>> = {
 };
 
 /**
- * Announce each announced fact a run commits from the view this stream
- * starts at: what the first level holds is not new. Values are compared as
- * written, so a view rebuilt from the same rows announces nothing.
+ * Announce every announced fact row a run commits above `since`, once each
+ * and in commit order. The view only says which runs to look at: a run whose
+ * announced fact differs from the last level read, the first level included.
+ * The rows themselves are read (`rows`), since the view keeps each kind's
+ * latest value only and its tail coalesces wakes; a row at or below `since`
+ * (the history a reopened session replays) is never announced.
  */
 export function announceRunFacts(
   changes: Stream.Stream<SessionView>,
-): Effect.Effect<void> {
+  rows: (runId: RunId) => Effect.Effect<readonly SessionEvent[], Error>,
+  since: CommitOrdinal,
+): Effect.Effect<void, Error> {
   return Effect.suspend(() => {
-    let seen: ReadonlyMap<string, string> | undefined;
-    return Stream.runForEach(changes, (view) =>
-      Effect.sync(() => {
-        const now = new Map<string, string>();
-        const changed: (() => void)[] = [];
-        for (const run of view.runs.values()) {
-          for (const [key, announce] of Object.entries(ANNOUNCED)) {
-            const value = run.facts[key];
-            if (value === undefined) continue;
-            const id = `${run.id}/${key}`;
-            const written = JSON.stringify(value);
-            now.set(id, written);
-            if (seen !== undefined && seen.get(id) !== written)
-              changed.push(() => announce(value));
-          }
+    const seen = new Map<RunId, string>();
+    const announcedTo = new Map<RunId, CommitOrdinal>();
+    const announce = (runId: RunId) =>
+      Effect.map(rows(runId), (stored) => {
+        let last = announcedTo.get(runId) ?? since;
+        for (const row of stored) {
+          if (row.type !== 'plugin.fact' || row.commit <= last) continue;
+          ANNOUNCED[`${row.plugin}/${row.kind}`]?.(row.value);
+          last = row.commit;
         }
-        seen = now;
-        for (const announce of changed) announce();
-      }),
-    );
+        announcedTo.set(runId, last);
+      });
+    return Stream.runForEach(changes, (view) => {
+      const moved: RunId[] = [];
+      for (const run of view.runs.values()) {
+        const facts = Object.keys(ANNOUNCED).map((key) => run.facts[key]);
+        if (facts.every((fact) => fact === undefined)) continue;
+        const written = JSON.stringify(facts);
+        if (seen.get(run.id) === written) continue;
+        seen.set(run.id, written);
+        moved.push(run.id);
+      }
+      return Effect.forEach(moved, announce, { discard: true });
+    });
   });
 }

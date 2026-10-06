@@ -31,6 +31,7 @@ import {
 
 import type { SessionViewAccess } from '@agent/runtime/SessionHandle';
 import { aggregateId, type LocalRuntimeState } from '@shared/schemas';
+import { Database, type DatabaseReadFailed } from '@shared/session/database';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { fold } from '@shared/session/sessionFold';
 import {
@@ -130,8 +131,9 @@ export const makeSessionViewAccess = (
   closed: () => boolean,
 ): Effect.Effect<
   SessionViewAccess,
-  never,
+  DatabaseReadFailed,
   | Scope.Scope
+  | Database
   | SessionViewService
   | SessionInputs
   | TranscriptSubscriptions
@@ -144,7 +146,16 @@ export const makeSessionViewAccess = (
     const local = yield* LocalRuntimeSource;
     // What the session's runs announce, to this process's listeners, for
     // the session's life.
-    yield* announceRunFacts(changes).pipe(
+    // What the session's runs announce from here on, to this process's
+    // listeners, for the session's life: rows above the commit the store
+    // holds now, so a reopened session never replays history as news.
+    const database = yield* Database;
+    yield* announceRunFacts(
+      changes,
+      (runId) =>
+        database.readAggregate(aggregateId('run', runId), 1, ['plugin.fact']),
+      yield* database.currentCommit,
+    ).pipe(
       Effect.catchCause((cause) =>
         Effect.logWarning(
           `Session ${storage} stopped announcing its runs' facts`,
