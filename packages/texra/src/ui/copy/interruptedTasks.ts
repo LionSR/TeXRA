@@ -43,7 +43,7 @@ export function interruptedTasks(
     .sort((a, b) => b.createdAt - a.createdAt)
     .map((run) => ({
       runId: run.id,
-      title: run.description || run.label,
+      title: run.title,
       stoppedAt: run.lastTimestamp,
       agents: agentProgress(run),
       blocked: run.resumeBlocked,

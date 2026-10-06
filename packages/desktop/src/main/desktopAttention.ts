@@ -110,7 +110,7 @@ function finishedLine(
   if (previous === undefined || run.parentId !== null) return undefined;
   if (run.durableOutcome === null || previous.durableOutcome !== null)
     return undefined;
-  return `${run.description ?? run.label}: ${run.statusLabel}.`;
+  return `${run.title}: ${run.statusLabel}.`;
 }
 
 /**
@@ -149,7 +149,7 @@ export const followDesktopAttention = Effect.gen(function* () {
           const run = view.runs.get(runId);
           if (run === undefined || notices.some((n) => n.runId === runId))
             continue;
-          const line = `${run.description ?? run.label} is waiting for you.`;
+          const line = `${run.title} is waiting for you.`;
           notices.push({ runId, line });
         }
         for (const run of view.runs.values()) {

@@ -326,8 +326,7 @@ export class RunHeader extends LitElement {
     if (!this.renaming) return;
     this.renaming = false;
     const title = input.value.trim();
-    if (!save || title === '' || title === (run.description || run.label))
-      return;
+    if (!save || title === '' || title === run.title) return;
     this.dispatchEvent(
       SessionUiEvents.runtime({ kind: 'run.rename', runId: run.id, title }),
     );
@@ -338,7 +337,7 @@ export class RunHeader extends LitElement {
       return html`<input
         class="rename-input"
         aria-label="Task title"
-        .value=${run.description || run.label}
+        .value=${run.title}
         @keydown=${(event: KeyboardEvent) => {
           const input = event.target as HTMLInputElement;
           if (event.key === 'Enter') this.finishRename(run, input, true);
@@ -348,7 +347,7 @@ export class RunHeader extends LitElement {
           this.finishRename(run, event.target as HTMLInputElement, true)}
       />`;
     return html`<h1 id=${ELEMENT_IDS.ACTIVE_RUN_NAME} data-run=${run.id}>
-        ${run.description || run.label}
+        ${run.title}
       </h1>
       <wa-tooltip for=${ELEMENT_IDS.ACTIVE_RUN_NAME}>${run.label}</wa-tooltip>`;
   }
@@ -358,9 +357,7 @@ export class RunHeader extends LitElement {
     const source = run.forkedFrom;
     if (source === null) return nothing;
     const from = this.view?.runs.get(source.id);
-    const label = TASK_ACTIONS.forkedFrom(
-      from ? from.description || from.label : 'a deleted task',
-    );
+    const label = TASK_ACTIONS.forkedFrom(from ? from.title : 'a deleted task');
     return html`<button
       type="button"
       class="forked-from"
@@ -601,7 +598,7 @@ export class RunHeader extends LitElement {
           (fork) =>
             html`<wa-dropdown-item value=${`${OPEN_FORK}${fork.id}`}
               >${waIcon('code-branch', { slot: 'icon' })}${TASK_ACTIONS.openFork(
-                fork.description || fork.label,
+                fork.title,
               )}</wa-dropdown-item
             >`,
         )}

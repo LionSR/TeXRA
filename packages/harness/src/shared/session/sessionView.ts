@@ -96,6 +96,8 @@ const RunViewSchema = z.object({
   description: z.string().nullable(),
   /** Who wrote `description`: a user title outlives later model ones. */
   descriptionBy: z.enum(['model', 'user']).nullable(),
+  /** What every surface names the run by: `description`, else `label`. */
+  title: z.string(),
   model: z.string().nullable(),
   modelLabel: z.string().nullable(),
   /** Full, untruncated command that spawned a process run. */
@@ -270,9 +272,8 @@ export interface FollowUpHost {
  */
 export function acceptsFollowUp(run: RunView, host: FollowUpHost): boolean {
   if (run.followUpSupport === 'unsupported' || run.readOnly) return false;
-  if (run.followUpSupport === 'terminalBacked' && !host.terminalBacked) {
+  if (run.followUpSupport === 'terminalBacked' && !host.terminalBacked)
     return false;
-  }
   if (run.group === 'running' || run.group === 'waiting') return true;
   return run.status === 'ready' && run.lastTimestamp === null;
 }
@@ -291,9 +292,8 @@ export function requestAnswerability(
   payload: Pick<PermissionPayload, 'kind'>,
 ): RequestAnswerability {
   if (run.readOnly) return 'readOnly';
-  if (run.approval === 'own' || !requestParksItsCaller(payload)) {
+  if (run.approval === 'own' || !requestParksItsCaller(payload))
     return 'answerable';
-  }
   return 'resume';
 }
 

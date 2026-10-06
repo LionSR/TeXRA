@@ -1073,6 +1073,10 @@ describe('sessionFold', () => {
       title(next + 1, 'model', 'Summary'),
     ].reduce(fold, settled);
     expect(runView(renamed, CHILD).description).toBe('Renamed');
+    expect(runView(renamed, CHILD).title).toBe('Renamed');
+    // An empty title names the run by its label, never by ''.
+    const blank = fold(renamed, title(next + 2, 'user', ''));
+    expect(runView(blank, CHILD).title).toBe(runView(blank, CHILD).label);
   });
 
   it('mints a run from run.start alone', () => {
