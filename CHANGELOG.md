@@ -806,7 +806,8 @@ show` print the same notice, and the new `texra agents customize`,
   limit.** The background service runs every project's tasks, but each
   project waited out a provider's 429 on its own, so a second project kept
   hitting the limited key. A rate limit on one credential now pauses that
-  credential's calls in every project the process serves.
+  credential's calls in every project the process serves (keyed by
+  the API key, or a subscription's current token).
 - **The CLI's progress line no longer goes blank for a task with an empty
   description.** It shows the run's status instead.
 - **A task with an empty description no longer shows a blank title in

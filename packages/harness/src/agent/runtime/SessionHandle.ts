@@ -303,8 +303,8 @@ export class SessionHandle {
   private texraApprovalPolicy = TEXRA_APPROVAL_POLICY_DEFAULT;
   /**
    * Coordinates recovery probes for model routes shared by parallel runs.
-   * Built by the session owner in the session's scope, so its probe fibers
-   * and waiting calls end with the session rather than through this store.
+   * The process's one gate, built by its session family in the runtime's
+   * scope, so every project's runs on a credential share its cooling.
    */
   readonly modelRetries: ModelRetryGate;
   /** The history query store (`executions` `query`), closed with the session. */
