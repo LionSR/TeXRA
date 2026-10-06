@@ -9,7 +9,7 @@ import { CODEX_FILE_CHANGE_TOOL } from '@shared/schemas';
 import {
   buildCodexCommandToolLog,
   buildCodexFileChangeToolLog,
-} from '@texra/tools/codexShared';
+} from '@texra/tools/agentCli/codexShared';
 
 describe('buildCodexFileChangeToolLog', () => {
   it('deduplicates repeated file-change entries', () => {

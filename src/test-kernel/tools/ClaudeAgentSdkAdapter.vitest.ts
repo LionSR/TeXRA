@@ -7,8 +7,8 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import type { AgentEvent, AgentTrace } from '@agent/trace';
 import { noopTrace } from '@test/support/noopTrace';
-import { ClaudeBackgroundTaskTracker } from '@texra/tools/claudeAgentBackgroundTasks';
-import { claudeResultUsage } from '@texra/tools/claudeAgentShared';
+import { ClaudeBackgroundTaskTracker } from '@texra/tools/agentCli/claudeAgentBackgroundTasks';
+import { claudeResultUsage } from '@texra/tools/agentCli/claudeAgentShared';
 
 function fakeTrace(): {
   trace: AgentTrace;

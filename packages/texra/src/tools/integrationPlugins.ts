@@ -14,10 +14,10 @@ import {
   claudeAgentSessionsLayer,
   CodexThreads,
   codexThreadsLayer,
-} from '@texra/tools/agentCliSessionStores';
-import { ClaudeAgentTool } from '@texra/tools/claudeAgent';
-import { CLAUDE_AGENT_NAME } from '@texra/tools/claudeAgentShared';
-import { CodexTool } from '@texra/tools/codex';
+} from '@texra/tools/agentCli/agentCliSessionStores';
+import { ClaudeAgentTool } from '@texra/tools/agentCli/claudeAgent';
+import { CLAUDE_AGENT_NAME } from '@texra/tools/agentCli/claudeAgentShared';
+import { CodexTool } from '@texra/tools/agentCli/codex';
 import { GitHubSubscriptionTool } from '@texra/tools/github/githubSubscriptionTool';
 import { GitHubSubscriptions } from '@texra/tools/github/subscriptionBindings';
 import { gitHubSubscriptionsLayer } from '@texra/tools/github/subscriptionRegistries';

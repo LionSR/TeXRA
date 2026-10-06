@@ -9,7 +9,7 @@
  * (`bash`), a provider-namespaced name from a delegated sub-agent
  * (`claude:Edit`), and the MCP name TeXRA emits for a Codex MCP call
  * (`mcp:<server>/<tool>`, see `buildCodexMcpToolLog` in
- * `packages/texra/src/tools/codexShared.ts`). Normalization used to be host-local, so the
+ * `packages/texra/src/tools/agentCli/codexShared.ts`). Normalization used to be host-local, so the
  * progress view showed a namespaced name verbatim and missed every
  * name-keyed display rule the CLI applied. This browser-safe module is the
  * single source of truth for both halves: the canonical lookup key and the
@@ -34,7 +34,7 @@ export function isMcpToolName(toolName: string): boolean {
 
 /** Build the `mcp:<server>/<tool>` wire name for an MCP tool call. Single
  *  source of the `mcp:` contract so the producer (`buildCodexMcpToolLog` in
- *  `packages/texra/src/tools/codexShared.ts`) and the recognition/display side here can't
+ *  `packages/texra/src/tools/agentCli/codexShared.ts`) and the recognition/display side here can't
  *  drift: if the producer used its own literal, a drift would silently make
  *  `isMcpToolName` return false for every MCP call and names would render
  *  verbatim. */

@@ -7,7 +7,7 @@ import { describe, expect } from 'vitest';
 import type { RunId } from '@shared/schemas';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
 import { noPluginHold } from '@test/support/testPluginServices';
-import { AgentCliSessionRegistry } from '@texra/tools/agentCliSessionRegistry';
+import { AgentCliSessionRegistry } from '@texra/tools/agentCli/agentCliSessionRegistry';
 
 describe('AgentCliSessionRegistry', () => {
   it.effect(

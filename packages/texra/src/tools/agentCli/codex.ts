@@ -52,8 +52,8 @@ import {
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
-import { buildSyntheticToolUseConfig } from '@texra/tools/core/syntheticAgentConfig';
-import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
+import { buildSyntheticToolUseConfig } from '@texra/tools/agentCli/syntheticAgentConfig';
+import { buildAgentWorkspaceOptions } from '@texra/tools/agentCli/agentWorkspaceOptions';
 import { defineTool } from '@tools/core/define';
 import type { DetachedChildRunLaunch } from '@tools/delegation/detachedChildRun';
 import { readSettingFrom } from '@utils/config/platformSettings';

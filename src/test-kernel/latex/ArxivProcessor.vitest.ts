@@ -21,11 +21,11 @@ import * as tar from 'tar';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { ArxivProcessor } from '@latex/arxivProcessor';
 import { setLogSink } from '@logger/logSink';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { ArxivProcessor } from '@texra/tools/arxiv/arxivProcessor';
 
 const tempDirs = useTempDirs();
 const SOURCE_URL = 'https://arxiv.org/src/2404.12175';

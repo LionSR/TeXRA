@@ -5,7 +5,7 @@ import { z } from 'zod';
  * Codex tool-log identifiers and Zod schemas (pure data: no platform,
  * `vscode`, or `node:*` dependencies).
  *
- * Used both by the backend Codex tool-log builders (`@tools/codexShared`) and
+ * Used both by the backend Codex tool-log builders (`@texra/tools/agentCli/codexShared`) and
  * by the progress-view webview formatters, which key on the tool-name constants
  * and `.safeParse()` the schemas while rendering. They live in
  * `@shared/schemas` so the webview frontend never imports runtime values from

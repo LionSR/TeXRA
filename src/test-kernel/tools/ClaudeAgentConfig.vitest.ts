@@ -20,7 +20,7 @@ let spawnCalls: ChildProcess.StandardCommand[];
 let homedirMock: string;
 
 async function loadBuildClaudeAgentEnv(): Promise<
-  typeof import('@texra/tools/claudeAgentConfig').buildClaudeAgentEnv
+  typeof import('@texra/tools/agentCli/claudeAgentConfig').buildClaudeAgentEnv
 > {
   vi.doMock('node:os', async (importOriginal) => {
     const actual = await importOriginal<typeof import('node:os')>();
@@ -30,7 +30,8 @@ async function loadBuildClaudeAgentEnv(): Promise<
     };
   });
 
-  return (await import('@texra/tools/claudeAgentConfig')).buildClaudeAgentEnv;
+  return (await import('@texra/tools/agentCli/claudeAgentConfig'))
+    .buildClaudeAgentEnv;
 }
 
 /** The suite's secret store as the `Secrets` service the env builder reads. */

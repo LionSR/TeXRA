@@ -33,7 +33,7 @@ import {
   createCachedBinaryResolver,
   importForeignSdk,
   resolvePackageDir,
-} from '@texra/tools/support/externalBinaryUtils';
+} from '@texra/tools/agentCli/externalBinaryUtils';
 import { inheritedEnv } from '@utils/system/envFlags';
 import { readSettingUnlessOverridden } from '@utils/config/platformSettings';
 import { IS_WINDOWS } from '@utils/system/platformPaths';

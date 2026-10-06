@@ -200,13 +200,13 @@
       "name": "prepareToolEditApprovalPrompt"
     },
     {
-      "file": "packages/texra/src/tools/claudeAgent.ts",
+      "file": "packages/texra/src/tools/agentCli/claudeAgent.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "runStreamedTurn"
     },
     {
-      "file": "packages/texra/src/tools/codex.ts",
+      "file": "packages/texra/src/tools/agentCli/codex.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "runStreamedTurn"

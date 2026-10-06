@@ -11,13 +11,13 @@ import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { inputBox, quickPick } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
-import {
-  ArxivProcessor,
-  type ArxivDownloadDestination,
-} from '@latex/arxivProcessor';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
+import {
+  ArxivProcessor,
+  type ArxivDownloadDestination,
+} from '@texra/tools/arxiv/arxivProcessor';
 
 const CHANNEL = 'arXivCommands';
 

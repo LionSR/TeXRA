@@ -8,8 +8,8 @@ ports (see `overleafClone.ts`) rather than the other way around.
 ## The subsystem is Effect-native
 
 The subprocess-and-filesystem lane — `texcount.ts`, `latexdiff.ts` and
-`latexdiff/`, the three extractors, `overleafClone.ts`, `arxivProcessor.ts`
-and `LatexMediaManager.ts` — returns `Effect` programs, not Promises. Two
+`latexdiff/`, the three extractors, `overleafClone.ts` and
+`LatexMediaManager.ts` — returns `Effect` programs, not Promises. Two
 consequences worth knowing before you touch a file here:
 
 - **Nothing in this directory runs a fiber.** A caller runs the program at
@@ -81,9 +81,8 @@ The files have distinct roles:
   `TikzPictureManager.ts` extracts and renders standalone TikZ pictures;
   `acceptedFileTarget.ts` resolves where an
   accepted/edited file should land and commits the replacement.
-- **Remote sources** — `arxivIdentifier.ts` normalizes an arXiv ID out of a
-  URL or bare string; `arxivProcessor.ts` downloads and unpacks arXiv source
-  archives. `overleafProject.ts` is the pure, host-neutral parsing and
+- **Remote sources** — arXiv ID normalization and source download live
+  with the arXiv tools in `../tools/arxiv/`. `overleafProject.ts` is the pure, host-neutral parsing and
   credential/URL derivation for an Overleaf git remote; `overleafClone.ts` is
   the workflow built on top of it (precondition checks, clone execution,
   auth-failure handling — it clears the bad token and reports the failure,

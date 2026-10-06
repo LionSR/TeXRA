@@ -19,8 +19,8 @@ import type { RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { noPluginHold } from '@test/support/testPluginServices';
-import { ClaudeAgentSessions as ClaudeAgentSessionsService } from '@texra/tools/agentCliSessionStores';
-import { AgentCliSessionRegistry } from '@texra/tools/agentCliSessionRegistry';
+import { ClaudeAgentSessions as ClaudeAgentSessionsService } from '@texra/tools/agentCli/agentCliSessionStores';
+import { AgentCliSessionRegistry } from '@texra/tools/agentCli/agentCliSessionRegistry';
 
 const mocks = vi.hoisted(() => ({
   registerRun: vi.fn(),
@@ -86,17 +86,22 @@ vi.mock('@agent/runtime/childRunLoop', () => ({
   startChildRunLoop: mocks.startChildRunLoop,
 }));
 
-vi.mock('@texra/tools/claudeAgentConfig', () => ({
+vi.mock('@texra/tools/agentCli/claudeAgentConfig', () => ({
   buildClaudeAgentEnv: mocks.buildClaudeAgentEnv,
 }));
 
-vi.mock('@texra/tools/claudeAgentImport', async (importActual) => ({
-  ...(await importActual<typeof import('@texra/tools/claudeAgentImport')>()),
+vi.mock('@texra/tools/agentCli/claudeAgentImport', async (importActual) => ({
+  ...(await importActual<
+    typeof import('@texra/tools/agentCli/claudeAgentImport')
+  >()),
   importClaudeAgentSdk: () => Effect.succeed(mocks.query),
   findClaudeBinaryPath: mocks.findClaudeBinaryPath,
 }));
 
-import { ClaudeAgentTool, runStreamedTurn } from '@texra/tools/claudeAgent';
+import {
+  ClaudeAgentTool,
+  runStreamedTurn,
+} from '@texra/tools/agentCli/claudeAgent';
 import { createFakeAgentCliChildRun } from '../support/agentCliResumeTestUtils';
 
 const parentRunId = 'parent-run' as RunId;

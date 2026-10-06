@@ -25,9 +25,9 @@ import {
   CodexStateKey,
 } from '@texra/shared/settingsView/integrationSettings';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
-import { selectAgentCliModel } from '@texra/tools/agentCliModel';
-import { readClaudeCodeRun } from '@texra/tools/claudeAgentShared';
-import { CODEX_MODEL_RULE, codexRun } from '@texra/tools/codexConfig';
+import { selectAgentCliModel } from '@texra/tools/agentCli/agentCliModel';
+import { readClaudeCodeRun } from '@texra/tools/agentCli/claudeAgentShared';
+import { CODEX_MODEL_RULE, codexRun } from '@texra/tools/agentCli/codexConfig';
 
 import { scriptedSpawnerLayer } from '../support/childProcessTestLayer';
 import { makeFakeSettingsStores } from '../support/settingsStoresFake';

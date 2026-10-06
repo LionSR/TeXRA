@@ -18,11 +18,11 @@ import { withLogChannel } from '@logger/effectLog';
 import {
   importCodexClass,
   findCodexBinaryPath,
-} from '@texra/tools/codexImport';
+} from '@texra/tools/agentCli/codexImport';
 import {
   importClaudeAgentSdk,
   findClaudeBinaryPath,
-} from '@texra/tools/claudeAgentImport';
+} from '@texra/tools/agentCli/claudeAgentImport';
 import {
   getGitHubToken,
   GITHUB_TOKEN_STORAGE_KEY,

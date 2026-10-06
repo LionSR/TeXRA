@@ -30,7 +30,7 @@ import {
   binaryIfPresent,
   createCachedBinaryResolver,
   importForeignSdk,
-} from '@texra/tools/support/externalBinaryUtils';
+} from '@texra/tools/agentCli/externalBinaryUtils';
 import { readSettingUnlessOverridden } from '@utils/config/platformSettings';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import type { StateReadFailed } from '@texra-ai/harness';

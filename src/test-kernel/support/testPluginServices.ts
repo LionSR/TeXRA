@@ -10,7 +10,7 @@ import type { PluginContext } from '@platform/processRuntime';
 import {
   claudeAgentSessionsLayer,
   codexThreadsLayer,
-} from '@texra/tools/agentCliSessionStores';
+} from '@texra/tools/agentCli/agentCliSessionStores';
 import { GitHubSubscriptions } from '@texra/tools/github/subscriptionBindings';
 import { codeSandboxLayer } from '@tools/codemode/ScriptTool';
 import { PluginHold } from '@tools/toolTable';

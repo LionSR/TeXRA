@@ -11,7 +11,6 @@ import { Clock, Duration, Effect, Semaphore } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
 import { withLogChannel } from '@logger/effectLog';
 import { ToolError } from '@shared/schemas';
 import { requireNonEmptyString } from '@tools/utils';
@@ -20,6 +19,7 @@ import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { pluralize } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { normaliseArxivIdentifier } from './arxivIdentifier';
 
 type Category = Parameters<typeof catQuery>[0];
 

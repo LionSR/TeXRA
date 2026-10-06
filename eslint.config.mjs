@@ -1114,7 +1114,7 @@ export default tseslint.config(
     const entries = EFFECT_RUN_ENTRIES;
     const residents = [
       'packages/harness/src/agent/runtime/childRunLoop.ts',
-      'packages/texra/src/tools/claudeAgent.ts',
+      'packages/texra/src/tools/agentCli/claudeAgent.ts',
     ];
     const iconFile = 'packages/texra/src/ui/wa/webAwesomeIcons.ts';
     const block = (files, ignores, ...selectors) => ({
