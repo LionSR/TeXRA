@@ -22,9 +22,9 @@ import {
   type StepToolInputs,
 } from '@agent/runtime/agentToolResolution';
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
-import { RunHistory } from '@shared/session/runHistory';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
+import { RunHistory } from '@shared/session/runHistory';
 import {
   AGENT_SOURCE,
   DeclinableUsageRouteSchema,

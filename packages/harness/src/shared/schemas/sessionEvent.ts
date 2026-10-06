@@ -320,8 +320,7 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   /** Every activation of a run, the first launch and each resume (PRD 6,
    *  item 8); `run.start` is the creation fact and happens once. */
   durable('run.activate', {}),
-  /** What the run runs with, written when it changes: the newest row's model
-   *  is the one the run is on; `binding` once its loop binds it. */
+  /** What the run runs with: the newest row's model and `binding` hold. */
   durable('run.config', {
     config: RunRecordFieldsSchema,
     binding: RunBindingSchema.nullish(),

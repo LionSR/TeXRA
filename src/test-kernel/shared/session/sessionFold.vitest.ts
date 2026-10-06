@@ -1909,6 +1909,36 @@ describe('foldRunState', () => {
     expect(reasonOf(run())).toBe(reason);
   });
 
+  // A `submit_output` a script issued is the run's structured output, read
+  // off the same settlement as a direct call's: under codemode the model
+  // submits from inside its script, and losing it would leave the run with
+  // no output and a latch that refuses a second submission.
+  it('folds a structured output a script submitted', () => {
+    const state = stateOf(
+      through(
+        5,
+        {
+          type: 'script.call',
+          payload: {
+            scriptCallId: 'call-a',
+            seq: 0,
+            callId: 'call-a/0',
+            toolName: 'submit_output',
+            input: {},
+            replay: 'unsafe',
+            logId: 'log-s0',
+            stageId: 'stage-s',
+            phase: null,
+          },
+        },
+        settlement('call-a/0', {
+          result: { status: 'executed', output: 'ok', value: { a: 1 } },
+        }),
+      ),
+    );
+    expect(state?.structured).toEqual({ value: { a: 1 } });
+  });
+
   it('keeps the private run history types out of the listing and off the transport, and lists run.position', () => {
     const runHistoryTypes = [
       'model.message',
