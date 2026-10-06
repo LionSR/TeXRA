@@ -145,9 +145,7 @@ function goldenTurn(
     );
   }
   if (system.includes('GOLDEN-CHILD')) {
-    // The delegated child looks its parent up and messages it while the
-    // parent waits on the delegation: refused, since the headless parent
-    // ends after its turn and would never read it.
+    // Messaging its waiting headless parent is refused (it never reads).
     if (!said.includes('Answer the delegated child task'))
       return Effect.succeed(text('Child result.'));
     if (results.length === 0)
@@ -176,11 +174,9 @@ function goldenTurn(
     );
   }
   // The interactive chat: a plan run as a goal, the goal completed, replies
-  // after a `/model` switch and after a `/compact`, told apart by what they
-  // say (the compacted history has no tool results).
+  // after a `/model` switch and a `/compact`, told apart by what they say.
   if (system.includes('GOLDEN-CHAT')) {
-    // The last turn launches a Codex child, then is held until the user's
-    // stop detaches it; the message typed behind stays queued on the run.
+    // A Codex child held until a stop; what is typed behind stays queued.
     if (said.includes('Hold this turn.'))
       return results.length === 0
         ? Effect.succeed([call('codex', { prompt: 'Answer the Codex task.' })])
@@ -207,8 +203,8 @@ function goldenTurn(
     );
   }
   if (system.includes('GOLDEN-SCRIPT')) {
-    // The service's task: a shell command sent to the background, which
-    // waits for its release file; its result wakes the task once more.
+    // A background command waiting for its release file; its result wakes
+    // the task once more.
     if (said.includes('Run in the background.')) {
       const last = turn.messages.at(-1);
       if (last?.role === 'tool')
@@ -237,9 +233,8 @@ function goldenTurn(
         : text('Script done.'),
     );
   }
-  // The fork and its handoff: each reply names the user messages its view
-  // held, each by its last line (a headless run's first message ends with
-  // its instruction), so the store records what the edit left.
+  // The fork and its handoff: each reply names its view's user messages by
+  // their last lines, so the store records what the edit left.
   if (system.includes('GOLDEN-FORK')) {
     const users = turn.messages.flatMap((message) =>
       message.role === 'user'
@@ -273,10 +268,9 @@ function goldenTurn(
           ]
         : text('Noted.'),
     );
-  // The crash-point conformance run: two calls, a script, the echo's text.
-  // A step a crash cut off before it started is asked for again, as a model
-  // retries; a view an edit replaced (handoff, compaction, a fork of either)
-  // no longer holds the task, and the echo shows the view the edit left.
+  // The crash-point run: two calls, a script, the echo's text. A step a crash
+  // cut off unstarted is asked for again; a view an edit replaced no longer
+  // holds the task, and the echo shows the view the edit left.
   if (system.includes('GOLDEN-CRASH')) {
     const done = results.filter(
       (message) =>
@@ -366,12 +360,15 @@ export const shouldUseInternalValidationModel = Effect.fn(
 )(function* (): Effect.fn.Return<boolean> {
   if (process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL !== '1')
     return false;
+
   const envKey = process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_ENV ?? '';
   const flagEnvKey =
     process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_ENV ?? '';
   const expectedFlagContent =
     process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_CONTENT ?? '';
+
   if ((yield* envVar(envKey)) !== '1') return false;
+
   const flagPath = yield* envVar(flagEnvKey);
   if (!flagPath || !path.isAbsolute(flagPath)) {
     return yield* Effect.die(
@@ -380,6 +377,7 @@ export const shouldUseInternalValidationModel = Effect.fn(
       ),
     );
   }
+
   // An unreadable flag file dies with the filesystem error, which names it.
   const flagContent = yield* Effect.sync(() => readFileSync(flagPath, 'utf8'));
   if (flagContent.trim() !== expectedFlagContent) {
@@ -478,8 +476,7 @@ export function validationModel(config: ModelConfig): {
       );
     }
     const calls = content.some((part) => part.kind === 'local-call');
-    // The echo counts its input as a provider would, about four characters
-    // a token, so the compaction threshold can be crossed.
+    // About four characters a token, so compaction can be crossed.
     const inputTokens = echo
       ? Math.ceil(JSON.stringify(turn.messages).length / 4)
       : 1;
@@ -521,8 +518,7 @@ export function validationModel(config: ModelConfig): {
           : { promptCacheKey: request.cacheKey }),
       },
     });
-  // The scenario switches are read per turn, so a validation run can flip
-  // them between turns.
+  // Read per turn, so a validation run can flip them between turns.
   const streamTurn: Model['streamTurn'] = (turn) =>
     Stream.fromEffect(
       Effect.gen(function* () {
