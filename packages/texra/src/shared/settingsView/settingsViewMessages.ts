@@ -57,6 +57,7 @@ import {
   PluginActionMessageSchema,
   PluginListItemSchema,
 } from './pluginMessages';
+import type { ModelProvider } from 'llm-zoo';
 
 // Re-export what settings consumers need from the view-message modules, so
 // they keep one import site; the schemas themselves stay unexported here.
@@ -227,6 +228,36 @@ const UpdateAgentSelectionMessageSchema = z.object({
 });
 
 // ==================== Model selection data schema ====================
+
+/**
+ * The model sources the Models tab groups its rows under, in display order.
+ * A model whose source is outside this list never renders as a row, so the
+ * controller admits only these. Every llm-zoo provider but `others` is a
+ * source (checked below, so a provider a new llm-zoo release adds fails to
+ * compile until it is placed here), plus the Kimi Code subscription.
+ */
+const MODEL_SOURCES = [
+  'openai',
+  'anthropic',
+  'google',
+  'xai',
+  'deepseek',
+  'moonshot',
+  'dashscope',
+  'minimax',
+  'glm',
+  'meta',
+  'kimiCode',
+  'copilot',
+] as const;
+type _EveryProviderIsASource = AssertNever<
+  Exclude<`${ModelProvider}`, (typeof MODEL_SOURCES)[number] | 'others'>
+>;
+type AssertNever<T extends never> = T;
+
+/** {@link MODEL_SOURCES}, as the picker reads it. */
+export const MODEL_SOURCE_ORDER: readonly string[] =
+  Object.freeze(MODEL_SOURCES);
 
 const ModelSelectionItemSchema = z.object({
   name: z.string(),

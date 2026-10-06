@@ -30,7 +30,6 @@ import {
   xaiLoginWithDeviceCode,
   xaiLoginWithLoopback,
 } from '@texra-ai/llm/node';
-import { codexAccountLabel, xaiAccountLabel } from '@texra-ai/llm';
 import {
   Secrets,
   type PlatformSecrets,
@@ -42,9 +41,11 @@ import {
   setPreferSubscription,
 } from '@model/subscriptionAccess';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type {
-  SUBSCRIPTION_AUTH_PROVIDERS,
-  SubscriptionAuthStatus,
+import {
+  codexAccountLabel,
+  type SUBSCRIPTION_AUTH_PROVIDERS,
+  type SubscriptionAuthStatus,
+  xaiAccountLabel,
 } from '@shared/model/subscriptionAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { HttpClient } from 'effect/http';

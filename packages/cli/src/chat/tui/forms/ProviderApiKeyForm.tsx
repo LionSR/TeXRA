@@ -5,10 +5,10 @@ import {
   API_KEY_PROVIDER_IDS,
   type ApiKeyStatus,
   type ApiKeyProviderId,
-  codingPlanForApiProvider,
   providerDisplayName,
 } from '@texra-ai/llm';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import { codingPlanForApiProvider } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { ApiKeyEntryForm } from './ApiKeyEntryForm';

@@ -7,8 +7,11 @@
  * which stay wire identifiers and never reach the screen.
  */
 
-import { codingPlanForUsageRoute } from '@texra-ai/llm';
-import type { TokenUsageStats, UsageRoute } from '@shared/schemas';
+import {
+  codingPlanForUsageRoute,
+  type TokenUsageStats,
+  type UsageRoute,
+} from '@shared/schemas';
 import { assertNever } from '@utils/core';
 import { formatCostUsd } from '@utils/text/stringUtils';
 

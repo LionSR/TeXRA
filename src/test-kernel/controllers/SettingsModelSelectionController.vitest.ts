@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 import { MODEL_CONFIGS, lookup } from 'llm-zoo';
 
-import { buildBaseModelOption } from '@texra-ai/llm';
 import {
   getEnabledModels,
   type ModelOptionStores,
@@ -36,7 +35,7 @@ const modelOptions = (models: readonly string[]): ModelOptionData[] =>
     .map((model) => {
       const config = lookup(model);
       return config
-        ? buildBaseModelOption(model, config)
+        ? { value: model, label: config.label, provider: config.provider }
         : { value: model, label: model };
     })
     .map((option) => ({

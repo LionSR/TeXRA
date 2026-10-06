@@ -11,9 +11,6 @@ import {
 import {
   acceptedEfforts,
   defaultReasoningLevel,
-  isExpensiveModel,
-  isFastFirstResponseModel,
-  MODEL_SOURCE_ORDER,
   resolveModelSource,
 } from '@texra-ai/llm';
 import {
@@ -37,10 +34,15 @@ import {
 } from '@model/reasoningLevel';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { type ModelOptionData } from '@shared/schemas';
+import {
+  isExpensiveModel,
+  isFastFirstResponseModel,
+  type ModelOptionData,
+} from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   type CopilotRouteInfo,
+  MODEL_SOURCE_ORDER,
   type ModelSelectionItem,
   type UpdateModelSelectionMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
@@ -210,7 +212,8 @@ export class SettingsModelSelectionController<R = never> {
         // resolved source is outside that order can never render as a row.
         // Admitting it anyway would leak it into the serialized `models` payload
         // and — once enabled — into the helper-model dropdown, which does not
-        // group. Registry-derived, so a new provider needs no edit here.
+        // group. A provider a new llm-zoo release adds fails to compile until
+        // `MODEL_SOURCE_ORDER` places it.
         .filter((config) =>
           MODEL_SELECTION_SOURCES.has(resolveModelSource(config)),
         )

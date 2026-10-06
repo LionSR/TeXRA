@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { API_KEY_PROVIDER_IDS, PROVIDER_DISPLAY_NAMES } from '@texra-ai/llm';
+import { API_KEY_PROVIDER_IDS } from '@texra-ai/llm';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   readSetting,
@@ -10,8 +10,8 @@ import {
   type ProviderKeyStatus,
   type UpdateProfileMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
+import { getProviderDisplayName } from '@texra/model/providerPresentation';
 import {
-  getProviderDisplayName,
   getProviderEndpoint,
   supportsCustomEndpoint,
 } from '@utils/config/providerConfig';
@@ -50,11 +50,7 @@ export class SettingsProfileController {
   });
 
   getProviderDisplayName(provider: string) {
-    return getProviderDisplayName(
-      this.deps.stores,
-      provider,
-      PROVIDER_DISPLAY_NAMES[provider] ?? provider,
-    );
+    return getProviderDisplayName(this.deps.stores, provider);
   }
 
   /**

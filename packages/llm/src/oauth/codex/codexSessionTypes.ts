@@ -28,21 +28,6 @@ export const CodexSessionSchema = SubscriptionSessionBaseSchema.extend({
 });
 export type CodexSession = z.infer<typeof CodexSessionSchema>;
 
-/**
- * How a ChatGPT account is named in user-facing text, from a session, a
- * coordinator status, or the settings wire payload — all of which carry the
- * same optional `email`/`accountId` pair. The email is the identity a user
- * recognizes; the account id is the only other identifier the token carries.
- */
-export function codexAccountLabel(
-  account:
-    | { readonly email?: string | null; readonly accountId?: string | null }
-    | null
-    | undefined,
-): string {
-  return account?.email ?? account?.accountId ?? 'your ChatGPT account';
-}
-
 /** Device-code "usercode" response. Field name varies (`user_code`/`usercode`). */
 export const CodexDeviceUserCodeSchema = z.object({
   device_auth_id: z.string().min(1),

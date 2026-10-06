@@ -11,7 +11,7 @@
  */
 
 // Local imports
-import { modelFileName } from '@texra-ai/llm';
+import { modelConfig } from '@texra-ai/llm';
 import { agentFileName } from '@shared/schemas';
 
 /** The fixed basename of every workflow output file (no extension). */
@@ -78,4 +78,13 @@ export function workflowOutputCopyStem(params: {
   round: number;
 }): string {
   return `${params.base}_${getAgentFirstNameChunk(params.agent)}_r${params.round}_${modelFileName(params.model)}`;
+}
+
+/**
+ * A model string as it may appear in a file or folder name: the model's API
+ * id without its provider or selection suffix (`gpt-6.1-sol`), or the string
+ * with path and shell-unsafe characters replaced when it names no model.
+ */
+export function modelFileName(id: string): string {
+  return (modelConfig(id)?.id ?? id).replaceAll(/[\\/:*?"<>|@+\s]/g, '-');
 }

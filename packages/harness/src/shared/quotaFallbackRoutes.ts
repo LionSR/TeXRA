@@ -1,7 +1,9 @@
-import { CODING_PLAN_SUBSCRIPTIONS } from '@texra-ai/llm';
 import { CHATGPT_AUTH, GROK_AUTH } from '@shared/model/accountAuth';
+import {
+  CODING_PLAN_SUBSCRIPTIONS,
+  type DeclinableUsageRoute,
+} from './schemas/usage';
 import type { ExhaustionReason } from './schemas/errors';
-import type { DeclinableUsageRoute } from './schemas/usage';
 
 /**
  * One switchable quota-fallback route: when its usage quota is exhausted, a

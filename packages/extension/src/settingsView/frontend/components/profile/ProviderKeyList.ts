@@ -9,10 +9,10 @@ import {
 } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
-import { codingPlanForApiProvider } from '@texra-ai/llm';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { providerEndpointKey } from '@shared/state/providerSettings';
 import type { SubscriptionUsageSnapshots } from '@shared/schemas';
+import { codingPlanForApiProvider } from '@shared/schemas';
 import { postMessage } from '@texra/shared/hostBridge';
 import { TickerController } from '@texra/shared/litControllers/TickerController';
 import type {

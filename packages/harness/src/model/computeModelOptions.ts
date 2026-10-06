@@ -1,10 +1,14 @@
 import { Data, Effect, Result } from 'effect';
-import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
+import {
+  hint,
+  MODEL_CONFIGS,
+  type ModelConfig,
+  type ReasoningEffort,
+} from 'llm-zoo';
 import { z } from 'zod';
 
 import {
   type ApiKeyProviderId,
-  buildBaseModelOption,
   decideModelRoute,
   hasUsableApiKey,
   type HostRouteFacts,
@@ -23,6 +27,10 @@ import type { PlatformSecrets } from '@platform/secrets';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
+  EXPENSIVE_MODEL_HINT,
+  FAST_FIRST_RESPONSE_HINT,
+  isExpensiveModel,
+  isFastFirstResponseModel,
   MODEL_AVAILABILITY_STATUS,
   type ModelAvailabilityKind,
   type ModelOptionData,
@@ -549,6 +557,74 @@ export function setModelEnabled(input: {
       Effect.map(enabledModelsOf),
       Effect.ensuring(Effect.suspend(() => reportInvalid(invalid))),
     );
+}
+
+/** The fields of a model's picker row the registry alone decides. */
+interface BaseModelOption {
+  readonly value: string;
+  readonly label: string;
+  readonly provider: string;
+  readonly context: string | undefined;
+  readonly cost: string | undefined;
+  readonly hint: string;
+}
+
+const MILLION = 1_000_000;
+const THOUSAND = 1_000;
+
+/** Format a context window for display. */
+function formatContext(context: number | undefined): string | undefined {
+  if (context === undefined) return undefined;
+  if (context >= MILLION) return `${(context / MILLION).toFixed(1)}M`;
+  if (context >= THOUSAND) return `${Math.round(context / THOUSAND)}K`;
+  return context.toString();
+}
+
+/** Format per-million input and output prices for display. */
+function formatCost(
+  inputPrice: number | undefined,
+  outputPrice: number | undefined,
+): string | undefined {
+  if (inputPrice === undefined || outputPrice === undefined) return undefined;
+  return `$${inputPrice.toFixed(3)}/$${outputPrice.toFixed(3)}`;
+}
+
+function prefixHint(prefix: string, base: string): string {
+  return base ? `${prefix} | ${base}` : prefix;
+}
+
+/** The model tooltip: the registry's hint behind a pricing hint, if any. */
+function buildModelHint(config: ModelConfig): string {
+  const base = hint(config);
+  if (isExpensiveModel(config.outputPrice)) {
+    return prefixHint(EXPENSIVE_MODEL_HINT, base);
+  }
+  if (isFastFirstResponseModel(config.inputPrice)) {
+    return prefixHint(FAST_FIRST_RESPONSE_HINT, base);
+  }
+  return base;
+}
+
+/**
+ * Project a model's registry config to the picker-row fields every view
+ * shares: label, source, context window, prices and tooltip. The tooltip
+ * reads `hintConfig`, the config as published, while the window and prices
+ * read the config the model runs with on its route.
+ */
+function buildBaseModelOption(
+  model: string,
+  config: ModelConfig,
+  hintConfig: ModelConfig = config,
+  source: string = resolveModelSource(config),
+): BaseModelOption {
+  return {
+    value: model,
+    label: config.label,
+    provider: source,
+    context: formatContext(config.contextWindow),
+    cost: formatCost(config.inputPrice, config.outputPrice),
+    hint: buildModelHint(hintConfig),
+  };
 }
 
 /**

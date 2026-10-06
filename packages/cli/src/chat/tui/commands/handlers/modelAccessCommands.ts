@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { type ApiKeyProviderId, codingPlanForApiProvider } from '@texra-ai/llm';
+import { type ApiKeyProviderId } from '@texra-ai/llm';
 import { loadCliDetailedAccountStatusLines } from '@cli/runtime/apiStatus';
 import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
@@ -8,6 +8,7 @@ import { type CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import { updateCliModelAccess } from '@cli/runtime/modelAccessSelection';
 
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { codingPlanForApiProvider } from '@shared/schemas';
 import {
   type SlashCommandOutput,
   type SlashCommandContext,

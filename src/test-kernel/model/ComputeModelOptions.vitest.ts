@@ -17,6 +17,7 @@ import {
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
 import { LanguageModel } from '@platform/languageModel';
+import { FAST_FIRST_RESPONSE_HINT } from '@shared/schemas';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
@@ -32,7 +33,6 @@ import {
   installPlatform,
   setupPlatform,
 } from '@test/support/setupPlatform';
-import { FAST_FIRST_RESPONSE_HINT } from '../../../packages/llm/src/providers/providers.js';
 import { CODEX_SESSION_SECRET_KEY } from '../../../packages/llm/src/oauth/codex/codexConstants.js';
 
 const GPT55 = 'openai/gpt-5.5-2026-04-23';

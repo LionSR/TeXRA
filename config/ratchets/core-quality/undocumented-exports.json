@@ -191,8 +191,7 @@
   "packages/llm/src/oauth/subscriptionSessionSchema.ts": 1,
   "packages/llm/src/oauth/xai/xaiConstants.ts": 2,
   "packages/llm/src/oauth/xai/xaiSessionPolicy.ts": 1,
-  "packages/llm/src/oauth/xai/xaiSessionTypes.ts": 2,
+  "packages/llm/src/oauth/xai/xaiSessionTypes.ts": 1,
   "packages/llm/src/protocol.ts": 6,
-  "packages/llm/src/providers/codingPlanSubscriptions.ts": 2,
   "packages/llm/src/turn.ts": 15
 }
