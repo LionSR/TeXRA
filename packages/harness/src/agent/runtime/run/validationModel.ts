@@ -55,36 +55,21 @@ const results = await Promise.allSettled([
 return { solutions: results.map((result) => result.status === 'fulfilled' ? result.value.structured : null) }`;
 
 /** The golden store's script: finds the reading tool, then two reads and a
- *  command (a barrier, held until `golden-script.release`) in one
- *  `Promise.all`; the generator kills the process while the command runs. */
+ *  command in one `Promise.all`. */
 const GOLDEN_SCRIPT_SOURCE = `phase('Gather')
 const [found] = await searchTools('read a file', { limit: 1 })
 const declaration = await describeTool(found.name)
-const [notes, shell, gate] = await Promise.all([
+const [notes, shell] = await Promise.all([
   tools[found.name]({ path: 'notes.tex' }),
-  tools.bash({
-    command: 'touch golden-script.started; until [ -f golden-script.release ]; do sleep 0.05; done; echo released',
-    description: 'Wait for the release file',
-  }),
-  tools[found.name]({ path: 'golden-script.release' }),
+  tools.bash({ command: 'echo gathered', description: 'Say gathered' }),
 ])
-console.log('gathered')
-return { found: found.name, documented: declaration.includes('path: string'), notes: notes.output, shell: shell.output, gate: gate.summary }`;
+return { found: found.name, documented: declaration.includes('path: string'), notes: notes.output, shell: shell.output }`;
 
-/** The golden store's fan-out: two `agent()` calls under a child-run budget
- *  of 1; the second is held until `golden-fanout.release` and killed. */
-const GOLDEN_FANOUT_SOURCE = `phase('Fan out')
-const [a, b] = await Promise.all([
-  agent('Fan-out child A: answer at once.', { agentName: 'golden_child', label: 'A' }),
-  agent('Fan-out child B: answer once released.', { agentName: 'golden_child', label: 'B' }),
-])
-return { a: a.response, b: b.response }`;
-
-/** The golden store's background script: one `agent()` call, held until
- *  `golden-background.release` and killed after the parent's turn ended. */
-const GOLDEN_BACKGROUND_SOURCE = `phase('Background')
-const answer = await agent('Background child: answer once released.', { agentName: 'golden_child', label: 'Child' })
-return { answer: answer.response }`;
+/** The crash suite's background script: one awaited `agent()` call, whose
+ *  child the background script run owns. */
+const GOLDEN_BACKGROUND_SOURCE = `phase('Deliver')
+const child = await agent('Background child: answer.', { agentName: 'golden_child', label: 'Child' })
+return { delivered: child.response }`;
 
 /** The crash-point conformance run's script: a read and a command in one
  *  `Promise.all`, then an awaited `agent()` call, whose child the call owns
@@ -122,12 +107,18 @@ function goldenTurn(
   // The golden chat's `/compact`: its summary replaces the history.
   if (system === COMPACTION_SYSTEM_PROMPT)
     return Effect.succeed(text('The golden chat so far.'));
+  // The golden parent's session label: its `run.description`.
+  if (
+    system.startsWith('Generate a short TeXRA session label') &&
+    said.includes('<agent>golden_parent</agent>')
+  )
+    return Effect.succeed(text('Working through the golden parent task'));
+  // A model call held until its release file appears (the service checks).
   if (system.includes('GOLDEN-PARK'))
     return gate('golden-park.release').pipe(
       Effect.as(text('Parked run released.')),
     );
-  // A command that waits for its approval: the generator kills the process
-  // while it waits, and the conformance suite resumes and approves it.
+  // A command that waits for its approval (the service checks).
   if (system.includes('GOLDEN-APPROVAL'))
     return Effect.succeed(
       results.length === 0
@@ -142,16 +133,6 @@ function goldenTurn(
         : text('The diagnostics read came back.'),
     );
   if (system.includes('GOLDEN-CHILD')) {
-    if (said.includes('Background child'))
-      return gate('golden-background.release').pipe(
-        Effect.as(text('Background child answer.')),
-      );
-    if (said.includes('Fan-out child B'))
-      return gate('golden-fanout.release').pipe(
-        Effect.as(text('Fan-out child B answer.')),
-      );
-    if (said.includes('Fan-out child A'))
-      return Effect.succeed(text('Fan-out child A answer.'));
     // The delegated child looks its parent up and messages it while the
     // parent waits on the delegation: refused, since the headless parent
     // ends after its turn and would never read it.
@@ -226,38 +207,6 @@ function goldenTurn(
           ]
         : text('Script done.'),
     );
-  // The fan-out script, then the same script again: its calls are reused.
-  if (system.includes('GOLDEN-FANOUT')) {
-    const step = [
-      () => call('script', { title: 'Fan out', code: GOLDEN_FANOUT_SOURCE }),
-      () =>
-        call('script', { title: 'Fan out again', code: GOLDEN_FANOUT_SOURCE }),
-    ][results.length];
-    return Effect.succeed(
-      step === undefined ? text('Fan-out done.') : [step()],
-    );
-  }
-  // A script sent to the background, then the turn ends: its result comes
-  // back as a follow-up, which the next turn acknowledges. The reply that
-  // ends the launching turn waits for `golden-background-reply.release`:
-  // the parent and its script run are two fibers of one process, so the
-  // generator releases it once the script's child waits at its model call,
-  // and the parent's last rows commit after the script's, not raced.
-  if (system.includes('GOLDEN-BACKGROUND')) {
-    if (results.length === 0)
-      return Effect.succeed([
-        call('script', {
-          title: 'Background',
-          code: GOLDEN_BACKGROUND_SOURCE,
-          run_in_background: true,
-        }),
-      ]);
-    if (said.includes('script-result'))
-      return Effect.succeed(text('Background script reported.'));
-    return gate('golden-background-reply.release').pipe(
-      Effect.as(text('Background script sent.')),
-    );
-  }
   // The fork and its handoff: each reply names the user messages its view
   // held, each by its last line (a headless run's first message ends with
   // its instruction), so the store records what the edit left.
@@ -283,7 +232,7 @@ function goldenTurn(
             }),
             call('script', {
               title: 'Deliver',
-              code: "phase('Deliver')\nreturn { delivered: true }",
+              code: GOLDEN_BACKGROUND_SOURCE,
               run_in_background: true,
             }),
             call('bash', {

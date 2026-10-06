@@ -1,5 +1,5 @@
 name: golden_script
-description: The golden store's script run, killed mid-script after one call settled.
+description: The golden store's script run, which finds its read tool and gathers in one script.
 tools:
   - read_file
   - bash

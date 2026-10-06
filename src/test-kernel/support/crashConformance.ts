@@ -882,7 +882,9 @@ export function crashConformanceSuite(plugins: string): void {
      * command's last turn each settle in the batch that ends them, and a
      * resumed parent relays every settled result it has not read. Every
      * crash point after the first settlement resumes the parent until it
-     * has read each result its children settled, once.
+     * has read each result its children settled, once. The background
+     * script awaits an `agent()` child of its own: a resume never launches
+     * that child again for its call (I5).
      */
     it.live(
       'reads every child result settled before the crash, exactly once',
@@ -951,8 +953,17 @@ export function crashConformanceSuite(plugins: string): void {
               ),
           );
           const cleanRows = rowsOf(roots.storage);
-          // The child's turn, the script and the command each reported.
+          // The child's turn, the script and the command each reported, and
+          // the script's own `agent()` child ran under it.
           expect(settled(cleanRows)).toHaveLength(3);
+          expect(
+            cleanRows.filter(
+              (row) =>
+                row.type === 'run.start' &&
+                row.parent !== null &&
+                row.parent !== root,
+            ),
+          ).toHaveLength(1);
 
           const first = Math.min(
             ...cleanRows
@@ -972,8 +983,18 @@ export function crashConformanceSuite(plugins: string): void {
               ids(final, type).filter(
                 (id, index, all) => all.indexOf(id) !== index,
               );
+            const calls = final.flatMap((row) =>
+              row.type === 'run.start' && row.parent !== null
+                ? [
+                    `${row.parent}/${(json(row).parent as { callId: string }).callId}`,
+                  ]
+                : [],
+            );
             const found = [
               ...(refused === null ? [] : [refused]),
+              new Set(calls).size === calls.length
+                ? null
+                : 'a child launched again for its call',
               allRead(final) ? null : 'a settled child result was never read',
               twice('followup.queued').length === 0
                 ? null
