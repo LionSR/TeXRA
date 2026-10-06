@@ -1,5 +1,4 @@
 {
-  "packages/harness/src/agent/core/state/AgentWorkspaceState.ts": 3,
   "packages/harness/src/agent/index/AgentDirectoryService.ts": 1,
   "packages/harness/src/agent/runtime/childRunLoop.ts": 3,
   "packages/harness/src/agent/runtime/historyQuery/HistoryQuery.ts": 3,
