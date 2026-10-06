@@ -168,6 +168,7 @@ const SeqSchema = z.int().positive();
 export const CommitOrdinalSchema = z.int().nonnegative();
 export type CommitOrdinal = z.infer<typeof CommitOrdinalSchema>;
 
+const OWN_GRANT = z.enum(['on', 'off', 'parent']);
 /**
  * A run's approval grants after a change, the one record of them: what the
  * run itself decided, never what it inherits. A kind the run decides
@@ -175,12 +176,11 @@ export type CommitOrdinal = z.infer<typeof CommitOrdinalSchema>;
  * is read off the rows (`resolveBypass`), never stored here.
  */
 export const ApprovalPolicySnapshotSchema = z.object({
-  /** The run's own human value per kind, where it has one: `on` granted,
-   *  `off` an explicit override. */
-  own: z.partialRecord(z.enum(APPROVAL_BYPASS_KINDS), z.enum(['on', 'off'])),
-  /** The kinds the run's autonomous goal grants it, over its own values
-   *  until the goal ends or a human decides that kind. A resume ends them:
-   *  its activation writes them off until a human re-arms the goal. */
+  /** A human's `on` or `off` per kind, or `parent`: derived when a resume
+   *  ended an ancestor's goal grant, following the ancestry's human values. */
+  own: z.partialRecord(z.enum(APPROVAL_BYPASS_KINDS), OWN_GRANT),
+  /** The kinds the run's own goal grants it, over its own values, until the
+   *  goal ends, a human decides the kind, or a resume ends the goal. */
   goal: z.array(z.enum(APPROVAL_BYPASS_KINDS)).readonly(),
 });
 

@@ -258,10 +258,7 @@ export interface ChatSessionControllerInit {
   /** Where run requests land, edit previews come from and run state is
    *  read, when the chat is a client of the background service; its own
    *  session otherwise. */
-  readonly backend?: Pick<
-    SessionBackend,
-    'request' | 'preview' | 'view' | 'viewChanges'
-  >;
+  readonly backend?: Pick<SessionBackend, 'request' | 'preview' | 'view'>;
   /** Offer the service what this chat shows for its project's tasks. */
   readonly attachWindow?: (host: WindowHost) => void;
 }
@@ -338,12 +335,12 @@ export function createChatSessionController(
   };
   const requests: SessionRequests = init.backend ?? runtimeSession.requests;
   // The fold the chat's runs appear in: the service's, or this session's.
-  const viewChanges = (init.backend ?? runtimeSession).viewChanges;
+  const viewChanges = (init.backend ?? runtimeSession).view.changes;
   // Said in the transcript the controller writes to, not on stderr before
   // Ink mounts, where it would be left above the header.
-  if (runtimeSession.storeMovedAside) {
+  if (runtimeSession.log.movedAside) {
     appendLocalNotice(
-      sessionStoreMovedAsideMessage(runtimeSession.storeMovedAside),
+      sessionStoreMovedAsideMessage(runtimeSession.log.movedAside),
     );
   }
   let preparingRoot: PreparingRoot | undefined;
@@ -784,7 +781,7 @@ export function createChatSessionController(
       Effect.gen(function* () {
         yield* adoptRunRecord(run.id);
         yield* runtimeSession.runs.awaitDrained(run.id);
-        const status = runtimeSession.runView(run.id)?.status;
+        const status = runtimeSession.view.run(run.id)?.status;
         session.settleExitCode(
           claim,
           isTerminalOutcomePhase(status)
@@ -815,7 +812,7 @@ export function createChatSessionController(
   // service's view also holds other terminals' conversations.
   if (init.backend === undefined) {
     const resumedRoots = runtime.runFork(
-      Stream.runForEach(runtimeSession.viewChanges, observeResumedRoots),
+      Stream.runForEach(runtimeSession.view.changes, observeResumedRoots),
     );
     disposables.add(() => {
       runtime.runFork(Fiber.interrupt(resumedRoots));

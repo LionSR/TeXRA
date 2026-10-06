@@ -199,8 +199,8 @@ const scriptRequest = (
   Effect.gen(function* () {
     const { session, runId } = call.run;
     const prefix = `proposal-script-${truncatedHexId(`${call.responseId}\0${script.callId}`, 16)}`;
-    const from = session.now();
-    const rows = yield* session.readAggregate(aggregateId('run', runId), [
+    const from = session.log.now();
+    const rows = yield* session.log.rows(aggregateId('run', runId), [
       'request.opened',
       'request.decided',
     ]);
@@ -217,7 +217,7 @@ const scriptRequest = (
       if (decided?.type !== 'request.decided')
         // A plane that closes first decides nothing: the call stays in
         // flight, and the next resume finds the request still open.
-        return yield* session.decisionFor(runId, last, from).pipe(
+        return yield* session.requests.decision(runId, last, from).pipe(
           Effect.map((row) => row.decision),
           Effect.catch((cause) =>
             Effect.logWarning(
@@ -275,7 +275,7 @@ const fingerprint = Effect.fn('agent.fingerprint')(function* (
  */
 const reuseScope = Effect.fn('agent.reuseScope')(function* (call: RunToolCall) {
   const { session, runId } = call.run;
-  const view = yield* session.readView([]);
+  const view = yield* session.view.read([]);
   const root =
     view.runs.get(runId)?.identity.kind === 'script'
       ? (view.runs.get(runId)?.parentId ?? runId)
@@ -314,7 +314,7 @@ const reusable = Effect.fn('agent.reusable')(function* (
     );
   siblings.set(key, callId);
   const rows = (yield* Effect.forEach(yield* reuseScope(call), (runId) =>
-    call.run.session.readAggregate(aggregateId('run', runId), ['tool.result']),
+    call.run.session.log.rows(aggregateId('run', runId), ['tool.result']),
   )).flat();
   const found = rows.flatMap((row) =>
     row.type === 'tool.result' &&

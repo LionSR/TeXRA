@@ -41,16 +41,17 @@ const CHANNEL = 'InterruptedTasks';
 const checkRun = (session: SessionHandle, runId: RunId, resume: boolean) =>
   Effect.gen(function* () {
     const config = yield* getRunRecords(session, runId).readConfig();
-    if (config === null) return yield* session.markResumeBlocked(runId, null);
+    if (config === null)
+      return yield* session.view.markResumeBlocked(runId, null);
     const blocker = yield* resumeBlocker(session, config);
     if (blocker !== null)
-      return yield* session.markResumeBlocked(runId, {
+      return yield* session.view.markResumeBlocked(runId, {
         reason: blocker,
         retry: resume,
       });
     // Nothing blocks it now. A resume that finds it blocked again records
     // that itself; one refused for any other reason leaves no stale block.
-    yield* session.markResumeBlocked(runId, null);
+    yield* session.view.markResumeBlocked(runId, null);
     if (resume) yield* resumeOnSession(runId, session);
   }).pipe(
     Effect.catch((error) =>
@@ -103,7 +104,7 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
               Effect.ensuring(
                 Effect.suspend(() => {
                   checking.delete(runId);
-                  const blocked = session
+                  const blocked = session.view
                     .resumeBlocks()
                     .find((b) => b.runId === runId);
                   return entry.again && blocked !== undefined
@@ -120,7 +121,7 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
         session.roots,
         RESUME_ON_OPEN_SETTING.configKey,
       );
-      const view = yield* session.readView([]);
+      const view = yield* session.view.read([]);
       const roots = [...view.runs.values()].filter(
         (run) =>
           run.parentId === null &&
@@ -133,7 +134,7 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
       // dead, or there is none).
       const interrupted = yield* Effect.filter(roots, (run) =>
         Effect.map(
-          session.claimOwner(run.id),
+          session.log.owner(run.id),
           (claim) => claimStanding(claim).kind === 'free',
         ),
       );
@@ -142,7 +143,7 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
     yield* Effect.forever(
       Effect.andThen(Queue.take(changed), () =>
         Effect.forEach(
-          session.resumeBlocks(),
+          session.view.resumeBlocks(),
           ({ runId, retry }) => check(runId, retry),
           { discard: true },
         ),

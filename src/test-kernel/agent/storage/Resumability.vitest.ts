@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { deriveResumability, finalizeRun } from '@agent/storage';
+import { deriveResumability } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { positionRow } from '@agent/runtime/loop/rows';
 import {
@@ -46,10 +46,10 @@ describe('deriveResumability', () => {
     { outcome }: { outcome?: RunOutcome },
   ): Promise<void> {
     publishTestRunStart(session, runId);
-    await Effect.runPromise(session.settled);
+    await Effect.runPromise(session.log.settled);
     if (outcome) {
       await Effect.runPromise(
-        session.commit([
+        session.log.transact([
           {
             type: 'run.end',
             aggregateId: aggregateId('run', runId),
@@ -79,7 +79,7 @@ describe('deriveResumability', () => {
     Effect.gen(function* () {
       const runId = 'ac0001' as RunId;
       yield* Effect.promise(() => writeMeta(runId, {}));
-      yield* session.commit([
+      yield* session.log.transact([
         {
           type: 'run.config',
           aggregateId: aggregateId('run', runId),
@@ -89,7 +89,7 @@ describe('deriveResumability', () => {
         },
       ]);
       yield* Effect.promise(() => writeOpening(runId));
-      yield* session.commit([
+      yield* session.log.transact([
         {
           type: 'run.end',
           aggregateId: aggregateId('run', runId),
@@ -111,12 +111,12 @@ describe('deriveResumability', () => {
         const runId = 'ac0003' as RunId;
         yield* Effect.promise(() => writeMeta(runId, {}));
         yield* Effect.promise(() => writeOpening(runId));
-        vi.spyOn(session, 'updateRecordFacts').mockReturnValueOnce(
+        vi.spyOn(session.log, 'transact').mockReturnValueOnce(
           Effect.die(new Error('metadata disk full')),
         );
 
         expect(
-          yield* finalizeRun(session, { runId, outcome: RUN_OUTCOME.FAILED }),
+          yield* session.runs.end({ runId, outcome: RUN_OUTCOME.FAILED }),
         ).toMatchObject({ ok: false });
 
         expect(yield* deriveResumability(runId, session)).toMatchObject({
@@ -143,7 +143,7 @@ describe('deriveResumability', () => {
       const runId = 'ac000a' as RunId;
       yield* Effect.promise(() => writeMeta(runId, {}));
       yield* Effect.promise(() => writeOpening(runId));
-      vi.spyOn(session, 'readRunRecords').mockReturnValue(
+      vi.spyOn(session.log, 'records').mockReturnValue(
         Effect.fail(
           new DatabaseReadFailed({
             path: 'session.db',
@@ -151,7 +151,7 @@ describe('deriveResumability', () => {
           }),
         ),
       );
-      vi.spyOn(session, 'readAggregate').mockReturnValue(
+      vi.spyOn(session.log, 'rows').mockReturnValue(
         Effect.fail(
           new DatabaseReadFailed({
             path: 'session.db',

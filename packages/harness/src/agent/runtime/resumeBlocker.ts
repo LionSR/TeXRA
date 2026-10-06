@@ -3,7 +3,7 @@
  * and D5): its agent is missing from the catalog, or its agent comes from an
  * installed plugin that is off or not trusted as it is now. A resume that
  * meets one does not fail the run: the run stays interrupted, the reason
- * goes into the projection (`SessionHandle.markResumeBlocked`), and the
+ * goes into the projection (`SessionHandle.view.markResumeBlocked`), and the
  * session's follower (`followInterruptedTasks`) resumes it once the catalog
  * says it is back.
  *

@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import type { RouteRetries } from '@agent/runtime';
 
 import { POLISH_PROMPT_PREFIX } from '@agent/runtime/bundledPrompts';
 import { helperCall } from '@agent/runtime/helperModel';
@@ -30,7 +31,7 @@ export const polishTextWithAI = Effect.fn('polishTextWithAI')(function* (
 ): Effect.fn.Return<
   string,
   Error,
-  LanguageModel | HttpClient.HttpClient | UsageLog
+  LanguageModel | HttpClient.HttpClient | UsageLog | RouteRetries
 > {
   return yield* Effect.gen(function* () {
     const responseText = yield* helperCall(

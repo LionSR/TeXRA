@@ -132,7 +132,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
         grants:
           continues !== undefined && continues !== runId
             ? inheritedGrants(
-                SubscriptionRef.getUnsafe(runSession.view),
+                SubscriptionRef.getUnsafe(runSession.view.ref),
                 continues,
               )
             : launchGrants,

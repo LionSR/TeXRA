@@ -72,7 +72,7 @@ import {
   type BoundModel,
 } from './run/modelBinding';
 import { AttemptFailed, classifyModelFailure } from './run/modelFailure';
-import { runInvocation } from './run/invocation';
+import { runInvocation, type RouteRetries } from './run/invocation';
 import { callModel, type CallResult } from './run/modelCall';
 import { observeBackground, submitAndObserve } from './run/backgroundTurn';
 import { contextTokens } from './run/contextTokens';
@@ -164,17 +164,17 @@ type InvocationOutcome =
  */
 export type InvokeError = CellError | StateReadFailed;
 
+/** What an invocation reads from its run's context. */
+type InvokeServices =
+  FileSystem.FileSystem | LanguageModel | HttpClient.HttpClient | RouteRetries;
+
 export class ModelInvoker extends Context.Service<
   ModelInvoker,
   {
     readonly invoke: (
       cell: RunCell,
       request: InvokeRequest,
-    ) => Effect.Effect<
-      InvocationOutcome,
-      InvokeError,
-      FileSystem.FileSystem | LanguageModel | HttpClient.HttpClient
-    >;
+    ) => Effect.Effect<InvocationOutcome, InvokeError, InvokeServices>;
     /** A compaction summary: one call outside a turn, on the run's binding,
      *  its attempts recorded on the run's history. */
     readonly call: (
@@ -191,7 +191,7 @@ export class ModelInvoker extends Context.Service<
 export const modelInvokerLayer = (): Layer.Layer<
   ModelInvoker,
   never,
-  AgentRun | UsageLog | LanguageModel | HttpClient.HttpClient
+  AgentRun | UsageLog | LanguageModel | HttpClient.HttpClient | RouteRetries
 > =>
   Layer.effect(
     ModelInvoker,
@@ -200,7 +200,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       const { runId, session, logger } = run;
       const aggregateId = rowAggregate(runId);
       const usageLog = yield* UsageLog;
-      type Binders = LanguageModel | HttpClient.HttpClient;
+      type Binders = LanguageModel | HttpClient.HttpClient | RouteRetries;
       const binders = yield* Effect.context<Binders>();
       const attribution = {
         agentName: usageAgentName(run.config.agent, run.config.agentSource),
@@ -744,11 +744,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       const invoke = Effect.fn('ModelInvoker.invoke')(function* (
         cell: RunCell,
         request: InvokeRequest,
-      ): Effect.fn.Return<
-        InvocationOutcome,
-        InvokeError,
-        FileSystem.FileSystem | LanguageModel | HttpClient.HttpClient
-      > {
+      ): Effect.fn.Return<InvocationOutcome, InvokeError, InvokeServices> {
         const ended = yield* runInvocation<
           InvocationResponse,
           InvokeError,
@@ -782,8 +778,8 @@ export const modelInvokerLayer = (): Layer.Layer<
                 logger.debug('Waiting for manual retry');
                 // The answer is the `request.decided` row (R5) the decide
                 // command lands; a closing plane cancels.
-                const row = yield* session
-                  .decisionFor(runId, requestId, (yield* cell.current).commit)
+                const row = yield* session.requests
+                  .decision(runId, requestId, (yield* cell.current).commit)
                   .pipe(
                     Effect.catch((error) =>
                       Effect.sync(() => {
@@ -824,7 +820,6 @@ export const modelInvokerLayer = (): Layer.Layer<
                 'continuation' in chainedContinuation(state, bound.origin),
             ),
           retries: (yield* SynchronizedRef.get(run.model)).automaticRetries,
-          gate: session.modelRetries,
           secrets: run.stores.secrets,
           logger,
         });
@@ -843,7 +838,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           binding: SynchronizedRef.get(run.model),
           reacquire: (failed) => rebind(cell)('configured', failed),
           request,
-          gate: session.modelRetries,
           settings: session.roots,
           secrets: run.stores.secrets,
           attribution,

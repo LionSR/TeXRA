@@ -11,7 +11,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { StatusCodes } from 'http-status-codes';
-import { Cause, Effect, Exit, Result } from 'effect';
+import { Cause, Context, Effect, Exit, Result } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import {
@@ -47,6 +47,13 @@ import {
 import type { HttpClient } from 'effect/http';
 import type { ModelRetryGate } from '../ModelRetryGate';
 import type { BoundModel } from './modelBinding';
+
+/** The process's one retry gate, served by `processLayer`: a 429 cools a
+ *  credential for every run of every project. */
+export class RouteRetries extends Context.Service<
+  RouteRetries,
+  ModelRetryGate
+>()('@texra/RouteRetries') {}
 
 /** Base delay between automatic attempts; the gate scales its own on top. */
 const RETRY_BACKOFF_MS = 1000;
@@ -107,7 +114,6 @@ export interface InvocationDriver<A, E, R> {
   readonly chains: (bound: BoundModel) => Effect.Effect<boolean>;
   /** Automatic resends per invocation. */
   readonly retries: number;
-  readonly gate: ModelRetryGate;
   readonly secrets: PlatformSecrets;
   readonly logger: Pick<AgentTrace, 'warn' | 'debug'>;
 }
@@ -187,16 +193,18 @@ const tryAttempt = <A, E, R>(
   move: Extract<Move, { kind: 'send' | 'observe' }>,
   ref: InvocationRef,
   bound: BoundModel,
-): Effect.Effect<{ readonly ok: A } | AttemptFailed, E, R> =>
+): Effect.Effect<{ readonly ok: A } | AttemptFailed, E, R | RouteRetries> =>
   Effect.exit(
     move.kind === 'send'
-      ? driver.gate.withRoutes(routePolicies(bound), {
-          baseBackoffMs: RETRY_BACKOFF_MS,
-          onWait: (delayMs) =>
-            driver.logger.debug(
-              `Waiting ${delayMs}ms for the model recovery probe.`,
-            ),
-        })(driver.attempt(bound, ref, null))
+      ? Effect.flatMap(RouteRetries, (gate) =>
+          gate.withRoutes(routePolicies(bound), {
+            baseBackoffMs: RETRY_BACKOFF_MS,
+            onWait: (delayMs) =>
+              driver.logger.debug(
+                `Waiting ${delayMs}ms for the model recovery probe.`,
+              ),
+          })(driver.attempt(bound, ref, null)),
+        )
       : driver.attempt(bound, ref, move.attempt.accepted),
   ).pipe(
     Effect.flatMap(
@@ -344,7 +352,11 @@ export const runInvocation = Effect.fn('ModelInvoker.invocation')(function* <
   R,
 >(
   driver: InvocationDriver<A, E, R>,
-): Effect.fn.Return<A | InvocationEnd, E, R | HttpClient.HttpClient> {
+): Effect.fn.Return<
+  A | InvocationEnd,
+  E,
+  R | HttpClient.HttpClient | RouteRetries
+> {
   const renew = credentialRenewal(driver.secrets, driver.rebind);
   // A renewed credential observes the same operation again, unrecorded.
   let again: Move | null = null;

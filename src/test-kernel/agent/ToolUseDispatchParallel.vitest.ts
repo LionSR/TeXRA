@@ -272,7 +272,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
   const logger = options.logger ?? noopTrace;
   const tools = new MapToolRegistry(options.tools);
   publishTestRunStart(session, runId);
-  yield* session.settled;
+  yield* session.log.settled;
   yield* session.runHistory.acquire(runId);
   const opened = yield* session.runHistory.appendBatch(runId, null, [
     appendRow(runId, [
@@ -833,7 +833,7 @@ describe('tool-use dispatch', () => {
           role: 'call',
         }),
       ]);
-      yield* kit.session.decideRequest(kit.runId, 'q1', { action: 'reject' });
+      yield* kit.session.requests.decide(kit.runId, 'q1', { action: 'reject' });
       yield* cell.append([
         {
           type: 'tool.result',

@@ -24,7 +24,7 @@ export function WorkPlanReader({
   readonly title: string;
 }): React.JSX.Element {
   const { columns } = useWindowSize();
-  const run = session.runView(runId);
+  const run = session.view.run(runId);
   const layout = readerLayout({
     availableRows,
     frameWidth: Math.max(1, columns),

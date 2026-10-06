@@ -4,9 +4,9 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { getRunRecords } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { finalizeRun, registerRun } from '@agent/storage/runLifecycle';
+import { registerRun } from '@agent/storage/runLifecycle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { aggregateId, type RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
 import {
   createTestSession,
@@ -55,7 +55,7 @@ describe('run registration and finalization', () => {
           },
         );
         expect(
-          (yield* session.readView([runId])).runs.get(runId),
+          (yield* session.view.read([runId])).runs.get(runId),
         ).toMatchObject({
           identity: options.identity,
           followUpSupport: 'nativeInteractive',
@@ -96,11 +96,11 @@ describe('run registration and finalization', () => {
     () =>
       Effect.gen(function* () {
         const failure = new Error('database write failed');
-        vi.spyOn(session, 'commitRegistration').mockReturnValueOnce(
+        vi.spyOn(session.log, 'transact').mockReturnValueOnce(
           Effect.die(failure),
         );
         expect(yield* Effect.flip(register())).toBe(failure);
-        expect(yield* session.ownsRun(runId)).toBe(false);
+        expect(yield* session.log.owns(runId)).toBe(false);
         expect(yield* getRunRecords(session, runId).exists()).toBe(false);
       }),
   );
@@ -112,18 +112,19 @@ describe('run registration and finalization', () => {
         yield* register();
         // Registration left the birth claim standing; a run nobody drives
         // any more has given it back.
-        if (!alreadyOwned) yield* Effect.scoped(session.holdRunClaim(runId));
+        if (!alreadyOwned)
+          yield* Effect.scoped(session.log.hold(runId, { ends: true }));
         const failure = new DatabaseReadFailed({
           path: 'session.db',
           cause: new Error('database admission rejected'),
         });
-        vi.spyOn(session, 'acquireClaims').mockReturnValueOnce(
-          Effect.fail(failure),
-        );
+        vi.spyOn(session.log, 'hold').mockReturnValueOnce(Effect.fail(failure));
         expect(
-          yield* Effect.flip(Effect.scoped(session.holdRunClaim(runId))),
+          yield* Effect.flip(
+            Effect.scoped(session.log.hold(runId, { ends: true })),
+          ),
         ).toBe(failure);
-        expect(yield* session.ownsRun(runId)).toBe(alreadyOwned);
+        expect(yield* session.log.owns(runId)).toBe(alreadyOwned);
       }),
   );
 
@@ -132,9 +133,9 @@ describe('run registration and finalization', () => {
     () =>
       Effect.gen(function* () {
         yield* register();
-        yield* Effect.scoped(session.holdRunClaim(runId));
+        yield* Effect.scoped(session.log.hold(runId, { ends: true }));
         const failure = new Error('registration rejected');
-        vi.spyOn(session, 'commitRegistration').mockReturnValueOnce(
+        vi.spyOn(session.log, 'transact').mockReturnValueOnce(
           Effect.die(failure),
         );
         expect(yield* Effect.flip(register())).toBe(failure);
@@ -142,8 +143,11 @@ describe('run registration and finalization', () => {
           seedReport(session, runId, 'unowned'),
         );
         expect(refused).toBeInstanceOf(Error);
-        yield* session.acquireClaims(aggregateId('run', runId));
-        yield* seedReport(session, runId, 'owned');
+        yield* Effect.scoped(
+          session.log
+            .hold(runId)
+            .pipe(Effect.andThen(seedReport(session, runId, 'owned'))),
+        );
         expect(yield* getRunRecords(session, runId).readReport()).toBe('owned');
       }),
   );
@@ -154,13 +158,13 @@ describe('run registration and finalization', () => {
       Effect.gen(function* () {
         yield* register();
         const failure = new Error('status write failed');
-        vi.spyOn(session, 'updateRecordFacts').mockReturnValueOnce(
+        vi.spyOn(session.log, 'transact').mockReturnValueOnce(
           Effect.die(failure),
         );
         // The run's rows live until explicit deletion (C9): finalization writes
         // the terminal row and removes nothing beside it, so a failed write is
         // the whole failure and comes back unwrapped.
-        const result = yield* finalizeRun(session, {
+        const result = yield* session.runs.end({
           runId,
           outcome: 'failed',
         });

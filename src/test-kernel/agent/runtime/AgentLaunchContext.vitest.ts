@@ -284,7 +284,7 @@ describe('AgentLaunchContext', () => {
         yield* session.interactions.use(recording.interactions);
         yield* Effect.addFinalizer(() => closeSessionOf(session));
         publishTestRunStart(session, EXECUTION_ID);
-        yield* session.settled;
+        yield* session.log.settled;
         mocks.resolve.mockReturnValueOnce(
           Effect.succeed({
             path: '/agents/chat.yaml',
@@ -330,7 +330,6 @@ describe('AgentLaunchContext', () => {
       Effect.gen(function* () {
         const session = yield* createTestSession();
         yield* Effect.addFinalizer(() => closeSessionOf(session));
-        const batches = vi.spyOn(session, 'commitRegistration');
         const recording = recordSessionEvents(session);
         mocks.resolve.mockReturnValueOnce(
           Effect.succeed({
@@ -359,16 +358,15 @@ describe('AgentLaunchContext', () => {
           runId: EXECUTION_ID,
           session,
         });
-        expect(batches.mock.calls[0]?.[0].map((event) => event.type)).toEqual([
+        const created = (yield* Effect.promise(() => recording.read())).slice(
+          0,
+          3,
+        );
+        expect(created.map((event) => event.type)).toEqual([
           'run.start',
           'run.config',
           'run.activate',
         ]);
-        expect(
-          (yield* Effect.promise(() => recording.read()))
-            .slice(0, 3)
-            .map((event) => event.type),
-        ).toEqual(['run.start', 'run.config', 'run.activate']);
         // One aggregate, one counter: the activation is the third durable
         // row of the creation batch, and the phase the fold reads from it.
         expect(
@@ -417,7 +415,7 @@ describe('AgentLaunchContext', () => {
           humanGrant(['toolEdit'], true),
         );
         yield* setGoalSessionAutoApproval(session, EXECUTION_ID, 'commands');
-        yield* session.settled;
+        yield* session.log.settled;
 
         definitionMocks();
         yield* buildAgentLaunchContext({
@@ -428,7 +426,7 @@ describe('AgentLaunchContext', () => {
         });
 
         // The human's grant stands; the goal's ends with the activation.
-        const view = yield* session.readView([]);
+        const view = yield* session.view.read([]);
         expect(runBypasses(view, EXECUTION_ID)).toEqual({
           bash: false,
           toolEdit: true,
@@ -445,16 +443,10 @@ describe('AgentLaunchContext', () => {
     Effect.gen(function* () {
       const order: string[] = [];
       const failure = new Error('user vars unavailable');
-      const postProcessResponse = vi.fn((text: string) => Effect.succeed(text));
-      const responseTextProcessing = {
-        postProcessResponse,
-      };
-      const session = yield* createTestSession({
-        responseTextProcessing,
-      });
+      const session = yield* createTestSession();
       yield* Effect.addFinalizer(() => closeSessionOf(session));
       publishTestRunStart(session, EXECUTION_ID);
-      yield* session.settled;
+      yield* session.log.settled;
       const terminalEvents = recordSessionEvents(session);
       const stage = noopTrace.openStage('Run');
       const endStage = vi.spyOn(stage, 'end').mockImplementation(() => {
@@ -510,7 +502,7 @@ describe('AgentLaunchContext', () => {
         stageId: undefined,
       });
       expect(endStage).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.FAILED);
-      expect(session.runView(EXECUTION_ID)?.status).toBe(RUN_PHASE.FAILED);
+      expect(session.view.run(EXECUTION_ID)?.status).toBe(RUN_PHASE.FAILED);
       expect(close).toHaveBeenCalledOnce();
       // The launch's scope unwinds first (its stage, then its trace); the
       // launch terminal then ends the run it left open.

@@ -39,8 +39,8 @@ export type FollowUpBatch =
   | { readonly kind: 'edit'; readonly edit: ViewEdit };
 
 /**
- * One generation's reader. A take reads the run's readable rows (`pending`),
- * so a row an earlier process left
+ * One generation's reader. A take reads the run's readable rows (`pending`)
+ * from the store, so a row an earlier process left
  * queued and one sent while this generation runs arrive the same way, in
  * commit order. The inbox signals the reader when a row lands for it.
  *
@@ -56,26 +56,33 @@ export class RunInput {
   private beforeEdit: ReadonlySet<string> = new Set();
   private ended = false;
 
-  private readonly queued: () => readonly QueuedFollowUp[];
+  /** The run's queued follow-ups, read from its committed rows. */
+  private readonly queued: Effect.Effect<readonly QueuedFollowUp[]>;
 
-  constructor(queued: () => readonly QueuedFollowUp[]) {
+  constructor(queued: Effect.Effect<readonly QueuedFollowUp[]>) {
     this.queued = queued;
   }
 
   /** The run's own pending requests (`/compact`, a model switch). */
-  controls(): readonly QueuedFollowUp[] {
-    return this.queued().filter((f) => f.control !== undefined);
-  }
+  readonly controls: Effect.Effect<readonly QueuedFollowUp[]> = Effect.suspend(
+    () =>
+      Effect.map(this.queued, (rows) =>
+        rows.filter((f) => f.control !== undefined),
+      ),
+  );
 
   /** The messages a take may read, folded from the rows' holds: an
    *  `instruction`-held row only beside an instruction. */
-  private pending(): readonly QueuedFollowUp[] {
-    const rows = this.queued().filter((f) => f.control === undefined);
-    const asked = rows.some(
-      (f) => f.holdUntil !== 'instruction' && isInstruction(f.content),
+  private readonly pending: Effect.Effect<readonly QueuedFollowUp[]> =
+    Effect.suspend(() =>
+      Effect.map(this.queued, (queued) => {
+        const rows = queued.filter((f) => f.control === undefined);
+        const asked = rows.some(
+          (f) => f.holdUntil !== 'instruction' && isInstruction(f.content),
+        );
+        return asked ? rows : rows.filter((f) => f.holdUntil !== 'instruction');
+      }),
     );
-    return asked ? rows : rows.filter((f) => f.holdUntil !== 'instruction');
-  }
 
   /** Wake the consumer: a follow-up row landed for it. */
   notify(): void {
@@ -87,31 +94,47 @@ export class RunInput {
    * before anything queued later. False while another is queued or once the
    * generation has ended.
    */
-  editView(edit: ViewEdit): boolean {
-    if (this.ended || this.edit !== null) return false;
-    this.edit = edit;
-    this.beforeEdit = new Set(this.pending().map((f) => f.followUpId));
-    Latch.openUnsafe(this.signal);
-    return true;
+  editView(edit: ViewEdit): Effect.Effect<boolean> {
+    return Effect.map(this.pending, (pending) => {
+      if (this.ended || this.edit !== null) return false;
+      this.edit = edit;
+      this.beforeEdit = new Set(pending.map((f) => f.followUpId));
+      Latch.openUnsafe(this.signal);
+      return true;
+    });
   }
 
   /** A `/compact` is pending: it wakes a parked run. */
-  private compacting(): boolean {
-    return this.controls().some((f) => f.control?.kind === 'compact');
-  }
+  private readonly compacting: Effect.Effect<boolean> = Effect.suspend(() =>
+    Effect.map(this.controls, (controls) =>
+      controls.some((f) => f.control?.kind === 'compact'),
+    ),
+  );
 
-  hasQueued(): boolean {
-    return this.edit !== null || this.compacting() || this.pending().length > 0;
-  }
+  /** Whether a take would return now: a view edit, a `/compact`, or a
+   *  readable message is queued. */
+  readonly hasQueued: Effect.Effect<boolean> = Effect.suspend(() =>
+    this.edit !== null
+      ? Effect.succeed(true)
+      : Effect.zipWith(
+          this.compacting,
+          this.pending,
+          (compacting, pending) => compacting || pending.length > 0,
+        ),
+  );
 
   /** The queued messages, when they are all a take would read now: no view
    *  edit is queued. Nothing is taken; it only reads. */
-  takeQueued(): Extract<FollowUpBatch, { kind: 'followUps' }> | null {
-    const followUps = this.pending();
-    return this.edit === null && followUps.length > 0
-      ? { kind: 'followUps', followUps }
-      : null;
-  }
+  readonly takeQueued: Effect.Effect<Extract<
+    FollowUpBatch,
+    { kind: 'followUps' }
+  > | null> = Effect.suspend(() =>
+    Effect.map(this.pending, (followUps) =>
+      this.edit === null && followUps.length > 0
+        ? ({ kind: 'followUps', followUps } as const)
+        : null,
+    ),
+  );
 
   /** End the generation: what is pending stays queued on the run's rows; a
    *  view edit nobody took fails. */
@@ -134,9 +157,10 @@ export class RunInput {
         if (this.ended) return null;
         // Closed before the read: a signal landing after it reopens the wait.
         Latch.closeUnsafe(this.signal);
+        const pending = yield* this.pending;
         const edit = this.edit;
         if (edit !== null) {
-          const earlier = this.pending().filter((f) =>
+          const earlier = pending.filter((f) =>
             this.beforeEdit.has(f.followUpId),
           );
           if (earlier.length > 0)
@@ -144,11 +168,10 @@ export class RunInput {
           this.edit = null;
           return { kind: 'edit', edit } as const;
         }
-        const followUps = this.pending();
-        if (followUps.length > 0) {
-          return { kind: 'followUps', followUps } as const;
+        if (pending.length > 0) {
+          return { kind: 'followUps', followUps: pending } as const;
         }
-        if (this.compacting())
+        if (yield* this.compacting)
           return { kind: 'synthetic', text: COMPACTION_REQUEST } as const;
         yield* this.signal.await;
       }

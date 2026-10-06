@@ -66,7 +66,7 @@ export function readChildTurnState(
   session: SessionHandle,
   runId: RunId,
 ): Effect.Effect<ChildTurnState, DatabaseReadFailed> {
-  return session.readAggregate(aggregateId('run', runId), ['child.turn']).pipe(
+  return session.log.rows(aggregateId('run', runId), ['child.turn']).pipe(
     Effect.map((rows) => {
       let active: AttemptKey | null = null;
       let lastCompleted: AttemptKey | null = null;
@@ -144,7 +144,7 @@ const parentEdge = Effect.fn('parentEdge')(function* (
   session: SessionHandle,
   runId: RunId,
 ) {
-  return edgeOf(yield* session.readRunRecords(runId));
+  return edgeOf(yield* session.log.records(runId));
 });
 
 /**
@@ -221,7 +221,7 @@ export const openOwnedChildren = Effect.fn('openOwnedChildren')(function* (
     for (const child of children) {
       // One read of the child's records: a child that never started has no
       // edge, and its edge and its end come from the same rows.
-      const rows = yield* session.readRunRecords(child);
+      const rows = yield* session.log.records(child);
       if (
         edgeOf(rows)?.callId === callId &&
         runEndFromEvents(rows, child) === null
@@ -260,7 +260,7 @@ export const withChildSpend = <
   session: SessionHandle,
   end: T,
 ): Effect.Effect<T & { readonly usage: RunUsageTotals }, DatabaseReadFailed> =>
-  Effect.forEach(session.runView(end.runId)?.childIds ?? [], (child) =>
+  Effect.forEach(session.view.run(end.runId)?.childIds ?? [], (child) =>
     getRunRecords(session, child).readRunEnd(),
   ).pipe(
     Effect.map((ends) => ({
@@ -315,15 +315,15 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
     });
   /** Every row of the run, in one read; none for a closed (tombstoned) run,
    *  which the record reads report as absent too. */
-  const runRows = session
-    .readAggregate(id)
+  const runRows = session.log
+    .rows(id)
     .pipe(
       Effect.map((rows) => (rows.at(-1)?.type === 'run.removed' ? [] : rows)),
     );
   const read = <A>(
     select: (rows: readonly SessionEvent[]) => A,
   ): Effect.Effect<A, DatabaseReadFailed> =>
-    session.readRunRecords(runId).pipe(Effect.map(select));
+    session.log.records(runId).pipe(Effect.map(select));
   /** The latest `run.config` row; the database reads a closed run as absent. */
   const readRecord = (): Effect.Effect<RunRecord | null, DatabaseReadFailed> =>
     read((rows) => latestOfType(rows, id, 'run.config')?.config ?? null);
@@ -387,7 +387,7 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
       result: DeliveredResult,
     ): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> =>
       Effect.suspend(() =>
-        session.commit([
+        session.log.transact([
           {
             type: 'run.result',
             aggregateId: id,

@@ -20,6 +20,7 @@ import {
   RUN_OUTCOME,
   RUN_PHASE,
   type RunId,
+  type SessionEvent,
   type UserFollowUpSupport,
 } from '@shared/schemas';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -117,7 +118,7 @@ describe('child run progress events', () => {
   beforeEach(async () => {
     const session = await Effect.runPromise(createProcessSession());
     publishTestRunStart(session, parentRunId);
-    await Effect.runPromise(session.settled);
+    await Effect.runPromise(session.log.settled);
   });
 
   it.effect(
@@ -210,7 +211,7 @@ describe('child run progress events', () => {
         },
       );
       yield* firstRun.finalize({ outcome: RUN_OUTCOME.COMPLETED });
-      expect(testDefaultSession().runView(workflowRelaunchRunId)?.status).toBe(
+      expect(testDefaultSession().view.run(workflowRelaunchRunId)?.status).toBe(
         RUN_PHASE.COMPLETED,
       );
 
@@ -232,7 +233,7 @@ describe('child run progress events', () => {
           .pipe(Effect.orDie),
       );
 
-      expect(testDefaultSession().runView(workflowRelaunchRunId)?.status).toBe(
+      expect(testDefaultSession().view.run(workflowRelaunchRunId)?.status).toBe(
         RUN_PHASE.RUNNING,
       );
       expect(testDefaultSession().runs.hasActiveChildren(parentRunId)).toBe(
@@ -331,25 +332,33 @@ describe('child run progress events', () => {
         const session = testDefaultSession();
         const committed = yield* Deferred.make<RunId>();
         const releasePublication = yield* Deferred.make<void>();
-        const commit = session.commitRegistration.bind(session);
+        // The registration's transaction is the one whose rows hold the
+        // child's `run.start`: it commits, then waits for the release.
+        const transact = session.log.transact.bind(session.log) as (
+          work: unknown,
+        ) => Effect.Effect<unknown, unknown>;
         const publication = vi
-          .spyOn(session, 'commitRegistration')
-          .mockImplementationOnce((events) =>
-            commit(events).pipe(
-              Effect.tap((rows) => {
-                const start = rows.find((row) => row.type === 'run.start');
-                if (!start) throw new Error('expected a committed child birth');
+          .spyOn(session.log, 'transact')
+          .mockImplementation(((work: unknown) =>
+            transact(work).pipe(
+              Effect.tap((value) => {
+                const start = Array.isArray(value)
+                  ? (value as readonly SessionEvent[]).find(
+                      (row) => row.type === 'run.start',
+                    )
+                  : undefined;
+                if (start === undefined) return Effect.void;
                 // The run is its own aggregate: the birth fact carries no
                 // second copy of the id.
                 const target = aggregateTarget(start.aggregateId);
                 if (target.kind !== 'run') {
                   throw new Error('expected a run aggregate for run.start');
                 }
-                return Deferred.succeed(committed, target.id);
+                return Deferred.succeed(committed, target.id).pipe(
+                  Effect.andThen(Deferred.await(releasePublication)),
+                );
               }),
-              Effect.tap(() => Deferred.await(releasePublication)),
-            ),
-          );
+            )) as unknown as typeof session.log.transact);
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => publication.mockRestore()),
         );
@@ -387,7 +396,7 @@ describe('child run progress events', () => {
         expect((yield* getRunRecords(session, id).readRunEnd())?.outcome).toBe(
           RUN_OUTCOME.CANCELLED,
         );
-        expect(yield* session.ownsRun(id)).toBe(false);
+        expect(yield* session.log.owns(id)).toBe(false);
         expect(
           Exit.isFailure(
             yield* Effect.exit(seedReport(session, id, 'unowned')),
@@ -442,7 +451,7 @@ describe('child run progress events', () => {
           throw new Error('expected the failed child launch to be captured');
         }
         expect(session.runs.getHandle(childRunId)).toBeUndefined();
-        expect(session.runView(childRunId)?.status).toBe(RUN_PHASE.FAILED);
+        expect(session.view.run(childRunId)?.status).toBe(RUN_PHASE.FAILED);
         expect(
           yield* getRunRecords(session, childRunId).readRunEnd(),
         ).toMatchObject({ outcome: 'failed' });
@@ -467,7 +476,7 @@ describe('child run progress events', () => {
 
         yield* childRun.finalize({ outcome: RUN_OUTCOME.CANCELLED });
 
-        expect(testDefaultSession().runView(stoppedRunId)?.status).toBe(
+        expect(testDefaultSession().view.run(stoppedRunId)?.status).toBe(
           RUN_PHASE.CANCELLED,
         );
         expect(
@@ -488,7 +497,7 @@ describe('child run progress events', () => {
         error: new Error('child process exited 1'),
       });
 
-      expect(testDefaultSession().runView(failedRunId)?.status).toBe(
+      expect(testDefaultSession().view.run(failedRunId)?.status).toBe(
         RUN_PHASE.FAILED,
       );
       expect(

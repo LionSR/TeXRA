@@ -107,7 +107,18 @@ const publishThreadUpdate = Effect.fn('publishInquiryThreadUpdate')(function* (
   const records = yield* InquiryRecords;
   const summary = yield* records.getThreadSummary(threadId);
   if (!summary) return;
-  session.publish([inquiryThreadRow(summary)]);
+  // The panel's row only: the thread record is the authority, so a refused
+  // row is logged, never the action's failure.
+  yield* session.log
+    .transact([inquiryThreadRow(summary)])
+    .pipe(
+      Effect.catch((error) =>
+        Effect.logWarning('The inquiry thread row was not written').pipe(
+          Effect.annotateLogs({ data: error }),
+          withLogChannel(CHANNEL),
+        ),
+      ),
+    );
 });
 
 /**

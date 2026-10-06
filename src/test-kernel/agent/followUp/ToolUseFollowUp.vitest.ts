@@ -3,7 +3,7 @@ import { Deferred, Effect, Exit, Fiber, Semaphore } from 'effect';
 import { afterEach, describe, expect, vi, type Mock } from 'vitest';
 
 import * as resumability from '@agent/storage/resumability';
-import { Inbox, type InboxClosed } from '@agent/followUp/Inbox';
+import { Inbox, type InboxClosed, type InboxPort } from '@agent/followUp/Inbox';
 import { RunInput } from '@agent/followUp/RunInput';
 import {
   presentFollowUpResult,
@@ -11,8 +11,16 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import type { ToolUseFollowUpTarget } from '@agent/runtime/runRegistry';
 import { AgentEngine } from '@agent/runtime/AgentEngine';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { aggregateId, type RunId, type SessionEvent } from '@shared/schemas';
+import type {
+  SessionHandle,
+  SessionTransaction,
+} from '@agent/runtime/SessionHandle';
+import {
+  aggregateId,
+  type RunId,
+  type SessionEvent,
+  type SessionEventDraft,
+} from '@shared/schemas';
 import {
   DatabaseClaimRefused,
   DatabaseNotOwner,
@@ -20,11 +28,7 @@ import {
   heldElsewhereBy,
 } from '@shared/session/database';
 import { runRelation } from '@shared/session/runRelation';
-import {
-  foldRunRows,
-  lifecycleOf,
-  type QueuedFollowUp,
-} from '@shared/session/runRows';
+import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { Append } from '@shared/session/sessionEvents';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { generateRunId } from '@utils/core';
@@ -97,33 +101,44 @@ function recordedFollowUps(
       rows.push(...committed);
       return Effect.succeed(committed);
     });
-  const runRows = (runId: RunId) =>
-    rows.filter((row) => row.aggregateId === aggregateId('run', runId));
   const followUps = new Inbox({
-    exclusive: (job) => publisher.withPermits(1)(job(append)),
+    log: {
+      transact: <A, E>(
+        work:
+          | readonly SessionEventDraft[]
+          | ((tx: SessionTransaction) => Effect.Effect<A, E>),
+      ) =>
+        typeof work === 'function'
+          ? publisher.withPermits(1)(work({ append, claim: () => Effect.void }))
+          : publisher.withPermits(1)(append(work)),
+      rows: (id, types) =>
+        Effect.sync(() =>
+          rows.filter(
+            (row) =>
+              row.aggregateId === id &&
+              (types === undefined || types.includes(row.type)),
+          ),
+        ),
+      hold: (runId) =>
+        Effect.suspend(() => {
+          claims.push(runId);
+          return options.claimRefused
+            ? Effect.fail(
+                new DatabaseWriteFailed({
+                  path: ':memory:',
+                  cause: new DatabaseClaimRefused({
+                    ownerId: JSON.stringify(['other-host', 4321, null]),
+                    verdict: 'alive',
+                  }),
+                }),
+              )
+            : Effect.void;
+        }),
+    } as InboxPort['log'],
     detach: (job) => {
       Effect.runFork(publisher.withPermits(1)(job(append)));
     },
-    pending: (runId) => foldRunRows(runRows(runId)).followUps,
-    inputClosed: (runId) => lifecycleOf(runRows(runId)).closed,
     parentOf: () => undefined,
-    named: (runId, followUpId) =>
-      foldRunRows(runRows(runId)).followUpIds.has(followUpId),
-    acquireClaim: (runId) =>
-      Effect.suspend(() => {
-        claims.push(runId);
-        return options.claimRefused
-          ? Effect.fail(
-              new DatabaseWriteFailed({
-                path: ':memory:',
-                cause: new DatabaseClaimRefused({
-                  ownerId: JSON.stringify(['other-host', 4321, null]),
-                  verdict: 'alive',
-                }),
-              }),
-            )
-          : Effect.succeed(Effect.void);
-      }),
     live: (runId) => live.has(runId),
   });
   const queuedRows = (runId: RunId) =>
@@ -145,7 +160,7 @@ function recordedFollowUps(
 /** What `input` takes now without blocking (nothing is consumed). */
 const taken = (input: RunInput) =>
   Effect.gen(function* () {
-    const batch = input.hasQueued() ? yield* input.take : null;
+    const batch = (yield* input.hasQueued) ? yield* input.take : null;
     return batch?.kind !== 'followUps'
       ? []
       : batch.followUps.map((followUp) => followUp.content.text);
@@ -181,13 +196,14 @@ function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
           startImmediately: true,
         }),
     },
-    runView: () => ({}),
+    view: { run: () => ({}) },
     interactions: { emit: () => Effect.void },
-    readRunRecords: () => Effect.succeed([]),
-    // No database behind this fixture, so the claim read fails and the
-    // refusal is the unclassified one.
-    claimOwner: () => Effect.fail(new Error('claim store unavailable')),
-    status: { clearHold: () => {}, markUnavailable: () => {} },
+    log: {
+      records: () => Effect.succeed([]),
+      // No database behind this fixture, so the claim read fails and the
+      // refusal is the unclassified one.
+      owner: () => Effect.fail(new Error('claim store unavailable')),
+    },
     followUps,
   } as unknown as SessionHandle;
 }
@@ -603,7 +619,7 @@ describe('Inbox readers', () => {
       const pending: QueuedFollowUp[] = [
         { ...followUp('/compact'), control: { kind: 'compact' } },
       ];
-      const input = new RunInput(() => pending);
+      const input = new RunInput(Effect.sync(() => pending));
 
       expect(yield* input.take).toMatchObject({
         kind: 'synthetic',
@@ -616,7 +632,7 @@ describe('Inbox readers', () => {
         kind: 'followUps',
         followUps: [followUp('first'), followUp('second')],
       });
-      expect(input.controls()).toHaveLength(1);
+      expect(yield* input.controls).toHaveLength(1);
       input.end();
       expect(yield* input.take).toBeNull();
     }),
@@ -739,7 +755,7 @@ describe('Inbox visibility held on the row', () => {
           }),
         ).toEqual({ kind: 'queued', read: false, wake: false });
         const input = yield* followUps.open(id);
-        expect(input.hasQueued()).toBe(false);
+        expect(yield* input.hasQueued).toBe(false);
 
         yield* followUps.send(id, user('go on'));
         expect(yield* taken(input)).toEqual(['child paused', 'go on']);

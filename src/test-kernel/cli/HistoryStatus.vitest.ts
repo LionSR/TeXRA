@@ -72,7 +72,7 @@ async function seedSnapshot(
     }),
   );
   await Effect.runPromise(
-    testDefaultSession().commit([
+    testDefaultSession().log.transact([
       {
         type: 'run.position',
         aggregateId: aggregateId('run', id),
@@ -171,7 +171,7 @@ describe('CLI history status formatting', () => {
   it.effect('does not offer a run whose config is missing as resumable', () =>
     Effect.gen(function* () {
       const id = 'baad-c0f' as RunId;
-      yield* testDefaultSession().commit([
+      yield* testDefaultSession().log.transact([
         {
           type: 'run.start',
           aggregateId: aggregateId('run', id),
@@ -181,7 +181,7 @@ describe('CLI history status formatting', () => {
           provenance: null,
         },
       ]);
-      yield* testDefaultSession().commit([
+      yield* testDefaultSession().log.transact([
         {
           type: 'run.position',
           aggregateId: aggregateId('run', id),

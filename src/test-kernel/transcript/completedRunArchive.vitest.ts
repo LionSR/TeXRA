@@ -32,6 +32,7 @@ import {
   createProcessSession,
   createTestSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { settleSessionEvents } from '@test/agent/progressTestUtils';
@@ -58,10 +59,10 @@ function runConfig(
 
 /** Publish the run's existence the way registration does. */
 async function stampRun(runId: RunId): Promise<void> {
-  const view = await Effect.runPromise(taskSession.readView([runId]));
+  const view = await Effect.runPromise(taskSession.view.read([runId]));
   if (!view.runs.has(runId)) {
     publishTestRunStart(taskSession, runId);
-    await Effect.runPromise(taskSession.settled);
+    await Effect.runPromise(taskSession.log.settled);
   }
 }
 
@@ -106,7 +107,8 @@ async function appendRows(
   rows: readonly LogRow[],
 ): Promise<void> {
   await stampRun(runId);
-  taskSession.publish(
+  publishTestRows(
+    taskSession,
     rows.map((row) => ({
       type: 'log' as const,
       aggregateId: aggregateId('run', runId),
@@ -116,7 +118,7 @@ async function appendRows(
       data: row.data,
     })),
   );
-  await Effect.runPromise(taskSession.settled);
+  await Effect.runPromise(taskSession.log.settled);
 }
 
 /** Write the transcript rows of a completed run. */
@@ -197,12 +199,12 @@ describe('completedRunArchive facade', () => {
           ({ session, label }) =>
             Effect.gen(function* () {
               publishTestRunStart(session, runId);
-              yield* session.settled;
+              yield* session.log.settled;
               yield* seedRunRecord(session, runId, {
                 ...runConfig(label),
                 instruction: label,
               });
-              yield* session.commit([
+              yield* session.log.transact([
                 {
                   type: 'run.description',
                   by: 'model',
@@ -210,14 +212,14 @@ describe('completedRunArchive facade', () => {
                   description: label,
                 },
               ]);
-              session.publish([
+              publishTestRows(session, [
                 {
                   type: 'response.finalized',
                   aggregateId: aggregateId('run', runId),
                   text: `Proof for ${label}.`,
                 },
               ]);
-              yield* session.settled;
+              yield* session.log.settled;
             }),
           { concurrency: 'unbounded', discard: true },
         );
@@ -303,9 +305,9 @@ describe('completedRunArchive facade', () => {
         });
         taskSession = session;
         publishTestRunStart(session, runId);
-        yield* session.settled;
+        yield* session.log.settled;
         yield* seedRunRecord(session, runId, config);
-        session.publish([
+        publishTestRows(session, [
           {
             type: 'log',
             aggregateId: aggregateId('run', runId),
@@ -319,7 +321,7 @@ describe('completedRunArchive facade', () => {
             text: 'First proof.',
           },
         ]);
-        yield* session.settled;
+        yield* session.log.settled;
 
         launchMocks.resolveAgent.mockReturnValue(
           Effect.succeed({
@@ -330,7 +332,7 @@ describe('completedRunArchive facade', () => {
         );
 
         // The one fact a resume reads: the run's opening `run.position`.
-        yield* session.commit([
+        yield* session.log.transact([
           {
             type: 'run.position',
             aggregateId: aggregateId('run', runId),
@@ -340,12 +342,12 @@ describe('completedRunArchive facade', () => {
 
         // The resumed run's trace writes its first event through the reopened
         // writer; the second turn lands beside it.
-        const publishRunEvent = session.publishRunEvent.bind(session);
+        const publishRunEvent = session.trace.publish.bind(session.trace);
         const resumedWriter = vi
-          .spyOn(session, 'publishRunEvent')
+          .spyOn(session.trace, 'publish')
           .mockImplementationOnce((requestedRunId, event) => {
             publishRunEvent(requestedRunId, event);
-            session.publish([
+            publishTestRows(session, [
               {
                 type: 'log',
                 aggregateId: aggregateId('run', runId),
@@ -374,7 +376,7 @@ describe('completedRunArchive facade', () => {
         expect(released._tag).toBe('Failure');
         expect(
           (yield* Effect.exit(
-            session.commit([
+            session.log.transact([
               {
                 type: 'log',
                 aggregateId: aggregateId('run', runId),
@@ -384,7 +386,7 @@ describe('completedRunArchive facade', () => {
             ]),
           ))._tag,
         ).toBe('Failure');
-        expect(yield* session.ownsRun(runId)).toBe(false);
+        expect(yield* session.log.owns(runId)).toBe(false);
         resumedWriter.mockRestore();
 
         const archived = yield* readCompletedRunConversationEffect(

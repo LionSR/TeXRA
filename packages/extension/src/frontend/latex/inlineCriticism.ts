@@ -47,7 +47,7 @@ const CODE_TOOL = 'criticize:tool';
 /** What {@link registerInlineCriticism} attached the feature to. */
 interface CriticismRegistration {
   readonly context: vscode.ExtensionContext;
-  readonly session: Pick<SessionBackend, 'viewChanges'>;
+  readonly session: Pick<SessionBackend, 'view'>;
   readonly runtime: ProcessRuntime;
   readonly stores: SettingsStores;
 }
@@ -233,7 +233,7 @@ export function pushManualCriticism(entry: ManualCriticismEntry): boolean {
 export function registerInlineCriticism(
   context: vscode.ExtensionContext,
   runtime: ProcessRuntime,
-  session: Pick<SessionBackend, 'viewChanges'>,
+  session: Pick<SessionBackend, 'view'>,
   stores: SettingsStores,
 ): Effect.Effect<void, StateReadFailed> {
   return Effect.suspend(() => {

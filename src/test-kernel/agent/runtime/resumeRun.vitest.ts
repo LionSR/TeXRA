@@ -107,11 +107,11 @@ const taken: string[] = [];
 const resumedFlowTakes = (session: SessionHandle) =>
   Effect.gen(function* () {
     const input = yield* session.followUps.open(RUN);
-    const batch = input.hasQueued() ? yield* input.take : null;
+    const batch = (yield* input.hasQueued) ? yield* input.take : null;
     if (batch?.kind === 'followUps') {
       taken.push(...batch.followUps.map((followUp) => followUp.content.text));
       // What the loop's consume commits: the rows stop queueing the batch.
-      yield* session.commit(
+      yield* session.log.transact(
         batch.followUps.map((followUp) => ({
           type: 'followup.consumed' as const,
           aggregateId: aggregateId('run', RUN),
@@ -134,7 +134,7 @@ const createSession = Effect.fn('test.createSession')(function* () {
   const session = yield* createTestSession();
   publishTestRunStart(session, RUN);
   sessions.push(session);
-  yield* session.settled;
+  yield* session.log.settled;
   return session;
 });
 
@@ -238,7 +238,7 @@ describe('resumeRun tool-use queue ownership', () => {
       ).toEqual({ kind: 'queued', read: false, wake: false });
 
       yield* Deferred.succeed(exists, false);
-      yield* session.settled;
+      yield* session.log.settled;
       expect(yield* Fiber.join(resumed)).toEqual({ failed: 'not_resumable' });
       expect(yield* queuedTexts(session)).toEqual(['raced']);
     }),
@@ -324,7 +324,7 @@ describe('resumeRun tool-use queue ownership', () => {
       const resumed = yield* Effect.forkChild(resumeOne(RUN, { session }));
       yield* Deferred.await(configRead);
       session.followUps.closeInput(RUN);
-      yield* session.settled;
+      yield* session.log.settled;
       yield* Deferred.succeed(config, snapshot().agentConfig);
 
       expect(yield* Fiber.join(resumed)).toEqual({ failed: 'not_resumable' });
@@ -437,14 +437,17 @@ describe('resumeRun tool-use queue ownership', () => {
   it.effect('refuses with `finished` when no checkpoint remains', () =>
     Effect.gen(function* () {
       const session = yield* createSession();
-      const markUnreadable = vi.spyOn(session, 'markUnreadable');
+      const markUnreadable = vi.spyOn(session.view, 'markUnreadable');
       retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
 
       expect(yield* resumeOne(RUN, { session })).toEqual({
         failed: 'finished',
       });
       expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
-      expect(markUnreadable).not.toHaveBeenCalled();
+      // Clearing a stale detail (`null`) is not a mark.
+      expect(
+        markUnreadable.mock.calls.filter(([, detail]) => detail !== null),
+      ).toEqual([]);
     }),
   );
 
@@ -456,7 +459,7 @@ describe('resumeRun tool-use queue ownership', () => {
     () =>
       Effect.gen(function* () {
         const session = yield* createSession();
-        const markUnreadable = vi.spyOn(session, 'markUnreadable');
+        const markUnreadable = vi.spyOn(session.view, 'markUnreadable');
         retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
         classifyRunMock.mockResolvedValueOnce({
           kind: 'held_elsewhere',
@@ -526,10 +529,10 @@ describe('resumeRun tool-use queue ownership', () => {
     () =>
       Effect.gen(function* () {
         const session = yield* createSession();
-        const markUnreadable = vi.spyOn(session, 'markUnreadable');
+        const markUnreadable = vi.spyOn(session.view, 'markUnreadable');
         const ownerId = JSON.stringify(['other-host', 4321, 'start-1']);
         // The claim the host's resume takes is refused by its live owner.
-        vi.spyOn(session, 'borrowRunClaim').mockReturnValue(
+        vi.spyOn(session.log, 'hold').mockReturnValue(
           Effect.fail(
             new DatabaseWriteFailed({
               path: ':memory:',

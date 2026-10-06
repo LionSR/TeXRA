@@ -1,47 +1,38 @@
 /**
  * `SessionRequests`: one handler for every request a surface issues to its
- * session's runtime (PRD one-fold-three-renderers, 7.6 and 8.2). A request
- * is answered exactly once: an `Outcome` the host renders, or one of the
- * request errors. Existence is read from the log's sequence table before
- * any arm runs (contract C2: a run exists iff its sequence row exists
- * and is not closed, minted synchronously by the publish of its `run.start`
- * and ahead of every fold), so a stop issued the moment a launch exposes its
- * run is admitted; a run with no row is `Unavailable`, never a defect
- * (a second surface can act from a view that has not yet folded a
- * `run.removed`). Ownership comes from that same current sequence row:
- * a foreign claim
- * without a death proof is `NotOwner`. Display residency and historical
- * event writers never establish present ownership. A collaborator that
- * rejects is neither: the arms below reach one as an Effect of this same
- * program and die on its untyped failures (`Effect.orDie`), so such a
- * rejection is a handler defect, and `SessionBridge` logs the cause
- * under the request id and answers `Internal`; the sender's latch clears
- * either way. A refusal this handler decides is a `RequestError`; a
- * collaborator breaking is not one to word. In process (the TUI,
- * headless) the Effect's own result is
- * the response; a bridge posts it as the `Response` of 8.4.
- *
- * Built per session by `sessionLayer.ts`'s opener as that session's
- * requests: it acts on exactly the session it was built for, on that
- * session's `Runs`, and on the approval state it carries.
+ * session's runtime (PRD one-fold-three-renderers, 7.6 and 8.2), answered
+ * exactly once: an `Outcome` the host renders, or a request error.
+ * Existence is read from the log's sequence table before any arm runs (C2:
+ * a run exists iff its sequence row exists and is not closed), so a stop
+ * issued the moment a launch exposes its run is admitted, and a run with no
+ * row is `Unavailable`, never a defect. Ownership comes from that same row:
+ * a foreign claim without a death proof is `NotOwner`. A collaborator that
+ * rejects is a handler defect (`Effect.orDie`), which `SessionBridge` logs
+ * under the request id and answers `Internal`. In process (the TUI,
+ * headless) the Effect's own result is the response; a bridge posts it as
+ * the `Response` of 8.4. Built per session by `sessionLayer.ts`.
  */
 import { Effect, SubscriptionRef, type Context } from 'effect';
 
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
+import { requestAsks } from '@agent/runtime/requestPolicy';
+import { setPolicy } from '@agent/runtime/runApprovalQueue';
 import { forkRun } from '@agent/runtime/forkRun';
 import { RunLive } from '@agent/runtime/runRegistry';
 import { Runs } from '@agent/runtime/runRegistry';
 import type {
-  SessionApprovals,
+  SessionHandle,
   SessionRequests,
-} from '@agent/runtime/runApprovalQueue';
+} from '@agent/runtime/SessionHandle';
 import {
   aggregateId as qualifyAggregateId,
   requestParksItsCaller,
+  type CommitOrdinal,
+  type LocalRuntimeState,
+  type RunAction,
+  type RunId,
 } from '@shared/schemas';
-import type { LocalRuntimeState, RunAction, RunId } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
   DatabaseWriteFailed,
@@ -64,8 +55,6 @@ import type { ToolTable } from '@tools/toolTable';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { setPolicy } from './pendingUnderBypass';
-
 const done: Outcome = Object.freeze({ kind: 'done' } as const);
 
 /** The log's reads, and removal through the session's publisher. */
@@ -73,81 +62,22 @@ type SessionRequestLog = Pick<
   Context.Service.Shape<typeof Database>,
   'aggregateState' | 'readAll'
 > &
-  Pick<SessionEventsShape, 'removeRun'>;
+  Pick<SessionEventsShape, 'removeRun' | 'detach'>;
 
-/**
- * The session's requests: its approval state and the handler that admits
- * on the log's sequence table. One value per session, so the decision lanes
- * below, like the approval queues beside them, serialize within a session and
- * never across two.
- */
-export function sessionRequests(
-  session: SessionHandle,
-  approvals: SessionApprovals,
-  log: SessionRequestLog,
-  local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
-  plugins: ToolTable,
-  globalDatabase: Context.Service.Shape<typeof GlobalDatabase>,
-): SessionRequests {
-  /**
-   * One in-process serial lane per request id. `decideRequest`'s checked
-   * append fences the row across processes, but the row alone: two surfaces
-   * of this process deciding one inquiry would both pass the pending check
-   * and both reach the thread record before either appended, so the loser's
-   * verdict could stand over an answer already recorded and delivered. The
-   * lane makes the pending check, the inquiry record and the append one
-   * operation per request.
-   */
-  const decisionLanes = new Map<string, PerKeyLane>();
-  const request = Effect.fn('SessionRequests.request')(function* (
-    req: RuntimeRequest,
-  ) {
-    yield* requireRunAction(session, req);
-    const admitted = yield* admit(log, local, req);
-    // This process holds the run's claim: a parked request has a fiber here.
-    const heldHere =
-      admitted.ownerId !== null &&
-      SubscriptionRef.getUnsafe(local).self.includes(admitted.ownerId);
-    return yield* handle(
-      session,
-      approvals,
-      decisionLanes,
-      plugins,
-      req,
-      log,
-      admitted,
-      heldHere,
-    ).pipe(
-      Effect.provideService(GlobalDatabase, globalDatabase),
-      Effect.provideService(Runs, session.runs),
-    );
-  });
-  const removeRun = Effect.fn('SessionRequests.removeRun')(function* (
-    runId: RunId,
-    mode: DeletionMode,
-    expectedStartCommit: number,
-  ) {
-    // Listing-driven removal (`texra history delete`, the leftover-shell
-    // sweep) acts through the registry's inactive-run step and the claim,
-    // which refuse a run anything still holds; the view's liveness of a
-    // spawned run this process registered and never started is not theirs.
-    // Deliberately not gated on `actions` either: an explicit delete is how
-    // a user clears a run this process cannot read (the UI never offers
-    // it), and the claim still protects a run a live process holds.
-    const admitted = yield* admit(log, local, { kind: 'run.delete', runId });
-    if (admitted.startCommit !== expectedStartCommit) {
-      return yield* Effect.fail(
-        new Unavailable({
-          runId,
-          reason: 'The task changed after it was listed.',
-        }),
-      );
-    }
-    return yield* deleteAdmittedRun(log, runId, admitted, mode).pipe(
-      Effect.provideService(Runs, session.runs),
-    );
-  });
-  return { approvals, request, removeRun };
+/** What the session layer builds a session's requests over. */
+export interface SessionRequestsInit {
+  /** The session these requests act on, resolved when first used. */
+  readonly session: () => SessionHandle;
+  /** The root's log: admission reads, removal, and the detached door an
+   *  interrupted request's cancellation takes. */
+  readonly log: SessionRequestLog;
+  /** This process's liveness snapshot (`self`, `dead`). */
+  readonly local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>;
+  readonly plugins: ToolTable;
+  readonly globalDatabase: Context.Service.Shape<typeof GlobalDatabase>;
+  /** Whether the session's doors are shut: a cancellation then writes
+   *  nothing. */
+  readonly closed: () => boolean;
 }
 
 /** The run action a request performs, where the run's `actions` gates it. */
@@ -158,35 +88,19 @@ const GATED_ACTIONS: Partial<Record<RuntimeRequest['kind'], RunAction>> = {
   'policy.set': 'grant',
 };
 
-/**
- * The user's title, as the run's `run.description` row by the user. A run
- * this process does not hold takes the row under its claim, taken and given
- * back as a decision's is, so a later resume can still take the run.
- */
-function rename(
-  session: SessionHandle,
-  req: Extract<RuntimeRequest, { kind: 'run.rename' }>,
-  heldHere: boolean,
-): Effect.Effect<Outcome, RequestError> {
-  const commit = session
-    .commit([
-      {
-        type: 'run.description',
-        aggregateId: qualifyAggregateId('run', req.runId),
-        description: req.title,
-        by: 'user',
-      },
-    ])
-    .pipe(
-      Effect.mapError(
-        writeRefused({
-          runId: req.runId,
-          reason: 'The title could not be saved.',
-        }),
-      ),
-      Effect.as(done),
-    );
-  return withRunClaim(session, req.runId, heldHere, commit);
+/** One session's requests, as every handler below reads them. */
+interface RequestDeps extends SessionRequestsInit {
+  /**
+   * One in-process serial lane per request id. `decide`'s checked append
+   * fences the row across processes, but the row alone: two surfaces of
+   * this process deciding one inquiry would both pass the pending check and
+   * both reach the thread record before either appended, so the loser's
+   * verdict could stand over an answer already recorded and delivered. The
+   * lane makes the pending check, the inquiry record and the append one
+   * operation per request.
+   */
+  readonly decisionLanes: Map<string, PerKeyLane>;
+  readonly asks: Pick<SessionRequests, 'ask' | 'decide' | 'decision'>;
 }
 
 /**
@@ -194,39 +108,40 @@ function rename(
  * else taken and given back around it, so a later resume can still take
  * the run.
  */
-function withRunClaim<A, R>(
-  session: SessionHandle,
+const withRunClaim = <A, R>(
+  deps: RequestDeps,
   runId: RunId,
   heldHere: boolean,
   write: Effect.Effect<A, RequestError, R>,
-): Effect.Effect<A, RequestError, R> {
-  if (heldHere) return write;
-  return Effect.acquireUseRelease(
-    session
-      .acquireClaims(qualifyAggregateId('run', runId))
-      .pipe(Effect.mapError((): RequestError => new NotOwner({ runId }))),
-    () => write,
-    (release) => release.pipe(Effect.orDie),
-  );
-}
+): Effect.Effect<A, RequestError, R> =>
+  heldHere
+    ? write
+    : Effect.scoped(
+        deps
+          .session()
+          .log.hold(runId)
+          .pipe(
+            Effect.mapError((): RequestError => new NotOwner({ runId })),
+            Effect.andThen(write),
+          ),
+      );
 
 /**
- * Refuse a delete, compaction, rename or approval grant the run's current `actions`
- * no longer holds, with its reason: the host rendered it from an earlier
- * view, and the run may have started or ended since. A run the view has not
- * folded yet, and one another process holds, are left to `admit` and the
- * claim (the latter answers `NotOwner`); any other run this process cannot
- * act on is refused here. A stop is not gated: it is always safe to ask,
- * and a run just launched may not have folded live.
+ * Refuse a delete, compaction, rename or approval grant the run's current
+ * `actions` no longer holds, with its reason: the host rendered it from an
+ * earlier view, and the run may have started or ended since. A run the
+ * view has not folded yet, and one another process holds, are left to
+ * `admit` and the claim (the latter answers `NotOwner`). A stop is not
+ * gated: it is always safe to ask.
  */
-function requireRunAction(
-  session: Pick<SessionHandle, 'view'>,
+const requireRunAction = (
+  deps: RequestDeps,
   req: RuntimeRequest,
-): Effect.Effect<void, RequestError> {
+): Effect.Effect<void, RequestError> => {
   const action = GATED_ACTIONS[req.kind];
   if (action === undefined) return Effect.void;
   const runId = req.kind === 'policy.set' ? req.change.runId : req.runId;
-  const run = SubscriptionRef.getUnsafe(session.view).runs.get(runId);
+  const run = deps.session().view.run(runId);
   // `readOnly` with a foreign owner: a live one (a dead owner's run is not
   // read-only), whose claim answers for the run.
   const heldElsewhere =
@@ -234,20 +149,19 @@ function requireRunAction(
   return run === undefined || heldElsewhere || run.actions.includes(action)
     ? Effect.void
     : Effect.fail(new Rejected({ reason: runActionRefusal(run, action) }));
-}
+};
 
-/** Admit against current sequence-row existence and claims. A foreign owner
- *  absent from the liveness snapshot is unprovable, so it cannot be admitted.
- *  Deletion uses the database transaction for its explicit single-run exception. */
-function admit(
-  log: Pick<Context.Service.Shape<typeof Database>, 'aggregateState'>,
-  local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
+/** Admit against current sequence-row existence and claims. A foreign
+ *  owner absent from the liveness snapshot is unprovable, so it cannot be
+ *  admitted. Deletion uses the database transaction for its explicit
+ *  single-run exception. */
+const admit = (
+  deps: RequestDeps,
   req: RuntimeRequest,
-): Effect.Effect<AggregateState, RequestError> {
-  // The run a request acts on.
+): Effect.Effect<AggregateState, RequestError> => {
   const runId = req.kind === 'policy.set' ? req.change.runId : req.runId;
   return Effect.flatMap(
-    log.aggregateState([qualifyAggregateId('run', runId)]).pipe(
+    deps.log.aggregateState([qualifyAggregateId('run', runId)]).pipe(
       Effect.orDie,
       Effect.map((rows) => rows[0]),
     ),
@@ -260,7 +174,7 @@ function admit(
           }),
         );
       }
-      const liveness = SubscriptionRef.getUnsafe(local);
+      const liveness = SubscriptionRef.getUnsafe(deps.local);
       // A fork only reads the committed rows of its source, whoever holds it.
       if (
         req.kind !== 'run.delete' &&
@@ -274,46 +188,65 @@ function admit(
       return Effect.succeed(state);
     },
   );
-}
-
-/** A decision for a request no longer pending: decided already, or never opened. */
-function settled(runId: RunId): Unavailable {
-  return new Unavailable({
-    runId,
-    reason: 'No pending request under that id.',
-  });
-}
+};
 
 /**
- * The one way in for a decision (one run model, 3.7): the request must be
- * pending (opened, not decided), the decision lands as the run's
- * `request.decided` row, and the waiting run reads it from the tail. The
- * fold routes the arm; `SessionHandle.decideRequest` re-reads the committed
- * rows under the session's publication permit and is the authority, so two
- * surfaces deciding at once record one decision and the loser hears that the
- * request was settled rather than overwriting it.
+ * The user's title, as the run's `run.description` row by the user, under
+ * the run's claim.
+ */
+const rename = (
+  deps: RequestDeps,
+  req: Extract<RuntimeRequest, { kind: 'run.rename' }>,
+  heldHere: boolean,
+): Effect.Effect<Outcome, RequestError> =>
+  withRunClaim(
+    deps,
+    req.runId,
+    heldHere,
+    deps
+      .session()
+      .log.transact([
+        {
+          type: 'run.description',
+          aggregateId: qualifyAggregateId('run', req.runId),
+          description: req.title,
+          by: 'user',
+        },
+      ])
+      .pipe(
+        Effect.mapError(
+          writeRefused({
+            runId: req.runId,
+            reason: 'The title could not be saved.',
+          }),
+        ),
+        Effect.as(done),
+      ),
+  );
+
+/**
+ * The one way in for a surface's decision (one run model, 3.7): the
+ * request must be pending, the decision lands as the run's
+ * `request.decided` row, and the waiting run reads it from the tail.
+ * {@link decide} re-reads the committed rows inside its transaction and is
+ * the authority, so two surfaces deciding at once record one decision and
+ * the loser hears that the request was settled.
  *
  * The plugin that owns the request's kind records its side first (an
  * inquiry's answer, on its cross-project thread): that record cannot share
- * the run's transaction, and a process that exits in the gap then leaves the
- * request pending and answerable. So the whole decision takes the request's
- * lane ({@link decisionLanes}): a second surface of this process reads a
- * request already decided instead of recording behind the first.
+ * the run's transaction, and a process that exits in the gap then leaves
+ * the request pending and answerable. So the whole decision takes the
+ * request's lane.
  */
-function decide(
-  session: SessionHandle,
-  decisionLanes: Map<string, PerKeyLane>,
-  plugins: ToolTable,
+const decideRequest = (
+  deps: RequestDeps,
   req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
-  admitted: AggregateState,
   heldHere: boolean,
-): Effect.Effect<Outcome, RequestError, GlobalDatabase> {
-  // A run whose owner is gone (proved dead, or a claim already released)
-  // takes no append until this process holds its claim: the decision
-  // acquires it with the fencing resume uses and gives it back, so a later
-  // resume can still take the run.
+): Effect.Effect<Outcome, RequestError, GlobalDatabase> => {
   const answer = Effect.gen(function* () {
-    const pending = SubscriptionRef.getUnsafe(session.view).requests.find(
+    const pending = SubscriptionRef.getUnsafe(
+      deps.session().view.ref,
+    ).requests.find(
       (request) =>
         request.runId === req.runId && request.requestId === req.requestId,
     );
@@ -332,13 +265,17 @@ function decide(
         }),
       );
     }
-    const hook = plugins.decisions.get(pending.payload.kind);
+    const hook = deps.plugins.decisions.get(pending.payload.kind);
     if (hook !== undefined)
       yield* hook
-        .record({ payload: pending.payload, decision: req.decision, session })
+        .record({
+          payload: pending.payload,
+          decision: req.decision,
+          session: deps.session(),
+        })
         .pipe(Effect.orDie);
-    const recorded = yield* session
-      .decideRequest(req.runId, req.requestId, req.decision)
+    const recorded = yield* deps.asks
+      .decide(req.runId, req.requestId, req.decision)
       .pipe(
         Effect.mapError(
           writeRefused({
@@ -351,18 +288,18 @@ function decide(
     return done;
   });
   return withPerKeyLane(
-    decisionLanes,
+    deps.decisionLanes,
     `${req.runId}/${req.requestId}`,
-  )(withRunClaim(session, req.runId, heldHere, answer));
-}
+  )(withRunClaim(deps, req.runId, heldHere, answer));
+};
 
 /** Delete the admitted lifetime after acquiring its inactive run slot. */
-function deleteAdmittedRun(
-  log: SessionRequestLog,
+const deleteAdmittedRun = (
+  deps: RequestDeps,
   runId: RunId,
   admitted: AggregateState,
   mode: DeletionMode,
-): Effect.Effect<Outcome, RequestError, Runs> {
+): Effect.Effect<Outcome, RequestError> => {
   const aggregateId = qualifyAggregateId('run', runId);
   return Effect.gen(function* () {
     if (admitted.startCommit === null) {
@@ -373,7 +310,7 @@ function deleteAdmittedRun(
         }),
       );
     }
-    const [start] = yield* log
+    const [start] = yield* deps.log
       .readAll(admitted.startCommit - 1, admitted.startCommit)
       .pipe(Effect.orDie);
     if (start?.type !== 'run.start' || start.aggregateId !== aggregateId) {
@@ -384,10 +321,11 @@ function deleteAdmittedRun(
         }),
       );
     }
-    yield* (yield* Runs)
-      .withInactiveRunStep(
+    yield* deps
+      .session()
+      .runs.withInactiveRunStep(
         runId,
-        log.removeRun(aggregateId, mode, start.commit),
+        deps.log.removeRun(aggregateId, mode, start.commit),
       )
       .pipe(
         Effect.mapError((error): RequestError => {
@@ -415,18 +353,14 @@ function deleteAdmittedRun(
       );
     return done;
   });
-}
+};
 
-function handle(
-  session: SessionHandle,
-  approvals: SessionApprovals,
-  decisionLanes: Map<string, PerKeyLane>,
-  plugins: ToolTable,
+const handle = (
+  deps: RequestDeps,
   req: RuntimeRequest,
-  log: SessionRequestLog,
   admitted: AggregateState,
   heldHere: boolean,
-): Effect.Effect<Outcome, RequestError, GlobalDatabase | Runs> {
+): Effect.Effect<Outcome, RequestError, GlobalDatabase | Runs> => {
   switch (req.kind) {
     case 'run.stop':
       return Effect.gen(function* () {
@@ -436,7 +370,7 @@ function handle(
         // request-borne stop.
         const detachActiveChildren =
           req.detachActiveChildren ??
-          (yield* detachSubagentsOnStop(session.roots));
+          (yield* detachSubagentsOnStop(deps.session().roots));
         yield* runs.stop(req.runId, {
           detachActiveChildren,
           reason: req.reason,
@@ -457,27 +391,22 @@ function handle(
         Effect.uninterruptible,
       );
     case 'run.delete':
-      return deleteAdmittedRun(log, req.runId, admitted, 'single');
+      return deleteAdmittedRun(deps, req.runId, admitted, 'single');
     case 'run.compact':
-      return Effect.flatMap(Runs, (runs) => {
-        const result = runs.requestManualCompaction(req.runId);
-        switch (result.kind) {
-          case 'requested':
-            return Effect.succeed(done);
-          case 'no_active_tool_use':
-            return Effect.fail(
-              new Unavailable({
-                runId: req.runId,
-                reason: 'This task has no conversation to compact.',
-              }),
-            );
-        }
-      });
+      return deps.session().runs.requestManualCompaction(req.runId).kind ===
+        'requested'
+        ? Effect.succeed(done)
+        : Effect.fail(
+            new Unavailable({
+              runId: req.runId,
+              reason: 'This task has no conversation to compact.',
+            }),
+          );
     case 'run.rename':
-      return rename(session, req, heldHere);
+      return rename(deps, req, heldHere);
     case 'run.fork':
       return forkRun(
-        session,
+        deps.session(),
         { id: req.runId, uid: admitted.uid },
         req.at ?? null,
       ).pipe(
@@ -487,24 +416,23 @@ function handle(
         ),
         Effect.map((runId): Outcome => ({ kind: 'forked', runId })),
       );
-    case 'run.reset':
-      return Effect.flatMap(Runs, (runs) => {
-        const controls = runs.getHandle(req.runId)?.controls;
-        if (controls === undefined)
-          return Effect.fail(
-            new Unavailable({
-              runId: req.runId,
-              reason: 'Resume the task to reset it.',
-            }),
-          );
-        return controls.editView(req.handoff ?? null).pipe(
-          Effect.mapError(
-            (error): RequestError =>
-              new Unavailable({ runId: req.runId, reason: error.message }),
-          ),
-          Effect.as(done),
+    case 'run.reset': {
+      const controls = deps.session().runs.getHandle(req.runId)?.controls;
+      if (controls === undefined)
+        return Effect.fail(
+          new Unavailable({
+            runId: req.runId,
+            reason: 'Resume the task to reset it.',
+          }),
         );
-      });
+      return controls.editView(req.handoff ?? null).pipe(
+        Effect.mapError(
+          (error): RequestError =>
+            new Unavailable({ runId: req.runId, reason: error.message }),
+        ),
+        Effect.as(done),
+      );
+    }
     case 'followUp.send':
       return submitFollowUp(
         req.runId,
@@ -514,7 +442,7 @@ function handle(
           ...(req.displayText == null ? {} : { displayText: req.displayText }),
           ...(req.mediaFiles == null ? {} : { mediaFiles: req.mediaFiles }),
         },
-        { session },
+        { session: deps.session() },
       ).pipe(
         Effect.orDie,
         Effect.flatMap((result) =>
@@ -535,13 +463,77 @@ function handle(
         ),
       );
     case 'request.decide':
-      return decide(session, decisionLanes, plugins, req, admitted, heldHere);
+      return decideRequest(deps, req, heldHere);
     case 'policy.set':
       return withRunClaim(
-        session,
+        deps,
         req.change.runId,
         heldHere,
-        setPolicy(session, approvals, req.change, heldHere),
+        setPolicy(deps.session(), req.change, heldHere),
       );
   }
+};
+
+/**
+ * The session's requests: the handler that admits on the log's sequence
+ * table, and a run's questions to a person. One value per session, so the
+ * decision lanes serialize within a session and never across two.
+ */
+export function sessionRequests(init: SessionRequestsInit): SessionRequests {
+  const deps: RequestDeps = {
+    ...init,
+    decisionLanes: new Map(),
+    asks: requestAsks({
+      session: init.session,
+      detach: init.log.detach,
+      closed: init.closed,
+    }),
+  };
+  const request = Effect.fn('SessionRequests.request')(function* (
+    req: RuntimeRequest,
+  ) {
+    yield* requireRunAction(deps, req);
+    const admitted = yield* admit(deps, req);
+    // This process holds the run's claim: a parked request has a fiber here.
+    const heldHere =
+      admitted.ownerId !== null &&
+      SubscriptionRef.getUnsafe(deps.local).self.includes(admitted.ownerId);
+    return yield* handle(deps, req, admitted, heldHere).pipe(
+      Effect.provideService(GlobalDatabase, deps.globalDatabase),
+      Effect.provideService(Runs, deps.session().runs),
+    );
+  });
+
+  const removeRun = Effect.fn('SessionRequests.removeRun')(function* (
+    runId: RunId,
+    mode: DeletionMode,
+    expectedStartCommit: CommitOrdinal,
+  ) {
+    // Listing-driven removal (`texra history delete`, the leftover-shell
+    // sweep) acts through the registry's inactive-run step and the claim,
+    // which refuse a run anything still holds. Deliberately not gated on
+    // `actions` either: an explicit delete is how a user clears a run this
+    // process cannot read (the UI never offers it), and the claim still
+    // protects a run a live process holds.
+    const admitted = yield* admit(deps, { kind: 'run.delete', runId });
+    if (admitted.startCommit !== expectedStartCommit) {
+      return yield* Effect.fail(
+        new Unavailable({
+          runId,
+          reason: 'The task changed after it was listed.',
+        }),
+      );
+    }
+    return yield* deleteAdmittedRun(deps, runId, admitted, mode);
+  });
+
+  return { request, removeRun, ...deps.asks };
+}
+
+/** A decision for a request no longer pending: decided already, or never opened. */
+function settled(runId: RunId): Unavailable {
+  return new Unavailable({
+    runId,
+    reason: 'No pending request under that id.',
+  });
 }

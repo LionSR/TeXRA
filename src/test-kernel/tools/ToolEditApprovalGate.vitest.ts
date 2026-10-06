@@ -14,8 +14,13 @@ import { humanGrant } from '@agent/runtime/runApprovalQueue';
 // Local imports
 import type { ToolServices } from '@agent/runtime/ToolServices';
 
+import type { SessionTransaction } from '@agent/runtime/SessionHandle';
 import { WorkspaceFs } from '@platform/rootedFs';
-import type { RequestDecision, RunId } from '@shared/schemas';
+import type {
+  RequestDecision,
+  RunId,
+  SessionEventDraft,
+} from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -168,13 +173,13 @@ function inRun<A, E>(effect: Effect.Effect<A, E, ToolServices>) {
 describe('Tool edit approval gating', () => {
   beforeEach(async () => {
     await installPlatform();
-    testDefaultSession().setApprovalPolicy('ask');
+    testDefaultSession().approvals.setPolicy('ask');
     policyDenials = 0;
     workspaceWrites.mockReset();
     relativeFiles.clear();
     readFiles = new Set<string>();
     runId = publishTestRunStart(testDefaultSession(), generateRunId());
-    await Effect.runPromise(testDefaultSession().settled);
+    await Effect.runPromise(testDefaultSession().log.settled);
     decisions = autoDecideRequests(testDefaultSession(), () => nextDecision());
   });
 
@@ -358,7 +363,7 @@ describe('Tool edit approval gating', () => {
       yield* Effect.tryPromise(() =>
         installPlatform({ 'texra.toolUse.requireEditApproval': false }),
       );
-      testDefaultSession().setApprovalPolicy('never');
+      testDefaultSession().approvals.setPolicy('never');
 
       const tool = writeFileTool();
       const write = stubWorkspaceFile('denied.txt', {
@@ -408,20 +413,25 @@ describe('Tool edit approval gating', () => {
     Effect.gen(function* () {
       // The commit that would list the request is refused, so no
       // `request.decided` will ever release the preview staged before it:
-      // `openRequest`, the one call that knows the row never landed, runs
+      // `requests.ask`, the one call that knows the row never landed, runs
       // the release the staging handed it.
       const session = testDefaultSession();
-      const commit = session.commit.bind(session);
-      vi.spyOn(session, 'commit').mockImplementation((events) =>
-        events.some((event) => event.type === 'request.opened')
+      const transact = session.log.transact.bind(session.log);
+      vi.spyOn(session.log, 'transact').mockImplementation(((
+        work:
+          | readonly SessionEventDraft[]
+          | ((tx: SessionTransaction) => Effect.Effect<unknown, unknown>),
+      ) => {
+        if (typeof work === 'function') return transact(work);
+        return work.some((event) => event.type === 'request.opened')
           ? Effect.fail(
               new DatabaseWriteFailed({
                 path: 'session.db',
                 cause: 'the disk is full',
               }),
             )
-          : commit(events),
-      );
+          : transact(work);
+      }) as typeof transact);
 
       const failure = yield* inRun(
         requestToolEditApproval({
@@ -447,12 +457,17 @@ describe('Tool edit approval gating', () => {
         // with no row written: the cancellation finds nothing open, writes
         // no decision, and releases what the open never listed.
         const session = testDefaultSession();
-        const commit = session.commit.bind(session);
-        vi.spyOn(session, 'commit').mockImplementation((events) =>
-          events.some((event) => event.type === 'request.opened')
+        const transact = session.log.transact.bind(session.log);
+        vi.spyOn(session.log, 'transact').mockImplementation(((
+          work:
+            | readonly SessionEventDraft[]
+            | ((tx: SessionTransaction) => Effect.Effect<unknown, unknown>),
+        ) => {
+          if (typeof work === 'function') return transact(work);
+          return work.some((event) => event.type === 'request.opened')
             ? Effect.never
-            : commit(events),
-        );
+            : transact(work);
+        }) as typeof transact);
 
         const request = yield* Effect.forkChild(
           inRun(
@@ -514,7 +529,7 @@ describe('Tool edit approval gating', () => {
         );
 
         yield* Fiber.interrupt(request);
-        yield* session.settled;
+        yield* session.log.settled;
 
         assert.deepStrictEqual(releasedPreviews, []);
       }),

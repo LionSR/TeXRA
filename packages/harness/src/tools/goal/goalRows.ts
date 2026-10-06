@@ -22,7 +22,7 @@ import type { RunView } from '@shared/session/sessionView';
 import { hexId12 } from '@utils/core';
 
 /** What a goal reader takes: the fold's per-run level. */
-type GoalReader = Pick<SessionHandle, 'runView'>;
+type GoalReader = Pick<SessionHandle, 'view'>;
 
 /**
  * What a goal mutation takes: the reader plus the awaited commit. A mutation
@@ -30,7 +30,7 @@ type GoalReader = Pick<SessionHandle, 'runView'>;
  * failed append reaches the caller as the mutation's error instead of a
  * success over a row that never landed.
  */
-type GoalWriter = GoalReader & Pick<SessionHandle, 'commit'>;
+type GoalWriter = GoalReader & Pick<SessionHandle, 'log'>;
 
 function goalOfRunView(runId: RunId, run: RunView | undefined): Goal | null {
   if (run === undefined) return null;
@@ -45,7 +45,7 @@ function commitGoalState(
   runId: RunId,
   state: GoalState,
 ): Effect.Effect<void, Error> {
-  return session.commit([goalStateRow(runId, state)]).pipe(Effect.asVoid);
+  return session.log.transact([goalStateRow(runId, state)]).pipe(Effect.asVoid);
 }
 
 /** Commit the run's goal as its next row and hand it back to the caller. */
@@ -71,7 +71,7 @@ function requireNonEmpty(
 
 /** The run's in-flight goal, or null when none is. */
 export function goalOf(session: GoalReader, runId: RunId): Goal | null {
-  return goalOfRunView(runId, session.runView(runId));
+  return goalOfRunView(runId, session.view.run(runId));
 }
 
 /**

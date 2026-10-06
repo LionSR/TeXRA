@@ -71,7 +71,6 @@ import {
   registerInlineComments,
 } from '@frontend/comments/inlineComments';
 import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
-import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { withLogChannel } from '@logger/effectLog';
 import { setLogSink } from '@logger/logSink';
@@ -495,7 +494,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   const owner = yield* SessionOwner;
   const runtimeSession = yield* owner.open({
     roots,
-    responseTextProcessing: createTexraResponseTextProcessing(),
     // The service follows the interrupted tasks of a window that is its
     // client.
     ...(Result.isFailure(service) && { interruptedTasks: 'offer' }),
@@ -519,18 +517,18 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
       ),
     );
   }
-  if (runtimeSession.storeMovedAside) {
+  if (runtimeSession.log.movedAside) {
     yield* Effect.forkDetach(
       announce(
         EXTENSION_CHANNEL,
         vscodeUi.showWarningMessage(
-          sessionStoreMovedAsideMessage(runtimeSession.storeMovedAside),
+          sessionStoreMovedAsideMessage(runtimeSession.log.movedAside),
         ),
         undefined,
       ),
     );
   }
-  runtimeSession.setApprovalPolicy(
+  runtimeSession.approvals.setPolicy(
     yield* readSettingFrom<TexraApprovalPolicy>(
       runtimeSession.roots,
       TEXRA_APPROVAL_POLICY_CONFIG_KEY,
@@ -539,11 +537,11 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   // The service's session of this project takes the window's policy, and
   // every change of it the settings view makes.
   if (Result.isSuccess(service)) {
-    yield* backend.setApprovalPolicy(runtimeSession.approvalPolicy);
+    yield* backend.setApprovalPolicy(runtimeSession.approvals.policy());
     yield* Effect.forkScoped(
       onAppSignal('approvalPolicyChanged', () =>
         runtime.runFork(
-          backend.setApprovalPolicy(runtimeSession.approvalPolicy),
+          backend.setApprovalPolicy(runtimeSession.approvals.policy()),
         ),
       ),
       { startImmediately: true },
@@ -665,7 +663,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
 
   const statusBarUsageTracker = new StatusBarUsageTracker(backend);
   const updateStatusBarTooltip = () => {
-    const policy = runtimeSession.approvalPolicy;
+    const policy = runtimeSession.approvals.policy();
     const policyLine = `Approval policy: ${texraApprovalPolicyLabel(policy)} — ${formatTexraApprovalPolicy(policy)}`;
     const usage = statusBarUsageTracker.totalUsage;
     const { cost, inputTokens, outputTokens } = usage;

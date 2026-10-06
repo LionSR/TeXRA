@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect, Stream } from 'effect';
+import { Effect } from 'effect';
 import '@test/support/defaultSessionTestSetup';
 
 import { describe, expect, vi } from 'vitest';
@@ -66,10 +66,10 @@ function explodedRun(): Effect.Effect<never, Error> {
 /** The run's committed `run.end` rows, as results. */
 const resultsOf = (ctx: AgentLaunchContext) =>
   Effect.gen(function* () {
-    yield* ctx.session.settled;
-    const rows = yield* Stream.runCollect(
-      ctx.session.events.aggregate(aggregateId('run', ctx.runId), 0),
-    );
+    yield* ctx.session.log.settled;
+    const rows = yield* ctx.session.log.rows(aggregateId('run', ctx.runId), [
+      'run.end',
+    ]);
     return rows.flatMap((row): ResultEvent[] =>
       row.type === 'run.end' ? [{ ...row, runId: ctx.runId }] : [],
     );

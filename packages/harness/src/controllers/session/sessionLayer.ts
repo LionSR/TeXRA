@@ -15,10 +15,8 @@
 import {
   Cause,
   Context,
-  Deferred,
   Duration,
   Effect,
-  Exit,
   Equal,
   FiberSet,
   Hash,
@@ -33,28 +31,28 @@ import {
 } from 'effect';
 import { FetchHttpClient, HttpClient } from 'effect/http';
 
-import { finalizeRun } from '@agent/storage/runLifecycle';
+import { Inbox } from '@agent/followUp/Inbox';
 import { AgentEngine } from '@agent/runtime/AgentEngine';
 import {
   executeAgent,
   resumeToolUseFromResumeData,
 } from '@agent/runtime/executeAgent';
-import { resumeRun } from '@agent/runtime/resumeRun';
-import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
-import { RunRegistry } from '@agent/runtime/runRegistry';
-import { runHistoryLayer } from '@agent/runtime/RunHistory';
-import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
+import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { HistoryQuery } from '@agent/runtime/historyQuery/HistoryQuery';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
-import {
+import { RouteRetries } from '@agent/runtime/run/invocation';
+import { resumeRun } from '@agent/runtime/resumeRun';
+import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
+import { runHistoryLayer } from '@agent/runtime/RunHistory';
+import { RunRegistry } from '@agent/runtime/runRegistry';
+import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
+import type {
   SessionHandle,
-  type SessionHandleInit,
+  SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
-import {
-  SESSION_CLOSE_DEADLINE_MS,
-  SessionOwner,
-  type SessionGraph,
-} from '@agent/runtime/sessionGraph';
+import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
+import { SessionOwner } from '@agent/runtime/SessionOwner';
+import { presentTerminalResult } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
 import {
   effectDiagnosticsLayer,
@@ -76,28 +74,18 @@ import {
   type ProcessProbe,
 } from '@platform/defaults/nodeProcesses';
 import { nodePlatformServices } from '@platform/defaults/nodePlatform';
-import { inheritedGrants } from '@shared/approvalBypassKind';
 import { RunHistory } from '@shared/session/runHistory';
 import {
-  aggregateId as qualifyAggregateId,
   aggregateTarget,
   RUN_OUTCOME,
-  TOOL_CALL_STATUS,
-  type AggregateId,
-  type CommitOrdinal,
   type RunId,
   type SessionCloseReport,
-  type SessionEvent,
 } from '@shared/schemas';
-import { closesRunWindow } from '@shared/session/runRows';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
-import { SessionInputs } from '@shared/session/sessionInputs';
-
 import {
   Database,
   ProjectDatabases,
   type DatabaseOpenFailed,
-  type DatabaseReadFailed,
   GlobalDatabase,
   type SessionOpenError,
 } from '@shared/session/database';
@@ -123,14 +111,14 @@ import { projectDatabaseLayer } from './projectDatabase';
 import { collectPendingDeletions } from './deletionCleanup';
 import { ownerLiveness } from './ownerLiveness';
 import { sessionRequests } from './SessionRequests';
+import { makeSessionStore } from './sessionStore';
 import { sweepLeftoverRuns } from './sweepLeftoverRuns';
 import {
   LocalRuntimeSource,
   TextChunkSource,
   TranscriptSubscriptions,
-  type InflightTextChunk,
 } from './sessionSources';
-import { SessionViewService } from './SessionView';
+import { makeSessionViewAccess, SessionViewService } from './SessionView';
 import { sessionInputsLayer } from './sessionInputs';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
@@ -174,344 +162,76 @@ class Session extends Context.Service<Session, SessionHandle>()(
 
 /**
  * The handle of one root, over the root's graph: the session is the entry's
- * one service, and its `Runs` and requests are reached through it. The last
- * layer of the entry, so it is the first thing unwound when the entry closes
- * and the graph outlives every publisher above it. The entry's scope is the
- * session's one lifetime: {@link closeSession} and the runtime's disposal
- * both end it by closing that scope, and every owner the handle holds is torn
- * down by a finalizer registered here.
+ * one service. The last layer of the entry, so it is the first thing unwound
+ * when the entry closes and the graph outlives every publisher above it. The
+ * entry's scope is the session's one lifetime: {@link closeSession} and the
+ * runtime's disposal both end it by closing that scope, and every owner the
+ * handle holds is torn down by a finalizer registered here.
  */
-const sessionHandleLayer = (key: SessionKey, modelRetries: ModelRetryGate) =>
+const sessionHandleLayer = (key: SessionKey) =>
   Layer.effectContext(
     Effect.gen(function* () {
-      const { publish, exclusive, detach, removeRun, ...reads } =
-        yield* SessionEvents;
-      const eventLog = yield* Database;
-      const identity = yield* ProcessIdentity;
+      const events = yield* SessionEvents;
+      const database = yield* Database;
       const runHistory = yield* RunHistory;
       const plugins = yield* ToolRegistry;
       const globalDatabase = yield* GlobalDatabase;
-      const view = yield* SessionViewService;
       const local = yield* LocalRuntimeSource;
-      const inputs = yield* SessionInputs;
-      const chunks = yield* TextChunkSource;
-      const subscriptions = yield* TranscriptSubscriptions;
-      const delivered = yield* SubscriptionRef.make(0);
-      const tailEnded = yield* Deferred.make<void, DatabaseReadFailed>();
-      const settledCursor = () =>
-        Math.min(
-          SubscriptionRef.getUnsafe(view.ref).cursor,
-          SubscriptionRef.getUnsafe(delivered),
-        );
-      /** The settled level as a stream: `settledCursor` re-read on every move
-       *  of either coordinate. It ends with the fold (`view.changes`, not the
-       *  bare ref `folded` wakes on, whose tail outlives every reader), so a
-       *  wait on it is answered or dies, never hangs. */
-      const settledChanges = Stream.merge(
-        view.changes,
-        SubscriptionRef.changes(delivered),
-        { haltStrategy: 'left' },
-      ).pipe(Stream.map(settledCursor));
-      /** Wait until the tail has delivered and the view has folded every
-       *  commit up to `commit`: what "published" means to a caller that reads
-       *  the view next. One wait on the level both coordinates feed, since
-       *  `settledCursor` is already their min. */
-      const settleTo = (commit: CommitOrdinal) =>
-        settledChanges.pipe(
-          Stream.filter((cursor) => cursor >= commit),
-          Stream.runHead,
-          Effect.raceFirst(
-            Deferred.await(tailEnded).pipe(
-              // The tail outlives every publication it settles; if it ends,
-              // pending waits die with its read failure.
-              Effect.orDie,
-              Effect.andThen(
-                Effect.die(
-                  new Error('Session committed-event consumer stopped'),
-                ),
-              ),
-            ),
-          ),
-          Effect.flatMap((cursor) =>
-            Option.isSome(cursor)
-              ? Effect.void
-              : Effect.die(
-                  new Error('Session view stopped before publication settled'),
-                ),
-          ),
-        );
-      const settlePublication = (rows: readonly SessionEvent[]) => {
-        const last = rows.at(-1);
-        return last === undefined
-          ? Effect.succeed(rows)
-          : settleTo(last.commit).pipe(Effect.as(rows));
-      };
-      const now = () => SubscriptionRef.getUnsafe(eventLog.observedCommit);
-      /**
-       * This process's holds on aggregate claims, counted: the first holder
-       * of an aggregate proves any prior owner dead and takes its claim (or
-       * finds it already this process's, as a registration leaves it), every
-       * later holder shares it, and the claim's disposition is decided when
-       * the last holder's scope closes. A holder returns the claim to how the
-       * first one found it, unless one of them ends it: a run's driver, or a
-       * checkpoint's invocation, owns the claim, and when the last hold goes
-       * after one of those, the claim is released. So nested holders nest —
-       * a parent's detach batch over a running child, a follow-up admission
-       * on a registered run — and none of them releases under another. The
-       * map closes with the session, deciding whatever is still held.
-       */
-      const claims = yield* RcMap.make({
-        lookup: (id: AggregateId) =>
-          Effect.acquireRelease(
-            eventLog.acquireClaims([id]).pipe(
-              // A claim moving here seeds the publisher's pending follow-ups.
-              Effect.tap((ids) => reads.hydrateFollowUps(id, ids.length > 0)),
-              Effect.map((ids) => ({ taken: ids.length > 0, ended: false })),
-            ),
-            (hold) =>
-              hold.taken || hold.ended
-                ? eventLog
-                    .releaseClaims([id])
-                    .pipe(
-                      Effect.catch(
-                        logFailure(
-                          `The claim on ${id} was not released; the next process proves this one dead before it takes the claim.`,
-                        ),
-                      ),
-                    )
-                : Effect.void,
-          ),
-      });
-      const graph = (session: SessionHandle): SessionGraph => {
-        // The session scope owns one approval state shared by its runs and
-        // request handler, over the session's view and record door.
-        const approvals = createSessionApprovals(session);
-        return {
-          events: reads,
-          runHistory,
-          publishText: (runId, id, text) =>
-            SubscriptionRef.update(chunks.ref, (held) => {
-              const next = new Map(held);
-              const key = `${runId}/${id}`;
-              const previous = next.get(key);
-              next.set(key, {
-                previous,
-                text,
-                length: (previous?.length ?? 0) + text.length,
-              });
-              return next;
-            }),
-          readText: (runId, id) => {
-            let chunk = SubscriptionRef.getUnsafe(chunks.ref).get(
-              `${runId}/${id}`,
-            );
-            if (chunk === undefined) return undefined;
-            const pieces: string[] = [];
-            while (chunk !== undefined) {
-              pieces.push(chunk.text);
-              chunk = chunk.previous;
-            }
-            return pieces.reverse().join('');
-          },
-          acquireClaims: (id, ends) =>
-            Effect.gen(function* () {
-              const hold = yield* Scope.make();
-              const claim = yield* RcMap.get(claims, id).pipe(
-                Scope.provide(hold),
-                Effect.onError(() => Scope.close(hold, Exit.void)),
-              );
-              if (ends) claim.ended = true;
-              return Scope.close(hold, Exit.void);
-            }),
-          runRecords: (id) =>
-            eventLog.readRunRecords(qualifyAggregateId('run', id)),
-          ownsRun: (id) =>
-            eventLog
-              .aggregateState([qualifyAggregateId('run', id)])
-              .pipe(
-                Effect.map((states) =>
-                  states.some(
-                    (state) =>
-                      state.startCommit !== null &&
-                      !state.closed &&
-                      state.ownerId === identity.ownerId,
-                  ),
-                ),
-              ),
-          claimOwner: (id) =>
-            eventLog.claimOwner(qualifyAggregateId('run', id)),
-          aggregateRows: (id, types) => eventLog.readAggregate(id, 1, types),
-          displayRows: (id) => eventLog.readDisplayAggregate(id, 1),
-          publish: (events) =>
-            publish(events).pipe(Effect.flatMap(settlePublication)),
-          // A job settles against the last commit it appended, never against
-          // whatever the publisher committed next: a job that appended nothing
-          // (a decision already taken, an empty update) returns at once.
-          exclusive: (job) =>
-            Effect.gen(function* () {
-              let committed: CommitOrdinal | null = null;
-              const value = yield* exclusive((append) =>
-                job((events) =>
-                  append(events).pipe(
-                    Effect.tap((rows) =>
-                      Effect.sync(() => {
-                        const last = rows.at(-1);
-                        if (last !== undefined) committed = last.commit;
-                      }),
-                    ),
-                  ),
-                ),
-              );
-              if (committed !== null) yield* settleTo(committed);
-              return value;
-            }),
-          detach,
-          // The publisher runs jobs in order, so an empty job is the barrier
-          // for every one enqueued before it; the view then folds to there.
-          settle: exclusive(() => eventLog.currentCommit).pipe(
-            Effect.orDie,
-            Effect.flatMap(settleTo),
-          ),
-          publishRegistration: (events) =>
-            Effect.gen(function* () {
-              // A registration owns its run's claim once it commits, as a
-              // birth does: a run with no `run.start` in the batch is a
-              // re-registration of rows already written, whose claim it
-              // takes over first (from a dead owner, or this process's own).
-              // The run's driver holds the claim from there on.
-              const reclaimed = [
-                ...new Set(
-                  events.flatMap((event) =>
-                    event.type === 'run.activate' &&
-                    !events.some(
-                      (other) =>
-                        other.type === 'run.start' &&
-                        other.aggregateId === event.aggregateId,
-                    )
-                      ? [event.aggregateId]
-                      : [],
-                  ),
-                ),
-              ];
-              for (const id of reclaimed)
-                yield* eventLog
-                  .acquireClaims([id])
-                  .pipe(
-                    Effect.tap((ids) =>
-                      reads.hydrateFollowUps(id, ids.length > 0),
-                    ),
-                  );
-              const rows = yield* publish(events).pipe(
-                Effect.onError(() =>
-                  eventLog
-                    .releaseClaims(reclaimed)
-                    .pipe(
-                      Effect.catch(
-                        logFailure(
-                          'Registration claims were not released after its publication failed.',
-                        ),
-                      ),
-                    ),
-                ),
-              );
-              const born = [
-                ...reclaimed,
-                ...rows.flatMap((row) =>
-                  row.type === 'run.start' ? [row.aggregateId] : [],
-                ),
-              ];
-              return yield* settlePublication(rows).pipe(
-                Effect.onError(() =>
-                  eventLog.releaseClaims(born).pipe(
-                    // The settle's failure is what the caller hears; a release
-                    // that also failed leaves the claims to the next process's
-                    // liveness proof, and says so.
-                    Effect.catch(
-                      logFailure(
-                        'Registration claims were not released after its settle failed.',
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }),
-          view: view.ref,
-          viewChanges: view.changes,
-          storeMovedAside: eventLog.movedAside,
-          // Release rows only once both the view fold and local reconciliation
-          // have applied them. Readers can then query either state consistently.
-          folded: (fromCommit) =>
-            tailFrom(
-              eventLog.readDisplay,
-              {
-                get: Effect.sync(settledCursor),
-                // The fold's level stream, not its ref: a fold that died
-                // fails this tail's readers rather than stalling them.
-                changes: Stream.merge(
-                  view.changes,
-                  SubscriptionRef.changes(delivered),
-                ).pipe(Stream.map(settledCursor)),
-              },
-              fromCommit,
-            ),
-          local: local.ref,
-          inputs: inputs.read,
-          subscriptions,
-          // The runs, over the doors of a handle built by the time they call.
-          runs: new RunRegistry({
-            runView: (runId) => session.runView(runId),
-            commit: (events) => session.commit(events).pipe(Effect.asVoid),
-            grantsOnDetach: (runId) => {
-              const current = SubscriptionRef.getUnsafe(view.ref);
-              return {
-                ...inheritedGrants(current, runId),
-                goal: current.policy.get(runId)?.goal ?? [],
-              };
-            },
-            finalizeRun: (input) => finalizeRun(session, input),
-            holdRunClaim: (runId) => session.holdRunClaim(runId),
-            borrowRunClaim: (runId) => session.borrowRunClaim(runId),
-            fork,
-            pinPlugins,
-          }),
-          // The requests: the approvals above, admitted on the root's log.
-          requests: sessionRequests(
-            session,
-            approvals,
-            { ...eventLog, removeRun },
-            local.ref,
-            plugins,
-            globalDatabase,
-          ),
-          now,
-        };
-      };
-      // Capture before constructing the handle: constructor publications and
-      // commits preceding subscription are covered by the tail's first read.
-      const anchor = yield* eventLog.currentCommit;
-      // Register the consumer's scope first so handle teardown can publish and
-      // drain while both this tail and the underlying view are still alive.
+      // Register the consumers' scope first so the handle's teardown can
+      // publish and settle while the tails and the view are still alive.
       const consumerScope = yield* Effect.acquireRelease(
         Scope.make(),
         (scope, exit) => Scope.close(scope, exit),
       );
+      const store = yield* makeSessionStore(key.storage);
+      const view = yield* makeSessionViewAccess(key.storage, store.closed);
       // Capture the startup cohort before callers can publish new launches.
-      const initialListing = yield* eventLog.readListing();
+      const initialListing = yield* database.readListing();
       // The runs' fork and the history store end with this scope.
       const fork = yield* FiberSet.makeRuntime<ProcessServices>();
       const pinPlugins = yield* sessionPluginLayers(() => session.runs);
-      const services = {
-        modelRetries,
+      const interactions = new SessionHostInteractions();
+      const runs = new RunRegistry({
+        session: () => session,
+        fork,
+        pinPlugins,
+      });
+      const session: SessionHandle = {
+        roots: key.open.roots,
+        log: store.log,
+        view,
+        runs,
+        requests: sessionRequests({
+          session: () => session,
+          log: {
+            ...database,
+            removeRun: events.removeRun,
+            detach: store.detach,
+          },
+          local: local.ref,
+          plugins,
+          globalDatabase,
+          closed: store.closed,
+        }),
+        approvals: createSessionApprovals({ view: view.ref, log: store.log }),
+        interactions,
+        followUps: new Inbox({
+          log: store.log,
+          detach: store.detach,
+          parentOf: (runId) => view.run(runId)?.parentId,
+          live: (runId) => runs.isLive(runId),
+        }),
+        trace: store.trace,
+        runHistory,
         history: yield* HistoryQuery.make(() => session),
       };
-      const session = new SessionHandle({ ...key.open, graph, ...services });
       // The session's teardown is this scope's finalizers, run in the reverse
-      // of their registration: the handle's own doors shut last, after every
-      // owner below has unwound, with the publications they left settled;
-      // then the follow-up queue, the presentation hosts; and first of all
-      // the runs, so no run is admitted over a session that is unwinding.
+      // of their registration: the doors shut last, after every owner below
+      // has unwound, with what they left settled; then the follow-up queue,
+      // the presentation hosts; and first of all the runs, so no run is
+      // admitted over a session that is unwinding.
       yield* Effect.addFinalizer(() =>
-        session.settled.pipe(
+        session.log.settled.pipe(
           // Bounded like the close that invalidates this entry: a
           // publisher too stuck to settle must not hold the release.
           Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
@@ -522,7 +242,7 @@ const sessionHandleLayer = (key: SessionKey, modelRetries: ModelRetryGate) =>
                   `Session ${key.storage} closed with publications still unsettled past the close budget`,
                 ).pipe(withLogChannel(CHANNEL)),
           ),
-          Effect.ensuring(Effect.sync(() => session.closeDoors())),
+          Effect.ensuring(Effect.sync(() => store.close())),
         ),
       );
       yield* Effect.addFinalizer(() =>
@@ -537,71 +257,36 @@ const sessionHandleLayer = (key: SessionKey, modelRetries: ModelRetryGate) =>
       // and a constructor cannot run one.
       if (key.open.interactions)
         yield* session.interactions.use(key.open.interactions);
-      yield* SubscriptionRef.set(delivered, anchor);
-      yield* reads.all(anchor, delivered).pipe(
-        Stream.runForEach((event) =>
-          Effect.suspend(() => {
-            const target = aggregateTarget(event.aggregateId);
-            // The local half of a committed removal; its plugin rows go with it.
-            return event.type === 'run.removed' && target.kind === 'run'
-              ? Effect.sync(() => {
-                  session.runs.detachChildren(target.id);
-                  releaseRunResources(target.id, session);
-                })
-              : Effect.void;
-          }).pipe(
-            Effect.andThen(() => {
-              // A row that closes live text drops the held chunks: a
-              // stream's final text or a card's terminal result drop their
-              // own; a phase move that rests or ends the run, and its
-              // removal, drop every chunk of the run, so a card an
-              // interrupted run closed without a terminal row holds nothing.
-              const runId = aggregateTarget(event.aggregateId).id;
-              let drop: ((key: string) => boolean) | null = null;
-              if (event.type === 'stream.end') {
-                drop = (key) => key === `${runId}/${event.id}`;
-              } else if (
-                event.type === 'tool.end' &&
-                event.status !== TOOL_CALL_STATUS.IN_PROGRESS
-              ) {
-                drop = (key) => key === `${runId}/${event.logId}`;
-              } else if (
-                event.type === 'run.removed' ||
-                closesRunWindow(event)
-              ) {
-                drop = (key) => key.startsWith(`${runId}/`);
-              }
-              const dropping = drop;
-              return dropping === null
-                ? Effect.void
-                : SubscriptionRef.update(chunks.ref, (held) => {
-                    let next: Map<string, InflightTextChunk> | null = null;
-                    for (const key of held.keys()) {
-                      if (!dropping(key)) continue;
-                      next ??= new Map(held);
-                      next.delete(key);
-                    }
-                    return next ?? held;
-                  });
-            }),
-            Effect.andThen(SubscriptionRef.set(delivered, event.commit)),
-          ),
-        ),
-        Effect.tapError(
-          logFailure(
-            `Session ${key.storage} stopped delivering committed rows: the log could not be read.`,
-            Effect.logError,
-          ),
-        ),
-        Effect.onExit((exit) => Deferred.done(tailEnded, exit)),
-        Effect.forkIn(consumerScope),
-      );
+      // The local half of a committed removal; its plugin rows go with it.
+      yield* store
+        .deliver((runId) => {
+          session.runs.detachChildren(runId);
+          releaseRunResources(runId, session);
+        })
+        .pipe(Scope.provide(consumerScope));
       // The registry's phase notification rides the fold-gated tail, not the
-      // raw one above: its waiters and child lists read `RunView.status`
+      // raw one: its waiters and child lists read `RunView.status`
       // synchronously, so a row reaches them only once the view holds the
-      // state it produced.
-      yield* Stream.runForEach(session.folded(anchor), (event) =>
-        session.receiveFoldedEvent(event),
+      // state it produced. Host notifications belong to the authoring process.
+      yield* Stream.runForEach(store.folded, (event) =>
+        Effect.gen(function* () {
+          const target = aggregateTarget(event.aggregateId);
+          if (target.kind !== 'run' || event.type !== 'run.end') return;
+          const { self } = yield* SubscriptionRef.get(local.ref);
+          if (event.origin == null || !self.includes(event.origin)) return;
+          if (!store.closed())
+            yield* Effect.suspend(() =>
+              presentTerminalResult(session, { ...event, runId: target.id }),
+            ).pipe(
+              Effect.catchCause((cause) =>
+                Effect.logWarning('Terminal result presentation threw').pipe(
+                  Effect.annotateLogs({ data: Cause.squash(cause) }),
+                  withLogChannel(CHANNEL),
+                ),
+              ),
+            );
+          session.runs.sweepChildrenOfFoldedStop(target.id);
+        }),
       ).pipe(
         Effect.catch(
           logFailure(
@@ -625,7 +310,7 @@ const sessionHandleLayer = (key: SessionKey, modelRetries: ModelRetryGate) =>
           Effect.forkScoped,
         );
       // The session owns retries and waits for in-flight removal on close.
-      yield* collectPendingDeletions(eventLog, key.storage).pipe(
+      yield* collectPendingDeletions(database, key.storage).pipe(
         Effect.catch(
           logFailure(
             'Deletion records could not be read; cleanup remains pending.',
@@ -679,8 +364,7 @@ const sessionGraphLayer = (key: SessionKey) => {
  * runtime goes. Opens borrow (the reference an open takes is released at once)
  * and the idle lifetime is infinite, so no reader's detachment and no
  * reference count decides a session's end: the application does, explicitly
- * (PR #11893, agent SDK architecture proposal, section 3). Entries share one
- * route gate (a 429 cools a credential for every project) and are otherwise
+ * (PR #11893, agent SDK architecture proposal, section 3). Entries are
  * `Layer.fresh`: layers memoize by reference, else roots share one fold.
  */
 class SessionMap extends Context.Service<
@@ -689,16 +373,12 @@ class SessionMap extends Context.Service<
 >()('@texra/session/SessionMap') {
   static readonly layer = Layer.effect(
     SessionMap,
-    Effect.flatMap(ModelRetryGate.make, (modelRetries) =>
-      LayerMap.make(
-        (key: SessionKey) =>
-          Layer.fresh(
-            sessionHandleLayer(key, modelRetries).pipe(
-              Layer.provide(sessionGraphLayer(key)),
-            ),
-          ),
-        { idleTimeToLive: Duration.infinity },
-      ),
+    LayerMap.make(
+      (key: SessionKey) =>
+        Layer.fresh(
+          sessionHandleLayer(key).pipe(Layer.provide(sessionGraphLayer(key))),
+        ),
+      { idleTimeToLive: Duration.infinity },
     ),
   );
 }
@@ -799,8 +479,8 @@ const heldSession = (root: string) =>
  */
 const settleRun = (session: SessionHandle, runId: RunId): Effect.Effect<void> =>
   Effect.gen(function* () {
-    if (!(yield* session.ownsRun(runId))) return;
-    const finalization = yield* finalizeRun(session, {
+    if (!(yield* session.log.owns(runId))) return;
+    const finalization = yield* session.runs.end({
       runId,
       outcome: RUN_OUTCOME.CANCELLED,
       keepExistingOutcome: true,
@@ -843,8 +523,7 @@ const closeSession = (root: string) =>
     if (held === undefined)
       return { settled: true, abandoned: [] } satisfies SessionCloseReport;
     const { key, session, runs } = held;
-    runs.closeAdmissions();
-    runs.killBackgroundProcesses();
+    runs.close();
     // A run the stop reached no driver for, or whose stop failed, has nothing
     // to settle it: the close settles it now instead of waiting out the
     // budget for it.
@@ -1037,6 +716,9 @@ export function processLayer({
       resumeToolUseFromResumeData,
       resumeRun,
     }),
+    // One retry gate for the process: a 429 cools a credential for every
+    // project's runs.
+    Layer.effect(RouteRetries, ModelRetryGate.make),
   ).pipe(
     Layer.provideMerge(appState.pipe(Layer.orDie)),
     Layer.provideMerge(identity),

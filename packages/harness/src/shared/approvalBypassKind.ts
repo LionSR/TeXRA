@@ -10,10 +10,15 @@ export const APPROVAL_BYPASS_KINDS = ['bash', 'toolEdit', 'superYolo'] as const;
 
 export type ApprovalBypassKind = (typeof APPROVAL_BYPASS_KINDS)[number];
 
+/** A run's own value for one kind: a human's `on` or `off`, or `parent`,
+ *  derived at an activation: follow the ancestry's human values, not its
+ *  goals (`ApprovalPolicySnapshotSchema`). */
+type OwnGrant = 'on' | 'off' | 'parent';
+
 /** A run's own approval grants, as its latest `approval.policy` row (or its
  *  `run.start`) records them. */
 export interface ApprovalGrants {
-  readonly own: Partial<Record<ApprovalBypassKind, 'on' | 'off'>>;
+  readonly own: Partial<Record<ApprovalBypassKind, OwnGrant>>;
   readonly goal: readonly ApprovalBypassKind[];
 }
 
@@ -31,7 +36,8 @@ export interface ApprovalGrantSource<Id> {
  * Who bypasses one kind's prompts for a run: the nearest run in its ancestry
  * (itself first) that decides the kind, by its autonomous goal's grant
  * (`goal`) or a human's value (`human` when on); `null` when nothing grants
- * it. The one reading of the grants, for enforcement and every surface.
+ * it. Past a `parent` value only human values decide. The one reading of the
+ * grants, for enforcement and every surface.
  */
 export function resolveBypass<Id>(
   source: ApprovalGrantSource<Id>,
@@ -39,6 +45,7 @@ export function resolveBypass<Id>(
   kind: ApprovalBypassKind,
 ): 'goal' | 'human' | null {
   const seen = new Set<Id>();
+  let goals = true;
   for (
     let current: Id | null | undefined = runId;
     current !== null && current !== undefined && !seen.has(current);
@@ -46,9 +53,10 @@ export function resolveBypass<Id>(
   ) {
     seen.add(current);
     const grants = source.policy.get(current);
-    if (grants?.goal.includes(kind)) return 'goal';
+    if (goals && grants?.goal.includes(kind)) return 'goal';
     const own = grants?.own[kind];
-    if (own !== undefined) return own === 'on' ? 'human' : null;
+    if (own === 'parent') goals = false;
+    else if (own !== undefined) return own === 'on' ? 'human' : null;
   }
   return null;
 }
@@ -72,7 +80,7 @@ export function inheritedGrants<Id>(
   source: ApprovalGrantSource<Id>,
   runId: Id,
 ): ApprovalGrants {
-  const own: Partial<Record<ApprovalBypassKind, 'on' | 'off'>> = {};
+  const own: Partial<Record<ApprovalBypassKind, OwnGrant>> = {};
   for (const kind of APPROVAL_BYPASS_KINDS) {
     const seen = new Set<Id>();
     for (
@@ -82,7 +90,7 @@ export function inheritedGrants<Id>(
     ) {
       seen.add(current);
       const value = source.policy.get(current)?.own[kind];
-      if (value === undefined) continue;
+      if (value === undefined || value === 'parent') continue;
       own[kind] = value;
       break;
     }

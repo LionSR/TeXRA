@@ -25,6 +25,7 @@ import {
   createTestSession,
   publishTestRunStart,
   queuedFollowUps,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -215,11 +216,11 @@ function answerOpenedRequests(
 ) {
   const openedKinds: string[] = [];
   const fiber = Effect.runFork(
-    Stream.runForEach(session.events.all(session.now()), (event) =>
+    Stream.runForEach(session.log.tail(session.log.now()), (event) =>
       Effect.sync(() => {
         if (event.type !== 'request.opened') return;
         openedKinds.push(event.payload.kind);
-        session.publish([
+        publishTestRows(session, [
           {
             type: 'request.decided',
             aggregateId: event.aggregateId,
@@ -252,7 +253,7 @@ function delegateWithProposalDecision(
       );
       // A request is a row on its run, so the parent run must exist first.
       publishTestRunStart(session, PARENT_RUN_ID);
-      yield* session.settled;
+      yield* session.log.settled;
       const result = yield* callDelegateReview(parentRunContext({ session }));
       // A detached child commits its `child.turn` row before its first turn
       // runs, so the launch is not observable the moment the tool returns and
@@ -428,14 +429,17 @@ describe('headless delegation', () => {
     // with its own `run.start`.
     inBandSession = await Effect.runPromise(createTestSession());
     releaseClaim = vi.fn();
-    const acquireClaims = inBandSession.acquireClaims.bind(inBandSession);
-    vi.spyOn(inBandSession, 'acquireClaims').mockImplementation((id) =>
-      Effect.map(acquireClaims(id), (release) =>
-        Effect.andThen(Effect.sync(releaseClaim), release),
+    // The driver's hold (`ends`) is the one the child's ending releases.
+    const hold = inBandSession.log.hold.bind(inBandSession.log);
+    vi.spyOn(inBandSession.log, 'hold').mockImplementation((runId, options) =>
+      Effect.tap(hold(runId, options), () =>
+        options?.ends === true
+          ? Effect.addFinalizer(() => Effect.sync(releaseClaim))
+          : Effect.void,
       ),
     );
     publishTestRunStart(inBandSession, IN_BAND_PARENT_RUN_ID);
-    await Effect.runPromise(inBandSession.settled);
+    await Effect.runPromise(inBandSession.log.settled);
     mocks.prepareAgentDefinition.mockImplementation(
       ({ config }: { config: unknown }) =>
         Effect.succeed({ config, persona: { tools: [] }, task: null }),
@@ -447,7 +451,7 @@ describe('headless delegation', () => {
       (session: SessionHandle, runId: RunId) =>
         Effect.promise(async () => {
           publishTestRunStart(session, runId);
-          await Effect.runPromise(session.settled);
+          await Effect.runPromise(session.log.settled);
         }),
     );
     testEngine = {
@@ -500,7 +504,11 @@ describe('headless delegation', () => {
     // Every case delegates without a proposal unless it brings its own
     // session, whose proposal bypass starts off.
     const defaultSession = testDefaultSession();
-    if (!SubscriptionRef.getUnsafe(defaultSession.view).runs.has(PARENT_RUN_ID))
+    if (
+      !SubscriptionRef.getUnsafe(defaultSession.view.ref).runs.has(
+        PARENT_RUN_ID,
+      )
+    )
       publishTestRunStart(defaultSession, PARENT_RUN_ID);
     await Effect.runPromise(
       defaultSession.approvals.change(
@@ -942,7 +950,7 @@ describe('headless delegation', () => {
           // Failure modes: `never` approves the proposal because the run
           // cannot present prompts, or opens a prompt nobody may answer.
           const session = yield* createTestSession();
-          session.setApprovalPolicy('never');
+          session.approvals.setPolicy('never');
           const decider = answerOpenedRequests(session, { action: 'approve' });
           yield* Effect.addFinalizer(() =>
             decider.stop().pipe(Effect.ensuring(closeSessionOf(session))),
@@ -963,7 +971,7 @@ describe('headless delegation', () => {
     Effect.scoped(
       Effect.gen(function* () {
         const session = yield* createTestSession();
-        session.setApprovalPolicy('yolo');
+        session.approvals.setPolicy('yolo');
         const decider = answerOpenedRequests(session, { action: 'approve' });
         yield* Effect.addFinalizer(() =>
           decider.stop().pipe(Effect.ensuring(closeSessionOf(session))),

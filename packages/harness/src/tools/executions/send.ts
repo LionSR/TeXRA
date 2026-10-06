@@ -41,7 +41,7 @@ export const sendToRun = Effect.fn('ExecutionsTool.send')(function* (
       new ToolError('A run cannot send a message to itself.'),
     );
   }
-  const view = yield* session.readView([]);
+  const view = yield* session.view.read([]);
   const recipient = view.runs.get(target);
   if (!recipient) {
     return yield* Effect.fail(

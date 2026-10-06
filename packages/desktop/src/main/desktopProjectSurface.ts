@@ -168,16 +168,16 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
             const binding = bindings.active();
             if (!binding) return 'unavailable' as const;
             const view = SubscriptionRef.getUnsafe(
-              binding.project.backend.view,
+              binding.project.backend.view.ref,
             );
             if (!view.runs.has(runId)) return 'missing' as const;
             binding.bridge.surfaceAction({ kind: 'select', runId });
             return 'revealed' as const;
           }),
         runLabel: (runId) =>
-          SubscriptionRef.getUnsafe(projects.active().backend.view).runs.get(
-            runId,
-          )?.label,
+          SubscriptionRef.getUnsafe(
+            projects.active().backend.view.ref,
+          ).runs.get(runId)?.label,
         stateSettingApplied: () => Effect.void,
         runInTerminal: (_name, command) =>
           Effect.sync(() => {

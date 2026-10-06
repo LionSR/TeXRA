@@ -99,7 +99,7 @@ export function nativeToolTestLayer(
           open: (
             payload: PermissionPayload,
             opened?: { readonly onNeverCommitted?: Effect.Effect<void> },
-          ) => run.session.openRequest(run.runId, payload, opened),
+          ) => run.session.requests.ask(run.runId, payload, opened),
         },
       }),
     })),

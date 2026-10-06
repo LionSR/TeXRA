@@ -60,7 +60,7 @@ export const forkRun = Effect.fn('forkRun')(function* (
     return yield* refused('Only a conversation can be forked.');
   }
   const aggregate = aggregateId('run', from.id);
-  const start = (yield* session.readRunRecords(from.id)).find(
+  const start = (yield* session.log.records(from.id)).find(
     (row) => row.type === 'run.start',
   );
   if (start?.type !== 'run.start') {
@@ -68,15 +68,13 @@ export const forkRun = Effect.fn('forkRun')(function* (
   }
   // The title the source shows: its newest user title over any later model
   // title, as the fold reads it, with its authorship.
-  const titles = (yield* session.readAggregate(aggregate, [
+  const titles = (yield* session.log.rows(aggregate, [
     'run.description',
   ])).flatMap((row) => (row.type === 'run.description' ? [row] : []));
   const title =
     titles.findLast((row) => row.by === 'user') ?? titles.at(-1) ?? null;
   // The cut is a position row: a turn boundary of the source, not any seq.
-  const parks = (yield* session.readAggregate(aggregate, [
-    'run.position',
-  ])).filter(
+  const parks = (yield* session.log.rows(aggregate, ['run.position'])).filter(
     (row) =>
       row.type === 'run.position' &&
       (row.payload.at === 'waiting' || row.payload.at === 'halted'),

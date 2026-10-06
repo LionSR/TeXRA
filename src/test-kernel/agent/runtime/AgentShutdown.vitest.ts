@@ -27,15 +27,9 @@ describe('agent shutdown', () => {
         ),
       );
       const compatibilitySession = testDefaultSession();
-      const firstDrain = vi.spyOn(firstSession.runs, 'killBackgroundProcesses');
-      const secondDrain = vi.spyOn(
-        secondSession.runs,
-        'killBackgroundProcesses',
-      );
-      const compatibilityDrain = vi.spyOn(
-        compatibilitySession.runs,
-        'killBackgroundProcesses',
-      );
+      const firstDrain = vi.spyOn(firstSession.runs, 'close');
+      const secondDrain = vi.spyOn(secondSession.runs, 'close');
+      const compatibilityDrain = vi.spyOn(compatibilitySession.runs, 'close');
 
       // A host's shutdown closes every held session; a later close finds
       // them released and drains nothing again.

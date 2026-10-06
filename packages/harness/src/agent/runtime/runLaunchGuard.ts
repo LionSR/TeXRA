@@ -7,7 +7,6 @@
  */
 import { Cause, Effect, Exit } from 'effect';
 
-import { finalizeRun } from '@agent/storage/runLifecycle';
 import { classifyAgentError } from '@common/errors';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import {
@@ -35,24 +34,26 @@ export const endRunOutsideLifecycle = (
   error: unknown,
   settlement: readonly SessionEventDraft[] = [],
 ): Effect.Effect<void, Error> =>
-  finalizeRun(session, {
-    runId,
-    outcome,
-    keepExistingOutcome: true,
-    ...(settlement.length > 0 ? { settlement } : {}),
-    ...(outcome === RUN_OUTCOME.FAILED && error != null
-      ? {
-          error: {
-            kind: classifyAgentError(error),
-            message: getSdkErrorMessage(error),
-          },
-        }
-      : {}),
-  }).pipe(
-    Effect.flatMap((finalized) =>
-      finalized.ok ? Effect.void : Effect.fail(ensureError(finalized.error)),
-    ),
-  );
+  session.runs
+    .end({
+      runId,
+      outcome,
+      keepExistingOutcome: true,
+      ...(settlement.length > 0 ? { settlement } : {}),
+      ...(outcome === RUN_OUTCOME.FAILED && error != null
+        ? {
+            error: {
+              kind: classifyAgentError(error),
+              message: getSdkErrorMessage(error),
+            },
+          }
+        : {}),
+    })
+    .pipe(
+      Effect.flatMap((finalized) =>
+        finalized.ok ? Effect.void : Effect.fail(ensureError(finalized.error)),
+      ),
+    );
 
 /** A launch that owns its run for the run's whole life. */
 export interface RunTerminalOwner {
@@ -117,7 +118,9 @@ export function runWithLaunchGuard<A, E, R>(
         // A hold taken and let go at once releases the birth claim no driver
         // took; an owner's own hold is released by its scope.
         if (owner === undefined)
-          yield* Effect.scoped(Effect.ignore(session.holdRunClaim(runId)));
+          yield* Effect.scoped(
+            Effect.ignore(session.log.hold(runId, { ends: true })),
+          );
       }).pipe(Effect.uninterruptible);
     const guarded: Effect.Effect<A, E | Error, R> =
       owner === undefined
@@ -132,7 +135,7 @@ export function runWithLaunchGuard<A, E, R>(
           Effect.scoped(
             Effect.uninterruptibleMask((restore) =>
               Effect.gen(function* () {
-                yield* session.holdRunClaim(runId);
+                yield* session.log.hold(runId, { ends: true });
                 owner.onRunClaimed?.(runId);
                 return yield* restore(operation).pipe(Effect.onExit(terminal));
               }),

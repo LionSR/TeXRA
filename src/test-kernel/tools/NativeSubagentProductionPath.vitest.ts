@@ -413,7 +413,7 @@ function waitForParentTurns(count: number): Effect.Effect<void> {
   return Effect.promise(() =>
     vi.waitFor(
       async () => {
-        await Effect.runPromise(session.settled);
+        await Effect.runPromise(session.log.settled);
         const transcript = await Effect.runPromise(
           readCompletedRunConversation(PARENT_RUN_ID, session),
         );
@@ -424,7 +424,7 @@ function waitForParentTurns(count: number): Effect.Effect<void> {
               row.text !== 'Parent noted progress.',
           ),
         ).toHaveLength(count + 1);
-        expect(session.runView(PARENT_RUN_ID)?.status).toBe(RUN_PHASE.WAITING);
+        expect(session.view.run(PARENT_RUN_ID)?.status).toBe(RUN_PHASE.WAITING);
       },
       { timeout: 20_000 },
     ),
@@ -445,7 +445,7 @@ function queueRecovery(runId: RunId, text: string) {
 
 function waitForClaimRelease(runId: RunId): Promise<void> {
   return vi.waitFor(async () => {
-    expect(await Effect.runPromise(session.ownsRun(runId))).toBe(false);
+    expect(await Effect.runPromise(session.log.owns(runId))).toBe(false);
   });
 }
 
@@ -644,7 +644,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       openTestDefaultSession({ roots: testWorkspaceRoots() }),
     );
     publishTestRunStart(session, OUTER_RUN_ID);
-    await Effect.runPromise(session.settled);
+    await Effect.runPromise(session.log.settled);
     childId = undefined;
     // Every wake: a send that owed the run a resume.
     resumedRuns = [];
@@ -726,7 +726,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           'Result A.',
         );
 
-        yield* session.settled;
+        yield* session.log.settled;
         const archivedChild = yield* readCompletedRunConversation(
           runId,
           session,
@@ -824,7 +824,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           outcome: RUN_PHASE.WAITING,
         });
         expect(session.runs.getHandle(runId)).toBeDefined();
-        yield* session.viewChanges.pipe(
+        yield* session.view.changes.pipe(
           Stream.filter(
             (view) => view.runs.get(runId)?.status === RUN_PHASE.WAITING,
           ),
@@ -903,7 +903,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         );
         yield* waitForParentTurns(2);
 
-        yield* session.settled;
+        yield* session.log.settled;
         const archivedChild = yield* readCompletedRunConversation(
           runId,
           session,
@@ -987,7 +987,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         const childNodes = yield* Effect.promise(() =>
           vi.waitFor(
             async () => {
-              await Effect.runPromise(session.settled);
+              await Effect.runPromise(session.log.settled);
               const archived = await Effect.runPromise(
                 readCompletedRunConversation(runId, session),
               );
@@ -996,7 +996,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
               expect(text).toContain('second assertion');
               expect(text).toContain('third assertion');
               expect(nodes.at(-1)?.kind).toBe('assistant-text');
-              expect(session.runView(runId)?.status).toBe(RUN_PHASE.WAITING);
+              expect(session.view.run(runId)?.status).toBe(RUN_PHASE.WAITING);
               return nodes;
             },
             { timeout: 20_000 },
@@ -1012,7 +1012,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         // Admission order is the rows' commit order, and the child reads the
         // sends in exactly that order, each once.
         const admitted = followUpTexts(
-          yield* session.readAggregate(aggregateId('run', runId)),
+          yield* session.log.rows(aggregateId('run', runId)),
         )
           .map((text) => text.match(/(second|third) assertion/)?.[1])
           .filter((word) => word !== undefined);
@@ -1092,7 +1092,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             { session },
           );
         }
-        yield* session.settled;
+        yield* session.log.settled;
         const afterReplay = JSON.stringify(
           yield* readCompletedRunConversation(PARENT_RUN_ID, session),
         );
@@ -1110,7 +1110,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           { session },
         );
         yield* waitForParentTurns(2);
-        yield* session.settled;
+        yield* session.log.settled;
         const afterDistinct = JSON.stringify(
           yield* readCompletedRunConversation(PARENT_RUN_ID, session),
         );
@@ -1333,7 +1333,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         yield* Effect.promise(() =>
           vi.waitFor(
             async () => {
-              await Effect.runPromise(session.settled);
+              await Effect.runPromise(session.log.settled);
               const transcript = await Effect.runPromise(
                 readCompletedRunConversation(PARENT_RUN_ID, session),
               );
@@ -1341,7 +1341,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
                 kind: 'assistant-text',
                 text: 'Parent received the workflow result.',
               });
-              expect(session.runView(PARENT_RUN_ID)?.status).toBe(
+              expect(session.view.run(PARENT_RUN_ID)?.status).toBe(
                 RUN_PHASE.WAITING,
               );
             },

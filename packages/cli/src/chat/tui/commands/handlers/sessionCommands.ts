@@ -63,7 +63,7 @@ export function showCliWorkPlan(session: SessionHandle): void {
     return;
   }
   clearTransientNotice();
-  const run = session.runView(runId);
+  const run = session.view.run(runId);
   if (run && run.plan !== null) {
     openWorkPlanReader(runId);
   } else {
@@ -261,7 +261,7 @@ function forkCliTask(context: SlashCommandContext): SlashCommandEffect {
       );
       return;
     }
-    const ended = yield* SubscriptionRef.changes(context.backend.view).pipe(
+    const ended = yield* SubscriptionRef.changes(context.backend.view.ref).pipe(
       Stream.takeUntil((view) => {
         const run = view.runs.get(runId);
         return run === undefined || !isLiveRun(run);

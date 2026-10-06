@@ -12,6 +12,7 @@ import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   createTestSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { readRunTranscript } from '@transcript/runTranscript';
 import { generateRunId } from '@utils/core';
@@ -31,15 +32,15 @@ describe('session-owned transcripts and follow-up queues', () => {
         const runId = generateRunId();
 
         publishTestRunStart(launching, runId);
-        yield* launching.settled;
+        yield* launching.log.settled;
         const trace = new TraceEmitter((event) =>
-          launching.publishRunEvent(runId, event),
+          launching.trace.publish(runId, event),
         );
         yield* Effect.addFinalizer(() => Effect.sync(() => trace.close()));
         const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
         output.append('owned by launching session');
         output.finalize();
-        yield* launching.settled;
+        yield* launching.log.settled;
 
         const rowText = (row: TranscriptRow) =>
           row.kind === 'assistant' ? row.text.full : row.kind;
@@ -59,19 +60,19 @@ describe('session-owned transcripts and follow-up queues', () => {
       yield* Effect.addFinalizer(() => closeSessionOf(session));
       const runId = generateRunId();
       publishTestRunStart(session, runId);
-      yield* session.settled;
+      yield* session.log.settled;
       const trace = new TraceEmitter((event) =>
-        session.publishRunEvent(runId, event),
+        session.trace.publish(runId, event),
       );
       yield* Effect.addFinalizer(() => Effect.sync(() => trace.close()));
       const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
       output.append('partial text');
-      yield* session.settled;
+      yield* session.log.settled;
       // The `waiting` step parks the run and the loop commits the closure
       // facts in that batch (`loop/toolUse.ts`), so the partial text becomes
       // the row's final text instead of streaming forever.
-      session.publish(session.closureFacts(runId));
-      yield* session.settled;
+      publishTestRows(session, session.trace.closure(runId));
+      yield* session.log.settled;
       const { rows } = yield* readRunTranscript(session, runId);
       expect(
         rows.flatMap((row) =>
@@ -91,14 +92,14 @@ describe('session-owned transcripts and follow-up queues', () => {
       const runId = generateRunId();
       for (const session of [a, b]) {
         publishTestRunStart(session, runId);
-        yield* session.settled;
+        yield* session.log.settled;
       }
 
       yield* a.followUps.open(runId);
       yield* b.followUps.open(runId);
 
       a.followUps.closeInput(runId);
-      yield* a.settled;
+      yield* a.log.settled;
 
       const late = { from: { kind: 'user' as const }, text: 'late' };
       expect(yield* a.followUps.send(runId, late)).toEqual({ kind: 'refused' });
@@ -118,7 +119,7 @@ describe('sendFollowUp host-path session routing', () => {
       Effect.gen(function* () {
         const processSession = yield* createTestSession();
         const parentRun = publishTestRunStart(processSession);
-        yield* processSession.settled;
+        yield* processSession.log.settled;
         yield* Effect.addFinalizer(() =>
           Effect.sync(() =>
             processSession.followUps.closeInput(parentRun),

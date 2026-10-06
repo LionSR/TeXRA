@@ -4,12 +4,14 @@
  * (`runProgressRenderer.ts`) and the plain-text workflow output
  * (`scriptPlainOutput.ts`), which are otherwise separate renderers.
  */
-import type { SessionHandle } from '@agent/runtime';
+import type { SessionViewAccess } from '@agent/runtime';
 import type { SessionView } from '@shared/session/sessionView';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 /** What a headless renderer reads of a session: its view. */
-export type RunProgressSession = Pick<SessionHandle, 'view' | 'viewChanges'>;
+export interface RunProgressSession {
+  readonly view: Pick<SessionViewAccess, 'ref' | 'changes'>;
+}
 
 /**
  * The run a headless renderer describes: the run of the named run,

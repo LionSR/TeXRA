@@ -370,7 +370,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     // the run's scope closes it when the run ends, and when a launch that
     // never became a run unwinds.
     const agentLogger = new TraceEmitter(
-      (event) => session.publishRunEvent(runId, event),
+      (event) => session.trace.publish(runId, event),
       ...(input.onTraceEvent ? [input.onTraceEvent] : []),
     );
     yield* Effect.addFinalizer(() => Effect.sync(() => agentLogger.close()));

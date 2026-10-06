@@ -458,7 +458,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private chimeOnServiceDocuments(): Effect.Effect<void> {
     return Effect.suspend(() => {
       let live = new Set<RunId>();
-      return Stream.runForEach(this.backend.viewChanges, (view) =>
+      return Stream.runForEach(this.backend.view.changes, (view) =>
         Effect.sync(() => {
           const now = new Set<RunId>();
           for (const run of view.runs.values()) {
@@ -778,7 +778,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       if (!options?.inPlace) yield* this.showInSidebar();
       // Each surface decides from its own selection: one on the New-task
       // state opens the newest session, one showing a session keeps it.
-      const newest = SubscriptionRef.getUnsafe(this.backend.view).order.at(0);
+      const newest = SubscriptionRef.getUnsafe(this.backend.view.ref).order.at(
+        0,
+      );
       if (newest !== undefined)
         this.surfaceAction({ kind: 'showSessions', runId: newest });
     });
@@ -796,7 +798,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     runId: RunId,
   ): Effect.Effect<ProgressRunRevealResult, SurfacePlacementFailed> {
     return Effect.gen({ self: this }, function* () {
-      const view = SubscriptionRef.getUnsafe(this.backend.view);
+      const view = SubscriptionRef.getUnsafe(this.backend.view.ref);
       if (!view.runs.has(runId)) return 'missing' as const;
       yield* this.showProgressView();
       this.surfaceAction({ kind: 'select', runId });
@@ -805,7 +807,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public runLabel(runId: RunId): string | undefined {
-    return SubscriptionRef.getUnsafe(this.backend.view).runs.get(runId)?.label;
+    return SubscriptionRef.getUnsafe(this.backend.view.ref).runs.get(runId)
+      ?.label;
   }
 
   public popOutToEditor() {

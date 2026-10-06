@@ -339,7 +339,7 @@ const readResultMeta = (session: SessionHandle, runId: string) =>
 const seedStartedRun = (session: SessionHandle, runId: string) =>
   Effect.gen(function* () {
     if (seededRunIds.has(runId)) return;
-    yield* session.commit([
+    yield* session.log.transact([
       {
         type: 'run.start',
         aggregateId: aggregateId('run', runId as RunId),
@@ -373,12 +373,15 @@ const seedResumableCheckpoint = (session: SessionHandle, runId: string) =>
 /** The commit the command's result-metadata write makes, for ordering. */
 const resultMetaCommitOrder = (commitSpy: {
   readonly mock: {
-    readonly calls: readonly (readonly [readonly SessionEventDraft[]])[];
+    readonly calls: readonly (readonly [unknown])[];
     readonly invocationCallOrder: readonly number[];
   };
 }): number => {
-  const index = commitSpy.mock.calls.findIndex(([drafts]) =>
-    drafts.some((draft) => draft.type === 'run.result'),
+  // A transaction is rows or a job; the result write is rows.
+  const index = commitSpy.mock.calls.findIndex(
+    ([work]) =>
+      Array.isArray(work) &&
+      work.some((draft: SessionEventDraft) => draft.type === 'run.result'),
   );
   if (index < 0) throw new Error('The run.result commit never happened.');
   const order = commitSpy.mock.invocationCallOrder[index];
@@ -770,7 +773,7 @@ describe('CLI run command, workflow agents', () => {
         const records = getRunRecords(session, runId);
         // The run's first append claims its aggregate for this process; the
         // release below is what makes a later write refuse.
-        yield* session.commit([
+        yield* session.log.transact([
           {
             type: 'run.start',
             aggregateId: aggregateId('run', run.result.runId),
@@ -786,8 +789,8 @@ describe('CLI run command, workflow agents', () => {
         mocks.executeCliConfig.mockImplementationOnce(
           (_config, _context, options) =>
             Effect.scoped(
-              session
-                .holdRunClaim(runId)
+              session.log
+                .hold(runId, { ends: true })
                 .pipe(
                   Effect.andThen(
                     options.publishWorkflowOutput(run.result, [], () => true),
@@ -836,7 +839,7 @@ describe('CLI run command, workflow agents', () => {
           // store's own DatabaseWriteFailed, carried out on the typed Error
           // channel, unlike the usage errors above.
           yield* seedStartedRun(currentSession(), 'abc005');
-          vi.spyOn(currentSession(), 'commit').mockReturnValueOnce(
+          vi.spyOn(currentSession().log, 'transact').mockReturnValueOnce(
             Effect.fail(
               new DatabaseWriteFailed({
                 path: 'run-records',
@@ -899,7 +902,7 @@ describe('CLI run command, workflow agents', () => {
           // The hint advertises only a resumable run: the cancelled run's own
           // checkpoint is what the real resumability read has to find.
           yield* seedResumableCheckpoint(currentSession(), 'abc007');
-          const commitSpy = vi.spyOn(currentSession(), 'commit');
+          const commitSpy = vi.spyOn(currentSession().log, 'transact');
 
           const context = createRunCommandCliContext({
             cwd: root,

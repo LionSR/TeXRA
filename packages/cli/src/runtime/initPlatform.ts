@@ -24,7 +24,6 @@ import {
   openProjectStateStore,
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
-import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { setLogSink, silentLogSink } from '@logger/logSink';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -80,7 +79,7 @@ type CliPlatformInitOptions = Pick<
   | 'version'
 > & {
   readonly installSignalHandlers?: boolean;
-  /** The caller shows `SessionHandle.storeMovedAside` itself: the chat TUI,
+  /** The caller shows `SessionHandle.log.movedAside` itself: the chat TUI,
    *  in its transcript (`createChatSessionController`), since stderr written before Ink mounts is left
    *  above its header. Otherwise this init prints it to stderr: the
    *  platform's log sink is always silent. */
@@ -362,7 +361,6 @@ export function initCliPlatform(
             Effect.acquireRelease(
               owner.open({
                 roots,
-                responseTextProcessing: createTexraResponseTextProcessing(),
                 ...(context.interruptedTasks !== undefined && {
                   interruptedTasks: context.interruptedTasks,
                 }),
@@ -372,7 +370,7 @@ export function initCliPlatform(
               Scope.provide(projectScope),
               Effect.tap((session) =>
                 Effect.sync(() => {
-                  const moved = session.storeMovedAside;
+                  const moved = session.log.movedAside;
                   if (moved && context.presentsStoreMovedAside !== true) {
                     writeTextStderr(sessionStoreMovedAsideMessage(moved));
                   }

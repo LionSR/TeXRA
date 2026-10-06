@@ -6,9 +6,9 @@
  */
 import { Effect, Stream } from 'effect';
 
-import type { SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
 import { attentionOf, type SessionView } from '@shared/session/sessionView';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import type { RunId } from '@texra-ai/harness/schemas';
@@ -34,11 +34,11 @@ export class RequestAttention {
     view.badge = this.badge;
   }
 
-  follow(session: Pick<SessionHandle, 'viewChanges'>): Effect.Effect<void> {
+  follow(session: Pick<SessionBackend, 'view'>): Effect.Effect<void> {
     // Unseeded: the first view is what was already pending when the window
     // subscribed, which the badge shows and nothing reveals.
     let previous: SessionView | undefined;
-    return Stream.runForEach(session.viewChanges, (view) => {
+    return Stream.runForEach(session.view.changes, (view) => {
       const { requests, arrived } = attentionOf(view, previous);
       previous = view;
       this.setCount(requests.length);

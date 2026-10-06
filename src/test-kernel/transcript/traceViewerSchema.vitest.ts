@@ -18,6 +18,7 @@ import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import {
   createTempDirPlatform,
@@ -54,9 +55,9 @@ describe('trace-viewer TraceDocumentSchema', () => {
 
       const session = yield* createTestSession();
       publishTestRunStart(session, runId);
-      yield* session.settled;
+      yield* session.log.settled;
       yield* seedRunRecord(session, runId, runConfigRecord);
-      session.publish([
+      publishTestRows(session, [
         {
           type: 'log',
           aggregateId: aggregateId('run', runId),
@@ -71,7 +72,7 @@ describe('trace-viewer TraceDocumentSchema', () => {
           output: emptyRunEndOutput(),
         },
       ]);
-      yield* session.settled;
+      yield* session.log.settled;
       const result = yield* assembleTrace(runId, session);
       yield* closeSessionOf(session);
       expect(result.status).toBe('ok');

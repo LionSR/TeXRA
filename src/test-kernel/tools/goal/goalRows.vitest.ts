@@ -11,6 +11,7 @@ import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import {
   createTestSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
@@ -124,13 +125,13 @@ describe('the goal row is the goal', () => {
       publishTestRunStart(session, RUN_A);
       yield* startGoal(session, RUN_A, 'objective a');
 
-      session.publish([
+      publishTestRows(session, [
         {
           type: 'run.removed',
           aggregateId: qualifyAggregateId('run', RUN_A),
         },
       ]);
-      yield* session.settled;
+      yield* session.log.settled;
 
       expect(goalOf(session, RUN_A)).toBeNull();
     }),

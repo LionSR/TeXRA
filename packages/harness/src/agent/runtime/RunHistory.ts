@@ -309,7 +309,7 @@ export const runHistoryLayer: Layer.Layer<
     // every other database failure passes through unconverted (F3).
     const acquire = Effect.fn('RunHistory.acquire')(function* (run: RunId) {
       const aggregate = qualifyAggregateId('run', run);
-      const taken = yield* log.acquireClaims([aggregate]).pipe(
+      yield* log.acquireClaims([aggregate]).pipe(
         Effect.catchTag('DatabaseNotOwner', (failure) =>
           Effect.fail(
             new RunHistoryRefused({
@@ -334,29 +334,27 @@ export const runHistoryLayer: Layer.Layer<
       // the resume re-enters it; what the previous owner left open unbound
       // is a later request of an attempt already past its first answer,
       // whose body died with that owner. Taking the claim retires exactly
-      // those as cancelled, so the surfaces still offering them settle
-      // instead of outliving the process that asked. Rows that do not fold
-      // are `load`'s refusal, answered here from the same read.
+      // those as cancelled, so no surface outlives the process that asked.
+      // Rows that do not fold are `load`'s refusal, from the same read.
       const stored = yield* log.readAggregate(aggregate, 1);
-      // The same read seeds the publisher's pending follow-ups: what an
-      // earlier owner left queued is delivered by this one.
-      yield* events.hydrateFollowUps(aggregate, taken.length > 0, stored);
       const folded = foldStored(null, stored);
       if (Result.isFailure(folded) || folded.success === null)
         return yield* loaded(run, folded);
       const unbound = unboundRequests(folded.success);
       if (unbound.length === 0) return yield* loaded(run, folded);
       const cancelled = yield* events
-        .publish(
-          unbound.map((requestId) => ({
-            type: 'request.decided' as const,
-            aggregateId: aggregate,
-            requestId,
-            decision: {
-              action: 'cancel' as const,
-              cause: 'The process that asked exited.',
-            },
-          })),
+        .transact((append) =>
+          append(
+            unbound.map((requestId) => ({
+              type: 'request.decided' as const,
+              aggregateId: aggregate,
+              requestId,
+              decision: {
+                action: 'cancel' as const,
+                cause: 'The process that asked exited.',
+              },
+            })),
+          ),
         )
         .pipe(
           Effect.catchTag('DatabaseNotOwner', (failure) =>
@@ -452,7 +450,9 @@ export const runHistoryLayer: Layer.Layer<
       // `not-owner`, nothing written (D6 b, R7); any other rollback stays the
       // write failure it is (F3).
       const committed = yield* events
-        .publish([...registration, ...rows.map(storedDraft)])
+        .transact((append) =>
+          append([...registration, ...rows.map(storedDraft)]),
+        )
         .pipe(
           Effect.catchTag('DatabaseNotOwner', (failure) =>
             Effect.fail(

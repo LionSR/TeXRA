@@ -80,8 +80,8 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
       `executions/${childRunId}/${relativePath}`,
     );
     publishTestRunStart(session, parentId);
-    yield* session.settled;
-    yield* session.commit([
+    yield* session.log.settled;
+    yield* session.log.transact([
       {
         type: 'run.start',
         aggregateId: aggregateId('run', childRunId),
@@ -95,7 +95,7 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
       completedWorkflowResult,
     );
     // How the child ended, and what it declared, is its `run.end` row's.
-    yield* session.commit([
+    yield* session.log.transact([
       {
         type: 'run.end',
         aggregateId: aggregateId('run', childRunId),

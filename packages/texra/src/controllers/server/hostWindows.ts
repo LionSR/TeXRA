@@ -420,7 +420,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
         // lists has settled: it is dropped, and its window releases its
         // view. One not listed yet is kept: staging precedes the row.
         yield* Effect.forkScoped(
-          Stream.runForEach(SubscriptionRef.changes(session.view), (view) =>
+          Stream.runForEach(SubscriptionRef.changes(session.view.ref), (view) =>
             Effect.gen(function* () {
               const held = stagedIn(key);
               if (held.size === 0) return;
@@ -444,7 +444,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
         );
       }),
     preview: (session, requestId) =>
-      Effect.map(SubscriptionRef.get(session.view), (view) =>
+      Effect.map(SubscriptionRef.get(session.view.ref), (view) =>
         view.requests.some((request) => request.requestId === requestId)
           ? previewOf(stagedIn(session.roots.storage).get(requestId))
           : null,

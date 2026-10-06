@@ -23,6 +23,7 @@ import {
 } from '@shared/schemas';
 import type { UsageLog } from '@shared/usageLog';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import type { RouteRetries } from './run/invocation';
 import type { HttpClient } from 'effect/http';
 
 const CHANNEL = 'SessionDescription';
@@ -114,7 +115,7 @@ export const generateSessionDescription = Effect.fn(
 ): Effect.fn.Return<
   void,
   never,
-  LanguageModel | HttpClient.HttpClient | UsageLog
+  LanguageModel | HttpClient.HttpClient | UsageLog | RouteRetries
 > {
   const instruction = getDisplayedInstruction(config);
   if (!instruction) return;
@@ -158,7 +159,7 @@ export const generateSessionDescription = Effect.fn(
     // would then turn into a warning, leaving the terminal drain to write a
     // COMPLETED row over a fact nobody hears about. A refused commit is this
     // path's own failure and the one thing the warning is for.
-    yield* session.commit([
+    yield* session.log.transact([
       {
         type: 'run.description',
         aggregateId: qualifyAggregateId('run', runId),

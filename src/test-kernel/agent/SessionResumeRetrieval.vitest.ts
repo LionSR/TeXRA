@@ -43,7 +43,7 @@ describe('retrieveSessionResumeData', () => {
   /** Open the run aggregate the way a loop does: claim, then a position. */
   const openRun = Effect.fn('openRun')(function* (runId: RunId) {
     publishTestRunStart(session, runId);
-    yield* session.settled;
+    yield* session.log.settled;
     yield* session.runHistory.acquire(runId);
     yield* session.runHistory.appendBatch(runId, null, [
       positionRow(runId, { turn: 0 }, 'turn.ready'),
@@ -67,7 +67,7 @@ describe('retrieveSessionResumeData', () => {
       const runId = 'ab0002' as RunId;
       publishTestRunStart(session, runId);
       // Registered and never opened, it would resume by opening: it ended.
-      yield* session.commit([
+      yield* session.log.transact([
         {
           type: 'run.end',
           aggregateId: aggregateId('run', runId),
@@ -86,8 +86,8 @@ describe('retrieveSessionResumeData', () => {
     Effect.gen(function* () {
       const runId = 'ab0005' as RunId;
       publishTestRunStart(session, runId);
-      yield* session.settled;
-      vi.spyOn(session, 'readRunRecords').mockReturnValue(
+      yield* session.log.settled;
+      vi.spyOn(session.log, 'records').mockReturnValue(
         Effect.fail(
           new DatabaseReadFailed({
             path: 'session.db',

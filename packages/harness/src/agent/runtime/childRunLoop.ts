@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Cause, Clock, Effect, Exit, type Fiber } from 'effect';
+import { Cause, Clock, Effect, Exit, type Fiber, Scope } from 'effect';
 
 // Shared child accounting and durable delivery for native runs and processes.
 
@@ -450,8 +450,8 @@ function commitChildTurn(
   turn: AttemptKey,
   phase: 'accepted',
 ): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> {
-  return session
-    .commit([
+  return session.log
+    .transact([
       {
         type: 'child.turn',
         aggregateId: aggregateId('run', runId),
@@ -474,14 +474,14 @@ const commitSettlement = (
   runId: RunId,
   { rows }: ChildSettlement,
 ): Effect.Effect<void, Error> =>
-  session.commit(rows).pipe(
+  session.log.transact(rows).pipe(
     Effect.asVoid,
     Effect.catch((error) => {
       const settled = rows.findLast((row) => row.type === 'child.turn');
       return (
         settled === undefined
           ? Effect.void
-          : session.commit([
+          : session.log.transact([
               settledRow(runId, {
                 key: settled.attemptId,
                 index: settled.turnIndex,
@@ -503,8 +503,8 @@ function commitPark(
   runId: RunId,
   phase: 'parked' | 'resumed',
 ): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> {
-  return session
-    .commit([
+  return session.log
+    .transact([
       { type: 'child.park', aggregateId: aggregateId('run', runId), phase },
     ])
     .pipe(Effect.asVoid);
@@ -690,12 +690,12 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
     let releaseClaim: Effect.Effect<void> = Effect.void;
     const run = Effect.gen(function* () {
       runStarted = true;
-      releaseClaim = yield* runSession.acquireClaims(
-        aggregateId('run', runId),
-        {
-          ends: true,
-        },
+      const claimHeld = yield* Scope.make();
+      yield* runSession.log.hold(runId, { ends: true }).pipe(
+        Scope.provide(claimHeld),
+        Effect.onError(() => Scope.close(claimHeld, Exit.void)),
       );
+      releaseClaim = Scope.close(claimHeld, Exit.void);
       let turnIndex = 0;
       let result: TTurn | undefined;
       yield* Effect.scoped(
@@ -880,7 +880,7 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
             if (
               turnIndex === 0 &&
               err != null &&
-              !(yield* runSession.ownsRun(runId))
+              !(yield* runSession.log.owns(runId))
             )
               return yield* Effect.fail(ensureError(err));
             if (turnFailed) {
@@ -1004,7 +1004,7 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
                   // returned its last turn with no lifecycle to settle it (a
                   // strategy that writes no `run.end`) settles it alone.
                   const abnormal = stoppedAtExit || sawTurnFailure;
-                  if (abnormal && (yield* runSession.ownsRun(runId)))
+                  if (abnormal && (yield* runSession.log.owns(runId)))
                     yield* endRunOutsideLifecycle(
                       runSession,
                       runId,
@@ -1013,7 +1013,7 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
                       settlement,
                     );
                   else if (!abnormal && settlement.length > 0)
-                    yield* runSession.commit(settlement);
+                    yield* runSession.log.transact(settlement);
                   // A user's stop, not a shutdown: what the child left for
                   // its parent to resume, read with the parent's next input.
                   const target = parent.current;

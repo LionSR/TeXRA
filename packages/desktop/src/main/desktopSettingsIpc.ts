@@ -185,17 +185,19 @@ export function createDesktopSettingsIpc(
       // tasks. Telling the service outlives this surface, in the order set:
       // a project switch or a closed window must not leave the service on
       // an older policy.
-      setApprovalPolicy: (policy) => {
-        options.session.setApprovalPolicy(policy);
-        spawn(
-          Effect.asVoid(
-            Effect.forkDetach(
-              options.backend
-                .setApprovalPolicy(policy)
-                .pipe(withPerKeyLane(policyLanes, options.backend)),
+      approvals: {
+        setPolicy: (policy) => {
+          options.session.approvals.setPolicy(policy);
+          spawn(
+            Effect.asVoid(
+              Effect.forkDetach(
+                options.backend
+                  .setApprovalPolicy(policy)
+                  .pipe(withPerKeyLane(policyLanes, options.backend)),
+              ),
             ),
-          ),
-        );
+          );
+        },
       },
     },
     secrets: options.secrets,

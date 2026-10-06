@@ -22,6 +22,7 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   createTestSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import { generateRunId } from '@utils/core';
@@ -87,8 +88,8 @@ describe('desktop agent run completion hook', () => {
         { startImmediately: true },
       );
       const completedRun = publishTestRunStart(session, generateRunId());
-      session.publish([completedRunEnd(completedRun)]);
-      yield* session.settled;
+      publishTestRows(session, [completedRunEnd(completedRun)]);
+      yield* session.log.settled;
       expect(onRunCompleted).not.toHaveBeenCalled();
 
       yield* Deferred.succeed(launchSettled, undefined);

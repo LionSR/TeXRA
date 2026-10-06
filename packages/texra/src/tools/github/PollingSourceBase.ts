@@ -22,7 +22,7 @@ import {
   Scope,
 } from 'effect';
 
-import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionGraph';
+import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
 

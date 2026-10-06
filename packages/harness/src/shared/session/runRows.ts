@@ -115,9 +115,8 @@ export const phaseAfter = (
  * What these rows say about one run: its position and the input it has not
  * taken. `sessionFold` keeps one per run beside its view and projects the
  * view's containers from it; the admission's replay check reads it whole.
- * The loop's pending input is the publisher's
- * (`SessionEvents.pendingFollowUps`), so `RunState` carries only the
- * position.
+ * The loop reads its pending input from the rows (`Inbox.read`), so
+ * `RunState` carries only the position.
  */
 export type RunRows = RunPosition & {
   /** Queued without consumed, in commit order. */

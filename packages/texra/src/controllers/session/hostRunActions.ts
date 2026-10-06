@@ -228,9 +228,12 @@ export const createHostRunActions = (
     // context each of its callers happens to run on.
     const fs = yield* FileSystem.FileSystem;
     const { session, backend } = ports;
-    const view = () => SubscriptionRef.getUnsafe(backend.view);
+    const view = () => SubscriptionRef.getUnsafe(backend.view.ref);
     const runView = (runId: RunId) => view().runs.get(runId);
-    const guard = runActionGuard({ runView, runs: session.runs });
+    const guard = runActionGuard({
+      view: { run: runView },
+      runs: session.runs,
+    });
 
     /** Validate a request an action built, then launch it: one that does
      *  not validate is refused before anything starts, a refusal the

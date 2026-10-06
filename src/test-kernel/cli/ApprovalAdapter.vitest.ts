@@ -54,7 +54,7 @@ function context(overrides: Partial<CliContext> = {}): CliContext {
     version: 'test',
     ...overrides,
   });
-  testDefaultSession().setApprovalPolicy(ctx.approvalPolicy);
+  testDefaultSession().approvals.setPolicy(ctx.approvalPolicy);
   return ctx;
 }
 
@@ -67,7 +67,7 @@ function useCliHostInteractions(
   hooks: CliApprovalPromptHooks = {},
 ): void {
   detachHostInteractions();
-  testDefaultSession().setApprovalPolicy(cliContext.approvalPolicy);
+  testDefaultSession().approvals.setPolicy(cliContext.approvalPolicy);
   detachHostInteractions = Effect.runSync(
     testDefaultSession().interactions.use(
       createHeadlessCliHostInteractions(
@@ -90,7 +90,7 @@ function ensureRun(runId: RunId) {
     if (started.has(runId)) return;
     started.add(runId);
     publishTestRunStart(testDefaultSession(), runId);
-    yield* testDefaultSession().settled;
+    yield* testDefaultSession().log.settled;
   });
 }
 
@@ -130,7 +130,7 @@ function openRequestOn(
   return Effect.gen(function* () {
     const session = testDefaultSession();
     yield* ensureRun(runId);
-    return yield* session.openRequest(runId, payload);
+    return yield* session.requests.ask(runId, payload);
   }).pipe(Effect.mapError((cause) => new Error(String(cause))));
 }
 

@@ -36,7 +36,7 @@ export const listRuns = Effect.fn('ExecutionsTool.listRuns')(function* (
 ) {
   // One cold fold of the log's listing tier: every run's identity, model,
   // description, parentage and status, already decided. Nothing per row.
-  const view = yield* session.readView([]);
+  const view = yield* session.view.read([]);
   const entries = [...view.runs.values()].toSorted(
     (left, right) =>
       right.launchedAt - left.launchedAt || right.createdAt - left.createdAt,
@@ -47,7 +47,7 @@ export const listRuns = Effect.fn('ExecutionsTool.listRuns')(function* (
   }
 
   // Unread input is the live fold's: the listing tier carries no follow-ups.
-  const { queuedFollowUps } = SubscriptionRef.getUnsafe(session.view);
+  const { queuedFollowUps } = SubscriptionRef.getUnsafe(session.view.ref);
   const parentOf = (id: RunId) => view.runs.get(id)?.parentId;
   const relationTo = (run: RunView): string | undefined => {
     if (caller === undefined) return undefined;

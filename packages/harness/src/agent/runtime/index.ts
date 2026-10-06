@@ -18,10 +18,13 @@
  */
 
 // SessionHandle
-export { SessionHandle } from './SessionHandle';
+export type { SessionHandle, SessionViewAccess } from './SessionHandle';
 
-// sessionGraph: the shutdown budget a host spends closing its sessions.
-export { SESSION_CLOSE_DEADLINE_MS } from './sessionGraph';
+// The shutdown budget a host spends closing its sessions.
+export { SESSION_CLOSE_DEADLINE_MS } from './SessionHandle';
+
+// The process's one route retry gate, which a helper call reads from context.
+export type { RouteRetries } from './run/invocation';
 
 // HostInteractions
 export type {

@@ -179,7 +179,7 @@ export interface CallRequests {
    *  `<prefix>-<id>`. A request is staged under this id before it opens. */
   readonly nextId: (prefix: string) => string;
   /** Open the request (or re-enter the standing one) and wait for its
-   *  decision, as `SessionHandle.openRequest` does. */
+   *  decision, as `SessionRequests.ask` does. */
   readonly open: (
     payload: PermissionPayload,
     options?: { readonly onNeverCommitted?: Effect.Effect<void> },

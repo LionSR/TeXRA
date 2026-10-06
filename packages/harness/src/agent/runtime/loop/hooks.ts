@@ -267,7 +267,7 @@ const inputBase = (run: AgentRunShape) => {
     session_id: root,
     cwd: run.session.roots.workspace ?? '',
     permission_mode:
-      run.session.approvalPolicy === 'yolo'
+      run.session.approvals.policy() === 'yolo'
         ? ('bypassPermissions' as const)
         : ('default' as const),
     ...(root === run.runId

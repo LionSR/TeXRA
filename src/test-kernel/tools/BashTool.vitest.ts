@@ -26,6 +26,7 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   createProcessSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { BashTool } from '@tools/bash';
@@ -116,7 +117,7 @@ function startedParentRun(): RunId {
  */
 async function parkRunWaiting(runId: RunId): Promise<void> {
   const session = testDefaultSession();
-  session.publish([
+  publishTestRows(session, [
     {
       type: 'run.position',
       aggregateId: aggregateId('run', runId),
@@ -125,7 +126,7 @@ async function parkRunWaiting(runId: RunId): Promise<void> {
   ]);
   await vi.waitFor(() => {
     assert.equal(
-      testDefaultSession().runView(runId)?.status,
+      testDefaultSession().view.run(runId)?.status,
       RUN_PHASE.WAITING,
     );
   });
@@ -713,17 +714,21 @@ describe('BashTool', () => {
         assert.ok(runId, JSON.stringify(launchResult));
         const session = testDefaultSession();
         // The manifest rides the batch that ends the run: refuse that batch.
-        const update = session.updateRecordFacts.bind(session);
-        vi.spyOn(session, 'updateRecordFacts').mockImplementation(
-          (id, change) =>
-            update(id, (rows) =>
-              Effect.flatMap(change(rows), (next) =>
-                next.events.some((event) => event.type === 'run.result')
-                  ? Effect.die(new Error('result metadata disk full'))
-                  : Effect.succeed(next),
-              ),
-            ),
-        );
+        const transact = session.log.transact.bind(session.log);
+        vi.spyOn(session.log, 'transact').mockImplementation(((
+          work: Parameters<typeof transact>[0],
+        ) =>
+          typeof work === 'function'
+            ? transact((tx) =>
+                work({
+                  ...tx,
+                  append: (rows) =>
+                    rows.some((row) => row.type === 'run.result')
+                      ? Effect.die(new Error('result metadata disk full'))
+                      : tx.append(rows),
+                }),
+              )
+            : transact(work)) as typeof transact);
         const records = getRunRecords(session, runId);
 
         resolveCommand(DONE_EXEC_RESULT);
@@ -740,12 +745,10 @@ describe('BashTool', () => {
         assert.equal(yield* records.readResultMeta(), null);
         // Nor does the parent read a result the child never ended with.
         assert.deepEqual(
-          session.events
-            .pendingFollowUps(aggregateId('run', parentRunId))
-            .filter(
-              ({ content: { from } }) =>
-                from.kind === 'run' && from.runId === runId,
-            ),
+          (yield* session.followUps.read(parentRunId)).followUps.filter(
+            ({ content: { from } }) =>
+              from.kind === 'run' && from.runId === runId,
+          ),
           [],
         );
         detachBackgroundRun(recorded, parentRunId);

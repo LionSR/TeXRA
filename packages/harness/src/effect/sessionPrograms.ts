@@ -34,7 +34,7 @@ import {
   runAgent as runValidatedAgent,
   type SessionHandle as RuntimeSessionHandle,
 } from '@agent/runtime';
-import type { SessionOwner } from '@agent/runtime/sessionGraph';
+import type { SessionOwner } from '@agent/runtime/SessionOwner';
 import type { AgentEvent } from '@agent/trace';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -236,7 +236,7 @@ function start(
         );
         spawned.push(runFiber);
         yield* restore(Deferred.await(admitted));
-        const view = session.viewChanges.pipe(
+        const view = session.view.changes.pipe(
           // The level replays on subscribe, and the fold lands the run's
           // `run.start` asynchronously, so a replayed level can predate the
           // run.
@@ -259,7 +259,7 @@ function start(
             const key = ids.join('\0');
             if (key === subscribed) return Effect.void;
             subscribed = key;
-            return session.subscriptions.set(
+            return session.view.subscribe(
               port,
               ids.map((id) => ({
                 id: qualifyAggregateId('run', id),
@@ -326,14 +326,14 @@ function sessionOf(
     roots: handle.roots,
     start: (input) => start(handle, services, input),
     request: (request) => handle.requests.request(request),
-    view: { changes: handle.viewChanges },
+    view: { changes: handle.view.changes },
     subscribe: (interests) =>
       Effect.acquireRelease(
         Effect.suspend(() => {
           const port = `sdk/reader/${(readerPorts += 1)}`;
-          return Effect.as(handle.subscriptions.set(port, interests), port);
+          return Effect.as(handle.view.subscribe(port, interests), port);
         }),
-        (port) => handle.subscriptions.set(port, []),
+        (port) => handle.view.subscribe(port, []),
       ).pipe(Effect.asVoid),
   };
 }

@@ -1,8 +1,8 @@
 /**
  * The session's follow-up inbox. A run's input is a file appended to: each
  * message is one `followup.queued` row, and what a run still has to read is
- * its queued rows less its `followup.consumed` ones (the publisher's pending
- * fold). There is one reader per run, the generation running it here, which
+ * its queued rows less its `followup.consumed` ones, read from the store
+ * inside the job that acts on them (`read`). There is one reader per run, the generation running it here, which
  * the run registry already admits one at a time; the run's database claim is
  * the only lock. When a row may be read is data on the row (`holdUntil`),
  * evaluated by the fold a take reads (`RunInput`).
@@ -10,16 +10,28 @@
 import { Deferred, Effect, Result, type Scope } from 'effect';
 
 import type { ResumeRunResult } from '@agent/runtime/resumeRun';
+import type { SessionLog } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import {
   aggregateId,
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
-import { heldElsewhereBy } from '@shared/session/database';
+import {
+  heldElsewhereBy,
+  type DatabaseReadFailed,
+} from '@shared/session/database';
 import { runRelation } from '@shared/session/runRelation';
-import type { QueuedFollowUp } from '@shared/session/runRows';
-import type { Append } from '@shared/session/sessionEvents';
+import {
+  FOLLOW_UP_TYPES,
+  foldRunRows,
+  isFollowUpRow,
+  lifecycleOf,
+  RUN_LIFECYCLE_TYPES,
+  type QueuedFollowUp,
+  type RunRows,
+} from '@shared/session/runRows';
+import type { Append, SessionEventsShape } from '@shared/session/sessionEvents';
 import { ensureError } from '@utils/errors/errorMessage';
 import { RunInput } from './RunInput';
 import { queuedRow } from './followUpMessages';
@@ -27,26 +39,19 @@ import type { FollowUpSenderInput } from './followUpSender';
 
 const CHANNEL = 'Inbox';
 
-/** The session doors the inbox works through (`SessionHandle` wires them). */
+/** The rows a run's input is read from. */
+const INPUT_TYPES = [...FOLLOW_UP_TYPES, ...RUN_LIFECYCLE_TYPES];
+/** A run's input: what is queued, every follow-up id named, if closed. */
+type InputRows = RunRows & { readonly closed: boolean };
+
+/** The session doors the inbox works through (the session layer wires them). */
 export interface InboxPort {
-  /** One job on the session's publisher; nothing else is written while it runs. */
-  readonly exclusive: <A, E>(
-    job: (append: Append) => Effect.Effect<A, E>,
-  ) => Effect.Effect<A, E>;
-  /** Enqueue a job on that publisher and return. */
-  readonly detach: (job: (append: Append) => Effect.Effect<unknown>) => void;
-  /** The run's pending follow-ups, in commit order. */
-  readonly pending: (runId: RunId) => readonly QueuedFollowUp[];
-  /** Whether the run's input is closed (`followup.closed`, `run.removed`). */
-  readonly inputClosed: (runId: RunId) => boolean;
+  /** The session's log: a send is one transaction under the run's claim. */
+  readonly log: Pick<SessionLog, 'transact' | 'rows' | 'hold'>;
+  /** Enqueue a job on the session's publisher and return. */
+  readonly detach: SessionEventsShape['detach'];
   /** The run's parent as the session view folds it; `null` at top level. */
   readonly parentOf: (runId: RunId) => RunId | null | undefined;
-  /** Whether a committed row of the run named this follow-up id. */
-  readonly named: (runId: RunId, followUpId: string) => boolean;
-  /** Hold the run's claim (prior owners proven dead first); returns its release. */
-  readonly acquireClaim: (
-    runId: RunId,
-  ) => Effect.Effect<Effect.Effect<void, Error>, Error>;
   /** Whether a generation of the run is live in this process. */
   readonly live: (runId: RunId) => boolean;
 }
@@ -118,8 +123,8 @@ export class Inbox {
     options: SendOptions = {},
   ): Effect.Effect<Sent, Error> {
     if (this.disposed) return Effect.succeed({ kind: 'refused' });
-    return this.port.exclusive((append) =>
-      this.admit(runId, item, options, append),
+    return this.port.log.transact((tx) =>
+      this.admit(runId, item, options, tx.append),
     );
   }
 
@@ -149,7 +154,14 @@ export class Inbox {
       Effect.suspend(() => {
         if (this.readers.has(runId))
           return Effect.die(new Error(`Run ${runId} already has a reader`));
-        const input = new RunInput(() => this.port.pending(runId));
+        const input = new RunInput(
+          this.read(runId).pipe(
+            Effect.map(({ followUps }) => followUps),
+            // The run's own rows, read while this process holds its claim:
+            // a store that cannot read them cannot run it either.
+            Effect.orDie,
+          ),
+        );
         if (this.disposed) input.end();
         else this.readers.set(runId, input);
         return Effect.succeed(input);
@@ -167,8 +179,8 @@ export class Inbox {
     input.end();
     if (!terminal) return;
     this.port.detach(() =>
-      Effect.sync(() => {
-        if (this.readers.has(runId) || this.queued(runId)) return;
+      Effect.gen({ self: this }, function* () {
+        if (this.readers.has(runId) || queued(yield* this.read(runId))) return;
         this.notify({ kind: 'run', runId });
       }),
     );
@@ -186,10 +198,11 @@ export class Inbox {
     this.port.detach((append) =>
       Effect.scoped(
         Effect.gen({ self: this }, function* () {
-          yield* this.holdClaim(runId);
-          if (this.queued(runId)) return;
+          yield* this.port.log.hold(runId);
+          const input = yield* this.read(runId);
+          if (queued(input)) return;
           // A request the run never applied closes with its input.
-          const settled = this.port.pending(runId).map(({ followUpId }) => ({
+          const settled = input.followUps.map(({ followUpId }) => ({
             type: 'followup.consumed' as const,
             aggregateId: run,
             followUpId,
@@ -253,20 +266,19 @@ export class Inbox {
     childRunId: RunId,
   ): Effect.Effect<number, Error> {
     if (runId === undefined || this.disposed) return Effect.succeed(0);
-    return this.port.exclusive((append) => {
-      const rows = this.port
-        .pending(runId)
-        .filter(({ followUpId }) => followUpId.startsWith(`${childRunId}:`))
-        .map(({ followUpId }): SessionEventDraft => ({
-          type: 'followup.consumed',
-          aggregateId: aggregateId('run', runId),
-          followUpId,
-        }));
-      return Effect.as(
-        rows.length > 0 ? append(rows) : Effect.void,
-        rows.length,
-      );
-    });
+    return this.port.log.transact((tx) =>
+      Effect.gen({ self: this }, function* () {
+        const rows = (yield* this.read(runId)).followUps
+          .filter(({ followUpId }) => followUpId.startsWith(`${childRunId}:`))
+          .map(({ followUpId }): SessionEventDraft => ({
+            type: 'followup.consumed',
+            aggregateId: aggregateId('run', runId),
+            followUpId,
+          }));
+        if (rows.length > 0) yield* tx.append(rows);
+        return rows.length;
+      }),
+    );
   }
 
   /** Hear each run that takes no more input, and the inbox's own close. */
@@ -295,27 +307,27 @@ export class Inbox {
     options: SendOptions,
     append: Append,
   ): Effect.Effect<Sent, Error> {
-    // A run with no reader here answers "closed" from its rows, asked again
-    // once the claim is held (a claim that moved here re-reads them).
-    const closed = () =>
-      this.disposed ||
-      (!this.readers.has(runId) && this.port.inputClosed(runId));
+    // A run with no reader here answers "closed" from its rows, read again
+    // once the claim is held (a claim that moved here reads what its earlier
+    // owner wrote).
+    const closed = (input: InputRows) =>
+      this.disposed || (!this.readers.has(runId) && input.closed);
     const refused = { kind: 'refused' } as const;
     const landed = Effect.gen({ self: this }, function* () {
-      if (closed()) return refused;
-      yield* this.holdClaim(runId);
-      if (closed()) return refused;
+      if (closed(yield* this.read(runId))) return refused;
+      yield* this.port.log.hold(runId);
+      const input = yield* this.read(runId);
+      if (closed(input)) return refused;
       // Stamped inside the job, from committed parentage.
       const row = queuedRow(item, options.hold, (sender) =>
         runRelation(sender, runId, this.port.parentOf),
       );
-      if (!this.port.named(runId, row.followUpId)) {
+      if (!input.followUpIds.has(row.followUpId)) {
         const queued = { type: 'followup.queued', ...row } as const;
         yield* append([{ ...queued, aggregateId: aggregateId('run', runId) }]);
         return 'written' as const;
       }
-      const pending = this.port.pending(runId);
-      return pending.some((f) => f.followUpId === row.followUpId)
+      return input.followUps.some((f) => f.followUpId === row.followUpId)
         ? ('pending' as const)
         : ({ kind: 'duplicate' } as const);
     });
@@ -348,26 +360,15 @@ export class Inbox {
     );
   }
 
-  /** Whether a message is queued: a request (`control`) resumes no run. */
-  private queued(runId: RunId): boolean {
-    return this.port.pending(runId).some((f) => f.control === undefined);
-  }
-
-  /** The run's claim for the enclosing scope; a failed release is logged. */
-  private holdClaim(runId: RunId): Effect.Effect<void, Error, Scope.Scope> {
-    return Effect.asVoid(
-      Effect.acquireRelease(this.port.acquireClaim(runId), (release) =>
-        release.pipe(
-          Effect.catch((error) =>
-            Effect.logWarning(
-              `Run ${runId}: the claim taken to queue a follow-up was not released`,
-            ).pipe(
-              Effect.annotateLogs({ data: error }),
-              withLogChannel(CHANNEL),
-            ),
-          ),
-        ),
-      ),
+  /** The run's input as its committed rows say it (`InputRows`). */
+  read(runId: RunId): Effect.Effect<InputRows, DatabaseReadFailed> {
+    return Effect.suspend(() =>
+      this.port.log.rows(aggregateId('run', runId), INPUT_TYPES),
+    ).pipe(
+      Effect.map((rows) => ({
+        ...foldRunRows(rows.filter(isFollowUpRow)),
+        closed: lifecycleOf(rows).closed,
+      })),
     );
   }
 
@@ -393,3 +394,7 @@ export class Inbox {
     }
   }
 }
+
+/** Whether a message is queued: a request (`control`) resumes no run. */
+const queued = (input: InputRows): boolean =>
+  input.followUps.some((f) => f.control === undefined);

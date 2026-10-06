@@ -103,7 +103,7 @@ beforeAll(bindTestSessionView);
 // `/plan` reads the focused run off the session's own fold, `/status` off the
 // TUI's projection of it; one seeded map answers both.
 beforeEach(() => {
-  vi.spyOn(testDefaultSession(), 'runView').mockImplementation((id) =>
+  vi.spyOn(testDefaultSession().view, 'run').mockImplementation((id) =>
     seeded.get(id),
   );
 });

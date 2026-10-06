@@ -205,8 +205,10 @@ export const serviceSessionBackend = Effect.fn('serviceSessionBackend')(
       );
     return {
       key,
-      view: graph.view.ref,
-      viewChanges: SubscriptionRef.changes(graph.view.ref),
+      view: {
+        ref: graph.view.ref,
+        changes: SubscriptionRef.changes(graph.view.ref),
+      },
       frames: (port, host, subscribe) =>
         Stream.unwrap(
           Effect.gen(function* () {

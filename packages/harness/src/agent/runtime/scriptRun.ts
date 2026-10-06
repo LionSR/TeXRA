@@ -72,7 +72,7 @@ export const scriptRunCalls = Effect.fn('scriptRun.calls')(function* (
   session: SessionHandle,
   runId: RunId,
 ) {
-  const rows = yield* session.readAggregate(aggregateId('run', runId), [
+  const rows = yield* session.log.rows(aggregateId('run', runId), [
     'script.call',
     'tool.result',
   ]);
@@ -154,7 +154,7 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
   startedAt: number,
 ) {
   const { calls } = yield* scriptRunCalls(session, runId);
-  const view = yield* session.readView([]);
+  const view = yield* session.view.read([]);
   const now = yield* Clock.currentTimeMillis;
   const tally: ScriptTally = {
     total: calls.length,

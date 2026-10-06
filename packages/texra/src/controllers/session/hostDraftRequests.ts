@@ -12,6 +12,7 @@ import {
   type LanguageModel,
 } from '@texra-ai/harness';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { RouteRetries } from '@agent/runtime';
 import { resolveRouteCredential } from '@agent/runtime/modelRoutes';
 import { withLogChannel } from '@logger/effectLog';
 import { readProviderEndpoints } from '@model/modelRoute';
@@ -105,6 +106,7 @@ export class HostDraftRequests {
     | HttpClient.HttpClient
     | ChildProcessSpawner
     | UsageLog
+    | RouteRetries
   > {
     switch (request.kind) {
       case 'polish': {

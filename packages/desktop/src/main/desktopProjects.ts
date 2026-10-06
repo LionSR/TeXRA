@@ -26,7 +26,6 @@ import {
   openProjectStateStore,
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
-import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { openTexraWorkspaceConfigStores } from '@platform/defaults/nodeStores';
@@ -232,7 +231,6 @@ function openProjectSession(
     const session = yield* Effect.acquireRelease(
       owner.open({
         roots,
-        responseTextProcessing: createTexraResponseTextProcessing(),
         ...(served === undefined && { interruptedTasks: 'offer' }),
       }),
       // The one close every session takes: its runs stopped under the
@@ -240,7 +238,7 @@ function openProjectSession(
       // artifacts flushed, its entry released.
       (session) => Effect.asVoid(owner.close(session.roots.storage)),
     );
-    session.setApprovalPolicy(
+    session.approvals.setPolicy(
       yield* readSettingFrom<TexraApprovalPolicy>(
         roots,
         TEXRA_APPROVAL_POLICY_CONFIG_KEY,
@@ -251,7 +249,7 @@ function openProjectSession(
         ? localSessionBackend(session)
         : yield* serviceSessionBackend(served, root, roots.storage);
     if (served !== undefined)
-      yield* backend.setApprovalPolicy(session.approvalPolicy);
+      yield* backend.setApprovalPolicy(session.approvals.policy());
     return {
       key: roots.storage,
       root,

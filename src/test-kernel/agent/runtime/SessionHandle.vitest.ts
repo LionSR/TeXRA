@@ -42,9 +42,9 @@ describe('SessionHandle', () => {
         const handleB = trackAgent(b, runB);
         // The policy is the session's own setting: a change on A writes no
         // row and leaves B's as it was.
-        a.setApprovalPolicy('yolo');
-        expect(a.approvalPolicy).toBe('yolo');
-        expect(b.approvalPolicy).toBe('ask');
+        a.approvals.setPolicy('yolo');
+        expect(a.approvals.policy()).toBe('yolo');
+        expect(b.approvals.policy()).toBe('ask');
         yield* closeSessionOf(a);
         expect(a.runs.getHandle(isolated)).toBeUndefined();
         expect(b.runs.getHandle(runB)).toBe(handleB);

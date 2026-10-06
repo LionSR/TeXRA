@@ -234,7 +234,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
         preparedRequest,
       );
     const decision = decideTexraApproval({
-      policy: session.approvalPolicy,
+      policy: session.approvals.policy(),
       promptRequired: approvalsEnabled,
       scopedBypass: isRunBypassed,
       canPresent: run.toolPolicy.approvalPromptsUnavailable !== true,
@@ -270,7 +270,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       // listed with nothing to show for it. Staging hands back the release
       // for what it staged, bound to the host it staged on; the one case no
       // decision ever reaches is an open that never committed, which
-      // `openRequest` owns and runs this for.
+      // `requests.ask` owns and runs this for.
       prompt: session.interactions.presentToolEdit(staged).pipe(
         Effect.flatMap((releaseStaged) =>
           requests

@@ -21,7 +21,8 @@ import {
   type Path,
 } from 'effect';
 import type { AgentEngine } from '@agent/runtime/AgentEngine';
-import type { SessionOwner } from '@agent/runtime/sessionGraph';
+import type { RouteRetries } from '@agent/runtime/run/invocation';
+import type { SessionOwner } from '@agent/runtime/SessionOwner';
 import type { ProcessIdentity } from '@shared/session/sessionEvents';
 import type {
   GlobalDatabase,
@@ -75,7 +76,8 @@ export type ProcessServices =
   | UsageLog
   | ToolRegistry
   | LiveTools
-  | ToolAvailability;
+  | ToolAvailability
+  | RouteRetries;
 
 /**
  * The services a step pinned from its plugins' layers (a plugin's

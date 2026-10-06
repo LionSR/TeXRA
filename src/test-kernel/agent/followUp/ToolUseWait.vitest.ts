@@ -40,6 +40,7 @@ import {
   createProcessSession,
   publishTestRunStart,
   queuedFollowUps,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { releaseRunResources } from '@tools/approval';
 import {
@@ -239,7 +240,7 @@ const enqueue = Effect.fn('test.enqueue')(function* (
   runId: RunId,
   items: readonly InboxItem[],
 ) {
-  yield* session.settled;
+  yield* session.log.settled;
   for (const item of items) {
     yield* session.followUps.send(runId, item);
   }
@@ -307,8 +308,8 @@ describe('a parked child run', () => {
           followUpId: 'follow-up-1',
           content: { text: asked, from: { kind: 'user' as const } },
         };
-        session.publish([queued]);
-        yield* session.settled;
+        publishTestRows(session, [queued]);
+        yield* session.log.settled;
 
         const resumed = yield* forkLoop({
           runId,
@@ -320,15 +321,13 @@ describe('a parked child run', () => {
         yield* resumed.park(1);
         const resumedState = yield* session.runHistory.load(runId);
         expect(userTexts(resumedState)).toContain(asked);
-        expect(session.events.pendingFollowUps(rowAggregate(runId))).toEqual(
-          [],
-        );
+        expect((yield* session.followUps.read(runId)).followUps).toEqual([]);
         yield* Fiber.interrupt(resumed.fiber);
 
         // A producer that replays the delivery after a restart writes the
         // same id again; it names a follow-up already consumed.
-        session.publish([queued]);
-        yield* session.settled;
+        publishTestRows(session, [queued]);
+        yield* session.log.settled;
         const again = yield* forkLoop({
           runId,
           session,
@@ -503,7 +502,7 @@ describe('a parked root run', () => {
       const child = publishTestRunStart(session, generateRunId(), {
         parent: runId,
       });
-      session.publish([
+      publishTestRows(session, [
         {
           type: 'run.end',
           aggregateId: rowAggregate(child),
@@ -622,7 +621,7 @@ describe('the batch a parked run consumes', () => {
         const child = publishTestRunStart(session, generateRunId(), {
           parent: runId,
         });
-        session.publish([
+        publishTestRows(session, [
           {
             type: 'run.end',
             aggregateId: rowAggregate(child),
@@ -815,9 +814,9 @@ describe('the batch a parked run consumes', () => {
           expect.objectContaining({ messageType: expect.any(String) }),
         );
         expect(
-          session.events
-            .pendingFollowUps(rowAggregate(runId))
-            .map((f) => f.content.text),
+          (yield* session.followUps.read(runId)).followUps.map(
+            (f) => f.content.text,
+          ),
         ).toEqual(['use this diagram']);
       }),
   );

@@ -213,7 +213,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             ),
           );
         const done = yield* Deferred.make<void, Error>();
-        if (!followUps.editView({ handoff, done }))
+        if (!(yield* followUps.editView({ handoff, done })))
           return yield* Effect.fail(
             new Error('This task is already being reset.'),
           );
@@ -398,7 +398,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           state,
           cell,
           (at) => compaction.settle(at, 'the model is switching'),
-          followUps.controls(),
+          yield* followUps.controls,
         );
         if (state.pendingResponse !== null) {
           // A user's follow-up to a stopped response joins its delivery.
@@ -443,7 +443,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (state.invocation === null) {
           // The queued `/compact`s are consumed by the edit that answers
           // them, or, with nothing to summarize, by this round's admission.
-          const requests = consumedRows(runId, followUps.controls(), 'compact');
+          const controls = yield* followUps.controls;
+          const requests = consumedRows(runId, controls, 'compact');
           state = yield* cell.adopt(
             yield* compaction.atBoundary(state, cell, bound, requests),
           );
@@ -454,11 +455,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             state = yield* cell.append(step.rows);
             tools = toolDefinitionsFor(step.tools.definitions);
           }
-          const unanswered = followUps
-            .controls()
-            .filter((f) =>
-              requests.some(({ followUpId }) => followUpId === f.followUpId),
-            );
+          const unanswered = (yield* followUps.controls).filter((f) =>
+            requests.some(({ followUpId }) => followUpId === f.followUpId),
+          );
           const admitted = consumedRows(runId, unanswered, 'compact');
           if (admitted.length > 0) state = yield* cell.append(admitted);
         }
@@ -528,15 +527,15 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (parked) {
           // A native child waits in this same run scope, just like its root:
           // its loop has already delivered the turn offered at the boundary.
-          if (isChild() && afterError && !followUps.hasQueued())
+          const queued = yield* followUps.hasQueued;
+          if (isChild() && afterError && !queued)
             return finish(state, RUN_OUTCOME.FAILED);
           // Activation clears the visible step: restore an idle cursor's park.
-          if (restoring && !followUps.hasQueued())
+          if (restoring && !queued)
             state = yield* cell.append([positionRow(runId, state, 'waiting')]);
-          restoring &&= followUps.hasQueued();
+          restoring &&= queued;
           // A child's idle is its parent's; the policy sees failed turns too.
-          const canContinue =
-            !run.toolPolicy.stopAfterCycle && !followUps.hasQueued();
+          const canContinue = !run.toolPolicy.stopAfterCycle && !queued;
           // A park opens a step, which pins (and records) its continuation.
           let next: string | null = null;
           if (!isChild()) {
@@ -558,7 +557,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           }
           // A queued follow-up outranks the policy's synthetic turn.
           let batch: FollowUpBatch | null =
-            next !== null && !followUps.hasQueued()
+            next !== null && !(yield* followUps.hasQueued)
               ? { kind: 'synthetic', text: next }
               : null;
           if (batch === null) {
@@ -596,7 +595,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         state = yield* cell.adopt(yield* compaction.finish(state));
         // The turn's trace rows are queued ahead of the boundary: the
         // barrier lets the open streams `waiting` closes count every one.
-        yield* session.settled;
+        yield* session.log.settled;
         // The turn boundary, in one batch: Stop hooks, the
         // steps (`waiting` closes open streams), a child's settlement, and a
         // Stop hook's block or input already queued, under a fresh step.
@@ -611,11 +610,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             : null;
         const ending = [
           positionRow(runId, state, 'turn.end'),
-          ...session.closureFacts(runId),
+          ...session.trace.closure(runId),
           positionRow(runId, state, 'waiting'),
           ...(settlement?.rows ?? []),
         ];
-        const next = block ?? (goesOn ? followUps.takeQueued() : null);
+        const next = block ?? (goesOn ? yield* followUps.takeQueued : null);
         const pin =
           next !== null && !isChild() ? yield* openStep(state, 'park') : null;
         state =

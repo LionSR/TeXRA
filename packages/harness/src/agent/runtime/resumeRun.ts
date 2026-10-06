@@ -1,4 +1,4 @@
-import { Deferred, Effect, Exit, Fiber, Result, Scope } from 'effect';
+import { Effect, Exit, Fiber, Latch, Result, Scope } from 'effect';
 
 /**
  * The one resume entry point. Every host continues a persisted run through
@@ -149,7 +149,7 @@ export const resumeRun = Effect.fn('resumeRun')(function* (
 /** Hold the run's claim for the enclosing scope: null, or the live process
  *  that refused it. */
 const holdClaim = (session: SessionHandle, runId: RunId) =>
-  session.borrowRunClaim(runId).pipe(
+  session.log.hold(runId).pipe(
     Effect.as(null),
     Effect.catch((error) => {
       const holder = heldElsewhereBy(error);
@@ -176,7 +176,7 @@ const resumeHere = Effect.fn('resumeHere')(function* (
     return REFUSED;
   }
   // Deleted, or its input closed, while those reads ran.
-  if (cancelled() || session.events.inputClosed(aggregateId('run', runId)))
+  if (cancelled() || (yield* session.followUps.read(runId)).closed)
     return REFUSED;
   // Every resume reads the run's state under its claim and holds it until
   // the launched run holds its own, so two processes never both launch it,
@@ -187,7 +187,7 @@ const resumeHere = Effect.fn('resumeHere')(function* (
   yield* Effect.addFinalizer(() => Scope.close(claim, Exit.void));
   const heldBy = yield* holdClaim(session, runId).pipe(Scope.provide(claim));
   if (heldBy !== null) {
-    yield* session.markUnreadable(runId, runHeldMessage(ownerPid(heldBy)));
+    yield* session.view.markUnreadable(runId, runHeldMessage(ownerPid(heldBy)));
     return { failed: 'owned_elsewhere' };
   }
   const retrieved = yield* retrieveSessionResumeData(runId, config, session);
@@ -200,14 +200,14 @@ const resumeHere = Effect.fn('resumeHere')(function* (
       failed: yield* recordRunRefusal(runId, session, classification),
     };
   }
-  yield* session.clearUnreadable(runId);
+  yield* session.view.markUnreadable(runId, null);
   const resume = retrieved;
   // An agent or plugin this process cannot run now leaves the run
   // interrupted with the reason (D5), for the session's follower to
   // resume once it is back; nothing is launched. Another process's run
   // is refused as such above, whatever this process lacks.
   const blocker = yield* resumeBlocker(session, config);
-  yield* session.markResumeBlocked(
+  yield* session.view.markResumeBlocked(
     runId,
     blocker === null ? null : { reason: blocker, retry: true },
   );
@@ -232,7 +232,7 @@ const runLaunchOptions = (options: ResumeRunOptions) => ({
 /** The follow-ups still queued on the run, folded from its durable rows. */
 const queuedFollowUps = (session: SessionHandle, runId: RunId) =>
   Effect.flatMap(
-    session.readAggregate(aggregateId('run', runId), FOLLOW_UP_TYPES),
+    session.log.rows(aggregateId('run', runId), FOLLOW_UP_TYPES),
     (rows) =>
       Effect.try({
         try: () => foldRunRows(rows).followUps,
@@ -250,7 +250,7 @@ function refusalFor(
   // A live owner refused the claim, or took it after its owner was proved dead.
   const holder = heldElsewhereBy(error);
   if (holder !== null) {
-    return session
+    return session.view
       .markUnreadable(runId, runHeldMessage(ownerPid(holder)))
       .pipe(Effect.as({ failed: 'owned_elsewhere' } as const));
   }
@@ -298,14 +298,20 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
       // A model switch waits for a turn: the resume does not wait on it.
       for (const input of yield* queuedInput)
         if (input.control?.kind !== 'model') admitted.add(input.followUpId);
-      const idle = yield* Deferred.make<void>();
-      const launchOptions = runLaunchOptions(options);
+      // The run rested: once what this resume admitted is taken, the
+      // resume has delivered it.
+      const rested = Latch.makeUnsafe(false);
       const onIdle = (): void => {
-        const pending = session.events.pendingFollowUps(
-          aggregateId('run', runId),
-        );
-        if (!pending.some(isAdmitted)) Deferred.doneUnsafe(idle, Effect.void);
+        Latch.openUnsafe(rested);
       };
+      const idle = Effect.gen(function* () {
+        for (;;) {
+          yield* rested.await;
+          Latch.closeUnsafe(rested);
+          if (!(yield* queuedInput).some(isAdmitted)) return;
+        }
+      });
+      const launchOptions = runLaunchOptions(options);
       const parentRunId = yield* persistedParentRunId(session, runId);
       let completion: Fiber.Fiber<RunEndResult | undefined, Error>;
       if (parentRunId === undefined) {
@@ -350,10 +356,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
       // Interrupting either observation below cannot interrupt the
       // launched run's lifetime.
       return yield* Effect.raceFirst(
-        Deferred.await(idle).pipe(
-          Effect.as(RUN_PHASE.WAITING),
-          Effect.interruptible,
-        ),
+        idle.pipe(Effect.as(RUN_PHASE.WAITING), Effect.interruptible),
         Fiber.join(completion).pipe(Effect.interruptible),
       );
     }),

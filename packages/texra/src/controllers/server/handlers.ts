@@ -86,7 +86,7 @@ export const runningTasks = Effect.fn('server.runningTasks')(function* (
 ): Effect.fn.Return<number> {
   let running = 0;
   for (const session of (yield* projects.opened).values()) {
-    const view = yield* SubscriptionRef.get(session.view);
+    const view = yield* SubscriptionRef.get(session.view.ref);
     for (const run of view.runs.values())
       if (
         run.ownedHere &&
@@ -233,14 +233,14 @@ export const serviceHandlers = TexraRpcs.toLayer(
             return frameSubscription(
               {
                 key: session.roots.storage,
-                view: session.view,
-                inputs: session.inputs,
-                setTranscriptSubscriptions: session.subscriptions.set,
+                view: session.view.ref,
+                inputs: session.view.inputs,
+                setTranscriptSubscriptions: session.view.subscribe,
               },
               port,
               host,
               { ...subscribe, session: session.roots.storage },
-            ).pipe(Stream.ensuring(session.subscriptions.set(port, [])));
+            ).pipe(Stream.ensuring(session.view.subscribe(port, [])));
           }),
         ),
       'task.ended': ({ workspace, runId }) =>
@@ -327,7 +327,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
       'host.answer': ({ id, answer }) => hosts.answer(id, answer),
       'project.policy': ({ workspace, policy }) =>
         open(workspace).pipe(
-          Effect.map((session) => session.setApprovalPolicy(policy)),
+          Effect.map((session) => session.approvals.setPolicy(policy)),
         ),
       'task.resume': ({ workspace, runId }) =>
         Effect.gen(function* () {
@@ -337,7 +337,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
           // asks takes up the conversation it belongs to, where it is (a
           // chat left it waiting here).
           const live = liveRoot(
-            yield* SubscriptionRef.get(session.view),
+            yield* SubscriptionRef.get(session.view.ref),
             session,
             runId,
           );

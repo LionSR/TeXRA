@@ -57,7 +57,7 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
   // The run's canonical event publication, from its first event: the trace
   // is built with the session as its sink, and closed with the run.
   const trace = new TraceEmitter((event) =>
-    session.publishRunEvent(runId, event),
+    session.trace.publish(runId, event),
   );
   const handle = new RunHandle(
     {
@@ -199,7 +199,7 @@ const pauseChildRun = (
     options.stage?.end(RUN_OUTCOME.CANCELLED);
     const target = aggregateId('run', runId);
     // The last turn's settlement first: the pause notice is the newer report.
-    yield* session.commit([
+    yield* session.log.transact([
       ...(options.settlement ?? []),
       { type: 'run.report', aggregateId: target, report: text },
       { type: 'child.park', aggregateId: target, phase: 'paused', resumeId },
@@ -255,9 +255,9 @@ export const agentCliChildRunId = Effect.fn('agentCliChildRunId')(function* ({
   if (resumeId === undefined) return generateRunId();
   // Only the pauses that kept `resumeId` are collected, not the session.
   const [view, parks] = yield* Effect.all([
-    session.readView([]),
+    session.view.read([]),
     Stream.runCollect(
-      session.events
+      session.log
         .listing()
         .pipe(
           Stream.filter(

@@ -178,7 +178,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       resumeFrom,
     ] = yield* Effect.all(
       [
-        session.readView([]).pipe(Effect.map((view) => view.runs.get(id))),
+        session.view.read([]).pipe(Effect.map((view) => view.runs.get(id))),
         store.readConfig(),
         store.readResult(),
         store.readReport(),
@@ -334,7 +334,7 @@ export const deleteCliHistory = Effect.fn('deleteCliHistory')(function* (
   if (!options.all && !options.id) {
     return yield* Effect.fail(new Error('Expected a run id, or --all.'));
   }
-  const rows = yield* Stream.runCollect(session.events.listing());
+  const rows = yield* Stream.runCollect(session.log.listing());
   const removed = new Set(
     rows
       .filter((row) => row.type === 'run.removed')

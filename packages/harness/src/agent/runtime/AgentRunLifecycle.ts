@@ -1,7 +1,7 @@
 import { Cause, Effect, Exit } from 'effect';
 
 import { logSdkError, type ResultEvent, type StageHandle } from '@agent/trace';
-import { configChange, finalizeRun } from '@agent/storage/runLifecycle';
+import { configChange } from '@agent/storage/runLifecycle';
 import {
   AGENT_ERROR_OUTCOME,
   AgentError,
@@ -148,7 +148,7 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
     }
     // A trace row the store refused means the run's record is incomplete:
     // the run failed, whatever it reported, and its row says why.
-    const lost = yield* session.lostRows(handle.runId);
+    const lost = yield* session.trace.lost(handle.runId);
     const reported = lost === undefined ? params.outcome : RUN_OUTCOME.FAILED;
     // The `run.end` row written below is the run's terminal fact: the report
     // is only the verdict for a run no stop reached.
@@ -166,7 +166,7 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
       output,
     };
     const settlement = params.settle ? yield* params.settle(outcome) : [];
-    const finalization = yield* finalizeRun(session, {
+    const finalization = yield* session.runs.end({
       runId: handle.runId,
       outcome,
       error,
@@ -416,7 +416,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
     // another model), before the RUNNING transition so the fold already
     // carries it when the transition-owned run-start side effects fire.
     const config = yield* configChange(ctx.session, runId, ctx.config);
-    if (config !== null) yield* ctx.session.commit([config]);
+    if (config !== null) yield* ctx.session.log.transact([config]);
     // The flow is an Effect: a fiber interruption reaches its provider work
     // directly, and its finalizers settle before the resources below are
     // disposed.
@@ -476,7 +476,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
   // terminal above, so no stop lands between the two: a tracked handle is
   // always finalized. The host's stop is this run fiber's interruption
   // (`RunRegistry.interrupt`); the requests this run left open close with
-  // the fibers waiting on them (`SessionHandle.openRequest`).
+  // the fibers waiting on them (`SessionRequests.ask`).
   const resolved = yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
       runs.track(handle);

@@ -115,8 +115,8 @@ export const listRuns = Effect.fn('listRuns')(function* (
   session: SessionHandle,
 ): Effect.fn.Return<RunListingEntry[], Error> {
   const [view, listing] = yield* Effect.all([
-    session.readView([]),
-    Stream.runCollect(session.events.listing()),
+    session.view.read([]),
+    Stream.runCollect(session.log.listing()),
   ]);
   const records = recordRows(listing);
   const results = yield* Effect.forEach(

@@ -617,10 +617,11 @@ host.
 3. **The registry is process-global**, not session-scoped
    (`packages/harness/src/agent/index/agentRegistry.ts:113-128`). There is no per-embedder agent
    namespace.
-4. **`initializeDefaultSession` throws when a default is already open over the
-   same storage root** (`packages/harness/src/agent/runtime/sessionGraph.ts:313-316`). Embedding
-   inside a process that already hosts TeXRA means reusing
-   `tryDefaultSession()` or owning your own `SessionHandle`.
+4. **One session per storage root.** `SessionOwner.open`
+   (`packages/harness/src/agent/runtime/SessionOwner.ts`) returns the session
+   already open over the same root, built from what its first opener
+   supplied. Embedding inside a process that already hosts TeXRA shares that
+   session.
 5. **Some failure modes cluster at run time, not startup.** A missing
    `loadAgents` throws at agent resolution, and a request nobody decides
    parks the run mid-way (§3). Neither fails fast at bootstrap.

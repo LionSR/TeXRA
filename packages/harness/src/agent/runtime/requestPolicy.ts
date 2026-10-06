@@ -1,6 +1,10 @@
 /**
- * What the session's approval policy settles when a request opens, decided in
- * core so that `yolo` and `never` mean one thing on every host. The answer is
+ * A run's questions to a person, as rows (one run model, 3.7): what the
+ * session's approval policy settles when a request opens, decided in core so
+ * that `yolo` and `never` mean one thing on every host; `ask`, which opens a
+ * request with that answer beside it and waits for the `request.decided`
+ * that closes it, cancelling it on an interruption so no pending request
+ * outlives the call; and `decide`, the one writer of a decision. The answer is
  * recorded as the `request.decided` row beside the request's own
  * `request.opened`, in the same batch, so no surface ever lists it pending.
  *
@@ -10,6 +14,9 @@
  * present.
  */
 
+import { Effect, Option, Stream } from 'effect';
+
+import { withLogChannel } from '@logger/effectLog';
 import {
   decideHumanInputRequest,
   decideRetryApproval,
@@ -23,14 +30,24 @@ import {
 import {
   aggregateId as qualifyAggregateId,
   isCredentialRetryFailure,
+  type CommitOrdinal,
   type PermissionPayload,
   type RequestDecision,
   type RunId,
+  type SessionEvent,
 } from '@shared/schemas';
+import { foldRunRows } from '@shared/session/runRows';
 import type { RunHistoryDraft } from '@shared/session/runStateFold';
+import type { Append, SessionEventsShape } from '@shared/session/sessionEvents';
 
 import type { StepToolInputs } from './agentToolResolution';
-import type { SessionHandle } from './SessionHandle';
+import type {
+  AskOptions,
+  LogWriteError,
+  RequestRow,
+  SessionHandle,
+  SessionRequests,
+} from './SessionHandle';
 
 /** What the session's host can answer, read live: a host attached after a
  *  run started still answers for it. */
@@ -44,7 +61,7 @@ const canPresent = (session: SessionHandle): boolean =>
  */
 const executableDecision = (session: SessionHandle) =>
   decideTexraApproval({
-    policy: session.approvalPolicy,
+    policy: session.approvals.policy(),
     promptRequired: true,
     scopedBypass: false,
     canPresent: canPresent(session),
@@ -63,7 +80,7 @@ function answerFor(
       readonly denial?: ApprovalPolicyDenial;
     }
   | undefined {
-  const policy = session.approvalPolicy;
+  const policy = session.approvals.policy();
   switch (payload.kind) {
     case 'planApproval': {
       const decision = executableDecision(session);
@@ -152,4 +169,151 @@ export function liveToolGates(
       session.interactions.readDiagnostics ? ['diagnostics'] : [],
     ),
   };
+}
+
+const CHANNEL = 'requestPolicy';
+
+/** What a session's asks are built over. */
+export interface RequestAsksInit {
+  /** The session the requests are asked on, resolved when first used. */
+  readonly session: () => SessionHandle;
+  /** The publisher's detached door: an interrupted ask's cancellation. */
+  readonly detach: SessionEventsShape['detach'];
+  /** Whether the session's doors are shut: a cancellation then writes
+   *  nothing. */
+  readonly closed: () => boolean;
+}
+
+/** Build one session's {@link SessionRequests} `ask`, `decide` and
+ *  `decision`. */
+export function requestAsks({
+  session,
+  detach,
+  closed,
+}: RequestAsksInit): Pick<SessionRequests, 'ask' | 'decide' | 'decision'> {
+  /** The `request.decided` row for `requestId`, if the request is still
+   *  open: the body of one publisher transaction, whether a surface awaits
+   *  it or an interrupted {@link ask} detaches it. */
+  const decisionRow = (
+    runId: RunId,
+    requestId: string,
+    decision: RequestDecision,
+    append: Append,
+  ) =>
+    Effect.gen(function* () {
+      const aggregateId = qualifyAggregateId('run', runId);
+      const { requests } = foldRunRows(yield* session().log.rows(aggregateId));
+      if (requests[requestId]?.resolved !== false) return false;
+      yield* append([
+        { type: 'request.decided', aggregateId, requestId, decision },
+      ]);
+      return true;
+    });
+
+  const decision: SessionRequests['decision'] = (runId, requestId, from) => {
+    const aggregate = qualifyAggregateId('run', runId);
+    return session()
+      .log.tail(from)
+      .pipe(
+        Stream.filter(
+          (
+            event,
+          ): event is Extract<SessionEvent, { type: 'request.decided' }> =>
+            event.type === 'request.decided' &&
+            event.aggregateId === aggregate &&
+            event.requestId === requestId,
+        ),
+        Stream.runHead,
+        Effect.flatMap(
+          Option.match({
+            onNone: () =>
+              Effect.fail(
+                new Error(
+                  `The session closed before request ${requestId} was decided.`,
+                ),
+              ),
+            onSome: Effect.succeed,
+          }),
+        ),
+      );
+  };
+
+  const ask = <E = never>(
+    runId: RunId,
+    payload: PermissionPayload,
+    options: AskOptions<E> = {},
+  ): Effect.Effect<RequestDecision, LogWriteError | E> => {
+    const requestId = payload.data.requestId;
+    const aggregateId = qualifyAggregateId('run', runId);
+    const releaseUncommitted = Effect.uninterruptible(
+      options.onNeverCommitted ?? Effect.void,
+    );
+    const open: (
+      opened: readonly RequestRow[],
+    ) => Effect.Effect<CommitOrdinal, E | LogWriteError> =
+      options.open ??
+      ((opened) =>
+        Effect.suspend(() => {
+          const from = session().log.now();
+          return session().log.transact(opened).pipe(Effect.as(from));
+        }));
+    return Effect.gen(function* () {
+      const rows: RequestRow[] = [
+        {
+          type: 'request.opened',
+          aggregateId,
+          requestId,
+          payload,
+          thread: options.thread ?? null,
+        },
+        ...policyDecidedRows(session(), runId, payload),
+      ];
+      const from = yield* open(rows).pipe(
+        Effect.tapError(() => releaseUncommitted),
+      );
+      return yield* decision(runId, requestId, from).pipe(
+        Effect.map((row) => row.decision),
+        Effect.catch((cause) =>
+          Effect.logWarning(
+            `Request ${requestId} closed without a decision`,
+          ).pipe(
+            Effect.annotateLogs({ data: cause }),
+            withLogChannel(CHANNEL),
+            Effect.as({
+              action: 'cancel',
+              cause: cause.message,
+            } satisfies RequestDecision),
+          ),
+        ),
+      );
+    }).pipe(
+      Effect.onInterrupt(() =>
+        Effect.sync(() => {
+          if (closed()) return;
+          detach((append) =>
+            decisionRow(
+              runId,
+              requestId,
+              { action: 'cancel', cause: 'Run interrupted.' },
+              append,
+            ).pipe(
+              // `false` is the interruption that landed before the open
+              // committed: no row exists, so this cancellation writes none
+              // either and the caller's staging has no decision coming.
+              Effect.tap((cancelled) =>
+                cancelled ? Effect.void : releaseUncommitted,
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  };
+
+  const decide: SessionRequests['decide'] = (runId, requestId, answer) =>
+    session().log.transact((tx) =>
+      decisionRow(runId, requestId, answer, tx.append),
+    );
+
+  return { ask, decide, decision };
 }

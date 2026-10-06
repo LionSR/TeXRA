@@ -10,6 +10,7 @@ import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 
 /**
@@ -34,7 +35,7 @@ const run = (runId: RunId) => aggregateId('run', runId);
 
 const query = (session: SessionHandle, sql: string, params: string[] = []) =>
   Effect.gen(function* () {
-    yield* session.settled.pipe(Effect.orDie);
+    yield* session.log.settled.pipe(Effect.orDie);
     return yield* session.history.query(sql, params);
   });
 
@@ -62,7 +63,7 @@ describe('HistoryQuery', () => {
     withSession((session) =>
       Effect.gen(function* () {
         const runId = publishTestRunStart(session);
-        session.publish([
+        publishTestRows(session, [
           {
             type: 'run.activate',
             aggregateId: run(runId),
@@ -81,7 +82,7 @@ describe('HistoryQuery', () => {
         );
         expect(ended.rows).toEqual([['ended', 'failed']]);
 
-        session.publish([
+        publishTestRows(session, [
           {
             type: 'run.activate',
             aggregateId: run(runId),
@@ -109,7 +110,9 @@ describe('HistoryQuery', () => {
         );
         expect(before.rows).toEqual([[child]]);
 
-        session.publish([{ type: 'run.detach', aggregateId: run(child) }]);
+        publishTestRows(session, [
+          { type: 'run.detach', aggregateId: run(child) },
+        ]);
         const after = yield* query(
           session,
           'SELECT id FROM run_tree WHERE ancestor_id = ?',
@@ -145,7 +148,7 @@ describe('HistoryQuery', () => {
     withSession((session) =>
       Effect.gen(function* () {
         const runId = publishTestRunStart(session);
-        session.publish([
+        publishTestRows(session, [
           { type: 'run.report', aggregateId: run(runId), report: 'secret' },
         ]);
         const types = yield* query(session, 'SELECT DISTINCT type FROM events');

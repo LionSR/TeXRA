@@ -81,7 +81,9 @@ function trackerOverSessionView(): {
     );
   };
   return {
-    tracker: new StatusBarUsageTracker({ view }),
+    tracker: new StatusBarUsageTracker({
+      view: { ref: view, changes: SubscriptionRef.changes(view) },
+    }),
     setRun(
       runId,
       status,

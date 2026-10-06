@@ -8,7 +8,6 @@ import { describe, expect, vi } from 'vitest';
 
 import { runWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { Runs } from '@agent/runtime/runRegistry';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   RUN_OUTCOME,
   aggregateId,
@@ -31,33 +30,13 @@ import {
 import {
   createTestSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { generateRunId } from '@utils/core';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
-const storageMocks = vi.hoisted(() => ({
-  finalizeRun: vi.fn().mockResolvedValue({ ok: true }),
-  /** Storage root each host-exit terminal write resolved, by run id. */
-  settledUnder: new Map<string, string>(),
-}));
-
-vi.mock('@agent/storage', () => ({
-  finalizeRun: storageMocks.finalizeRun,
-}));
-
-vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@agent/storage/runLifecycle')>();
-  return {
-    ...actual,
-    finalizeRun: vi.fn((session: SessionHandle, input: { runId: string }) =>
-      Effect.sync(() => {
-        storageMocks.settledUnder.set(input.runId, session.roots.storage);
-        return { ok: true, outcome: 'cancelled' };
-      }),
-    ),
-  };
-});
+/** Storage root each host-exit terminal write resolved, by run id. */
+const settledUnder = new Map<string, string>();
 
 describe('session isolation', () => {
   it.effect('two sessions in one process write under their own roots', () =>
@@ -90,9 +69,6 @@ describe('session isolation', () => {
         Effect.promise((): Promise<string> => readFile(file, 'utf8'));
       expect(yield* read(fakePath('storage/a/note.txt'))).toBe('from a');
       expect(yield* read(fakePath('storage/b/note.txt'))).toBe('from b');
-      // What the two share is the process's: a 429 one paper's run hits on a
-      // credential cools the other paper's runs on that credential too.
-      expect(sessionB.modelRetries).toBe(sessionA.modelRetries);
       // Neither paper's roots are the process's: a session answers from the
       // record it holds, and the process roots name only the default session.
       expect(testWorkspaceRoots().workspace).toBe(fakePath('workspace'));
@@ -125,8 +101,14 @@ describe('session isolation', () => {
           [sessionB, 'b0db01' as RunId],
         ] as const;
         for (const [session, runId] of live) {
+          vi.spyOn(session.runs, 'end').mockImplementation((input) =>
+            Effect.sync(() => {
+              settledUnder.set(input.runId, session.roots.storage);
+              return { ok: true, outcome: 'cancelled' } as const;
+            }),
+          );
           publishTestRunStart(session, runId);
-          session.publish([
+          publishTestRows(session, [
             {
               type: 'stage.start',
               aggregateId: aggregateId('run', runId),
@@ -134,7 +116,7 @@ describe('session isolation', () => {
               label: 'Running stage',
             },
           ]);
-          yield* session.settled;
+          yield* session.log.settled;
           session.runs.track(
             testRunHandle({
               runId,
@@ -142,23 +124,19 @@ describe('session isolation', () => {
             }),
           );
           // The run's first append claimed its aggregate for this process.
-          expect(yield* session.ownsRun(runId)).toBe(true);
+          expect(yield* session.log.owns(runId)).toBe(true);
         }
         // Each session claims runs in its own root: paper B never holds
         // paper A's run.
-        expect(yield* sessionB.ownsRun('a0da01' as RunId)).toBe(false);
+        expect(yield* sessionB.log.owns('a0da01' as RunId)).toBe(false);
         yield* Effect.all(
           [closeSessionOf(sessionA), closeSessionOf(sessionB)],
           {
             concurrency: 'unbounded',
           },
         );
-        expect(storageMocks.settledUnder.get('a0da01')).toBe(
-          fakePath('storage/a'),
-        );
-        expect(storageMocks.settledUnder.get('b0db01')).toBe(
-          fakePath('storage/b'),
-        );
+        expect(settledUnder.get('a0da01')).toBe(fakePath('storage/a'));
+        expect(settledUnder.get('b0db01')).toBe(fakePath('storage/b'));
       }),
   );
 
@@ -187,7 +165,7 @@ describe('session isolation', () => {
         // Job 2: the run fiber's own awaited commit, enqueued in the same
         // synchronous turn, so the publisher is already contended when it runs.
         const seen = yield* Effect.gen(function* () {
-          yield* session.commit([
+          yield* session.log.transact([
             {
               type: 'run.start',
               aggregateId: aggregateId('run', 'c0c002' as RunId),

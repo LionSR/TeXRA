@@ -24,7 +24,7 @@ export function runOutputReader(session: SessionHandle): {
 } {
   return {
     readRunOutputs: (runId) =>
-      session.readView([runId]).pipe(
+      session.view.read([runId]).pipe(
         Effect.map((view) => {
           const run = view.runs.get(runId);
           return run === undefined ? {} : documentsOf(run).files;

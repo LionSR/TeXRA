@@ -21,6 +21,7 @@ import { getHelperModelName } from './helperModelName';
 import { bindModel, type BoundModel } from './run/modelBinding';
 import { callModel } from './run/modelCall';
 import { turnText } from './run/turnText';
+import type { RouteRetries } from './run/invocation';
 import type { UsageAttribution } from './run/pricing';
 import type { SessionHandle } from './SessionHandle';
 import type { HttpClient } from 'effect/http';
@@ -84,7 +85,7 @@ interface HelperPrompt {
  */
 export const helperCall = Effect.fn('helperCall')(
   function* (
-    session: Pick<SessionHandle, 'modelRetries' | 'roots'>,
+    session: Pick<SessionHandle, 'roots'>,
     secrets: ModelOptionStores['secrets'],
     { userPrompt, systemPrompt }: HelperPrompt,
     attribution: UsageAttribution,
@@ -93,7 +94,11 @@ export const helperCall = Effect.fn('helperCall')(
   ): Effect.fn.Return<
     string,
     HelperModelUnavailable | Error,
-    Scope.Scope | LanguageModel | HttpClient.HttpClient | UsageLog
+    | Scope.Scope
+    | LanguageModel
+    | HttpClient.HttpClient
+    | UsageLog
+    | RouteRetries
   > {
     // Each binding in its own fork of this call's scope, so a reacquired
     // connection retires the dead one at once.
@@ -131,7 +136,6 @@ export const helperCall = Effect.fn('helperCall')(
           { role: 'user', content: [{ kind: 'text', text: userPrompt }] },
         ],
       },
-      gate: session.modelRetries,
       settings: session.roots,
       secrets,
       attribution,

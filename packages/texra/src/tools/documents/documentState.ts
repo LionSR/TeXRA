@@ -123,7 +123,7 @@ export const openDocuments = Effect.fn('documents.open')(function* (
     );
   const { roots } = session;
   const aggregate = aggregateId('run', runId);
-  const rows = yield* session.readAggregate(aggregate, ['plugin.fact']);
+  const rows = yield* session.log.rows(aggregate, ['plugin.fact']);
   const state = createOutputState(
     roundsFromPersisted(latestDocumentRounds(rows, aggregate) ?? []),
   );
@@ -171,7 +171,9 @@ export const openDocuments = Effect.fn('documents.open')(function* (
     baseFiles,
     // Suspended: the row is built from the state as the call left it.
     commit: Effect.suspend(() =>
-      session.commit([documentsOutputRow(runId, roundsToPersisted(state))]),
+      session.log.transact([
+        documentsOutputRow(runId, roundsToPersisted(state)),
+      ]),
     ).pipe(Effect.asVoid),
   } satisfies Documents;
 });

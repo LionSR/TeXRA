@@ -77,9 +77,7 @@ vi.doMock(cliRequire.resolve('ink'), () => ({
 }));
 
 vi.mock('@latex/texraResponseTextProcessing', () => ({
-  createTexraResponseTextProcessing: () => ({
-    postProcessResponse: (text: string) => Effect.succeed(text),
-  }),
+  postProcessResponse: (text: string) => Effect.succeed(text),
 }));
 
 vi.mock('@cli/runtime/initPlatform', () => ({

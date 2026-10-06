@@ -846,6 +846,12 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A resumed subagent follows its parent's later approval toggles again.**
+  When a subagent ran under its parent's goal approval and was resumed on its
+  own, its resume recorded that kind as turned off, as if you had refused it.
+  It now records that the goal ended for it, so turning the kind on (or off)
+  on the parent reaches the subagent while it stays attached (#13839).
+
 - **"Auto-approve — this task only" now ends with the task it was chosen
   for.** The new-task composer kept the choice after a launch, so the next
   task (even in a later window) started auto-approved too. A launch now

@@ -36,7 +36,7 @@ function childRow(child: RunView) {
  * contract is a versioned projection of `SessionEvent`, not a second
  * vocabulary (`contract: 2`, stamped by the NDJSON sink).
  *
- * It reads `events.all(session.now())` directly (PRD 10.3): every event
+ * It reads `log.tail(session.log.now())` directly (PRD 10.3): every event
  * above the current ordinal in commit order, never the view, so a
  * `stage.start` no surface subscribed to still becomes its line and two
  * same-type updates never collapse.
@@ -69,7 +69,7 @@ function childRow(child: RunView) {
 export const attachCliSessionProgressProjection = Effect.fn(
   'attachCliSessionProgressProjection',
 )(function* (
-  session: Pick<SessionHandle, 'events' | 'now' | 'view' | 'viewChanges'>,
+  session: Pick<SessionHandle, 'log' | 'view'>,
   writeRecord: CliNdjsonProgressRecordWriter = writeNdjsonStdout,
 ) {
   // A `debug`-level `log` row is a diagnostic, not progress: it reaches the
@@ -86,7 +86,7 @@ export const attachCliSessionProgressProjection = Effect.fn(
   }
 
   /** The last commit the tail passed. */
-  let delivered = session.now();
+  let delivered = session.log.now();
   /** The ordinal detach cut at; nothing above it is written. */
   let stopAt: number | undefined;
   const drained = Deferred.makeUnsafe<void>();
@@ -102,7 +102,7 @@ export const attachCliSessionProgressProjection = Effect.fn(
    *  it, so a child list never precedes the row it reports. */
   let childrenPending = false;
   const emitChildren = (): void => {
-    const view = SubscriptionRef.getUnsafe(session.view);
+    const view = SubscriptionRef.getUnsafe(session.view.ref);
     childrenPending = view.cursor > delivered;
     if (childrenPending) return;
     for (const [parentRunId, run] of view.runs) {
@@ -147,7 +147,7 @@ export const attachCliSessionProgressProjection = Effect.fn(
   const fork = Effect.forkChild({ startImmediately: true });
   const fibers = [
     yield* fork(
-      Stream.runForEach(session.events.all(delivered, drainedTo), (event) =>
+      Stream.runForEach(session.log.tail(delivered, drainedTo), (event) =>
         Effect.sync(() => {
           if (stopAt !== undefined && event.commit > stopAt) return;
           const { type, ...payload } = event;
@@ -165,14 +165,14 @@ export const attachCliSessionProgressProjection = Effect.fn(
     ),
     // The child list's own source: the fold, whose every level is a candidate.
     yield* fork(
-      Stream.runForEach(session.viewChanges, () => Effect.sync(emitChildren)),
+      Stream.runForEach(session.view.changes, () => Effect.sync(emitChildren)),
     ),
   ];
 
   return Effect.gen(function* () {
     const first = stopAt === undefined;
     if (first) {
-      stopAt = session.now();
+      stopAt = session.log.now();
       settleIfDrained();
     }
     yield* Deferred.await(drained);
