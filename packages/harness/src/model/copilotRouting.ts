@@ -16,8 +16,7 @@ import { MODEL_CONFIGS, lookup, type ModelConfig } from 'llm-zoo';
 import {
   type ApiKeyProviderId,
   decideModelRoute,
-  isDeprecatedModel,
-  isRetiredModel,
+  modelConfig,
   OWN_KEY_ROUTE_FACTS,
   selectModel,
   zeroCostAccessOverrides,
@@ -131,7 +130,9 @@ export function preferredCopilotRouteModels(state: Pick<StateStore, 'get'>) {
 
 /** A stored preference list without the models that left the catalog. */
 const liveRouteModels = (stored: readonly string[]) =>
-  stored.filter((model) => !isRetiredModel(model) && !isDeprecatedModel(model));
+  stored.filter(
+    (model) => !modelConfig(model)?.retired && !modelConfig(model)?.deprecated,
+  );
 
 /** Whether the user prefers the Copilot route for this canonical base model. */
 export function prefersCopilotRoute(

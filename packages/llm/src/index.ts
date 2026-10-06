@@ -85,8 +85,6 @@ export type { ApiKeyStatus } from './providers/apiProviders.js';
 
 // Choosing a model: selection, the route decision, reasoning and pricing.
 export {
-  isDeprecatedModel,
-  isRetiredModel,
   modelConfig,
   modelRefOf,
   selectModel,
