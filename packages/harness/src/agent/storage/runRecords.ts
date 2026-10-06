@@ -15,14 +15,13 @@ import {
   isAgentRunRecord,
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
-import type {
-  DatabaseNotOwner,
+import {
   DatabaseReadFailed,
-  DatabaseWriteFailed,
+  type DatabaseNotOwner,
+  type DatabaseWriteFailed,
 } from '@shared/session/database';
 import { foldAttempts, type AttemptKey } from '@shared/session/attemptFold';
 import { attemptOf } from '@shared/session/inFlight';
-import type { RunHistoryRefused } from '@shared/session/runHistory';
 import { foldRunState, type RunState } from '@shared/session/runStateFold';
 import {
   ResultMetaSchema,
@@ -346,18 +345,23 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
     /**
      * The workspace files the run edited, folded from its settled calls
      * (`RunState.edited`). A run with no run history edited nothing here.
+     * A run whose rows this build cannot fold is a failed read of that run,
+     * never a refusal of the caller's own writes.
      */
-    readWorkspaceFiles: (): Effect.Effect<
-      string[],
-      DatabaseReadFailed | RunHistoryRefused
-    > =>
-      session.runHistory
-        .load(runId)
-        .pipe(
-          Effect.map((state) =>
-            RunWorkspaceFilesSchema.parse(state?.edited ?? []),
+    readWorkspaceFiles: (): Effect.Effect<string[], DatabaseReadFailed> =>
+      session.runHistory.load(runId).pipe(
+        Effect.map((state) =>
+          RunWorkspaceFilesSchema.parse(state?.edited ?? []),
+        ),
+        Effect.catchTag('RunHistoryRefused', (refused) =>
+          Effect.fail(
+            new DatabaseReadFailed({
+              path: session.roots.storage ?? '',
+              cause: refused,
+            }),
           ),
         ),
+      ),
     readResultMeta: (): Effect.Effect<ResultMeta | null, DatabaseReadFailed> =>
       read((rows) => latestOfType(rows, id, 'run.result')?.result ?? null),
     /** The run's terminal result ({@link runEndOf}), or null while the

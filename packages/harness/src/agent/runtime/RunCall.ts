@@ -1,6 +1,6 @@
 /**
  * A tool call made under a run, as the harness's built-in tools read it:
- * its place in the run (`RunCall`: the run, its workspace state, the
+ * its place in the run (`RunCall`: the run, the files it read, the
  * response and attempt it belongs to), the script that issued it
  * (`IssuingScript`), and a `script` call's door to the run's tools
  * (`ScriptCalls`). The public contract every tool reads is

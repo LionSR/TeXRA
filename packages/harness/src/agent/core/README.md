@@ -7,7 +7,7 @@ concern they carry:
 | Module        | Concern                          | Contents                                                                                                                                                                                                      |
 | ------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `definition/` | What an agent **is** (configure) | `AgentDataclass` (settings, prompts, `AgentDefinition`, `Persona`, `DocumentTask`), `AgentConfig` (launch/run configuration + payload), `agentDefinitionInheritance`, `RunRecord`                             |
-| `state/`      | Run-state snapshots              | `AgentWorkspaceState` (file, media and work-plan state) and `runRequests` (request validation)                                                                                                                |
+| `state/`      | Run-state snapshots              | `runRequests` (request validation)                                                                                                                                                                            |
 | `tools/`      | Tool contracts and tool calls    | `ToolTypes` (`ITool`, `IToolRegistry`, `MapToolRegistry`, `ToolContext`), `toolAttachmentExtraction`, `toolCallParsing` (duplicate-call partitioning and tool-call error normalization, used by the run loop) |
 
 What is **not** here, and where it lives instead:

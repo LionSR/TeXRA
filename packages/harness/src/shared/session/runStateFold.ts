@@ -158,7 +158,8 @@ export type RunState = RunPosition & {
   /** The workspace files the run's calls edited, first edit first: the
    *  paths of every executed `tool.result`'s `edits`. */
   readonly edited: readonly string[];
-  /** The calls that ran a tool: every `executed` or `failed` settlement. */
+  /** The calls the run settled as `executed` or `failed`: tool bodies, and
+   *  a script's host-function answers (`searchTools`, `describeTool`). */
   readonly toolCalls: number;
   /** The latest `context.edit`'s `seq`: the next edit's `base`. */
   readonly lastEdit: number | null;

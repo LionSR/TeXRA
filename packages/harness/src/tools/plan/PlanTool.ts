@@ -187,9 +187,6 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
   );
 });
 
-/**
- * Request user approval for a new plan. Pauses run until approved/rejected.
- */
 /** Show `plan` as the run's plan (null clears it): the run's `plan` fact,
  *  and the progress a parent of this run reads. */
 const showPlan = (call: RunToolCall, plan: Plan | null): void => {
@@ -197,6 +194,9 @@ const showPlan = (call: RunToolCall, plan: Plan | null): void => {
   call.run.callbacks.onProgress?.({ kind: 'plan', plan });
 };
 
+/**
+ * Request user approval for a new plan. Pauses run until approved/rejected.
+ */
 const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
   call: RunToolCall,
   plan: Plan,
