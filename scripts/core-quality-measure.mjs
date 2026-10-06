@@ -932,8 +932,12 @@ function measureDepth(sourceFile, file, publicEntries, site, byRule) {
                 !isHidden(parameter),
             ).length;
         }
-      } else if (ts.isInterfaceDeclaration(node))
-        elements += node.members.length;
+      } else if (ts.isInterfaceDeclaration(node)) {
+        // Each member, plus the parameters of its method, call or construct
+        // signature, so widening a signature widens the interface.
+        for (const member of node.members)
+          elements += 1 + (member.parameters?.length ?? 0);
+      }
       const callable = ts.isVariableDeclaration(node)
         ? declaredFunction(node.initializer)
         : node;
@@ -1056,7 +1060,13 @@ function measureAst(rootDir, files, byRule) {
     }
 
     const visit = (node) => {
-      if (isPassThrough(node, sourceFile)) {
+      // An inline callback argument binds a receiver or supplies laziness an
+      // API asks for; only a declared function or method is an interface.
+      const callback =
+        node.parent != null &&
+        ts.isCallExpression(node.parent) &&
+        node.parent.arguments.includes(node);
+      if (!callback && isPassThrough(node, sourceFile)) {
         site(
           'pass-through',
           node,

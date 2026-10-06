@@ -1,8 +1,8 @@
 {
-  "packages/harness/src/agent/core/tools/ToolTypes.ts": 42,
-  "packages/harness/src/agent/runtime/RunHandle.ts": 25,
-  "packages/harness/src/platform/interfaces.ts": 39,
-  "packages/harness/src/platform/languageModel.ts": 20,
+  "packages/harness/src/agent/core/tools/ToolTypes.ts": 45,
+  "packages/harness/src/agent/runtime/RunHandle.ts": 28,
+  "packages/harness/src/platform/interfaces.ts": 51,
+  "packages/harness/src/platform/languageModel.ts": 22,
   "packages/harness/src/platform/secrets.ts": 5,
   "packages/harness/src/shared/schemas/agent.ts": 21,
   "packages/harness/src/shared/schemas/index.ts": 75,
@@ -14,5 +14,6 @@
   "packages/harness/src/tools/toolAvailabilityService.ts": 11,
   "packages/llm/src/models/kimiCodeRetryGate.ts": 8,
   "packages/llm/src/models/modelSelection.ts": 12,
-  "packages/llm/src/oauth/support.ts": 7
+  "packages/llm/src/oauth/support.ts": 7,
+  "packages/llm/src/providers/credentials.ts": 15
 }
