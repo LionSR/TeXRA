@@ -46,7 +46,11 @@ import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  InlinePersonaSchema,
+  type RunId,
+} from '@shared/schemas';
 import { descendantRuns } from '@shared/session/sessionView';
 import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -112,11 +116,10 @@ function admitInput(
     const tools = input.tools ?? [];
     yield* admitTools(tools);
     const { agent } = input;
-    const persona = typeof agent === 'string' ? null : agent;
     const resolved =
       typeof agent === 'string'
         ? getAgent(agent)
-        : { name: agent.name, source: 'inline' as const };
+        : { name: null, source: 'inline' as const };
     if (!resolved) {
       return yield* new AgentNotFound({
         agent: String(agent),
@@ -127,22 +130,22 @@ function admitInput(
     // than a defect: an instruction this surface will not accept reaches an
     // embedder's `catchTag` in the vocabulary the surface names, as the
     // agent scan's failure above does.
-    const config = yield* Effect.try({
-      try: () =>
-        AgentConfigSchema.parse({
-          agent: resolved.name,
+    return yield* Effect.try({
+      try: () => {
+        // The run is named as its persona's schema spells the name.
+        const persona =
+          typeof agent === 'string' ? null : InlinePersonaSchema.parse(agent);
+        return AgentConfigSchema.parse({
+          agent: persona?.name ?? resolved.name,
           agentSource: resolved.source,
           persona,
           instruction: input.instruction,
           ...(input.model ? { model: input.model } : {}),
-        }),
+        });
+      },
       catch: (cause) =>
         new RunFailure({ cause, message: toErrorMessage(cause) }),
     });
-    // The run is named as its persona's schema spells the name (trimmed).
-    return config.persona == null
-      ? config
-      : { ...config, agent: config.persona.name };
   });
 }
 
