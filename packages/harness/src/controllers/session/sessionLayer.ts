@@ -498,10 +498,10 @@ const settleRun = (session: SessionHandle, runId: RunId): Effect.Effect<void> =>
  * an SDK close, a desktop project's close, a host's shutdown, a host
  * releasing its default session. In order, on the caller's fiber:
  *
- * 1. refuse new runs and kill the background OS processes its runs own;
- * 2. stop every run (the stop cascades into children), settle the ones
- *    no driver answered for, and wait for the drivers to settle theirs,
- *    inside one budget ({@link SESSION_CLOSE_DEADLINE_MS});
+ * 1. refuse new runs;
+ * 2. stop every run (it cascades into children; a process child's OS
+ *    process ends with its loop), settle those no driver answered for, and
+ *    wait for the rest, inside one budget ({@link SESSION_CLOSE_DEADLINE_MS});
  * 3. settle from here, inside a second budget, each run still held when the
  *    first runs out ({@link settleRun}), reporting it as abandoned;
  * 4. release the entry, whose finalizers flush the session's publications

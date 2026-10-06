@@ -200,8 +200,8 @@ function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
     interactions: { emit: () => Effect.void },
     log: {
       records: () => Effect.succeed([]),
-      // No database behind this fixture: a claim read fails, so its state
-      // cannot be continued.
+      // No database behind this fixture: a claim read fails, a transient
+      // refusal that says nothing about the run.
       owner: () => Effect.fail(new Error('claim store unavailable')),
     },
     followUps,
@@ -429,7 +429,7 @@ describe('submitFollowUp', () => {
         yield* submitFollowUp(runId, childResult('late'), { session }).pipe(
           withResumePort(tryResumeRun),
         ),
-      ).toEqual({ status: 'failed', reason: 'unusable_checkpoint' });
+      ).toEqual({ status: 'failed', reason: 'read_failed' });
       expect(tryResumeRun).not.toHaveBeenCalled();
     }),
   );

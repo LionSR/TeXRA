@@ -32,10 +32,10 @@ function foreignOwners(view: SessionView, self: OwnerId): OwnerId[] {
  * The liveness prober (PRD 5.2, contract C5): every owner the view names on a
  * non-terminal run other than this process, proved by `kill(pid, 0)` plus the
  * start-identity check per distinct owner, never per run. Probed whenever that
- * owner set changes and, while it is not empty, on an interval. Alive and unprovable
- * owners hold their runs; only an explicit death verdict permits an
- * interrupted classification. It writes `dead`; `unreadable` is the status
- * machine's.
+ * owner set changes and, while it is not empty, on an interval: a holder
+ * that dies reads held until the next tick. Alive and unprovable owners hold
+ * their runs; only an explicit death verdict permits an interrupted
+ * classification. It writes `dead`; `unreadable` is the session inputs'.
  */
 export const ownerLiveness = Layer.effectDiscard(
   Effect.gen(function* () {
