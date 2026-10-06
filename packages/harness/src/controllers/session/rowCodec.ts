@@ -8,10 +8,10 @@
  * below it reads a payload field.
  *
  * - **Versions.** A row is written at its kind's version (`ROW_KINDS`); an
- *   older one is upcast step by step. One of a newer version or unknown kind
- *   blocks its aggregate `newer`, one failing its version's schema `older`
- *   (an earlier shape), one unreadable `corrupt`. A plugin value carries
- *   its arm's version and is upcast through the arm.
+ *   older one is upcast step by step. A row of a newer version, an unknown
+ *   kind or a key this build does not know blocks its aggregate `newer`; one
+ *   failing its version's schema otherwise `older`, one unreadable `corrupt`.
+ *   A plugin value carries its arm's version and is upcast through the arm.
  * - **Blobs.** A payload string of 4096+ characters is stored once per store,
  *   zstd of its JSON encoding (lone surrogates survive) under that text's
  *   sha256; the row keeps `{"$b": digest}` (a payload's own `$b` key is
@@ -34,6 +34,7 @@ import {
   ROW_KINDS,
   SessionEventDraftSchema,
   SessionEventSchema,
+  unreadBy,
   type AggregateId,
   type BlockedAggregate,
   type JsonValue,
@@ -284,7 +285,7 @@ export function decodeRow(input: SqlRow): RowVerdict {
   } catch (error) {
     return { ...blocked('corrupt'), error };
   }
-  const parsed = SessionEventSchema.safeParse({
+  const { data: event, error: refused } = SessionEventSchema.safeParse({
     ...data,
     aggregateId,
     seq: row.seq,
@@ -293,8 +294,7 @@ export function decodeRow(input: SqlRow): RowVerdict {
     at: row.at,
     type: row.type,
   });
-  if (!parsed.success) return { ...blocked('older'), error: parsed.error };
-  const event = parsed.data;
+  if (refused) return { ...blocked(unreadBy(refused)), error: refused };
   if (event.type !== 'plugin.fact') return { _tag: 'event', event };
   const name = `${event.plugin}/${event.kind}`;
   const arm = PLUGIN_ARMS.get(name);
@@ -311,11 +311,9 @@ export function decodeRow(input: SqlRow): RowVerdict {
   for (const step of arm.upcasters.slice(event.version - 1))
     value = step(value);
   const { error } = arm.schema.safeParse(value);
-  if (error) return { ...blocked('older'), error, type: `plugin.fact/${name}` };
-  return {
-    _tag: 'event',
-    event: { ...event, version: arm.version, value },
-  };
+  if (error)
+    return { ...blocked(unreadBy(error)), error, type: `plugin.fact/${name}` };
+  return { _tag: 'event', event: { ...event, version: arm.version, value } };
 }
 
 /**

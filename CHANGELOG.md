@@ -799,6 +799,11 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A task saved by a newer TeXRA is no longer resumed on a trimmed copy.**
+  When a task's saved state held a field this build does not know, TeXRA
+  dropped the field, resumed, and wrote the trimmed state back, losing
+  what the newer build had saved. Such a task is now shown as written by
+  a newer TeXRA and left untouched, as one with a newer row already is.
 - **The CLI's progress line no longer goes blank for a task with an empty
   description.** It shows the run's status instead.
 - **A task with an empty description no longer shows a blank title in

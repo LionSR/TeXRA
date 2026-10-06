@@ -100,21 +100,21 @@ export function addTurnUsage(
 // ------------------------------------------------------------ workspace
 
 /** Flattened file-edit records. */
-const FileEditSnapshotSchema = z.object({
+const FileEditSnapshotSchema = z.strictObject({
   path: z.string(),
   added: LineCountSchema.prefault(0),
   removed: LineCountSchema.prefault(0),
 });
 
 /** File interaction state snapshot. */
-const FileInteractionStateSnapshotSchema = z.object({
+const FileInteractionStateSnapshotSchema = z.strictObject({
   readFiles: z.array(z.string()).prefault([]),
   edits: z.array(FileEditSnapshotSchema).prefault([]),
   toolCallCount: z.int().nonnegative().prefault(0),
 });
 
 /** Media attachment state snapshot. */
-const MediaAttachmentStateSnapshotSchema = z.object({
+const MediaAttachmentStateSnapshotSchema = z.strictObject({
   files: z.array(FileLocationSchema).prefault([]),
 });
 
@@ -123,7 +123,7 @@ const MediaAttachmentStateSnapshotSchema = z.object({
  * state has one supported format; an older record (one written before
  * `workPlan` entered the shape) fails its resume parse here.
  */
-export const AgentWorkspaceStateSnapshotSchema = z.object({
+export const AgentWorkspaceStateSnapshotSchema = z.strictObject({
   media: MediaAttachmentStateSnapshotSchema.prefault({}),
   interactions: FileInteractionStateSnapshotSchema.prefault({}),
   workPlan: WorkPlanSnapshotSchema,
@@ -134,7 +134,7 @@ export type AgentWorkspaceSnapshot = z.output<
 
 // ------------------------------------------------------------ launch facts
 
-export const AttachedMemoryMissSchema = z.object({
+export const AttachedMemoryMissSchema = z.strictObject({
   path: z.string(),
   reason: z.string(),
 });
@@ -181,23 +181,18 @@ export type ModelBackend = z.infer<typeof ModelBackendSchema>;
 
 // ------------------------------------------------------------ flow core
 
-const StateSlicesSchema = z.object({
+const StateSlicesSchema = z.strictObject({
   workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
 });
 
 /**
  * The message-free state of a run's flow: the messages are folded from the
- * run's `model.message` rows.
- *
- * Default `z.object` semantics by decision (#10641): unknown top-level keys
- * in a persisted record are accepted but stripped at this parse boundary,
- * and the resumed flow's first persisted step then rewrites the stripped
- * record. Deliberately not `z.strictObject`
- * — a record written by a newer build carrying keys this build does not know
- * must still resume — and no `.catch`: malformed known fields must keep
- * failing loudly.
+ * run's `model.message` rows. Closed, like every object of the snapshot: a
+ * key this build does not know was written by a newer build, so the row is
+ * refused as newer at the codec rather than resumed on a stripped copy that
+ * the next snapshot would write back.
  */
-export const ToolUseSnapshotStateSchema = z.object({
+export const ToolUseSnapshotStateSchema = z.strictObject({
   stateSlices: StateSlicesSchema.nullable(),
   /** The address of the run's system text, before what each step adds
    *  (`stepInstructions`): a `context.blob` of the run, never restated in

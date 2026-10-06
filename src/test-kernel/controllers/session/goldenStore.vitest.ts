@@ -249,6 +249,26 @@ describe('the golden 1.0 store', () => {
     );
     const verdicts = rows.map(decodeRow);
     expect(verdicts.filter((verdict) => verdict._tag !== 'event')).toEqual([]);
+    // A snapshot carrying a key this build does not know was written by a
+    // newer build: its run is refused as newer, never resumed on a stripped
+    // copy that the next snapshot would then write back.
+    const snapshot = rows.find(
+      (row): row is { data: string } =>
+        (row as { type?: unknown }).type === 'run.snapshot',
+    );
+    const data = JSON.parse(snapshot?.data ?? '{}');
+    expect(
+      decodeRow({
+        ...snapshot,
+        data: JSON.stringify({
+          ...data,
+          payload: {
+            ...data.payload,
+            state: { ...data.payload.state, fromALaterBuild: true },
+          },
+        }),
+      }),
+    ).toMatchObject({ _tag: 'blocked', reason: 'newer' });
     const events = verdicts.flatMap((v) =>
       v._tag === 'event' ? [v.event] : [],
     );

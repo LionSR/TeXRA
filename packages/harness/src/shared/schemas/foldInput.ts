@@ -107,7 +107,8 @@ export type ExistenceReconciliation = z.infer<
 
 /**
  * An aggregate whose rows this build cannot read whole: a row a later build
- * wrote (`newer`: a newer version or an unknown kind), an earlier shape of
+ * wrote (`newer`: a newer version, an unknown kind, or a key this build does
+ * not know), an earlier shape of
  * its version (`older`), or one not JSON or with a blob missing or altered
  * (`corrupt`). The listing delivers what decodes and this
  * verdict beside it; the fold marks the run blocked, and every run history read
@@ -127,6 +128,14 @@ export const BlockedAggregateSchema = z.object({
   at: z.int(),
 });
 export type BlockedAggregate = z.infer<typeof BlockedAggregateSchema>;
+
+/** Which build wrote a row its schema refuses: a later one when every
+ *  complaint is a key this build does not know, else an earlier one. */
+export function unreadBy(error: z.ZodError): BlockedAggregate['reason'] {
+  return error.issues.every((issue) => issue.code === 'unrecognized_keys')
+    ? 'newer'
+    : 'older';
+}
 
 const FoldInputSchema = z.discriminatedUnion('_tag', [
   BlockedAggregateSchema,
