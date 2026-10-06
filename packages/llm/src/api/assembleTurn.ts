@@ -219,7 +219,8 @@ function step(turn: Assembly, event: PartEvent): Folded {
 
 /**
  * The content of a finished response. Each item's done event owns its
- * content. A stream that saw the whole response is the content; the terminal
+ * content. A stream that saw the whole response is the content, and its
+ * snapshot may name only items the stream delivered; the terminal
  * snapshot is read only when no item streamed or the stream joined late (a
  * resumed observation), and then supplies the items the stream did not
  * close, each streamed item standing in for the snapshot entry it names.
@@ -233,12 +234,17 @@ const settle = Effect.fn('llm.settleTurn')(function* (
   if (!partial && streamed.some(([index], ordinal) => index !== ordinal))
     return yield* fail(turn, 'omitted an output position');
   const parts = streamed.flatMap(([, slot]) => (slot.part ? [slot.part] : []));
+  const names = (list: readonly Part[]) => new Set(list.map(keyOf));
   if (snapshot === undefined || (!partial && streamed.length > 0)) {
     if (streamed.some(([, slot]) => !slot.closed))
       return yield* fail(turn, 'left an output item unfinished');
+    // An item only the snapshot names never streamed: never drop it quietly.
+    const delivered = names(parts);
+    if (snapshot?.some((item) => !delivered.has(keyOf(item))))
+      return yield* fail(turn, 'returned a snapshot beyond its output');
     return parts;
   }
-  const named = new Set(snapshot.map(keyOf));
+  const named = names(snapshot);
   if (parts.some((part) => !named.has(keyOf(part))))
     return yield* fail(turn, 'returned a snapshot that omits its output');
   const done = new Map(

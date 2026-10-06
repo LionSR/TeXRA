@@ -2443,10 +2443,32 @@ describe('native OpenAI Responses protocol', () => {
         const faithful = yield* run(events(OUTPUT));
         const contradicted = yield* run(events(OUTPUT, final));
         expect(contradicted.content).toEqual(faithful.content);
+        expect(contradicted.content).toMatchObject([
+          { kind: 'reasoning', evidence: { itemId: 'rs_1' } },
+          {
+            kind: 'message',
+            evidence: { itemId: 'msg_1', phase: 'commentary' },
+          },
+          {
+            kind: 'local-call',
+            providerCallId: 'call_1',
+            argumentsText: '{"path":"a"}',
+          },
+          {
+            kind: 'local-call',
+            providerCallId: 'call_2',
+            argumentsText: '{"path":"b"}',
+          },
+        ]);
       }),
   );
 
   it.effect.each([
+    {
+      name: 'a local call only the terminal snapshot names',
+      final: snapshot([...OUTPUT.slice(0, 3)]),
+      output: OUTPUT.slice(0, 2),
+    },
     {
       name: 'invalid local-call arguments',
       final: snapshot([{ ...CALLS[0], arguments: '{' }]),
