@@ -884,12 +884,6 @@ show` print the same notice, and the new `texra agents customize`,
   at the close deadline are refused and logged. Before, the close drained the
   whole backlog for as long as it took.
 
-- **Deleted tasks' files are removed once a passing failure clears.** If
-  removing a deleted task's generated files fails (a busy disk, a permission
-  problem), TeXRA tries again after 30 seconds, then at growing intervals up
-  to every 30 minutes, until the cleanup succeeds. Before, it waited for the
-  next deletion or the next time the project opened.
-
 - **An older TeXRA writes nothing into a store a newer one has written,
   input history included.** Before, the input history, projection rebuilds
   and deletion cleanup were still written.

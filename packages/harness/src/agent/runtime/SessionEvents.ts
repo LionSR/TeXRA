@@ -10,6 +10,7 @@ import {
   Cause,
   Deferred,
   Effect,
+  Exit,
   Fiber,
   Layer,
   Option,
@@ -117,7 +118,9 @@ function settling<A, E>(
   return {
     run: job.pipe(
       Effect.exit,
-      Effect.flatMap((exit) => Deferred.done(done, exit)),
+      Effect.flatMap((exit) =>
+        Exit.hasInterrupts(exit) ? refuse : Deferred.done(done, exit),
+      ),
       Effect.onInterrupt(() => refuse),
       Effect.asVoid,
     ),
@@ -204,36 +207,40 @@ export const sessionEventsLayer = Layer.effect(
         Effect.uninterruptible,
       );
     const inbox = yield* Queue.unbounded<PublicationJob, Cause.Done>();
+    // Its scope's finalizer, after `drain`, interrupts the job the
+    // deadline found running and waits only for that job's masked write.
     const consumer = yield* Effect.forkScoped(
       Stream.fromQueue(inbox).pipe(Stream.runForEach((job) => job.run)),
     );
     const drain: SessionEventsShape['drain'] = Effect.gen(function* () {
       yield* Queue.end(inbox);
-      const drained = yield* Fiber.join(consumer).pipe(
+      // Interruptible inside the close's uninterruptible region, so the
+      // deadline can cut the wait.
+      const ended = yield* Fiber.await(consumer).pipe(
+        Effect.interruptible,
         Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
-        // Every job settles its own refusal, so the consumer ends abnormally
-        // only on a defect; closing still proceeds, and says so.
-        Effect.catchCause((cause) =>
-          Effect.as(
-            Effect.logWarning(
-              'Session publisher ended abnormally on close',
-            ).pipe(
-              Effect.annotateLogs({ data: Cause.squash(cause) }),
-              withLogChannel(CHANNEL),
-            ),
-            Option.some(undefined),
-          ),
-        ),
       );
-      if (Option.isSome(drained)) return;
-      yield* Fiber.interrupt(consumer);
-      const refused = yield* Queue.clear(inbox);
+      if (
+        Option.isSome(ended) &&
+        Exit.isFailure(ended.value) &&
+        !Cause.hasInterruptsOnly(ended.value.cause)
+      ) {
+        yield* Effect.logWarning(
+          'Session publisher ended abnormally on close',
+        ).pipe(
+          Effect.annotateLogs({ data: Cause.squash(ended.value.cause) }),
+          withLogChannel(CHANNEL),
+        );
+      }
+      // Whatever the consumer never ran (the deadline cut it, or it died)
+      // is refused, never left for its awaiter to wait on.
+      const refused = yield* Queue.clear(inbox).pipe(Effect.orDie);
       yield* Effect.forEach(refused, (job) => job.refuse, { discard: true });
-      yield* Effect.logWarning(
-        `Session publisher cut at the close deadline; ${refused.length} queued publications refused`,
-      ).pipe(withLogChannel(CHANNEL));
+      if (refused.length > 0)
+        yield* Effect.logWarning(
+          `Session publisher closed; ${refused.length} queued publications refused`,
+        ).pipe(withLogChannel(CHANNEL));
     });
-    // Registered after the fork, so it runs before the fork's own finalizer.
     yield* Effect.addFinalizer(() => drain);
     const enqueue = (job: PublicationJob): boolean =>
       Queue.offerUnsafe(inbox, job);
