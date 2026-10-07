@@ -50,7 +50,7 @@ Use parallel subagents when the user asks for breadth or many candidates. Give e
 - Platform and hosts: port interfaces versus their actual consumers, `packages/texra/src/hosts/`, per-host wiring in `packages/*/`.
 - Webviews: the three parallel view trees (`webview`, `progressView`, `settingsView`) — duplicated manager or slice logic across them is a recurring find, but keep their directory structures aligned.
 - Storage and compatibility: `packages/harness/src/common/storage/`, persisted-state schemas, format readers with introduction dates.
-- Packages, scripts, resources: `packages/extension/resources/`, `scripts/`, `prompts/`, `supabase/functions/` — splits and inventories that outlived their consumer.
+- Packages, scripts, resources: `packages/extension/resources/`, `scripts/`, `supabase/functions/` — splits and inventories that outlived their consumer.
 
 If subagents are unavailable, simulate the same breadth yourself. Do not let the first good candidate stop the survey. Start with the largest production-code deltas; an audit that stops after obvious unused symbols misses the files where duplicated lifecycle or defensive machinery carries most of the cost.
 
@@ -70,7 +70,7 @@ A genuinely _new_ dependency can still be the right answer, but the proposal mus
 
 For every symbol or behavior, classify consumers before writing:
 
-- Production corpus: `src/`, `packages/*/src`, `packages/extension/resources/`, `prompts/`, `supabase/functions/`, and loader/config paths (`package.json` contributions, settings schema, command registration).
+- Production corpus: `src/`, `packages/*/src`, `packages/extension/resources/`, `supabase/functions/`, and loader/config paths (`package.json` contributions, settings schema, command registration).
 - Non-production corpus: `src/test-kernel/`, docs, snapshots, comments.
 - Ambiguous corpus: `scripts/` and `docs/scripts/` — some are release/CI tooling that counts as production. Inspect usage before classifying.
 
