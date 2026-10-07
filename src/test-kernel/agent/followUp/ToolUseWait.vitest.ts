@@ -2,6 +2,8 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { randomUUID } from 'node:crypto';
+import { rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
@@ -777,6 +779,54 @@ describe('the batch a parked run consumes', () => {
           }),
         );
       }),
+  );
+
+  it.effect("gives each row of a batch only its own item's badges", () =>
+    Effect.gen(function* () {
+      const figure = path.join(tmpdir(), `texra-badge-${randomUUID()}.png`);
+      // A 1×1 PNG: within any size limit, so it attaches as it is.
+      writeFileSync(
+        figure,
+        Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+          'base64',
+        ),
+      );
+      const session = yield* quietSession();
+      const runId = startedRun(session);
+      const logger = new TraceEmitter();
+      const info = vi.spyOn(logger, 'info');
+      yield* enqueue(session, runId, [
+        { text: 'just text', from: { kind: 'user' as const } },
+        {
+          text: 'with a figure',
+          mediaFiles: [figure],
+          from: { kind: 'user' as const },
+        },
+      ]);
+
+      const { fiber, park } = yield* forkLoop({
+        runId,
+        session,
+        logger,
+        bound: { supportsVision: true },
+        script: [textTurn('first'), textTurn('second')],
+      });
+      yield* park(1);
+      yield* Fiber.interrupt(fiber);
+      rmSync(figure, { force: true });
+
+      expect(info).toHaveBeenCalledWith(
+        'with a figure',
+        expect.objectContaining({
+          data: expect.objectContaining({ attachments: ['image'] }),
+        }),
+      );
+      expect(info).toHaveBeenCalledWith(
+        'just text',
+        expect.not.objectContaining({ data: expect.anything() }),
+      );
+    }),
   );
 
   it.effect(

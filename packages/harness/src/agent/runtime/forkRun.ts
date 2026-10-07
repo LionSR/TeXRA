@@ -43,6 +43,13 @@ const isSettled = (state: RunState): boolean =>
 
 const refused = (reason: string) => new Rejected({ reason });
 
+/** A run's noun in a refusal (GQ4): an agent is a run another run started. */
+export const runNoun = (
+  session: SessionHandle,
+  runId: RunId,
+): 'task' | 'agent' =>
+  session.view.run(runId)?.parentId == null ? 'task' : 'agent';
+
 /**
  * Fork run `from` at `at`, the `seq` of a settled position in its run
  * history, or at the end of its last completed turn when `at` is null (a
@@ -64,7 +71,9 @@ export const forkRun = Effect.fn('forkRun')(function* (
     (row) => row.type === 'run.start',
   );
   if (start?.type !== 'run.start') {
-    return yield* refused(`Task ${from.id} has no recorded start.`);
+    return yield* refused(
+      `The ${runNoun(session, from.id)} ${from.id} has no recorded start.`,
+    );
   }
   // The title the source shows: its newest user title over any later model
   // title, as the fold reads it, with its authorship.

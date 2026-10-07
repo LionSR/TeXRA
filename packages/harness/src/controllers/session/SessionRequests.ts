@@ -14,7 +14,7 @@ import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { requestAsks } from '@agent/runtime/requestPolicy';
 import { setPolicy } from '@agent/runtime/runApprovalQueue';
-import { forkRun } from '@agent/runtime/forkRun';
+import { forkRun, runNoun } from '@agent/runtime/forkRun';
 import { RunLive } from '@agent/runtime/runRegistry';
 import { Runs } from '@agent/runtime/runRegistry';
 import type {
@@ -75,10 +75,6 @@ export interface SessionRequestsInit {
    *  nothing. */
   readonly closed: () => boolean;
 }
-
-/** A run's noun in a refusal (GQ4): an agent is a run another run started. */
-const noun = (deps: SessionRequestsInit, runId: RunId) =>
-  deps.session().view.run(runId)?.parentId == null ? 'task' : 'agent';
 
 /** The run action a request performs, where the run's `actions` gates it. */
 const GATED_ACTIONS: Partial<Record<RuntimeRequest['kind'], RunAction>> = {
@@ -168,7 +164,7 @@ const admit = (
         return Effect.fail(
           new Unavailable({
             runId,
-            reason: `The ${noun(deps, runId)} is no longer open.`,
+            reason: `The ${runNoun(deps.session(), runId)} is no longer open.`,
           }),
         );
       }
@@ -264,7 +260,7 @@ const decideRequest = (
       return yield* Effect.fail(
         new Unavailable({
           runId: req.runId,
-          reason: `The ${noun(deps, req.runId)} that asked is no longer running: resume it to answer this request.`,
+          reason: `The ${runNoun(deps.session(), req.runId)} that asked is no longer running: resume it to answer this request.`,
         }),
       );
     }
@@ -309,7 +305,7 @@ const deleteAdmittedRun = (
       return yield* Effect.fail(
         new Unavailable({
           runId,
-          reason: `The ${noun(deps, runId)} has no recorded start.`,
+          reason: `The ${runNoun(deps.session(), runId)} has no recorded start.`,
         }),
       );
     }
@@ -320,7 +316,7 @@ const deleteAdmittedRun = (
       return yield* Effect.fail(
         new Unavailable({
           runId,
-          reason: `The ${noun(deps, runId)}'s start could not be read.`,
+          reason: `The ${runNoun(deps.session(), runId)}'s start could not be read.`,
         }),
       );
     }
@@ -335,7 +331,7 @@ const deleteAdmittedRun = (
           if (error instanceof RunLive)
             return new Unavailable({
               runId,
-              reason: `Stop the ${noun(deps, runId)} before deleting it.`,
+              reason: `Stop the ${runNoun(deps.session(), runId)} before deleting it.`,
             });
           if (
             error instanceof DatabaseWriteFailed &&
@@ -350,7 +346,7 @@ const deleteAdmittedRun = (
           }
           return new Unavailable({
             runId,
-            reason: `The ${noun(deps, runId)} could not be removed from the listing.`,
+            reason: `The ${runNoun(deps.session(), runId)} could not be removed from the listing.`,
           });
         }),
       );
@@ -387,7 +383,7 @@ const handle = (
           (error): RequestError =>
             new Unavailable({
               runId: req.runId,
-              reason: `The ${noun(deps, req.runId)} could not be stopped: ${toErrorMessage(error)}`,
+              reason: `The ${runNoun(deps.session(), req.runId)} could not be stopped: ${toErrorMessage(error)}`,
             }),
         ),
         Effect.as(done),
@@ -402,7 +398,7 @@ const handle = (
         : Effect.fail(
             new Unavailable({
               runId: req.runId,
-              reason: `This ${noun(deps, req.runId)} has no conversation to compact.`,
+              reason: `This ${runNoun(deps.session(), req.runId)} has no conversation to compact.`,
             }),
           );
     case 'run.rename':
@@ -425,7 +421,7 @@ const handle = (
         return Effect.fail(
           new Unavailable({
             runId: req.runId,
-            reason: `Resume the ${noun(deps, req.runId)} to reset it.`,
+            reason: `Resume the ${runNoun(deps.session(), req.runId)} to reset it.`,
           }),
         );
       return controls.editView(req.handoff ?? null).pipe(
@@ -523,7 +519,7 @@ export function sessionRequests(init: SessionRequestsInit): SessionRequests {
       return yield* Effect.fail(
         new Unavailable({
           runId,
-          reason: `The ${noun(deps, runId)} changed after it was listed.`,
+          reason: `The ${runNoun(deps.session(), runId)} changed after it was listed.`,
         }),
       );
     }

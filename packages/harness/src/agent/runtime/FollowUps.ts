@@ -148,21 +148,20 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   const input = yield* session.followUps.open(runId);
 
   /** The canonical user message of one batch: every item's text as its
-   *  own part, media parts after the item they arrived with. */
+   *  own part, media parts after it; `kinds[i]` is item i's badges. */
   const batchMessage = Effect.fn('FollowUps.batchMessage')(function* (
     followUps: readonly QueuedFollowUp[],
   ): Effect.fn.Return<
-    { message: Message; kinds: readonly MediaAttachmentKind[] },
+    { message: Message; kinds: readonly (readonly MediaAttachmentKind[])[] },
     Error,
     FileSystem.FileSystem | ChildProcessSpawner
   > {
     const bound = yield* SynchronizedRef.get(run.model);
     const parts: InputPart[] = [];
-    const kinds: MediaAttachmentKind[] = [];
+    const kinds: (readonly MediaAttachmentKind[])[] = [];
     for (const { content } of followUps) {
       parts.push({ kind: 'text', text: content.text });
-      const files = content.mediaFiles;
-      if (!files?.length) continue;
+      const files = content.mediaFiles ?? [];
       const media = yield* mediaInputParts(
         files.map((path) => run.fileService.createLocation(path)),
         bound,
@@ -170,7 +169,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
         run.session.roots.config,
       );
       parts.push(...media.parts);
-      kinds.push(...media.kinds);
+      kinds.push(media.kinds);
     }
     return { message: { role: 'user', content: parts }, kinds };
   });
@@ -191,11 +190,12 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
 
   const logFollowUps = (
     followUps: readonly QueuedFollowUp[],
-    attachments: readonly MediaAttachmentKind[],
+    kinds: readonly (readonly MediaAttachmentKind[])[] = [],
   ): void => {
-    for (const { content } of followUps) {
+    for (const [i, { content }] of followUps.entries()) {
       const { text, scriptSummary } = followUpDisplay(content);
       const { mediaFiles } = content;
+      const attachments = kinds[i];
       logUserMessage(logger, text, { attachments, mediaFiles, scriptSummary });
     }
   };
@@ -240,9 +240,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
             kinds: [],
           })
         : batchMessage(followUps)
-    ).pipe(
-      Effect.tapCause(() => Effect.sync(() => logFollowUps(followUps, []))),
-    );
+    ).pipe(Effect.tapCause(() => Effect.sync(() => logFollowUps(followUps))));
     if (all.length > followUps.length) {
       logger.debug(
         `Consumed ${all.length - followUps.length} progress notice(s) of ended subagents without delivering them.`,
