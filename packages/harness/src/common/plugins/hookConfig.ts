@@ -56,6 +56,9 @@ const HookHandlerSchema = z.object({
   async: z.boolean().optional(),
   asyncRewake: z.boolean().optional(),
   shell: z.string().optional(),
+  /** Accepted, not evaluated: the hook runs for every call its matcher
+   *  matches, which the reference allows when it cannot tell what a command
+   *  runs (`2026-09-28-code-plugins-hooks-v1.md`). */
   if: z.string().optional(),
 });
 

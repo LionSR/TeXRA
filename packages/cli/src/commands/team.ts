@@ -145,7 +145,7 @@ export const runTeam = Effect.fn('runTeam')(function* (
   const plan = yield* loadTeamRunPlan(init, services);
   if (rejectsHeadlessAsk) {
     writeTextStderr(
-      `Cannot run team "${plan.preset.id}" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
+      `Cannot run team "${plan.preset.id}" with headless approval policy "ask": approval prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
     );
     return CliExitCode.Usage;
   }
@@ -187,7 +187,7 @@ export const runTeam = Effect.fn('runTeam')(function* (
       Effect.gen(function* () {
         if (runContext.approvalPolicy === 'never') {
           writeTextStderr(
-            `WARN team ${plan.preset.id} may run without subagent delegation because approval policy "never" denies approval-gated delegation tools. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
+            `WARN team ${plan.preset.id} may run without subagents because approval policy "never" denies approval-gated tools, the agent tool included. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
           );
         }
 

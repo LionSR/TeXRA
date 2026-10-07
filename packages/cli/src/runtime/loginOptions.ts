@@ -15,9 +15,6 @@ export type CliLogoutTarget = SubscriptionProviderId | 'all';
 export type LoginFormValue =
   SubscriptionProviderId | `${SubscriptionProviderId} --device`;
 
-const CHATGPT_LOGIN_TARGETS = new Set(['chatgpt', 'codex', 'subscription']);
-const GROK_LOGIN_TARGETS = new Set(['grok', 'xai', 'supergrok']);
-
 // `--device` and `--no-browser` are distinct sign-in transports, not
 // refinements of each other (device-code shows no loopback URL), and the
 // device branch silently wins when both are set. The chat `/login` path
@@ -46,11 +43,7 @@ export function parseChatLoginSlashArgs(
   }
   if (positionals.length !== 1) return undefined;
   const [name] = positionals;
-  if (CHATGPT_LOGIN_TARGETS.has(name)) {
-    return { target: 'chatgpt', noBrowser, device };
-  }
-  if (GROK_LOGIN_TARGETS.has(name)) {
-    return { target: 'grok', noBrowser, device };
-  }
-  return undefined;
+  return name === 'chatgpt' || name === 'grok'
+    ? { target: name, noBrowser, device }
+    : undefined;
 }

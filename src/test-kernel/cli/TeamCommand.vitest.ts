@@ -231,7 +231,7 @@ function mockMaterializedStdin(inputFiles: string[]): void {
 describe('CLI team run command', () => {
   const tempDirs = useTempDirs();
   const headlessAskError =
-    'Cannot run team "mathematician" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.';
+    'Cannot run team "mathematician" with headless approval policy "ask": approval prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.';
 
   beforeEach(() => {
     vi.clearAllMocks();

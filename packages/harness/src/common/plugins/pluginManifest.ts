@@ -338,10 +338,18 @@ function hooksOf(dir: string, name: string, manifests: PluginManifest[]) {
     );
     const hooks: ConfiguredHook[] = [];
     const unsupported: string[] = [];
+    // Handlers whose `if` TeXRA does not evaluate: they run on every call
+    // their matcher matches, said once at debug level.
+    const unevaluated: string[] = [];
     const add = (source: string, config: z.infer<typeof HooksConfigSchema>) => {
       const found = configuredHooks(source, config);
       hooks.push(...found.hooks);
       unsupported.push(...found.unsupported);
+      for (const [event, groups] of Object.entries(config.hooks))
+        for (const group of groups)
+          for (const handler of group.hooks)
+            if (handler.if !== undefined)
+              unevaluated.push(`${event} if ${handler.if}`);
     };
     const files = [
       HOOKS_FILE,
@@ -374,6 +382,10 @@ function hooksOf(dir: string, name: string, manifests: PluginManifest[]) {
         );
       add('manifest', config.data);
     }
+    if (unevaluated.length > 0)
+      yield* Effect.logDebug(
+        `Plugin ${name}: hook \`if\` conditions are not evaluated, so these hooks run on every call their matcher matches: ${unevaluated.join('; ')}`,
+      );
     return { hooks, unsupported };
   });
 }

@@ -13,10 +13,8 @@ import { isInFlightPhase } from '@shared/runs/runStatus';
  * Returns true when:
  * - The handle is gone (run already untracked / completed), OR
  * - The run left the canonical in-flight phases, OR
- * - The run is a *tool-use subagent* in WAITING (job done, result
- *   already delivered by the child-run loop's per-turn delivery — see
- *   childRunLoop.ts). Workflow subagents in WAITING may still be awaiting
- *   retry/user action and should keep blocking.
+ * - The run is a subagent in WAITING (job done, result already delivered
+ *   by the child-run loop's per-turn delivery — see childRunLoop.ts).
  *
  * One handle lookup and one view read per call — no redundant lookups.
  */
@@ -31,11 +29,8 @@ export function shouldSkipWait(session: SessionHandle, runId: RunId): boolean {
     viewed === undefined || viewed === 'ready' ? RUN_PHASE.RUNNING : viewed;
   if (!isInFlightPhase(status)) return true;
 
-  // Tool-use subagent in WAITING = job delivered by the child-run loop, don't block.
-  // Workflow subagent in WAITING = may be waiting for retry/user action. Blocking
-  // isn't very useful (only the user can unblock it), but the subagent is still
-  // technically active so we don't skip — avoids misreporting it as done.
-  // Non-subagent WAITING = human input needed, keep blocking.
+  // A subagent in WAITING = job delivered by the child-run loop, don't block.
+  // A top-level run in WAITING = human input needed, keep blocking.
   return (
     status === RUN_PHASE.WAITING &&
     handle.identity.kind === 'agent' &&

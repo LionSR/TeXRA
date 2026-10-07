@@ -111,8 +111,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   const instruction = yield* resolveFileBackedInstruction(init, context.cwd);
   // Nothing can run this: a document task needs at least one input file, a
   // chat needs an instruction. Rejecting it before the
-  // platform init keeps a plain usage error off the agent-catalog fetch a
-  // signed-in session would otherwise pay for.
+  // platform init keeps a plain usage error cheap.
   if (!instruction && init.inputFiles.length === 0) {
     return yield* failUsage(
       'Provide --instruction or --instruction-file for an agent, or --input for a document task.',

@@ -68,7 +68,7 @@ The terminal uses the same paths: provider env vars for your own keys,
 for a Grok (xAI) subscription, or `/login` in a chat to pick among connected
 subscriptions. Running `texra` without any of these opens the chat with a
 **Connect a model** panel instead of an error. `texra setup` is the terminal counterpart of the setup
-assistant: it walks you through sign-in, ChatGPT, or an API key, then your
+assistant: it walks you through a ChatGPT sign-in or an API key, then your
 environment, agents, and first task. Read the
 [Authentication section](./texra-cli.md#authentication) of the CLI guide.
 :::
