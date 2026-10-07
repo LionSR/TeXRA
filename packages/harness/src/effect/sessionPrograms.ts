@@ -40,7 +40,6 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 
 // The composition root supplies its existing scoped services privately;
 // public Session capabilities carry no process implementation types.
-import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { InlinePersonaSchema, type RunId } from '@shared/schemas';
@@ -64,8 +63,6 @@ import type {
   Run,
   StartInput,
 } from './sessions.js';
-
-const CHANNEL = 'agentPackage';
 
 /** A failure of the launch path, as the run's own. */
 const runFailure = (cause: unknown): RunFailure =>
