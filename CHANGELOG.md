@@ -1042,9 +1042,10 @@ show` print the same notice, and the new `texra agents customize`,
 - **One warning per media file a model can't read.** Attaching an image
   or PDF to a model without vision used to log two warnings: a
   launch-time "Model has no vision support" summary, repeated on every
-  resume, and then "Skipping <file>" for each dropped file. Only the
-  per-file "Skipping <file>: the model does not accept
-  images/documents/audio" warning remains, written where the file is
+  resume, and then `Skipping <file>` for each dropped file. Only the
+  per-file
+  `Skipping <file>: the model does not accept images/documents/audio`
+  warning remains, written where the file is
   dropped: on a chat's first message, a follow-up, a subagent's opening,
   and each revision of a document task.
 - **A resumed task no longer asks whether a command ran that never
