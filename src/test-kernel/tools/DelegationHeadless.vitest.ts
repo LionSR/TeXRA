@@ -662,8 +662,6 @@ describe('headless delegation', () => {
         expect(mocks.writeResultMeta).toHaveBeenCalledWith(
           expect.objectContaining({
             producer: 'subagent',
-            agentName: 'review',
-            wallTimeMs: expect.any(Number),
             output: result.result.output,
           }),
         );
@@ -889,7 +887,6 @@ describe('headless delegation', () => {
       expect(mocks.writeResultMeta).toHaveBeenCalledWith(
         expect.objectContaining({
           producer: 'subagent',
-          agentName: 'review',
         }),
       );
     }),

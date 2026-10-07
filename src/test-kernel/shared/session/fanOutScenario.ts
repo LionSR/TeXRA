@@ -191,7 +191,7 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(ROOT, T.root, {
     type: 'run.start',
     identity: ROOT_IDENTITY,
-    worktree: { workingDirectory: '/paper', branch: 'main' },
+    worktree: { workingDirectory: '/paper' },
     parent: null,
     provenance: null,
     userFollowUpSupport: 'unsupported',
@@ -305,7 +305,6 @@ export function buildScenario({ proposal = false } = {}) {
       rounds: [
         {
           round: 1,
-          rawOutput: null,
           outputs: [],
           compileFailures: [],
           missingOutputs: [],

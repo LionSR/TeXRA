@@ -136,7 +136,6 @@ async function emitOutputFiles(
     documentsOutputRow(runId, [
       {
         round: emissions,
-        rawOutput: null,
         compileFailures: [],
         missingOutputs: [],
         outputs: [

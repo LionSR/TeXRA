@@ -810,7 +810,6 @@ describe('tool-use dispatch', () => {
           type: 'request.opened',
           aggregateId,
           requestId: 'q1',
-          thread: null,
           payload: {
             kind: 'bash',
             data: {

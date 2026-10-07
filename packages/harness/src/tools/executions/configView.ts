@@ -13,13 +13,7 @@ import type { RunRecord } from '@agent/core/definition/RunRecord';
 const HIDDEN_CONFIG_FIELDS_BY_CATEGORY: Readonly<
   Record<string, ReadonlySet<string>>
 > = {
-  agent: new Set([
-    'inputFiles',
-    'contextFiles',
-    'outputFiles',
-    'editedFile',
-    'editedFiles',
-  ]),
+  agent: new Set(['inputFiles', 'contextFiles', 'outputFiles', 'editedFile']),
   task: new Set(['script']),
 };
 

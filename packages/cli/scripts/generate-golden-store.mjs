@@ -23,6 +23,8 @@
  *   is refused: a one-shot parent never reads a message. Headless
  *   delegation runs in band, so every row commits in one order.
  * - two `review` runs over the same notes: the context blobs they share.
+ * - a `polish` document task with `--output`: the documents plugin's output
+ *   fact and the CLI's `run.result` (producer `cliWorkflow`).
  * - `golden_chat`, the interactive `texra chat` driven under a PTY, with
  *   "Keep agents running" turned on in `/config` and a plugin's
  *   `PostToolUse` hook on `codex` enabled: a plan the user runs as a goal
@@ -168,6 +170,10 @@ function scenario(root) {
   writeFileSync(
     path.join(project, 'notes.tex'),
     '\\section{Notes}\nThe golden store reads this file.\n',
+  );
+  writeFileSync(
+    path.join(project, 'paper.tex'),
+    '\\section{Input}\nThe golden document task polishes this file.\n',
   );
   // The Codex CLI the Codex child runs: first on PATH, with an empty global
   // npm prefix so no installed Codex is found first. Its one turn answers
@@ -456,6 +462,24 @@ async function generate(root) {
       'json',
       '--print',
     ]);
+
+  // A document task through `texra run --output`: the documents plugin's
+  // output fact and the CLI's `run.result` (producer `cliWorkflow`).
+  cli.run([
+    'run',
+    'polish',
+    '--model',
+    'gpt56',
+    '--input',
+    'paper.tex',
+    '--output',
+    'paper.polished.tex',
+    '--approval-policy',
+    'never',
+    '--output-format',
+    'json',
+    '--print',
+  ]);
 
   // The chat's Codex call runs the hook plugin's `PostToolUse` hook.
   cli.run(['tools', 'enable', 'codex', '--print']);
@@ -1014,6 +1038,11 @@ function normalize(file, root) {
     ...uuids.seen,
     ...nanos.seen,
     ...times.seen,
+    // The project's storage folder, named by a hash of its temporary path.
+    [
+      /workspace-storage\/project-[0-9a-f]+/g,
+      'workspace-storage/project-golden',
+    ],
     [/Date: \d{4}-\d{2}-\d{2}/g, 'Date: 2026-01-01'],
     [/Platform: [^\n]*/g, 'Platform: golden'],
     [/Shell: [^\n]*/g, 'Shell: golden'],

@@ -74,8 +74,6 @@ describe('canonical run records', () => {
         yield* seedReport(session, runId, 'retained report bytes');
         yield* records.writeResultMeta({
           producer: 'subagent',
-          agentName: 'worker',
-          wallTimeMs: 1,
           output: { response: 'done', files: [] },
         });
         yield* session.log.transact([

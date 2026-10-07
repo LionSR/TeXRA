@@ -40,7 +40,6 @@ function viewFor(activity: Activity): SessionView {
               runId,
               requestId: 'bash-1',
               payload: { kind: 'bash' } as never,
-              thread: null,
             },
           ]
         : [],

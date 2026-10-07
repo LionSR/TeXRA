@@ -327,7 +327,6 @@ function publishRun(
       mediaFiles: [],
       outputFiles: [],
       editedFile: null,
-      editedFiles: [],
       toolConfig: {
         autoExtractFigure: false,
         autoExtractTikzFigure: false,

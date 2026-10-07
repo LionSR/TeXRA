@@ -380,13 +380,11 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   durable('followup.consumed', { followUpId: z.string().min(1) }),
   /**
    * A run asking a person (one run model, section 3.7): what the UI shows,
-   * never host handles. `thread` names an earlier request this one
-   * continues (an inquiry's multi-turn). Pending is opened without decided.
+   * never host handles. Pending is opened without decided.
    */
   durable('request.opened', {
     requestId: z.string().min(1),
     payload: PermissionPayloadSchema,
-    thread: z.string().min(1).nullish(),
   }),
   /**
    * The answer, whatever surface gave it and whatever its provenance. The

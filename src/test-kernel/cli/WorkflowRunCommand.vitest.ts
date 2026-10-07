@@ -293,16 +293,11 @@ function mockCancellationDuringOutputFinalization(
 }
 
 /**
- * The result record the command persists for history details: the copies it
- * made and the diffs it computed. How the run ended is the `run.end` row's
- * fact and its files are its `output.produced` rows', so neither is copied.
+ * The result record the command persists: the diffs it computed. How the run
+ * ended is the `run.end` row's fact and its files are the documents plugin's
+ * output fact, so neither is copied.
  */
-function expectedResultMeta(copies: {
-  readonly copiedOutput?: string;
-  readonly copiedOutputs?: readonly string[];
-}): Record<string, unknown> {
-  return { producer: 'cliWorkflow', ...copies, diffs: [] };
-}
+const EXPECTED_RESULT_META = { producer: 'cliWorkflow', diffs: [] };
 
 /** Materializes the round-1 output file the copy target is sourced from. */
 async function writeGeneratedOutput(root: string): Promise<string> {
@@ -636,11 +631,7 @@ describe('CLI run command, workflow agents', () => {
           ).toBe('polished');
           expect(
             yield* readResultMeta(currentSession(), 'abc002'),
-          ).toMatchObject(
-            expectedResultMeta({
-              copiedOutput: path.join(root, 'polished.tex'),
-            }),
-          );
+          ).toMatchObject(EXPECTED_RESULT_META);
           const emission = mocks.emitCliResult.mock.calls[0]?.[1];
           expect(emission?.json).toMatchObject({
             outcome: RUN_OUTCOME.COMPLETED,
@@ -666,7 +657,7 @@ describe('CLI run command, workflow agents', () => {
       ),
   );
 
-  it.effect('persists copied output-dir paths for history details', () =>
+  it.effect('copies the outputs into --output-dir', () =>
     withTempDirEffect('texra-workflow-', (root) =>
       Effect.gen(function* () {
         const workspace = path.join(root, 'workspace ');
@@ -701,9 +692,7 @@ describe('CLI run command, workflow agents', () => {
           ),
         ).toBe('polished');
         expect(yield* readResultMeta(currentSession(), 'abc003')).toMatchObject(
-          expectedResultMeta({
-            copiedOutputs: [path.join(workspace, 'out', 'paper.tex')],
-          }),
+          EXPECTED_RESULT_META,
         );
       }),
     ),
@@ -883,7 +872,7 @@ describe('CLI run command, workflow agents', () => {
 
         expect(exitCode).toBe(CliExitCode.AgentError);
         expect(yield* readResultMeta(currentSession(), 'abc006')).toMatchObject(
-          expectedResultMeta({}),
+          EXPECTED_RESULT_META,
         );
       }),
   );
@@ -926,7 +915,7 @@ describe('CLI run command, workflow agents', () => {
           ).toBe(true);
           expect(
             yield* readResultMeta(currentSession(), 'abc007'),
-          ).toMatchObject(expectedResultMeta({}));
+          ).toMatchObject(EXPECTED_RESULT_META);
           expect(
             cliLogSinksMock.writeTextStderr,
           ).toHaveBeenCalledExactlyOnceWith(
@@ -970,7 +959,7 @@ describe('CLI run command, workflow agents', () => {
           ).toBe(true);
           expect(
             yield* readResultMeta(currentSession(), 'abc008'),
-          ).toMatchObject(expectedResultMeta({}));
+          ).toMatchObject(EXPECTED_RESULT_META);
           const emission = mocks.emitCliResult.mock.calls[0]?.[1];
           expect(emission?.json).toMatchObject({
             outcome: RUN_OUTCOME.CANCELLED,
@@ -1021,7 +1010,7 @@ describe('CLI run command, workflow agents', () => {
           ).toBe(true);
           expect(
             yield* readResultMeta(currentSession(), 'abc009'),
-          ).toMatchObject(expectedResultMeta({}));
+          ).toMatchObject(EXPECTED_RESULT_META);
           const emission = mocks.emitCliResult.mock.calls[0]?.[1];
           expect(emission?.json).toMatchObject({
             outcome: RUN_OUTCOME.CANCELLED,
@@ -1134,7 +1123,7 @@ describe('CLI run command, workflow agents', () => {
 
         expect(exitCode).toBe(CliExitCode.Interrupted);
         expect(yield* readResultMeta(currentSession(), 'abc00c')).toMatchObject(
-          expectedResultMeta({}),
+          EXPECTED_RESULT_META,
         );
         expect(mocks.emitCliResult).toHaveBeenCalledWith(
           expect.any(Object),
@@ -1219,7 +1208,7 @@ describe('CLI run command, workflow agents', () => {
           }
           expect(
             yield* readResultMeta(currentSession(), 'abc00c'),
-          ).toMatchObject(expectedResultMeta({}));
+          ).toMatchObject(EXPECTED_RESULT_META);
           const emitted = mocks.emitCliResult.mock.calls[0]?.[1]?.json;
           expect(emitted).toMatchObject({
             outcome: RUN_OUTCOME.CANCELLED,

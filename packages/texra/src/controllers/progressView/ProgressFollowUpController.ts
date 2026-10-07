@@ -301,7 +301,6 @@ export class ProgressFollowUpController {
       inputFiles: editableFiles,
       outputFiles: [],
       editedFile: null,
-      editedFiles: [],
     };
   }
 

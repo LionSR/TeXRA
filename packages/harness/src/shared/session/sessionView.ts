@@ -294,15 +294,13 @@ export function requestAnswerability(
   return 'resume';
 }
 
-/** A pending request: which run is asking, the payload the UI shows (its
- *  `kind` is the request's kind), and the earlier request it continues (an
- *  inquiry's thread). The list is a set keyed by `requestId` (5.2): opened
+/** A pending request: which run is asking and the payload the UI shows (its
+ *  `kind` is the request's kind). The list is a set keyed by `requestId` (5.2): opened
  *  without decided. */
 const PendingRequestSchema = z.object({
   runId: RunIdSchema,
   requestId: z.string(),
   payload: PermissionPayloadSchema,
-  thread: z.string().nullable(),
 });
 
 /** A queued follow-up as a composer lists it: the row's key and the text it

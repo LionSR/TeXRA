@@ -89,6 +89,9 @@ export function createNativeSubagentStrategy(
   // already-built result manifest is still available for persistence.
   let cachedBuilt: SubagentResultMeta | undefined;
   let cachedDelivery: string | undefined;
+  // When the last turn ended: its delivery's wall time, so the diffs the
+  // result computes afterwards are not counted (as `formatError` counts).
+  let turnEndedAt = params.startedAt;
 
   const runNative = Effect.fn('nativeSubagent.runTurn')(function* (
     call: Effect.Effect<RunEndResult, Error, AgentRunServices>,
@@ -100,6 +103,7 @@ export function createNativeSubagentStrategy(
       Effect.tap((result) =>
         Effect.sync(() => {
           lastResult = result;
+          turnEndedAt = Date.now();
           cachedBuilt = undefined;
           cachedDelivery = undefined;
         }),
@@ -113,12 +117,8 @@ export function createNativeSubagentStrategy(
     if (!cachedBuilt) {
       cachedBuilt = yield* buildSubagentResult(
         params.runId,
-        config.agent,
         turn.output,
-        {
-          startedAt: params.startedAt,
-          storageRoot: params.session.roots.storage,
-        },
+        params.session.roots.storage,
       );
     }
     return cachedBuilt;
@@ -209,7 +209,7 @@ export function createNativeSubagentStrategy(
               {
                 runId: params.runId,
                 memoryMisses: turn.memoryMisses,
-                wallTimeMs: built.wallTimeMs,
+                wallTimeMs: turnEndedAt - params.startedAt,
                 workingDirectory: params.workingDirectory,
               },
             ),
@@ -242,11 +242,7 @@ export function createNativeSubagentStrategy(
           // failed run's own output, or an empty one when the turn produced
           // none.
           const result = turn ?? lastResult;
-          return buildSubagentResultMeta(
-            config.agent,
-            result?.output ?? emptyRunEndOutput(),
-            Date.now() - params.startedAt,
-          );
+          return buildSubagentResultMeta(result?.output ?? emptyRunEndOutput());
         }
         return yield* buildResult(turn);
       }),

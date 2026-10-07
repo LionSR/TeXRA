@@ -153,13 +153,9 @@ export const ResultMetaSchema = z.discriminatedUnion('producer', [
   }),
   DeliveredDiffsSchema.extend({
     producer: z.literal('cliWorkflow'),
-    copiedOutput: z.string().optional(),
-    copiedOutputs: z.array(z.string()).optional(),
   }),
   DeliveredDiffsSchema.extend({
     producer: z.literal('subagent'),
-    agentName: z.string(),
-    wallTimeMs: z.number().nonnegative(),
     output: StoredRunOutputSchema,
   }),
 ]);

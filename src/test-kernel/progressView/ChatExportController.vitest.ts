@@ -72,7 +72,6 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
     agent: 'orchestrator',
     model: 'deepseek/deepseek-v4-flash',
     instruction: 'Solve the problem.',
-    editedFiles: [],
     toolConfig: DEFAULT_TOOL_CONFIG,
     memories: [],
     workingDirectory: '/workspace',

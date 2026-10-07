@@ -275,7 +275,6 @@ export function requestAsks({
           aggregateId,
           requestId,
           payload,
-          thread: options.thread ?? null,
         },
         ...policyDecidedRows(session(), runId, payload),
       ];

@@ -732,7 +732,6 @@ export const modelInvokerLayer = (): Layer.Layer<
             aggregateId,
             requestId,
             payload,
-            thread: null,
           },
           failed,
           ...(automatic

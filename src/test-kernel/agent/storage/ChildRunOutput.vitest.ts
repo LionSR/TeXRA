@@ -42,7 +42,6 @@ function workflowRounds(absolutePath: string): RoundOutput[] {
   return [
     RoundOutputSchema.parse({
       round: 1,
-      rawOutput: null,
       outputs: [
         {
           source: 'draft',
@@ -63,8 +62,6 @@ function workflowRounds(absolutePath: string): RoundOutput[] {
 
 const completedWorkflowResult: DeliveredResult = {
   producer: 'subagent',
-  agentName: 'draft',
-  wallTimeMs: 10,
   output: {
     response: '',
     files: [],

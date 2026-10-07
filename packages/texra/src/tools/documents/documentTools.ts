@@ -176,13 +176,11 @@ export const DocumentExtractTool = defineTool({
       round.outputs.length > 0
         ? traceFileLineage(docs.state, docs.baseFiles, revision)
         : undefined;
-    const summary = yield* summarizeRound(
-      docs.state,
-      docs.deps,
-      location,
-      revision,
-      { mapping, isRewrite: docs.task.rewrite, baseFiles: docs.baseFiles },
-    );
+    const summary = yield* summarizeRound(docs.state, docs.deps, revision, {
+      mapping,
+      isRewrite: docs.task.rewrite,
+      baseFiles: docs.baseFiles,
+    });
     const { missing } = yield* checkExpectedOutputs(
       docs.state,
       docs.deps,

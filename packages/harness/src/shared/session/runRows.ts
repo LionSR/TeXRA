@@ -51,8 +51,6 @@ export const isSharedRunRow = <E extends Pick<SessionEvent, 'type'>>(
 
 type RequestState = {
   readonly payload: PermissionPayload;
-  /** The earlier request this one continues: an inquiry's multi-turn. */
-  readonly thread: string | null;
   readonly resolved: boolean;
   /** The recorded decision (R5): the `request.decided` row's, null while
    *  the request is open. */
@@ -293,7 +291,6 @@ export function applyRunRow(
       const requests = writable(pass, current.requests, copyById);
       requests[row.requestId] = {
         payload: row.payload,
-        thread: row.thread ?? null,
         resolved: false,
         decision: null,
       };

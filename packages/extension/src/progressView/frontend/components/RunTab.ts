@@ -47,7 +47,7 @@ function buildTooltip(run: RunView): string {
       : undefined;
   const worktree = run.worktree;
   const worktreeDisplay = worktree
-    ? `Worktree: ${worktree.branch ?? getBasename(worktree.workingDirectory)}`
+    ? `Worktree: ${getBasename(worktree.workingDirectory)}`
     : undefined;
   const mainLine = [
     run.label,

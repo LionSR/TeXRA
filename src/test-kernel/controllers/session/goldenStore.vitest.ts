@@ -78,19 +78,23 @@ const SELF = JSON.stringify([
 
 /** The runs, by the ids the generator normalizes them to, in start order. */
 const PARENT = RunIdSchema.parse('a00000000001');
-const CHAT = RunIdSchema.parse('a00000000005');
+const CHAT = RunIdSchema.parse('a00000000008');
 /** The chat's Codex child, detached by the user's stop. */
-const CODEX = RunIdSchema.parse('a00000000006');
-const SCRIPTED = RunIdSchema.parse('a00000000007');
+const CODEX = RunIdSchema.parse('a00000000009');
+const SCRIPTED = RunIdSchema.parse('a0000000000a');
 /** A headless run, the fork `texra resume --fork` made of it, and the
  *  handoff that continued the fork. */
-const FORK_SOURCE = RunIdSchema.parse('a00000000008');
-const FORKED = RunIdSchema.parse('a00000000009');
-const TOMBSTONED = RunIdSchema.parse('a0000000000a');
+const FORK_SOURCE = RunIdSchema.parse('a0000000000b');
+const FORKED = RunIdSchema.parse('a0000000000c');
+const TOMBSTONED = RunIdSchema.parse('a0000000000d');
 /** The service's task, and the background command it sent, whose input the
  *  service's resume closed. */
-const SERVICE_TASK = RunIdSchema.parse('a0000000000b');
-const BACKGROUND = RunIdSchema.parse('a0000000000c');
+const SERVICE_TASK = RunIdSchema.parse('a0000000000e');
+const BACKGROUND = RunIdSchema.parse('a0000000000f');
+/** The `texra run --output` document task and the revisions its recipe
+ *  ran, named by the calls that launched them. */
+const DOCUMENT_TASK = RunIdSchema.parse('a00000000005');
+const REVISIONS = ['927d1d030445aec1310b519c', 'd0817e54a64797f2a31b1e22'];
 
 const roots: string[] = [];
 afterAll(() => {
@@ -290,6 +294,9 @@ describe('the golden 1.0 store', () => {
         ),
       ).toEqual([
         [PARENT, 'validation-agent-3'],
+        // Each revision is an `agent` call in the recipe's script.
+        [DOCUMENT_TASK, 'script/1'],
+        [DOCUMENT_TASK, 'script/6'],
         [CHAT, null],
         [SERVICE_TASK, null],
       ]);
@@ -349,6 +356,12 @@ describe('the golden 1.0 store', () => {
         run(DELEGATED, 'golden_child', { parent: PARENT }),
         run('a00000000003', 'review'),
         run('a00000000004', 'review'),
+        // The document task and the two revisions its recipe ran.
+        run(DOCUMENT_TASK, 'polish', { children: REVISIONS }),
+        // Listed in start order, while the parent names them sorted.
+        ...REVISIONS.toReversed().map((id) =>
+          run(id, 'polish', { parent: DOCUMENT_TASK }),
+        ),
         // The user stopped its held turn with Ctrl-C, which detached its
         // parked Codex child, then exited, which ended the child.
         run(CHAT, 'golden_chat', { status: 'cancelled', outcome: 'cancelled' }),
