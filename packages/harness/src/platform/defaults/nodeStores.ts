@@ -107,7 +107,8 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
  * workspace `workspaceRoot` under `storageRoot`. Neither store creates
  * anything on open, so a caller that must not create a directory under the
  * storage root (the CLI's pre-platform startup read, whose `clone` entry may
- * only be able to read it) is served too.
+ * only be able to read it) is served too. `follow` opens all three
+ * following their files, as {@link openTexraWorkspaceConfigStores} does.
  */
 export const openTexraConfigStores = Effect.fn(
   'nodeStores.openTexraConfigStores',
@@ -115,6 +116,7 @@ export const openTexraConfigStores = Effect.fn(
   storageRoot: string,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,
+  follow?: (error: Error) => void,
 ) {
   const [{ workspace, local }, global] = yield* Effect.all(
     [
@@ -122,12 +124,14 @@ export const openTexraConfigStores = Effect.fn(
         resolveWorkspaceStoragePath(storageRoot, workspaceRoot),
         workspaceRoot,
         warn,
+        follow,
       ),
       JsonStore.open(
         path.join(
           resolveGlobalStoragePath(storageRoot),
           TEXRA_CONFIG_FILE_NAME,
         ),
+        { follow },
       ),
     ],
     { concurrency: 'unbounded' },
