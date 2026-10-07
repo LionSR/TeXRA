@@ -872,6 +872,13 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Each of several messages sent together shows only its own attachments.**
+  When a text-only message and a message with an image reached a task in the
+  same turn, both rows showed the image badge. Now each row shows the
+  attachments its own message carried. Forking an agent that has no recorded
+  start now says "The agent ... has no recorded start" instead of calling it
+  a task.
+
 - **A model retry that cannot switch credentials now fails instead of
   resending on the old ones.** When you answer a failed request with "retry
   with my own key" and that key is gone, or a dropped Responses WebSocket
