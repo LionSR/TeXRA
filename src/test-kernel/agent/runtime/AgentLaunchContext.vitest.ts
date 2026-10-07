@@ -1,7 +1,7 @@
 import { it } from '@effect/vitest';
 import { Cause, Effect, Exit, Layer } from 'effect';
 import { assert, beforeEach, describe, expect, vi } from 'vitest';
-import { humanGrant } from '@agent/runtime/runApprovalQueue';
+import { goalGrant, humanGrant } from '@agent/runtime/runApprovalQueue';
 
 const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
@@ -43,7 +43,6 @@ import {
 } from '@test/support/sessionTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { setGoalSessionAutoApproval } from '@tools/goal';
 
 import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
 
@@ -414,7 +413,7 @@ describe('AgentLaunchContext', () => {
           EXECUTION_ID,
           humanGrant(['toolEdit'], true),
         );
-        yield* setGoalSessionAutoApproval(session, EXECUTION_ID, 'commands');
+        yield* session.approvals.change(EXECUTION_ID, goalGrant(['bash']));
         yield* session.log.settled;
 
         definitionMocks();

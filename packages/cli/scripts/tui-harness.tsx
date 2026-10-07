@@ -78,7 +78,7 @@ import {
   tail,
 } from '@test/shared/session/fanOutScenario';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { clearGoal, setGoalSessionAutoApproval, startGoal } from '@tools/goal';
+import { clearGoal, startGoal } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -1094,15 +1094,12 @@ async function appendHarnessPlanDecision(
 ): Promise<void> {
   if (result.action === 'approve_and_goal') {
     await harnessRuntime.runPromise(
-      startGoal(session(), HARNESS_RUN_ID, PLAN_APPROVAL_OBJECTIVE),
-    );
-    // The same grant `PlanTool.startGoalForPlan` applies next: approving a
-    // plan as a goal auto-approves commands, and nothing broader unless the
-    // user explicitly widened the scope.
-    await harnessRuntime.runPromise(
-      setGoalSessionAutoApproval(
+      // The grant `PlanTool.startGoalForPlan` commits with the goal:
+      // commands, and nothing broader unless the user widened the scope.
+      startGoal(
         session(),
         HARNESS_RUN_ID,
+        PLAN_APPROVAL_OBJECTIVE,
         result.autoApproveAll ? 'allAgentWork' : 'commands',
       ),
     );

@@ -234,8 +234,14 @@ export const sessionEventsLayer = Layer.effect(
         );
         // At the deadline the running job is cut; the interrupt waits only for
         // its masked atomic write.
-        if (Option.isNone(ended)) yield* Fiber.interrupt(consumer);
-        else if (
+        if (Option.isNone(ended)) {
+          // A detached job cut here, whose write then fails, is heard by
+          // nobody: say the cut happened.
+          yield* Effect.logWarning(
+            'Session publisher cut at the close deadline; a job it was running may not have been written',
+          ).pipe(withLogChannel(CHANNEL));
+          yield* Fiber.interrupt(consumer);
+        } else if (
           Exit.isFailure(ended.value) &&
           !Cause.hasInterruptsOnly(ended.value.cause)
         ) {

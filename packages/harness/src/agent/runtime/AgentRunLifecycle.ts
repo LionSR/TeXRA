@@ -55,11 +55,8 @@ type Settlement = Effect.Effect<readonly SessionEventDraft[]>;
 export interface RunLifecycleOptions {
   /** The launching run: the parent edge on the live handle. */
   parentRunId?: RunId;
-  /**
-   * Fires once with the run's id, right after its handle is tracked (F-2).
-   * Neither a failure of this program nor a throw while building it may abort
-   * the run, so the run forks it detached and logs whatever it ends on.
-   */
+  /** Fires once with the run's id, right after its handle is tracked (F-2),
+   *  forked detached: nothing it does may abort the run, and it is logged. */
   onRun?: (runId: RunId) => Effect.Effect<void, Error>;
   /** A child's last-turn settlement, from the result its run ends with. */
   settleEnd?: (result: RunEndResult) => Settlement;
@@ -77,16 +74,11 @@ interface FinalizeRunTerminalParams {
    * while that phase is still non-terminal — see {@link finalizeRunTerminal}.
    */
   readonly outcome: RunOutcome;
-  /**
-   * Classified error facts carried on the `run.end` row, dropped when stop
-   * precedence resolves a different outcome than `outcome`.
-   */
+  /** Classified error facts on the `run.end` row, dropped when stop
+   *  precedence resolves another outcome than `outcome`. */
   readonly error?: ResultEvent['error'];
-  /**
-   * What the flow produced; absent when the run ended before it did, and
-   * absent by rule on the child-run path (`finalizeChildRun`): a child's
-   * product is its per-turn delivery to its parent, not a flow output.
-   */
+  /** What the flow produced; absent when the run ended first, and on the
+   *  child-run path, whose product is its per-turn delivery. */
   readonly output?: RunEndOutput;
   /** Transcript stage closed with the resolved outcome (guarded). */
   readonly stage?: Pick<StageHandle, 'end'>;
@@ -104,9 +96,8 @@ interface FinalizeRunTerminalParams {
 
 interface FinalizeRunTerminalResult {
   readonly event: ResultEvent;
-  /** The `run.end` row write's failure, reported rather than thrown: the
-   *  terminal still settled and untracked. A caller whose exit must
-   *  attest the persistence (the child loop's cleanup) reads it here. */
+  /** The `run.end` row write's failure: the terminal still settled and
+   *  untracked, and the event reports FAILED with its reason. */
   readonly persistFailure?: unknown;
 }
 
@@ -173,23 +164,17 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
       output,
       ...(settlement.length > 0 ? { settlement } : {}),
     });
-    if (!finalization.ok) {
+    if (!finalization.ok)
       yield* logLifecycleWarning('Failed to finalize durable run state', {
         agentIdentifier: handle.agentName,
         runId: handle.runId,
         error: finalization.error,
       });
-    }
-    // The run has produced its canonical terminal result. Guard the cleanup so
-    // a throw from untrack's listeners or a run-status host emit cannot
-    // escape past an already-settled result.
+    // Guard the cleanup: a throw from untrack's listeners must not escape
+    // past a settled result. Only this handle's registration goes; a run
+    // that started again is its successor's.
     yield* Effect.try({
-      try: () => {
-        // Only this handle's registration: a run that started again is the
-        // successor's, and a late terminal of the generation it replaced must
-        // not untrack it.
-        runs.untrackIfCurrent(handle);
-      },
+      try: () => runs.untrackIfCurrent(handle),
       catch: ensureError,
     }).pipe(
       Effect.catch((cleanupErr) =>
@@ -199,9 +184,14 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
         }),
       ),
     );
+    if (finalization.ok) return { event };
+    // A run whose `run.end` did not commit failed, whatever it reported.
+    const unsaved = ensureError(finalization.error);
+    const message = `The run's end could not be saved: ${unsaved.message}`;
+    const failed = { kind: classifyAgentError(unsaved), message };
     return {
-      event,
-      ...(finalization.ok ? {} : { persistFailure: finalization.error }),
+      event: { ...event, outcome: RUN_OUTCOME.FAILED, error: failed },
+      persistFailure: finalization.error,
     };
   },
   // The run's terminal is atomic: the run's stop is its fiber's interruption,
@@ -445,8 +435,15 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
         output: result.output,
         settledBy: result,
       }).pipe(
-        Effect.map((finalized) =>
-          withResolvedOutcome(result, finalized.event.outcome),
+        // An end that did not save fails the run, saying why.
+        Effect.flatMap(({ event, persistFailure }) =>
+          persistFailure === undefined
+            ? Effect.succeed(withResolvedOutcome(result, event.outcome))
+            : Effect.fail(
+                new AgentError(event.error?.message ?? '', {
+                  cause: persistFailure,
+                }),
+              ),
         ),
       );
     }

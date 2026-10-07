@@ -674,7 +674,7 @@ function finalize(params: Parameters<typeof finalizeRunTerminal>[0]) {
 
 describe('finalizeRunTerminal', () => {
   it.effect(
-    'settles and untracks once while reporting terminal metadata failure',
+    'settles and untracks once, and fails a run whose terminal row was not saved',
     () =>
       Effect.gen(function* () {
         const logs = captureLogEntries();
@@ -687,10 +687,12 @@ describe('finalizeRunTerminal', () => {
           }),
         );
 
+        // A run that reported success but whose `run.end` did not commit
+        // failed: its caller hears FAILED, never the unsaved report.
         const event = yield* finalize({
           session,
           handle,
-          outcome: RUN_OUTCOME.FAILED,
+          outcome: RUN_OUTCOME.COMPLETED,
         });
 
         expect(event).toMatchObject({
@@ -698,7 +700,11 @@ describe('finalizeRunTerminal', () => {
             type: 'run.end',
             outcome: RUN_OUTCOME.FAILED,
             runId,
+            error: {
+              message: expect.stringContaining('metadata disk write failed'),
+            },
           },
+          persistFailure: durabilityError,
         });
         expect(untrackIfCurrent).toHaveBeenCalledExactlyOnceWith(handle);
         const [warning, ...rest] = logs.at('WARN', 'agentRunLifecycle');

@@ -41,6 +41,15 @@ export function rowAggregate(runId: RunId) {
   return qualifyAggregateId('run', runId);
 }
 
+/** The row making `text` the response shown as final: a row of the run's
+ *  history, awaited, never a detached trace row. */
+export const finalizedRows = (
+  runId: RunId,
+  text: string,
+): RunHistoryDraft[] => [
+  { type: 'response.finalized', aggregateId: rowAggregate(runId), text },
+];
+
 /** The coordinates a `run.position` row is stamped with. */
 export type PositionCoordinates = Pick<RunState, 'turn'>;
 

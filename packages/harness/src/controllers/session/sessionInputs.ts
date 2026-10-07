@@ -245,8 +245,8 @@ export const sessionInputsLayer = Layer.effect(
   }),
 );
 
-/** Show each damaged run read-only with why (`unreadable`): its `run.start`
- *  does not decode, so it lists bare and never opens. */
+/** Show each damaged run read-only with why (`unreadable`): one of its rows
+ *  does not decode, so it never opens. */
 const markDamaged = (
   ref: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
   damaged: readonly AggregateId[],

@@ -5,7 +5,7 @@
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, SubscriptionRef } from 'effect';
 import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
-import { humanGrant } from '@agent/runtime/runApprovalQueue';
+import { goalGrant, humanGrant } from '@agent/runtime/runApprovalQueue';
 
 const mocks = vi.hoisted(() => ({
   hasUsableApiKey: vi.fn(),
@@ -90,7 +90,6 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installedHost } from '@test/support/setupPlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { setGoalSessionAutoApproval } from '@tools/goal';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 import { bashApprovalRequest } from '../agent/progressTestUtils';
 
@@ -385,7 +384,7 @@ describe('TUI request decisions', () => {
         const session = testDefaultSession();
         const { approvals } = session;
         yield* approvals.change(runId, humanGrant(['bash'], false));
-        yield* setGoalSessionAutoApproval(session, runId, 'commands');
+        yield* approvals.change(runId, goalGrant(['bash']));
         expect(approvals.bypass(runId, 'bash') !== null).toBe(true);
         // The human turns commands off, then on again, while the goal runs,
         // and approves edits for the session; ending the goal must write
@@ -395,7 +394,7 @@ describe('TUI request decisions', () => {
         yield* approvals.change(runId, humanGrant(['bash'], true));
         yield* approvals.change(runId, humanGrant(['toolEdit'], true));
 
-        yield* setGoalSessionAutoApproval(session, runId, false);
+        yield* approvals.change(runId, goalGrant([]));
         expect(approvals.bypass(runId, 'bash') !== null).toBe(true);
         expect(approvals.bypass(runId, 'toolEdit') !== null).toBe(true);
       }),

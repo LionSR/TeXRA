@@ -85,14 +85,10 @@ export function readChildTurnState(
 
 /**
  * The run's terminal fact for the lifecycle it is in now, or null while this
- * lifecycle has not ended. "Ended" is a fact about the current lifecycle, not
- * about the aggregate: every activation publishes a `run.activate` row (the
- * launch and each resume), so a `run.activate` after the previous `run.end`
- * means the run started again and the earlier terminal fact belongs to the
- * lifecycle before it. Reading the aggregate's last `run.end` instead would
- * leave a resumed run carrying the outcome of a lifecycle it has already
- * left. Shared with `finalizeRun`, the row's one writer, so writer and
- * readers scope it identically.
+ * lifecycle has not ended: a `run.activate` (the launch, each resume) after
+ * the last `run.end` starts a new lifecycle, so a resumed run never carries
+ * the outcome of one it left. Shared with `finalizeRun`, the row's one
+ * writer, so writer and readers scope it identically.
  */
 export function runEndFromEvents(
   rows: readonly SessionEvent[],
@@ -219,9 +215,16 @@ export const openOwnedChildren = Effect.fn('openOwnedChildren')(function* (
   const open: { readonly runId: RunId; readonly callId: string }[] = [];
   for (const [callId, children] of calls)
     for (const child of children) {
-      // One read of the child's records: a child that never started has no
-      // edge, and its edge and its end come from the same rows.
-      const rows = yield* session.log.records(child);
+      // One read of the child's records (its edge and its end). A damaged
+      // child fails alone: its parent warns and does not wait on it.
+      const read = yield* Effect.result(session.log.records(child));
+      if (read._tag === 'Failure') {
+        yield* Effect.logWarning(
+          `Child run ${child} cannot be read; its parent ${runId} treats it as failed.`,
+        ).pipe(Effect.annotateLogs({ data: read.failure }));
+        continue;
+      }
+      const rows = read.success;
       if (
         edgeOf(rows)?.callId === callId &&
         runEndFromEvents(rows, child) === null
@@ -232,12 +235,9 @@ export const openOwnedChildren = Effect.fn('openOwnedChildren')(function* (
 });
 
 /**
- * The run's latest row of one type, or null. The one latest-row reader every
- * named record goes through: the read already keeps only the newest row of
- * each type per aggregate, so "latest" is `findLast` over what it returned,
- * and the row's own fields need no parse of their own — `SessionEventSchema`
- * carries them, so the database's decode already refused a row that does not
- * match, as `DatabaseReadFailed`.
+ * The run's latest row of one type, or null: the one latest-row reader every
+ * named record goes through. The read keeps only the newest row of each type,
+ * and its strict decode already refused a row that does not match.
  */
 function latestOfType<T extends SessionEvent['type']>(
   rows: readonly SessionEvent[],

@@ -1610,23 +1610,32 @@ describe('the C1 event table and the C6 publisher', () => {
     'fails a run history read of a row that does not decode, and the session still opens and lists it damaged',
     () => {
       const storage = workspace();
+      const corrupt = (commit: number) =>
+        Effect.sync(() => {
+          const raw = reader(storage);
+          try {
+            raw.exec(
+              `UPDATE event SET data = '{}' WHERE "commit" = ${commit};`,
+            );
+          } finally {
+            raw.close();
+          }
+        });
       return Effect.gen(function* () {
+        // Any undecodable row of a run damages it, not only its start.
         yield* Effect.gen(function* () {
           const db = yield* Database;
           yield* db.appendAll([runStart, olderStart, waiting]);
-          yield* Effect.sync(() => {
-            const raw = reader(storage);
-            try {
-              raw.exec(`UPDATE event SET data = '{}' WHERE "commit" = 1;`);
-            } finally {
-              raw.close();
-            }
-          });
+          yield* corrupt(3);
           expect(
             yield* Effect.flip(db.readAggregate(runStart.aggregateId, 0)),
           ).toMatchObject({
             _tag: 'DatabaseReadFailed',
-            cause: { _tag: 'DatabaseRowCorrupt', type: 'run.start', commit: 1 },
+            cause: {
+              _tag: 'DatabaseRowCorrupt',
+              type: 'run.position',
+              commit: 3,
+            },
           });
         }).pipe(Effect.provide(substrate(storage)));
         // A fresh session over the store opens: the healthy run lists, and
@@ -1647,6 +1656,19 @@ describe('the C1 event table and the C6 publisher', () => {
           Effect.provide(graph([], substrate(storage).pipe(Layer.orDie))),
           Effect.scoped,
         );
+        // A record decision reads strictly: a damaged start fails it, never
+        // a placeholder that reads as an unopened run.
+        yield* corrupt(1);
+        expect(
+          yield* Effect.flip(
+            Effect.flatMap(Database, (db) =>
+              db.readRunRecords(runStart.aggregateId),
+            ).pipe(Effect.provide(substrate(storage))),
+          ),
+        ).toMatchObject({
+          _tag: 'DatabaseReadFailed',
+          cause: { _tag: 'DatabaseRowCorrupt', type: 'run.start', commit: 1 },
+        });
       });
     },
   );

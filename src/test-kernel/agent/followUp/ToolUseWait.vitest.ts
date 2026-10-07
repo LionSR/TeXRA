@@ -45,12 +45,7 @@ import {
   publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { releaseRunResources } from '@tools/approval';
-import {
-  clearGoal,
-  goalOf,
-  setGoalSessionAutoApproval,
-  startGoal,
-} from '@tools/goal';
+import { clearGoal, goalOf, startGoal } from '@tools/goal';
 import { generateRunId } from '@utils/core';
 
 import {
@@ -938,9 +933,8 @@ describe('an active goal at the wait', () => {
       Effect.gen(function* () {
         const session = yield* goalSession();
         const runId = startedRun(session);
-        yield* startGoal(session, runId, 'finish the refactor');
-        // The grant an approved plan makes; pausing ends it.
-        yield* setGoalSessionAutoApproval(session, runId, 'commands');
+        // Under the grant an approved plan makes; pausing ends it.
+        yield* startGoal(session, runId, 'finish the refactor', 'commands');
         const recorded = recordSessionEvents(session);
 
         try {

@@ -139,10 +139,10 @@ export function runResumeBlockedMessage(
   }
 }
 
-/** Banner copy for a run whose `run.start` does not decode: shown, never
+/** Banner copy for a run with a row that does not decode: shown, never
  *  opened. */
 export const RUN_DAMAGED_MESSAGE =
-  "This task's saved start is damaged, so it cannot be opened or resumed. Delete removes it.";
+  "Part of this task's saved history is damaged, so it cannot be opened or resumed.";
 
 /** Banner and tooltip copy for a run another TeXRA process holds, named by
  *  its pid: the one part of a process identity a user can act on. */

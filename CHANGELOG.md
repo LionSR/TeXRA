@@ -34,8 +34,11 @@ All notable changes to this project will be documented in this file.
 - **Task history is stored without per-turn snapshots.** A task now resumes
   from the rows that record each fact (its configuration, its messages, its
   tool results), so a resumed task picks up exactly where its rows left it.
-  Tasks saved by an earlier build open as made by an older TeXRA and cannot
-  be resumed.
+  **Essentially every task saved by an earlier build that called a tool can
+  no longer be resumed or opened.** Its saved tool calls, retries and
+  snapshots are in shapes this release no longer reads. Such a task stays in
+  the task list marked as damaged, read-only; start it again to continue the
+  work.
 - **No more "Did it finish before TeXRA stopped?" question after a crash.**
   When TeXRA stops while a command, an edit or another call that is not
   safe to repeat is running, the resumed task no longer asks you whether to
@@ -45,19 +48,24 @@ All notable changes to this project will be documented in this file.
   subagent left in an inconsistent state after a crash is resumed under its
   own id, or comes back as an ordinary failed call. An approval this build
   asked for is still waiting after a restart. A task saved by an earlier
-  build that ever showed the old "Run again / Skip it" question opens as
-  made by an older TeXRA and cannot be resumed.
+  build that ever showed the old "Run again / Skip it" question is marked
+  as damaged and cannot be resumed.
 - **A project a newer TeXRA has saved into opens only in that version.**
   When a newer TeXRA version has saved tasks into a project, an older one
   now refuses to open the project's history ("update TeXRA, or move the
   store aside") instead of showing those tasks as blocked, and an older
-  window that is already open stops saving into it. A single damaged task
-  is left out of the task list with a note in the log, and it cannot be
-  opened, while every other task still works. History from before 1.0 is
+  window that is already open stops saving into it. A task with any
+  damaged saved step stays in the task list marked as damaged, with a note
+  in the log, and it cannot be opened or resumed, while every other task
+  still works. History from before 1.0 is
   still set aside on first launch; the copies set aside are now kept until
   you remove them with `texra doctor --prune-storage`, which lists every
   copy and every project folder that no longer exists before deleting
   anything.
+- **`@texra-ai/harness`: a run's final answer is no longer a trace event.**
+  `response.finalized` left the exported `AgentEvent` union, so `run.events`
+  no longer carries it. It is a row of the run's own history, committed with
+  the turn; read the answer from the run's result or its history.
 - **`@texra-ai/harness`: one process layer for hosts and embedders.**
   `Sessions.layer` now composes the same `processLayer` every TeXRA host
   builds its runtime from, and the root entry exports it with the
@@ -73,7 +81,7 @@ All notable changes to this project will be documented in this file.
   that holds it is resumed, for its subagents too. When a display row a
   task published cannot be saved, the task ends as failed with the real
   error instead of an "artifact drain" mark; a task an earlier build ended
-  with that mark is left out of the task list as unreadable. Grants a task
+  with that mark is shown as damaged and cannot be resumed. Grants a task
   only inherited under an earlier build are not carried over.
 - **One credential store for every TeXRA app; enter your keys once more.**
   The VS Code extension and the desktop app no longer keep API keys and
@@ -887,6 +895,19 @@ show` print the same notice, and the new `texra agents customize`,
   run's transcript. See the Agent integrations guide.
 
 ### Bug Fixes
+
+- **A task with a damaged saved step is shown as damaged, not as
+  resumable.** If any saved step of a task can't be read, not only its
+  start, the task is marked damaged and can't be opened. A task whose start
+  was damaged no longer offers to resume as if it had never begun.
+
+- **A task whose end could not be saved now reports a failure.** Before,
+  it reported the result it had in memory, even though its history did not
+  record that it had ended.
+
+- **Pausing or finishing a goal ends its auto-approval in the same save.**
+  A paused goal can no longer keep approving commands because only half
+  of the change was saved.
 
 - **A window reconnecting to the TeXRA service no longer restores an old
   approval policy.** The project's saved approval policy is now the only

@@ -28,7 +28,6 @@ import {
   goalOf,
   pauseGoal,
   retargetGoal,
-  setGoalSessionAutoApproval,
   startGoal,
   type GoalAutoApprovalScope,
 } from '@tools/goal';
@@ -113,10 +112,10 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
   // the stale one.
   if (goalOf(call.run.session, runId)) {
     return yield* Effect.gen(function* () {
-      const active = yield* retargetGoal(call.run.session, runId, objective);
-      yield* setGoalSessionAutoApproval(
+      const active = yield* retargetGoal(
         call.run.session,
         runId,
+        objective,
         autoApprovalScope,
       );
       return executed(
@@ -158,10 +157,10 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
   }
 
   return yield* Effect.gen(function* () {
-    const goal = yield* startGoal(call.run.session, runId, objective);
-    yield* setGoalSessionAutoApproval(
+    const goal = yield* startGoal(
       call.run.session,
       runId,
+      objective,
       autoApprovalScope,
     );
     return executed(
@@ -327,7 +326,6 @@ const executePause = Effect.fn('PlanTool.executePause')(function* (
     );
   }
   const updated = (yield* pauseGoal(call.run.session, runId)) ?? goal;
-  yield* setGoalSessionAutoApproval(call.run.session, runId, false);
   return executed(
     `Goal paused: ${reason}\n\n${formatGoalView(updated, yield* Clock.currentTimeMillis)}`,
     'Goal paused.',
@@ -351,7 +349,6 @@ const executeComplete = Effect.fn('PlanTool.executeComplete')(function* (
   // The autonomous loop stops because the run's next row states that no goal
   // is in flight for the wait-node continuation check.
   yield* clearGoal(call.run.session, runId);
-  yield* setGoalSessionAutoApproval(call.run.session, runId, false);
   return executed(
     `Goal ${goal.goalId} marked complete.\n\n` +
       `Reason: ${reason}\n\n` +

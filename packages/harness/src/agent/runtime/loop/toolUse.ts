@@ -59,6 +59,7 @@ import {
   configRow,
   consumedRows,
   handedDown,
+  finalizedRows,
   positionRow,
   scriptSettlement,
 } from './rows';
@@ -353,9 +354,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       /**
        * The policy a committed text-only response runs, read off the rows:
        * a blank turn after a tool result asks once more, the terminal tool
-       * gets one forced turn per turn, and otherwise the turn ends with
-       * this text. Each nudge is an `append` naming its reason, so a resume
-       * finds the policy where the rows left it. `done` ends the turn.
+       * gets one forced turn per turn, else the turn ends with this text.
+       * Each step is a row, so a resume finds it. `done` ends the turn.
        */
       const afterTextResponse = Effect.fn('toolUse.afterTextResponse')(
         function* (
@@ -375,7 +375,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             return { state: next, done: false };
           }
           if (text && !at.answerFinalized)
-            logger.emit({ type: 'response.finalized', text });
+            at = yield* cell.append(finalizedRows(runId, text));
           if (
             run.finalToolName !== null &&
             at.finalToolTurn !== at.turn &&

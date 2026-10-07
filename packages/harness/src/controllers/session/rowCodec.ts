@@ -304,12 +304,12 @@ function decodeRow(
 
 /**
  * One connection's reader of selected rows (`read`), answering their
- * events. A newer row fails the read. A row that does not decode fails a run history read (`whole`), so no
- * run folds from part of its rows; a wide read (tail, listing, projections)
+ * events. A newer row fails the read. A row that does not decode fails a
+ * strict read (`whole`: a run's history and its records), so no decision is
+ * made from part of a run's rows; a wide read (tail, listing, projections)
  * leaves it out with one warning, so one damaged row never costs the
- * session. A damaged `run.start` is read as a bare one, so its run still
- * lists (and can be deleted), and `damaged` names every such run; an absent
- * plugin's kind is left out with one warning.
+ * session. Any undecodable row of a run marks that run in `damaged`, shown
+ * read-only and never opened. An absent plugin's kind is left out, warned.
  */
 export function rowReader(path: string): {
   readonly read: (
@@ -348,20 +348,19 @@ export function rowReader(path: string): {
           return yield* Effect.fail(decoded.failure);
         yield* warnOnce(
           `${decoded.failure.commit}`,
-          `${path}: ${decoded.failure.message} It is left out of the listing and the tail, and its run cannot be read whole.`,
+          `${path}: ${decoded.failure.message} It is left out of the listing and the tail, and its run is shown as damaged and cannot be opened.`,
         );
+        const { kind, logicalId } = RowSchema.parse(row);
+        if (kind === 'run') damaged.add(aggregateOf(kind, logicalId));
         const start = bareStart(row);
-        if (start === null) continue;
-        damaged.add(start.aggregateId);
-        events.push(start);
+        if (start !== null) events.push(start);
       }
       return events;
     });
   return { read, damaged: () => [...damaged] };
 }
 
-/** A damaged `run.start` as a bare one from its columns: the run it creates
- *  still lists, unopened, and can be deleted. Null for any other row. */
+/** A damaged `run.start` as a bare one, so its run still lists. */
 function bareStart(input: SqlRow): SessionEvent | null {
   const row = RowSchema.parse(input);
   if (row.type !== 'run.start' || row.kind !== 'run') return null;
