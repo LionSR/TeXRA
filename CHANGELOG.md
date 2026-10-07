@@ -896,6 +896,14 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **The TeXRA service no longer grows with every project it ever
+  opened.** A project's session in the service now closes once no window
+  or terminal is attached to it and none of its tasks is running or
+  waiting, for as long as the service's own idle time (10 minutes by
+  default, `texra serve --idle-timeout`); the next use reopens it. Streaming
+  text no longer makes the service re-read the task store on every burst:
+  it reads only when something was committed.
+
 - **A task with a damaged saved step is shown as damaged, not as
   resumable.** If any saved step of a task can't be read, not only its
   start, the task is marked damaged and can't be opened. A task whose start

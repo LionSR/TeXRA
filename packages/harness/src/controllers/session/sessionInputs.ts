@@ -143,6 +143,26 @@ export const sessionInputsLayer = Layer.effect(
               ],
               { concurrency: 3 },
             );
+            /** The durable half of a drain: the rows committed past
+             *  `from`, and the existence of the aggregates still checked. */
+            const readDurable = (from: number) =>
+              foldRead(
+                log.readInputBatch(
+                  aggregates.map(({ id }) => id),
+                  from,
+                  // The read dedups the ids it checks.
+                  [...checked, ...effectiveAggregates.map(({ id }) => id)],
+                ),
+              ).pipe(
+                Effect.tap((read) => markDamaged(local.ref, read.damaged)),
+                Effect.map((read) => {
+                  const existence = reconcileExistence(read);
+                  checked = new Set(
+                    existence.claims.map(({ aggregateId }) => aggregateId),
+                  );
+                  return { cursor: read.cursor, rows: read.events, existence };
+                }),
+              );
             const tail = wakes.pipe(
               // Wakeups carry no data: the next read captures every source's
               // current level. Retain one pending read, not a backlog of reads
@@ -151,6 +171,9 @@ export const sessionInputsLayer = Layer.effect(
               Stream.mapAccumEffect(
                 () => ({
                   cursor: anchor,
+                  // The wake level the last durable read saw; none yet, so
+                  // the first drain reads.
+                  level: -1,
                   text: new Map() as InflightText,
                   local: initialLocal,
                   // The first drain must publish the anchor: replay.complete
@@ -159,50 +182,32 @@ export const sessionInputsLayer = Layer.effect(
                 }),
                 (previous) =>
                   Effect.gen(function* () {
+                    // Text first, then the level: a row committed before a
+                    // chunk moved the level this read sees.
                     const nextText = yield* SubscriptionRef.get(text.ref);
                     const snapshot = yield* SubscriptionRef.get(local.ref);
-                    const read = yield* foldRead(
-                      log.readInputBatch(
-                        aggregates.map(({ id }) => id),
-                        previous.cursor,
-                        // The read dedups the ids it checks.
-                        [
-                          ...checked,
-                          ...effectiveAggregates.map(({ id }) => id),
-                        ],
-                      ),
+                    const level = yield* SubscriptionRef.get(log.level);
+                    // A burst of text, or a local change, moved no durable
+                    // state: only a new level is worth a database read.
+                    const {
+                      cursor,
+                      rows,
+                      existence,
+                    }: Omit<
+                      Effect.Success<ReturnType<typeof readDurable>>,
+                      'existence'
+                    > & { existence?: ExistenceReconciliation } =
+                      level === previous.level
+                        ? {
+                            cursor: previous.cursor,
+                            rows: [],
+                            existence: previous.existence,
+                          }
+                        : yield* readDurable(previous.cursor);
+                    const inputs: FoldInput[] = textChunks(
+                      previous.text,
+                      nextText,
                     );
-                    yield* markDamaged(local.ref, read.damaged);
-                    const { cursor, events: rows } = read;
-                    const existence = reconcileExistence(read);
-                    checked = new Set(
-                      existence.claims.map(({ aggregateId }) => aggregateId),
-                    );
-                    const inputs: FoldInput[] = [];
-                    for (const [key, value] of nextText) {
-                      const held = previous.text.get(key);
-                      if (value === held) continue;
-                      // Visit only appends since this reader's captured tail.
-                      // A replacement row starts a new chain and reads from 0.
-                      const parts: string[] = [];
-                      let at: InflightTextChunk | undefined = value;
-                      while (at !== undefined && at !== held) {
-                        parts.push(at.text);
-                        at = at.previous;
-                      }
-                      const from = at === held ? (held?.length ?? 0) : 0;
-                      if (value.length <= from) continue;
-                      const slash = key.indexOf('/');
-                      const chunk: TextChunk = {
-                        _tag: 'chunk',
-                        runId: RunIdSchema.parse(key.slice(0, slash)),
-                        rowId: key.slice(slash + 1),
-                        from,
-                        to: value.length,
-                        text: parts.toReversed().join(''),
-                      };
-                      inputs.push(chunk);
-                    }
                     if (!isDeepStrictEqual(previous.local, snapshot)) {
                       inputs.push({ _tag: 'local', local: snapshot });
                     }
@@ -214,7 +219,11 @@ export const sessionInputsLayer = Layer.effect(
                     ) {
                       // Every nonempty batch needs its closing marker so the
                       // webview decoder can release it as one complete read.
-                      inputs.push({ _tag: 'drained', cursor, existence });
+                      inputs.push({
+                        _tag: 'drained',
+                        cursor,
+                        existence: existence ?? replayExistence,
+                      });
                     }
                     const batch: FoldInput[] = [
                       ...rows
@@ -229,6 +238,7 @@ export const sessionInputsLayer = Layer.effect(
                     return [
                       {
                         cursor,
+                        level,
                         text: nextText,
                         local: snapshot,
                         existence,
@@ -282,4 +292,33 @@ function reconcileExistence(read: {
       ownerId,
     })),
   };
+}
+
+/** The text each row gained since `held`, this reader's captured tail:
+ *  only the appends since it, or the whole row when a replacement row
+ *  started a new chain. */
+function textChunks(held: InflightText, next: InflightText): TextChunk[] {
+  const chunks: TextChunk[] = [];
+  for (const [key, value] of next) {
+    const tail = held.get(key);
+    if (value === tail) continue;
+    const parts: string[] = [];
+    let at: InflightTextChunk | undefined = value;
+    while (at !== undefined && at !== tail) {
+      parts.push(at.text);
+      at = at.previous;
+    }
+    const from = at === tail ? (tail?.length ?? 0) : 0;
+    if (value.length <= from) continue;
+    const slash = key.indexOf('/');
+    chunks.push({
+      _tag: 'chunk',
+      runId: RunIdSchema.parse(key.slice(0, slash)),
+      rowId: key.slice(slash + 1),
+      from,
+      to: value.length,
+      text: parts.toReversed().join(''),
+    });
+  }
+  return chunks;
 }

@@ -2183,6 +2183,120 @@ prompt: |
 }
 
 /**
+ * A project's session in the service closes once it has no client and no
+ * run held for the idle time (audit 2026-10-07 #6), while the service
+ * stays up for another project's window; the next task reopens it. The
+ * service is started in the foreground with a short idle time. Its log
+ * lines about the close and both tasks' outcomes are the artifact.
+ */
+async function validateServiceSessionIdle() {
+  const cwd = makeScratch('texra-cli-service-idle-');
+  const project = echoProject(cwd);
+  const other = path.join(cwd, 'other');
+  mkdirSync(other, { recursive: true });
+  const storageRoot = path.join(cwd, 'home', '.texra');
+  const env = { ...project.ptyEnv, TEXRA_NO_TELEMETRY: '1' };
+  const texra = (args, label) => {
+    const result = run(
+      process.execPath,
+      [binaryPath, ...args, '--cwd', project.work],
+      { cwd: project.work, env },
+    );
+    assertSuccess(result, label);
+    return result.stdout.trim();
+  };
+  const waitFor = async (label, check, timeoutMs = 120_000) => {
+    const deadline = Date.now() + timeoutMs;
+    while (!check()) {
+      assert(Date.now() < deadline, `timed out waiting for ${label}`);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  };
+  const service = spawn(
+    process.execPath,
+    [binaryPath, 'serve', '--idle-timeout', '4'],
+    { cwd: project.work, env: { ...process.env, ...env } },
+  );
+  let log = '';
+  service.stderr.on('data', (chunk) => (log += chunk));
+  let window;
+  try {
+    await waitFor('the service to listen', () => log.includes('listening on'));
+    // Another project's window keeps the service itself in use.
+    window = spawn(
+      process.execPath,
+      [hostHarnessPath, storageRoot, other, 'answer'],
+      { cwd: other, env: { ...process.env, ...env } },
+    );
+    let windowOut = '';
+    window.stdout.on('data', (chunk) => (windowOut += chunk));
+    await waitFor('the other window to attach', () =>
+      windowOut.includes('ATTACHED'),
+    );
+    const first = texra(
+      [
+        'tasks',
+        'start',
+        'echo_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        'First',
+      ],
+      'texra tasks start (first)',
+    );
+    const ended = (runId) =>
+      project.readStore(
+        `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
+         WHERE s.logical_id = '${runId}' AND e.type = 'run.position'
+         AND json_extract(e.data, '$.payload.at') = 'waiting'`,
+      ).length > 0;
+    await waitFor('the first task to wait', () => ended(first));
+    texra(['tasks', 'stop', first], 'texra tasks stop (first)');
+    await waitFor('the project session to close', () =>
+      /Closed the idle session of .*work-/.test(log),
+    );
+    const second = texra(
+      [
+        'tasks',
+        'start',
+        'echo_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        'Second',
+      ],
+      'texra tasks start (reopened)',
+    );
+    await waitFor('the second task to wait', () => ended(second));
+    const artifactPath = writeArtifact('service-session-idle.json', {
+      closed: log
+        .split('\n')
+        .filter((line) => line.includes('Closed the idle session')),
+      first,
+      second,
+      serviceAlive: service.exitCode === null,
+    });
+    assert(
+      service.exitCode === null &&
+        !log
+          .split('\n')
+          .some(
+            (line) =>
+              line.includes('Closed the idle session') &&
+              line.includes('other'),
+          ),
+      `the service should stay up and keep the attached project's session (artifact: ${artifactPath})`,
+    );
+    texra(['tasks', 'stop', second], 'texra tasks stop (second)');
+  } finally {
+    window?.kill('SIGKILL');
+    service.kill('SIGTERM');
+    removeScratch(cwd);
+  }
+}
+
+/**
  * The project's approval policy has one owner, its persisted setting, which
  * the service reads itself (audit 2026-10-07 #1). Window A attaches while
  * the setting is Auto-approve; window B then sets Ask (a settings write);
@@ -3038,6 +3152,7 @@ async function validateCliRunArtifacts(options = {}) {
   await validateServiceTasksInTui();
   await validateServiceChatsSeeEachOther();
   await validateServiceHostCalls();
+  await validateServiceSessionIdle();
   await validateServicePolicyOwner();
   await validateServiceBuildIdentity();
   validateScriptFanoutRunCommand();

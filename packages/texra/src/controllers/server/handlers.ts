@@ -12,8 +12,11 @@ import {
   Cause,
   Context,
   Deferred,
+  Duration,
   Effect,
+  Exit,
   FiberSet,
+  Schedule,
   Scope,
   Stream,
   SubscriptionRef,
@@ -47,17 +50,25 @@ import { listTasks } from './taskList';
 import type { ProcessServices } from '@texra-ai/harness';
 
 /** The projects the service serves: one session per folder, opened on
- *  demand and held until the service stops. The host that composes the
- *  service builds each project's roots, so this is its port. */
+ *  demand and closed once idle. The host that composes the service builds
+ *  each project's roots, so this is its port. */
 export class ServiceProjects extends Context.Service<
   ServiceProjects,
   {
     /** The storage root every project's store sits under. */
     readonly storageRoot: string;
-    /** The session of `workspace`, opened on first use. */
-    readonly open: (workspace: string) => Effect.Effect<SessionHandle, Error>;
+    /** The session of `workspace`, opened on first use and leased for the
+     *  caller's scope: a leased session is never closed for idleness. */
+    readonly open: (
+      workspace: string,
+    ) => Effect.Effect<SessionHandle, Error, Scope.Scope>;
     /** The sessions open now, by storage root. */
     readonly opened: Effect.Effect<ReadonlyMap<string, SessionHandle>>;
+    /** Close, with their stores, the sessions no lease and no run has held
+     *  for `idleFor`; answers the sessions closed. */
+    readonly closeIdle: (
+      idleFor: Duration.Duration,
+    ) => Effect.Effect<readonly SessionHandle[]>;
   }
 >()('@texra/server/ServiceProjects') {}
 
@@ -74,6 +85,9 @@ export class ServiceControl extends Context.Service<
     readonly draining: Effect.Effect<boolean>;
     /** Stop now, or drain first; returns once the stop is asked. */
     readonly stop: (drain: boolean) => Effect.Effect<void>;
+    /** How long anything unused is kept: the service with no client and
+     *  no task, and a project's session with no lease and no run held. */
+    readonly idleAfter: Duration.Duration;
   }
 >()('@texra/server/ServiceControl') {}
 
@@ -185,15 +199,37 @@ export const serviceHandlers = TexraRpcs.toLayer(
         );
     });
     const hosts = yield* makeHostWindows;
-    const presented = new WeakSet<SessionHandle>();
-    /** The service's presentation surface on a project's session, given
-     *  once: what its runs ask of a host goes to the project's windows. */
+    /** Each session's presentation surface, given once (claimed in one
+     *  step) and closed with the session: what its runs ask of a host goes
+     *  to the project's windows. */
+    const presented = new Map<SessionHandle, Scope.Closeable>();
     const present = (session: SessionHandle): Effect.Effect<void> =>
       Effect.suspend(() => {
         if (presented.has(session)) return Effect.void;
-        presented.add(session);
-        return hosts.adopt(session).pipe(Scope.provide(scope));
+        const surface = Scope.forkUnsafe(scope);
+        presented.set(session, surface);
+        return hosts.adopt(session).pipe(Scope.provide(surface));
       });
+    // A session no client leases and no run holds closes once idle long
+    // enough, with its surface: a service that lives for weeks keeps only
+    // the projects in use.
+    const idleMs = Duration.toMillis(control.idleAfter);
+    yield* Effect.forkScoped(
+      Effect.gen(function* () {
+        for (const session of yield* projects.closeIdle(control.idleAfter)) {
+          yield* Effect.logInfo(
+            `Closed the idle session of ${session.roots.storage}`,
+          );
+          const surface = presented.get(session);
+          presented.delete(session);
+          if (surface !== undefined) yield* Scope.close(surface, Exit.void);
+        }
+      }).pipe(
+        Effect.repeat(
+          Schedule.spaced(Duration.millis(Math.min(60_000, idleMs / 2))),
+        ),
+      ),
+    );
     const openSession = (workspace: string) =>
       projects.open(workspace).pipe(Effect.tap(present));
     const open = (workspace: string) =>
@@ -244,27 +280,35 @@ export const serviceHandlers = TexraRpcs.toLayer(
           }),
         ),
       'task.ended': ({ workspace, runId }) =>
-        Effect.flatMap(open(workspace), (session) =>
-          Effect.map(runEnded(session, runId), ({ outcome, output }) => ({
-            outcome,
-            output,
-          })),
+        Effect.scoped(
+          Effect.flatMap(open(workspace), (session) =>
+            Effect.map(runEnded(session, runId), ({ outcome, output }) => ({
+              outcome,
+              output,
+            })),
+          ),
         ),
       'request.preview': ({ workspace, requestId }) =>
-        open(workspace).pipe(
-          Effect.flatMap((session) => hosts.preview(session, requestId)),
+        Effect.scoped(
+          open(workspace).pipe(
+            Effect.flatMap((session) => hosts.preview(session, requestId)),
+          ),
         ),
       'task.request': ({ workspace, request }) =>
-        openSession(workspace).pipe(
-          Effect.mapError((error): RequestErrorWire => ({
-            _tag: 'Rejected',
-            reason: error.message,
-          })),
-          Effect.flatMap((session) =>
-            session.requests.request(request).pipe(Effect.mapError(wireError)),
-          ),
-          Effect.catchDefect((defect) =>
-            internal(Cause.die(defect)).pipe(Effect.flatMap(Effect.fail)),
+        Effect.scoped(
+          openSession(workspace).pipe(
+            Effect.mapError((error): RequestErrorWire => ({
+              _tag: 'Rejected',
+              reason: error.message,
+            })),
+            Effect.flatMap((session) =>
+              session.requests
+                .request(request)
+                .pipe(Effect.mapError(wireError)),
+            ),
+            Effect.catchDefect((defect) =>
+              internal(Cause.die(defect)).pipe(Effect.flatMap(Effect.fail)),
+            ),
           ),
         ),
       'task.start': ({
@@ -277,39 +321,46 @@ export const serviceHandlers = TexraRpcs.toLayer(
         approveDelegatedWork,
         approvalPolicy,
       }) =>
-        Effect.gen(function* () {
-          yield* refuseWhileDraining;
-          const session = yield* open(workspace);
-          return yield* admit<RunId>(runs, (admitted) =>
-            runAgent(
-              { config, runId },
-              {
-                session,
-                preferHelperModel,
-                ownApiKeyFallback,
-                // Admitted once the run is registered, so a `task.ended`
-                // that follows the answer finds it.
-                approveDelegatedWork,
-                ...(approvalPolicy !== null && { approvalPolicy }),
-                onRun: (registered) =>
-                  Deferred.succeed(admitted, registered).pipe(Effect.asVoid),
-                ...(continues !== null && { continues }),
-              },
-            ),
-          );
-        }),
-      'task.model': ({ workspace, runId, model }) =>
-        Effect.flatMap(open(workspace), (session) => {
-          const controls = session.runs.getHandle(runId)?.controls;
-          if (controls === undefined)
-            return Effect.fail(
-              failed('The task is not running; resume it to switch its model.'),
+        Effect.scoped(
+          Effect.gen(function* () {
+            yield* refuseWhileDraining;
+            const session = yield* open(workspace);
+            return yield* admit<RunId>(runs, (admitted) =>
+              runAgent(
+                { config, runId },
+                {
+                  session,
+                  preferHelperModel,
+                  ownApiKeyFallback,
+                  // Admitted once the run is registered, so a `task.ended`
+                  // that follows the answer finds it.
+                  approveDelegatedWork,
+                  ...(approvalPolicy !== null && { approvalPolicy }),
+                  onRun: (registered) =>
+                    Deferred.succeed(admitted, registered).pipe(Effect.asVoid),
+                  ...(continues !== null && { continues }),
+                },
+              ),
             );
-          return controls
-            .switchModel(model)
-            .pipe(Effect.mapError((error) => failed(error.message)));
-        }),
+          }),
+        ),
+      'task.model': ({ workspace, runId, model }) =>
+        Effect.scoped(
+          Effect.flatMap(open(workspace), (session) => {
+            const controls = session.runs.getHandle(runId)?.controls;
+            if (controls === undefined)
+              return Effect.fail(
+                failed(
+                  'The task is not running; resume it to switch its model.',
+                ),
+              );
+            return controls
+              .switchModel(model)
+              .pipe(Effect.mapError((error) => failed(error.message)));
+          }),
+        ),
       'host.attach': ({ workspace, capabilities }) =>
+        // The window's stream leases its project's session while it runs.
         Stream.unwrap(
           Effect.map(
             projects
@@ -328,59 +379,63 @@ export const serviceHandlers = TexraRpcs.toLayer(
       'host.focus': ({ attachment }) => hosts.focus(attachment),
       'host.answer': ({ id, answer }) => hosts.answer(id, answer),
       'task.resume': ({ workspace, runId }) =>
-        Effect.gen(function* () {
-          yield* refuseWhileDraining;
-          const session = yield* open(workspace);
-          // A run this service is running needs no resume: the client that
-          // asks takes up the conversation it belongs to, where it is (a
-          // chat left it waiting here).
-          const live = liveRoot(
-            yield* SubscriptionRef.get(session.view.ref),
-            session,
-            runId,
-          );
-          const resumed =
-            live ??
-            (yield* admit<RunId | null>(runs, (admitted) =>
-              Effect.gen(function* () {
-                let resolved: RunId = runId;
-                const result = yield* resumeRun(runId, {
-                  session,
-                  // Admitted once the resumed generation is registered (the
-                  // parent, for an owned child), so a `task.ended` that
-                  // follows the answer waits for it.
-                  onRun: (registered) =>
-                    Deferred.succeed(admitted, registered).pipe(Effect.asVoid),
-                  onResumeResolved: (resumed) =>
-                    Effect.sync(() => {
-                      resolved = resumed;
-                    }),
-                });
-                // A resume that joined one already in flight registers no
-                // generation of its own: the run is registered by now.
-                if ('started' in result)
-                  yield* Deferred.succeed(admitted, resolved);
-                // Blocked, not failed: it stays interrupted until what it needs is back.
-                if ('failed' in result && result.failed === 'blocked')
-                  return yield* Deferred.succeed(admitted, null);
-                if ('failed' in result)
-                  return yield* Effect.fail(
-                    new Error(describeFollowUpFailure(result.failed)),
-                  );
-                if (result.completion) yield* result.completion;
-              }).pipe(Effect.mapError(ensureError)),
-            ));
-          if (resumed === null) return null;
-          // A workflow settles with its whole run, whose output the window
-          // opens then; it tells which by the run's own config.
-          const config = yield* getRunRecords(session, resumed)
-            .readConfig()
-            .pipe(Effect.mapError((error) => failed(toErrorMessage(error))));
-          return {
-            runId: resumed,
-            workflow: config !== null && isDocumentTaskConfig(config),
-          };
-        }),
+        Effect.scoped(
+          Effect.gen(function* () {
+            yield* refuseWhileDraining;
+            const session = yield* open(workspace);
+            // A run this service is running needs no resume: the client that
+            // asks takes up the conversation it belongs to, where it is (a
+            // chat left it waiting here).
+            const live = liveRoot(
+              yield* SubscriptionRef.get(session.view.ref),
+              session,
+              runId,
+            );
+            const resumed =
+              live ??
+              (yield* admit<RunId | null>(runs, (admitted) =>
+                Effect.gen(function* () {
+                  let resolved: RunId = runId;
+                  const result = yield* resumeRun(runId, {
+                    session,
+                    // Admitted once the resumed generation is registered (the
+                    // parent, for an owned child), so a `task.ended` that
+                    // follows the answer waits for it.
+                    onRun: (registered) =>
+                      Deferred.succeed(admitted, registered).pipe(
+                        Effect.asVoid,
+                      ),
+                    onResumeResolved: (resumed) =>
+                      Effect.sync(() => {
+                        resolved = resumed;
+                      }),
+                  });
+                  // A resume that joined one already in flight registers no
+                  // generation of its own: the run is registered by now.
+                  if ('started' in result)
+                    yield* Deferred.succeed(admitted, resolved);
+                  // Blocked, not failed: it stays interrupted until what it needs is back.
+                  if ('failed' in result && result.failed === 'blocked')
+                    return yield* Deferred.succeed(admitted, null);
+                  if ('failed' in result)
+                    return yield* Effect.fail(
+                      new Error(describeFollowUpFailure(result.failed)),
+                    );
+                  if (result.completion) yield* result.completion;
+                }).pipe(Effect.mapError(ensureError)),
+              ));
+            if (resumed === null) return null;
+            // A workflow settles with its whole run, whose output the window
+            // opens then; it tells which by the run's own config.
+            const config = yield* getRunRecords(session, resumed)
+              .readConfig()
+              .pipe(Effect.mapError((error) => failed(toErrorMessage(error))));
+            return {
+              runId: resumed,
+              workflow: config !== null && isDocumentTaskConfig(config),
+            };
+          }),
+        ),
     };
   }),
 );
