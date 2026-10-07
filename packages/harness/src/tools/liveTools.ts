@@ -44,6 +44,7 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { AppState } from '@platform/interfaces';
 import type { PluginContext } from '@platform/processRuntime';
+import { ProjectEnvironment } from '@platform/defaults/nodeWorkspace';
 import { makeRegistry, type Pinned, type Registry } from '@tools/liveRegistry';
 import type { Plugin } from '@tools/plugins';
 import {
@@ -156,20 +157,18 @@ const liveToolsLayer = (
             ),
           ),
       });
-      // Each built-in plugin's open contribution, closed when switched off,
-      // and each installed plugin's load, by id.
+      // Built-in contributions (closed when off) and installed loads, by id.
       const builtIns = new Map<string, Scope.Closeable>();
       const installed = new Map<string, InstalledLoad>();
-      // Each step's read of the installed plugins is numbered as it begins,
-      // and only a read newer than the last one applied decides what is
-      // wanted (each plugin's key): a slow load from an older read never
-      // reverts a newer one, and is still adopted when the newer read wants
-      // what it loaded (a switch follower's read, which loads nothing).
+      // Each read of the installed plugins is numbered; only one newer than
+      // the last applied decides what is wanted (each plugin's key), so a
+      // slow older load never reverts a newer one, yet is adopted when the
+      // newer read wants what it loaded (a switch follower's read).
       let reads = 0;
       let applied = 0;
       let wanted: ReadonlyMap<string, string> = new Map();
-      // The catalog's lock: what runs under it is short and uninterruptible,
-      // so a cancelled step never leaves a scope and its map out of step.
+      // The catalog's lock: short and uninterruptible, so a cancelled step
+      // never leaves a scope and its map out of step.
       const lock = yield* Semaphore.make(1);
       const locked = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
         lock.withPermits(1)(Effect.uninterruptible(effect));
@@ -178,6 +177,7 @@ const liveToolsLayer = (
         spawner,
         locked,
         registry: () => registry,
+        project: yield* ProjectEnvironment,
       });
       const registry = yield* makeRegistry<string, ToolEntry, void>({
         // The server processes the generation dispatches through.

@@ -29,6 +29,7 @@ import {
 } from '@agent/runtime/run/toolResultText';
 import type { McpServerConfig } from '@common/plugins/mcpServers';
 import { withLogChannel } from '@logger/effectLog';
+import { environment } from '@platform/defaults/nodeWorkspace';
 import type { ToolResult } from '@shared/schemas';
 import { makeJsonRpcConnection, type JsonRpcConnection } from '@tools/jsonRpc';
 import { errorResult, executed } from '@tools/core/result';
@@ -128,10 +129,15 @@ function mcpToolName(server: string, tool: string): string {
   return `${normalized.slice(0, MAX_TOOL_NAME_LENGTH - NAME_HASH_LENGTH - 1)}_${suffix}`;
 }
 
-/** The parent environment minus credential-shaped names, plus the entry's. */
-function serverEnv(config: McpServerConfig): Record<string, string> {
+/** The environment the server starts from (the process's, with the
+ *  project's `.env` over it) minus credential-shaped names, plus the
+ *  entry's. */
+function serverEnv(
+  config: McpServerConfig,
+  inherited: Readonly<Record<string, string | undefined>>,
+): Record<string, string> {
   const env: Record<string, string> = {};
-  for (const [name, value] of Object.entries(process.env)) {
+  for (const [name, value] of Object.entries(inherited)) {
     if (value !== undefined && !SENSITIVE_ENV_NAME.test(name))
       env[name] = value;
   }
@@ -269,7 +275,7 @@ const stopProcess = (handle: ChildProcessSpawner.ChildProcessHandle) =>
 const connect = (config: McpServerConfig) =>
   Effect.gen(function* () {
     const handle = yield* ChildProcess.make(config.command, [...config.args], {
-      env: serverEnv(config),
+      env: serverEnv(config, yield* environment),
       extendEnv: false,
       ...(config.cwd === undefined ? {} : { cwd: config.cwd }),
     }).pipe(

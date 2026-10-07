@@ -27,6 +27,8 @@ import {
   apiKeyEnvName,
   type ApiKeyProviderId,
 } from '@texra-ai/llm';
+
+import { environment } from '@platform/defaults/nodeWorkspace';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 
 const ENV_FLAG_OFF_VALUES = new Set(['', '0', 'false', 'no', 'off']);
@@ -58,29 +60,39 @@ export const envVar = (name: string): Effect.Effect<string | undefined> =>
 export const envFlag = (name: string): Effect.Effect<boolean> =>
   Effect.map(envVar(name), isEnvFlagValueOn);
 
-/** Sync face of `envFlag` for non-Effect callers (telemetry gate, `texra doctor`, CLI update notice). */
-export function isEnvFlagEnabled(name: string): boolean {
-  return isEnvFlagValueOn(process.env[name]);
+/** Sync face of `envFlag` for non-Effect callers (telemetry gate, `texra
+ *  doctor`, CLI update notice), over `env`: the process's own, or an
+ *  `environment` a run read. */
+export function isEnvFlagEnabled(
+  name: string,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): boolean {
+  return isEnvFlagValueOn(env[name]);
 }
 
 /**
- * The environment a child process TeXRA spawns starts from: this process's,
+ * The environment a child process TeXRA spawns starts from: this process's
+ * with its project's `.env` variables over it (`environment`),
  * minus every provider API-key variable TeXRA reads as its own credential
  * ({@link API_KEY_ENV_NAMES}). What a child prints lands in tool results and
  * the transcript, so the key is never there to print. `keep` names the one
  * provider whose key a child agent CLI authenticates with itself. Windows
  * matches variable names case-insensitively, as its environment does.
  */
-export function inheritedEnv(keep?: ApiKeyProviderId): Record<string, string> {
-  const fold = (name: string) => (IS_WINDOWS ? name.toUpperCase() : name);
-  const kept = keep === undefined ? undefined : apiKeyEnvName(keep);
-  const withheld = new Set(
-    API_KEY_ENV_NAMES.filter((name) => name !== kept).map(fold),
-  );
-  return Object.fromEntries(
-    Object.entries(process.env).filter(
-      (entry): entry is [string, string] =>
-        entry[1] !== undefined && !withheld.has(fold(entry[0])),
-    ),
-  );
-}
+export const inheritedEnv = (
+  keep?: ApiKeyProviderId,
+): Effect.Effect<Record<string, string>> =>
+  Effect.gen(function* () {
+    const env = yield* environment;
+    const fold = (name: string) => (IS_WINDOWS ? name.toUpperCase() : name);
+    const kept = keep === undefined ? undefined : apiKeyEnvName(keep);
+    const withheld = new Set(
+      API_KEY_ENV_NAMES.filter((name) => name !== kept).map(fold),
+    );
+    return Object.fromEntries(
+      Object.entries(env).filter(
+        (entry): entry is [string, string] =>
+          entry[1] !== undefined && !withheld.has(fold(entry[0])),
+      ),
+    );
+  });

@@ -12,6 +12,7 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 // Local imports - agent runtime
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
+import { ProjectEnvironment } from '@platform/defaults/nodeWorkspace';
 import { entriesOf, type ToolEntry } from '@tools/catalogEntries';
 import type { Generation, Registry } from '@tools/liveRegistry';
 import type { InstalledToolPlugin, LoadedPlugin } from '@tools/toolTable';
@@ -41,6 +42,10 @@ export function makeServerHolds(catalog: {
   ) => Effect.Effect<A, E, R>;
   /** The tool registry, read when a server first contributes. */
   readonly registry: () => Registry<string, ToolEntry, void>;
+  /** The catalog's own project variables (an editor window's `.env`; none
+   *  in the service): a server starts with these, never with a run's, so
+   *  a server held across projects never carries one project's `.env`. */
+  readonly project: Readonly<Record<string, string>>;
 }) {
   const { scope, spawner, locked } = catalog;
   const servers = new Map<
@@ -107,6 +112,7 @@ export function makeServerHolds(catalog: {
         const answered = yield* restore(
           plugin.acquire.pipe(
             Effect.provideService(ChildProcessSpawner, spawner),
+            Effect.provideService(ProjectEnvironment, catalog.project),
             Scope.provide(serverScope),
           ),
         ).pipe(Effect.onError(() => Scope.close(serverScope, Exit.void)));

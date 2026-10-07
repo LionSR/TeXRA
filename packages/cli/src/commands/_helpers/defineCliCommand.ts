@@ -74,8 +74,11 @@ interface DefineCliCommandOptions<A extends ArgsDef, E> {
    * a state store and a global-root handle that refuse, because neither
    * command runs the platform shutdown that would dispose an opened one.
    * Every other command omits it and takes the install that opens both.
+   * `service` is `texra serve`'s and its management commands': it serves
+   * many projects, so its own reads see no one project's `.env` (each run
+   * reads its own), and a project's broken `.env` never blocks a stop.
    */
-  readonly install?: 'noPlatform';
+  readonly install?: 'noPlatform' | 'service';
   /**
    * How this command reports a failure of its own — the program's, and the
    * runtime install that precedes it. A number writes the error message to
@@ -158,6 +161,11 @@ export function defineCliCommand<const A extends ArgsDef, E>(
               : {
                   resourcesPath: context.resourcesPath,
                   minimumLogLevel: context.minimumLogLevel,
+                  // The command's project: its `.env` is what its model
+                  // availability and its runs read.
+                  ...(options.install !== 'service' && {
+                    workspace: context.cwd,
+                  }),
                 },
           ),
         catch: ensureError,
