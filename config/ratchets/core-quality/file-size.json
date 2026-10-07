@@ -3,7 +3,7 @@
   "packages/harness/src/agent/index/agentRegistry.ts": 418,
   "packages/harness/src/agent/prompt/templateInputs.ts": 528,
   "packages/harness/src/agent/runtime/AgentLaunchContext.ts": 487,
-  "packages/harness/src/agent/runtime/AgentRunLifecycle.ts": 532,
+  "packages/harness/src/agent/runtime/AgentRunLifecycle.ts": 530,
   "packages/harness/src/agent/runtime/childRunLoop.ts": 1108,
   "packages/harness/src/agent/runtime/executeAgent.ts": 488,
   "packages/harness/src/agent/runtime/FollowUps.ts": 432,

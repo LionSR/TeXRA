@@ -59,7 +59,6 @@ export type AgentEvent =
       | 'context.state'
       | 'stream.start'
       | 'stream.end'
-      | 'response.finalized'
     >
   /** Mutable persisted run config changed after run.start. */
   | (TraceArm<'run.config'> & { readonly runId: RunId })

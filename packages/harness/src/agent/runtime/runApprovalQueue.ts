@@ -68,7 +68,7 @@ interface QueuedApproval<A, E, R> {
 type QueuedKind = Extract<ApprovalBypassKind, 'bash' | 'toolEdit'>;
 
 /** A write of a run's grants refused: the store's own refusals. */
-export type GrantWriteError =
+type GrantWriteError =
   DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed;
 
 /** A run's grants as its rows record them: the latest `approval.policy`,

@@ -62,6 +62,10 @@ All notable changes to this project will be documented in this file.
   you remove them with `texra doctor --prune-storage`, which lists every
   copy and every project folder that no longer exists before deleting
   anything.
+- **`@texra-ai/harness`: a run's final answer is no longer a trace event.**
+  `response.finalized` left the exported `AgentEvent` union, so `run.events`
+  no longer carries it. It is a row of the run's own history, committed with
+  the turn; read the answer from the run's result or its history.
 - **`@texra-ai/harness`: one process layer for hosts and embedders.**
   `Sessions.layer` now composes the same `processLayer` every TeXRA host
   builds its runtime from, and the root entry exports it with the

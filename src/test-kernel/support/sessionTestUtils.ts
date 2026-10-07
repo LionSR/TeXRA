@@ -178,6 +178,9 @@ export function createTestRunTrace(runId: RunId) {
         apply({ type: 'run.position', payload: { at: 'waiting' } });
       } else apply({ type: 'run.end', outcome: phase });
     },
+    /** The run history's final-answer row (`response.finalized`), folded
+     *  in its place beside the trace. */
+    finalize: (text: string) => apply({ type: 'response.finalized', text }),
     transcript: () => transcript,
     rows: () => transcript.rows,
     dispose: () => trace.close(),
