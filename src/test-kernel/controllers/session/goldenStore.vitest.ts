@@ -15,13 +15,24 @@
  * `context.edit` missing or out of order, an awaited child without the call
  * that owns it. Interrupted states are the crash-point suite's
  * (`crashConformance*.vitest.ts`), which truncates a clean store at every
- * commit and resumes it.
+ * commit and resumes it, but for one a real kill made: `golden_effect`,
+ * killed (`SIGKILL`) after its command's effect landed and before its
+ * result committed. A resume that runs that command again, or reports it
+ * as anything but an unknown outcome, fails.
  */
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
 // Node imports
-import { mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import * as os from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -29,8 +40,10 @@ import { DatabaseSync } from 'node:sqlite';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
-import { afterAll, describe, expect } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect } from 'vitest';
 
+import { refresh } from '@agent/index';
+import { resumeRun } from '@agent/runtime/resumeRun';
 import { runHistoryLayer } from '@agent/runtime/RunHistory';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import { databaseLayer } from '@controllers/session/Database';
@@ -47,6 +60,8 @@ import {
 import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { AgentDirectories, AppState } from '@platform/interfaces';
+import { withProcessServices } from '@platform/processRuntime';
 import {
   aggregateId,
   isDisplaySessionEvent,
@@ -63,8 +78,27 @@ import {
   type SessionView,
 } from '@shared/session/sessionView';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { FakeStateStore } from '@test/support/FakePlatform';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import {
+  nodePlatformLayer,
+  unusedGlobalStorageFs,
+} from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
+import {
+  closeTestDefaultSession,
+  openTestDefaultSession,
+} from '@test/support/sessionEnd';
+import {
+  fakeHostAgentDirectories,
+  setupPlatform,
+} from '@test/support/setupPlatform';
+import {
+  createTempDirPlatform,
+  useTempDirs,
+} from '@test/support/tempDirPlatform';
+import { testRuntime } from '@test/support/testProcessRuntime';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 const GOLDEN = readFileSync(
   resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/golden-1.0.sql'),
@@ -86,15 +120,17 @@ const SCRIPTED = RunIdSchema.parse('a0000000000a');
  *  handoff that continued the fork. */
 const FORK_SOURCE = RunIdSchema.parse('a0000000000b');
 const FORKED = RunIdSchema.parse('a0000000000c');
-const TOMBSTONED = RunIdSchema.parse('a0000000000d');
+/** Killed after its command's effect, before the command's result. */
+const KILLED = RunIdSchema.parse('a0000000000d');
+const TOMBSTONED = RunIdSchema.parse('a0000000000e');
 /** The service's task, and the background command it sent, whose input the
  *  service's resume closed. */
-const SERVICE_TASK = RunIdSchema.parse('a0000000000e');
-const BACKGROUND = RunIdSchema.parse('a0000000000f');
+const SERVICE_TASK = RunIdSchema.parse('a0000000000f');
+const BACKGROUND = RunIdSchema.parse('a00000000010');
 /** The `texra run --output` document task and the revisions its recipe
  *  ran, named by the calls that launched them. */
 const DOCUMENT_TASK = RunIdSchema.parse('a00000000005');
-const REVISIONS = ['927d1d030445aec1310b519c', 'd0817e54a64797f2a31b1e22'];
+const REVISIONS = ['5fc0b51b6aa17245062995d1', '2690a561d6d483740d16c8e5'];
 
 const roots: string[] = [];
 afterAll(() => {
@@ -373,6 +409,9 @@ describe('the golden 1.0 store', () => {
           status: 'cancelled',
           outcome: 'cancelled',
         }),
+        // Killed while its command's result was uncommitted: it still reads
+        // as running, its owner dead.
+        run(KILLED, 'golden_effect', { status: 'running', outcome: null }),
         // Stopped with `texra tasks stop` once its command reported back.
         run(SERVICE_TASK, 'golden_script', {
           status: 'cancelled',
@@ -512,4 +551,128 @@ describe('the golden 1.0 store', () => {
       expect(of(listing).runs.map((run) => run.id)).not.toContain(TOMBSTONED);
     }).pipe(Effect.provide(substrate(storage)));
   });
+});
+
+/**
+ * The real kill: `golden_effect`'s command appended its line, then the
+ * process died before the command's result committed (the generator held it
+ * in a `PostToolUse` hook). Its file is back on disk as the kill left it.
+ * The resume must not run the command again: the call settles as an unknown
+ * outcome, which the model reads, and the line stays one line.
+ */
+describe('the golden run killed after its effect', () => {
+  const AGENTS = resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/agents');
+  const EFFECT = resolve(
+    REPO_ROOT,
+    'src/test-kernel/fixtures/storage/golden-effect/approved.txt',
+  );
+  const tempDirs = useTempDirs();
+  setupPlatform(async () => {
+    const host = await createTempDirPlatform('texra-golden-kill-', tempDirs);
+    const agents = {
+      custom: () => Effect.succeed(AGENTS),
+      customConfigured: () => Effect.succeed(false),
+      builtIn: () => Effect.succeed(AGENTS),
+      builtInToolUse: () => Effect.succeed(AGENTS),
+    };
+    return {
+      ...host,
+      platform: { ...host.platform, agentDirectories: agents },
+    };
+  });
+  const VALIDATION = {
+    TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1',
+    TEXRA_CLI_INTERNAL_VALIDATION_MODEL_ENV: 'TEXRA_INTERNAL_VALIDATE_MODEL',
+    TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_ENV:
+      'TEXRA_INTERNAL_VALIDATE_MODEL_FLAG',
+    TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_CONTENT:
+      'texra-cli-run-validation',
+    TEXRA_INTERNAL_VALIDATE_MODEL: '1',
+    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+  };
+  let restore: Record<string, string | undefined> = {};
+  beforeEach(async () => {
+    const { storage, workspace } = testWorkspaceRoots();
+    if (workspace === undefined) throw new Error('no test workspace');
+    const flag = join(storage, 'validation-flag');
+    restore = Object.fromEntries(
+      [...Object.keys(VALIDATION), 'TEXRA_INTERNAL_VALIDATE_MODEL_FLAG'].map(
+        (key) => [key, process.env[key]],
+      ),
+    );
+    Object.assign(process.env, VALIDATION, {
+      TEXRA_INTERNAL_VALIDATE_MODEL_FLAG: flag,
+    });
+    cpSync(goldenRoot(), storage, { recursive: true });
+    mkdirSync(workspace, { recursive: true });
+    cpSync(EFFECT, join(workspace, 'approved.txt'));
+    raw(storage, (db) => {
+      db.prepare(
+        `UPDATE event SET data = replace(data, '/golden/project', ?)
+         WHERE type IN ('run.start', 'run.config') AND aggregate =
+           (SELECT id FROM event_sequence WHERE logical_id = ?)`,
+      ).run(workspace, KILLED);
+      // The kill, on this host: an owner whose process is gone.
+      db.prepare(
+        'UPDATE event_sequence SET owner_id = ? WHERE logical_id = ?',
+      ).run(
+        JSON.stringify([os.hostname().toLowerCase(), process.pid, 'killed']),
+        KILLED,
+      );
+    });
+    writeFileSync(flag, 'texra-cli-run-validation\n');
+    await Effect.runPromise(
+      Effect.provide(
+        refresh(),
+        Layer.mergeAll(
+          unusedGlobalStorageFs(),
+          nodePlatformLayer,
+          testHttpClientLayer,
+          AgentDirectories.layer(fakeHostAgentDirectories),
+          AppState.layer(new FakeStateStore()),
+        ),
+      ),
+    );
+    await Effect.runPromise(closeTestDefaultSession);
+  });
+  afterEach(async () => {
+    await Effect.runPromise(closeTestDefaultSession);
+    for (const [key, value] of Object.entries(restore)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+
+  it.live('reports the command as an unknown outcome and never reruns it', () =>
+    Effect.gen(function* () {
+      const { storage, workspace } = testWorkspaceRoots();
+      const session = yield* openTestDefaultSession({
+        roots: testWorkspaceRoots(),
+      });
+      const result = yield* withProcessServices(
+        testRuntime(),
+        resumeRun(KILLED, { session }),
+      );
+      expect(result).toMatchObject({ started: true });
+      yield* closeTestDefaultSession;
+      const settled = raw(storage, (db) =>
+        db
+          .prepare(
+            `SELECT json_extract(e.data, '$.payload') AS payload
+             FROM event e JOIN event_sequence s ON s.id = e.aggregate
+             WHERE s.logical_id = ? AND e.type = 'tool.result'`,
+          )
+          .all(KILLED)
+          .map((row) => JSON.parse(String(row.payload)) as unknown),
+      );
+      expect(settled).toHaveLength(1);
+      expect(JSON.stringify(settled[0])).toContain('outcome is unknown');
+      // The effect the killed process left, and nothing more.
+      expect(
+        readFileSync(join(workspace!, 'approved.txt'), 'utf8')
+          .split('\n')
+          .filter(Boolean),
+      ).toEqual(['approved']);
+    }),
+  );
 });

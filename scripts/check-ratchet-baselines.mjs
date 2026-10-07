@@ -7,7 +7,10 @@
  * Rows may move, because files and modules move (M8, `--move`): each added
  * row consumes one removed row of the same file, used once. A numeric donor
  * must carry an equal or greater count; an allowlist donor must match the
- * added item on every field that is not a path. Retained rows cannot grow.
+ * added item on every field that is not a path; and the added row's key must
+ * be the donor's with each path that differs renamed by a move in
+ * `git diff --find-renames <base>` (a module specifier names the file it
+ * resolves to by its trailing path). Retained rows cannot grow.
  * A deleted baseline file retires its ratchet and fails; that is an owner
  * call, made outside this check. Refuted candidates are recorded refusals,
  * which only restrict, so they are not compared.
@@ -163,15 +166,46 @@ function donates(donor, value) {
   return donor === value;
 }
 
-/** A removed row pays for at most one added row of the same file. */
-function checkBaseline(file, previous, current) {
+/** Every file the tree moved since the base, as `[from, to]` stems. */
+function renamesSinceBase() {
+  const stem = (file) => file.replace(/\.[cm]?[jt]sx?$/, '');
+  return git('diff', '--find-renames', '--name-status', '-z', base)
+    .split('\0')
+    .flatMap((field, i, fields) =>
+      field.startsWith('R') ? [[stem(fields[i + 1]), stem(fields[i + 2])]] : [],
+    );
+}
+
+/** Whether `name` (a path or an `@alias/` specifier) names the file `stem`. */
+function names(name, stem) {
+  const tail = name.replace(/\.[cm]?[jt]sx?$/, '').replace(/^@/, '');
+  return stem === tail || stem.endsWith(`/${tail}`);
+}
+
+/** Whether `added` is `removed`'s key moved: every part that differs is a
+ *  path the tree renamed. */
+function moved(removed, added, renames) {
+  const parts = (key) => (key.startsWith('[') ? JSON.parse(key) : [key]);
+  const from = parts(removed);
+  const to = parts(added);
+  return (
+    from.length === to.length &&
+    from.every(
+      (part, i) =>
+        part === to[i] ||
+        renames.some(([old, next]) => names(part, old) && names(to[i], next)),
+    )
+  );
+}
+
+/** A removed row pays for at most one added row of the same file, and only
+ *  for the row it became when its file moved. */
+function checkBaseline(file, previous, current, renames) {
   if (previous.shape !== current.shape)
     throw new Error(
       `${file}: baseline shape changed: ${previous.shape} → ${current.shape}`,
     );
-  const removed = [...previous.rows]
-    .filter(([key]) => !current.rows.has(key))
-    .map(([, value]) => value);
+  const removed = [...previous.rows].filter(([key]) => !current.rows.has(key));
   const problems = [];
   const added = [];
   for (const [key, value] of current.rows) {
@@ -191,15 +225,17 @@ function checkBaseline(file, previous, current) {
   // rename passes whatever the order, even when several rows move at once.
   const rank = (v) =>
     typeof v === 'number' ? v : v === 'value' ? 2 : v === 'type-only' ? 1 : 0;
-  removed.sort((a, b) => rank(a) - rank(b));
+  removed.sort((a, b) => rank(a[1]) - rank(b[1]));
   for (const [key, value] of added.toSorted(
     (a, b) => rank(b[1]) - rank(a[1]),
   )) {
-    const donor = removed.findIndex((old) => donates(old, value));
+    const donor = removed.findIndex(
+      ([oldKey, old]) => donates(old, value) && moved(oldKey, key, renames),
+    );
     if (donor >= 0) removed.splice(donor, 1);
     else
       problems.push(
-        `${file}: ${current.shape}.${key}: absent → ${value} (new allowance)`,
+        `${file}: ${current.shape}.${key}: absent → ${value} (new allowance; a move needs its file's rename in the diff, staged)`,
       );
   }
   return problems;
@@ -234,6 +270,7 @@ function main() {
     ? baselineFiles(baselineDir).toSorted()
     : [];
   const problems = [];
+  const renames = renamesSinceBase();
   let newFiles = 0;
   for (const file of files) {
     const current = readBaseline(
@@ -247,7 +284,7 @@ function main() {
     const previous = readBaseline(file, git('show', `${base}:${file}`));
     // Refuted candidates record refusals; adding one only restricts.
     if (file !== REFUTED_CANDIDATES)
-      problems.push(...checkBaseline(file, previous, current));
+      problems.push(...checkBaseline(file, previous, current, renames));
   }
   // Absent on the base only before this file's first commit.
   const kindsEver = (text) => JSON.parse(text).kinds;
