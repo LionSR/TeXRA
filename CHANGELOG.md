@@ -907,7 +907,7 @@ show` print the same notice, and the new `texra agents customize`,
   project's `.env` was missing there, and a different key from your login
   shell could be used instead. Each task now reads its project's `.env`
   as it starts, over the environment, so an edited or rotated key applies
-  to the next task; its commands and MCP servers see the variables (never
+  to the next task; its commands see the variables (never
   a provider key), a `DO_NOT_TRACK` or `TEXRA_NO_TELEMETRY` there turns
   usage logging off for its tasks, and one project's `.env` never reaches
   another's. The CLI and the desktop app read it too, for their model
