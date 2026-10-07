@@ -405,8 +405,14 @@ describe('executeCliRequest', () => {
   const promptsUnavailableAtLaunch = (): (() => boolean | undefined) => {
     let seen: boolean | undefined;
     mocks.runAgent.mockImplementationOnce(
-      async (_request, options: { session: SessionHandle }) => {
-        seen = liveToolGates(options.session).approvalPromptsUnavailable;
+      async (
+        request: { runId: RunId },
+        options: { session: SessionHandle },
+      ) => {
+        seen = liveToolGates(
+          options.session,
+          request.runId,
+        ).approvalPromptsUnavailable;
         return COMPLETED_RUN;
       },
     );

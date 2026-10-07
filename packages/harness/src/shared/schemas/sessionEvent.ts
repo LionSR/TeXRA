@@ -25,6 +25,7 @@ import { z } from 'zod';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 
 import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
+import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import { JsonValueSchema } from './jsonValue';
 import {
   RunEndRowSchema,
@@ -181,6 +182,9 @@ export const ApprovalPolicySnapshotSchema = z.object({
   /** The kinds the run's own goal grants it, over its own values, until the
    *  goal ends, a human decides the kind, or a resume ends the goal. */
   goal: z.array(z.enum(APPROVAL_BYPASS_KINDS)).readonly(),
+  /** A launch's narrowing of the project's policy, for the run and its
+   *  descendants (`policyLimit`); absent when the launch asked for none. */
+  limit: TexraApprovalPolicySchema.optional(),
 });
 
 /**

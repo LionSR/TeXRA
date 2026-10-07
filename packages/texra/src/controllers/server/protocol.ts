@@ -32,6 +32,7 @@ import * as SchemaIssue from 'effect/SchemaIssue';
 import { z } from 'zod';
 
 import { AgentConfigSchema } from '@texra-ai/harness/schemas';
+import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import { RunEndSchema, RunIdSchema } from '@shared/schemas';
 
 import {
@@ -194,6 +195,9 @@ export const TexraRpcs = RpcGroup.make(
       /** An Auto-approve launch: the run starts with delegated work
        *  approved, as the run header's switch would set it. */
       approveDelegatedWork: Schema.Boolean,
+      /** The policy the launch asked for: one stricter than the project's
+       *  narrows this task only; a more permissive one is ignored. */
+      approvalPolicy: zodWire(TexraApprovalPolicySchema.nullable()),
     },
     /** The run that started: the asked id, or the one the launch resolved. */
     success: zodWire(RunIdSchema),

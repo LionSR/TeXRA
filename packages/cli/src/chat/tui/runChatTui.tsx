@@ -48,6 +48,7 @@ import {
   texraApprovalPolicyLabel,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
+import { stricterPolicy } from '@shared/approvalBypassKind';
 import { RUN_PHASE } from '@shared/schemas';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import {
@@ -202,12 +203,16 @@ export async function runChat(
       const startupNotices: string[] = [];
       if (Result.isSuccess(service)) {
         // The service decides this chat's requests under the project's
-        // persisted policy, which no client overrides; a different one this
-        // invocation asked for is said, not silently dropped.
+        // persisted policy. Each launch asks for this chat's own, which
+        // narrows its tasks when stricter; a more permissive one is said
+        // and ignored, since no client widens the project's policy.
         const configured = runtimeSession.approvals.policy();
-        if (context.approvalPolicy !== configured)
+        if (
+          stricterPolicy(context.approvalPolicy, configured) !==
+          context.approvalPolicy
+        )
           startupNotices.push(
-            `This chat's tasks run in the TeXRA service under the project's approval policy, ${texraApprovalPolicyLabel(configured)}, not ${texraApprovalPolicyLabel(context.approvalPolicy)}. Change the project's policy with /approval, or run with TEXRA_NO_SERVICE=1 to use ${texraApprovalPolicyLabel(context.approvalPolicy)} in this chat alone.`,
+            `This chat's tasks run in the TeXRA service under the project's approval policy, ${texraApprovalPolicyLabel(configured)}, not ${texraApprovalPolicyLabel(context.approvalPolicy)}: a launch can only narrow it. Change the project's policy with /approval, or run with TEXRA_NO_SERVICE=1 to use ${texraApprovalPolicyLabel(context.approvalPolicy)} in this chat alone.`,
           );
       } else {
         runtimeSession.approvals.override(context.approvalPolicy);
@@ -332,28 +337,36 @@ export async function runChat(
     ...context,
     quietLogs: true,
   });
+  // The policy this chat's launches ask the service for (see
+  // `serviceAgentRuns`): its flag, then each `/approval`.
+  let chatPolicy = context.approvalPolicy;
   // Here, `/approval` overrides this chat's own session. In the service it
   // writes the project's persisted policy, the one the service follows for
-  // every window and terminal of the project.
+  // every window and terminal of the project, and the status line moves
+  // once the write lands; meanwhile the chat's next launch already asks
+  // for it, which narrows a stricter choice at once.
   const setApprovalPolicy = (policy: TexraApprovalPolicy): void => {
-    if (runsElsewhere)
-      runtime.runFork(
-        writeSettingTo(
-          runtimeSession.roots,
-          TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-          policy,
-        ).pipe(
-          Effect.catch((error) =>
-            Effect.sync(() =>
-              appendLocalNotice(
-                `The project's approval policy was not saved: ${error.message}`,
-              ),
+    chatPolicy = policy;
+    if (!runsElsewhere) {
+      runtimeSession.approvals.override(policy);
+      patchSessionMeta({ approvalPolicy: policy });
+      return;
+    }
+    runtime.runFork(
+      writeSettingTo(
+        runtimeSession.roots,
+        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+        policy,
+      ).pipe(
+        Effect.match({
+          onSuccess: () => patchSessionMeta({ approvalPolicy: policy }),
+          onFailure: (error) =>
+            appendLocalNotice(
+              `The project's approval policy was not saved, so it stays ${texraApprovalPolicyLabel(runtimeSession.approvals.policy())}: ${error.message}`,
             ),
-          ),
-        ),
-      );
-    else runtimeSession.approvals.override(policy);
-    patchSessionMeta({ approvalPolicy: policy });
+        }),
+      ),
+    );
   };
   // The slash-command context is identical at every call site; build it once
   // lazily so the closures it captures (resetSessionForClear,
@@ -488,7 +501,7 @@ export async function runChat(
     runtime,
     ...(link !== undefined && {
       backend,
-      agentRuns: serviceAgentRuns(backend),
+      agentRuns: serviceAgentRuns(backend, () => chatPolicy),
       attachWindow: (host) => {
         runtime.runFork(
           attachWindowHost(link, context.cwd, host).pipe(

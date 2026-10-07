@@ -266,7 +266,7 @@ const openStep = Effect.fn('Step.open')(function* (
       .pipe(Scope.provide(scope));
     const resolved = yield* resolveStepTools(pinned.generation, {
       ...run.toolInputs,
-      ...liveToolGates(run.session),
+      ...liveToolGates(run.session, run.runId),
       ...(recipe && { approvalPromptsUnavailable: false }),
     });
     const held = recorded === null ? null : heldToRecord(resolved, recorded);

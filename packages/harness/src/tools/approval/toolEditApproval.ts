@@ -234,7 +234,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
         preparedRequest,
       );
     const decision = decideTexraApproval({
-      policy: session.approvals.policy(),
+      policy: session.approvals.policy(runId ?? undefined),
       promptRequired: approvalsEnabled,
       scopedBypass: isRunBypassed,
       canPresent: run.toolPolicy.approvalPromptsUnavailable !== true,

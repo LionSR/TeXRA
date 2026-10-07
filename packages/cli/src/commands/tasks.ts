@@ -9,6 +9,7 @@ import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 
 import { AgentConfigSchema, type AgentConfigPayload } from '@agent/runtime';
+import { stricterPolicy } from '@shared/approvalBypassKind';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   texraApprovalPolicyLabel,
@@ -178,15 +179,20 @@ const startCommand = defineCliCommand({
           new CliUsageError('--instruction must not be empty.'),
         );
       const services = yield* initCliPlatform(context);
-      // The task runs in the service under the project's persisted policy,
-      // which no client overrides: one this command asked for is said.
+      // The task runs in the service under the project's persisted policy.
+      // This command's policy (its flag, `--no-input`, or the config) rides
+      // the launch: stricter, it narrows this task only; more permissive,
+      // it is said and ignored, since no client widens the project's.
       const configured = readConfigSettingFrom<TexraApprovalPolicy>(
         services.config,
         TEXRA_APPROVAL_POLICY_CONFIG_KEY,
       );
-      if (context.approvalPolicy !== configured)
+      if (
+        stricterPolicy(context.approvalPolicy, configured) !==
+        context.approvalPolicy
+      )
         writeTextStderr(
-          `The task runs in the TeXRA service under the project's approval policy, ${texraApprovalPolicyLabel(configured)}, not ${texraApprovalPolicyLabel(context.approvalPolicy)}. Change the project's policy with /approval in \`texra chat\` or in the settings view.`,
+          `The task runs in the TeXRA service under the project's approval policy, ${texraApprovalPolicyLabel(configured)}, not ${texraApprovalPolicyLabel(context.approvalPolicy)}: a launch can only narrow it. Change the project's policy with /approval in \`texra chat\` or in the settings view.`,
         );
       const agent = yield* resolveCliRunAgent(services, ctx.args.agent);
       const model = yield* selectCliRunModel(
@@ -223,6 +229,7 @@ const startCommand = defineCliCommand({
             continues: null,
             preferHelperModel: false,
             ownApiKeyFallback: false,
+            approvalPolicy: context.approvalPolicy,
             approveDelegatedWork: false,
           });
         }),

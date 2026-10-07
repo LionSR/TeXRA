@@ -218,11 +218,7 @@ const sessionHandleLayer = (key: SessionKey) =>
           globalDatabase,
           closed: store.closed,
         }),
-        approvals: createSessionApprovals({
-          view: view.ref,
-          log: store.log,
-          config: key.open.roots.config,
-        }),
+        approvals: createSessionApprovals(() => session),
         interactions,
         followUps: new Inbox({
           log: store.log,

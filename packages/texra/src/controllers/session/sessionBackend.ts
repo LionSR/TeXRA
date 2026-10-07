@@ -38,6 +38,7 @@ import {
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
 import { isLiveRun } from '@shared/session/sessionView';
+import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import type { ToolEditPreview } from '@texra/controllers/server/protocol';
 import type { ProcessServices } from '@texra-ai/harness';
@@ -116,6 +117,9 @@ interface SessionLaunchOptions {
   readonly suppressErrorNotification?: boolean;
   /** The chat's previous root: its approval bypasses carry over. */
   readonly continues?: RunId;
+  /** The policy the launch asked for: a stricter one than the project's
+   *  narrows this run only (`RunAgentOptions.approvalPolicy`). */
+  readonly approvalPolicy?: TexraApprovalPolicy;
 }
 
 /**
@@ -183,6 +187,7 @@ export function localSessionBackend(session: SessionHandle): SessionBackend {
         continues: options.continues,
         onRunResolved: options.onRunResolved,
         suppressErrorNotification: options.suppressErrorNotification,
+        approvalPolicy: options.approvalPolicy,
       }),
     request: (request) => session.requests.request(request),
     controls: (runId) => session.runs.getHandle(runId)?.controls,

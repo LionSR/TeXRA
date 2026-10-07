@@ -2188,7 +2188,9 @@ prompt: |
  * the setting is Auto-approve; window B then sets Ask (a settings write);
  * the service restarts and window A's link reaches the new one. A command
  * task must then wait for approval: nothing window A held replaced Ask.
- * The task's rows, the setting and window A's output are the artifact.
+ * A launch may narrow its own task: with the project back on
+ * Auto-approve, `tasks start --approval-policy ask` still asks. The tasks'
+ * rows, the setting and window A's output are the artifacts.
  */
 async function validateServicePolicyOwner() {
   const cwd = makeScratch('texra-cli-service-policy-');
@@ -2328,6 +2330,37 @@ prompt: |
       `after a restart the service should follow the project's Ask setting, not a policy window A held (artifact: ${artifactPath})`,
     );
     texra(['tasks', 'stop', runId], 'texra tasks stop');
+    // A launch narrows its own task: an Auto-approve project, and a task
+    // started with `--approval-policy ask`, still waits for approval.
+    setPolicy('yolo');
+    const narrowed = texra(
+      [
+        'tasks',
+        'start',
+        'approval_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--approval-policy',
+        'ask',
+        '--instruction',
+        'Run the command',
+      ],
+      'texra tasks start --approval-policy ask (yolo project)',
+    ).stdout.trim();
+    await waitFor('the narrowed command to wait for approval', () =>
+      rowTypes(narrowed).includes('request.opened'),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    const narrowedRows = rowTypes(narrowed);
+    writeArtifact('service-policy-narrowed.json', {
+      rows: narrowedRows,
+      commandRan: existsSync(approved),
+    });
+    assert(
+      !existsSync(approved) && !narrowedRows.includes('request.decided'),
+      'a task started with --approval-policy ask in an Auto-approve project should still ask',
+    );
+    texra(['tasks', 'stop', narrowed], 'texra tasks stop (narrowed)');
   } finally {
     windowA?.child.kill('SIGKILL');
     run(process.execPath, [binaryPath, 'service', 'stop'], {

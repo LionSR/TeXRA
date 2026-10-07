@@ -9,7 +9,8 @@ import {
   APPROVAL_BYPASS_KINDS,
   NO_APPROVAL_GRANTS,
 } from '@shared/approvalBypassKind';
-import { inheritedGrants } from '@shared/approvalBypassKind';
+import { inheritedGrants, stricterPolicy } from '@shared/approvalBypassKind';
+import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type RunId, USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
 import { generateRunId } from '@utils/core';
 import { humanGrant } from './runApprovalQueue';
@@ -59,6 +60,13 @@ export interface RunAgentOptions
   /** An Auto-approve launch: the run starts with every bypass granted, in
    *  its `run.start`, so no approval opens ahead of the grant. */
   approveDelegatedWork?: boolean;
+  /**
+   * The policy the launch asked for (a CLI flag, `--no-input`). Stricter
+   * than the session's, it becomes the run's launch limit on its
+   * `run.start`, narrowing the run and its descendants only; a more
+   * permissive one is ignored, since a launch never widens the project's.
+   */
+  approvalPolicy?: TexraApprovalPolicy;
 }
 
 /** A fresh launch; a persisted run resumes through `resumeRun`. */
@@ -96,6 +104,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
     suppressErrorNotification,
     continues,
     approveDelegatedWork,
+    approvalPolicy,
     ...executeAgentOptions
   } = options;
   const runSession = options.session;
@@ -126,16 +135,29 @@ export const runAgent = Effect.fn('runAgent')(function* (
       const launchGrants = approveDelegatedWork
         ? humanGrant(APPROVAL_BYPASS_KINDS, true)(NO_APPROVAL_GRANTS)
         : NO_APPROVAL_GRANTS;
+      const grants =
+        continues !== undefined && continues !== runId
+          ? inheritedGrants(
+              SubscriptionRef.getUnsafe(runSession.view.ref),
+              continues,
+            )
+          : launchGrants;
+      // Only a strictly stricter request narrows; the limit then holds
+      // even if the project's policy is widened later.
+      const project =
+        approvalPolicy === undefined
+          ? undefined
+          : runSession.approvals.policy();
+      const limit =
+        approvalPolicy === undefined ||
+        project === undefined ||
+        stricterPolicy(approvalPolicy, project) === project
+          ? undefined
+          : stricterPolicy(approvalPolicy, grants.limit ?? approvalPolicy);
       yield* registerRun(runSession, runId, definition.config, {
         identity: { kind: 'agent', agent: definition.config.agent },
         userFollowUpSupport,
-        grants:
-          continues !== undefined && continues !== runId
-            ? inheritedGrants(
-                SubscriptionRef.getUnsafe(runSession.view.ref),
-                continues,
-              )
-            : launchGrants,
+        grants: limit === undefined ? grants : { ...grants, limit },
       });
       return yield* runWithLaunchGuard(
         runSession,

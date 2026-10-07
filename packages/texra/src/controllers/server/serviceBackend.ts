@@ -289,6 +289,7 @@ export const serviceSessionBackend = Effect.fn('serviceSessionBackend')(
               preferHelperModel: options.preferHelperModel ?? false,
               ownApiKeyFallback: options.ownApiKeyFallback ?? false,
               approveDelegatedWork: options.approveDelegatedWork ?? false,
+              approvalPolicy: options.approvalPolicy ?? null,
             }).pipe(
               Effect.mapError(
                 (error) =>

@@ -6,6 +6,8 @@
  * `superYolo` here is the delegated-work scoped bypass, not a TeXRA policy
  * value.
  */
+import type { TexraApprovalPolicy } from './approvalPolicy';
+
 export const APPROVAL_BYPASS_KINDS = ['bash', 'toolEdit', 'superYolo'] as const;
 
 export type ApprovalBypassKind = (typeof APPROVAL_BYPASS_KINDS)[number];
@@ -20,6 +22,45 @@ type OwnGrant = 'on' | 'off' | 'parent';
 export interface ApprovalGrants {
   readonly own: Partial<Record<ApprovalBypassKind, OwnGrant>>;
   readonly goal: readonly ApprovalBypassKind[];
+  /** The most permissive policy the run and its descendants run under: a
+   *  launch that asked for a stricter policy than the project's. It narrows
+   *  the project's policy for this run only and is never widened. */
+  readonly limit?: TexraApprovalPolicy;
+}
+
+const STRICTNESS: Readonly<Record<TexraApprovalPolicy, number>> = {
+  never: 0,
+  ask: 1,
+  yolo: 2,
+};
+
+/** The stricter of two policies (`never` < `ask` < `yolo`). */
+export function stricterPolicy(
+  a: TexraApprovalPolicy,
+  b: TexraApprovalPolicy,
+): TexraApprovalPolicy {
+  return STRICTNESS[a] <= STRICTNESS[b] ? a : b;
+}
+
+/** The strictest launch limit on a run's ancestry while its edges stand,
+ *  or undefined when no launch narrowed it. */
+export function policyLimit<Id>(
+  source: ApprovalGrantSource<Id>,
+  runId: Id,
+): TexraApprovalPolicy | undefined {
+  const seen = new Set<Id>();
+  let limit: TexraApprovalPolicy | undefined;
+  for (
+    let current: Id | null | undefined = runId;
+    current !== null && current !== undefined && !seen.has(current);
+    current = source.runs.get(current)?.parentId
+  ) {
+    seen.add(current);
+    const own = source.policy.get(current)?.limit;
+    if (own !== undefined)
+      limit = limit === undefined ? own : stricterPolicy(limit, own);
+  }
+  return limit;
 }
 
 /** No grants of its own: every kind defers to the run's ancestry. */
@@ -95,5 +136,6 @@ export function inheritedGrants<Id>(
       break;
     }
   }
-  return { own, goal: [] };
+  const limit = policyLimit(source, runId);
+  return { own, goal: [], ...(limit !== undefined && { limit }) };
 }

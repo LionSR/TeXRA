@@ -91,7 +91,7 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
       request.grant === 'shell' ? 'bash' : 'superYolo',
     ) !== null;
   const decision = decideTexraApproval({
-    policy: session.approvals.policy(),
+    policy: session.approvals.policy(runId),
     promptRequired: approvalsEnabled,
     scopedBypass: granted(),
     canPresent: run.toolPolicy.approvalPromptsUnavailable !== true,
