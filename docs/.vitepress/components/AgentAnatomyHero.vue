@@ -4,21 +4,21 @@ import MockCard from './MockCard.vue';
 // Frameless "agent anatomy" map for guide/custom-agents.md, Step 3. The starter
 // template a custom-agent author edits is a ~50-line flat YAML block; this
 // figure lifts its part-whole structure out of the comments into three labelled
-// bands — inherits / persona (prompt, temperature) / task — and draws the one
-// relationship the prose spends a Reflection Tips callout explaining: the
+// bands — identity (name, description) / persona (prompt, temperature) / task —
+// and draws the one relationship the prose spends a Reflection Tips callout explaining: the
 // `task.requests` list maps position-by-position onto revisions (item [0] = the
 // first revision, item [1] = the second).
 //
 // Standalone (no MockupFrame). The root carries `.mockup` so the shared `--mk-*`
 // colour + dimensional tokens (theme/mockup.css) resolve here and the card flips
 // cleanly between the docs light / dark themes. Keys mirror the YAML on the page
-// (inherits: my_polish, prompt, temperature, task: rewrite / prefix / requests).
+// (name, description, prompt, temperature, task: rewrite / prefix / requests).
 
 // The three parts of the file, each captioned by its role.
 const bands = [
   {
-    key: 'inherits: my_polish',
-    role: 'starts from another agent in the same folder',
+    key: 'name · description',
+    role: 'what the agent list shows',
   },
   {
     key: 'prompt · temperature',

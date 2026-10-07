@@ -6,7 +6,6 @@ import { glob } from 'glob';
 import { ZodError, type z, type ZodIssue } from 'zod';
 
 import { Data, Effect, FileSystem, Result } from 'effect';
-import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -54,8 +53,8 @@ interface ParsedAgentYaml {
 /**
  * Scan one agent source. A source can span several roots (the bundled
  * tool-use source is the core directory plus each tool plugin's), and they are
- * pooled into one scan, so names stay unique and `inherits` resolves across
- * the whole source. Files list in absolute-path order, as one directory holding
+ * pooled into one scan, so names stay unique across the whole source. Files
+ * list in absolute-path order, as one directory holding
  * them all would list them. A root that cannot be listed is one issue and
  * drops only its own files.
  */
@@ -111,15 +110,9 @@ export function scanDirectory(
         });
       }
     }
-    const unique = yield* entriesWithUniqueNames(parsed, issues);
-    const definitions = new Map(
-      unique.map((entry) => [entry.name, entry] as const),
-    );
     const entries: AgentEntry[] = [];
-    for (const entry of unique) {
-      const scanned = yield* Effect.result(
-        scanYaml(entry, source, definitions),
-      );
+    for (const entry of yield* entriesWithUniqueNames(parsed, issues)) {
+      const scanned = yield* Effect.result(scanYaml(entry, source));
       if (Result.isSuccess(scanned)) {
         entries.push(scanned.success);
         continue;
@@ -216,58 +209,17 @@ function formatSchemaIssue(issue: ZodIssue): string {
   const where = issue.path.join('.');
   const prefix = where ? `${where}: ` : '';
   if (issue.code === 'unrecognized_keys') {
-    return `${prefix}unrecognized keys ${issue.keys.join(', ')}`;
+    const unrecognized = `${prefix}unrecognized keys ${issue.keys.join(', ')}`;
+    // A file written before 1.0 can still name a parent; say what replaces it.
+    return issue.keys.includes('inherits')
+      ? `${unrecognized} (\`inherits\` was removed in 1.0; copy the fields you need into this agent)`
+      : unrecognized;
   }
   return issue.message ? `${prefix}${issue.message}` : '';
 }
 
-/** The fields a file inherits: everything but its identity and its stamp. */
-type InheritedFields = Omit<
-  AgentDefinition,
-  'name' | 'description' | 'inherits' | 'basedOn'
->;
-
 /**
- * The definition's own fields with its `inherits` chain merged in: the
- * parent gives defaults and the child overrides (a `task` block merges field
- * by field, a list replaces the parent's). The chain is looked up by name in
- * the same source's scan, so a parent that is absent or a chain that loops
- * is an error of this file, reported as its issue, never a listed agent that
- * fails at launch.
- */
-function inheritedFields(
-  entry: ParsedAgentYaml,
-  definitions: Map<string, ParsedAgentYaml>,
-  seen: readonly string[] = [entry.name],
-): InheritedFields {
-  const {
-    name: _name,
-    description: _description,
-    inherits: parentName,
-    basedOn: _basedOn,
-    ...own
-  } = entry.definition;
-  if (!parentName) return own;
-
-  const parent = definitions.get(parentName);
-  if (!parent) {
-    throw new Error(
-      `Unable to locate parent agent "${parentName}" in the same directory.`,
-    );
-  }
-  if (seen.includes(parent.name)) {
-    throw new Error(
-      `Circular "inherits" chain detected: ${[...seen, parent.name].join(' -> ')}.`,
-    );
-  }
-  return mergeInheritedAgentObject(
-    inheritedFields(parent, definitions, [...seen, parent.name]),
-    own,
-  );
-}
-
-/**
- * The entry a definition makes, its inheritance already merged: its persona
+ * The entry a definition makes: its persona
  * and task with the schema's defaults applied, the one validation a launch
  * reads, for a file and an inline persona alike. A task's persona works
  * text-only: the recipe owns extraction, compilation and the proposal, so a
@@ -276,7 +228,7 @@ function inheritedFields(
  */
 export function agentEntryOf(
   // As written (a file's tools are parsed, an inline persona's are names).
-  definition: Omit<z.input<typeof AgentDefinitionSchema>, 'inherits'>,
+  definition: z.input<typeof AgentDefinitionSchema>,
   at: Pick<AgentEntry, 'source' | 'path' | 'digest'>,
 ): AgentEntry {
   const {
@@ -306,23 +258,18 @@ export function agentEntryOf(
   };
 }
 
-/** The entry a definition file makes, with its inheritance chain merged. */
+/** The entry a definition file makes. */
 function scanYaml(
   entry: ParsedAgentYaml,
   source: AgentSource,
-  definitions: Map<string, ParsedAgentYaml>,
 ): Effect.Effect<AgentEntry, AgentScanError> {
   return Effect.try({
     try: (): AgentEntry =>
-      agentEntryOf(
-        {
-          ...inheritedFields(entry, definitions),
-          name: entry.name,
-          description: entry.definition.description,
-          basedOn: entry.definition.basedOn,
-        },
-        { source, path: entry.path, digest: entry.digest },
-      ),
+      agentEntryOf(entry.definition, {
+        source,
+        path: entry.path,
+        digest: entry.digest,
+      }),
     catch: (cause) =>
       new AgentScanError({
         path: entry.path,

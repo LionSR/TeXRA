@@ -171,7 +171,7 @@ export const DocumentTaskSchema = z.strictObject({
 /** A document task with its defaults applied. */
 export type DocumentTask = z.infer<typeof DocumentTaskSchema>;
 
-/** A document task as a file writes it, before inheritance and defaults. */
+/** A document task as a file writes it, before defaults. */
 const DocumentTaskInputSchema = z.strictObject({
   rewrite: z.boolean().optional(),
   outputs: z.array(z.string()).optional(),
@@ -182,13 +182,11 @@ const DocumentTaskInputSchema = z.strictObject({
 
 /**
  * An agent file as written: a flat persona, made a document task by its
- * `task` block. Optional fields stay unmaterialized so `inherits` can tell
- * "not written" from "written as the default".
+ * `task` block.
  */
 export const AgentDefinitionSchema = z.strictObject({
   name: AgentNameSchema,
   description: z.string().optional(),
-  inherits: z.string().optional(),
   /**
    * On a customized copy of a bundled agent: the digest of the bundled file it
    * was copied from, so an app update that changes the bundled agent can say
@@ -200,18 +198,17 @@ export const AgentDefinitionSchema = z.strictObject({
   temperature: TemperatureSchema.optional(),
   task: DocumentTaskInputSchema.optional(),
 });
-/** An agent definition as written, before inheritance and defaults. */
+/** An agent definition as written, before defaults. */
 export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;
 
 /**
  * A persona an embedder passes inline (`StartInput.agent`) instead of a
  * file: the same definition with nothing a file alone can mean. It has no
- * sibling to inherit from and no bundled original, and a document task is
+ * bundled original, and a document task is
  * the app's recipe, which the package does not ship; each is refused as an
  * unrecognized key.
  */
 export const InlinePersonaSchema = AgentDefinitionSchema.omit({
-  inherits: true,
   basedOn: true,
   task: true,
 }).extend({

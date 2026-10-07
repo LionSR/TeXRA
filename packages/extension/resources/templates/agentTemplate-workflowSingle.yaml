@@ -1,5 +1,3 @@
-# --- Inheritance (optional) ---
-# inherits: base
 name: {{ AGENT_NAME }}
 description: '{{ DESCRIPTION | replace("'", "''") }}'
 temperature: 0.1
