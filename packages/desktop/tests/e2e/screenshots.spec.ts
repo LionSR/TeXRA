@@ -142,6 +142,32 @@ test('settings navigation and appearance across window sizes', async () => {
         path: test.info().outputPath(`settings-${name}-${theme}.png`),
         animations: 'disabled',
       });
+      if (name === 'agents') {
+        await settings.locator('[data-section="skills"]').click();
+        await expect(
+          settings.getByRole('textbox', { name: 'Search skills', exact: true }),
+        ).toBeVisible();
+        await page.screenshot({
+          path: test.info().outputPath(`settings-skills-${theme}.png`),
+          animations: 'disabled',
+        });
+        await settings.locator('[data-section="library"]').click();
+      }
+      if (name === 'plugins') {
+        await settings
+          .getByRole('button', { name: 'Goal Mode', exact: true })
+          .click();
+        await expect(
+          settings.getByRole('switch', {
+            name: 'Available to agents',
+            exact: true,
+          }),
+        ).toBeVisible();
+        await page.screenshot({
+          path: test.info().outputPath(`settings-goal-plugin-${theme}.png`),
+          animations: 'disabled',
+        });
+      }
     }
     await tabs.first().focus();
     await page.keyboard.press('ArrowDown');
@@ -157,6 +183,88 @@ test('settings navigation and appearance across window sizes', async () => {
     await expect(settings.getByRole('tabpanel')).toBeVisible();
     await page.screenshot({
       path: test.info().outputPath(`settings-compact-${theme}.png`),
+      animations: 'disabled',
+    });
+    await settings.getByRole('tab', { name: 'Agents', exact: true }).click();
+    const catalog = settings.locator('agent-selection-panel');
+    await expect(
+      catalog.getByRole('textbox', { name: 'Search agents', exact: true }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: test.info().outputPath(`settings-agents-compact-${theme}.png`),
+      animations: 'disabled',
+    });
+    await settings.getByRole('tab', { name: 'Plugins', exact: true }).click();
+    await settings
+      .getByRole('button', { name: 'Goal Mode', exact: true })
+      .click();
+    const availability = settings.locator(
+      'plugin-card .settings-row.is-toggle',
+    );
+    const labelBounds = await availability
+      .locator('.settings-row-label')
+      .boundingBox();
+    const switchBounds = await availability.locator('wa-switch').boundingBox();
+    expect(labelBounds).not.toBeNull();
+    expect(switchBounds).not.toBeNull();
+    expect(switchBounds!.x).toBeGreaterThan(
+      labelBounds!.x + labelBounds!.width,
+    );
+    expect(
+      Math.abs(
+        labelBounds!.y +
+          labelBounds!.height / 2 -
+          (switchBounds!.y + switchBounds!.height / 2),
+      ),
+    ).toBeLessThan(2);
+    await page.screenshot({
+      path: test.info().outputPath(`settings-goal-plugin-compact-${theme}.png`),
+      animations: 'disabled',
+    });
+    await settings
+      .getByRole('tab', { name: 'Models', exact: true })
+      .first()
+      .click();
+    await settings.locator('[data-section="subscriptions"]').click();
+    const subscription = settings.locator('subscription-section').first();
+    // Presentation fixture only: exercise the reported usage-card boundaries
+    // without credentials, provider requests, or changes to account state.
+    await subscription.evaluate((element) => {
+      const now = Date.now();
+      Object.assign(element, {
+        auth: {
+          provider: 'chatgpt',
+          signedIn: true,
+          email: 'researcher@example.org',
+          preferSubscription: true,
+        },
+        now,
+        usage: {
+          provider: 'chatgpt',
+          providerName: 'ChatGPT',
+          planName: 'Plus',
+          state: 'available',
+          fetchedAt: now,
+          windows: [
+            {
+              name: '5-hour',
+              percentUsed: 1,
+              percentRemaining: 99,
+              resetAt: now + 34 * 60_000,
+            },
+            {
+              name: '7-day',
+              percentUsed: 0,
+              percentRemaining: 100,
+              resetAt: now + 6 * 86_400_000,
+            },
+          ],
+        },
+      });
+    });
+    await expect(subscription.locator('.usage-plan')).toContainText('Plus');
+    await page.screenshot({
+      path: test.info().outputPath(`settings-subscription-${theme}.png`),
       animations: 'disabled',
     });
     await settings.locator('.desktop-settings-close').click();

@@ -52,6 +52,8 @@ import { faDatabase } from '@fortawesome/free-solid-svg-icons/faDatabase';
 import { faDiagramProject } from '@fortawesome/free-solid-svg-icons/faDiagramProject';
 import { faDownload } from '@fortawesome/free-solid-svg-icons/faDownload';
 import { faEllipsis } from '@fortawesome/free-solid-svg-icons/faEllipsis';
+import { faEye } from '@fortawesome/free-solid-svg-icons/faEye';
+import { faEyeSlash } from '@fortawesome/free-solid-svg-icons/faEyeSlash';
 import { faFile } from '@fortawesome/free-solid-svg-icons/faFile';
 import { faFileCirclePlus } from '@fortawesome/free-solid-svg-icons/faFileCirclePlus';
 import { faFileCode } from '@fortawesome/free-solid-svg-icons/faFileCode';
@@ -201,6 +203,8 @@ const icons = {
   'diagram-project': faDiagramProject,
   download: faDownload,
   ellipsis: faEllipsis,
+  eye: faEye,
+  'eye-slash': faEyeSlash,
   file: faFile,
   'file-circle-plus': faFileCirclePlus,
   'file-code': faFileCode,

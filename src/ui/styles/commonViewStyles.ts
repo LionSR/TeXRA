@@ -220,15 +220,12 @@ export const commonViewStyles: CSSResult = css`
     gap: var(--wa-space-2xs);
   }
 
-  /* Panel collapsible - consistent styling for collapsible panels */
-  .panel-collapsible {
-    border-top: var(--border-thin) solid var(--color-border);
-  }
-
-  /* Boxed variant: also rule off the bottom edge so the panel reads as a
-     standalone band (used by the Plan panel in the progress board). */
-  .panel-collapsible.is-boxed {
-    border-bottom: var(--border-thin) solid var(--color-border);
+  /* The primitive owns one frame. Host borders would sit outside WA's own
+     rounded base and create stray rules above and below the same panel. */
+  .panel-collapsible::part(base) {
+    border: var(--border-thin) solid var(--color-border);
+    border-radius: var(--border-radius);
+    background: var(--wa-color-surface-default);
   }
 
   .panel-collapsible::part(header) {

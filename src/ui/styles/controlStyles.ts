@@ -559,7 +559,7 @@ export const formControlStyles: CSSResult = css`
 
 /**
  * The settings row primitive: label (plus optional help text) on the left, the
- * control on the right, a hairline between rows, and nothing else — no
+ * control on the right, a hairline between adjacent rows, and nothing else — no
  * per-row card, no per-row radius, no per-row background.
  *
  * Reaches the settings tabs through `commonViewStyles`, which every tab already
@@ -577,11 +577,12 @@ export const settingsRowStyles: CSSResult = css`
     justify-content: space-between;
     gap: var(--wa-space-m);
     padding-block: var(--wa-space-xs);
-    border-block-end: var(--border-thin) solid var(--border-hairline);
   }
 
-  .settings-row:last-child {
-    border-block-end: 0;
+  /* Only separate peer rows. A following card, disclosure, or custom element
+     owns its own boundary; a row must not add a second line around it. */
+  .settings-row + .settings-row {
+    border-block-start: var(--border-thin) solid var(--border-hairline);
   }
 
   .settings-row.is-compact {
@@ -592,14 +593,23 @@ export const settingsRowStyles: CSSResult = css`
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--wa-space-3xs);
     min-width: 0;
   }
 
   .settings-row-label {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
     font-size: var(--font-size);
     font-weight: var(--font-weight-medium);
     color: var(--wa-color-text-normal);
+  }
+
+  .settings-row-label > wa-icon {
+    flex: 0 0 var(--font-size-icon-sm);
+    width: var(--font-size-icon-sm);
+    height: var(--font-size-icon-sm);
   }
 
   .settings-row-help {
@@ -624,14 +634,18 @@ export const settingsRowStyles: CSSResult = css`
     max-width: 100%;
   }
 
+  .settings-row.is-toggle wa-switch::part(label) {
+    margin-inline-start: 0;
+  }
+
   @container settings (max-width: 520px) {
-    .settings-row {
+    .settings-row:not(.is-toggle) {
       align-items: stretch;
       flex-direction: column;
       gap: var(--wa-space-xs);
     }
 
-    .settings-row-control {
+    .settings-row:not(.is-toggle) .settings-row-control {
       align-self: flex-start;
       max-width: 100%;
       flex-wrap: wrap;
