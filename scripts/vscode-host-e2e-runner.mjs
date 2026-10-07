@@ -15,6 +15,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -59,6 +60,16 @@ const WATCHDOG_MS = 8 * 60_000;
 const watchdog = setTimeout(() => {
   console.error(`VS Code host e2e did not finish within ${WATCHDOG_MS} ms`);
   printLogs();
+  // What is still alive, and which of it holds VS Code open.
+  if (process.platform !== 'win32')
+    console.error(
+      spawnSync('ps', ['-axo', 'pid,ppid,pgid,etime,command'], {
+        encoding: 'utf8',
+      })
+        .stdout.split('\n')
+        .filter((line) => /Code|serve|node|vsh-/.test(line))
+        .join('\n'),
+    );
   stopService(path.join(home, '.texra', 'run', 'serve.json'));
   process.exit(1);
 }, WATCHDOG_MS);
