@@ -12,7 +12,6 @@
   "packages/harness/src/agent/runtime/AgentLaunchContext.ts": 3,
   "packages/harness/src/agent/runtime/AgentRunLifecycle.ts": 1,
   "packages/harness/src/agent/runtime/childRunLoop.ts": 2,
-  "packages/harness/src/agent/runtime/executeAgent.ts": 1,
   "packages/harness/src/agent/runtime/FollowUps.ts": 2,
   "packages/harness/src/agent/runtime/historyQuery/HistoryQuery.ts": 3,
   "packages/harness/src/agent/runtime/historyQuery/views.ts": 2,

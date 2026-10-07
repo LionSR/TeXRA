@@ -88,10 +88,9 @@ const text = (value: string): TurnResult['content'] => [
 ];
 
 /**
- * The scripted conversation of the golden 1.0 store
- * (`generate-golden-store.mjs`): each agent's system prompt names its part,
- * and a part's step is the count of tool results its history holds. A held
- * call waits for its `*.release` file beside the flag file.
+ * The golden 1.0 store's scripted conversation (`generate-golden-store.mjs`):
+ * a system prompt names its part, a step is its count of tool results, and a
+ * held call waits for its `*.release` file beside the flag file.
  */
 function goldenTurn(
   turn: ResolvedTurn,
@@ -120,11 +119,12 @@ function goldenTurn(
     return gate('golden-park.release').pipe(
       Effect.as(text('Parked run released.')),
     );
-  // A command that waits for its approval (the service checks).
+  // A call awaiting approval: the tool named after the marker, else bash.
+  const asked = /GOLDEN-APPROVAL (\w+)/.exec(system)?.[1] ?? 'bash';
   if (system.includes('GOLDEN-APPROVAL'))
     return Effect.succeed(
       results.length === 0
-        ? [call('bash', { command: 'echo approved >> approved.txt' })]
+        ? [call(asked, { command: 'echo approved >> approved.txt' })]
         : text('The approved command ran.'),
     );
   // A diagnostics read the service forwards to an attached window.

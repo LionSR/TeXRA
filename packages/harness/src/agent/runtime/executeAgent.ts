@@ -405,11 +405,9 @@ export function executeAgent(
  */
 export type ResumeTurnIdentity = Pick<ResumeData, 'runId' | 'agentConfig'>;
 
+/** What a fresh launch takes, but its own-key fallback. */
 export interface ResumeToolUseFromResumeDataOptions
-  extends
-    SubagentRunOptions,
-    Pick<ExecuteAgentOptions, 'publishWorkflowOutput' | 'stopAfterCycle'>,
-    RunTerminalOwner {
+  extends Omit<ExecuteAgentOptions, 'ownApiKeyFallback'>, RunTerminalOwner {
   /** A resumed cycle is idle after its child delivery, while its run stays live. */
   readonly onIdle?: () => void;
   /** Caller-owned cancellation, read on the run's fiber before its loop. */
@@ -457,6 +455,8 @@ export function resumeToolUseFromResumeData(
       definition,
       runId: resume.runId,
       resumed: true,
+      onRunResolved: options.onRunResolved,
+      onTraceEvent: options.onTraceEvent,
       session: runSession,
       toolPolicy: {
         approvalPromptsUnavailable:

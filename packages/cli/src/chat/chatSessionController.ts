@@ -702,13 +702,17 @@ export function createChatSessionController(
   const settleResumedTurn = Effect.fn('settleResumedTurn')(function* (
     result: {
       readonly outcome?: TurnOutcome;
-      readonly completion?: Effect.Effect<TurnOutcome, Error>;
+      readonly completion?: Effect.Effect<
+        { readonly outcome: TurnOutcome },
+        Error
+      >;
     },
     claim: RootRunSettled,
   ) {
     const outcome =
-      (result.completion ? yield* result.completion : result.outcome) ??
-      RUN_OUTCOME.COMPLETED;
+      (result.completion
+        ? (yield* result.completion).outcome
+        : result.outcome) ?? RUN_OUTCOME.COMPLETED;
     session.settleExitCode(claim, runOutcomeExitCode(outcome));
   });
 

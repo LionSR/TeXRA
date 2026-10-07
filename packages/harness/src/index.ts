@@ -27,6 +27,9 @@ export type { AgentPlatform, Composition } from './effect/sessions.js';
 export type { Plugin } from '@tools/plugins';
 export { Sessions } from './effect/sessions.js';
 export type {
+  ApprovalHandler,
+  OpenOptions,
+  PendingRequest,
   Run,
   Session,
   SessionView,
@@ -56,7 +59,9 @@ export {
 export {
   AgentNotFound,
   PluginsRefused,
+  ResumeRefused,
   RunFailure,
+  SessionOptionsConflict,
   ToolsRefused,
 } from './effect/errors.js';
 export type { LaunchError } from './effect/errors.js';
@@ -92,6 +97,7 @@ export { defineTool } from '@tools/core/definition';
 export type { DefinedTool } from '@tools/core/definition';
 export type {
   AggregateId,
+  RequestDecision,
   RunId,
   SessionCloseReport,
   TranscriptSubscription,
