@@ -325,10 +325,6 @@ export const serviceHandlers = TexraRpcs.toLayer(
         ),
       'host.focus': ({ attachment }) => hosts.focus(attachment),
       'host.answer': ({ id, answer }) => hosts.answer(id, answer),
-      'project.policy': ({ workspace, policy }) =>
-        open(workspace).pipe(
-          Effect.map((session) => session.approvals.setPolicy(policy)),
-        ),
       'task.resume': ({ workspace, runId }) =>
         Effect.gen(function* () {
           yield* refuseWhileDraining;

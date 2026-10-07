@@ -89,9 +89,7 @@ const SUBSCRIPTION_USAGE_PROVIDERS_BY_ID: Readonly<
 
 interface SettingsViewBodyPorts {
   readonly host: 'vscode' | 'desktop';
-  readonly session: Pick<SessionHandle, 'roots'> & {
-    readonly approvals: Pick<SessionHandle['approvals'], 'setPolicy'>;
-  };
+  readonly session: Pick<SessionHandle, 'roots'>;
   readonly secrets: PlatformSecrets;
   /** The packaged resources root; the agent templates live under it. */
   readonly resourcesPath: string;
@@ -274,8 +272,6 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
         host: ports.host,
         stores: roots,
         requiresOpenWorkspace: bindings.requiresOpenWorkspace,
-        onApprovalPolicyChanged: (policy) =>
-          ports.session.approvals.setPolicy(policy),
       });
       if (result.kind === 'ignored') return;
       const label = result.entry.title ?? result.entry.key;

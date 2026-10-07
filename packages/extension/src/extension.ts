@@ -83,9 +83,7 @@ import { StorageFs, withSessionFs } from '@platform/rootedFs';
 import { GlobalDatabase } from '@shared/session/database';
 import {
   formatTexraApprovalPolicy,
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   texraApprovalPolicyLabel,
-  type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
@@ -103,7 +101,6 @@ import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { reachExtensionService } from './common/extensionService';
 
@@ -526,25 +523,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
         ),
         undefined,
       ),
-    );
-  }
-  runtimeSession.approvals.setPolicy(
-    yield* readSettingFrom<TexraApprovalPolicy>(
-      runtimeSession.roots,
-      TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-    ),
-  );
-  // The service's session of this project takes the window's policy, and
-  // every change of it the settings view makes.
-  if (Result.isSuccess(service)) {
-    yield* backend.setApprovalPolicy(runtimeSession.approvals.policy());
-    yield* Effect.forkScoped(
-      onAppSignal('approvalPolicyChanged', () =>
-        runtime.runFork(
-          backend.setApprovalPolicy(runtimeSession.approvals.policy()),
-        ),
-      ),
-      { startImmediately: true },
     );
   }
   // The run-storage directory of the session just initialized, through that

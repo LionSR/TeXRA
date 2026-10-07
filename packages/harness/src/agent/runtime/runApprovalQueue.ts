@@ -16,8 +16,9 @@
 
 import { Effect, SubscriptionRef } from 'effect';
 
+import type { ConfigProvider } from '@platform/interfaces';
 import {
-  TEXRA_APPROVAL_POLICY_DEFAULT,
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 
@@ -44,6 +45,7 @@ import type {
 import { writeRefused, type RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SessionView } from '@shared/session/sessionView';
+import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 import type { SessionHandle, SessionLog } from './SessionHandle';
@@ -69,10 +71,12 @@ type QueuedKind = Extract<ApprovalBypassKind, 'bash' | 'toolEdit'>;
 export type GrantWriteError =
   DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed;
 
-/** The session doors the grants are read from and committed through. */
+/** The session doors the grants are read from and committed through, and
+ *  the project config its approval policy is read from. */
 interface GrantStore {
   readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
   readonly log: Pick<SessionLog, 'transact' | 'records'>;
+  readonly config: ConfigProvider;
 }
 
 /** A run's grants as its rows record them: the latest `approval.policy`,
@@ -151,11 +155,20 @@ export interface SessionApprovals {
   activationRows(
     runId: RunId,
   ): Effect.Effect<readonly SessionEventDraft[], DatabaseReadFailed>;
-  /** The session's approval policy, the host's setting, read live. */
+  /**
+   * The session's approval policy: this process's override, else the
+   * project's persisted `texra.approvalPolicy`, read at each call. The
+   * persisted setting is the one owner of a project's policy; a client
+   * changes it by writing that setting, never by telling a session.
+   */
   policy(): TexraApprovalPolicy;
-  /** Set the session's approval policy: every request any of its runs
-   *  opens from now on is decided under it. */
-  setPolicy(policy: TexraApprovalPolicy): void;
+  /**
+   * Override the persisted policy for this process's own session (a CLI
+   * invocation's `--approval-policy`, a chat's `/approval`); null follows
+   * the setting again. The service never takes one: its sessions serve
+   * every window of a project, so they follow the setting alone.
+   */
+  override(policy: TexraApprovalPolicy | null): void;
 }
 
 /** Build the session's approvals over its view and its record door. */
@@ -169,12 +182,17 @@ export function createSessionApprovals(store: GrantStore): SessionApprovals {
   };
   const bypass: SessionApprovals['bypass'] = (runId, kind) =>
     resolveBypass(SubscriptionRef.getUnsafe(store.view), runId, kind);
-  let policy = TEXRA_APPROVAL_POLICY_DEFAULT;
+  let overridden: TexraApprovalPolicy | null = null;
   return {
     bypass,
-    policy: () => policy,
-    setPolicy: (next) => {
-      policy = next;
+    policy: () =>
+      overridden ??
+      readConfigSettingFrom<TexraApprovalPolicy>(
+        store.config,
+        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+      ),
+    override: (next) => {
+      overridden = next;
     },
     enqueue: (kind, runId, approval) =>
       Effect.suspend(() =>

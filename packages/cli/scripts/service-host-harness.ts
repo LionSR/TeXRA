@@ -2,14 +2,15 @@
 // TeXRA service offering `readDiagnostics`, the way an extension window
 // does. `answer` answers each read with one diagnostic naming the file;
 // `hang` never answers, so the validator can detach it mid-call. It prints
-// `ATTACHED` once its attachment is up and `CALLED <path>` per read, and
-// runs until it is killed.
+// `ATTACHED` once its attachment is up, `LINKED` each time its link
+// reaches a service (a restart prints it again), and `CALLED <path>` per
+// read, and runs until it is killed.
 //
 //   node service-host-harness.js <storageRoot> <workspace> <answer|hang>
 
 import path from 'node:path';
 
-import { Effect, Stream } from 'effect';
+import { Effect, Stream, SubscriptionRef } from 'effect';
 
 import { linkService } from '@texra/controllers/server/client';
 import { attachWindowHost } from '@texra/controllers/server/windowHost';
@@ -30,6 +31,11 @@ await Effect.runPromise(
         storageRoot,
         Effect.fail(
           new Error('The harness attaches to a running service only.'),
+        ),
+      );
+      yield* Effect.forkScoped(
+        Stream.runForEach(SubscriptionRef.changes(link.client), (client) =>
+          client === null ? Effect.void : say('LINKED'),
         ),
       );
       yield* attachWindowHost(

@@ -19,10 +19,10 @@ import { type SlashCommandContext } from './slashContext';
 const APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
 
 /**
- * `/approval` is a session-scoped override, like `--approval-policy`: it moves
- * the live policy for this session only and never writes `.texra/config.json`.
- * The persisted default is `/config`'s row, which applies its new value to this
- * same session through the shared write path's approval-policy port.
+ * `/approval` sets the chat's policy. A chat running in this process takes
+ * it as a session override, like `--approval-policy`. A chat whose tasks run
+ * in the service writes the project's persisted policy instead: the service
+ * follows only that setting, for every window and terminal of the project.
  */
 export function applyCliApprovalPolicySelection(
   input: string,

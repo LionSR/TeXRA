@@ -31,10 +31,6 @@ import { setLogSink, silentLogSink, writeLogLine } from '@logger/logSink';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@platform/defaults/nodeStores';
-import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
 import type {
   GlobalDatabase,
   ProjectDatabases,
@@ -52,7 +48,6 @@ import {
   type ServiceUnavailable,
 } from '@texra/controllers/server/client';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { envFlag } from '@utils/system/envFlags';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -130,38 +125,22 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     | ProjectDatabases
     | SessionOwner
   >();
+  // Each project's approval policy is its persisted setting, which the
+  // session reads at every decision through these following config stores:
+  // a change any client writes applies to the next request, and nothing a
+  // window holds can replace it.
   const sessions = new Map<string, SessionHandle>();
   const lanes = new Map<string, PerKeyLane>();
-  // Each project's approval policy as its config last read: a change there
-  // (`texra config`, any window's settings) applies at the next call, and
-  // a policy a window told the service holds until the config changes.
-  const configuredPolicy = new Map<string, TexraApprovalPolicy>();
-  const followPolicy = (root: string, session: SessionHandle) =>
-    Effect.map(
-      readSettingFrom<TexraApprovalPolicy>(
-        session.roots,
-        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-      ),
-      (policy) => {
-        if (configuredPolicy.get(root) === policy) return;
-        configuredPolicy.set(root, policy);
-        session.approvals.setPolicy(policy);
-      },
-    );
   const open = (workspace: string) => {
     const root = canonicalizeWorkspacePath(workspace);
     return Effect.gen(function* () {
       const held = sessions.get(root);
-      if (held !== undefined) {
-        yield* followPolicy(root, held);
-        return held;
-      }
+      if (held !== undefined) return held;
       const roots = yield* openRoots(root);
       const session = yield* (yield* SessionOwner).open({
         roots,
         interruptedTasks: 'offer',
       });
-      yield* followPolicy(root, session);
       sessions.set(root, session);
       return session;
     }).pipe(

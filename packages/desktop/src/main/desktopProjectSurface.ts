@@ -223,7 +223,6 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
           ),
         },
         session: project.session,
-        backend: project.backend,
         secrets: options.secrets,
         resourcesPath: options.resourcesPath,
         spawn: desktopSpawner(runtime, owner),

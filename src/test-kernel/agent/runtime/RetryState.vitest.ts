@@ -1049,7 +1049,7 @@ describe('ModelInvoker retry', () => {
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
       const session = yield* sessionWithInteractions(undefined);
-      session.approvals.setPolicy('yolo');
+      session.approvals.override('yolo');
       const stub = stubModel([
         { fail: new Error('stream dropped before first token') },
       ]);

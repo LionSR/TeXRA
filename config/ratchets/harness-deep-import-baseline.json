@@ -116,7 +116,6 @@
       "@platform/defaults/nodeStorage",
       "@platform/defaults/nodeStores",
       "@platform/rootedFs",
-      "@shared/approvalPolicy",
       "@shared/iconNames",
       "@shared/ipc",
       "@shared/model/accountAuth",

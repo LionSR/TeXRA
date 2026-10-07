@@ -30,7 +30,6 @@ import type {
   SessionHandle,
   SessionViewAccess,
 } from '@agent/runtime/SessionHandle';
-import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   RUN_OUTCOME,
   type RunId,
@@ -99,10 +98,6 @@ export interface SessionBackend {
   readonly ended: (runId: RunId) => Effect.Effect<RunEndResult>;
   /** A live run's model switch, while its loop runs; undefined otherwise. */
   readonly controls: (runId: RunId) => RunModelControls | undefined;
-  /** The session's approval policy, from this window's settings. */
-  readonly setApprovalPolicy: (
-    policy: TexraApprovalPolicy,
-  ) => Effect.Effect<void>;
 }
 
 /** How a window launches a run, whichever backend runs it. */
@@ -209,7 +204,5 @@ export function localSessionBackend(session: SessionHandle): SessionBackend {
       }),
     // A tool this process runs stages its own preview (`presentToolEdit`).
     preview: () => Effect.succeed(null),
-    setApprovalPolicy: (policy) =>
-      Effect.sync(() => session.approvals.setPolicy(policy)),
   };
 }

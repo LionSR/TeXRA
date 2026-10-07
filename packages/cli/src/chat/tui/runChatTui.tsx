@@ -44,6 +44,8 @@ import { cliSecrets } from '@cli/runtime/cliSecrets';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import {
   formatTexraApprovalPolicy,
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+  texraApprovalPolicyLabel,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { RUN_PHASE } from '@shared/schemas';
@@ -57,6 +59,7 @@ import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { attachWindowHost } from '@texra/controllers/server/windowHost';
 import { serviceSessionBackend } from '@texra/controllers/server/serviceBackend';
 import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
+import { writeSettingTo } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { serviceAgentRuns } from '../serviceAgentRuns';
 
@@ -188,7 +191,6 @@ export async function runChat(
         }),
       });
       const runtimeSession = yield* services.session;
-      runtimeSession.approvals.setPolicy(context.approvalPolicy);
       const backend = Result.isSuccess(service)
         ? yield* serviceSessionBackend(
             service.success,
@@ -198,12 +200,21 @@ export async function runChat(
         : localSessionBackend(runtimeSession);
       // Said once the view is bound, which the transcript rows need.
       const startupNotices: string[] = [];
-      if (Result.isSuccess(service))
-        yield* backend.setApprovalPolicy(context.approvalPolicy);
-      else
+      if (Result.isSuccess(service)) {
+        // The service decides this chat's requests under the project's
+        // persisted policy, which no client overrides; a different one this
+        // invocation asked for is said, not silently dropped.
+        const configured = runtimeSession.approvals.policy();
+        if (context.approvalPolicy !== configured)
+          startupNotices.push(
+            `This chat's tasks run in the TeXRA service under the project's approval policy, ${texraApprovalPolicyLabel(configured)}, not ${texraApprovalPolicyLabel(context.approvalPolicy)}. Change the project's policy with /approval, or run with TEXRA_NO_SERVICE=1 to use ${texraApprovalPolicyLabel(context.approvalPolicy)} in this chat alone.`,
+          );
+      } else {
+        runtimeSession.approvals.override(context.approvalPolicy);
         startupNotices.push(
           `This chat runs here only, so other terminals and windows will not see it: ${service.failure.message}`,
         );
+      }
       // Without a usable credential the chat still opens: the "Connect a
       // model" panel takes the first foreground slot, and model resolution
       // waits for the connection instead of ending the process.
@@ -321,9 +332,27 @@ export async function runChat(
     ...context,
     quietLogs: true,
   });
+  // Here, `/approval` overrides this chat's own session. In the service it
+  // writes the project's persisted policy, the one the service follows for
+  // every window and terminal of the project.
   const setApprovalPolicy = (policy: TexraApprovalPolicy): void => {
-    runtimeSession.approvals.setPolicy(policy);
-    if (runsElsewhere) runtime.runFork(backend.setApprovalPolicy(policy));
+    if (runsElsewhere)
+      runtime.runFork(
+        writeSettingTo(
+          runtimeSession.roots,
+          TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+          policy,
+        ).pipe(
+          Effect.catch((error) =>
+            Effect.sync(() =>
+              appendLocalNotice(
+                `The project's approval policy was not saved: ${error.message}`,
+              ),
+            ),
+          ),
+        ),
+      );
+    else runtimeSession.approvals.override(policy);
     patchSessionMeta({ approvalPolicy: policy });
   };
   // The slash-command context is identical at every call site; build it once

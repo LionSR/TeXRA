@@ -369,7 +369,7 @@ if (HARNESS_MEMORY_FILES.length > 0) {
 const harnessRuntimeSession = await harnessRuntime.runPromise(
   HARNESS_PLATFORM_SERVICES.session,
 );
-harnessRuntimeSession.approvals.setPolicy(TEXRA_APPROVAL_POLICY_DEFAULT);
+harnessRuntimeSession.approvals.override(TEXRA_APPROVAL_POLICY_DEFAULT);
 if (process.env.HARNESS_VISIBLE_AGENTS !== undefined) {
   await harnessRuntime.runPromise(
     harnessRoots.repoState.update(WorkspaceStateKey.WORKSPACE_AGENTS, {
@@ -1468,7 +1468,7 @@ function appendHarnessTranscript(
 }
 
 function setHarnessApprovalPolicy(policy: TexraApprovalPolicy): void {
-  harnessRuntimeSession.approvals.setPolicy(policy);
+  harnessRuntimeSession.approvals.override(policy);
   sessionMeta.set({
     ...sessionMeta.get(),
     approvalPolicy: policy,

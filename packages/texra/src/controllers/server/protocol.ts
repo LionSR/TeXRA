@@ -21,7 +21,6 @@
  * - `task.start` / `task.resume`: launch or continue a task in the service;
  *   `task.ended`: the outcome it ends with.
  * - `task.model`: switch a running task's model.
- * - `project.policy`: the approval policy of a project's session.
  * - `host.attach` / `host.focus` / `host.answer`: a window offering its host
  *   capabilities to its project's tasks (see `hostCalls.ts`).
  * - `request.preview`: a pending tool edit's original and proposed content,
@@ -33,7 +32,6 @@ import * as SchemaIssue from 'effect/SchemaIssue';
 import { z } from 'zod';
 
 import { AgentConfigSchema } from '@texra-ai/harness/schemas';
-import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import { RunEndSchema, RunIdSchema } from '@shared/schemas';
 
 import {
@@ -229,10 +227,6 @@ export const TexraRpcs = RpcGroup.make(
    *  refused with the run's reason. */
   Rpc.make('task.model', {
     payload: { workspace, runId: zodWire(RunIdSchema), model: Schema.String },
-    error: zodWire(TaskFailedSchema),
-  }),
-  Rpc.make('project.policy', {
-    payload: { workspace, policy: zodWire(TexraApprovalPolicySchema) },
     error: zodWire(TaskFailedSchema),
   }),
   Rpc.make('host.attach', {

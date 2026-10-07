@@ -245,7 +245,7 @@ export function executeCliRequest(
       ...options.agentRuns,
     };
     const session = yield* options.session;
-    session.approvals.setPolicy(runContext.approvalPolicy);
+    session.approvals.override(runContext.approvalPolicy);
     const presentationHost = createCliRuntimeHost(runContext);
     // Everything the run attaches to the session for its output: closed once,
     // after the last result read, so the last line is on the wire before the

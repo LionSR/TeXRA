@@ -888,6 +888,18 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A window reconnecting to the TeXRA service no longer restores an old
+  approval policy.** The project's saved approval policy is now the only
+  one the service follows: it reads the setting for every request, and a
+  window or terminal changes it only by saving the setting (the settings
+  view, `/config`, or `/approval` in a chat whose tasks run in the
+  service). Before, each window re-sent the policy it last held whenever it
+  reconnected, so a window left open on Auto-approve could silently undo
+  another window's change to Ask. `texra chat --approval-policy` and
+  `texra tasks start --approval-policy` still apply to a chat run with
+  `TEXRA_NO_SERVICE=1`; with the service, they say that the project's
+  policy applies instead.
+
 - **OpenAI models can use tools.** A task on an OpenAI model, directly
   or through OpenRouter, failed on its first request with an "Invalid schema
   for function 'memory'" (or 'executions') error, because the line-range
