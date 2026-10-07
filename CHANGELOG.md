@@ -12,6 +12,9 @@ All notable changes to this project will be documented in this file.
   still has `inherits:` is not listed; the Agents tab and `texra agents`
   show it as an issue saying "`inherits` was removed in 1.0; copy the fields you need into this
   agent". No built-in agent used it.
+- **`/login` takes `chatgpt` or `grok` only.** The undocumented spellings
+  `codex`, `subscription`, `xai` and `supergrok` are gone; one of them now
+  shows the `/login` usage instead of signing in.
 - **Task history is stored without per-turn snapshots.** A task now resumes
   from the rows that record each fact (its configuration, its messages, its
   tool results), so a resumed task picks up exactly where its rows left it.

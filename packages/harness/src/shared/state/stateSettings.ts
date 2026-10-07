@@ -367,7 +367,7 @@ const HARNESS_CONFIG_ROWS: Record<
   'model.useGoogleBackgroundResponses': configToggle(
     false,
     'Google background responses',
-    'Run Google workflow generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically.',
+    'Run text-only Google generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically.',
   ),
   'model.useBackgroundResponses': configToggle(
     true,

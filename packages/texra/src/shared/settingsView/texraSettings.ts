@@ -123,7 +123,7 @@ const TEXRA_CONFIG_ROWS: Record<
   'agentOutputs.autoOpenFinal': {
     schema: z.boolean().prefault(true),
     description:
-      "When a workflow run completes, automatically preview the final revised file in a new editor tab. Disable for batch runs when you don't want a tab to steal focus.",
+      "When a document task completes, automatically preview the final revised file in a new editor tab. Disable for batch runs when you don't want a tab to steal focus.",
   },
   'bib.defaultPath': {
     schema: z.string().prefault(''),
