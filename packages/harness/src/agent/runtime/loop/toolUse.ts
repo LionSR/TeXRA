@@ -284,11 +284,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             : Effect.succeed({ parts: [], kinds: [] }),
         );
         if (run.initialUserMessageForTranscript) {
-          logUserMessage(
-            logger,
-            run.initialUserMessageForTranscript,
-            Exit.isSuccess(media) ? media.value.kinds : [],
-          );
+          logUserMessage(logger, run.initialUserMessageForTranscript, {
+            attachments: Exit.isSuccess(media) ? media.value.kinds : [],
+          });
         }
         if (Exit.isFailure(media)) return yield* Effect.failCause(media.cause);
         content.push(...media.value.parts);

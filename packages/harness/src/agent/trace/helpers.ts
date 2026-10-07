@@ -159,18 +159,28 @@ export function startCompactionActivity(
  * `attachments` records each attached media file's kind (not bytes) so the
  * archived conversation can render `[image attachment]` / `[document
  * attachment]` markers for media that only ever reached the provider
- * message (#7508). `scriptSummary` carries a workflow delivery's typed
- * presentation facts beside the row text (`UserMessagePayloadSchema`), so
- * renderers never re-parse them out of the text.
+ * message (#7508), and `mediaFiles` the files a follow-up attached, which
+ * "Fork from here" carries into the fork's composer. `scriptSummary` carries
+ * a workflow delivery's typed presentation facts beside the row text
+ * (`UserMessagePayloadSchema`), so renderers never re-parse them out of the
+ * text.
  */
 export function logUserMessage(
   trace: AgentTrace,
   message: string,
-  attachments?: readonly MediaAttachmentKind[],
-  scriptSummary?: ScriptDeliverySummary,
+  {
+    attachments,
+    mediaFiles,
+    scriptSummary,
+  }: {
+    readonly attachments?: readonly MediaAttachmentKind[];
+    readonly mediaFiles?: readonly string[] | null;
+    readonly scriptSummary?: ScriptDeliverySummary;
+  } = {},
 ): void {
   const data = {
     ...(attachments?.length ? { attachments } : {}),
+    ...(mediaFiles?.length ? { mediaFiles } : {}),
     ...(scriptSummary ? { scriptSummary } : {}),
   };
   trace.info(message, {

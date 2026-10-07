@@ -42,12 +42,15 @@ export type MediaAttachmentKind = z.infer<typeof MediaAttachmentKindSchema>;
  * bytes — so the archived conversation can render `[image attachment]` /
  * `[document attachment]` markers for media that was sent to the model but
  * only ever lived in the provider message, not the transcript row.
+ * `mediaFiles` are the files a follow-up attached, as its send named them,
+ * so "Fork from here" puts them back in the fork's composer beside the text.
  * `scriptSummary` carries a workflow delivery's typed presentation facts
  * beside the rendered text, so the progress view renders structured data
  * instead of re-parsing it out of the row text.
  */
 export const UserMessagePayloadSchema = z.object({
   attachments: z.array(MediaAttachmentKindSchema).optional(),
+  mediaFiles: z.array(z.string()).optional(),
   scriptSummary: ScriptDeliverySummarySchema.optional(),
 });
 

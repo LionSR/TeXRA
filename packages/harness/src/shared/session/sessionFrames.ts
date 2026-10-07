@@ -151,11 +151,13 @@ const SurfaceActionMessageSchema = z.object({
     /** The run accelerator: the composer's Send for the surface's resolved
      *  selection, a follow-up to the selected stream or a launch (PRD 12.4). */
     z.object({ kind: z.literal('submit') }),
-    /** A fork's composer holds the message "Fork from here" cut before. */
+    /** A fork's composer holds the message "Fork from here" cut before,
+     *  with the files it attached as the composer's images. */
     z.object({
       kind: z.literal('draft'),
       runId: RunIdSchema,
       text: z.string(),
+      images: z.array(z.object({ fileName: z.string(), path: z.string() })),
     }),
     /** A workflow run of this session left running for finished or
      *  cancelled: the host decides the transition once and sends it to one

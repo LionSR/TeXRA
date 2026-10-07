@@ -460,7 +460,7 @@ export function createSessionSurfaces(options: {
       act(entry, {
         kind: 'draft',
         runId: action.runId,
-        patch: { text: action.text },
+        patch: { text: action.text, images: action.images },
       });
     else if (action.kind !== 'showSessions') act(entry, action);
     // Show Sessions opens the newest session only from the New-task state.

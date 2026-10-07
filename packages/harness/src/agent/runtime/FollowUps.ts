@@ -53,7 +53,6 @@ import { activatedSkillNames } from '@skills/runtimeSkills';
 import { sha256 } from '@utils/core/idHash';
 import { ensureError } from '@utils/errors/errorMessage';
 import { type InputPart, mediaInputParts } from './run/mediaInput';
-
 import { blobRows } from './run/requestContext';
 import {
   appendRow,
@@ -192,11 +191,12 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
 
   const logFollowUps = (
     followUps: readonly QueuedFollowUp[],
-    kinds: readonly MediaAttachmentKind[],
+    attachments: readonly MediaAttachmentKind[],
   ): void => {
     for (const { content } of followUps) {
-      const display = followUpDisplay(content);
-      logUserMessage(logger, display.text, kinds, display.scriptSummary);
+      const { text, scriptSummary } = followUpDisplay(content);
+      const { mediaFiles } = content;
+      logUserMessage(logger, text, { attachments, mediaFiles, scriptSummary });
     }
   };
 

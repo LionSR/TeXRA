@@ -13,6 +13,8 @@
  * the host's switch to exactly those kinds, so it stays exhaustive and the
  * compiler still names a kind it forgot.
  */
+import * as path from 'node:path';
+
 import { Effect } from 'effect';
 
 import { Rejected, type HostRequestFailure } from '@texra-ai/harness';
@@ -315,12 +317,25 @@ export function handleSharedHostRequest(
           request.runId,
           request.at ?? null,
         );
-        if (request.draft != null)
+        const { draft } = request;
+        if (draft != null) {
+          // The composer keeps an image while its text holds the image's
+          // `[name]` chip, the stored file's name. A send from the CLI
+          // names it `[Image #N]` instead, so a missing chip is added.
+          const images = (request.mediaFiles ?? []).map((file) => ({
+            fileName: path.basename(file),
+            path: file,
+          }));
+          const chips = images
+            .map(({ fileName }) => `[${fileName}]`)
+            .filter((chip) => !draft.includes(chip));
           host.surfaceAction({
             kind: 'draft',
             runId: forked,
-            text: request.draft,
+            text: [draft, ...chips].join(' '),
+            images,
           });
+        }
         host.surfaceAction({ kind: 'select', runId: forked });
         return done;
       }

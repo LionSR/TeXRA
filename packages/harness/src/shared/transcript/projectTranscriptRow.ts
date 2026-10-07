@@ -267,6 +267,9 @@ export function logPayloadRow(
         ...(payload.data?.attachments
           ? { attachments: payload.data.attachments }
           : {}),
+        ...(payload.data?.mediaFiles
+          ? { mediaFiles: payload.data.mediaFiles }
+          : {}),
         ...(forkAt === undefined ? {} : { forkAt }),
       };
     }
