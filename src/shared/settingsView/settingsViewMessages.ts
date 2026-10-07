@@ -76,13 +76,13 @@ export {
  * command surfaces so no stale IPC target remains.
  */
 export const SETTINGS_TAB_ORDER = [
-  'models',
-  'agents',
-  'plugins',
-  'latex',
-  'memory',
   'general',
   'shortcuts',
+  'models',
+  'agents',
+  'memory',
+  'plugins',
+  'latex',
 ] as const;
 
 /**

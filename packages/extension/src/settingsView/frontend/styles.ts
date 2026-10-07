@@ -185,14 +185,38 @@ export const settingsViewStyles: CSSResult[] = [
       overflow: visible;
     }
 
+    .settings-nav-group-label {
+      margin-block-start: var(--wa-space-s);
+      padding: var(--wa-space-2xs) var(--wa-space-xs);
+      color: var(--wa-color-text-quiet);
+      font-size: var(--font-size-xs);
+      font-weight: var(--font-weight-medium);
+      line-height: var(--line-height-normal);
+    }
+
+    .settings-nav-group-label:first-child {
+      margin-block-start: 0;
+    }
+
     :host([data-desktop-view]) .settings-page-button::part(base) {
       justify-content: flex-start;
+      gap: var(--wa-space-xs);
       min-height: var(--height-button);
       padding-inline: var(--wa-space-xs);
       border-radius: var(--row-radius);
       box-shadow: none;
       white-space: normal;
       text-align: start;
+    }
+
+    :host([data-desktop-view]) .settings-page-button::part(start) {
+      flex: none;
+      margin: 0;
+    }
+
+    :host([data-desktop-view]) .settings-tab-icon {
+      width: var(--font-size-icon-sm);
+      height: var(--font-size-icon-sm);
     }
 
     :host([data-desktop-view])

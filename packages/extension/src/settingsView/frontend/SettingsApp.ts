@@ -232,9 +232,19 @@ export class SettingsApp extends SignalWatcher(LitElement) {
           aria-label="Settings pages"
           @keydown=${this.handleTablistKeydown}
         >
-          ${entries.map((entry) => {
+          ${entries.map((entry, index) => {
             const active = entry === activeEntry;
             return html`
+              ${
+                this.isDesktopHost && entry.group !== entries[index - 1]?.group
+                  ? html`<span
+                      class="settings-nav-group-label"
+                      role="presentation"
+                      aria-hidden="true"
+                      >${entry.group}</span
+                    >`
+                  : nothing
+              }
               <wa-button
                 class="settings-page-button"
                 appearance="plain"
@@ -246,7 +256,6 @@ export class SettingsApp extends SignalWatcher(LitElement) {
                 tabindex=${active ? '0' : '-1'}
                 data-active=${String(active)}
                 data-panel=${entry.panel}
-                title=${entry.label}
                 @click=${() => this.selectSettingsEntry(entry)}
               >
                 ${waIcon(entry.icon, {
