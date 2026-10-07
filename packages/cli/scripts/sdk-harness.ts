@@ -7,16 +7,22 @@
 //     session and prints the run's id, its result and the identity its
 //     session view gives it.
 //   node sdk-harness.js <workspace> <storageDir> ask <instruction>
-//     Starts a run that asks to run a command on a persistent session, and
+//     Starts a run whose custom tool asks for approval on a persistent
+//     session, and
 //     prints the request its approval handler receives. The handler never
 //     answers, so the process waits there until it is killed.
 //   node sdk-harness.js <workspace> <storageDir> resume <runId>
 //     Reopens the persistent session, resumes the run, approves what its
 //     handler receives, and prints the requests it answered and the result.
 
+import { appendFileSync } from 'node:fs';
+import path from 'node:path';
+
 import { Effect, Option, Stream } from 'effect';
+import { z } from 'zod';
 
 import {
+  defineTool,
   Sessions,
   type ApprovalHandler,
   type PendingRequest,
@@ -49,6 +55,23 @@ const asked = (request: PendingRequest) => ({
 /** Reports each request, and answers none: the run stays parked on it. */
 const reportOnly: ApprovalHandler = (request) =>
   print({ asked: asked(request) }).pipe(Effect.andThen(Effect.never));
+
+/** The embedder's own tool, which runs only once approved: it records the
+ *  approval in `approved.txt` in the workspace (the scripted model calls it
+ *  as it calls a command). Both phases pass it, as a
+ *  resumed run needs its custom tools again. */
+const recordApproval = defineTool({
+  name: 'record_approval',
+  description: 'Record a note once it is approved.',
+  schema: z.strictObject({ command: z.string() }),
+  requiresApproval: true,
+  execute: () =>
+    Effect.sync(() => {
+      appendFileSync(path.join(workspace, 'approved.txt'), 'approved\n');
+      return { status: 'executed' as const, output: 'approved' };
+    }),
+});
+const tools = [recordApproval];
 
 const answered: ReturnType<typeof asked>[] = [];
 /** Approves each request, recording it. */
@@ -87,12 +110,13 @@ const program = Effect.gen(function* () {
       const run = yield* session.start({
         agent: {
           name: 'approval_validation',
-          description: 'Run one command once it is approved.',
-          prompt: 'GOLDEN-APPROVAL',
-          tools: ['bash'],
+          description: 'Record one note once it is approved.',
+          prompt: 'GOLDEN-APPROVAL record_approval',
+          tools: [],
         },
         instruction: argument,
         model: 'openai/gpt-5.6-sol',
+        tools,
       });
       yield* print({ started: run.runId });
       return yield* run.result;
@@ -103,7 +127,7 @@ const program = Effect.gen(function* () {
         approve: approveAll,
       });
       // `argument` is the id the `ask` phase printed.
-      const run = yield* session.resume(argument as RunId);
+      const run = yield* session.resume(argument as RunId, { tools });
       const result = yield* run.result;
       return yield* print({ runId: run.runId, answered, result });
     }

@@ -61,6 +61,7 @@ export {
   PluginsRefused,
   ResumeRefused,
   RunFailure,
+  SessionOptionsConflict,
   ToolsRefused,
 } from './effect/errors.js';
 export type { LaunchError } from './effect/errors.js';

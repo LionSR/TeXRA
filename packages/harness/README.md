@@ -124,15 +124,19 @@ continues it from its committed history through the resume path every TeXRA
 host takes and hands back the same `Run` that `start` returns. A run that
 nothing can continue fails with `ResumeRefused`, whose `reason` says why:
 `finished`, `owned_elsewhere` (a live process holds it), `blocked` (an agent
-or plugin it needs is missing), and so on. A run owned by an open call of
-its parent resumes through that parent.
+or plugin it needs is missing), `unusable_checkpoint`, or `not_resumable`
+(it is running here, it was deleted, or it is a child that an open call of
+its parent owns, which resumes with that parent). A run that called a
+custom tool needs that tool again, so `resume` takes the same `tools` as
+`start`. A second `resume` of a run already resuming here joins the first
+and gets the same `Run`.
 
 ```ts
 const program = Effect.gen(function* () {
   const session = yield* (yield* Sessions).open(undefined, {
     persistent: true,
   });
-  const run = yield* session.resume(runId);
+  const run = yield* session.resume(runId, { tools });
   return yield* run.result;
 });
 ```
@@ -149,8 +153,9 @@ once for each request a run waits on here, the requests every TeXRA host
 lists from `SessionView.requests`, and its answer goes through the
 session's one `request.decide`. An embedder may instead answer a listed
 request itself, with `session.request({ kind: 'request.decide', ... })`;
-whichever answer lands first is the decision. A handler that fails is logged
-and its request is offered again on the next view.
+whichever answer lands first is the decision. A handler that fails, throws,
+or has not answered within ten minutes denies the request, and the cause is
+logged at warn: no run stays parked on a handler that went quiet.
 
 A request is a row, so it survives the process. On a persistent session, a
 run killed while it waits for approval still waits after a restart: reopen
@@ -176,8 +181,11 @@ const program = Effect.gen(function* () {
 });
 ```
 
-What `open` is given counts only for the open that builds the root's
-session: a later open of the same root gets that session as it is.
+The options belong to the open that builds the root's session. A later
+open of the same root gets that session, and must ask for the same store and
+the same handler (compared by identity). An open that asks for something
+else fails with `SessionOptionsConflict`; close the session first to open
+it differently.
 
 | Service    | What it is                                                                                                                                                                                                                                                                                                                                                                                      |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -344,12 +352,12 @@ is unpublished and the Promise entry had no consumers; and TeXRA 1.0 keeps no
 parallel surfaces. The composition-once-per-process limit went with the
 Promise entry: each `Sessions.layer` scope owns the composition it made.
 
-Failures are `Data.TaggedError`s. Five come from the package itself —
-`PluginsRefused`, `AgentNotFound`, `ToolsRefused`, `ResumeRefused`, and
-`RunFailure`, whose `cause` is exactly what the launch path threw — and two,
-`DatabaseOpenFailed` and `DatabaseReadFailed` (the `SessionOpenError` union),
-reach the surface from the session store when it cannot open or read, for
-seven in all. A
+Failures are `Data.TaggedError`s. Six come from the package itself —
+`PluginsRefused`, `SessionOptionsConflict`, `AgentNotFound`, `ToolsRefused`,
+`ResumeRefused`, and `RunFailure`, whose `cause` is exactly what the launch
+path threw — and two, `DatabaseOpenFailed` and `DatabaseReadFailed` (the
+`SessionOpenError` union), reach the surface from the session store when it
+cannot open or read, for eight in all. A
 `session.request` answers with the runtime's own `Outcome` or its
 `RequestError` union, the same values every TeXRA host reads. Beyond these,
 nothing else is exported: no fold internals, no host widgets.

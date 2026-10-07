@@ -45,6 +45,8 @@ import {
   PluginsRefused,
   type LaunchError,
   type ResumeRefused,
+  type SessionOptionsConflict,
+  type ToolsRefused,
   type RunFailure,
 } from './errors.js';
 import { makeSessions } from './sessionPrograms.js';
@@ -123,15 +125,17 @@ export type PendingRequest = SessionView['requests'][number];
  * The embedder's answer to each request a run of the session waits on: an
  * approval, a denial with its reason, or for a retry, `retry` or `cancel`.
  * The session records it as the request's `request.decided`, through the
- * same `request.decide` a {@link Session.request} sends.
+ * same `request.decide` a {@link Session.request} sends. A handler that
+ * fails, throws, or has not answered within ten minutes is a denial, with
+ * the cause logged.
  */
 export type ApprovalHandler = (
   request: PendingRequest,
 ) => Effect.Effect<RequestDecision>;
 
-/** How {@link Sessions} opens a root's session; read only by the open that
- *  builds it, as a later open of the same root gets the session already
- *  there. */
+/** How {@link Sessions} opens a root's session. A later open of the same
+ *  root gets the session already there, and must ask for the same options:
+ *  one that differs fails with {@link SessionOptionsConflict}. */
 export interface OpenOptions {
   /** Keep the session's history in the root's SQLite store (under
    *  `roots.storage`, the store every TeXRA host keeps), so a later process
@@ -203,12 +207,15 @@ export interface Session {
   /**
    * Continue a persisted run of this session through the one resume path
    * every host takes, from its committed history: the same handle and the
-   * same admission as {@link start}. A run nothing can continue fails with
-   * {@link ResumeRefused}.
+   * same admission as {@link start}, and the same custom `tools`, which a
+   * persisted run needs again to continue a call to one. A resume of a run
+   * already resuming here joins it, with the same handle. A run nothing can
+   * continue fails with {@link ResumeRefused}.
    */
   readonly resume: (
     runId: RunId,
-  ) => Effect.Effect<Run, ResumeRefused | RunFailure>;
+    input?: Pick<StartInput, 'tools'>,
+  ) => Effect.Effect<Run, ResumeRefused | ToolsRefused | RunFailure>;
   /** The one handler of every request a surface issues to this session:
    *  answered exactly once, an outcome or a request error. */
   readonly request: (
@@ -234,7 +241,7 @@ export class Sessions extends Context.Service<
     readonly open: (
       roots?: WorkspaceRoots,
       options?: OpenOptions,
-    ) => Effect.Effect<Session, SessionOpenError>;
+    ) => Effect.Effect<Session, SessionOpenError | SessionOptionsConflict>;
     /**
      * Refuse new runs, settle the ones it owns inside the runtime's
      * shutdown-phase budget, flush, release.

@@ -1373,12 +1373,12 @@ function validateSdkInlinePersona() {
 
 /**
  * An SDK approval that outlives its process: an embedder on a persistent
- * session starts a run whose command asks for approval, and its handler
+ * session starts a run whose custom tool asks for approval, and its handler
  * receives the request and leaves it pending; the process is killed there.
- * A second embedder reopens the session's store, resumes the run, and its
- * handler approves the same request, so the command runs once and the run
- * completes. Both phases' output, the run's request and tool rows and the
- * file the command wrote are the artifact.
+ * A second embedder reopens the session's store, resumes the run with the
+ * same custom tool, and its handler approves the same request, so the tool
+ * runs once and the run completes. Both phases' output, the run's request
+ * and tool rows and the file the tool wrote are the artifact.
  */
 async function validateSdkResumeApproval() {
   const cwd = makeScratch('texra-sdk-resume-');
@@ -1449,7 +1449,8 @@ async function validateSdkResumeApproval() {
       rows = db
         .prepare(
           `SELECT e.type, json_extract(e.data, '$.requestId') AS requestId,
-             json_extract(e.data, '$.decision.action') AS decision
+             json_extract(e.data, '$.decision.action') AS decision,
+             json_extract(e.data, '$.payload.callId') AS callId
            FROM event e JOIN event_sequence s ON s.id = e.aggregate
            WHERE s.logical_id = ? AND e.type IN
              ('request.opened', 'request.decided', 'tool.result', 'run.end')
@@ -1480,6 +1481,7 @@ async function validateSdkResumeApproval() {
         type: row.type,
         sameRequest: sameRequest(row),
         decision: row.decision,
+        callId: row.callId,
       })),
       approved,
     });
@@ -1496,8 +1498,13 @@ async function validateSdkResumeApproval() {
     assert(
       result?.outcome === 'completed' &&
         result?.output?.response === 'The approved command ran.' &&
+        rows.some(
+          (row) =>
+            row.type === 'tool.result' &&
+            row.callId === 'validation-record_approval-1',
+        ) &&
         approved === 'approved\n',
-      `the resumed run should run the approved command once and complete (artifact: ${artifactPath})`,
+      `the resumed run should run the embedder's approved tool once and complete (artifact: ${artifactPath})`,
     );
   } finally {
     removeScratch(cwd);

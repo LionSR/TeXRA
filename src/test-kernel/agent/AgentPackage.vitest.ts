@@ -34,6 +34,8 @@ type FakeSessionView = Omit<RuntimeSessionView, 'runs'> & {
 
 const mocks = vi.hoisted(() => ({
   /** The runtime owner's close, as the package reaches it: by storage root. */
+  /** The session's one request door, as a decision reaches it. */
+  decide: vi.fn((_request: unknown) => Effect.succeed({ kind: 'done' })),
   closeSession: vi.fn((_root: string) =>
     Effect.succeed({ settled: true, abandoned: [] as string[] }),
   ),
@@ -50,7 +52,10 @@ const mocks = vi.hoisted(() => ({
   interruptRun: vi.fn(),
   /** Every session the owner built for the package, with what it was
    *  built over: one per storage root. */
-  sessionInits: [] as { readonly roots: { readonly storage: string } }[],
+  sessionInits: [] as {
+    readonly roots: { readonly storage: string };
+    readonly interactions?: { readonly approvalPromptsUnavailable?: boolean };
+  }[],
   /** The current package session's view, advanced independently of run. */
   sessionView: undefined as unknown,
   setTranscriptSubscriptions: vi.fn(),
@@ -107,8 +112,8 @@ vi.mock('@controllers/session/sessionLayer', async () => {
     readonly runs = {
       interrupt: mocks.interruptRun,
     };
-    /** Opened without an approval handler: nobody answers. */
-    readonly interactions = { approvalPromptsUnavailable: true };
+    readonly interactions: { readonly approvalPromptsUnavailable?: boolean };
+    readonly requests = { request: mocks.decide };
     /** The session's view level: the pre-launch session, no run yet. */
     readonly viewRef = Effect.runSync(
       SubscriptionRef.make<FakeSessionView>({
@@ -146,6 +151,7 @@ vi.mock('@controllers/session/sessionLayer', async () => {
       mocks.sessionInits.push(init);
       mocks.sessionView = this.viewRef;
       this.roots = init.roots;
+      this.interactions = init.interactions ?? {};
     }
   }
   const sessions = new Map<string, FakeSession>();
@@ -348,6 +354,46 @@ describe('agent package sessions', () => {
           ),
         );
       }),
+  );
+
+  it.live('denies a request whose approval handler throws', () =>
+    Effect.gen(function* () {
+      const sessions = yield* Sessions;
+      yield* sessions.open(undefined, {
+        approve: () => {
+          throw new Error('handler down');
+        },
+      });
+      yield* Effect.promise(() =>
+        enterRun('ae0001', { approval: 'own' } as Partial<FakeRunView>),
+      );
+      yield* SubscriptionRef.update(sessionView(), (current) => ({
+        ...current,
+        requests: [
+          {
+            runId: 'ae0001' as RunId,
+            requestId: 'r1',
+            payload: { kind: 'bash', data: {} } as never,
+            thread: null,
+          },
+        ],
+      }));
+      yield* Effect.promise(() =>
+        vi.waitFor(() => expect(mocks.decide).toHaveBeenCalledOnce()),
+      );
+      expect(mocks.decide).toHaveBeenCalledWith({
+        kind: 'request.decide',
+        runId: 'ae0001',
+        requestId: 'r1',
+        decision: {
+          action: 'deny',
+          reason: 'The approval handler gave no decision: handler down',
+        },
+      });
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(Sessions.layer({ platform: PLATFORM, plugins: PLUGINS })),
+    ),
   );
 
   it.live("serves the embedder's tool-missing handler", () =>

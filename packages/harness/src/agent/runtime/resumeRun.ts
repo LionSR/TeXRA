@@ -55,7 +55,8 @@ export type ResumeRunResult =
       /** A workflow resume settles with its whole run: this is that run. */
       readonly result?: RunEndResult;
     }
-  | { readonly failed: FollowUpFailureReason };
+  /** `read_failed` is a follow-up's alone: a resume reads under its claim. */
+  | { readonly failed: Exclude<FollowUpFailureReason, 'read_failed'> };
 
 export interface ResumeRunOptions extends Pick<
   ResumeToolUseFromResumeDataOptions,
@@ -66,6 +67,7 @@ export interface ResumeRunOptions extends Pick<
   | 'onRunResolved'
   | 'onTraceEvent'
   | 'stopAfterCycle'
+  | 'tools'
 > {
   /** Session owning the resumed run's coordination state. */
   readonly session: SessionHandle;
@@ -221,6 +223,7 @@ const runLaunchOptions = (options: ResumeRunOptions) => ({
   onRunResolved: options.onRunResolved,
   onTraceEvent: options.onTraceEvent,
   stopAfterCycle: options.stopAfterCycle,
+  tools: options.tools,
 });
 
 /** The follow-ups still queued on the run, folded from its durable rows. */
