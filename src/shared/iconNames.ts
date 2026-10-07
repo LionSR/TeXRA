@@ -72,6 +72,8 @@ export const TEXRA_ICON_CANONICAL_NAMES = [
   'diagram-project',
   'download',
   'ellipsis',
+  'eye',
+  'eye-slash',
   'file',
   'file-circle-plus',
   'file-code',

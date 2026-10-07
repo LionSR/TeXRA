@@ -4,7 +4,6 @@
  * that use it. Every word comes from the row copy (`@ui/copy/plugins`).
  */
 
-import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -36,16 +35,17 @@ import {
   PLUGINS_PAGE,
   pluginRowName,
   pluginRowProblem,
-  pluginRowState,
   pluginRowSummary,
   pluginRowSwitchable,
   pluginRowTrust,
   pluginRowUsedBy,
 } from '@ui/copy/plugins';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { renderSettingsToggleRow } from '@ui/wa/settingsSection';
 import { renderStatusBadge } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { commonViewStyles, designTokens } from '@ui/styles';
+import { catalogDetailStyles } from '../shared/catalogDetailStyles';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 type TexraRow = Extract<PluginRow, { kind: 'texra' }>;
@@ -55,20 +55,10 @@ export class PluginCard extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    catalogDetailStyles,
     css`
       :host {
         display: block;
-      }
-
-      .plugin-card {
-        border: var(--border-thin) solid var(--color-border);
-        border-radius: var(--border-radius);
-        padding: var(--wa-space-xs) var(--wa-space-s);
-        margin-bottom: var(--wa-space-xs);
-        background: var(
-          --wa-color-surface-default,
-          var(--wa-color-surface-lowered)
-        );
       }
 
       .plugin-header {
@@ -80,24 +70,24 @@ export class PluginCard extends LitElement {
         margin-bottom: var(--wa-space-2xs);
       }
 
-      .plugin-title-group {
+      .plugin-summary {
         display: flex;
         align-items: center;
         flex-wrap: wrap;
-        gap: var(--wa-space-2xs);
+        column-gap: var(--wa-space-xs);
+        row-gap: var(--wa-space-2xs);
         min-width: 0;
+        margin-block-end: var(--wa-space-2xs);
       }
 
-      .plugin-name {
-        font-weight: var(--font-weight-medium);
-        font-size: var(--font-size);
-        color: var(--wa-color-text-normal);
+      .plugin-summary > .plugin-line {
         margin: 0;
-        overflow-wrap: anywhere;
       }
 
       .plugin-ready {
         display: inline-flex;
+        align-items: center;
+        gap: var(--wa-space-3xs);
         color: var(--color-status-ok);
         font-size: var(--font-size-sm);
       }
@@ -123,17 +113,9 @@ export class PluginCard extends LitElement {
         list-style: none;
       }
 
-      wa-badge.plugin-tool::part(base) {
-        font-family: var(--wa-font-family-mono, monospace), monospace;
-        font-size: var(--font-size-xs);
-        overflow-wrap: anywhere;
-      }
-
       .plugin-guide {
         margin-top: var(--wa-space-2xs);
-        padding: var(--wa-space-xs);
-        background: var(--wa-color-surface-lowered);
-        border-radius: var(--border-radius);
+        padding-block: var(--wa-space-xs);
         font-size: var(--font-size-sm);
         color: var(--wa-color-text-normal);
         line-height: var(--line-height-relaxed);
@@ -147,10 +129,6 @@ export class PluginCard extends LitElement {
         margin-top: var(--wa-space-2xs);
       }
 
-      .plugin-actions wa-button::part(base) {
-        min-height: var(--height-control);
-      }
-
       .plugin-auth-note {
         display: inline-flex;
         align-items: center;
@@ -162,26 +140,6 @@ export class PluginCard extends LitElement {
         color: var(--color-info);
         background: color-mix(in srgb, var(--color-info) 12%, transparent);
         overflow-wrap: anywhere;
-      }
-
-      .plugin-switch {
-        display: inline-flex;
-        align-items: center;
-        flex-shrink: 0;
-        margin-inline-start: auto;
-        color: var(--color-text-secondary);
-        font-size: var(--font-size-sm);
-      }
-
-      @container settings (max-width: 520px) {
-        .plugin-header {
-          align-items: flex-start;
-        }
-
-        .plugin-switch {
-          width: 100%;
-          margin-inline-start: 0;
-        }
       }
 
       .plugin-note {
@@ -202,7 +160,9 @@ export class PluginCard extends LitElement {
     if (!changed.has('row') || this.row.kind !== 'texra') return;
     const prev = changed.get('row');
     const was = prev?.kind === 'texra' ? prev.item.status : undefined;
-    if (was !== 'not-found' && this.row.item.status === 'not-found') {
+    if (prev?.kind !== 'texra' || prev.item.id !== this.row.item.id) {
+      this.guideDetails.open = this.row.item.status === 'not-found';
+    } else if (was !== 'not-found' && this.row.item.status === 'not-found') {
       this.guideDetails.open = true;
     }
   }
@@ -393,13 +353,7 @@ export class PluginCard extends LitElement {
       row.item.status,
       row.item.statusLabel,
     );
-    return html`<span
-      class="plugin-ready"
-      role="img"
-      aria-label=${label}
-      title=${label}
-      >${waIcon('check')}</span
-    >`;
+    return html`<span class="plugin-ready">${waIcon('check')}${label}</span>`;
   }
 
   /** The row's one switch, or none for a row that is always on or read-only. */
@@ -410,7 +364,7 @@ export class PluginCard extends LitElement {
     let onChange: (on: boolean) => void;
     if (row.kind === 'texra') {
       if (row.item.toggleable !== true)
-        return html`<span class="plugin-switch">${pluginRowState(row)}</span>`;
+        return html`<p class="plugin-line">Always available to agents</p>`;
       const { id } = row.item;
       checked = row.item.enabled !== false;
       onChange = (enabled) =>
@@ -426,22 +380,13 @@ export class PluginCard extends LitElement {
     } else {
       return nothing;
     }
-    // A constant name holding the visible "On" (WCAG 2.5.3 Label in Name);
-    // the state itself is carried by `checked`.
-    const label = `${pluginRowName(row)}: ${PLUGINS_PAGE.on}`;
-    return html`
-      <wa-switch
-        class="plugin-switch"
-        title=${label}
-        aria-label=${label}
-        ?checked=${checked}
-        ?disabled=${disabled}
-        @change=${(event: Event) =>
-          onChange(Boolean((event.currentTarget as WaSwitch | null)?.checked))}
-      >
-        ${PLUGINS_PAGE.on}
-      </wa-switch>
-    `;
+    return renderSettingsToggleRow({
+      label: PLUGINS_PAGE.availableToAgents,
+      checked,
+      disabled,
+      onChange: (event: Event) =>
+        onChange(Boolean((event.currentTarget as WaSwitch | null)?.checked)),
+    });
   }
 
   private renderTools(
@@ -453,11 +398,12 @@ export class PluginCard extends LitElement {
         ${item.tools.map(
           (tool) =>
             html`<li>
-              <wa-badge
-                class="plugin-tool"
+              <wa-tag
+                class="catalog-tool-badge"
                 variant="neutral"
                 appearance="filled"
-                ><bdi dir="auto">${tool.name}</bdi></wa-badge
+                size="s"
+                ><bdi dir="auto">${tool.name}</bdi></wa-tag
               >
             </li>`,
         )}
@@ -468,7 +414,7 @@ export class PluginCard extends LitElement {
   private renderTexraBody(row: TexraRow): TemplateResult {
     const { item } = row;
     return html`
-      <p class="plugin-line" dir="auto">${item.description}</p>
+      <p class="catalog-detail-description" dir="auto">${item.description}</p>
       ${
         item.statusDetail
           ? html`<div class="plugin-note" dir="auto">${item.statusDetail}</div>`
@@ -488,32 +434,32 @@ export class PluginCard extends LitElement {
     return html`
       <article class="plugin-card" data-plugin-kind=${row.kind}>
         <div class="plugin-header">
-          <div class="plugin-title-group">
-            <h3 class="plugin-name">
-              <bdi dir="auto">${pluginRowName(row)}</bdi>
-            </h3>
-            ${
-              problem
-                ? renderStatusBadge({
-                    icon: waIcon('triangle-exclamation'),
-                    label: problem,
-                    className: 'plugin-badge',
-                  })
-                : this.renderReady()
-            }
-            ${
-              authNote
-                ? html`<span class="plugin-auth-note"
-                    >${waIcon('key')} <bdi dir="auto">${authNote}</bdi></span
-                  >`
-                : nothing
-            }
-          </div>
-          ${this.renderSwitch()}
+          <h3 class="catalog-detail-name">
+            <bdi dir="auto">${pluginRowName(row)}</bdi>
+          </h3>
         </div>
-        <p class="plugin-line">
-          ${pluginRowSummary(row)}${trust ? ` · ${trust}` : ''}
-        </p>
+        <div class="plugin-summary">
+          <p class="plugin-line">
+            ${pluginRowSummary(row)}${trust ? ` · ${trust}` : ''}
+          </p>
+          ${
+            problem
+              ? renderStatusBadge({
+                  icon: waIcon('triangle-exclamation'),
+                  label: problem,
+                  className: 'plugin-badge',
+                })
+              : this.renderReady()
+          }
+          ${
+            authNote
+              ? html`<span class="plugin-auth-note"
+                  >${waIcon('key')} <bdi dir="auto">${authNote}</bdi></span
+                >`
+              : nothing
+          }
+        </div>
+        ${this.renderSwitch()}
         ${row.kind === 'texra' ? this.renderTexraBody(row) : nothing}
         ${
           row.kind === 'installed'

@@ -7,8 +7,7 @@
  */
 
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
-import { repeat } from 'lit/directives/repeat.js';
+import { customElement, property, state } from 'lit/decorators.js';
 
 import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
@@ -17,10 +16,16 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import type { PluginRow } from '@shared/settingsView/settingsViewMessages';
 import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
-import { PLUGINS_PAGE, pluginRowKey } from '@ui/copy/plugins';
+import {
+  PLUGINS_PAGE,
+  pluginRowKey,
+  pluginRowName,
+  pluginRowSummary,
+  pluginRowState,
+  pluginRowProblem,
+} from '@ui/copy/plugins';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
-import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLoadingState } from '@ui/wa/loadingState';
 import { readSelectValue } from '@ui/wa/selectTemplates';
 
@@ -28,27 +33,22 @@ import {
   catalogEnumChoices,
   postStateSetting,
 } from '../components/shared/stateSettingRows';
+import { catalogDetailStyles } from '../components/shared/catalogDetailStyles';
 import type { PluginsPageData } from '../settingsState';
 
 import '../components/plugins/PluginCard';
+import '../components/shared/SettingsCatalog';
+import type { SettingsCatalogItem } from '../components/shared/SettingsCatalog';
 
 @customElement('plugins-tab')
 export class PluginsTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    catalogDetailStyles,
     css`
       :host {
         display: block;
-      }
-
-      .plugins-toolbar {
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        flex-wrap: wrap;
-        gap: var(--wa-space-xs);
-        margin-bottom: var(--wa-space-xs);
       }
 
       .plugins-warnings {
@@ -64,6 +64,8 @@ export class PluginsTab extends LitElement {
       }
     `,
   ];
+
+  @state() private selectedKey: string | null = null;
 
   /** Null until the host's first rows arrive. */
   @property({ attribute: false }) page: PluginsPageData | null = null;
@@ -134,7 +136,7 @@ export class PluginsTab extends LitElement {
 
   private renderToolbar(): TemplateResult {
     return html`
-      <div class="plugins-toolbar">
+      <div slot="actions" class="catalog-toolbar-actions">
         ${renderLabeledActionButton({
           icon: 'plus',
           text: PLUGINS_PAGE.add,
@@ -144,26 +146,36 @@ export class PluginsTab extends LitElement {
               action: 'install',
             }),
         })}
-        ${renderLabeledActionButton({
-          icon: 'file-code',
-          text: PLUGINS_PAGE.openMcpConfig,
-          kind: 'secondary',
-          appearance: 'outlined',
-          onClick: () =>
-            postMessage(SETTINGS_VIEW_COMMANDS.PLUGIN_ACTION, {
-              action: 'openMcpConfig',
-            }),
-        })}
-        ${renderLabeledActionButton({
-          icon: 'rotate-right',
-          text: PLUGINS_PAGE.recheck,
-          kind: 'secondary',
-          appearance: 'outlined',
-          onClick: () =>
-            postMessage(SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS),
-        })}
       </div>
     `;
+  }
+
+  private catalogItems(rows: readonly PluginRow[]): SettingsCatalogItem[] {
+    return rows.map((row) => ({
+      key: pluginRowKey(row),
+      name: pluginRowName(row),
+      description:
+        row.kind === 'texra' ? row.item.description : pluginRowSummary(row),
+      group: { texra: 'TeXRA', installed: 'Installed', mcp: 'MCP servers' }[
+        row.kind
+      ],
+      searchText: `${pluginRowSummary(row)} ${pluginRowProblem(row) ?? ''}`,
+      control: html`<span class="catalog-row-status"
+        >${pluginRowState(row)}</span
+      >`,
+    }));
+  }
+
+  private renderSelectedPlugin(
+    rows: readonly PluginRow[],
+  ): TemplateResult | typeof nothing {
+    const row =
+      rows.find((row) => pluginRowKey(row) === this.selectedKey) ?? rows[0];
+    return row
+      ? html`<plugin-card slot="detail" .row=${row}
+          >${this.renderRowSettings(row)}</plugin-card
+        >`
+      : nothing;
   }
 
   override render(): TemplateResult {
@@ -177,7 +189,6 @@ export class PluginsTab extends LitElement {
     }
     return html`
       <div class="tab-content-container">
-        ${this.renderToolbar()}
         ${
           page.mcpWarnings.length === 0
             ? nothing
@@ -185,24 +196,37 @@ export class PluginsTab extends LitElement {
                 ${page.mcpWarnings.join(' ')}
               </p>`
         }
-        ${
-          page.rows.length === 0
-            ? renderEmptyState({
-                icon: 'cube',
-                title: PLUGINS_PAGE.empty,
-                headingTag: 'h3',
-                className: 'empty-state',
-              })
-            : repeat(
-                page.rows,
-                pluginRowKey,
-                (row) => html`
-                  <plugin-card .row=${row}>
-                    ${this.renderRowSettings(row)}
-                  </plugin-card>
-                `,
-              )
-        }
+        <settings-catalog
+          label="Plugins"
+          actionLabel="State"
+          .items=${this.catalogItems(page.rows)}
+          .selectedKey=${this.selectedKey}
+          @catalog-select=${(event: CustomEvent<string | null>) => {
+            this.selectedKey = event.detail;
+          }}
+        >
+          ${this.renderToolbar()} ${this.renderSelectedPlugin(page.rows)}
+        </settings-catalog>
+        <div class="catalog-footer-actions">
+          ${renderLabeledActionButton({
+            icon: 'file-code',
+            text: PLUGINS_PAGE.openMcpConfig,
+            kind: 'secondary',
+            appearance: 'outlined',
+            onClick: () =>
+              postMessage(SETTINGS_VIEW_COMMANDS.PLUGIN_ACTION, {
+                action: 'openMcpConfig',
+              }),
+          })}
+          ${renderLabeledActionButton({
+            icon: 'rotate-right',
+            text: PLUGINS_PAGE.recheck,
+            kind: 'secondary',
+            appearance: 'outlined',
+            onClick: () =>
+              postMessage(SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS),
+          })}
+        </div>
       </div>
     `;
   }
