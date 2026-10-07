@@ -3,11 +3,13 @@ import * as path from 'node:path';
 
 import {
   Data,
+  Duration,
   Effect,
   FileSystem,
   type Context,
   type Fiber,
   type PlatformError,
+  Schedule,
   type Scope,
 } from 'effect';
 
@@ -82,13 +84,27 @@ const removeRunDirectories = (
     ),
   );
 
+/** The wait before collecting again what a pass left pending: 30 s,
+ *  doubling, at most 30 min apart. */
+const RETRY_FIRST = '30 seconds';
+const RETRY = Schedule.exponential(RETRY_FIRST).pipe(
+  Schedule.modifyDelay(({ duration }) =>
+    Effect.succeed(Duration.min(duration, Duration.minutes(30))),
+  ),
+);
+
+/** A pass that left a record pending (or could not read them). */
+class DeletionPending extends Data.TaggedError('DeletionPending') {}
+
 /**
  * The session's deletion collector, bound to the caller's scope: each run
  * of the answered effect forks one pass over the pending tombstones there,
  * answering its fiber (the session runs one at open and one after each
  * removal). Every step of a pass may run twice, in one process or two, so
- * passes never conflict; a failed record stays closed and pending for the
- * next pass, and a failed read of the records is logged.
+ * passes never conflict. A failed record stays closed and pending, and a
+ * failed read of the records is logged; either way the pass is retried on
+ * {@link RETRY} until one leaves nothing pending, with one retry in flight
+ * per session and none once the scope closes.
  */
 export const deletionCollector = (
   database: Pick<
@@ -105,6 +121,7 @@ export const deletionCollector = (
     const fs = yield* FileSystem.FileSystem;
     const scope = yield* Effect.scope;
     const pass = Effect.gen(function* () {
+      let pending = false;
       for (const event of yield* database.readPendingDeletions()) {
         if (event.type !== 'run.removed') continue;
         yield* database
@@ -112,23 +129,46 @@ export const deletionCollector = (
             removeRunDirectories(fs, storage, ids),
           )
           .pipe(
-            Effect.catch((error) =>
-              Effect.logWarning(
+            Effect.catch((error) => {
+              pending = true;
+              return Effect.logWarning(
                 `Deletion cleanup remains pending for ${event.aggregateId}`,
               ).pipe(
                 Effect.annotateLogs({ data: error }),
                 withLogChannel(CHANNEL),
-              ),
-            ),
+              );
+            }),
           );
       }
+      if (pending) return yield* new DeletionPending();
     }).pipe(
-      Effect.catch((error) =>
-        Effect.logWarning('Deletion records could not be read.').pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
+      Effect.catchTag('DatabaseReadFailed', (error) =>
+        Effect.andThen(
+          Effect.logWarning('Deletion records could not be read.').pipe(
+            Effect.annotateLogs({ data: error }),
+            withLogChannel(CHANNEL),
+          ),
+          new DeletionPending(),
         ),
       ),
     );
-    return Effect.forkIn(pass, scope);
+    // One retry in flight per session: a pass that leaves records pending
+    // forks it, unless one is already waiting, outside the pass's fiber.
+    let retrying = false;
+    const collect = pass.pipe(
+      Effect.catch(() => {
+        if (retrying) return Effect.void;
+        retrying = true;
+        return pass.pipe(
+          // RETRY never ends, so the retry ends only with a clean pass.
+          Effect.retry(RETRY),
+          Effect.delay(RETRY_FIRST),
+          Effect.orDie,
+          Effect.ensuring(Effect.sync(() => (retrying = false))),
+          Effect.forkIn(scope),
+          Effect.asVoid,
+        );
+      }),
+    );
+    return Effect.forkIn(collect, scope);
   });

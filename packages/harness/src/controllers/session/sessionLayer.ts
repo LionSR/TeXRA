@@ -235,20 +235,10 @@ const sessionHandleLayer = (key: SessionKey) =>
       // has unwound, with what they left settled; then the follow-up queue,
       // the presentation hosts; and first of all the runs, so no run is
       // admitted over a session that is unwinding.
+      // The publisher drains inside the one close deadline and refuses
+      // what is left at it, so a stuck store cannot hold the release.
       yield* Effect.addFinalizer(() =>
-        session.log.settled.pipe(
-          // Bounded like the close that invalidates this entry: a
-          // publisher too stuck to settle must not hold the release.
-          Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
-          Effect.flatMap((settled) =>
-            Option.isSome(settled)
-              ? Effect.void
-              : Effect.logWarning(
-                  `Session ${key.storage} closed with publications still unsettled past the close budget`,
-                ).pipe(withLogChannel(CHANNEL)),
-          ),
-          Effect.ensuring(Effect.sync(() => store.close())),
-        ),
+        events.drain.pipe(Effect.ensuring(Effect.sync(() => store.close()))),
       );
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => session.followUps.dispose()),

@@ -84,15 +84,13 @@ export function currentValues(store: {
     read: Effect.Effect<A, E>,
   ) => Effect.Effect<A, DatabaseReadFailed>;
   readonly level: SubscriptionRef.SubscriptionRef<number>;
-  /** The store gate, run inside each change's transaction. */
-  readonly gate: Effect.Effect<void, SqlError | DatabaseStoreNewer>;
   /** Record for the gate that a value was written at this build's version. */
   readonly valueWritten: Effect.Effect<void, SqlError>;
 }): Pick<
   Database['Service'],
   'values' | 'readInputHistory' | 'appendInputHistory'
 > {
-  const { exec, execOne, transact, query, level, gate, valueWritten } = store;
+  const { exec, execOne, transact, query, level, valueWritten } = store;
   /** One value's row. */
   const valueRow = (family: string, key: string) =>
     execOne(
@@ -111,7 +109,6 @@ export function currentValues(store: {
     modify: (family, key, change) =>
       transact(
         Effect.gen(function* () {
-          yield* gate;
           const row = yield* valueRow(family.name, key);
           const result = change(
             row === undefined ? undefined : decodeValue(family, row),

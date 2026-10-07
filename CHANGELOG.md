@@ -879,6 +879,26 @@ show` print the same notice, and the new `texra agents customize`,
   start now says "The agent ... has no recorded start" instead of calling it
   a task.
 
+- **Closing a project no longer waits without limit on a stuck store.**
+  When the store stays locked during shutdown, the publications still queued
+  at the close deadline are refused and logged. Before, the close drained the
+  whole backlog for as long as it took.
+
+- **Deleted tasks' files are removed once a passing failure clears.** If
+  removing a deleted task's generated files fails (a busy disk, a permission
+  problem), TeXRA tries again after 30 seconds, then at growing intervals up
+  to every 30 minutes, until the cleanup succeeds. Before, it waited for the
+  next deletion or the next time the project opened.
+
+- **An older TeXRA writes nothing into a store a newer one has written,
+  input history included.** Before, the input history, projection rebuilds
+  and deletion cleanup were still written.
+
+- **A compaction or helper call whose model binding cannot be replaced now
+  fails**, as a task's own model request already does, instead of resending
+  on the old binding. A Responses WebSocket that a renewed sign-in has
+  already replaced is no longer reconnected a second time.
+
 - **A model retry that cannot switch credentials now fails instead of
   resending on the old ones.** When you answer a failed request with "retry
   with my own key" and that key is gone, or a dropped Responses WebSocket

@@ -170,24 +170,21 @@ const credentialRenewal = <R>(
   };
 };
 
-/** Rebind before attempt `ref` where `move` needs it: on a person's retry
- *  answer, or for a `resend` on a Responses WebSocket, which dies with a
- *  failed turn (#13407). A failed rebind is `ref`'s failure, recorded unsent,
- *  so nothing goes out on the binding it meant to leave: false then. */
+/** Rebind before sending `ref` on a person's retry answer, or when the
+ *  binding in force is the Responses WebSocket the last attempt `failedOn`
+ *  (it died with it, #13407). A failed rebind is `ref`'s failure, recorded
+ *  unsent, so nothing goes out on the binding it meant to leave: false. */
 const rebound = Effect.fn('ModelInvoker.rebound')(function* <A, E, R>(
   driver: InvocationDriver<A, E, R>,
   move: Extract<Move, { kind: 'send' | 'observe' }>,
-  resend: boolean,
+  failedOn: BoundModel | null,
   ref: InvocationRef,
 ): Effect.fn.Return<boolean, E, R> {
   const bound = yield* driver.binding;
-  const credentials =
-    move.kind === 'send'
-      ? (move.retry ??
-        (resend && bound.persistentConnection ? 'configured' : null))
-      : null;
-  if (credentials === null) return true;
-  const result = yield* driver.rebind(credentials, bound);
+  if (move.kind !== 'send') return true;
+  const dead = failedOn === bound && bound.persistentConnection;
+  if (move.retry === null && !dead) return true;
+  const result = yield* driver.rebind(move.retry ?? 'configured', bound);
   if (Result.isSuccess(result)) return true;
   const failure = bindingFailure(result.failure, bound);
   const next = yield* moveAfter(driver, failure, ref, bound, false);
@@ -361,8 +358,10 @@ export const runInvocation = Effect.fn('ModelInvoker.invocation')(function* <
   R | HttpClient.HttpClient | RouteRetries
 > {
   const renew = credentialRenewal(driver.secrets, driver.rebind);
-  // A renewed credential observes the same operation again, unrecorded.
+  // A renewed credential observes the same operation again, unrecorded;
+  // `failedOn` is the binding the last attempt went out on.
   let again: Move | null = null;
+  let failedOn: BoundModel | null = null;
   for (;;) {
     const { invocation, requests } = yield* driver.read;
     const move: Move = again ?? nextAttempt(invocation, requests);
@@ -374,8 +373,9 @@ export const runInvocation = Effect.fn('ModelInvoker.invocation')(function* <
     }
     const ref =
       move.kind === 'observe' ? move.attempt.ref : nextRef(invocation);
-    if (!(yield* rebound(driver, move, invocation !== null, ref))) continue;
+    if (!(yield* rebound(driver, move, failedOn, ref))) continue;
     const bound = yield* driver.binding;
+    failedOn = bound;
     const tried = yield* tryAttempt(driver, move, ref, bound);
     if ('ok' in tried) return tried.ok;
     const after = yield* afterFailure(

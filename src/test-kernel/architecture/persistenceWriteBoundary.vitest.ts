@@ -80,7 +80,7 @@ const PUBLISHER_MODULE = 'packages/harness/src/agent/runtime/SessionEvents.ts';
 
 /** A call of the database's append, or of the run removal whose transaction
  *  appends the tombstone; never a declaration or a `Pick` key. */
-const APPEND_CALL = /(?:\.appendAll|\.prepareRunRemoval|\bappendPrepared)\s*\(/;
+const APPEND_CALL = /(?:\.appendAll|\.prepareRunRemoval|\bappendRows)\s*\(/;
 
 /**
  * The files that still append without the publisher, each with the reason it
@@ -89,7 +89,7 @@ const APPEND_CALL = /(?:\.appendAll|\.prepareRunRemoval|\bappendPrepared)\s*\(/;
  */
 const APPENDS_OUTSIDE_PUBLISHER: Readonly<Record<string, string>> = {
   [DATABASE_MODULE]:
-    'defines appendAll and appendPrepared; the run-removal transaction it prepares runs as a publisher job',
+    'defines appendAll and appendRows; the run-removal transaction it prepares runs as a publisher job',
 };
 
 /** A numbered SQL parameter (`?1`, `?NNN`). A terminal private-mode escape

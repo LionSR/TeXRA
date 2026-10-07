@@ -392,12 +392,21 @@ export const databaseLayer = (
         write: transactions('write'),
         derive: transactions('derive'),
       };
-      // Every body is database-only, so a busy one runs again whole.
+      // Every body is database-only, so a busy one runs again whole. The
+      // store gate runs inside every write and derive: a store holding a kind
+      // this build does not read takes no write from it. The one exception
+      // (`gated` false) is `releaseClaims`, which gives back this process's
+      // own claims, writes no row, and lets the newer build take them.
       const transaction = <A, E, EBody>(
         mode: 'read' | 'write' | 'derive',
         body: Effect.Effect<A, EBody>,
         failed: (cause: unknown) => E,
-      ) => run[mode](body).pipe(retryBusy, mapDatabaseFailure(failed));
+        gated = mode !== 'read',
+      ) =>
+        run[mode](gated ? Effect.andThen(gate, body) : body).pipe(
+          retryBusy,
+          mapDatabaseFailure(failed),
+        );
       const transact = <A, E>(body: Effect.Effect<A, E>) =>
         transaction('write', body, writeFailed);
       const claim = `UPDATE event_sequence SET owner_id = ?
@@ -865,11 +874,6 @@ export const databaseLayer = (
             at,
           };
         });
-      // Every append passes the store gate (`storeGate`) in its transaction.
-      const appendPrepared = (
-        prepared: readonly ReturnType<typeof prepareEventDraft>[],
-        at: number,
-      ) => Effect.andThen(gate, appendRows(prepared, at));
       return {
         observedCommit,
         movedAside,
@@ -928,7 +932,6 @@ export const databaseLayer = (
           transact,
           query,
           level,
-          gate,
           valueWritten: Effect.asVoid(
             exec(UPSERT_KIND, [CURRENT_VALUE_KIND, CURRENT_VALUE_VERSION]),
           ),
@@ -1007,8 +1010,6 @@ export const databaseLayer = (
             yield* proveReclaimable(observed);
             return yield* transact(
               Effect.gen(function* () {
-                // A store a newer build wrote is not this build's to drive.
-                yield* gate;
                 yield* claimObserved(
                   observed,
                   'Claim changed before acquisition',
@@ -1081,7 +1082,7 @@ export const databaseLayer = (
                   observed,
                   'Deletion claim changed before acquisition',
                 );
-                return yield* appendPrepared(
+                return yield* appendRows(
                   [removal],
                   yield* Clock.currentTimeMillis,
                 );
@@ -1098,6 +1099,9 @@ export const databaseLayer = (
               )) === undefined
             )
               return;
+            // A store a newer build wrote takes no deletion from this one,
+            // and the files go only once the store would take the collection.
+            yield* query(gate);
             // Filesystem promises cannot be undone by fiber interruption.
             yield* cleanup(tombstone.runIds).pipe(Effect.uninterruptible);
             yield* transact(
@@ -1115,13 +1119,11 @@ export const databaseLayer = (
         releaseClaims: (ids) =>
           ids.length === 0
             ? Effect.void
-            : transact(
-                Effect.gen(function* () {
-                  yield* exec(release, [
-                    ...aggregateLists(ids),
-                    identity.ownerId,
-                  ]);
-                }),
+            : transaction(
+                'write',
+                exec(release, [...aggregateLists(ids), identity.ownerId]),
+                writeFailed,
+                false,
               ),
         appendAll: (input) =>
           Effect.gen(function* () {
@@ -1132,9 +1134,7 @@ export const databaseLayer = (
               catch: writeFailed,
             });
             const at = yield* Clock.currentTimeMillis;
-            return yield* transact(appendPrepared(prepared, at)).pipe(
-              typedRefusal,
-            );
+            return yield* transact(appendRows(prepared, at)).pipe(typedRefusal);
           }),
       };
     }),
