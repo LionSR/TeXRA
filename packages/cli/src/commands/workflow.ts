@@ -395,12 +395,6 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
           yield* getRunRecords(session, result.runId).writeResultMeta({
             producer: 'cliWorkflow',
             output: workflowResult?.output ?? result.output,
-            ...(workflowResult?.copiedOutput !== undefined && {
-              copiedOutput: workflowResult.copiedOutput,
-            }),
-            ...(workflowResult?.copiedOutputs !== undefined && {
-              copiedOutputs: [...workflowResult.copiedOutputs],
-            }),
           });
           // The fact the run decides its verdict from; the run, not this
           // host, commits the outcome.

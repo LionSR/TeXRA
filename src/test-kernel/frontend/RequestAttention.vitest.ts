@@ -39,7 +39,6 @@ describe('RequestAttention', () => {
         runId,
         requestId: 'bash-1',
         payload: { kind: 'bash' } as never,
-        thread: null,
       };
 
       yield* attention.follow({

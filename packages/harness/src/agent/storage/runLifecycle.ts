@@ -193,8 +193,7 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
     const events: SessionEventDraft[] = [];
     if (!prior) {
       // The worktree the fold spells is the run's working directory as a
-      // bare path chip: the fold never shells out, so `branch`/`dirty`
-      // stay absent.
+      // bare path chip.
       const worktreeCwd = pinned.workingDirectory?.trim();
       events.push({
         type: 'run.start',

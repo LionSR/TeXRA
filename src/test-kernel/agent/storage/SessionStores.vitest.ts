@@ -87,7 +87,6 @@ describe('committed run removal', () => {
                   allowBypass: false,
                 },
               },
-              thread: null,
             },
           ]);
           yield* session.log.settled;

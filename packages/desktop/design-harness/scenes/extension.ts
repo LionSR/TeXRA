@@ -229,7 +229,7 @@ function interruptedTasksView(): SessionView {
       {
         type: 'run.start',
         identity: { kind: 'agent', agent: 'assistant' },
-        worktree: { workingDirectory: '/paper', branch: 'main' },
+        worktree: { workingDirectory: '/paper' },
         parent: null,
         provenance: null,
         userFollowUpSupport: 'nativeInteractive',
@@ -308,7 +308,7 @@ function forkView(): SessionView {
     log.emit(id, at, {
       type: 'run.start',
       identity: { kind: 'agent', agent: 'assistant' },
-      worktree: { workingDirectory: '/paper', branch: 'main' },
+      worktree: { workingDirectory: '/paper' },
       parent: null,
       provenance,
       userFollowUpSupport: 'nativeInteractive',
@@ -577,7 +577,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     log.emit(ROOT, T.root, {
       type: 'run.start',
       identity: { kind: 'agent', agent: 'review' },
-      worktree: { workingDirectory: '/paper', branch: 'main' },
+      worktree: { workingDirectory: '/paper' },
       parent: null,
       provenance: null,
       userFollowUpSupport: 'unsupported',
@@ -604,7 +604,6 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       value: {
         rounds: [0, 1].map((round) => ({
           round,
-          rawOutput: null,
           outputs: [],
           compileFailures: [],
           missingOutputs: [],

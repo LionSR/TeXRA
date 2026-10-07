@@ -113,12 +113,8 @@ export function createNativeSubagentStrategy(
     if (!cachedBuilt) {
       cachedBuilt = yield* buildSubagentResult(
         params.runId,
-        config.agent,
         turn.output,
-        {
-          startedAt: params.startedAt,
-          storageRoot: params.session.roots.storage,
-        },
+        params.session.roots.storage,
       );
     }
     return cachedBuilt;
@@ -194,6 +190,9 @@ export function createNativeSubagentStrategy(
 
     formatDelivery: Effect.fn('nativeSubagent.formatDelivery')(function* (
       turn: RunEndResult,
+      /** The turn's wall time, measured by the loop before this result
+       *  computes its diffs. */
+      wallTimeMs: number,
     ) {
       if (cachedDelivery === undefined) {
         const built = yield* buildResult(turn);
@@ -209,7 +208,7 @@ export function createNativeSubagentStrategy(
               {
                 runId: params.runId,
                 memoryMisses: turn.memoryMisses,
-                wallTimeMs: built.wallTimeMs,
+                wallTimeMs,
                 workingDirectory: params.workingDirectory,
               },
             ),
@@ -242,11 +241,7 @@ export function createNativeSubagentStrategy(
           // failed run's own output, or an empty one when the turn produced
           // none.
           const result = turn ?? lastResult;
-          return buildSubagentResultMeta(
-            config.agent,
-            result?.output ?? emptyRunEndOutput(),
-            Date.now() - params.startedAt,
-          );
+          return buildSubagentResultMeta(result?.output ?? emptyRunEndOutput());
         }
         return yield* buildResult(turn);
       }),

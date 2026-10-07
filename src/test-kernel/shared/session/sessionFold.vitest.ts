@@ -212,10 +212,7 @@ describe('sessionFold', () => {
     expect(view.order).toStrictEqual([PROCESS, ROOT]);
 
     expect(root.label).toBe(runIdentityDisplayName(ROOT_IDENTITY));
-    expect(root.worktree).toStrictEqual({
-      workingDirectory: '/paper',
-      branch: 'main',
-    });
+    expect(root.worktree).toStrictEqual({ workingDirectory: '/paper' });
     expect(root.inputFiles).toStrictEqual([]);
     expect(root.childIds).toStrictEqual([CHILD]);
     // The commit ordinal of the run's run.start, never a clock.
@@ -822,7 +819,6 @@ describe('sessionFold', () => {
     });
     const roundOutput = (round: number) => ({
       round,
-      rawOutput: null,
       outputs: [outputOf(round)],
       compileFailures: round === 0 ? [failureOf(0)] : [],
       missingOutputs: round === 0 ? ['intro.tex'] : [],

@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Some tasks saved by an earlier build can no longer be opened.** Fields
+  nothing read were removed from the stored records, and these records are
+  checked strictly: a document task (any run that produced revisions), a
+  `texra run --output` / `--output-dir` run, and a finished subagent run
+  (the child's own record) now read as damaged: they
+  cannot be opened, resumed or shown in history. Other tasks are unaffected. A launch configuration that still
+  lists files in `editedFiles` is refused with a message naming
+  `editedFile`.
 - **Agent files no longer inherit from each other.** The `inherits:` field
   is gone: an agent file is complete on its own, and customizing a
   built-in agent already gives you a full copy. A custom agent file that

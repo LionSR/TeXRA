@@ -99,7 +99,6 @@ function queueTitleApproval(label: string): void {
           command: 'echo ok',
         },
       },
-      thread: null,
     },
   ];
   syncView();

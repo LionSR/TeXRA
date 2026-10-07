@@ -274,7 +274,6 @@ export interface AskOptions<E> {
   readonly open?: (
     rows: readonly RequestRow[],
   ) => Effect.Effect<CommitOrdinal, E>;
-  readonly thread?: string | null;
   /**
    * Cleanup for what the caller staged before the request opened, run once
    * and uninterruptibly in the two cases that leave no row behind: the

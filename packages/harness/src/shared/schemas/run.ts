@@ -92,10 +92,6 @@ export type RunLifecycleStatus = RunPhase | typeof RUN_LIFECYCLE_READY;
 export const WorktreeInfoSchema = z.object({
   /** Absolute path of the worktree the agent is operating in. */
   workingDirectory: z.string(),
-  /** Current HEAD branch, if checked out. */
-  branch: z.string().optional(),
-  /** True if the working tree has uncommitted changes. */
-  dirty: z.boolean().optional(),
 });
 export type WorktreeInfo = z.infer<typeof WorktreeInfoSchema>;
 

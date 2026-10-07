@@ -116,7 +116,6 @@ const config = {
   contextFiles: [],
   mediaFiles: [],
   editedFile: null,
-  editedFiles: [],
   memories: [],
   toolConfig: DEFAULT_TOOL_CONFIG,
 } as AgentConfig;

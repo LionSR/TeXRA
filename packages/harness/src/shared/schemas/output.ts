@@ -255,11 +255,10 @@ export type CompileResult = z.infer<typeof CompileResultSchema>;
 
 export const RoundOutputSchema = z.strictObject({
   round: RoundNumberSchema,
-  rawOutput: FileLocationSchema.nullable(),
   outputs: OutputFileInfoSchema.array(),
   compileFailures: CompileFailureSchema.array().prefault(() => []),
   /** The expected output files this round did not produce, as last reported.
-   *  Persisted with all round outputs in the `output.produced` row. */
+   *  Persisted with all round outputs in the documents plugin's output fact. */
   missingOutputs: z
     .string()
     .array()

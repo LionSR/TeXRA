@@ -4,8 +4,7 @@
  * The agent dispatches a self-contained question; the user later pastes
  * the external model's answer back via the inquiry panel. The question is a
  * request like any other (`request.opened { kind: 'externalInquiry' }`, one
- * run model, 3.7), whose `thread` names the earlier turn it follows up;
- * dispatch is non-blocking: the tool returns immediately with `dispatched`
+ * run model, 3.7), whose payload names its thread (`threadId`); dispatch is non-blocking: the tool returns immediately with `dispatched`
  * and the cycle continues. When the decision arrives, even hours later,
  * even after a restart, `recordInquiryDecision` records it on the thread and
  * delivers a `[inquiry]` follow-up that wakes or resumes the run.
@@ -264,8 +263,7 @@ function executeAsk(
     // injectors already avoid via writer snapshots.
 
     // The first turn's request is the thread itself; a follow-up turn is
-    // its own request whose `thread` names the first, which is the whole
-    // of the inquiry's multi-turn.
+    // its own request, `<thread>:<turn>`, whose payload names the thread.
     const turnIndex = manifest.turns.at(-1)?.turnIndex ?? 1;
     const requestId =
       turnIndex === 1 ? manifest.threadId : `${manifest.threadId}:${turnIndex}`;
@@ -288,7 +286,6 @@ function executeAsk(
           aggregateId: qualifyAggregateId('run', runId),
           requestId,
           payload: { kind: 'externalInquiry', data: permission },
-          thread: turnIndex === 1 ? null : manifest.threadId,
         },
       ])
       .pipe(
