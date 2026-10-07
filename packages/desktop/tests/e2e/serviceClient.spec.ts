@@ -10,6 +10,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   symlinkSync,
@@ -219,6 +220,17 @@ test('the desktop app shares the service with a CLI of its build, reaches the on
       await add.locator('wa-dropdown-item[value="files"]').click();
       await expect(treeRow('draft.tex')).toBeVisible({ timeout: 15_000 });
       await expect(treeRow('accepted.tex')).toHaveCount(0);
+      // The service follows the project's own approval policy, which a
+      // client can narrow but never widen: auto-approve it, as a window's
+      // settings view would, so the acceptance needs no answer.
+      const storage = join(dataRoot, 'v1', 'workspace-storage');
+      const project = readdirSync(storage).find((name) =>
+        name.startsWith('work-'),
+      );
+      writeFileSync(
+        join(storage, project!, 'config.json'),
+        `${JSON.stringify({ 'texra.approvalPolicy': 'yolo' })}\n`,
+      );
       const accept = JSON.parse(
         cli(
           nextBuild,
@@ -231,8 +243,6 @@ test('the desktop app shares the service with a CLI of its build, reaches the on
             'openai/gpt-5.6-sol',
             '--instruction',
             `Accept draft.tex from ${task.runId}`,
-            '--approval-policy',
-            'yolo',
             '--output-format',
             'json',
             '--cwd',
