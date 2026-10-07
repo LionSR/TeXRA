@@ -112,6 +112,10 @@ try {
       '--extensions-dir',
       path.join(root, 'x'),
       '--disable-extensions',
+      // VS Code's own secret storage in a file, not the login keychain: on
+      // a CI runner the keychain's access dialog holds VS Code open after
+      // the suite ends, so the run never finishes.
+      '--password-store=basic',
     ],
   });
   // The service the window started outlives it: its tasks keep running.
