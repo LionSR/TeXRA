@@ -46,8 +46,7 @@ const TemplateInputsSchema = z.object({
   /** Workspace root the run operates in. */
   CWD: z.string(),
   /** Absolute agent-directory paths from the external-roots registry, '' when unregistered. */
-  BUILTIN_WORKFLOW_DIR: z.string(),
-  BUILTIN_TOOLUSE_DIR: z.string(),
+  BUILTIN_AGENTS_DIR: z.string(),
   CUSTOM_AGENTS_DIR: z.string(),
   AGENT_DOCS_DIR: z.string(),
   /** Per-category primary file and its content, null when none is readable. */
@@ -233,8 +232,7 @@ type BasicVars = Pick<
   | 'INSTRUCTION'
   | 'IS_ANTHROPIC_MODEL'
   | 'CWD'
-  | 'BUILTIN_WORKFLOW_DIR'
-  | 'BUILTIN_TOOLUSE_DIR'
+  | 'BUILTIN_AGENTS_DIR'
   | 'CUSTOM_AGENTS_DIR'
   | 'AGENT_DOCS_DIR'
 >;
@@ -262,22 +260,17 @@ function getBasicVars(
  */
 type AgentDirectoryVars = Pick<
   TemplateInputs,
-  | 'BUILTIN_WORKFLOW_DIR'
-  | 'BUILTIN_TOOLUSE_DIR'
-  | 'CUSTOM_AGENTS_DIR'
-  | 'AGENT_DOCS_DIR'
+  'BUILTIN_AGENTS_DIR' | 'CUSTOM_AGENTS_DIR' | 'AGENT_DOCS_DIR'
 >;
 
 function getAgentDirectoryVars(): AgentDirectoryVars {
   const KIND_TO_VAR: Record<ExternalRootKind, keyof AgentDirectoryVars> = {
-    builtInWorkflow: 'BUILTIN_WORKFLOW_DIR',
-    builtInToolUse: 'BUILTIN_TOOLUSE_DIR',
+    builtIn: 'BUILTIN_AGENTS_DIR',
     custom: 'CUSTOM_AGENTS_DIR',
     agentDocs: 'AGENT_DOCS_DIR',
   };
   const vars: AgentDirectoryVars = {
-    BUILTIN_WORKFLOW_DIR: '',
-    BUILTIN_TOOLUSE_DIR: '',
+    BUILTIN_AGENTS_DIR: '',
     CUSTOM_AGENTS_DIR: '',
     AGENT_DOCS_DIR: '',
   };

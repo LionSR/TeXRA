@@ -218,6 +218,11 @@ function formatSchemaIssue(issue: ZodIssue): string {
   return issue.message ? `${prefix}${issue.message}` : '';
 }
 
+/** The template variables 1.0 removed, named anywhere in a prompt: in an
+ *  output, a tag (`{% if %}`, `{% set %}`) or any other expression. */
+const RETIRED_TEMPLATE_VARIABLE =
+  /\b(BUILTIN_WORKFLOW_DIR|BUILTIN_TOOLUSE_DIR)\b/;
+
 /**
  * The entry a definition makes: its persona
  * and task with the schema's defaults applied, the one validation a launch
@@ -241,6 +246,18 @@ export function agentEntryOf(
   const persona = PersonaSchema.parse(fields);
   const task =
     taskFields === undefined ? null : DocumentTaskSchema.parse(taskFields);
+  const retired = [
+    persona.prompt,
+    task?.prefix ?? '',
+    ...(task?.requests ?? []),
+  ]
+    .join('\n')
+    .match(RETIRED_TEMPLATE_VARIABLE);
+  // An unknown variable renders empty, so a removed one is refused here.
+  if (retired !== null)
+    throw new Error(
+      `\`${retired[1]}\` was removed in 1.0: the built-in agents are one directory, \`BUILTIN_AGENTS_DIR\`.`,
+    );
   if (task !== null && persona.tools.length > 0)
     throw new Error(
       'A document task works text-only, so `tools` and `task` cannot be combined: remove one.',

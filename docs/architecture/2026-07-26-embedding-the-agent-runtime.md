@@ -55,7 +55,7 @@ one of two owners, and an embedder supplies each one there:
 `agentDirectories` is the port that names the three directories the registry
 scans. `new AgentDirectoryService({...})`
 (`packages/harness/src/agent/index/AgentDirectoryService.ts:58-60`) builds one over a
-packaged resources tree; its `builtIn()` and `builtInToolUse()` read that tree
+packaged resources tree; its `builtIn()` reads that tree
 in place. Nothing is copied into global storage, so there is no bundle-copy
 step to run and no version state key to keep.
 
@@ -105,13 +105,13 @@ model call.
 ### Step 3 — agent directories
 
 To use the packaged agent definitions, install a port that names the tree they
-sit in. There is no copy step: `builtIn()` and `builtInToolUse()` resolve
+sit in. There is no copy step: `builtIn()` resolves
 inside `resourcesPath`, and the files are read where they are.
 
 ```ts
 const agentDirectories = new AgentDirectoryService({
   channel: 'my-embedder',
-  resourcesPath, // dir containing agents/, tool_use_agents/, skills/
+  resourcesPath, // dir containing agents/, skills/
   state: { get: () => Effect.succeed(undefined) },
 });
 // Served as `AgentDirectories` by the Step 1 install:
@@ -198,7 +198,7 @@ import { validateRunRequest } from '@agent/core/state/runRequests';
 // application state, and the rest.
 const agentDirectories = new AgentDirectoryService({
   channel: 'my-embedder',
-  resourcesPath, // dir containing agents/, tool_use_agents/, skills/
+  resourcesPath, // dir containing agents/, skills/
   state: { get: () => Effect.succeed(undefined) },
 });
 const runtime = installProcessRuntime({
@@ -292,7 +292,6 @@ export interface AgentDirectoriesPort {
     GlobalStorageFs | FileSystem.FileSystem
   >;
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
-  builtInToolUse(): Effect.Effect<string, AgentDirectoriesFailed>;
 }
 ```
 
@@ -341,8 +340,8 @@ await writeFile(resolve(customDir, 'chat.yaml'), [...].join('\n'));
 useAgentDirectories({ custom: () => Effect.succeed(customDir) });
 ```
 
-Its `builtIn()`/`builtInToolUse()` point at the real repo tree
-(`packages/extension/resources/agents`, `…/tool_use_agents`) —
+Its `builtIn()` points at the real repo tree
+(`packages/extension/resources/agents`) —
 `src/test-kernel/agent/AgentRegistry.vitest.ts`.
 
 If the codebase's own memfs kernel cannot avoid touching real disk to register
@@ -352,8 +351,7 @@ one agent, an embedder cannot either.
 
 - **Skipping the packaged bundle.** `scanDirectory` returns no entries for an
   empty path (`packages/harness/src/agent/index/agentYamlScanner.ts:71`), so
-  `builtIn: () => Effect.succeed('')` and
-  `builtInToolUse: () => Effect.succeed('')` are legal and cheap. This is the
+  `builtIn: () => Effect.succeed('')` is legal and cheap. This is the
   "empty-builtIn trick" the proposals mention, and it does work. With it you
   can skip the packaged resources tree entirely and point `custom()` at your
   own directory of YAML.
@@ -367,7 +365,6 @@ one agent, an embedder cannot either.
   const agentDirectories: AgentDirectoriesPort = {
     custom: () => Effect.succeed('/abs/path/to/my/agents'),
     builtIn: () => Effect.succeed(''),
-    builtInToolUse: () => Effect.succeed(''),
   };
   ```
 
@@ -530,11 +527,11 @@ when it opens.
   depend on this choice (`packages/harness/src/tools/plugins.ts`).
 
 The installed `AgentDirectoriesPort` is the whole of the core agent bundle:
-`AgentDirectoryService` resolves `builtIn()` and `builtInToolUse()` inside the
+`AgentDirectoryService` resolves `builtIn()` inside the
 `resourcesPath` it was given and the files are read where they sit, so a port
 pointed at a tree that does not hold them leaves `loadAgents` with no packaged
 agents (§2). Tool plugins that ship agents (today `lean4`) keep them at
-`<resourcesPath>/plugins/<id>/agents`, and the `builtInToolUse` scan adds
+`<resourcesPath>/plugins/<id>/agents`, and the `builtIn` scan adds
 those directories only once
 `installPluginAgentDirectories(resourcesPath, pluginIds)`
 (`packages/harness/src/agent/index/BundledAgentDirectories.ts`) has run, as `bootstrapHost`

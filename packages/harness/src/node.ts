@@ -90,7 +90,6 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
       custom: () => Effect.succeed(options.agentsDir),
       customConfigured: () => Effect.succeed(true),
       builtIn: () => Effect.succeed(''),
-      builtInToolUse: () => Effect.succeed(''),
     },
     roots: createNodeWorkspaceRoots({
       host: 'sdk',

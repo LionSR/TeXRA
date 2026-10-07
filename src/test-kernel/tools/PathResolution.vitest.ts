@@ -166,7 +166,7 @@ describe('resolveToolPath path protection', () => {
           'agents',
         );
         registerExternalRoot(packagedAgents, {
-          kind: 'builtInToolUse',
+          kind: 'builtIn',
           writable: false,
           label: 'Packaged agents',
         });

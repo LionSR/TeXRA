@@ -500,7 +500,6 @@ function verifySigningEnv(args) {
 const desktopIconPath = join(desktopRoot, 'build', 'icon.icns');
 const bundledRuntimeResourceDirs = [
   'agents',
-  'tool_use_agents',
   'skills',
   'plugins',
   'plugins/lean4/agents',
@@ -1138,7 +1137,7 @@ async function verifyPackage() {
     '- dist/renderer/assets/*.js',
     '- dist/renderer/assets/*.css',
     '- dist/renderer/assets Monaco worker chunks',
-    '- resources/agents, resources/tool_use_agents, resources/skills, and resources/plugins',
+    '- resources/agents, resources/skills, and resources/plugins',
     '- resources/traceViewer/index.html',
     '- package.json runtime dependencies',
     '- node_modules runtime dependency packages',

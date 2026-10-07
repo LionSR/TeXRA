@@ -798,7 +798,6 @@ export function crashConformanceSuite(plugins: string): void {
         // The bundled personas, `polish` among them: the golden agents
         // resolve from the custom source first.
         builtIn: () => Effect.succeed(BUNDLED_AGENTS),
-        builtInToolUse: () => Effect.succeed(AGENTS),
       };
       return {
         ...host,

@@ -16,7 +16,6 @@ const runtimeResourceEntries = [
   'docs',
   'plugins',
   'skills',
-  'tool_use_agents',
 ];
 
 // Built (not checked-in) assets: only present once packages/trace-viewer's

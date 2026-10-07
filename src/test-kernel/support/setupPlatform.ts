@@ -234,8 +234,6 @@ export const fakeHostAgentDirectories: AgentDirectoriesPort = {
   customConfigured: () =>
     installedHost().platform.agentDirectories.customConfigured(),
   builtIn: () => installedHost().platform.agentDirectories.builtIn(),
-  builtInToolUse: () =>
-    installedHost().platform.agentDirectories.builtInToolUse(),
 };
 
 /** The process services a fake host provides to a program. */

@@ -191,10 +191,6 @@ function createFakeDesktopPackage(
   writeText(join(appRoot, 'serve/texra-serve.mjs'), 'export {};\n');
   writeText(join(appRoot, 'resources/agents/example.yaml'), 'name: example\n');
   writeText(
-    join(appRoot, 'resources/tool_use_agents/example.yaml'),
-    'name: example\n',
-  );
-  writeText(
     join(appRoot, 'resources/skills/example/SKILL.md'),
     'name: example\n\ndescription: Example bundled skill.\n',
   );

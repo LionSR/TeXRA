@@ -14,6 +14,14 @@ All notable changes to this project will be documented in this file.
   cannot be opened, resumed or shown in history. Other tasks are unaffected. A launch configuration that still
   lists files in `editedFiles` is refused with a message naming
   `editedFile`.
+- **The built-in agents ship in one directory.** The split between
+  `agents/` (agents with a document task) and `tool_use_agents/` came from
+  the old agent categories, and nothing reads that distinction any more:
+  every bundled agent now lives in `resources/agents/`. The prompt variables
+  `BUILTIN_WORKFLOW_DIR` and `BUILTIN_TOOLUSE_DIR` become one,
+  `BUILTIN_AGENTS_DIR`. A custom agent (for example a customized copy of
+  `creator`) that still names one of the old two is listed as an issue
+  saying so, instead of rendering it empty.
 - **Agent files no longer inherit from each other.** The `inherits:` field
   is gone: an agent file is complete on its own, and customizing a
   built-in agent already gives you a full copy. A custom agent file that
