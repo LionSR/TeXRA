@@ -115,6 +115,10 @@ export function dockTab(id: string, actions: DockActions): ITabRenderer {
   const element = document.createElement('div');
   element.className = 'shell-dock-tab';
   element.dataset.tabId = id;
+  // Dockview positions groups with transforms, which turn a fixed descendant
+  // into group-relative coordinates. The pointer anchor must live at the root.
+  const menuRoot = document.createElement('div');
+  menuRoot.className = 'shell-dock-context-root';
   let panel: IDockviewPanel | undefined;
   let titleSubscription: { dispose(): void } | undefined;
   function draw() {
@@ -122,9 +126,6 @@ export function dockTab(id: string, actions: DockActions): ITabRenderer {
     const tab = actions.tab(id);
     if (!tab) return;
     element.dataset.kind = tab.kind;
-    const groups = actions
-      .api()
-      .groups.filter((group) => group !== panel?.group);
     render(
       html`
         ${waIcon(WORKBENCH_KIND_META[tab.kind].icon)}
@@ -145,9 +146,21 @@ export function dockTab(id: string, actions: DockActions): ITabRenderer {
             onClick: () => actions.close(id),
           })}
         </span>
+      `,
+      element,
+    );
+  }
+  function drawMenu() {
+    panel = actions.api().getPanel(id);
+    const groups = actions
+      .api()
+      .groups.filter((group) => group !== panel?.group);
+    render(
+      html`
         <wa-dropdown
           class="shell-dock-tab-menu"
           placement="bottom-start"
+          distance="0"
           @wa-select=${(event: CustomEvent<{ item: { value: string } }>) => {
             const value = event.detail.item.value;
             if (value === 'close') actions.close(id);
@@ -195,16 +208,23 @@ export function dockTab(id: string, actions: DockActions): ITabRenderer {
           <wa-dropdown-item value="close">Close tab</wa-dropdown-item>
         </wa-dropdown>
       `,
-      element,
+      menuRoot,
     );
   }
   element.addEventListener('contextmenu', (event) => {
     event.preventDefault();
-    draw();
-    const menu = element.querySelector<HTMLElement & { open: boolean }>(
+    event.stopPropagation();
+    for (const other of document.querySelectorAll<
+      HTMLElement & { open: boolean }
+    >('.shell-dock-tab-menu[open]')) {
+      other.open = false;
+    }
+    drawMenu();
+    if (!menuRoot.isConnected) document.body.append(menuRoot);
+    const menu = menuRoot.querySelector<HTMLElement & { open: boolean }>(
       'wa-dropdown',
     );
-    const anchor = element.querySelector<HTMLElement>(
+    const anchor = menuRoot.querySelector<HTMLElement>(
       '.shell-dock-menu-anchor',
     );
     if (menu && anchor) {
@@ -241,6 +261,8 @@ export function dockTab(id: string, actions: DockActions): ITabRenderer {
     dispose() {
       titleSubscription?.dispose();
       render(nothing, element);
+      render(nothing, menuRoot);
+      menuRoot.remove();
     },
   };
 }

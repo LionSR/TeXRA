@@ -41,6 +41,12 @@ import {
   type RunView,
 } from '@shared/session/sessionView';
 import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
+import {
+  loadSurface,
+  persistSurface,
+  PersistedSurfaceSchema,
+} from '@shared/session/surface';
+import { markShownRunSeen, unseenRuns } from '@shared/session/unseenRuns';
 import { DOCUMENTS_OUTPUT_ARM, documentsOf } from '@shared/plugins/documents';
 
 import { createExternalLocation } from '@utils/files/fileLocation';
@@ -80,6 +86,63 @@ const nobody = local({ dead: [OWNER] });
 
 describe('sessionFold', () => {
   const scenario = buildScenario();
+
+  it('keeps read conversations read across history replay and restart while detecting later activity', () => {
+    const log = new Log();
+    const start = log.emit(ROOT, 1000, {
+      type: 'run.start',
+      identity: ROOT_IDENTITY,
+      userFollowUpSupport: 'unsupported',
+      parent: null,
+      provenance: null,
+    });
+    const response = log.emit(ROOT, 2000, {
+      type: 'response.finalized',
+      text: 'Ready for review.',
+    });
+    const end = log.emit(ROOT, 3000, {
+      type: 'run.end',
+      outcome: 'completed',
+      output: emptyRunEndOutput(),
+    });
+    const listing = foldAll(
+      [start, end].map((event) => ({
+        _tag: 'event',
+        read: 'listing',
+        event,
+      })),
+    );
+    const history = foldAll(
+      [subscribe(ROOT), ...log.events.map(tail)],
+      listing,
+    );
+    const surface = loadSurface(
+      'paper',
+      PersistedSurfaceSchema.parse({ selected: ROOT }),
+    );
+    const read = markShownRunSeen(surface, history);
+    const restarted = loadSurface('paper', persistSurface(read));
+    expect(unseenRuns(restarted, listing)).toEqual(new Set());
+    expect(runView(history, ROOT).lastTimestamp).toBe(end.at);
+
+    // A partial replay must never move an existing read marker backwards.
+    const partial = foldAll([tail(start), subscribe(ROOT), tail(response)]);
+    expect(markShownRunSeen(restarted, partial)).toBe(restarted);
+    const later = fold(
+      history,
+      tail(
+        log.emit(ROOT, 4000, {
+          type: 'run.end',
+          outcome: 'completed',
+          output: emptyRunEndOutput(),
+        }),
+      ),
+    );
+    expect(unseenRuns(restarted, later)).toEqual(new Set([ROOT]));
+    expect(unseenRuns(markShownRunSeen(restarted, later), later)).toEqual(
+      new Set(),
+    );
+  });
 
   it('projects completed trace facts identically live and on replay without folding the listing as transcript', () => {
     const log = new Log();

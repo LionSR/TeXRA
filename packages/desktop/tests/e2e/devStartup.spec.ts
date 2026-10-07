@@ -170,12 +170,23 @@ test('renders the dev app from a cold cache and restores the editor after reload
       );
       await expect(menu).toBeVisible();
       const menuColors = await menu.evaluate((element) => ({
-        background: getComputedStyle(element).backgroundColor,
+        background: getComputedStyle(element.closest('.context-view')!)
+          .backgroundColor,
         foreground: getComputedStyle(element.querySelector('.action-label')!)
           .color,
+        outerRadius: Number.parseFloat(
+          getComputedStyle(element.closest('.context-view')!)
+            .borderTopLeftRadius,
+        ),
+        innerBorder: getComputedStyle(element).borderTopWidth,
+        outerClipping: getComputedStyle(element.closest('.context-view')!)
+          .overflow,
       }));
       expect(menuColors.background).not.toBe('rgba(0, 0, 0, 0)');
       expect(menuColors.background).not.toBe(menuColors.foreground);
+      expect(menuColors.outerRadius).toBeGreaterThan(0);
+      expect(menuColors.innerBorder).toBe('0px');
+      expect(menuColors.outerClipping).toBe('hidden');
       await page.screenshot({
         path: testInfo.outputPath(`editor-context-menu-${theme}.png`),
         animations: 'disabled',

@@ -793,6 +793,9 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Read conversations stay read after restarting.** Loading older chat history
+  no longer resets the sidebar's read marker. Later activity still makes the
+  conversation unread until it is viewed.
 - **A task saved by an older TeXRA no longer reads as corrupt.** A task
   whose stored shape this version no longer reads now says it was made by
   an older TeXRA and can't be opened here, instead of calling it corrupt,
