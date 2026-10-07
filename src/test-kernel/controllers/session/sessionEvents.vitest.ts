@@ -79,9 +79,11 @@ import {
 import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { onAppSignal } from '@eventBus/AppSignals';
 import { withProcessServices } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
+import { documentsAcceptedRow } from '@shared/plugins/documents';
 import { inquiryThreadRow } from '@shared/plugins/externalInquiry';
 import {
   aggregateId as qualifyAggregateId,
@@ -115,6 +117,7 @@ import {
   nodeSpawnerLayer,
   scriptedSpawnerLayer,
 } from '@test/support/childProcessTestLayer';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
@@ -1256,6 +1259,56 @@ describe('Sessions owner', () => {
         });
         expect(yield* isLive(session)).toBe(false);
       }),
+  );
+  it.live(
+    'announces each accepted-files row once, never the history a reopen replays',
+    () =>
+      withProcessServices(
+        testRuntime(),
+        Effect.gen(function* () {
+          const storage = mkdtempSync(join(tmpdir(), 'texra-accepted-'));
+          const heard: string[][] = [];
+          const ready = yield* Deferred.make<void>();
+          const listening = yield* Effect.forkDetach(
+            onAppSignal(
+              'workspaceFilesWritten',
+              ({ absolutePaths }) => heard.push(absolutePaths),
+              ready,
+            ),
+          );
+          yield* Deferred.await(ready);
+          const open = () =>
+            openTestSession({
+              roots: createFakeWorkspaceRoots({ storagePath: storage }),
+            });
+          const first = yield* open();
+          const runId = publishTestRunStart(first, 'abcdef123456' as RunId);
+          yield* first.log.settled;
+          // Two acceptances committed close together fold to one view level.
+          yield* Effect.all(
+            [
+              first.log.transact([
+                documentsAcceptedRow(runId, ['/w/a.tex'], 1),
+              ]),
+              first.log.transact([
+                documentsAcceptedRow(runId, ['/w/b.tex'], 2),
+              ]),
+            ],
+            { concurrency: 'unbounded' },
+          );
+          for (let i = 0; i < 100 && heard.length < 2; i++)
+            yield* Effect.sleep('20 millis');
+          expect(heard).toEqual([['/w/a.tex'], ['/w/b.tex']]);
+          yield* closeSessionOf(first);
+          const reopened = yield* open();
+          yield* reopened.log.settled;
+          yield* Effect.sleep('300 millis');
+          expect(heard).toHaveLength(2);
+          yield* closeSessionOf(reopened);
+          yield* Fiber.interrupt(listening);
+          rmSync(storage, { recursive: true, force: true });
+        }),
+      ),
   );
 });
 

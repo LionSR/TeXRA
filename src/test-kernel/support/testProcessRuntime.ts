@@ -21,7 +21,7 @@
  */
 import { Context, Effect } from 'effect';
 
-import { SessionOwner } from '@agent/runtime/SessionOwner';
+import { SessionOwner } from '@platform/processRuntime';
 import type { ProcessRuntime } from '@platform/processRuntime';
 
 let runtime: ProcessRuntime | undefined;
