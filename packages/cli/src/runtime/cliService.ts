@@ -8,7 +8,9 @@ import { hostname } from 'node:os';
 import * as path from 'node:path';
 
 import {
+  Duration,
   Effect,
+  Exit,
   Scope,
   type Context,
   type FileSystem,
@@ -86,6 +88,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
   );
   const openRoots = Effect.fn('cliServiceProjects.openRoots')(function* (
     workspace: string | undefined,
+    within: Scope.Scope,
   ) {
     const storage = resolveWorkspaceStoragePath(storageRoot, workspace);
     const [workspaceState, repoState, configs] = yield* Effect.all(
@@ -95,7 +98,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
         openTexraWorkspaceConfigStores(storage, workspace, warn, follow),
       ],
       { concurrency: 'unbounded' },
-    ).pipe(Scope.provide(scope));
+    ).pipe(Scope.provide(within));
     return createNodeWorkspaceRoots({
       host: 'cli',
       workspacePath: workspace,
@@ -108,7 +111,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     });
   });
   yield* bootstrapHost({
-    roots: yield* openRoots(undefined),
+    roots: yield* openRoots(undefined, scope),
     skills: {
       resourcesPath: context.resourcesPath,
       skillSourceOptions: context.skillSourceOptions,
@@ -129,59 +132,86 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
   // session reads at every decision through these following config stores:
   // a change any client writes applies to the next request, and nothing a
   // window holds can replace it.
-  const sessions = new Map<string, SessionHandle>();
+  //
+  // A project is its session and the scope its stores live in, leased by
+  // the callers that use it. Opening, leasing and closing one run on the
+  // project's lane, so a close sees every lease taken before it and an open
+  // after it opens the project anew.
+  interface Project {
+    readonly session: SessionHandle;
+    readonly scope: Scope.Closeable;
+    leases: number;
+    idleSince: number;
+  }
+  const projects = new Map<string, Project>();
   const lanes = new Map<string, PerKeyLane>();
-  const projectRoots = new Map<
-    string,
-    Effect.Success<ReturnType<typeof openRoots>>
-  >();
+  const lease = (root: string) =>
+    Effect.gen(function* () {
+      let project = projects.get(root);
+      if (project === undefined) {
+        const projectScope = yield* Scope.fork(scope);
+        const session = yield* Effect.gen(function* () {
+          const roots = yield* openRoots(root, projectScope);
+          return yield* (yield* SessionOwner).open({
+            roots,
+            interruptedTasks: 'offer',
+          });
+        }).pipe(Effect.onError(() => Scope.close(projectScope, Exit.void)));
+        project = { session, scope: projectScope, leases: 0, idleSince: 0 };
+        projects.set(root, project);
+      }
+      project.leases += 1;
+      return project;
+    }).pipe(withPerKeyLane(lanes, root));
   const open = (workspace: string) => {
     const root = canonicalizeWorkspacePath(workspace);
-    return Effect.gen(function* () {
-      const held = sessions.get(root);
-      if (held !== undefined) return held;
-      // A project's stores live as long as the service, so a session
-      // closed for idleness reopens over the same ones.
-      const roots = projectRoots.get(root) ?? (yield* openRoots(root));
-      projectRoots.set(root, roots);
-      const session = yield* (yield* SessionOwner).open({
-        roots,
-        interruptedTasks: 'offer',
-      });
-      sessions.set(root, session);
-      return session;
-    }).pipe(
-      withPerKeyLane(lanes, root),
+    return Effect.acquireRelease(lease(root), (project) =>
+      Effect.sync(() => {
+        project.leases -= 1;
+        if (project.leases === 0) project.idleSince = Date.now();
+      }),
+    ).pipe(
+      Effect.map((project) => project.session),
       Effect.mapError(ensureError),
       Effect.provideContext(services),
     );
   };
-  // Closed on the project's lane, so an open of the same project waits
-  // for the close and then opens it anew.
-  const close = (storage: string) =>
-    Effect.suspend(() => {
-      const root = [...sessions].find(
-        ([, session]) => session.roots.storage === storage,
-      )?.[0];
-      if (root === undefined) return Effect.void;
-      return Effect.gen(function* () {
-        sessions.delete(root);
-        yield* (yield* SessionOwner).close(storage);
-      }).pipe(withPerKeyLane(lanes, root), Effect.provideContext(services));
-    });
+  /** Close `root` if it is still unleased, holds no run and has been idle
+   *  for `idleMs`; a run held restarts its idle time. */
+  const closeIfIdle = (root: string, idleMs: number) =>
+    Effect.gen(function* () {
+      const project = projects.get(root);
+      if (project === undefined || project.leases > 0) return undefined;
+      const now = Date.now();
+      if (project.session.runs.heldIds().length > 0) {
+        project.idleSince = now;
+        return undefined;
+      }
+      if (now - project.idleSince < idleMs) return undefined;
+      projects.delete(root);
+      yield* (yield* SessionOwner).close(project.session.roots.storage);
+      yield* Scope.close(project.scope, Exit.void);
+      return project.session;
+    }).pipe(withPerKeyLane(lanes, root), Effect.provideContext(services));
   return {
     storageRoot,
     open,
-    close,
     opened: Effect.sync(
       () =>
         new Map(
-          [...sessions.values()].map((session) => [
+          [...projects.values()].map(({ session }) => [
             session.roots.storage,
             session,
           ]),
         ),
     ),
+    closeIdle: (idleFor) =>
+      Effect.map(
+        Effect.forEach([...projects.keys()], (root) =>
+          closeIfIdle(root, Duration.toMillis(idleFor)),
+        ),
+        (closed) => closed.filter((session) => session !== undefined),
+      ),
   } satisfies Context.Service.Shape<typeof ServiceProjects>;
 });
 

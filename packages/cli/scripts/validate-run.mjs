@@ -2254,7 +2254,7 @@ async function validateServiceSessionIdle() {
     await waitFor('the first task to wait', () => ended(first));
     texra(['tasks', 'stop', first], 'texra tasks stop (first)');
     await waitFor('the project session to close', () =>
-      /Closing the idle session of .*work-/.test(log),
+      /Closed the idle session of .*work-/.test(log),
     );
     const second = texra(
       [
@@ -2272,7 +2272,7 @@ async function validateServiceSessionIdle() {
     const artifactPath = writeArtifact('service-session-idle.json', {
       closed: log
         .split('\n')
-        .filter((line) => line.includes('Closing the idle session')),
+        .filter((line) => line.includes('Closed the idle session')),
       first,
       second,
       serviceAlive: service.exitCode === null,
@@ -2283,7 +2283,7 @@ async function validateServiceSessionIdle() {
           .split('\n')
           .some(
             (line) =>
-              line.includes('Closing the idle session') &&
+              line.includes('Closed the idle session') &&
               line.includes('other'),
           ),
       `the service should stay up and keep the attached project's session (artifact: ${artifactPath})`,
