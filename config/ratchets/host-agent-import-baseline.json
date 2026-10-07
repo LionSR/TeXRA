@@ -1,4 +1,0 @@
-{
-  "semantics": "Retired by ruling SQ2: config/ratchets/harness-deep-import-baseline.json counts every harness-internal specifier the app and the hosts import (this file counted only @agent/* from the hosts, and the SDK entry files' own @agent/* imports, whose public surface config/api-reports/ now pins). Kept empty because deleting a baseline file is an owner call (check-ratchet-baselines).",
-  "hosts": {}
-}
