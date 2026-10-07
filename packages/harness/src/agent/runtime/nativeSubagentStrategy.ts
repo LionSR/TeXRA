@@ -89,9 +89,6 @@ export function createNativeSubagentStrategy(
   // already-built result manifest is still available for persistence.
   let cachedBuilt: SubagentResultMeta | undefined;
   let cachedDelivery: string | undefined;
-  // When the last turn ended: its delivery's wall time, so the diffs the
-  // result computes afterwards are not counted (as `formatError` counts).
-  let turnEndedAt = params.startedAt;
 
   const runNative = Effect.fn('nativeSubagent.runTurn')(function* (
     call: Effect.Effect<RunEndResult, Error, AgentRunServices>,
@@ -103,7 +100,6 @@ export function createNativeSubagentStrategy(
       Effect.tap((result) =>
         Effect.sync(() => {
           lastResult = result;
-          turnEndedAt = Date.now();
           cachedBuilt = undefined;
           cachedDelivery = undefined;
         }),
@@ -194,6 +190,9 @@ export function createNativeSubagentStrategy(
 
     formatDelivery: Effect.fn('nativeSubagent.formatDelivery')(function* (
       turn: RunEndResult,
+      /** The turn's wall time, measured by the loop before this result
+       *  computes its diffs. */
+      wallTimeMs: number,
     ) {
       if (cachedDelivery === undefined) {
         const built = yield* buildResult(turn);
@@ -209,7 +208,7 @@ export function createNativeSubagentStrategy(
               {
                 runId: params.runId,
                 memoryMisses: turn.memoryMisses,
-                wallTimeMs: turnEndedAt - params.startedAt,
+                wallTimeMs,
                 workingDirectory: params.workingDirectory,
               },
             ),
