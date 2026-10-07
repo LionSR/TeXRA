@@ -27,7 +27,7 @@
   "packages/harness/src/controllers/session/Database.ts": 1193,
   "packages/harness/src/controllers/session/rowCodec.ts": 420,
   "packages/harness/src/controllers/session/sessionLayer.ts": 784,
-  "packages/harness/src/controllers/session/SessionRequests.ts": 539,
+  "packages/harness/src/controllers/session/SessionRequests.ts": 538,
   "packages/harness/src/controllers/session/storeSchema.ts": 412,
   "packages/harness/src/shared/schemas/runHistoryEvent.ts": 454,
   "packages/harness/src/shared/schemas/sessionEvent.ts": 660,
