@@ -284,16 +284,31 @@ const CONFIG = AgentConfigSchema.parse({
   model: GPT54,
 });
 
-/** The run service the invoker reads: identity, session, trace, binding. */
+/**
+ * The run service the invoker reads: identity, session, trace, binding. A
+ * rebind keeps the stub (a fresh copy of the binding) unless `binds`, where
+ * the real binder runs and, with no key in this suite, fails.
+ */
 function agentRun(
   runId: RunId,
   session: SessionHandle,
   logger: AgentTrace,
   model: SynchronizedRef.SynchronizedRef<BoundModel>,
+  binds: boolean,
 ): AgentRunShape {
   return testAgentRun(
     { runId, session, logger, model, scope: Scope.makeUnsafe() },
-    { config: CONFIG },
+    {
+      config: CONFIG,
+      ...(binds
+        ? {}
+        : {
+            swapModel: () =>
+              SynchronizedRef.updateAndGet(model, (current) => ({
+                ...current,
+              })),
+          }),
+    },
   );
 }
 
@@ -322,6 +337,7 @@ const openRun = Effect.fn('openRun')(function* (
   model: Model,
   overrides: Partial<BoundModel> = {},
   logger: AgentTrace = noopTrace,
+  binds = false,
 ): Effect.fn.Return<
   InvokerKit,
   RunHistoryRefused | DatabaseReadFailed | DatabaseWriteFailed
@@ -348,7 +364,7 @@ const openRun = Effect.fn('openRun')(function* (
   const layer = modelInvokerLayer().pipe(
     Layer.provide(
       Layer.mergeAll(
-        Layer.succeed(AgentRun, agentRun(runId, session, logger, bound)),
+        Layer.succeed(AgentRun, agentRun(runId, session, logger, bound, binds)),
         UsageLog.disabled,
         LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
         testHttpClientLayer,
@@ -840,7 +856,6 @@ describe('ModelInvoker retry', () => {
       const { runId } = kit;
       yield* Effect.promise(() => seedActiveRun(session, runId));
       const outcome = yield* invokeOn(kit);
-
       expect(outcome.kind).toBe('response');
       expect(stub.attempts()).toBe(2);
       // The request the run opened carries the retry payload every surface
@@ -915,6 +930,41 @@ describe('ModelInvoker retry', () => {
         yield* Fiber.interrupt(pump);
         yield* closeSessionOf(session);
       }),
+  );
+
+  // Failure mode: the answered retry cannot rebind (no personal key: it went
+  // away while the prompt was open), and the loop resends on the binding it
+  // meant to leave instead of failing.
+  it.effect('fails an answered retry whose rebind fails, sending nothing', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() =>
+        installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
+      );
+      const session = yield* sessionWithInteractions(undefined);
+      const pump = yield* pumpClock;
+      const requests = autoDecideRequests(session, () => ({
+        action: 'retry',
+        credentials: 'personal',
+      }));
+      const stub = stubModel([
+        { fail: httpError('temporary provider failure', 503) },
+        { ok: completedTurn('sent on the old binding') },
+      ]);
+      const kit = yield* openRun(session, stub.model, {}, noopTrace, true);
+      yield* Effect.promise(() => seedActiveRun(session, kit.runId));
+
+      const outcome = yield* invokeOn(kit);
+
+      expect(outcome.kind).toBe('failed');
+      expect(stub.attempts()).toBe(1);
+      // The failed rebind is the next attempt's recorded, unsent failure.
+      expect(
+        (yield* session.runHistory.load(kit.runId))?.invocation?.current,
+      ).toMatchObject({ ref: { attempt: 2 }, sent: null });
+      requests.detach();
+      yield* Fiber.interrupt(pump);
+      yield* closeSessionOf(session);
+    }),
   );
 
   // Failure mode: a 404 on a request that chained nothing reads as a lost

@@ -857,6 +857,17 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A model retry that cannot switch credentials now fails instead of
+  resending on the old ones.** When you answer a failed request with "retry
+  with my own key" and that key is gone, or a dropped Responses WebSocket
+  cannot reconnect, the task now stops with that error. Before, it logged a
+  warning and sent the request again on the subscription or connection the
+  retry meant to leave.
+
+- **Approving a request in a long task no longer slows down as the task
+  grows.** Each decision now reads only the task's request rows instead of
+  reloading its whole history.
+
 - **An unnamed image in an `.eml` file is named by its standard extension.**
   Reading an email names an image attachment that has no filename after the
   registered extension of its MIME type, so `image/x-icon` becomes
