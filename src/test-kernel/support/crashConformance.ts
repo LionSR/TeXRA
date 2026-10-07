@@ -301,9 +301,10 @@ function outcome(rows: readonly Row[], root: string) {
  * left it, its claims held by a dead owner: every durable table at the cut,
  * not the later store with rows cut away. Rows, their blobs and sequences
  * go back to commit `n`; a plugin aggregate hangs where its last fact at
- * the cut put it; `stored_kind` holds what the remaining rows wrote; current
- * values and input history written after the cut's clock go (one the later
- * run overwrote in place reads as never written, the one approximation).
+ * the cut put it; current values and input history written after the cut's
+ * clock go (one the later run overwrote in place reads as never written).
+ * `stored_kind` is append-only and kept: every version in it is this
+ * build's, so the gate reads it as it would at the cut.
  * The projections rebuild from the rows on open.
  */
 function crashAt(clean: string, storage: string, n: number): void {
@@ -340,15 +341,6 @@ function crashAt(clean: string, storage: string, n: number): void {
       WHERE kind <> 'run';
       DELETE FROM current_value WHERE at > ${Number(at ?? 0)};
       DELETE FROM input_history WHERE at > ${Number(at ?? 0)};
-      DELETE FROM stored_kind;
-      INSERT INTO stored_kind SELECT type, max(version) FROM event GROUP BY type;
-      INSERT INTO stored_kind
-        SELECT 'plugin.fact/' || json_extract(data, '$.plugin') || '/' ||
-          json_extract(data, '$.kind'), max(json_extract(data, '$.version'))
-        FROM event WHERE type = 'plugin.fact' GROUP BY 1;
-      INSERT INTO stored_kind
-        SELECT 'current_value', max(version) FROM current_value
-        HAVING count(*) > 0;
       UPDATE sqlite_sequence SET seq = ${n} WHERE name = 'event';
     `);
   } finally {

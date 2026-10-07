@@ -166,14 +166,23 @@ function donates(donor, value) {
   return donor === value;
 }
 
-/** Every file the tree moved since the base, as `[from, to]` stems. */
+/** Every file the tree moved since the base, as `[from, to]` stems. The
+ *  `-z` stream is records: a status, then one path, or two for a rename
+ *  or copy (`R`/`C` plus a score). */
 function renamesSinceBase() {
   const stem = (file) => file.replace(/\.[cm]?[jt]sx?$/, '');
-  return git('diff', '--find-renames', '--name-status', '-z', base)
+  const fields = git('diff', '--find-renames', '--name-status', '-z', base)
     .split('\0')
-    .flatMap((field, i, fields) =>
-      field.startsWith('R') ? [[stem(fields[i + 1]), stem(fields[i + 2])]] : [],
-    );
+    .filter(Boolean);
+  const renames = [];
+  for (let i = 0; i < fields.length;) {
+    const status = fields[i];
+    const paths = /^[RC]/.test(status) ? 2 : 1;
+    if (status.startsWith('R'))
+      renames.push([stem(fields[i + 1]), stem(fields[i + 2])]);
+    i += 1 + paths;
+  }
+  return renames;
 }
 
 /** Whether `name` (a path or an `@alias/` specifier) names the file `stem`. */
