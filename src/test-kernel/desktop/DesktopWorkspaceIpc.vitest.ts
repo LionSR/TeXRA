@@ -12,11 +12,15 @@ import { it } from '@effect/vitest';
 import { Deferred, Effect, Exit, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
+import { refresh } from '@agent/index';
 import { DESKTOP_WORKSPACE_COMMANDS } from '@desktop/shared/desktopWorkspaceMessages';
 import { createDesktopWorkspaceIpc } from '@desktop/main/desktopWorkspaceIpc';
+import { agentDocumentForPath } from '@desktop/main/desktopAgentDocuments';
+import { agentDocumentTarget } from '@desktop/shared/desktopAgentDocument';
 import type { DesktopBrowserViews } from '@desktop/main/desktopBrowserViews';
 import type { DesktopPtyHost } from '@desktop/main/desktopPtyHost';
 import { emitAppSignal } from '@eventBus/AppSignals';
+import { REPO_ROOT } from '@test/support/repoScan';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
@@ -199,6 +203,81 @@ describe('desktop workspace IPC', () => {
             .file({ kind: 'read', path: 'bom.tex' })
             .pipe(Effect.provide(context)),
         ).toEqual({ kind: 'contents', contents: '\uFEFFhi' });
+      }),
+  );
+
+  it.live(
+    'edits custom agent YAML outside the workspace, but refuses packaged and unknown documents',
+    () =>
+      Effect.gen(function* () {
+        const custom = join(fixtureRoot, 'custom');
+        const builtIn = join(fixtureRoot, 'built-in');
+        mkdirSync(custom);
+        mkdirSync(builtIn);
+        const original = readFileSync(
+          join(
+            REPO_ROOT,
+            'packages/extension/resources/tool_use_agents/assistant.yaml',
+          ),
+          'utf8',
+        );
+        const packagedPath = join(builtIn, 'assistant.yaml');
+        const customPath = join(custom, 'assistant.yaml');
+        writeFileSync(packagedPath, original);
+        writeFileSync(customPath, original);
+        const { installPlatform } = yield* Effect.promise(
+          () => import('@test/support/setupPlatform'),
+        );
+        yield* Effect.promise(() =>
+          installPlatform(
+            { workspacePath },
+            {
+              agentDirectories: {
+                custom: () => Effect.succeed(custom),
+                customConfigured: () => Effect.succeed(true),
+                builtIn: () => Effect.succeed(builtIn),
+                builtInToolUse: () => Effect.succeed(builtIn),
+              },
+            },
+          ),
+        );
+        const context = yield* testRuntime().contextEffect;
+        yield* refresh().pipe(Effect.provide(context));
+        const ipc = createIpc(vi.fn());
+        const target = agentDocumentTarget('custom', 'assistant');
+        const packagedTarget = agentDocumentTarget('builtIn', 'assistant');
+        expect(agentDocumentForPath(customPath)).toBe(target);
+        // The custom copy shadows this name in the visible catalog; the
+        // original must remain independently addressable and read-only.
+        expect(agentDocumentForPath(packagedPath)).toBe(packagedTarget);
+        expect(
+          yield* ipc
+            .file({ kind: 'read', path: target })
+            .pipe(Effect.provide(context)),
+        ).toEqual({ kind: 'contents', contents: original });
+        yield* ipc
+          .file({
+            kind: 'write',
+            path: target,
+            contents: `${original}\n# edited\n`,
+          })
+          .pipe(Effect.provide(context));
+        expect(readFileSync(customPath, 'utf8')).toBe(
+          `${original}\n# edited\n`,
+        );
+        for (const path of [
+          packagedTarget,
+          agentDocumentTarget('custom', '../../external'),
+        ]) {
+          const exit = yield* Effect.exit(
+            ipc
+              .file({ kind: 'write', path, contents: 'rejected' })
+              .pipe(Effect.provide(context)),
+          );
+          expect(Exit.isFailure(exit)).toBe(true);
+        }
+        expect(readFileSync(packagedPath, 'utf8')).toBe(original);
+        expect(readFileSync(externalPath, 'utf8')).toBe('outside');
       }),
   );
 

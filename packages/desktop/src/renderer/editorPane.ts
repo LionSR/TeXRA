@@ -44,6 +44,7 @@ interface EditorPaneCallbacks {
   listFiles(directory: string): Promise<readonly EditorFileEntry[]>;
   readFile(path: string): Promise<string>;
   writeFile(path: string, contents: string): Promise<void>;
+  isReadOnly?(path: string): boolean;
   /** Reports dirty state so the tab strip can show its indicator. */
   onDirtyChange(path: string, dirty: boolean): void;
   /**
@@ -485,6 +486,13 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         if (state) target.restoreViewState(state);
       }
       openPath = path;
+      target.updateOptions({
+        readOnly: callbacks.isReadOnly?.(path) ?? false,
+        readOnlyMessage: {
+          value:
+            'This definition is read-only. Use **Customize** in Settings to edit a copy.',
+        },
+      });
       notice.clear(path);
       renderTree();
     } catch (error) {
@@ -549,7 +557,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   async function save(): Promise<void> {
     const path = openPath;
     const model = path ? models.get(path) : undefined;
-    if (!path || !model) return;
+    if (!path || !model || callbacks.isReadOnly?.(path)) return;
     const savedVersion = model.getVersionId();
     activeWrites.set(path, (activeWrites.get(path) ?? 0) + 1);
     writeEpochs.set(path, (writeEpochs.get(path) ?? 0) + 1);

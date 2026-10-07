@@ -38,7 +38,7 @@ export interface SettingsHostBindings {
   /** Show a file or folder in the system file manager. */
   revealPath(filePath: string): HostEffect;
   /** Show YAML the user must not save back over where it came from. */
-  showReadOnlyYaml(fileName: string, text: string): HostEffect;
+  showReadOnlyYaml(filePath: string, text: string): HostEffect;
   pickFolder(title: string): HostEffect<string | undefined>;
   /** Reload the agent, team and model catalogs every open launcher shows,
    *  selecting the tool-use root a team just applied named. */
