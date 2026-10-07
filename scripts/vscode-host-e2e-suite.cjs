@@ -7,6 +7,7 @@ const path = require('node:path');
 const vscode = require('vscode');
 
 const EXTENSION_ID = 'texra-ai.texra';
+console.log('[texra e2e] suite loaded');
 const serviceRun = path.join(os.homedir(), '.texra', 'run');
 const serviceLog = path.join(serviceRun, 'serve.log');
 

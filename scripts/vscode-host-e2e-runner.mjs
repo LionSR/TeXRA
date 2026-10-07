@@ -7,8 +7,10 @@
 // `minimum` is `engines.vscode` from the extension manifest, so the run also
 // catches use of a VS Code API newer than the manifest claims.
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -50,6 +52,17 @@ writeFileSync(
   '\\documentclass{article}\n\\begin{document}\nSmoke\n\\end{document}\n',
 );
 
+// A run that never finishes says why: the window's own logs (the extension
+// host and TeXRA's output channels) and the service's, then fails. Without
+// this a stuck window holds the job until CI cancels it, printing nothing.
+const WATCHDOG_MS = 8 * 60_000;
+const watchdog = setTimeout(() => {
+  console.error(`VS Code host e2e did not finish within ${WATCHDOG_MS} ms`);
+  printLogs();
+  stopService(path.join(home, '.texra', 'run', 'serve.json'));
+  process.exit(1);
+}, WATCHDOG_MS);
+
 try {
   await runTests({
     version,
@@ -79,7 +92,11 @@ try {
     }
   }
   console.log(`VS Code host e2e passed on ${version}`);
+} catch (error) {
+  printLogs();
+  throw error;
 } finally {
+  clearTimeout(watchdog);
   stopService(path.join(home, '.texra', 'run', 'serve.json'));
   rmSync(root, { recursive: true, force: true });
 }
@@ -90,5 +107,25 @@ function stopService(record) {
     process.kill(JSON.parse(readFileSync(record, 'utf8')).pid, 'SIGTERM');
   } catch {
     // No service was started, or it is gone already.
+  }
+}
+
+/** Every log the window and the service wrote, for a run that failed. */
+function printLogs() {
+  const files = [];
+  const walk = (dir) => {
+    if (!existsSync(dir)) return;
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith('.log')) files.push(full);
+    }
+  };
+  walk(path.join(root, 'u', 'logs'));
+  walk(path.join(home, '.texra', 'run'));
+  for (const file of files) {
+    const text = readFileSync(file, 'utf8');
+    if (!/exthost|texra|TeXRA|serve/i.test(file + text.slice(0, 200))) continue;
+    console.error(`----- ${file}\n${text.slice(-8000)}`);
   }
 }
