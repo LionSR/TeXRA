@@ -221,37 +221,41 @@ export const sessionEventsLayer = Layer.effect(
         { disableYield: true },
       ).pipe(Effect.catchIf(Cause.isDone, () => Effect.void)),
     );
-    const drain: SessionEventsShape['drain'] = Effect.gen(function* () {
-      yield* Queue.end(inbox);
-      // Interruptible inside the close's uninterruptible region, so the
-      // deadline can cut the wait.
-      const ended = yield* Fiber.await(consumer).pipe(
-        Effect.interruptible,
-        Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
-      );
-      // At the deadline the running job is cut; the interrupt waits only for
-      // its masked atomic write.
-      if (Option.isNone(ended)) yield* Fiber.interrupt(consumer);
-      else if (
-        Exit.isFailure(ended.value) &&
-        !Cause.hasInterruptsOnly(ended.value.cause)
-      ) {
-        yield* Effect.logWarning(
-          'Session publisher ended abnormally on close',
-        ).pipe(
-          Effect.annotateLogs({ data: Cause.squash(ended.value.cause) }),
-          withLogChannel(CHANNEL),
+    // Cached: the session's close and the publisher's scope both run it,
+    // and only the first waits.
+    const drain: SessionEventsShape['drain'] = yield* Effect.cached(
+      Effect.gen(function* () {
+        yield* Queue.end(inbox);
+        // Interruptible inside the close's uninterruptible region, so the
+        // deadline can cut the wait.
+        const ended = yield* Fiber.await(consumer).pipe(
+          Effect.interruptible,
+          Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
         );
-      }
-      // Whatever the consumer never ran (the deadline cut it, or it died)
-      // is refused, never left for its awaiter to wait on.
-      const refused = yield* Queue.clear(inbox).pipe(Effect.orDie);
-      yield* Effect.forEach(refused, (job) => job.refuse, { discard: true });
-      if (refused.length > 0)
-        yield* Effect.logWarning(
-          `Session publisher closed; ${refused.length} queued publications refused`,
-        ).pipe(withLogChannel(CHANNEL));
-    });
+        // At the deadline the running job is cut; the interrupt waits only for
+        // its masked atomic write.
+        if (Option.isNone(ended)) yield* Fiber.interrupt(consumer);
+        else if (
+          Exit.isFailure(ended.value) &&
+          !Cause.hasInterruptsOnly(ended.value.cause)
+        ) {
+          yield* Effect.logWarning(
+            'Session publisher ended abnormally on close',
+          ).pipe(
+            Effect.annotateLogs({ data: Cause.squash(ended.value.cause) }),
+            withLogChannel(CHANNEL),
+          );
+        }
+        // Whatever the consumer never ran (the deadline cut it, or it died)
+        // is refused, never left for its awaiter to wait on.
+        const refused = yield* Queue.clear(inbox).pipe(Effect.orDie);
+        yield* Effect.forEach(refused, (job) => job.refuse, { discard: true });
+        if (refused.length > 0)
+          yield* Effect.logWarning(
+            `Session publisher closed; ${refused.length} queued publications refused`,
+          ).pipe(withLogChannel(CHANNEL));
+      }),
+    );
     yield* Effect.addFinalizer(() => drain);
     const enqueue = (job: PublicationJob): boolean =>
       Queue.offerUnsafe(inbox, job);
