@@ -2668,6 +2668,160 @@ prompt: |
 }
 
 /**
+ * Editor models in the service (audit 2026-10-07 #2): Copilot runs through a
+ * VS Code window of the project. With Copilot preferred for a model and no
+ * window offering editor models, a service task fails saying so; with a
+ * window that offers them (the harness's `lm` mode: one Copilot model that
+ * refuses every turn), the service discovers the route and prepares the
+ * turn through that window, and the task fails with the window's own model
+ * error. The tasks' failures and the window's calls are the artifact.
+ */
+async function validateServiceEditorModels() {
+  const cwd = makeScratch('texra-cli-service-lm-');
+  const project = echoProject(cwd);
+  const storageRoot = path.join(cwd, 'home', '.texra');
+  // No validation model: the route is decided as for a user. A key only
+  // gets the launch past the CLI's own check; Copilot is a hard route.
+  const env = {
+    ...isolatedCliHomeEnv(path.join(cwd, 'home')),
+    TEXRA_NO_TELEMETRY: '1',
+    OPENAI_API_KEY: VALIDATION_FAKE_API_KEY,
+  };
+  const texra = (args, label) => {
+    const result = run(
+      process.execPath,
+      [binaryPath, ...args, '--cwd', project.work],
+      { cwd: project.work, env },
+    );
+    assertSuccess(result, label);
+    return result.stdout.trim();
+  };
+  const waitFor = async (label, check, timeoutMs = 120_000) => {
+    const deadline = Date.now() + timeoutMs;
+    while (!check()) {
+      assert(Date.now() < deadline, `timed out waiting for ${label}`);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  };
+  /** The run's end, once it ended: its outcome and error message. */
+  const ended = (runId) => {
+    const rows = project.readStore(
+      `SELECT e.data FROM event e JOIN event_sequence s ON s.id = e.aggregate
+       WHERE s.logical_id = '${runId}' AND e.type = 'run.end'`,
+    );
+    return rows.length === 0 ? null : String(rows[0].data);
+  };
+  /** The run's rows that carry `needle`, by type. */
+  const saying = (runId, needle) =>
+    project
+      .readStore(
+        `SELECT e.type FROM event e JOIN event_sequence s ON s.id = e.aggregate
+         WHERE s.logical_id = '${runId}' AND e.data LIKE '%${needle}%'`,
+      )
+      .map((row) => row.type);
+  let window;
+  try {
+    // Opens the global store; then Copilot is preferred for the model, as
+    // the settings view's "Use Copilot" saves it.
+    texra(['config', 'show'], 'texra config show');
+    const global = new DatabaseSync(
+      path.join(storageRoot, 'v1', 'global-storage', 'texra.db'),
+    );
+    try {
+      global
+        .prepare(
+          `INSERT INTO current_value (family, key, version, value, at)
+           VALUES ('app-state', 'texra.copilotRouteModels', 1, ?, ?)`,
+        )
+        .run(JSON.stringify(['openai/gpt-5.6-terra']), Date.now());
+    } finally {
+      global.close();
+    }
+    // The CLI has no editor models: it refuses a Copilot model, plainly.
+    const refused = run(
+      process.execPath,
+      [
+        binaryPath,
+        'tasks',
+        'start',
+        'echo_validation',
+        '--model',
+        'openai/gpt-5.6-terra',
+        '--instruction',
+        'From a terminal',
+        '--cwd',
+        project.work,
+      ],
+      { cwd: project.work, env },
+    );
+    // Any client starts the service; the harness only attaches to one.
+    texra(['tasks', 'list'], 'texra tasks list');
+    // A window that starts tasks: without editor models, then with them.
+    const startWindow = async (mode) => {
+      const child = spawn(
+        process.execPath,
+        [
+          hostHarnessPath,
+          storageRoot,
+          project.work,
+          mode,
+          'openai/gpt-5.6-terra',
+        ],
+        { cwd: project.work, env: { ...process.env, ...env } },
+      );
+      const state = { child, stdout: '', stderr: '' };
+      child.stdout.on('data', (chunk) => (state.stdout += chunk));
+      child.stderr.on('data', (chunk) => (state.stderr += chunk));
+      await waitFor(`the ${mode} window to start its task`, () =>
+        /STARTED [0-9a-f]{12}/.test(state.stdout),
+      );
+      return state;
+    };
+    window = await startWindow('start');
+    const alone = /STARTED ([0-9a-f]{12})/.exec(window.stdout)[1];
+    await waitFor('the windowless task to end', () => ended(alone) !== null);
+    window.child.kill('SIGKILL');
+    window = await startWindow('lm');
+    const served = /STARTED ([0-9a-f]{12})/.exec(window.stdout)[1];
+    // The window's model refused the turn: the run records that failure
+    // (and asks how to go on), carrying the window's own message.
+    await waitFor(
+      'the windowed task to record the window model failure',
+      () => saying(served, 'HARNESS-COPILOT').length > 0,
+    );
+    const artifactPath = writeArtifact('service-editor-models.json', {
+      terminal: refused.stderr.trim().split('\n').at(-1),
+      alone: ended(alone),
+      served: saying(served, 'HARNESS-COPILOT'),
+      window: window.stdout.trim().split('\n'),
+    });
+    assert(
+      refused.status !== 0 && refused.stderr.includes('copilot unavailable'),
+      `the CLI should refuse a Copilot model it cannot run (artifact: ${artifactPath})`,
+    );
+    assert(
+      ended(alone).includes(
+        'Copilot models run through a VS Code window of this project',
+      ),
+      `a Copilot task with no window should say a VS Code window serves Copilot (artifact: ${artifactPath})`,
+    );
+    assert(
+      window.stdout.includes('CALLED lmModels') &&
+        window.stdout.includes('CALLED lmPrepare') &&
+        saying(served, 'HARNESS-COPILOT refused this turn').length > 0,
+      `a Copilot task should run its turn through the attached window (artifact: ${artifactPath})`,
+    );
+  } finally {
+    window?.child.kill('SIGKILL');
+    run(process.execPath, [binaryPath, 'service', 'stop'], {
+      cwd: project.work,
+      env,
+    });
+    removeScratch(cwd);
+  }
+}
+
+/**
  * `/tasks` in the chat (D1–D4): a task started in the service under the
  * `ask` policy opens a command approval; `texra chat` lists it with
  * `/tasks`, attaches, approves the command in place and sends a follow-up,
@@ -3309,6 +3463,7 @@ async function validateCliRunArtifacts(options = {}) {
   await validateServiceTasksInTui();
   await validateServiceChatsSeeEachOther();
   await validateServiceHostCalls();
+  await validateServiceEditorModels();
   await validateServiceProjectEnv();
   await validateServiceSessionIdle();
   await validateServicePolicyOwner();

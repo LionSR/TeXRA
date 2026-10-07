@@ -902,6 +902,13 @@ show` print the same notice, and the new `texra agents customize`,
   file badges and agent lists did not update until you refreshed them. The
   change is now recorded on the task, and every window that shows the
   project picks it up.
+- **Copilot models work in service tasks again.** Since tasks moved into
+  the TeXRA service, a model routed through GitHub Copilot failed there:
+  the service has no editor. A task now runs its Copilot turns through a
+  VS Code window of its project, streaming the reply back and stopping the
+  turn when the task stops; the window's own model error is shown as it
+  is. With no such window open, the task says so: open the project in VS
+  Code with GitHub Copilot, or stop using Copilot for that model.
 - **A project's `.env` reaches its tasks again, in every TeXRA app.**
   Since tasks moved into the TeXRA service, a key kept only in the
   project's `.env` was missing there, and a different key from your login

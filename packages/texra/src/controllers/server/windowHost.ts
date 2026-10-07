@@ -9,14 +9,18 @@ import {
   Deferred,
   Effect,
   FiberHandle,
+  FiberMap,
   type Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
 
+import { ModelError, ModelErrorFieldsSchema } from '@texra-ai/llm';
+
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { withLogChannel } from '@logger/effectLog';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { LanguageModelPort } from '@texra-ai/harness';
 
 import type { ServiceClient, ServiceLink } from './client';
 import type {
@@ -34,6 +38,9 @@ export interface WindowHost extends Pick<
   HostInteractions,
   'readDiagnostics' | 'addCriticism' | 'openPdf' | 'emit' | 'approvalDenied'
 > {
+  /** The editor's language models, which the service's runs of this
+   *  project bind through this window. */
+  readonly languageModel?: LanguageModelPort;
   /** The tool-edit preview a window stages beside the request, which the
    *  window releases when the request settles, and whose edited content an
    *  approve-all reads. */
@@ -51,7 +58,54 @@ function capabilitiesOf(host: WindowHost): HostCapability[] {
     ...(host.openPdf ? (['openPdf'] as const) : []),
     ...(host.toolEdits ? (['toolEdits'] as const) : []),
     ...(host.emit || host.approvalDenied ? (['notices'] as const) : []),
+    ...(host.languageModel ? (['languageModel'] as const) : []),
   ];
+}
+
+/** A value as JSON carries it (no `undefined` fields), for an answer; a
+ *  call with nothing to say says null. */
+const asJson = (value: unknown): unknown =>
+  value === undefined ? null : JSON.parse(JSON.stringify(value));
+const asJsonValue = (value: unknown) =>
+  // JSON round-tripped above, so it is a JSON value.
+  asJson(value) as Extract<HostAnswer, { ok: true }>['value'];
+
+/** A failure as the window answers it: a model's failure keeps its fields,
+ *  which the service rebuilds into the same `ModelError`. */
+function failureAnswer(error: unknown): HostAnswer {
+  const answer = { ok: false as const, message: toErrorMessage(error) };
+  if (!(error instanceof ModelError)) return answer;
+  const fields = ModelErrorFieldsSchema.safeParse(
+    asJson(
+      Object.fromEntries(
+        Object.keys(ModelErrorFieldsSchema.shape).map((name) => [
+          name,
+          Reflect.get(error, name),
+        ]),
+      ),
+    ),
+  );
+  return fields.success ? { ...answer, model: fields.data } : answer;
+}
+
+/** The streamed call's items: a turn of the editor's model. */
+function performStream(
+  host: WindowHost,
+  call: Extract<HostCall, { kind: 'lmStream' }>,
+): Stream.Stream<unknown, Error> {
+  const models = host.languageModel;
+  const { turn } = call;
+  if (models === undefined) return Stream.fail(unofferedError(call));
+  // An editor model runs only foreground turns.
+  if (turn.mode !== 'foreground')
+    return Stream.fail(
+      new Error('An editor model runs foreground turns only.'),
+    );
+  return Stream.unwrap(
+    Effect.map(models.acquire(call.configuration), (model) =>
+      model.streamTurn(turn),
+    ),
+  );
 }
 
 /** Carry out one call; its value, or the window's failure. */
@@ -99,11 +153,31 @@ function perform(
         host.approvalDenied?.(call.denial, call.runId);
         return null;
       });
+    case 'lmModels':
+      return (
+        host.languageModel?.selectModels(
+          call.vendor === null ? undefined : { vendor: call.vendor },
+        ) ?? unoffered(call)
+      );
+    case 'lmPrepare':
+      return host.languageModel === undefined
+        ? unoffered(call)
+        : Effect.scoped(
+            Effect.flatMap(
+              host.languageModel.acquire(call.configuration),
+              (model) => model.prepareTurn(call.request),
+            ),
+          );
+    // Streamed and cancelled by `attachTo`, never performed here.
+    case 'lmStream':
+    case 'cancel':
+      return unoffered(call);
   }
 }
 
-const unoffered = (call: HostCall) =>
-  Effect.fail(new Error(`This window does not offer ${call.kind}.`));
+const unofferedError = (call: HostCall) =>
+  new Error(`This window does not offer ${call.kind}.`);
+const unoffered = (call: HostCall) => Effect.fail(unofferedError(call));
 
 /**
  * Attach `host` to the service as a window of `workspace`, for the scope's
@@ -145,33 +219,46 @@ function attachTo(
   focused: Stream.Stream<void>,
   attached: Deferred.Deferred<void>,
 ): Effect.Effect<void> {
+  const send = (id: string, answer: HostAnswer) =>
+    client['host.answer']({ id, answer });
   const answer = (id: string, call: HostCall) =>
-    perform(host, call).pipe(
-      Effect.match({
-        onSuccess: (value): HostAnswer => ({
-          ok: true,
-          // Undefined is no JSON value; a call with nothing to say says null.
-          value: (value ?? null) as Extract<HostAnswer, { ok: true }>['value'],
-        }),
-        onFailure: (error): HostAnswer => ({
-          ok: false,
-          message: toErrorMessage(error),
-        }),
-      }),
-      Effect.flatMap((result) => client['host.answer']({ id, answer: result })),
+    (call.kind === 'lmStream'
+      ? // Each item as it comes, then the end; the service's `cancel`
+        // interrupts it (`streams`).
+        Stream.runForEach(performStream(host, call), (item) =>
+          send(id, { ok: true, value: asJsonValue(item), more: true }),
+        ).pipe(
+          Effect.matchEffect({
+            onSuccess: () => send(id, { ok: true, value: null }),
+            onFailure: (error) => send(id, failureAnswer(error)),
+          }),
+        )
+      : perform(host, call).pipe(
+          Effect.matchEffect({
+            onSuccess: (value) =>
+              send(id, { ok: true, value: asJsonValue(value) }),
+            onFailure: (error) => send(id, failureAnswer(error)),
+          }),
+        )
+    ).pipe(
       Effect.catchCause((cause) =>
-        Effect.logWarning(`A host call (${call.kind}) was not answered`).pipe(
-          Effect.annotateLogs({ data: Cause.squash(cause) }),
-        ),
+        Cause.hasInterruptsOnly(cause)
+          ? Effect.void
+          : Effect.logWarning(
+              `A host call (${call.kind}) was not answered`,
+            ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
       ),
     );
-  return client['host.attach']({
-    workspace,
-    capabilities: capabilitiesOf(host),
-  }).pipe(
-    Stream.runForEach((frame) =>
-      frame.kind === 'attached'
-        ? Deferred.succeed(attached, undefined).pipe(
+  return Effect.gen(function* () {
+    // The calls answering now, by id, so the service's `cancel` stops one.
+    const answering = yield* FiberMap.make<string>();
+    return yield* client['host.attach']({
+      workspace,
+      capabilities: capabilitiesOf(host),
+    }).pipe(
+      Stream.runForEach((frame) => {
+        if (frame.kind === 'attached')
+          return Deferred.succeed(attached, undefined).pipe(
             Effect.andThen(
               Effect.forkScoped(
                 Stream.runForEach(focused, () =>
@@ -183,10 +270,14 @@ function attachTo(
                 ),
               ),
             ),
-          )
-        : // Each call on its own fiber: a slow build never holds the next.
-          Effect.forkScoped(answer(frame.id, frame.call)),
-    ),
+          );
+        if (frame.call.kind === 'cancel')
+          return FiberMap.remove(answering, frame.call.call);
+        // Each call on its own fiber: a slow build never holds the next.
+        return FiberMap.run(answering, frame.id, answer(frame.id, frame.call));
+      }),
+    );
+  }).pipe(
     Effect.matchCauseEffect({
       // The service stopped or restarted: the window goes on with its
       // own process's capabilities.

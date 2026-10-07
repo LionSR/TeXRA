@@ -1,5 +1,6 @@
 import { Cause, Effect } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
+import type { LanguageModelPort } from '@platform/languageModel';
 import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import type { FileLocation, RunId } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
@@ -108,6 +109,8 @@ export interface HostInteractions {
   readonly addCriticism?: AddCriticismSink;
   /** Open a PDF in the active host's viewer. */
   readonly openPdf?: OpenPdfOpener;
+  /** The host editor's language models, served to the session's runs. */
+  readonly languageModel?: LanguageModelPort;
   /**
    * Stage a tool edit's preview (its original and proposed content, which
    * the durable request payload does not carry) for the request the fold
@@ -123,25 +126,18 @@ export interface HostInteractions {
   /**
    * Drop what {@link presentToolEdit} staged for one request, for the single
    * case no `request.decided` ever reaches: a request whose `request.opened`
-   * never committed. It pairs with `presentToolEdit` — every host that
-   * stages implements both, and a host that stages nothing implements
-   * neither, which is why this port is optional like the rest of this
-   * surface. An `Effect`, the way `openPdf` is: the cleanup a host's release
-   * needs (a diff view to close, temp files to delete) is a program this
-   * call builds and the session composes into its own, so the session waits
-   * for the cleanup it asked for without running a fiber of its own — which
-   * a VS Code-free zone has no runtime to do. Built when the preview is
-   * staged, run only if that one case arrives, so the body of this call
-   * stages nothing and undoes nothing on its own.
+   * never committed. Every host that stages implements both. An `Effect`,
+   * as `openPdf` is: the cleanup (a diff view to close, temp files to
+   * delete) is a program the session composes into its own, so it waits for
+   * it without a fiber of its own. Built when the preview is staged, run
+   * only if that one case arrives.
    */
   releaseToolEdit?(requestId: string): Effect.Effect<void>;
   /**
-   * Approve a request {@link presentToolEdit} staged the way its surface's
-   * Approve does: the decision carries the content the user edited in the
-   * host's view. `false` when nothing is staged for `requestId`, which the
-   * caller then approves from the payload. `true` means the host took the
-   * decision, including a failed read of the edit, which it reports and
-   * leaves the request pending for.
+   * Approve a request {@link presentToolEdit} staged, with the content the
+   * user edited in the host's view. `false` when nothing is staged, which
+   * the caller then approves from the payload; `true` when the host took
+   * the decision (a failed read of the edit included, left pending).
    */
   approveToolEdit?(requestId: string): Effect.Effect<boolean>;
   dispose?(): void;
@@ -298,6 +294,10 @@ export class SessionHostInteractions implements HostInteractions {
 
   get openPdf(): OpenPdfOpener | undefined {
     return this.activeAttachment?.interactions.openPdf;
+  }
+
+  get languageModel(): LanguageModelPort | undefined {
+    return this.activeAttachment?.interactions.languageModel;
   }
 
   /**

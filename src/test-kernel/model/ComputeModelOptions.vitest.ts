@@ -366,7 +366,7 @@ describe('model availability', () => {
         ]);
         expect(available).toBeNull();
         expect(copilot).toBe(
-          'VS Code does not currently offer "openai/gpt-5.6-terra" through Copilot.',
+          'No VS Code window offers "openai/gpt-5.6-terra" through Copilot: Copilot models run through a VS Code window of this project. Open the project in VS Code with GitHub Copilot, or stop using Copilot for this model.',
         );
         expect(secretReads.mock.calls).toHaveLength(readsAfterInputs);
         expect(globalState.copilotPreferenceReads).toBe(

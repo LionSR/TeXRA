@@ -58,7 +58,8 @@ export const UNAVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = Object.freeze(
       Effect.fail(
         new ModelError({
           kind: 'unsupported',
-          message: 'This host does not expose editor language models.',
+          message:
+            'No editor language models here: Copilot models run through a VS Code window of this project.',
         }),
       ),
   },
@@ -81,7 +82,22 @@ export class LanguageModel extends Context.Service<
   LanguageModel,
   LanguageModelPort
 >()('@texra/platform/LanguageModel') {
-  static layer(port: LanguageModelPort): Layer.Layer<LanguageModel> {
-    return Layer.succeed(LanguageModel)(port);
+  static layer(
+    port: LanguageModelPort,
+    /** The editor attached to a session, read at each call: its models
+     *  win over `port`'s, so a window that attaches or goes changes what
+     *  the next call reaches. A service process has none of its own. */
+    attached?: () => LanguageModelPort | undefined,
+  ): Layer.Layer<LanguageModel> {
+    return Layer.succeed(LanguageModel)(
+      attached === undefined
+        ? port
+        : {
+            selectModels: (selector) =>
+              (attached() ?? port).selectModels(selector),
+            acquire: (configuration) =>
+              (attached() ?? port).acquire(configuration),
+          },
+    );
   }
 }

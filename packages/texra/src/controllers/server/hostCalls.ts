@@ -1,13 +1,22 @@
 /**
  * What the service asks of a window: the host capabilities a run uses while
  * it runs in the service (a file's diagnostics, an inline criticism, a PDF
- * to open, a tool edit's preview to stage, a notice to show). A window
+ * to open, a tool edit's preview to stage, a notice to show, the editor's
+ * language models). A window
  * offers the capabilities it has when it attaches (`host.attach`); each call
  * reaches it as a frame of that stream, and it answers with `host.answer`.
  * A call's result enters the run's history only through the tool result
  * that used it.
  */
 import { z } from 'zod';
+
+import {
+  ModelErrorFieldsSchema,
+  ResolvedTurnSchema,
+  TurnEventSchema,
+  TurnRequestSchema,
+  VscodeLanguageModelConfigurationSchema,
+} from '@texra-ai/llm';
 
 import type { ManualCriticismEntry } from '@agent/runtime/HostInteractions';
 import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
@@ -23,6 +32,7 @@ import {
   type ShowAgentConfigBannerPayload,
 } from '@shared/schemas';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
+import type { LanguageModelInfo } from '@texra-ai/harness';
 
 /** What a window can do for a run. `notices` covers the runtime's notices
  *  and its approval-policy denials. */
@@ -32,6 +42,7 @@ const HOST_CAPABILITIES = [
   'openPdf',
   'toolEdits',
   'notices',
+  'languageModel',
 ] as const;
 export const HostCapabilitySchema = z.enum(HOST_CAPABILITIES);
 export type HostCapability = z.infer<typeof HostCapabilitySchema>;
@@ -128,6 +139,16 @@ const ToolEditStagingSchema = z.object({
 });
 export type ToolEditStaging = z.infer<typeof ToolEditStagingSchema>;
 
+const LanguageModelInfoSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  family: z.string(),
+  vendor: z.string(),
+  version: z.string(),
+  maxInputTokens: z.number(),
+  access: z.enum(['allowed', 'consent-required', 'unavailable']),
+}) satisfies z.ZodType<LanguageModelInfo>;
+
 /** One call of the service on a window. */
 const HostCallSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('readDiagnostics'), path: z.string() }),
@@ -152,6 +173,20 @@ const HostCallSchema = z.discriminatedUnion('kind', [
     denial: ApprovalPolicyDenialSchema,
     runId: RunIdSchema,
   }),
+  // The editor's language models: list them, prepare a turn, and stream
+  // one (answered item by item, `more`), which `cancel` stops.
+  z.object({ kind: z.literal('lmModels'), vendor: z.string().nullable() }),
+  z.object({
+    kind: z.literal('lmPrepare'),
+    configuration: VscodeLanguageModelConfigurationSchema,
+    request: TurnRequestSchema,
+  }),
+  z.object({
+    kind: z.literal('lmStream'),
+    configuration: VscodeLanguageModelConfigurationSchema,
+    turn: ResolvedTurnSchema,
+  }),
+  z.object({ kind: z.literal('cancel'), call: z.string() }),
 ]);
 export type HostCall = z.infer<typeof HostCallSchema>;
 
@@ -167,6 +202,10 @@ export const CALL_CAPABILITY: Readonly<
   approveToolEdit: 'toolEdits',
   notice: 'notices',
   approvalDenied: 'notices',
+  lmModels: 'languageModel',
+  lmPrepare: 'languageModel',
+  lmStream: 'languageModel',
+  cancel: 'languageModel',
 };
 
 /** What each call answers with, when it answers with a value. */
@@ -174,6 +213,10 @@ export const CallResultSchemas = {
   readDiagnostics: z.array(GenericDiagnosticSchema),
   addCriticism: z.boolean(),
   approveToolEdit: z.boolean(),
+  lmModels: z.array(LanguageModelInfoSchema),
+  lmPrepare: ResolvedTurnSchema,
+  /** Each item of a streamed `lmStream`. */
+  lmStream: TurnEventSchema,
 } as const;
 
 /** A frame of `host.attach`: the attachment's id first, then the calls. */
@@ -184,9 +227,19 @@ export const HostFrameSchema = z.discriminatedUnion('kind', [
 export type HostFrame = z.infer<typeof HostFrameSchema>;
 
 /** A window's answer to one call. A failure says why in the window's
- *  words; the service reports it as the capability's own failure. */
+ *  words (a model's failure as its fields, rebuilt in the service); the
+ *  service reports it as the capability's own failure. A streamed call
+ *  answers each item with `more`, then once without. */
 export const HostAnswerSchema = z.discriminatedUnion('ok', [
-  z.object({ ok: z.literal(true), value: z.json() }),
-  z.object({ ok: z.literal(false), message: z.string() }),
+  z.object({
+    ok: z.literal(true),
+    value: z.json(),
+    more: z.boolean().optional(),
+  }),
+  z.object({
+    ok: z.literal(false),
+    message: z.string(),
+    model: ModelErrorFieldsSchema.optional(),
+  }),
 ]);
 export type HostAnswer = z.infer<typeof HostAnswerSchema>;

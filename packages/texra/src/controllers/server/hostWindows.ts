@@ -15,7 +15,9 @@
  */
 import { randomUUID } from 'node:crypto';
 
+import { ModelError, type ModelErrorFieldsSchema } from '@texra-ai/llm';
 import {
+  type Cause,
   Data,
   Deferred,
   type Duration,
@@ -52,7 +54,19 @@ export class WindowCallFailed extends Data.TaggedError('WindowCallFailed')<{
    *  not answer in time; `failed`: it answered with its own failure. */
   readonly reason: 'detached' | 'no-answer' | 'failed';
   readonly message: string;
+  /** A model's failure, as the window's model raised it. */
+  readonly model?: z.infer<typeof ModelErrorFieldsSchema>;
 }> {}
+
+/** A model call's failure as the run's model binding sees it: the
+ *  window's own, or the window's absence as a transport failure. */
+const modelError = (failure: WindowCallFailed): ModelError =>
+  new ModelError(
+    failure.model ?? {
+      kind: 'transport',
+      message: `The VS Code window serving this editor model ${failure.reason === 'failed' ? 'failed' : 'is gone'}: ${failure.message}`,
+    },
+  );
 
 /** How long a run waits for each answer. A diagnostics read may build the
  *  document first, so it waits longest. */
@@ -61,6 +75,8 @@ const ANSWER_WITHIN = {
   addCriticism: '10 seconds',
   openPdf: '30 seconds',
   approveToolEdit: '30 seconds',
+  lmModels: '30 seconds',
+  lmPrepare: '30 seconds',
 } satisfies Partial<Record<HostCall['kind'], Duration.Input>>;
 type AnsweredCall = Extract<HostCall, { kind: keyof typeof ANSWER_WITHIN }>;
 
@@ -73,9 +89,24 @@ interface Window {
   readonly capabilities: ReadonlySet<HostCapability>;
   focusedAt: number;
   readonly frames: Queue.Queue<HostFrame>;
-  /** The calls it has not answered yet, by call id. */
-  readonly pending: Map<string, Deferred.Deferred<unknown, WindowCallFailed>>;
+  /** The calls it has not answered yet, by call id: what each answer
+   *  does, and how the call fails when the window goes. */
+  readonly pending: Map<string, PendingCall>;
 }
+
+interface PendingCall {
+  readonly answer: (answer: HostAnswer) => Effect.Effect<void>;
+  readonly fail: (failure: WindowCallFailed) => Effect.Effect<void>;
+}
+
+const answerFailure = (
+  answer: Extract<HostAnswer, { ok: false }>,
+): WindowCallFailed =>
+  new WindowCallFailed({
+    reason: 'failed',
+    message: answer.message,
+    ...(answer.model !== undefined && { model: answer.model }),
+  });
 
 type PresentedToolEdit = Extract<
   HostCall,
@@ -182,7 +213,15 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
           message: 'No TeXRA window of this project is attached.',
         });
       const id = randomUUID();
-      window.pending.set(id, answered);
+      window.pending.set(id, {
+        answer: (answer) =>
+          answer.ok
+            ? Deferred.succeed(answered, answer.value).pipe(Effect.asVoid)
+            : Deferred.fail(answered, answerFailure(answer)).pipe(
+                Effect.asVoid,
+              ),
+        fail: (failure) => Deferred.fail(answered, failure).pipe(Effect.asVoid),
+      });
       calls.set(id, window);
       yield* Queue.offer(window.frames, { kind: 'call', id, call });
       const value = yield* Deferred.await(answered).pipe(
@@ -212,15 +251,80 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
       return parsed.data;
     });
 
+  /** Send a streamed call to the window `key`'s project routes it to: its
+   *  items, decoded by `schema`, until its final answer. Ending early (the
+   *  run stopped) tells the window to cancel; the window going fails it. */
+  const askStream = <A>(
+    key: string,
+    call: Extract<HostCall, { kind: 'lmStream' }>,
+    schema: z.ZodType<A>,
+  ): Stream.Stream<A, WindowCallFailed> =>
+    Stream.unwrap(
+      Effect.gen(function* () {
+        const window = target(key, CALL_CAPABILITY[call.kind]);
+        if (window === undefined || !windows.has(window))
+          return yield* new WindowCallFailed({
+            reason: 'detached',
+            message: 'No TeXRA window of this project is attached.',
+          });
+        const items = yield* Queue.unbounded<
+          A,
+          WindowCallFailed | Cause.Done
+        >();
+        const id = randomUUID();
+        let settled = false;
+        window.pending.set(id, {
+          answer: (answer) => {
+            if (!answer.ok) {
+              settled = true;
+              return Queue.fail(items, answerFailure(answer)).pipe(
+                Effect.asVoid,
+              );
+            }
+            if (answer.more !== true) {
+              settled = true;
+              return Queue.end(items).pipe(Effect.asVoid);
+            }
+            const item = schema.safeParse(answer.value);
+            return item.success
+              ? Queue.offer(items, item.data).pipe(Effect.asVoid)
+              : Queue.fail(
+                  items,
+                  new WindowCallFailed({
+                    reason: 'failed',
+                    message: `The TeXRA window answered ${call.kind} with an item it does not take.`,
+                  }),
+                ).pipe(Effect.asVoid);
+          },
+          fail: (failure) => {
+            settled = true;
+            return Queue.fail(items, failure).pipe(Effect.asVoid);
+          },
+        });
+        calls.set(id, window);
+        yield* Queue.offer(window.frames, { kind: 'call', id, call });
+        return Stream.fromQueue(items).pipe(
+          Stream.ensuring(
+            Effect.suspend(() => {
+              window.pending.delete(id);
+              calls.delete(id);
+              return settled || !windows.has(window)
+                ? Effect.void
+                : tell(window, { kind: 'cancel', call: id });
+            }),
+          ),
+        );
+      }),
+    );
+
   /** The window went: what it was asked fails, and its project hears once
    *  when no window of it is left. */
   const detach = (window: Window) =>
     Effect.gen(function* () {
       windows.delete(window);
-      for (const [id, answered] of window.pending) {
+      for (const [id, pending] of window.pending) {
         calls.delete(id);
-        yield* Deferred.fail(
-          answered,
+        yield* pending.fail(
           new WindowCallFailed({
             reason: 'detached',
             message: 'The TeXRA window closed before it answered.',
@@ -285,6 +389,34 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
             { kind: 'addCriticism', entry },
             CallResultSchemas.addCriticism,
           );
+      },
+      get languageModel(): HostInteractions['languageModel'] {
+        if (!offers(key, 'languageModel')) return undefined;
+        return {
+          selectModels: (selector) =>
+            ask(
+              key,
+              { kind: 'lmModels', vendor: selector?.vendor ?? null },
+              CallResultSchemas.lmModels,
+            ).pipe(Effect.mapError((failure) => new Error(failure.message))),
+          // The window acquires the model per call: a turn's binding lives
+          // in the window that runs it.
+          acquire: (configuration) =>
+            Effect.succeed({
+              prepareTurn: (request) =>
+                ask(
+                  key,
+                  { kind: 'lmPrepare', configuration, request },
+                  CallResultSchemas.lmPrepare,
+                ).pipe(Effect.mapError(modelError)),
+              streamTurn: (turn) =>
+                askStream(
+                  key,
+                  { kind: 'lmStream', configuration, turn },
+                  CallResultSchemas.lmStream,
+                ).pipe(Stream.mapError(modelError)),
+            }),
+        };
       },
       get openPdf(): HostInteractions['openPdf'] {
         if (!offers(key, 'openPdf')) return undefined;
@@ -400,19 +532,9 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
           if (window.id === attachment) window.focusedAt = Date.now();
       }),
     answer: (id, answer) =>
-      Effect.suspend(() => {
-        const answered = calls.get(id)?.pending.get(id);
-        if (answered === undefined) return Effect.void;
-        return answer.ok
-          ? Deferred.succeed(answered, answer.value)
-          : Deferred.fail(
-              answered,
-              new WindowCallFailed({
-                reason: 'failed',
-                message: answer.message,
-              }),
-            );
-      }).pipe(Effect.asVoid),
+      Effect.suspend(
+        () => calls.get(id)?.pending.get(id)?.answer(answer) ?? Effect.void,
+      ),
     adopt: (session) =>
       Effect.gen(function* () {
         const key = session.roots.storage;

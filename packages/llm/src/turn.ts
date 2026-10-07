@@ -650,7 +650,8 @@ const CompletedEventSchema = z.strictObject({
 const HttpCompletedEventSchema = CompletedEventSchema.extend({
   result: HttpTurnResultSchema,
 });
-const TurnEventSchema = z.discriminatedUnion('kind', [
+/** A streamed turn's event as data, as an editor's model sends it over. */
+export const TurnEventSchema = z.discriminatedUnion('kind', [
   IdentifiedEventSchema.readonly(),
   DeltaEventSchema.readonly(),
   CompletedEventSchema.readonly(),
@@ -725,9 +726,8 @@ export type FileUpload = z.infer<typeof FileUploadSchema>;
  * enough for a typical run and inside both files endpoints' accepted range
  * (OpenAI `expires_after.seconds` 3600-2592000, Anthropic
  * `expires_in_seconds` 3600-7776000, per the pinned SDK typings). Without it
- * OpenAI keeps a non-batch file until it is deleted. A binding deletes what
- * it uploaded when its scope closes; this bound is what still clears a file
- * a crashed process never got to delete.
+ * OpenAI keeps a non-batch file until deleted. A binding deletes its uploads
+ * when its scope closes; this bound clears what a crashed process left.
  */
 export const FILE_UPLOAD_LIFETIME_SECONDS = 86_400;
 

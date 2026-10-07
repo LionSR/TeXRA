@@ -14,6 +14,7 @@ export {
   assistantMessageFromResult,
   completedTurn,
   ResolvedTurnSchema,
+  TurnEventSchema,
   TurnRequestSchema,
   TurnResultSchema,
   VscodeLanguageModelConfigurationSchema,
@@ -41,7 +42,11 @@ export {
   systemUpdateText,
 } from './message.js';
 export type { Continuation } from './message.js';
-export { ModelError, RemoteOperationSchema } from './errors.js';
+export {
+  ModelError,
+  ModelErrorFieldsSchema,
+  RemoteOperationSchema,
+} from './errors.js';
 export type { RemoteOperation } from './errors.js';
 
 // Credentials and the provider manifest over llm-zoo.

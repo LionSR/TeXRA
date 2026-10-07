@@ -14,7 +14,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { withProcessServices } from '@texra-ai/harness';
+import { LanguageModel, withProcessServices } from '@texra-ai/harness';
 import {
   PdfOpenFailed,
   type ManualCriticismEntry,
@@ -74,7 +74,6 @@ import { RequestAttention } from './requestAttention';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
 import type {
   PlatformSecrets,
-  LanguageModel,
   StateStore,
   StateReadFailed,
   StateWriteFailed,
@@ -380,12 +379,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       }).pipe(Scope.provide(this.scope)),
     );
     // A window of the service is its project's window too: the service's
-    // runs ask it for the same, and it stages their tool edits.
+    // runs ask it for the same, stage their tool edits here, and bind the
+    // editor's language models (Copilot) through it.
     if (service !== undefined)
       this.runtime.runFork(
-        this.attachToService(service, capabilities).pipe(
-          Scope.provide(this.scope),
-        ),
+        Effect.flatMap(Effect.service(LanguageModel), (languageModel) =>
+          this.attachToService(service, { ...capabilities, languageModel }),
+        ).pipe(Scope.provide(this.scope)),
       );
 
     this.watchWorkspace();

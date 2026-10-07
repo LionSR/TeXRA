@@ -4,21 +4,30 @@
 // `hang` never answers, so the validator can detach it mid-call. It prints
 // `ATTACHED` once its attachment is up, `LINKED` each time its link
 // reaches a service (a restart prints it again), and `CALLED <path>` per
-// read, and runs until it is killed.
+// read, and runs until it is killed. `lm` also offers the editor's language
+// models: it lists one Copilot model and refuses every turn with
+// `HARNESS-COPILOT`, printing `CALLED lmModels` / `CALLED lmPrepare`. With
+// `lm` or `start` it then starts a task on `<model>` itself, as a VS Code
+// window launches one, and prints `STARTED <runId>` (`start` offers no
+// models).
 //
-//   node service-host-harness.js <storageRoot> <workspace> <answer|hang>
+//   node service-host-harness.js <storageRoot> <workspace> <answer|hang|lm|start> [model]
 
 import path from 'node:path';
 
 import { Effect, Stream, SubscriptionRef } from 'effect';
 
+import { ModelError } from '@texra-ai/llm';
+
+import { AgentConfigSchema } from '@agent/runtime';
 import { linkService } from '@texra/controllers/server/client';
 import { attachWindowHost } from '@texra/controllers/server/windowHost';
+import { generateRunId } from '@utils/core';
 
-const [storageRoot, workspace, mode] = process.argv.slice(2);
+const [storageRoot, workspace, mode, model] = process.argv.slice(2);
 if (storageRoot === undefined || workspace === undefined)
   throw new Error(
-    'usage: service-host-harness <storageRoot> <workspace> <answer|hang>',
+    'usage: service-host-harness <storageRoot> <workspace> <answer|hang|lm>',
   );
 
 const say = (line: string) =>
@@ -59,6 +68,45 @@ await Effect.runPromise(
                     ]),
               ),
             ),
+          ...(mode === 'lm' && {
+            languageModel: {
+              selectModels: () =>
+                say('CALLED lmModels').pipe(
+                  Effect.as([
+                    {
+                      id: 'gpt-5.6-terra',
+                      name: 'GPT-5.6 Terra',
+                      family: 'gpt-5.6-terra',
+                      vendor: 'copilot',
+                      version: 'gpt-5.6-terra-harness',
+                      maxInputTokens: 200_000,
+                      access: 'allowed' as const,
+                    },
+                  ]),
+                ),
+              acquire: () =>
+                Effect.succeed({
+                  prepareTurn: () =>
+                    say('CALLED lmPrepare').pipe(
+                      Effect.andThen(
+                        Effect.fail(
+                          new ModelError({
+                            kind: 'authentication',
+                            message: 'HARNESS-COPILOT refused this turn',
+                          }),
+                        ),
+                      ),
+                    ),
+                  streamTurn: () =>
+                    Stream.fail(
+                      new ModelError({
+                        kind: 'authentication',
+                        message: 'HARNESS-COPILOT refused this turn',
+                      }),
+                    ),
+                }),
+            },
+          }),
         },
         Stream.empty,
       );
@@ -66,6 +114,28 @@ await Effect.runPromise(
       // a moment before a task asks for it.
       yield* Effect.sleep('1 second');
       yield* say('ATTACHED');
+      const client = yield* SubscriptionRef.get(link.client);
+      if ((mode === 'lm' || mode === 'start') && client !== null) {
+        const runId = yield* client['task.start']({
+          workspace,
+          runId: generateRunId(),
+          config: AgentConfigSchema.parse({
+            agent: 'echo_validation',
+            agentSource: 'custom',
+            model,
+            inputFiles: [],
+            contextFiles: [],
+            instruction: 'Answer through the editor model.',
+            workingDirectory: workspace,
+          }),
+          continues: null,
+          preferHelperModel: false,
+          ownApiKeyFallback: false,
+          approvalPolicy: null,
+          approveDelegatedWork: false,
+        });
+        yield* say(`STARTED ${runId}`);
+      }
       return yield* Effect.never;
     }),
   ),
