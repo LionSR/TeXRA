@@ -67,10 +67,10 @@ async function moveTab(
       for (const side of ['left', 'top', 'right', 'bottom'] as const) {
         let x = b.x + b.width / 2;
         let y = b.y + b.height / 2;
-        if (side === 'left') x = b.x + 12;
-        if (side === 'right') x = b.x + b.width - 12;
-        if (side === 'top') y = b.y + 12;
-        if (side === 'bottom') y = b.y + b.height - 12;
+        if (side === 'left') x = b.x + 32;
+        if (side === 'right') x = b.x + b.width - 32;
+        if (side === 'top') y = b.y + 32;
+        if (side === 'bottom') y = b.y + b.height - 32;
         await launched.page.mouse.move(x, y, { steps: 8 });
         await expect(preview).toHaveCSS('border-top-style', 'solid');
         await expect(preview).not.toHaveCSS(
@@ -108,8 +108,8 @@ async function moveTab(
     }
   }
   await launched.page.mouse.move(
-    edge === 'right' ? b.x + b.width - 12 : b.x + b.width / 2,
-    edge === 'bottom' ? b.y + b.height - 12 : b.y + b.height / 2,
+    edge === 'right' ? b.x + b.width - 32 : b.x + b.width / 2,
+    edge === 'bottom' ? b.y + b.height - 32 : b.y + b.height / 2,
     { steps: 15 },
   );
   await expect(preview).toBeVisible();
@@ -196,10 +196,37 @@ test('splits in both directions, keeps the explorer and agent, and restores the 
       return Math.abs(a.y - b.y) < 2 && b.x > a.x + 100;
     })
     .toBe(true);
+  // A right-click uses viewport coordinates even inside an offset split group.
+  const clickedTab = (await first.boundingBox())!;
+  const clickPoint = {
+    x: clickedTab.x + 12,
+    y: clickedTab.y + clickedTab.height / 2,
+  };
+  await page.mouse.click(clickPoint.x, clickPoint.y, { button: 'right' });
+  const contextMenu = page.locator('.shell-dock-tab-menu[open]');
+  await expect(contextMenu.getByRole('menu')).toBeVisible();
+  await expect
+    .poll(async () => {
+      const bounds = (await contextMenu.getByRole('menu').boundingBox())!;
+      return Math.abs(bounds.x - clickPoint.x);
+    })
+    .toBeLessThan(2);
+  await expect
+    .poll(async () => {
+      const bounds = (await contextMenu.getByRole('menu').boundingBox())!;
+      return Math.abs(bounds.y - clickPoint.y);
+    })
+    .toBeLessThan(3);
+  await page.screenshot({
+    path: test.info().outputPath('tab-context-menu.png'),
+    animations: 'disabled',
+  });
+  await page.keyboard.press('Escape');
   // Return the second tab through its keyboard-accessible context menu.
   await second.locator('xpath=..').focus();
   await page.keyboard.press('Shift+F10');
-  const moveChoice = second
+  const moveChoice = page
+    .locator('.shell-dock-tab-menu[open]')
     .locator('wa-dropdown-item')
     .filter({ hasText: 'Move to first.ts' });
   await moveChoice.click();
@@ -209,6 +236,36 @@ test('splits in both directions, keeps the explorer and agent, and restores the 
   ).toHaveCount(2);
   await menu(groupOf(second), 'split-below');
   await expect(panel('editor')).toHaveCount(2);
+  // The outer edge makes a full-height column alongside the whole workspace,
+  // independently of the nested editor split under the pointer.
+  const workspace = (await page.locator('.shell-dock:visible').boundingBox())!;
+  const sourceTab = (await second.boundingBox())!;
+  await page.mouse.move(sourceTab.x + 24, sourceTab.y + sourceTab.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(
+    workspace.x + workspace.width - 6,
+    workspace.y + workspace.height / 2,
+    { steps: 20 },
+  );
+  const columnPreview = page.locator('.dv-drop-target-anchor:visible');
+  await expect(columnPreview).toBeVisible();
+  const columnBounds = (await columnPreview.boundingBox())!;
+  expect(columnBounds.width).toBeGreaterThan(160);
+  expect(Math.abs(columnBounds.height - workspace.height)).toBeLessThan(2);
+  await page.screenshot({
+    path: test.info().outputPath('column-preview.png'),
+    animations: 'disabled',
+  });
+  await page.mouse.up();
+  await expect
+    .poll(async () => {
+      const result = (await groupOf(second).boundingBox())!;
+      return Object.entries(columnBounds).every(
+        ([key, value]) =>
+          Math.abs(result[key as keyof typeof result] - value) < 2,
+      );
+    })
+    .toBe(true);
   // Resize the actual sash and keep this grid across a reload.
   const sash = page.locator('.shell-dock .dv-sash.dv-enabled:visible').first();
   const bounds = (await sash.boundingBox())!;

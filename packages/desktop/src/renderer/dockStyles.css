@@ -96,7 +96,8 @@
   flex: none;
   padding-inline: 3px;
 }
-.shell-dock-tab-menu {
+.shell-dock-tab-menu,
+.shell-dock-context-root {
   display: contents;
 }
 .shell-dock-menu-anchor {

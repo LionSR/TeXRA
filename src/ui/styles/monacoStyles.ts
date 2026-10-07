@@ -17,13 +17,29 @@ export const monacoStyles = css`
     --vscode-editorHoverWidget-background: var(--wa-color-menu-background);
     --vscode-editorHoverWidget-foreground: var(--wa-color-text-normal);
     --vscode-editorHoverWidget-border: var(--wa-color-surface-border);
+    /* Monaco also paints its outer context view and scroll wrapper. Without
+       its geometry tokens those surfaces keep square corners around our menu. */
+    --vscode-cornerRadius-small: var(--border-radius-small);
+    --vscode-cornerRadius-medium: var(--field-radius);
+    --vscode-cornerRadius-large: var(--wa-border-radius-m);
+    --vscode-strokeThickness: var(--border-thin);
+    --vscode-shadow-lg: var(--wa-shadow-m);
   }
 
-  .monaco-menu-container .monaco-menu {
+  .context-view.monaco-menu-container:has(.monaco-menu) {
     background: var(--wa-color-menu-background);
     color: var(--wa-color-text-normal);
     border: var(--border-thin) solid var(--wa-color-surface-border);
-    border-radius: var(--panel-radius);
+    border-radius: var(--wa-border-radius-m);
+    box-shadow: var(--wa-shadow-m);
+    overflow: hidden;
+  }
+
+  .context-view.monaco-menu-container .monaco-menu {
+    background: transparent;
+    color: var(--wa-color-text-normal);
+    border: 0;
+    border-radius: 0;
   }
 
   /* Menu entries already expose their full names. Their duplicate hover
@@ -48,7 +64,7 @@ export const monacoStyles = css`
   .monaco-menu-container {
     font-family: var(--wa-font-family-body);
     font-size: var(--font-size-sm);
-    border-radius: var(--panel-radius);
+    border-radius: var(--wa-border-radius-m);
   }
 
   .quick-input-widget {

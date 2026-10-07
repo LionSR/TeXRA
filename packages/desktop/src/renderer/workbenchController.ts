@@ -332,6 +332,14 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
       disableFloatingGroups: true,
       defaultRenderer: 'always',
       dndStrategy: 'pointer',
+      // Outer-edge drops make a column/row beside the entire workspace.
+      // Give that target a usable hit area and preview its resulting size.
+      dndEdges: {
+        activationSize: { type: 'pixels', value: 24 },
+        size: { type: 'percentage', value: 100 / 3 },
+        smallWidthBoundary: 0,
+        smallHeightBoundary: 0,
+      },
       // Preview the resulting group, including its tab strip, even when the
       // destination is compact. Tab-strip drops keep the insertion marker.
       dropOverlayModel: ({ location }) =>
@@ -398,6 +406,28 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
       dock.onWillDragGroup(() => {
         dragging = true;
         syncBrowserViewBounds();
+      }),
+    );
+    subscriptions.push(
+      dock.onWillDrop((event) => {
+        if (event.kind !== 'edge' || event.position === 'center') return;
+        const data = event.getData();
+        const id =
+          data?.panelId ??
+          dock?.groups.find((group) => group.id === data?.groupId)?.activePanel
+            ?.id;
+        if (!id || !dock) return;
+        const horizontal =
+          event.position === 'left' || event.position === 'right';
+        const size = horizontal
+          ? { width: Math.round(dock.width / 3) }
+          : { height: Math.round(dock.height / 3) };
+        // Dockview completes the move synchronously. Resize the resulting
+        // group before paint; its default equal redistribution would disagree
+        // with the preview whenever the root already has several children.
+        queueMicrotask(() => {
+          if (!disposed) dock?.getPanel(id)?.group.api.setSize(size);
+        });
       }),
     );
   }
