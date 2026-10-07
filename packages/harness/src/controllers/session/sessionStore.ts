@@ -221,14 +221,16 @@ const transaction =
           ),
         claim: (runId) => {
           const id = qualifyAggregateId('run', runId);
-          return Effect.tap(database.acquireClaims([id]), () =>
-            Effect.sync(() => owned.push(id)),
+          // Only what this call took: a claim the process already held is
+          // not this transaction's to give back.
+          return Effect.tap(database.acquireClaims([id]), (taken) =>
+            Effect.sync(() => owned.push(...taken)),
           );
         },
       });
       const value = yield* events
         .transact((append) => job(tx(append)))
-        .pipe(Effect.tapError(() => release));
+        .pipe(Effect.onError(() => release));
       if (committed !== null)
         yield* settleTo(committed).pipe(Effect.onError(() => release));
       return value;

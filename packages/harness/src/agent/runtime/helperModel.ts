@@ -114,11 +114,12 @@ export const helperCall = Effect.fn('helperCall')(
       reacquire: () =>
         ScopedRef.set(held, acquire).pipe(
           Effect.provideContext(context),
-          Effect.catch((error) =>
+          Effect.tapError((error) =>
             Effect.logWarning('Could not rebind the helper model').pipe(
               Effect.annotateLogs({ error }),
             ),
           ),
+          Effect.result,
         ),
       ...(retries === undefined ? {} : { retries }),
       request: {

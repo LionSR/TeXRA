@@ -106,6 +106,12 @@ export class SessionEvents extends Context.Service<
       readonly SessionEvent[],
       DatabaseReadFailed | DatabaseWriteFailed
     >;
+    /** Close the plane: end the inbox and run what it holds, inside the
+     *  one close deadline (`SESSION_CLOSE_DEADLINE_MS`). At the deadline
+     *  the running job is cut outside its atomic write and every queued
+     *  one is refused, never joined without limit. Idempotent; the
+     *  publisher's scope runs it too. */
+    readonly drain: Effect.Effect<void>;
     /** What this publisher committed open on one aggregate and nothing has
      *  closed since, in first-appearance order: a stream until its
      *  `stream.end` or a phase move that rests or ends its run, a stage

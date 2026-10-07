@@ -902,6 +902,20 @@ show` print the same notice, and the new `texra agents customize`,
   start now says "The agent ... has no recorded start" instead of calling it
   a task.
 
+- **Closing a project or quitting no longer hangs when the task history is
+  busy.** If another TeXRA process keeps the history locked while a project
+  closes, TeXRA waits a few seconds and then closes anyway, logging the
+  updates it could not save. Before, closing could wait for minutes.
+
+- **An older TeXRA no longer changes a project that a newer TeXRA has
+  saved into.** Before, it still saved typed-message history and removed
+  deleted tasks' files there.
+
+- **Summaries and helper requests that cannot switch to new credentials
+  now fail, as a task's own model request already does.** Before, they
+  were sent again on the old sign-in. A connection that a renewed sign-in
+  has already replaced is no longer replaced a second time.
+
 - **A model retry that cannot switch credentials now fails instead of
   resending on the old ones.** When you answer a failed request with "retry
   with my own key" and that key is gone, or a dropped Responses WebSocket

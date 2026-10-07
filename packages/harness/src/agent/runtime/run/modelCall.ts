@@ -44,8 +44,11 @@ export interface ModelCall<R = never> {
   readonly purpose: 'compaction' | 'helper';
   /** The binding in force, read again before every attempt. */
   readonly binding: Effect.Effect<BoundModel>;
-  /** Replace a binding a failure killed or a refresh renewed. */
-  readonly reacquire: (failed: BoundModel) => Effect.Effect<unknown, never, R>;
+  /** Replace a binding a failure killed or a refresh renewed; a failure
+   *  ends the call (`runInvocation`'s `rebound`). */
+  readonly reacquire: (
+    failed: BoundModel,
+  ) => Effect.Effect<Result.Result<unknown, Error>, never, R>;
   /** A foreground request; each attempt prepares it on its binding. */
   readonly request: TurnRequest;
   /** The session's settings: usage consent reads them. */
@@ -116,8 +119,7 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
       requests: {},
     })),
     binding: call.binding,
-    rebind: (_credentials, failed) =>
-      Effect.as(call.reacquire(failed), Result.succeed(undefined)),
+    rebind: (_credentials, failed) => call.reacquire(failed),
     attempt: (bound, ref) =>
       Effect.gen(function* () {
         const prepared = yield* bound.model.prepareTurn(call.request).pipe(

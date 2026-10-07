@@ -188,6 +188,11 @@ const sessionHandleLayer = (key: SessionKey) =>
       const view = yield* makeSessionViewAccess(key.storage, store.closed);
       // Capture the startup cohort before callers can publish new launches.
       const initialListing = yield* database.readListing();
+      // The publisher drains inside the one close deadline, after the runs'
+      // fibers (registered before their fork) published their last rows.
+      yield* Effect.addFinalizer(() =>
+        events.drain.pipe(Effect.ensuring(Effect.sync(() => store.close()))),
+      );
       // The runs' fork and the history store end with this scope.
       const fork = yield* FiberSet.makeRuntime<ProcessServices>();
       const pinPlugins = yield* sessionPluginLayers(() => session.runs);
@@ -231,25 +236,10 @@ const sessionHandleLayer = (key: SessionKey) =>
         history: yield* HistoryQuery.make(() => session),
       };
       // The session's teardown is this scope's finalizers, run in the reverse
-      // of their registration: the doors shut last, after every owner below
-      // has unwound, with what they left settled; then the follow-up queue,
-      // the presentation hosts; and first of all the runs, so no run is
-      // admitted over a session that is unwinding.
-      yield* Effect.addFinalizer(() =>
-        session.log.settled.pipe(
-          // Bounded like the close that invalidates this entry: a
-          // publisher too stuck to settle must not hold the release.
-          Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
-          Effect.flatMap((settled) =>
-            Option.isSome(settled)
-              ? Effect.void
-              : Effect.logWarning(
-                  `Session ${key.storage} closed with publications still unsettled past the close budget`,
-                ).pipe(withLogChannel(CHANNEL)),
-          ),
-          Effect.ensuring(Effect.sync(() => store.close())),
-        ),
-      );
+      // of their registration: first the runs, so no run is admitted over a
+      // session that is unwinding; then the presentation hosts, the follow-up
+      // queue, the runs' fibers; and last the doors, after the publisher
+      // drained (registered above the fork).
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => session.followUps.dispose()),
       );
