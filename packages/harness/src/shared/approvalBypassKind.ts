@@ -21,7 +21,7 @@ type OwnGrant = 'on' | 'off' | 'parent';
 
 /** The policies a launch can narrow a run to: anything below Auto-approve,
  *  which is never stricter than a project's policy. */
-export const APPROVAL_POLICY_LIMITS = ['never', 'ask'] as const;
+const APPROVAL_POLICY_LIMITS = ['never', 'ask'] as const;
 export type ApprovalPolicyLimit = (typeof APPROVAL_POLICY_LIMITS)[number];
 
 /**
