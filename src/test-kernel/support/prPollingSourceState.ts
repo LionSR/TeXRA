@@ -1,12 +1,15 @@
 // Local imports - tools
-import { createBasePollState } from '@tools/github/PollingSourceBase';
-import { DedupedResource, MAX_SEEN_IDS } from '@tools/github/pollingDedup';
-import type { PRSubscriptionState } from '@tools/github/PRPollingSource';
+import { createBasePollState } from '@texra/tools/github/PollingSourceBase';
+import {
+  DedupedResource,
+  MAX_SEEN_IDS,
+} from '@texra/tools/github/pollingDedup';
+import type { PRSubscriptionState } from '@texra/tools/github/PRPollingSource';
 import type {
   GhIssueComment,
   GhReview,
   GhReviewComment,
-} from '@tools/github/prTypes';
+} from '@texra/tools/github/prTypes';
 
 /**
  * Builders for the real `PRPollingSource` subscription state. Suites drive the

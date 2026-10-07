@@ -34,14 +34,15 @@ import {
  * a second owner of the ordinals, which is the dual system the cutover
  * exists to remove.
  */
-const PRODUCTION_ROOTS = [...ALL_HOST_PRODUCTION_ROOTS, 'packages/harness/src'];
+const PRODUCTION_ROOTS = ALL_HOST_PRODUCTION_ROOTS;
 
-const DATABASE_MODULE = 'src/controllers/session/Database.ts';
+const DATABASE_MODULE = 'packages/harness/src/controllers/session/Database.ts';
 /** The history query store's process opens SQLite on its own `:memory:`
  *  database and never on the session file. It assigns no seq or commit and
  *  claims nothing, so it is not a second owner of the ordinals this ratchet
  *  guards; it stays under the write scan like every other file. */
-const HISTORY_QUERY_STORE = 'src/agent/runtime/historyQuery/childSource.ts';
+const HISTORY_QUERY_STORE =
+  'packages/harness/src/agent/runtime/historyQuery/childSource.ts';
 
 /** Both the official SQLite driver and raw SQLite imports create storage
  * authority. Imports, requires, and dynamic imports obey the same boundary. */
@@ -69,16 +70,17 @@ const EVENT_TABLE_WRITE = tableWrite(
 /** A root's current values and input history, written by `currentValues.ts`
  *  alone. */
 const CURRENT_TABLE_WRITE = tableWrite('current_value|input_history');
-const CURRENT_VALUES_MODULE = 'src/controllers/session/currentValues.ts';
+const CURRENT_VALUES_MODULE =
+  'packages/harness/src/controllers/session/currentValues.ts';
 
 /** The session publisher: per (process, root), every durable append is a
  *  job on its one inbox, so commit order is enqueue order (core concepts,
  *  invariant 1). */
-const PUBLISHER_MODULE = 'src/agent/runtime/SessionEvents.ts';
+const PUBLISHER_MODULE = 'packages/harness/src/agent/runtime/SessionEvents.ts';
 
 /** A call of the database's append, or of the run removal whose transaction
  *  appends the tombstone; never a declaration or a `Pick` key. */
-const APPEND_CALL = /(?:\.appendAll|\.prepareRunRemoval|\bappendPrepared)\s*\(/;
+const APPEND_CALL = /(?:\.appendAll|\.prepareRunRemoval|\bappendRows)\s*\(/;
 
 /**
  * The files that still append without the publisher, each with the reason it
@@ -87,7 +89,7 @@ const APPEND_CALL = /(?:\.appendAll|\.prepareRunRemoval|\bappendPrepared)\s*\(/;
  */
 const APPENDS_OUTSIDE_PUBLISHER: Readonly<Record<string, string>> = {
   [DATABASE_MODULE]:
-    'defines appendAll and appendPrepared; the run-removal transaction it prepares runs as a publisher job',
+    'defines appendAll and appendRows; the run-removal transaction it prepares runs as a publisher job',
 };
 
 /** A numbered SQL parameter (`?1`, `?NNN`). A terminal private-mode escape
@@ -133,7 +135,7 @@ describe('persistence write boundary', () => {
   it('scans the shared, host, and SDK production roots', () => {
     expectRealCoverage(PRODUCTION_ROOTS);
     expect(PRODUCTION_ROOTS.flatMap(productionFilesUnder)).toContain(
-      'src/controllers/session/deletionCleanup.ts',
+      'packages/harness/src/controllers/session/deletionCleanup.ts',
     );
   });
 

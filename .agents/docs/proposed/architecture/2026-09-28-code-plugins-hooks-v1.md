@@ -40,8 +40,8 @@ in `src/common/plugins/hookConfig.ts`.
 | `UserPromptSubmit` | a root run's opening and each user follow-up that starts a turn | add context beside the prompt         |
 | `PreToolUse`       | before a call's approval and body                               | deny with a reason, or add context    |
 | `PostToolUse`      | after a call that executed without error                        | add feedback beside the tool result   |
-| `Stop`             | a root run's completed turn                                     | notification only                     |
-| `SubagentStop`     | a child run's completed turn                                    | notification only                     |
+| `Stop`             | a root run's completed turn                                     | block the stop once (see below)       |
+| `SubagentStop`     | a child run's completed turn                                    | block the stop once (see below)       |
 
 `PreToolUse` never approves. `allow` is read as "no objection", and so are
 `ask` and `defer`: the run's approval policy decides as it would without the
@@ -56,9 +56,19 @@ prompt events after the prompt. A `PostToolUse` `decision: "block"` adds its
 `reason` beside the result. Exit 2 on `PostToolUse` shows stderr to the
 model, as the reference says.
 
+A `Stop` or `SubagentStop` hook blocks the stop with `decision: "block"`
+(its `reason`, plus any `additionalContext`) or exit 2 (its stderr). The
+run then goes on: its next turn opens with the reason as the instruction,
+in the batch that records the hook, even in a one-shot headless run. A
+child's result settles at the end of that turn instead. The block is
+honoured once. The stop that ends a turn a block opened sends
+`stop_hook_active: true`, and a second block there is recorded as ignored.
+That bounds the loop with no setting. A script run ends with its script, so
+its stop always sends `stop_hook_active: true`.
+
 Fields that v1 parses but does not act on are recorded as ignored and logged
 as a warning: `updatedInput`, `updatedToolOutput`, `continue: false`,
-blocking a prompt, blocking a stop, and `initialUserMessage`. `systemMessage`
+blocking a prompt, a second block in a row, and `initialUserMessage`. `systemMessage`
 is logged for the user. Every other event name in the reference is parsed and
 ignored. Handler types other than `command` (`http`, `mcp_tool`, `prompt`,
 `agent`) are also ignored, and so are `async` hooks and `shell: "powershell"`.
@@ -253,7 +263,7 @@ state, so there is no migration.
 - `async` and `asyncRewake` hooks.
 - PowerShell hooks.
 - Input rewriting (`updatedInput`), output rewriting
-  (`updatedToolOutput`), prompt blocking, and stop blocking.
+  (`updatedToolOutput`), and prompt blocking.
 - `SessionStart` with `source: "resume"`. The opening context is already
   in the recorded history.
 - `transcript_path`: TeXRA keeps no transcript file, so the field is not

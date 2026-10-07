@@ -1,3 +1,4 @@
+import { String as Str } from 'effect';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -12,18 +13,17 @@ import {
   type CheckboxValues,
   type DocumentFileType,
   type FileSelectConfig,
-  type SessionType,
 } from '@shared/schemas';
-import { SortableController } from '@shared/litControllers/SortableController';
 import type { SurfaceAction } from '@shared/session/surface';
-import { SessionUiEvents } from '@shared/session/uiEvents';
 import type { TeXRAIconName } from '@shared/iconNames';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { SortableController } from '@texra/shared/litControllers/SortableController';
 import { dropCueStyles } from '@ui/styles/commonViewStyles';
 import { designTokens } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { getBasename, normalizeFilePath } from '@utils/core';
-import { capitalize, formatResultCount } from '@utils/text/stringUtils';
+import { formatResultCount } from '@utils/text/stringUtils';
 import { FileDropController, postDroppedFiles } from '../fileDropHandler';
 import { fileSelectStyles } from '../fileSelectStyles';
 
@@ -66,10 +66,6 @@ export class FileSelectGroup extends LitElement {
   /** The tool and auto-extract toggles (`Surface.launch`). */
   @property({ attribute: false }) checkboxValues: CheckboxValues =
     ToolConfigFieldsSchema.parse({});
-
-  /** The launch mode: only a document task reads the tool and
-   *  auto-extract toggles. */
-  @property() sessionType: SessionType = 'task';
 
   @query('.multiple-files-list')
   private fileListElement?: HTMLElement;
@@ -239,10 +235,9 @@ export class FileSelectGroup extends LitElement {
     });
   }
 
-  /** Only a document task reads the tool and auto-extract toggles, so a
-   *  chat launch shows neither menu. */
+  /** The group renders only for a document task (ProgressApp's file
+   *  section), the one launch that reads these toggles. */
   private renderConfigMenu(): TemplateResult | typeof nothing {
-    if (this.sessionType !== 'task') return nothing;
     if (this.config.toolConfig === 'tool') return this.renderToolConfigMenu();
     if (this.config.toolConfig === 'autoExtract') {
       return this.renderAutoExtractMenu();
@@ -335,7 +330,7 @@ export class FileSelectGroup extends LitElement {
 
   override render(): TemplateResult {
     const { config } = this;
-    const typeLabel = capitalize(config.type);
+    const typeLabel = Str.capitalize(config.type);
     const labelId = `${this.listId}Label`;
 
     return html`

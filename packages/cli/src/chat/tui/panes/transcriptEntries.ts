@@ -8,7 +8,7 @@ import {
   rowHeadline,
   type TranscriptRow,
   type TranscriptRowKind,
-} from '@ui/transcript';
+} from '@shared/transcript';
 
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
 
@@ -134,7 +134,6 @@ const ROW_KIND_IS_WIDGET = {
   missingOutputs: true,
   progressStatus: true,
   scratchpad: true,
-  statistics: true,
   thinking: true,
   tool: true,
   webSearch: true,

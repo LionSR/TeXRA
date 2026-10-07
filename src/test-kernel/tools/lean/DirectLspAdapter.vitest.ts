@@ -64,18 +64,18 @@ import type { RunId } from '@shared/schemas';
 import {
   directLeanLanguageServices,
   type DirectLspLeanAdapterOptions,
-} from '@tools/lean/direct/directLspAdapter';
-import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
-import { LeanServer } from '@tools/lean/direct/leanServer';
+} from '@texra/tools/lean/direct/directLspAdapter';
+import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
+import { LeanServer } from '@texra/tools/lean/direct/leanServer';
 import {
   LeanServerPool,
   type LeanServerPoolOptions,
-} from '@tools/lean/direct/leanServerPool';
+} from '@texra/tools/lean/direct/leanServerPool';
 import {
   createLeanServerRoster,
   isLeanServerActive,
   type LeanServerInfo,
-} from '@tools/lean/leanServerRegistry';
+} from '@texra/tools/lean/leanServerRegistry';
 import { splitOutputLines } from '@utils/text/stringUtils';
 
 const FAKE_LAKE = `#!/usr/bin/env node

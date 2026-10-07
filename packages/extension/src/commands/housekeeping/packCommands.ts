@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import type { WorkflowFileOperationRequest } from '@controllers/session/hostRunActions';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
@@ -15,6 +14,7 @@ import { fileOpResultMessage, packRunOutputs } from '@housekeeping/runDirOps';
 import { filesystemFor } from '@housekeeping/utils';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { type FileOpResult } from '@shared/schemas';
+import type { WorkflowFileOperationRequest } from '@texra/controllers/session/hostRunActions';
 
 const CHANNEL = 'packCommands';
 

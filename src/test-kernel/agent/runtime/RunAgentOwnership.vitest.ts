@@ -64,9 +64,7 @@ vi.mock('@agent/runtime/executeAgent', async () => {
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { RunHandle } from '@agent/runtime/RunHandle';
-import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
-import { RunRegistry } from '@agent/runtime/runRegistry';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { RunRegistry } from '@agent/runtime/runRegistry';
 import { runAgent } from '@agent/runtime/runAgent';
 import {
   agentErrorPresentation,
@@ -80,17 +78,14 @@ import {
 } from '@common/errors/sdkError/errorMetadata';
 import {
   aggregateId as qualifyAggregateId,
-  type AggregateId,
   RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
 import { fakeProcessServices } from '@test/support/setupPlatform';
-import { testRunFork } from '@test/support/runHandleFixtures';
-import { pinNoPlugins } from '@test/support/testPluginServices';
+import { testRunRegistry } from '@test/support/runHandleFixtures';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const RUN_ID = 'a9e70a9e7001' as RunId;
-const PARENT_RUN_ID = 'a9e70a9e7002' as RunId;
 // The persisted lineage a resume reads after tracking its launch handle.
 // Empty unless a case seeds this run's `run.start` parent.
 const persistedRuns = new Map<RunId, { readonly parentId: RunId }>();
@@ -98,9 +93,6 @@ const CONFIG = AgentConfigSchema.parse({
   agent: 'assistant',
   model: 'test-model',
 });
-const settlePublications = vi.fn(
-  (_runId?: RunId): Effect.Effect<void, Error> => Effect.void,
-);
 let trackedHandle: RunHandle | undefined;
 const trackRun = vi.fn((handle: RunHandle) => {
   trackedHandle = handle;
@@ -108,8 +100,7 @@ const trackRun = vi.fn((handle: RunHandle) => {
 const untrackRun = vi.fn((runId: RunId) => {
   if (trackedHandle?.runId === runId) trackedHandle = undefined;
 });
-// The real exit choreography over the fake's settlePublications and the mocked
-// claim verbs, so the existing flush/release assertions keep
+// The real exit choreography over the mocked claim verbs, so the existing flush/release assertions keep
 // observing the same tree through its one owner.
 const sessionRuns = {
   track: trackRun,
@@ -131,24 +122,36 @@ const sessionRuns = {
   launchRun: vi.fn(
     (_runId: RunId, operation: Effect.Effect<unknown, unknown>) => operation,
   ),
+  // The one terminal writer, over the mocked `finalizeRun`.
+  end: (input: unknown) =>
+    Effect.tryPromise({
+      try: () => mocks.finalizeRun(SESSION, input),
+      catch: ensureError,
+    }),
 };
 const SESSION = {
   runs: sessionRuns,
-  readView: () => Effect.succeed({ runs: persistedRuns }),
-  // The launch's hold on the run's claim: the release it hands back also
-  // reports to `mocks.releaseClaims`, which the release-order cases observe.
-  acquireClaims: (id: AggregateId) =>
-    (mocks.acquireClaims(id) as Effect.Effect<Effect.Effect<void>>).pipe(
-      Effect.map((release) =>
-        release.pipe(
-          Effect.andThen(Effect.suspend(() => mocks.releaseClaims(id))),
+  view: { read: () => Effect.succeed({ runs: persistedRuns }) },
+  log: {
+    // The launch's hold on the run's claim: its release also reports to
+    // `mocks.releaseClaims`, which the release-order cases observe.
+    hold: (runId: RunId) => {
+      const id = qualifyAggregateId('run', runId);
+      return Effect.asVoid(
+        Effect.acquireRelease(
+          mocks.acquireClaims(id) as Effect.Effect<Effect.Effect<void>>,
+          (release) =>
+            release.pipe(
+              Effect.andThen(
+                Effect.suspend(
+                  () => mocks.releaseClaims(id) as Effect.Effect<void>,
+                ),
+              ),
+            ),
         ),
-      ),
-    ),
-  holdRunClaim: SessionHandle.prototype.holdRunClaim,
-  borrowRunClaim: SessionHandle.prototype.borrowRunClaim,
-  settlePublications,
-  commitRunEnd: SessionHandle.prototype.commitRunEnd,
+      );
+    },
+  },
 } as never;
 
 const EXECUTE_RESULT = {
@@ -173,21 +176,6 @@ function launch(options: RunOptions = {}) {
     { config: CONFIG, runId: RUN_ID },
     { session: SESSION, ...options },
   );
-}
-
-/** A real registry whose lane, liveness and stop the launch answers to. */
-function realRunRegistry(): RunRegistry {
-  return new RunRegistry({
-    runView: () => undefined,
-    commit: () => Effect.void,
-    approvals: createSessionApprovals(),
-    finalizeRun: ((input: { readonly outcome: string }) =>
-      Effect.succeed({ ok: true, outcome: input.outcome })) as never,
-    holdRunClaim: () => Effect.void,
-    borrowRunClaim: () => Effect.void,
-    fork: testRunFork,
-    pinPlugins: pinNoPlugins,
-  });
 }
 
 /** Launches on a real registry, the session's own runs replaced by it. */
@@ -218,7 +206,6 @@ describe('runAgent run ownership', () => {
     }));
     mocks.readRunEnd.mockReturnValue(null);
     mocks.runExists.mockReturnValue(true);
-    settlePublications.mockReturnValue(Effect.void);
     mocks.finalizeRun.mockResolvedValue(FINALIZE_RESULT);
     mocks.executeAgent.mockResolvedValue(EXECUTE_RESULT);
   });
@@ -230,7 +217,7 @@ describe('runAgent run ownership', () => {
         // A real registry: the first launch's admission is its fiber on the
         // run registry, so the duplicate is refused against it wherever the first
         // launch has got to — here, mid-registration.
-        const runs = realRunRegistry();
+        const runs = testRunRegistry();
         let finishRegistration!: () => void;
         mocks.registerRun.mockImplementationOnce(
           () =>
@@ -258,7 +245,7 @@ describe('runAgent run ownership', () => {
     'makes a fresh launch interruptible before registration settles',
     () =>
       Effect.gen(function* () {
-        const runs = realRunRegistry();
+        const runs = testRunRegistry();
         let finishRegistration!: () => void;
         mocks.registerRun.mockImplementationOnce(
           () =>
@@ -399,11 +386,6 @@ describe('runAgent run ownership', () => {
           order.push('release');
         }),
       );
-      settlePublications.mockImplementationOnce(() =>
-        Effect.sync(() => {
-          order.push('session-artifacts');
-        }),
-      );
 
       yield* launch({
         beforeRunEnd: () =>
@@ -412,12 +394,7 @@ describe('runAgent run ownership', () => {
           }),
       });
 
-      expect(order).toEqual([
-        'execute',
-        'artifacts',
-        'session-artifacts',
-        'release',
-      ]);
+      expect(order).toEqual(['execute', 'artifacts', 'release']);
     }),
   );
 
@@ -435,33 +412,6 @@ describe('runAgent run ownership', () => {
           expect.objectContaining({ publishWorkflowOutput }),
         );
         expect(publishWorkflowOutput).not.toHaveBeenCalled();
-      }),
-  );
-
-  it.effect(
-    'does not drain artifacts again after the host committed the run end',
-    () =>
-      Effect.gen(function* () {
-        const order: string[] = [];
-        mocks.executeAgent.mockImplementationOnce(async () => {
-          order.push('execute');
-          return EXECUTE_RESULT;
-        });
-        yield* launch({
-          beforeRunEnd: () =>
-            Effect.sync(() => {
-              order.push('host-artifacts-and-release');
-              return true;
-            }),
-        });
-
-        expect(order).toEqual(['execute', 'host-artifacts-and-release']);
-        expect(settlePublications).not.toHaveBeenCalled();
-        // The host committed the run's ending; the claim is still the
-        // launch's hold, released once as its scope closes.
-        expect(mocks.releaseClaims).toHaveBeenCalledExactlyOnceWith(
-          qualifyAggregateId('run', RUN_ID),
-        );
       }),
   );
 
@@ -531,7 +481,6 @@ describe('runAgent run ownership', () => {
         expect(mocks.releaseClaims).toHaveBeenCalledWith(
           qualifyAggregateId('run', RUN_ID),
         );
-        expect(settlePublications).toHaveBeenCalledWith(RUN_ID);
       }),
   );
 });

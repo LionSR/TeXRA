@@ -9,12 +9,10 @@ import { randomUUID } from 'node:crypto';
 import { Effect, Layer, type Scope, SynchronizedRef } from 'effect';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { PersonaSchema } from '@agent/core/definition/AgentDataclass';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import {
   rowAggregate,
-  snapshotRow,
   positionRow,
   type Message,
 } from '@agent/runtime/loop/rows';
@@ -25,9 +23,9 @@ import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter } from '@agent/trace';
+import { PersonaSchema } from '@shared/schemas';
 import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  type JsonValue,
   type RetryErrorInfo,
   type RunId,
 } from '@shared/schemas';
@@ -170,16 +168,21 @@ export function scriptedInvokerLayer(
             }
             if ('failWith' in scripted) {
               // As the invoker does: the failure commits before it returns,
-              // as the runtime snapshot a resumed run reads back off the fold.
+              // as the `failed` row a resumed run reads back off the fold.
               return {
                 kind: 'failed' as const,
                 state: yield* cell.append([
-                  ...snapshotRow(run.runId, state, {
-                    runtime: {
-                      lastError: scripted.failWith,
-                      declinedRoutes: [],
+                  {
+                    type: 'model.message',
+                    aggregateId,
+                    payload: {
+                      kind: 'failed',
+                      invocation: { invocationId: randomUUID(), attempt: 1 },
+                      purpose: 'turn',
+                      error: scripted.failWith,
+                      next: { kind: 'stop' },
                     },
-                  }),
+                  },
                 ]),
                 error: scripted.failWith,
               };
@@ -197,7 +200,7 @@ export function scriptedInvokerLayer(
                   request: '0'.repeat(64),
                   invocation,
                   origin: bound.origin,
-                  delivery: 'stream',
+                  purpose: 'turn',
                 },
               },
               ...('compactTo' in scripted
@@ -275,7 +278,6 @@ export function testAgentRun(
     fileService: new RunFileService(runId, session.roots),
     ...testRunTools(hostStores()),
     finalToolName: null,
-    structured: { value: undefined },
     swapModel: (next) =>
       SynchronizedRef.updateAndGetEffect(model, (current) =>
         Effect.scoped(next(current)),
@@ -300,8 +302,6 @@ export interface ScriptedRunInit {
   readonly stopAfterCycle?: boolean;
   /** The terminal structured-output tool, when the run has one. */
   readonly finalToolName?: string | null;
-  /** The slot the terminal tool captures into, shared with the scenario. */
-  readonly structured?: { value: JsonValue | undefined };
   readonly mediaFiles?: readonly string[];
   /** Absent means the launch had no transcript row to write. */
   readonly initialUserMessageForTranscript?: string | undefined;
@@ -340,7 +340,6 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
           toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
           ...testRunTools(hostStores(), tools),
           finalToolName: init.finalToolName ?? null,
-          structured: init.structured ?? { value: undefined },
           callbacks: init.onIdle ? { onIdle: init.onIdle } : {},
           ...('initialUserMessageForTranscript' in init
             ? {

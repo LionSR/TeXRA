@@ -15,18 +15,17 @@ import { basename, dirname, join } from 'node:path';
 
 import { Data, Effect, FileSystem, type PlatformError } from 'effect';
 
+import { Rejected } from '@texra-ai/harness';
+import { FILE_HANDLING_RULES } from '@common/files/fileHandlingRules';
+import { getIncludedExtensions } from '@common/files/fileTypeUtils';
+import { onAppSignal } from '@eventBus/AppSignals';
+import type { HostRequest } from '@shared/session/hostRequest';
+import type { HostOutcome } from '@shared/session/sessionFrames';
 import {
   passesFileFilters,
   prepareFileFilters,
   shouldVisitDirectory,
-} from '@common/files/fileListingRules';
-import { FILE_HANDLING_RULES } from '@common/files/fileHandlingRules';
-import { getIncludedExtensions } from '@common/files/fileTypeUtils';
-import { onAppSignal } from '@eventBus/AppSignals';
-import type { ProcessServices } from '@platform/processRuntime';
-import type { HostRequest } from '@shared/session/hostRequest';
-import { Rejected } from '@shared/session/requestErrors';
-import type { HostOutcome } from '@shared/session/sessionFrames';
+} from '@texra/common/files/fileListingRules';
 import { normalizeFilePath } from '@utils/core';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { isPathWithin } from '@utils/core/pathCore';
@@ -48,6 +47,7 @@ import {
   AgentDocumentUnavailable,
   resolveAgentDocument,
 } from './desktopAgentDocuments.js';
+import type { ProcessServices } from '@texra-ai/harness';
 import type { DesktopPtyHost } from './desktopPtyHost.js';
 import type { DesktopBrowserViews } from './desktopBrowserViews.js';
 

@@ -392,6 +392,9 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
     );
     subscriptions.push(
       dock.onDidActivePanelChange(() => {
+        const tab = dock?.activePanel && tabFor(dock.activePanel.id);
+        if (tab?.kind === 'editor' && tab.target)
+          void editorFor(tab.id).open(tab.target);
         persist();
         layoutVisibleSurfaces();
       }),

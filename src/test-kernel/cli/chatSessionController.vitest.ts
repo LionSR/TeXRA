@@ -101,7 +101,6 @@ import {
   TuiSession,
   type RootRunSettled,
 } from '@cli/chat/tui/state/sessionRunState';
-import { DisposableStore } from '@platform/disposable';
 import {
   aggregateId,
   emptyRunEndOutput,
@@ -126,12 +125,14 @@ import {
 import {
   createTestSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import {
   fakeProcessServices,
   setupPlatform,
 } from '@test/support/setupPlatform';
+import { DisposableStore } from '@texra/platform/disposable';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   bindTestSessionView,
@@ -350,27 +351,33 @@ function installSession(overrides: Record<string, unknown> = {}): void {
     isLive: () => false,
     awaitDrained: () => Effect.void,
   };
+  const { view: installed, ...rest } = overrides;
+  const ref =
+    (installed as SubscriptionRef.SubscriptionRef<SessionView> | undefined) ??
+    installableViewRef();
   mocks.sessionStub.mockReturnValue({
     roots: testWorkspaceRoots(),
-    approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
     interactions: {
       use: vi.fn(() => Effect.succeed(mocks.detachHostInteractions)),
     },
     requests: { request: mocks.request },
-    approvals: { registerRunParent: vi.fn() },
+    approvals: {
+      registerRunParent: vi.fn(),
+      policy: () => TEXRA_APPROVAL_POLICY_DEFAULT,
+    },
     runs,
-    // The parent edge the resume path reads cold, off the same seeded view
-    // the TUI renders.
-    readView: () => Effect.succeed(currentView()),
-    ...overrides,
-    // The fold's level stream, over whichever view ref the case installed.
-    ...(overrides.view === undefined
-      ? { viewChanges: Stream.empty }
-      : {
-          viewChanges: SubscriptionRef.changes(
-            overrides.view as SubscriptionRef.SubscriptionRef<SessionView>,
-          ),
-        }),
+    log: {},
+    // The fold's level and its stream, over whichever view ref the case
+    // installed; the parent edge the resume path reads cold comes off the
+    // same seeded view the TUI renders.
+    view: {
+      ref,
+      changes:
+        installed === undefined ? Stream.empty : SubscriptionRef.changes(ref),
+      run: (runId: RunId) => SubscriptionRef.getUnsafe(ref).runs.get(runId),
+      read: () => Effect.succeed(currentView()),
+    },
+    ...rest,
   });
 }
 
@@ -429,10 +436,6 @@ const defaultResumeRun = (runId: RunId, options: ResumeRunOptions) =>
     return STARTED;
   });
 
-function resumeWithAutoResumeData(): void {
-  mocks.resumeRun.mockImplementation(defaultResumeRun);
-}
-
 describe('CLI terminal outcome resolution', () => {
   // The persisted outcome is a committed `run.end` row on a real session over
   // the fake platform's storage; the read path under test folds it, so no
@@ -442,7 +445,7 @@ describe('CLI terminal outcome resolution', () => {
       const session = yield* createTestSession();
       const runId = '5d0001' as RunId;
       publishTestRunStart(session, runId);
-      session.publish([
+      publishTestRows(session, [
         {
           type: 'run.end',
           aggregateId: aggregateId('run', runId),
@@ -450,7 +453,7 @@ describe('CLI terminal outcome resolution', () => {
           output: emptyRunEndOutput(),
         },
       ]);
-      yield* session.settlePublications();
+      yield* session.log.settled;
 
       expect(
         yield* readCliRunOutcomeState(session, {
@@ -472,11 +475,11 @@ describe('CLI terminal outcome resolution', () => {
         const session = yield* createTestSession();
         const runId = 'b0f001' as RunId;
         publishTestRunStart(session, runId);
-        yield* session.settlePublications();
+        yield* session.log.settled;
         const reportReadFailure = vi.fn();
         // The read fails the way a corrupt store fails it: through the
         // session's own records port, typed.
-        vi.spyOn(session, 'readRunRecords').mockReturnValue(
+        vi.spyOn(session.log, 'records').mockReturnValue(
           Effect.fail(
             new DatabaseReadFailed({
               path: 'run-records',
@@ -484,7 +487,7 @@ describe('CLI terminal outcome resolution', () => {
             }),
           ),
         );
-        vi.spyOn(session, 'readAggregate').mockReturnValue(
+        vi.spyOn(session.log, 'rows').mockReturnValue(
           Effect.fail(
             new DatabaseReadFailed({
               path: 'run-records',
@@ -660,7 +663,7 @@ describe('createChatSessionController', () => {
 
         // The launch's `run.start` rows are detached publishes: the stop
         // claims the child's aggregate, so they commit first.
-        yield* runtimeSession.settlePublications();
+        yield* runtimeSession.log.settled;
         // The stop Ctrl-C sends under "Keep subagents running": the root
         // stops and its live children detach.
         const owner = mocks.sessionStub() as SessionHandle;
@@ -685,7 +688,7 @@ describe('createChatSessionController', () => {
         // already stated in the plane.
         const requestId = 'bash-detached-child';
         const approval = yield* Effect.forkScoped(
-          runtimeSession.openRequest(childRun, {
+          runtimeSession.requests.ask(childRun, {
             kind: 'bash',
             data: {
               requestId,
@@ -698,13 +701,13 @@ describe('createChatSessionController', () => {
         yield* Effect.promise(() =>
           vi.waitFor(() =>
             expect(
-              SubscriptionRef.getUnsafe(runtimeSession.view).requests.map(
+              SubscriptionRef.getUnsafe(runtimeSession.view.ref).requests.map(
                 (request) => request.requestId,
               ),
             ).toEqual([requestId]),
           ),
         );
-        runtimeSession.publish([
+        publishTestRows(runtimeSession, [
           {
             type: 'request.decided',
             aggregateId: aggregateId('run', childRun),

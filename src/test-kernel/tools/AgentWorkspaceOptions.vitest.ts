@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildAgentWorkspaceOptions } from '@tools/agentWorkspaceOptions';
+import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
 
 const WORKSPACE = '/tmp/workspace';
 

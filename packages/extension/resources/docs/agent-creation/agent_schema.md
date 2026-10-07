@@ -23,7 +23,7 @@ prompt: |
   [Role, behaviour, tool usage guidance]
 ```
 
-The file is flat: `name`, `description`, `inherits`, `temperature`, `tools`
+The file is flat: `name`, `description`, `temperature`, `tools`
 and `prompt` sit at the top level. Unknown keys are refused, and there is no
 reader for the old nested `settings:` / `prompts:` format.
 

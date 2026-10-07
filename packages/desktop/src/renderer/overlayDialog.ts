@@ -50,7 +50,7 @@ interface OverlayDialogOptions {
   appRoot: HTMLElement;
   /**
    * CSS class family. Derives `${prefix}-overlay`, `${prefix}-close`,
-   * `${prefix}-body` / `-header` / `-title` / `-subtitle`.
+   * `${prefix}-body` / `-header` / `-title`.
    */
   prefix: string;
   ariaLabel: string;
@@ -64,7 +64,6 @@ interface OverlayDialogOptions {
 interface OverlayDialogHandle {
   dialog: WaDialog;
   titleEl: HTMLElement;
-  subtitleEl: HTMLElement;
 }
 
 /** Build a closed wa-dialog shell with shared chrome and append it to `appRoot`. */
@@ -98,5 +97,5 @@ export function createOverlayDialog(
   dialog.append(body);
 
   options.appRoot.append(dialog);
-  return { dialog, titleEl, subtitleEl };
+  return { dialog, titleEl };
 }

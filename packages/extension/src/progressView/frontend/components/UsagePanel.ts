@@ -15,8 +15,11 @@ import {
   type ContextStateData,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { contextGaugeBand, roundedContextPercent } from '@shared/contextGauge';
 import type { TeXRAIconName } from '@shared/iconNames';
+import {
+  contextGaugeBand,
+  roundedContextPercent,
+} from '@texra/shared/contextGauge';
 import { designTokens } from '@ui/styles';
 import { usageCostLabel, usageRouteBadge } from '@ui/copy/modelAccess';
 import { focusRingStyles } from '@ui/styles/controlStyles';
@@ -29,15 +32,71 @@ import {
   formatCostUsd,
 } from '@utils/text/stringUtils';
 
-/** One token counter in the usage strip: icon, count, and its tooltip. */
-type TokenStat = {
+/** The usage strip's token counters in order: each one's icon and tooltip,
+ *  and the words the strip's aria summary reads. Only the `always` ones show
+ *  at zero; the rest stay hidden until the run reports them. */
+const TOKEN_STATS = [
+  {
+    key: 'inputTokens',
+    icon: 'arrow-up',
+    id: 'usage-input-icon',
+    tooltip: 'Input tokens',
+    label: 'input tokens',
+    always: true,
+  },
+  {
+    key: 'cacheReadInputTokens',
+    icon: 'cloud-arrow-down',
+    id: 'usage-cache-read-icon',
+    tooltip: 'Cache read tokens (discounted)',
+    label: 'cache read tokens',
+  },
+  {
+    key: 'cacheMissInputTokens',
+    icon: 'cloud-arrow-up',
+    id: 'usage-cache-miss-icon',
+    tooltip: 'Cache miss tokens (full price)',
+    label: 'cache miss tokens',
+  },
+  {
+    key: 'cacheCreationInputTokens',
+    icon: 'database',
+    id: 'usage-cache-write-icon',
+    tooltip: 'Cache creation tokens (1.25× cost)',
+    label: 'cache creation tokens',
+  },
+  {
+    key: 'outputTokens',
+    icon: 'arrow-down',
+    id: 'usage-output-icon',
+    tooltip: 'Output tokens',
+    label: 'output tokens',
+    always: true,
+  },
+  {
+    key: 'reasoningTokens',
+    icon: 'comments',
+    id: 'usage-reasoning-icon',
+    tooltip: 'Reasoning tokens',
+    label: 'reasoning tokens',
+  },
+] as const satisfies readonly {
+  key: keyof TokenUsageStats;
   icon: TeXRAIconName;
   id: string;
-  value: number;
   tooltip: string;
-  /** Optional counters stay hidden until the run reports them. */
-  onlyWhenPositive?: boolean;
-};
+  label: string;
+  always?: true;
+}[];
+
+type TokenStat = (typeof TOKEN_STATS)[number] & { value: number };
+
+function visibleTokenStats(usage: TokenUsageStats): TokenStat[] {
+  return TOKEN_STATS.flatMap((stat) => {
+    const value = usage[stat.key] ?? 0;
+    return 'always' in stat || value > 0 ? [{ ...stat, value }] : [];
+  });
+}
 
 function renderTokenStat(stat: TokenStat): TemplateResult {
   const tooltip = `${stat.tooltip}: ${stat.value.toLocaleString('en-US')}`;
@@ -209,59 +268,7 @@ export class UsagePanel extends LitElement {
   private renderUsage(): TemplateResult | typeof nothing {
     if (!this.usage) return nothing;
 
-    const { inputTokens, outputTokens, cost } = this.usage;
-    const cacheRead = this.usage.cacheReadInputTokens ?? 0;
-    const cacheMiss = this.usage.cacheMissInputTokens ?? 0;
-    const cacheWrite = this.usage.cacheCreationInputTokens ?? 0;
-    const reasoning = this.usage.reasoningTokens ?? 0;
-
-    const stats: TokenStat[] = [
-      {
-        icon: 'arrow-up',
-        id: 'usage-input-icon',
-        value: inputTokens,
-        tooltip: 'Input tokens',
-      },
-      {
-        icon: 'cloud-arrow-down',
-        id: 'usage-cache-read-icon',
-        value: cacheRead,
-        tooltip: 'Cache read tokens (discounted)',
-        onlyWhenPositive: true,
-      },
-      {
-        icon: 'cloud-arrow-up',
-        id: 'usage-cache-miss-icon',
-        value: cacheMiss,
-        tooltip: 'Cache miss tokens (full price)',
-        onlyWhenPositive: true,
-      },
-      {
-        icon: 'database',
-        id: 'usage-cache-write-icon',
-        value: cacheWrite,
-        tooltip: 'Cache creation tokens (1.25× cost)',
-        onlyWhenPositive: true,
-      },
-      {
-        icon: 'arrow-down',
-        id: 'usage-output-icon',
-        value: outputTokens,
-        tooltip: 'Output tokens',
-      },
-      {
-        icon: 'comments',
-        id: 'usage-reasoning-icon',
-        value: reasoning,
-        tooltip: 'Reasoning tokens',
-        onlyWhenPositive: true,
-      },
-    ];
-
-    const visible = stats.filter(
-      (stat) => !stat.onlyWhenPositive || stat.value > 0,
-    );
-
+    const { cost } = this.usage;
     const ownShare = this.ownShareLabel();
     // prettier-ignore
     const costRoute = ownShare === undefined
@@ -269,7 +276,7 @@ export class UsagePanel extends LitElement {
       : html`<span id="usage-cost" class="token-stat">${this.renderCostRoute(cost)}</span><wa-tooltip for="usage-cost" placement="top-end">${ownShare}</wa-tooltip>`;
     return html`
       <span class="run-summary__value">
-        ${join(visible.map(renderTokenStat), html`<span aria-hidden="true">·</span>`)}
+        ${join(visibleTokenStats(this.usage).map(renderTokenStat), html`<span aria-hidden="true">·</span>`)}
         <span aria-hidden="true">·</span>${costRoute}
       </span>
     `;
@@ -359,23 +366,10 @@ export class UsagePanel extends LitElement {
 
   private buildUsageLabel(): string {
     if (!this.usage) return '';
-    const { inputTokens, outputTokens } = this.usage;
-    const costLabel = usageCostLabel(this.usage);
-    const parts = [`${formatCompactTokenCount(inputTokens)} input tokens`];
-    const optionalParts: ReadonlyArray<readonly [number, string]> = [
-      [this.usage.cacheReadInputTokens ?? 0, 'cache read tokens'],
-      [this.usage.cacheMissInputTokens ?? 0, 'cache miss tokens'],
-      [this.usage.cacheCreationInputTokens ?? 0, 'cache creation tokens'],
-    ];
-    for (const [value, label] of optionalParts) {
-      if (value > 0) parts.push(`${formatCompactTokenCount(value)} ${label}`);
-    }
-    parts.push(`${formatCompactTokenCount(outputTokens)} output tokens`);
-    const reasoning = this.usage.reasoningTokens ?? 0;
-    if (reasoning > 0) {
-      parts.push(`${formatCompactTokenCount(reasoning)} reasoning tokens`);
-    }
-    parts.push(costLabel);
+    const parts = visibleTokenStats(this.usage).map(
+      ({ value, label }) => `${formatCompactTokenCount(value)} ${label}`,
+    );
+    parts.push(usageCostLabel(this.usage));
     const ownShare = this.ownShareLabel();
     return `Total usage: ${parts.join(', ')}${ownShare === undefined ? '' : `. ${ownShare}`}`;
   }

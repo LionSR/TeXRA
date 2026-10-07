@@ -42,6 +42,8 @@ const hostHarnessPath = path.join(
 // finds when an older build's service runs.
 const NEXT_BUILD = '999.0.0';
 const nextBuildPath = path.join(path.dirname(binaryPath), 'texra-next.js');
+// An SDK embedder on the validation model (scripts/sdk-harness.ts).
+const sdkHarnessPath = path.join(path.dirname(binaryPath), 'sdk-harness.js');
 const validationResourcesPath = path.join(validationRoot, 'resources');
 const validationEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL';
 const validationFlagEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_FLAG';
@@ -109,6 +111,7 @@ function run(command, args, options = {}) {
     cwd: options.cwd ?? repoRoot,
     encoding: 'utf8',
     env,
+    ...(options.input === undefined ? {} : { input: options.input }),
   });
   return {
     status: result.status ?? 1,
@@ -121,6 +124,15 @@ function run(command, args, options = {}) {
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+/** Poll `check` until it holds, failing the scenario after `timeoutMs`. */
+async function waitFor(label, check, timeoutMs = 120_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!check()) {
+    assert(Date.now() < deadline, `timed out waiting for ${label}`);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
 }
 
 function assertSuccess(result, label) {
@@ -745,7 +757,7 @@ function validateRunCommand() {
       'text run output should print the filesystem copy path when --output is used',
     );
     // The progress line prints the fold's status label from the one table in
-    // src/shared/runs/runStatusDisplay.ts (RUN_STATUS_LABELS).
+    // packages/harness/src/shared/runs/runStatusDisplay.ts (RUN_STATUS_LABELS).
     assert(
       text.stderr.includes(' · Completed ·'),
       `text run progress should end with the shared completed label\nstderr:\n${text.stderr}`,
@@ -1170,10 +1182,25 @@ function removeScratch(dir) {
     const record = path.join(runDir, 'serve.json');
     for (let waited = 0; !existsSync(record) && waited < 3_000; waited += 100)
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    // The record names the current service; a retired one still draining
+    // is named only by its own `serve-<pid>.sock`.
+    const pids = new Set(
+      readdirSync(runDir).flatMap((name) => {
+        const match = /^serve-(\d+)\.sock$/.exec(name);
+        return match ? [Number(match[1])] : [];
+      }),
+    );
     try {
-      process.kill(JSON.parse(readFileSync(record, 'utf8')).pid, 'SIGTERM');
+      pids.add(JSON.parse(readFileSync(record, 'utf8')).pid);
     } catch {
-      // Gone already, or never started: nothing left to stop.
+      // No record: the service never started, or its sockets name it.
+    }
+    for (const pid of pids) {
+      try {
+        process.kill(pid, 'SIGTERM');
+      } catch {
+        // Gone already: nothing left to stop.
+      }
     }
   }
   rmSync(dir, { recursive: true, force: true });
@@ -1185,6 +1212,303 @@ function writeArtifact(name, value) {
   const artifactPath = path.join(artifactDir, name);
   writeFileSync(artifactPath, `${JSON.stringify(value, null, 2)}\n`);
   return artifactPath;
+}
+
+/**
+ * A plugin's `Stop` hook as a quality gate: a headless `texra run` whose
+ * hook blocks the first stop goes on for one more turn with the hook's
+ * reason as its instruction (the echo model's reply shows it), and the stop
+ * after it, told `stop_hook_active: true`, lets the run end. The reply and
+ * the run's `hook.outcome` rows are the artifact.
+ */
+function validateStopHookBlock() {
+  const cwd = makeScratch('texra-cli-stop-hook-');
+  try {
+    const project = echoProject(cwd);
+    const plugin = path.join(cwd, 'stopgate');
+    mkdirSync(path.join(plugin, '.claude-plugin'), { recursive: true });
+    mkdirSync(path.join(plugin, 'hooks'), { recursive: true });
+    writeFileSync(
+      path.join(plugin, '.claude-plugin', 'plugin.json'),
+      `${JSON.stringify({ name: 'stopgate', version: '1.0.0' })}\n`,
+    );
+    writeFileSync(
+      path.join(plugin, 'hooks', 'hooks.json'),
+      `${JSON.stringify({
+        hooks: {
+          Stop: [
+            {
+              hooks: [
+                {
+                  type: 'command',
+                  command: 'node',
+                  args: ['${CLAUDE_PLUGIN_ROOT}/stop.mjs'],
+                },
+              ],
+            },
+          ],
+        },
+      })}\n`,
+    );
+    writeFileSync(
+      path.join(plugin, 'stop.mjs'),
+      `import { readFileSync } from 'node:fs';
+const input = JSON.parse(readFileSync(0, 'utf8'));
+if (!input.stop_hook_active)
+  process.stdout.write(JSON.stringify({ decision: 'block', reason: 'Stop gate: check the answer once more.' }));
+`,
+    );
+    const cli = (args, label, input) => {
+      const result = run(process.execPath, [binaryPath, ...args], {
+        cwd: project.work,
+        env: project.ptyEnv,
+        input,
+      });
+      assertSuccess(result, label);
+      return result;
+    };
+    cli(['plugin', 'install', plugin], 'texra plugin install');
+    cli(['plugin', 'enable', 'stopgate'], 'texra plugin enable', 'y\n');
+    const result = cli(
+      [
+        'run',
+        'echo_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        'First message',
+        '--cwd',
+        project.work,
+        '--approval-policy',
+        'never',
+        '--output-format',
+        'json',
+        '--print',
+      ],
+      'texra run echo_validation with a Stop hook',
+    );
+    const response = String(
+      parseJson(result.stdout, 'stop hook run').output?.response ?? '',
+    );
+    const outcomes = project.readStore(
+      `SELECT json_extract(e.data, '$.payload.point') AS point,
+         json_extract(e.data, '$.payload.status') AS status,
+         json_extract(e.data, '$.payload.context') AS context,
+         json_extract(e.data, '$.payload.ignored') AS ignored
+       FROM event e WHERE e.type = 'hook.outcome' ORDER BY e."commit"`,
+    );
+    const artifactPath = writeArtifact('stop-hook-block.json', {
+      response,
+      outcomes,
+    });
+    assert(
+      response.includes('First message') &&
+        response.includes('Stop gate: check the answer once more.'),
+      `the run should go on with the Stop hook's reason as its next instruction (artifact: ${artifactPath})\nresponse: ${response}`,
+    );
+    assert(
+      outcomes.length === 2 &&
+        outcomes[0].context?.includes('Stop gate') &&
+        outcomes[1].context === null &&
+        outcomes[1].ignored === '[]',
+      `the first stop should block and the second, after the block's turn, should let the run end (artifact: ${artifactPath})`,
+    );
+  } finally {
+    removeScratch(cwd);
+  }
+}
+
+/**
+ * An SDK run of an inline persona (`StartInput.agent` as an object): the
+ * embedder writes no agent file, the echo model's reply shows the
+ * instruction reached a run of that persona, and the session view names the
+ * run by the persona. The reply and the run's identity are the artifact.
+ */
+function validateSdkInlinePersona() {
+  const cwd = makeScratch('texra-sdk-inline-persona-');
+  try {
+    const home = path.join(cwd, 'home');
+    const work = path.join(cwd, 'work');
+    mkdirSync(work, { recursive: true });
+    const validationFlagPath = path.join(work, validationFlagName);
+    writeFileSync(validationFlagPath, validationFlagContent);
+    const result = run(
+      process.execPath,
+      [
+        sdkHarnessPath,
+        work,
+        path.join(cwd, 'storage'),
+        'inline',
+        'Inline persona message',
+      ],
+      {
+        cwd: work,
+        validationModel: true,
+        validationFlagPath,
+        env: isolatedCliHomeEnv(home, { TEXRA_INTERNAL_VALIDATE_ECHO: '1' }),
+      },
+    );
+    assertSuccess(result, 'the SDK harness');
+    // The embedder's own log lines come first; its answer is the last line.
+    const { result: ended, identity } = parseJson(
+      result.stdout.trim().split('\n').at(-1),
+      'SDK harness',
+    );
+    const response = String(ended?.output?.response ?? '');
+    const artifactPath = writeArtifact('sdk-inline-persona.json', {
+      outcome: ended?.outcome,
+      response,
+      identity,
+    });
+    assert(
+      ended?.outcome === 'completed' &&
+        response === 'Model saw: Inline persona message' &&
+        identity?.agent === 'inline_echo',
+      `the inline persona's run should complete with the echoed instruction under the persona's name (artifact: ${artifactPath})`,
+    );
+  } finally {
+    removeScratch(cwd);
+  }
+}
+
+/**
+ * An SDK approval that outlives its process: an embedder on a persistent
+ * session starts a run whose custom tool asks for approval, and its handler
+ * receives the request and leaves it pending; the process is killed there.
+ * A second embedder reopens the session's store, resumes the run with the
+ * same custom tool, and its handler approves the same request, so the tool
+ * runs once and the run completes. Both phases' output, the run's request
+ * and tool rows and the file the tool wrote are the artifact.
+ */
+async function validateSdkResumeApproval() {
+  const cwd = makeScratch('texra-sdk-resume-');
+  try {
+    const home = path.join(cwd, 'home');
+    const work = path.join(cwd, 'work');
+    const storage = path.join(cwd, 'storage');
+    mkdirSync(work, { recursive: true });
+    const validationFlagPath = path.join(work, validationFlagName);
+    writeFileSync(validationFlagPath, validationFlagContent);
+    const golden = { TEXRA_INTERNAL_VALIDATE_GOLDEN: '1' };
+    const asking = spawn(
+      process.execPath,
+      [sdkHarnessPath, work, storage, 'ask', 'Run the command'],
+      {
+        cwd: work,
+        env: {
+          ...process.env,
+          CI: '1',
+          ...isolatedCliHomeEnv(home, golden),
+          ...validationModelProviderEnv,
+          [validationEnv]: '1',
+          [validationFlagEnv]: validationFlagPath,
+          TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT: '1',
+        },
+      },
+    );
+    liveChildren.add(asking);
+    let asked = '';
+    asking.stdout.on('data', (chunk) => (asked += chunk));
+    asking.stderr.on('data', () => {});
+    const exited = new Promise((resolve) => asking.on('close', resolve));
+    const line = (key) =>
+      asked
+        .split('\n')
+        .filter((text) => text.startsWith(`{"${key}"`))
+        .map((text) => JSON.parse(text)[key])
+        .at(0);
+    await waitFor('the SDK approval handler to be asked', () => line('asked'));
+    asking.kill('SIGKILL');
+    await exited;
+    liveChildren.delete(asking);
+    const runId = line('started');
+    const resumed = run(
+      process.execPath,
+      [sdkHarnessPath, work, storage, 'resume', runId],
+      {
+        cwd: work,
+        validationModel: true,
+        validationFlagPath,
+        env: isolatedCliHomeEnv(home, golden),
+      },
+    );
+    assertSuccess(resumed, 'the resuming SDK harness');
+    const { answered, result } = parseJson(
+      resumed.stdout.trim().split('\n').at(-1),
+      'resuming SDK harness',
+    );
+    // The workspace's store: the global one beside it holds no runs.
+    const store = spawnSync(
+      'find',
+      [storage, '-path', '*/workspace-storage/*', '-name', 'texra.db'],
+      { encoding: 'utf8' },
+    ).stdout.trim();
+    const db = new DatabaseSync(store, { readOnly: true });
+    let rows;
+    try {
+      rows = db
+        .prepare(
+          `SELECT e.type, json_extract(e.data, '$.requestId') AS requestId,
+             json_extract(e.data, '$.decision.action') AS decision,
+             json_extract(e.data, '$.payload.callId') AS callId
+           FROM event e JOIN event_sequence s ON s.id = e.aggregate
+           WHERE s.logical_id = ? AND e.type IN
+             ('request.opened', 'request.decided', 'tool.result', 'run.end')
+           ORDER BY e."commit"`,
+        )
+        .all(runId);
+    } finally {
+      db.close();
+    }
+    const approvedPath = path.join(work, 'approved.txt');
+    const approved = existsSync(approvedPath)
+      ? readFileSync(approvedPath, 'utf8')
+      : null;
+    // Ids differ per run, so the artifact names each request by whether
+    // it is the one asked before the kill: the file diffs across runs.
+    const { requestId: askedId, kind } = line('asked');
+    const sameRequest = (row) =>
+      row.requestId === null ? null : row.requestId === askedId;
+    const artifactPath = writeArtifact('sdk-resume-approval.json', {
+      asked: kind,
+      answered: answered.map((request) => ({
+        kind: request.kind,
+        sameRequest: sameRequest(request),
+      })),
+      outcome: result?.outcome,
+      response: result?.output?.response,
+      rows: rows.map((row) => ({
+        type: row.type,
+        sameRequest: sameRequest(row),
+        decision: row.decision,
+        callId: row.callId,
+      })),
+      approved,
+    });
+    const requests = rows.filter((row) => row.requestId !== null);
+    assert(
+      answered.length === 1 &&
+        sameRequest(answered[0]) &&
+        requests.length === 2 &&
+        requests.every(sameRequest) &&
+        requests[1].type === 'request.decided' &&
+        requests[1].decision === 'approve',
+      `the resumed run's one request should be the one asked before the kill, approved after it (artifact: ${artifactPath})`,
+    );
+    assert(
+      result?.outcome === 'completed' &&
+        result?.output?.response === 'The approved command ran.' &&
+        rows.some(
+          (row) =>
+            row.type === 'tool.result' &&
+            row.callId === 'validation-record_approval-1',
+        ) &&
+        approved === 'approved\n',
+      `the resumed run should run the embedder's approved tool once and complete (artifact: ${artifactPath})`,
+    );
+  } finally {
+    removeScratch(cwd);
+  }
 }
 
 /**
@@ -1581,15 +1905,38 @@ async function validateServiceChatsSeeEachOther() {
 
 /**
  * The service's build identity (D1-D4): clients of one build share its
- * service; a client of a newer build retires it and starts its own; a client
- * of the older build then leaves the newer service alone. Every host stamps
+ * service; a client of a newer build retires it and starts its own while
+ * the old one finishes the task it holds; the newer service stays
+ * reachable once the old one exits; a client of the older build then
+ * leaves the newer service alone. Every host stamps
  * the same workspace version, so this holds across the CLI, the extension
  * and the desktop app. The statuses each client saw are the artifact.
  */
 async function validateServiceBuildIdentity() {
   const cwd = makeScratch('texra-cli-service-builds-');
   const project = echoProject(cwd);
-  const env = { ...project.ptyEnv, TEXRA_NO_TELEMETRY: '1' };
+  writeFileSync(
+    path.join(
+      cwd,
+      'home',
+      '.texra',
+      'v1',
+      'global-storage',
+      'custom_agents',
+      'park-validation.yaml',
+    ),
+    `name: park_validation
+description: Hold its model call until released.
+
+prompt: |
+  GOLDEN-PARK
+`,
+  );
+  const env = {
+    ...project.ptyEnv,
+    TEXRA_NO_TELEMETRY: '1',
+    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+  };
   const texraWith = (binary, args, label) => {
     const result = run(
       process.execPath,
@@ -1616,8 +1963,28 @@ async function validateServiceBuildIdentity() {
       return false;
     }
   };
+  const until = async (label, check) => {
+    const deadline = Date.now() + 30_000;
+    while (!check()) {
+      assert(Date.now() < deadline, `timed out waiting for ${label}`);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  };
   try {
-    texraWith(binaryPath, ['tasks', 'list'], 'texra tasks list (this build)');
+    // A task at work in this build's service: its model call is held.
+    texraWith(
+      binaryPath,
+      [
+        'tasks',
+        'start',
+        'park_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        'Hold',
+      ],
+      'texra tasks start (this build)',
+    );
     const first = status(binaryPath, 'service status (this build)');
     texraWith(
       binaryPath,
@@ -1625,27 +1992,32 @@ async function validateServiceBuildIdentity() {
       'texra tasks list (this build, again)',
     );
     const same = status(binaryPath, 'service status (this build, again)');
+    // A newer build retires it; it drains, finishing that task, while the
+    // newer service serves.
     texraWith(
       nextBuildPath,
       ['tasks', 'list'],
       'texra tasks list (next build)',
     );
     const next = status(nextBuildPath, 'service status (next build)');
+    const drainingKept = alive(first.pid);
+    // The retired service now exits: the newer one must still be found.
+    process.kill(first.pid, 'SIGTERM');
+    await until('the retired service to exit', () => !alive(first.pid));
+    const reachable = status(nextBuildPath, 'service status (next, after)');
     texraWith(
       binaryPath,
       ['tasks', 'list'],
       'texra tasks list (this build, after)',
     );
     const after = status(binaryPath, 'service status (this build, after)');
-    const deadline = Date.now() + 30_000;
-    while (alive(first.pid) && Date.now() < deadline)
-      await new Promise((resolve) => setTimeout(resolve, 250));
     const artifactPath = writeArtifact('service-builds.json', {
       first,
       same,
       next,
+      drainingKept,
+      reachable,
       after,
-      retiredGone: !alive(first.pid),
     });
     assert(
       same.pid === first.pid,
@@ -1656,12 +2028,16 @@ async function validateServiceBuildIdentity() {
       `a newer build should retire the older service and start its own (artifact: ${artifactPath})`,
     );
     assert(
-      after.pid === next.pid && after.version === NEXT_BUILD,
-      `an older build should leave a newer service running (artifact: ${artifactPath})`,
+      drainingKept,
+      `a retired service should keep running while its task works (artifact: ${artifactPath})`,
     );
     assert(
-      !alive(first.pid),
-      `the retired service should exit (artifact: ${artifactPath})`,
+      reachable.pid === next.pid,
+      `the newer service should stay reachable once the retired one exits (artifact: ${artifactPath})`,
+    );
+    assert(
+      after.pid === next.pid && after.version === NEXT_BUILD,
+      `an older build should leave a newer service running (artifact: ${artifactPath})`,
     );
   } finally {
     removeScratch(cwd);
@@ -1713,13 +2089,6 @@ prompt: |
     );
     assertSuccess(result, label);
     return result.stdout.trim();
-  };
-  const waitFor = async (label, check, timeoutMs = 120_000) => {
-    const deadline = Date.now() + timeoutMs;
-    while (!check()) {
-      assert(Date.now() < deadline, `timed out waiting for ${label}`);
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    }
   };
   // The task's tool results, from the project's store.
   const toolResults = (runId) => {
@@ -1805,6 +2174,334 @@ prompt: |
     );
   } finally {
     for (const window of windows) window.child.kill('SIGKILL');
+    run(process.execPath, [binaryPath, 'service', 'stop'], {
+      cwd: project.work,
+      env,
+    });
+    removeScratch(cwd);
+  }
+}
+
+/**
+ * A project's session in the service closes once it has no client and no
+ * run held for the idle time (audit 2026-10-07 #6), while the service
+ * stays up for another project's window; the next task reopens it. The
+ * service is started in the foreground with a short idle time. Its log
+ * lines about the close and both tasks' outcomes are the artifact.
+ */
+async function validateServiceSessionIdle() {
+  const cwd = makeScratch('texra-cli-service-idle-');
+  const project = echoProject(cwd);
+  const other = path.join(cwd, 'other');
+  mkdirSync(other, { recursive: true });
+  const storageRoot = path.join(cwd, 'home', '.texra');
+  const env = { ...project.ptyEnv, TEXRA_NO_TELEMETRY: '1' };
+  const texra = (args, label) => {
+    const result = run(
+      process.execPath,
+      [binaryPath, ...args, '--cwd', project.work],
+      { cwd: project.work, env },
+    );
+    assertSuccess(result, label);
+    return result.stdout.trim();
+  };
+  const waitFor = async (label, check, timeoutMs = 120_000) => {
+    const deadline = Date.now() + timeoutMs;
+    while (!check()) {
+      assert(Date.now() < deadline, `timed out waiting for ${label}`);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  };
+  const service = spawn(
+    process.execPath,
+    [binaryPath, 'serve', '--idle-timeout', '4'],
+    { cwd: project.work, env: { ...process.env, ...env } },
+  );
+  let log = '';
+  service.stderr.on('data', (chunk) => (log += chunk));
+  let window;
+  try {
+    await waitFor('the service to listen', () => log.includes('listening on'));
+    // Another project's window keeps the service itself in use.
+    window = spawn(
+      process.execPath,
+      [hostHarnessPath, storageRoot, other, 'answer'],
+      { cwd: other, env: { ...process.env, ...env } },
+    );
+    let windowOut = '';
+    window.stdout.on('data', (chunk) => (windowOut += chunk));
+    await waitFor('the other window to attach', () =>
+      windowOut.includes('ATTACHED'),
+    );
+    const first = texra(
+      [
+        'tasks',
+        'start',
+        'echo_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        'First',
+      ],
+      'texra tasks start (first)',
+    );
+    const ended = (runId) =>
+      project.readStore(
+        `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
+         WHERE s.logical_id = '${runId}' AND e.type = 'run.position'
+         AND json_extract(e.data, '$.payload.at') = 'waiting'`,
+      ).length > 0;
+    await waitFor('the first task to wait', () => ended(first));
+    texra(['tasks', 'stop', first], 'texra tasks stop (first)');
+    await waitFor('the project session to close', () =>
+      /Closed the idle session of .*work-/.test(log),
+    );
+    const second = texra(
+      [
+        'tasks',
+        'start',
+        'echo_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        'Second',
+      ],
+      'texra tasks start (reopened)',
+    );
+    await waitFor('the second task to wait', () => ended(second));
+    const artifactPath = writeArtifact('service-session-idle.json', {
+      closed: log
+        .split('\n')
+        .filter((line) => line.includes('Closed the idle session')),
+      first,
+      second,
+      serviceAlive: service.exitCode === null,
+    });
+    assert(
+      service.exitCode === null &&
+        !log
+          .split('\n')
+          .some(
+            (line) =>
+              line.includes('Closed the idle session') &&
+              line.includes('other'),
+          ),
+      `the service should stay up and keep the attached project's session (artifact: ${artifactPath})`,
+    );
+    texra(['tasks', 'stop', second], 'texra tasks stop (second)');
+  } finally {
+    window?.kill('SIGKILL');
+    service.kill('SIGTERM');
+    removeScratch(cwd);
+  }
+}
+
+/**
+ * The project's approval policy has one owner, its persisted setting, which
+ * the service reads itself (audit 2026-10-07 #1). Window A attaches while
+ * the setting is Auto-approve; window B then sets Ask (a settings write);
+ * the service restarts and window A's link reaches the new one. A command
+ * task must then wait for approval: nothing window A held replaced Ask.
+ * A launch may narrow its own task for good: `tasks start
+ * --approval-policy ask`, then the project widened to Auto-approve, still
+ * asks. The tasks'
+ * rows, the setting and window A's output are the artifacts.
+ */
+async function validateServicePolicyOwner() {
+  const cwd = makeScratch('texra-cli-service-policy-');
+  const project = echoProject(cwd);
+  const storageRoot = path.join(cwd, 'home', '.texra');
+  writeFileSync(
+    path.join(storageRoot, 'v1', 'global-storage', 'custom_agents', 'cmd.yaml'),
+    `name: approval_validation
+description: Run one command once it is approved.
+tools: [bash]
+
+prompt: |
+  GOLDEN-APPROVAL
+`,
+  );
+  const env = {
+    ...project.ptyEnv,
+    TEXRA_NO_TELEMETRY: '1',
+    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+  };
+  const texra = (args, label) => {
+    const result = run(
+      process.execPath,
+      [binaryPath, ...args, '--cwd', project.work],
+      { cwd: project.work, env },
+    );
+    assertSuccess(result, label);
+    return result;
+  };
+  const waitFor = async (label, check, timeoutMs = 120_000) => {
+    const deadline = Date.now() + timeoutMs;
+    while (!check()) {
+      assert(Date.now() < deadline, `timed out waiting for ${label}`);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  };
+  const storage = path.join(storageRoot, 'v1', 'workspace-storage');
+  const projectDir = () => {
+    const dir = existsSync(storage)
+      ? readdirSync(storage).find((name) => name.startsWith('work-'))
+      : undefined;
+    return dir === undefined ? null : path.join(storage, dir);
+  };
+  // The user's local config for the project: where a window's settings
+  // view writes `texra.approvalPolicy`.
+  const setPolicy = (policy) =>
+    writeFileSync(
+      path.join(projectDir(), 'config.json'),
+      `${JSON.stringify({ 'texra.approvalPolicy': policy })}\n`,
+    );
+  const rowTypes = (runId) => {
+    const db = new DatabaseSync(path.join(projectDir(), 'texra.db'), {
+      readOnly: true,
+    });
+    try {
+      return db
+        .prepare(
+          `SELECT e.type FROM event e
+           JOIN event_sequence s ON s.id = e.aggregate
+           WHERE s.logical_id = ? ORDER BY e."commit"`,
+        )
+        .all(runId)
+        .map((row) => row.type);
+    } finally {
+      db.close();
+    }
+  };
+  let windowA;
+  try {
+    // A first task opens the project in the service, which makes its
+    // store; then the setting is Auto-approve and window A attaches.
+    texra(
+      [
+        'tasks',
+        'start',
+        'echo_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        'Open the project',
+      ],
+      'texra tasks start echo_validation',
+    );
+    await waitFor('the project store', () => projectDir() !== null);
+    setPolicy('yolo');
+    const child = spawn(
+      process.execPath,
+      [hostHarnessPath, storageRoot, project.work, 'answer'],
+      { cwd: project.work, env: { ...process.env, ...env } },
+    );
+    windowA = { child, stdout: '' };
+    child.stdout.on('data', (chunk) => (windowA.stdout += chunk));
+    await waitFor('window A to attach', () =>
+      windowA.stdout.includes('ATTACHED'),
+    );
+    // Window B sets Ask; the service restarts and window A reconnects.
+    setPolicy('ask');
+    texra(['service', 'stop'], 'texra service stop');
+    texra(['tasks', 'list'], 'texra tasks list (starts the service)');
+    await waitFor(
+      'window A to reach the restarted service',
+      () => windowA.stdout.split('LINKED').length - 1 >= 2,
+    );
+    const started = texra(
+      [
+        'tasks',
+        'start',
+        'approval_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        'Run the command',
+      ],
+      'texra tasks start approval_validation',
+    );
+    const runId = started.stdout.trim();
+    await waitFor('the command to wait for approval', () =>
+      rowTypes(runId).includes('request.opened'),
+    );
+    // Long enough for an Auto-approve run to have run its command.
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    const approved = path.join(project.work, 'approved.txt');
+    const rows = rowTypes(runId);
+    const artifactPath = writeArtifact('service-policy-owner.json', {
+      setting: JSON.parse(
+        readFileSync(path.join(projectDir(), 'config.json'), 'utf8'),
+      ),
+      rows,
+      commandRan: existsSync(approved),
+      startNotice: started.stderr.trim(),
+      windowA: windowA.stdout.trim().split('\n'),
+    });
+    assert(
+      !existsSync(approved) &&
+        !rows.includes('request.decided') &&
+        !started.stderr.includes('approval policy'),
+      `after a restart the service should follow the project's Ask setting, not a policy window A held (artifact: ${artifactPath})`,
+    );
+    texra(['tasks', 'stop', runId], 'texra tasks stop');
+    // A launch narrows its own task for good: started with
+    // `--approval-policy ask` while the project asks, then the project is
+    // widened to Auto-approve, the task still waits for approval.
+    const narrowed = texra(
+      [
+        'tasks',
+        'start',
+        'approval_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--approval-policy',
+        'ask',
+        '--instruction',
+        'Run the command',
+      ],
+      'texra tasks start --approval-policy ask',
+    ).stdout.trim();
+    await waitFor('the narrowed task to start', () =>
+      rowTypes(narrowed).includes('run.start'),
+    );
+    setPolicy('yolo');
+    await waitFor('the narrowed command to wait for approval', () =>
+      rowTypes(narrowed).includes('request.opened'),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    const narrowedRows = rowTypes(narrowed);
+    // The limit is what holds it, recorded on its run.start; the project's
+    // Auto-approve may land before or after that row.
+    const db = new DatabaseSync(path.join(projectDir(), 'texra.db'), {
+      readOnly: true,
+    });
+    let limit;
+    try {
+      limit = db
+        .prepare(
+          `SELECT json_extract(e.data, '$.approvalPolicy.limit') AS limit_ FROM event e
+           JOIN event_sequence s ON s.id = e.aggregate
+           WHERE s.logical_id = ? AND e.type = 'run.start'`,
+        )
+        .get(narrowed)?.limit_;
+    } finally {
+      db.close();
+    }
+    writeArtifact('service-policy-narrowed.json', {
+      limit,
+      rows: narrowedRows,
+      commandRan: existsSync(approved),
+    });
+    assert(
+      limit === 'ask' &&
+        !existsSync(approved) &&
+        !narrowedRows.includes('request.decided'),
+      'a task started with --approval-policy ask should still ask after the project is widened to Auto-approve',
+    );
+    texra(['tasks', 'stop', narrowed], 'texra tasks stop (narrowed)');
+  } finally {
+    windowA?.child.kill('SIGKILL');
     run(process.execPath, [binaryPath, 'service', 'stop'], {
       cwd: project.work,
       env,
@@ -2000,13 +2697,6 @@ async function validateServiceSharedTask() {
       child.on('close', (code) => resolve((state.exit = code))),
     );
     return state;
-  };
-  const waitFor = async (label, check, timeoutMs = 120_000) => {
-    const deadline = Date.now() + timeoutMs;
-    while (!check()) {
-      assert(Date.now() < deadline, `timed out waiting for ${label}`);
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    }
   };
   const count = (text, needle) => text.split(needle).length - 1;
   let a;
@@ -2450,6 +3140,9 @@ async function validateCliRunArtifacts(options = {}) {
   validateRunCommand();
   validateToolUseAgentRunCommand();
   validateHistoryQueryRunCommand();
+  validateStopHookBlock();
+  validateSdkInlinePersona();
+  await validateSdkResumeApproval();
   await validateForkResetHandoff();
   await validateTuiForkHandoffReset();
   await validateBackgroundCompaction();
@@ -2459,6 +3152,8 @@ async function validateCliRunArtifacts(options = {}) {
   await validateServiceTasksInTui();
   await validateServiceChatsSeeEachOther();
   await validateServiceHostCalls();
+  await validateServiceSessionIdle();
+  await validateServicePolicyOwner();
   await validateServiceBuildIdentity();
   validateScriptFanoutRunCommand();
   validateTeamRunCommand();
@@ -2499,6 +3194,16 @@ function buildValidationBundle() {
       env: { TEXRA_CLI_BUNDLE_OUTFILE: hostHarnessPath },
     }),
     'build the service host harness',
+  );
+  assertSuccess(
+    run(process.execPath, ['scripts/build-bundle.mjs', '--sdk-harness'], {
+      cwd: cliRoot,
+      env: {
+        TEXRA_CLI_BUNDLE_OUTFILE: sdkHarnessPath,
+        TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1',
+      },
+    }),
+    'build the SDK harness',
   );
 }
 

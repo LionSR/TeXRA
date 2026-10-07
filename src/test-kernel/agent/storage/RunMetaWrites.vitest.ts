@@ -1,12 +1,12 @@
 import { it } from '@effect/vitest';
 import { Effect, SynchronizedRef } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
-import { finalizeRun, getRunRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import {
   appendRow,
   handedDown,
+  positionRow,
   rowAggregate,
-  snapshotRow,
 } from '@agent/runtime/loop/rows';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { aggregateId, type RunId } from '@shared/schemas';
@@ -23,7 +23,7 @@ const id = 'bbb001' as RunId;
 beforeEach(async () => {
   session = await Effect.runPromise(createTestSession());
   publishTestRunStart(session, id);
-  await Effect.runPromise(session.settlePublications());
+  await Effect.runPromise(session.log.settled);
 });
 
 describe('run metadata updates', () => {
@@ -33,7 +33,7 @@ describe('run metadata updates', () => {
       Effect.gen(function* () {
         yield* Effect.all(
           [
-            session.commit([
+            session.log.transact([
               {
                 type: 'run.description',
                 by: 'model',
@@ -41,14 +41,14 @@ describe('run metadata updates', () => {
                 description: 'A described session',
               },
             ]),
-            finalizeRun(session, {
+            session.runs.end({
               runId: id,
               outcome: 'completed',
             }),
           ],
           { concurrency: 'unbounded' },
         );
-        expect((yield* session.readView([id])).runs.get(id)).toMatchObject({
+        expect((yield* session.view.read([id])).runs.get(id)).toMatchObject({
           description: 'A described session',
           status: 'completed',
         });
@@ -63,20 +63,19 @@ describe('run metadata updates', () => {
         from: { kind: 'user' },
         control: { kind: 'model', model: 'gone' },
       });
-      const run = aggregateId('run', id);
-      expect(session.events.pendingFollowUps(run)).toHaveLength(1);
-      yield* finalizeRun(session, { runId: id, outcome: 'failed' });
-      expect(session.events.pendingFollowUps(run)).toEqual([]);
+      expect((yield* session.followUps.read(id)).followUps).toHaveLength(1);
+      yield* session.runs.end({ runId: id, outcome: 'failed' });
+      expect((yield* session.followUps.read(id)).followUps).toEqual([]);
     }),
   );
   it.effect('keeps a driver outcome when host-exit finalization follows', () =>
     Effect.gen(function* () {
-      yield* finalizeRun(session, {
+      yield* session.runs.end({
         runId: id,
         outcome: 'completed',
       });
       expect(
-        yield* finalizeRun(session, {
+        yield* session.runs.end({
           runId: id,
           outcome: 'cancelled',
           keepExistingOutcome: true,
@@ -117,11 +116,7 @@ describe('run metadata updates', () => {
           appendRow(id, [
             { role: 'user', content: [{ kind: 'text', text: 'go' }] },
           ]),
-          ...snapshotRow(id, opening, {
-            state: {
-              stateSlices: null,
-            },
-          }),
+          positionRow(id, opening, 'turn.ready'),
         ]);
         yield* session.runHistory.appendBatch(id, opened, [
           {
@@ -132,7 +127,7 @@ describe('run metadata updates', () => {
               request: '0'.repeat(64),
               invocation,
               origin,
-              delivery: 'stream',
+              purpose: 'turn',
             },
           },
           {
@@ -166,7 +161,7 @@ describe('run metadata updates', () => {
           },
         ]);
 
-        yield* finalizeRun(session, { runId: id, outcome: 'failed' });
+        yield* session.runs.end({ runId: id, outcome: 'failed' });
 
         expect(yield* getRunRecords(session, id).readRunEnd()).toMatchObject({
           outcome: 'failed',
@@ -190,16 +185,7 @@ describe('run metadata updates', () => {
           appendRow(id, [
             { role: 'user', content: [{ kind: 'text', text: 'polish' }] },
           ]),
-          ...snapshotRow(
-            id,
-            {
-              ...freshRunState(0),
-              family: 'toolUse',
-              modelId: 'copilot/gpt-test',
-              backend: 'copilot',
-            },
-            { state: { stateSlices: null } },
-          ),
+          positionRow(id, freshRunState(0), 'turn.ready'),
         ]);
         const run = {
           runId: id,

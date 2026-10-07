@@ -5,6 +5,7 @@
 // `SessionView` the fold test asserts on and the design harness renders, so
 // the two can never drift.
 
+import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
   aggregateId as qualifyAggregateId,
   AgentConfigFieldsSchema,
@@ -12,7 +13,6 @@ import {
   MESSAGE_TYPES,
   RunIdSchema,
   ToolConfigSchema,
-  type ApprovalPolicySnapshot,
   type FoldInput,
   type LocalRuntimeState,
   type RunIdentity,
@@ -69,10 +69,8 @@ const GRANDCHILD_IDENTITY: RunIdentity = {
 };
 /** The root script's stage: its calls' cards carry it as their group. */
 const SCRIPT_STAGE = 'script-review';
-export const ROOT_POLICY: ApprovalPolicySnapshot = {
-  policy: 'ask',
-  bypasses: { bash: false, toolEdit: true, superYolo: false },
-  own: {},
+export const ROOT_POLICY: ApprovalGrants = {
+  own: { toolEdit: 'on' },
   goal: [],
 };
 
@@ -149,7 +147,6 @@ export class Log {
       cursor: this.events[through - 1]?.commit ?? 0,
       existence: {
         checkedAggregateIds: [...claims.keys(), ...removed],
-        removedAggregateIds: [...removed],
         claims: [...claims].map(([aggregateId, ownerId]) => ({
           aggregateId,
           ownerId,
@@ -194,7 +191,7 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(ROOT, T.root, {
     type: 'run.start',
     identity: ROOT_IDENTITY,
-    worktree: { workingDirectory: '/paper', branch: 'main' },
+    worktree: { workingDirectory: '/paper' },
     parent: null,
     provenance: null,
     userFollowUpSupport: 'unsupported',
@@ -308,7 +305,6 @@ export function buildScenario({ proposal = false } = {}) {
       rounds: [
         {
           round: 1,
-          rawOutput: null,
           outputs: [],
           compileFailures: [],
           missingOutputs: [],

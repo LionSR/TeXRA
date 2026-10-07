@@ -21,16 +21,16 @@ import {
 import { customElement, property } from 'lit/decorators.js';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { postMessage } from '@shared/hostBridge';
-import type { PluginActionMessage } from '@shared/settingsView/pluginMessages';
+import { postMessage } from '@texra/shared/hostBridge';
+import { toolDependencyStatusLabel } from '@texra/shared/tools/toolDependencyStatusLabels';
+import type { PluginActionMessage } from '@texra/shared/settingsView/pluginMessages';
 import type {
   PluginRow,
   ToolCommandKind,
   ToolDashboardItem,
   ToolInstallAction,
-} from '@shared/settingsView/settingsViewMessages';
-import { DetailsOpenController } from '@shared/litControllers/DetailsOpenController';
-import { toolDependencyStatusLabel } from '@shared/tools/toolDependencyStatusLabels';
+} from '@texra/shared/settingsView/settingsViewMessages';
+import { DetailsOpenController } from '@texra/shared/litControllers/DetailsOpenController';
 import {
   PLUGINS_PAGE,
   pluginRowName,
@@ -245,7 +245,7 @@ export class PluginCard extends LitElement {
             variant=${secondaryVariant}
             size="s"
             @click=${() =>
-              postMessage(SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL, {
+              postMessage(SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL, {
                 url: action.url,
               })}
           >

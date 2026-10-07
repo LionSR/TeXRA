@@ -4,13 +4,13 @@ import { customElement, property } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 
+import type { SubscriptionUsageSnapshot } from '@shared/schemas';
 import {
   formatSubscriptionUsagePercent,
   formatSubscriptionUsageReset,
   formatSubscriptionUsageUpdated,
   subscriptionUsageWindowLabel,
-} from '@shared/subscriptionUsagePresentation';
-import type { SubscriptionUsageSnapshot } from '@shared/schemas';
+} from '@texra/shared/subscriptionUsagePresentation';
 import { commonViewStyles, designTokens } from '@ui/styles';
 
 type UnavailableReason = Extract<

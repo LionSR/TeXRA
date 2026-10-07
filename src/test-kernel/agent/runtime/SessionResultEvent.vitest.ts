@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect, Stream } from 'effect';
+import { Effect } from 'effect';
 import '@test/support/defaultSessionTestSetup';
 
 import { describe, expect, vi } from 'vitest';
@@ -9,12 +9,7 @@ import { runWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
-import {
-  launchApprovalOptions,
-  launchOnRun,
-} from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { aggregateId, RUN_OUTCOME, type RunId } from '@shared/schemas';
-import { LaunchSurfaceSchema } from '@shared/session/surface';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   fakeProcessServices,
@@ -71,10 +66,10 @@ function explodedRun(): Effect.Effect<never, Error> {
 /** The run's committed `run.end` rows, as results. */
 const resultsOf = (ctx: AgentLaunchContext) =>
   Effect.gen(function* () {
-    yield* ctx.session.settlePublications();
-    const rows = yield* Stream.runCollect(
-      ctx.session.events.aggregate(aggregateId('run', ctx.runId), 0),
-    );
+    yield* ctx.session.log.settled;
+    const rows = yield* ctx.session.log.rows(aggregateId('run', ctx.runId), [
+      'run.end',
+    ]);
     return rows.flatMap((row): ResultEvent[] =>
       row.type === 'run.end' ? [{ ...row, runId: ctx.runId }] : [],
     );
@@ -133,36 +128,6 @@ describe('terminal result event', () => {
       );
       expect(result).toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
       yield* expectSingleResult(ctx, { outcome: 'completed' });
-    }),
-  );
-
-  // The launch-time approval choice rides on onRun: it must be in force
-  // before the run's first step, or an approval could open ahead of it.
-  it.effect('an Auto-approve launch is bypassed before the run starts', () =>
-    Effect.gen(function* () {
-      const { ctx } = setupResultCase();
-      const { approvals } = ctx.session;
-      const launch = LaunchSurfaceSchema.parse({ approval: 'autoApprove' });
-      let atFirstStep: ReturnType<typeof approvals.bypassesFor> | undefined;
-      yield* runLifecycle(
-        ctx,
-        () =>
-          Effect.sync(() => {
-            atFirstStep = approvals.bypassesFor(ctx.runId);
-            return completedRun(ctx);
-          }),
-        {
-          onRun: launchOnRun(
-            approvals,
-            launchApprovalOptions({ kind: 'launch', launch, instruction: '' }),
-          ),
-        },
-      );
-      expect(atFirstStep).toEqual({
-        bash: true,
-        toolEdit: true,
-        superYolo: true,
-      });
     }),
   );
 

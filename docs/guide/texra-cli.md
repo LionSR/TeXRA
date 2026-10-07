@@ -335,8 +335,12 @@ enable it again and trust it anew. A program or file outside the plugin that a
 server runs, such as `node`, is listed as external and trusted by its path,
 size and date, not by its content. A plugin cannot be named `custom`,
 `builtIn` or `plugin`.
-A plugin with hooks or LSP servers runs code of its own and cannot be enabled
-yet; output styles and apps are not loaded.
+A plugin with LSP servers runs code of its own and cannot be enabled yet;
+output styles and apps are not loaded. A plugin's Claude Code hooks run as
+processes in the workspace. A `Stop` hook that blocks (`decision: "block"`,
+or exit code 2) keeps the run going once with its reason as the next
+instruction, even under `texra run`. The stop after that turn tells the hook
+`stop_hook_active: true` and cannot block again.
 
 An enabled, trusted plugin loads under its own name: its skills and commands
 are skills named `<plugin>:<name>`, its agents are agents named

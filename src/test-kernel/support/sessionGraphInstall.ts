@@ -1,8 +1,8 @@
-import { Effect } from 'effect';
+import { Effect, ManagedRuntime } from 'effect';
 
-import { installProcessRuntime } from '@controllers/session/sessionLayer';
-import { globalDatabaseLayer } from '@controllers/session/Database';
+import { processLayer } from '@controllers/session/sessionLayer';
 import { AppState, AgentDirectories } from '@platform/interfaces';
+import { withForkFailureReporting } from '@platform/processRuntime';
 import type { StateSettingEntry } from '@shared/state/stateSettings';
 import { UsageLog } from '@shared/usageLog';
 import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
@@ -15,13 +15,12 @@ import {
   fakeHostAppState,
   fakeHostLanguageModel,
   fakeHostSecrets,
-  fakeSetupPlatform,
 } from './setupPlatform';
 
 /**
  * The test kernel's process runtime and session graph family (PRD
  * one-fold-three-renderers, 7.7): what a composition root installs with
- * `installProcessRuntime()`, over the plugin list the setup module a test
+ * `processLayer()`, over the plugin list the setup module a test
  * file imports passes (`sessionGraphTestSetup` for TeXRA's plugins,
  * `builtinSessionGraphTestSetup` for the harness's built-ins). Installed
  * when that module is imported, in the importing test file's module graph,
@@ -59,29 +58,31 @@ export async function installTestSessionGraph(
   plugins: readonly Plugin[],
   settings?: readonly StateSettingEntry[],
 ): Promise<void> {
-  const runtime = installProcessRuntime({
-    processStart: Effect.sync(() => {
-      identityReads.count += 1;
-      return 'vitest';
-    }),
-    globalStorage,
-    // Under the fake global root, never the developer's `~/.texra/mcp.json`.
-    plugins,
-    ...(settings ? { settings } : {}),
-    mcpConfigPath: mcpConfigPathOf(globalStorage),
-    secrets: fakeHostSecrets,
-    appState: AppState.layer(fakeHostAppState),
-    languageModel: fakeHostLanguageModel,
-    agentDirectories: AgentDirectories.layer(fakeHostAgentDirectories),
-    setup: fakeSetupPlatform,
-    toolAvailability: unprobedToolAvailability,
-    // The harness reports no usage; the telemetry suite starts its own.
-    usageLog: UsageLog.disabled,
-    globalDatabase: globalDatabaseLayer(globalStorage),
-    // The suite's captured entries are the assertion surface: emit every
-    // level the programs run and let each test filter what it reads.
-    minimumLogLevel: 'Trace',
-  });
+  const runtime = withForkFailureReporting(
+    ManagedRuntime.make(
+      processLayer({
+        processStart: Effect.sync(() => {
+          identityReads.count += 1;
+          return 'vitest';
+        }),
+        globalStorage,
+        // Under the fake global root, never the developer's `~/.texra/mcp.json`.
+        plugins,
+        ...(settings ? { settings } : {}),
+        mcpConfigPath: mcpConfigPathOf(globalStorage),
+        secrets: fakeHostSecrets,
+        appState: AppState.layer(fakeHostAppState),
+        languageModel: fakeHostLanguageModel,
+        agentDirectories: AgentDirectories.layer(fakeHostAgentDirectories),
+        toolAvailability: unprobedToolAvailability,
+        // The harness reports no usage; the telemetry suite starts its own.
+        usageLog: UsageLog.disabled,
+        // The suite's captured entries are the assertion surface: emit every
+        // level the programs run and let each test filter what it reads.
+        minimumLogLevel: 'Trace',
+      }),
+    ),
+  );
   initTestProcessRuntime(runtime);
   // Built here, once, as a composition root's first `runPromise` builds it:
   // opening the global database reads the mount table through the spawner,

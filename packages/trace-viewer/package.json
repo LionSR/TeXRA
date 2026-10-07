@@ -8,13 +8,16 @@
     "typecheck": "tsc --noEmit --checkers 8",
     "build": "vite build"
   },
-  "dependencies": {
-    "zod": "^4.4.3"
-  },
   "devDependencies": {
+    "@awesome.me/webawesome": "^3.14.0",
+    "@lit-labs/signals": "^0.3.0",
     "@typescript/native": "npm:typescript@^7.0.2",
+    "katex": "^0.19.0",
+    "lit": "^3.3.3",
+    "signal-polyfill": "^0.2.2",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "vite": "^8.3.1",
-    "vite-plugin-singlefile": "^2.3.3"
+    "vite": "^8.3.2",
+    "vite-plugin-singlefile": "^2.3.3",
+    "zod": "^4.4.3"
   }
 }

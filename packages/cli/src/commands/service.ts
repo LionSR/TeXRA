@@ -1,14 +1,14 @@
 import { defineCommand } from 'citty';
 import { Deferred, Effect, Exit, Schedule, Scope } from 'effect';
 
-import { closeAllSessions } from '@agent/runtime';
-import { askServiceToStop } from '@controllers/server/client';
-import { servicePaths } from '@controllers/server/discovery';
-import { ServiceProjects } from '@controllers/server/handlers';
-import { serve } from '@controllers/server/serve';
-import type { ServiceInfo } from '@controllers/server/protocol';
+import { SessionOwner } from '@texra-ai/harness';
 import { entryChannel, entryMessage, setLogSink } from '@logger/logSink';
 import { adoptLoginShellEnvironment } from '@platform/defaults/loginShellEnv';
+import { askServiceToStop } from '@texra/controllers/server/client';
+import { servicePaths } from '@texra/controllers/server/discovery';
+import { ServiceProjects } from '@texra/controllers/server/handlers';
+import { serve } from '@texra/controllers/server/serve';
+import type { ServiceInfo } from '@texra/controllers/server/protocol';
 
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 import {
@@ -85,18 +85,19 @@ function runServe(context: CliContext, idleSeconds: number) {
     process.on('SIGINT', onSignal);
     process.on('SIGTERM', onSignal);
     const scope = yield* Scope.make();
+    const owner = yield* SessionOwner;
     const served = Effect.gen(function* () {
       const projects = yield* cliServiceProjects(context, scope);
       return yield* serve({
         idleAfter: `${idleSeconds} seconds`,
         shutdown,
-        settle: closeAllSessions(),
+        settle: Effect.asVoid(owner.closeAll),
       }).pipe(Effect.provideService(ServiceProjects, projects));
     }).pipe(
       // The sessions close first, their runs stopped and settled; then the
       // stores their roots opened.
       Effect.ensuring(
-        closeAllSessions().pipe(Effect.andThen(Scope.close(scope, Exit.void))),
+        owner.closeAll.pipe(Effect.andThen(Scope.close(scope, Exit.void))),
       ),
       Effect.ensuring(
         Effect.sync(() => {
@@ -140,7 +141,7 @@ export const serveCommand = defineCliCommand({
 
 function statusText(info: ServiceInfo | null, context: CliContext): string {
   if (info === null)
-    return `No TeXRA service is running (${servicePaths(context.storageRoot).socket}).`;
+    return `No TeXRA service is running (${servicePaths(context.storageRoot).record}).`;
   return [
     `TeXRA service ${info.version} (protocol ${info.protocol})`,
     `  pid:      ${info.pid}`,

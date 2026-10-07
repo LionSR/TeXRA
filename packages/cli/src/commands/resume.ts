@@ -1,11 +1,10 @@
-import type { RunId } from '@shared/schemas';
-
 import { CliUsageError } from '../runtime/cliContext';
 import { parseCliHistoryId } from '../runtime/history';
 import { runResumeCommand, type ResumeAction } from './resumeRun';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { AGENT_RUN_GLOBAL_ARGS, optString } from './_helpers/globalArgs';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The one view action a resume takes, from its flags, or the refusal. */
 function resumeAction(args: {

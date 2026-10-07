@@ -5,28 +5,36 @@ import { stripVTControlCharacters } from 'node:util';
 import ts from 'typescript';
 
 const EMPTY_COUNTS = { files: 0, exports: 0, types: 0, duplicates: 0 };
-const KNIP_KINDS = new Set(Object.keys(EMPTY_COUNTS));
+// The kinds whose entries each carry their own `name`. The dependency kinds
+// report a manifest (`package.json`) as the file: a declared package nothing
+// imports, or an imported package the manifest does not declare. knip's
+// `--include dependencies` also turns on `devDependencies` and
+// `optionalPeerDependencies`. None is baselined, so any one of them fails the
+// ratchet.
+const NAMED_KINDS = [
+  'files',
+  'exports',
+  'types',
+  'dependencies',
+  'devDependencies',
+  'optionalPeerDependencies',
+  'unlisted',
+];
+const KNIP_KINDS = new Set([...NAMED_KINDS, 'duplicates']);
 
 // Flattens knip's per-issue-file shape (`{ file, files, exports, types,
-// duplicates }`) into one finding per unused symbol, keyed by (file,
-// category, name). A `duplicates` entry is a group of co-exported names that
-// alias the same declaration; the group's own identity is the sorted,
-// comma-joined member names, since knip doesn't give the group itself a name.
+// duplicates, dependencies, devDependencies, unlisted }`) into one finding per
+// unused symbol or package, keyed by (file, category, name). A `duplicates`
+// entry is a group of co-exported names that alias the same declaration; the
+// group's own identity is the sorted, comma-joined member names, since knip
+// doesn't give the group itself a name.
 export function extractFindings(issues) {
   const findings = [];
   for (const issue of issues) {
-    for (const entry of issue.files ?? []) {
-      findings.push({ file: issue.file, category: 'files', name: entry.name });
-    }
-    for (const entry of issue.exports ?? []) {
-      findings.push({
-        file: issue.file,
-        category: 'exports',
-        name: entry.name,
-      });
-    }
-    for (const entry of issue.types ?? []) {
-      findings.push({ file: issue.file, category: 'types', name: entry.name });
+    for (const kind of NAMED_KINDS) {
+      for (const entry of issue[kind] ?? []) {
+        findings.push({ file: issue.file, category: kind, name: entry.name });
+      }
     }
     for (const group of issue.duplicates ?? []) {
       const name = group

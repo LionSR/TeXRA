@@ -2,9 +2,9 @@
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { PersonaSchema } from '@agent/core/definition/AgentDataclass';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
+import { PersonaSchema } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
 import { fakeStores } from '@test/support/FakePlatform';

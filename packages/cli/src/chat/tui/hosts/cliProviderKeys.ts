@@ -14,36 +14,32 @@
 import { Effect, Fiber } from 'effect';
 
 // Local imports - CLI runtime
-import {
-  type ApiKeyProviderId,
-  apiProviderOfSecretName,
-  providerDisplayName,
-} from '@texra-ai/llm';
+import { type ApiKeyProviderId, apiProviderOfSecretName } from '@texra-ai/llm';
 import { cliExternalOpener } from '@cli/runtime/hosts/cliExternalOpener';
 // Local imports - controllers
-import {
-  ProviderKeyActionFailed,
-  SettingsProfileKeyController,
-} from '@controllers/settingsView/SettingsProfileKeyController';
 // Local imports - event bus
 import { onAppSignal } from '@eventBus/AppSignals';
 // Local imports - hosts
-import { PromptFailed, type PromptHost } from '@hosts/uiHosts';
 // Local imports - model
 // Local imports - platform
-import type { ProcessRuntime } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
 // Local imports - shared
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { PromptFailed, type PromptHost } from '@texra/hosts/uiHosts';
+import {
+  ProviderKeyActionFailed,
+  SettingsProfileKeyController,
+} from '@texra/controllers/settingsView/SettingsProfileKeyController';
 // Local imports - utils
 import {
   getProviderDisplayName,
   getProviderKeyUrl,
-} from '@utils/config/providerConfig';
+} from '@texra/model/providerPresentation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { bumpCodexPreferenceVersion } from '../state/cliState';
 import { tuiUi } from './tuiUiHost';
+import type { ProcessRuntime } from '@texra-ai/harness';
+import type { PlatformSecrets } from '@texra-ai/harness';
 
 /** Write through the calling surface; failures stay in the Effect channel. */
 const commitProviderApiKeyVia = Effect.fn('commitProviderApiKeyVia')(function* (
@@ -58,7 +54,7 @@ const commitProviderApiKeyVia = Effect.fn('commitProviderApiKeyVia')(function* (
     prompt,
     externalOpener: cliExternalOpener,
     getProviderDisplayName: (candidate) =>
-      getProviderDisplayName(stores, candidate, providerDisplayName(candidate)),
+      getProviderDisplayName(stores, candidate),
     getProviderKeyUrl: (candidate) => getProviderKeyUrl(stores, candidate),
   });
   yield* controller.commitProviderKey(provider, key).pipe(
@@ -149,11 +145,7 @@ export const promptForCliProviderApiKey = Effect.fn(
   stores: SettingsStores,
   provider: ApiKeyProviderId,
 ) {
-  const label = yield* getProviderDisplayName(
-    stores,
-    provider,
-    providerDisplayName(provider),
-  );
+  const label = yield* getProviderDisplayName(stores, provider);
   const key = yield* tuiUi.input({
     prompt: `Enter ${label} API key`,
     placeHolder: 'enter your API key (hidden)',

@@ -1,0 +1,87 @@
+import {
+  ModelError,
+  type Model,
+  type VscodeLanguageModelConfiguration,
+} from '@texra-ai/llm';
+import { Context, Effect, Layer, type Scope } from 'effect';
+
+/** One editor language model the host discovered, as the picker lists it. */
+export interface LanguageModelInfo {
+  readonly id: string;
+  readonly name: string;
+  readonly family: string;
+  readonly vendor: string;
+  readonly version: string;
+  readonly maxInputTokens: number;
+  /** Access reported by the host for this exact discovered model. */
+  readonly access: LanguageModelAccessState;
+}
+
+/** Whether the editor lets TeXRA call a model: allowed, waiting on the
+ *  user's consent, or not callable. */
+export type LanguageModelAccessState =
+  'allowed' | 'consent-required' | 'unavailable';
+
+interface LanguageModelSelector {
+  readonly vendor?: string;
+}
+
+/** Stable identity for a model whose id is scoped to its provider. */
+export interface LanguageModelReference {
+  readonly vendor: string;
+  readonly id: string;
+}
+
+/**
+ * Host bridge for subscription-backed language models exposed by the editor.
+ * Hosts without such an API use {@link UNAVAILABLE_LANGUAGE_MODEL_PORT}.
+ */
+export interface LanguageModelPort {
+  selectModels(
+    selector?: LanguageModelSelector,
+  ): Effect.Effect<readonly LanguageModelInfo[], Error>;
+  /**
+   * The editor's model for one discovered route, live in the caller's scope
+   * (its request handle and uploads close with it). The run layer binds
+   * `vscode-lm` models through this.
+   */
+  acquire(
+    configuration: VscodeLanguageModelConfiguration,
+  ): Effect.Effect<Model, ModelError, Scope.Scope>;
+}
+
+/** Shared implementation for CLI, desktop, tests, and unsupported editors. */
+export const UNAVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = Object.freeze(
+  {
+    selectModels: () => Effect.succeed([]),
+    acquire: () =>
+      Effect.fail(
+        new ModelError({
+          kind: 'unsupported',
+          message: 'This host does not expose editor language models.',
+        }),
+      ),
+  },
+);
+
+/**
+ * The process's editor language-model bridge as an Effect service
+ * (`@texra/platform/LanguageModel`), provided once by the composition root
+ * through `processLayer`. The shape is the port itself — hosts
+ * without an editor language-model API provide
+ * {@link UNAVAILABLE_LANGUAGE_MODEL_PORT} — so a program that discovers
+ * editor-supplied models yields the service instead of reading the platform
+ * ambiently.
+ *
+ * `layer` takes the port itself, for the same reason `AppState.layer` takes
+ * the store: every root builds its port before installing the runtime that
+ * serves it.
+ */
+export class LanguageModel extends Context.Service<
+  LanguageModel,
+  LanguageModelPort
+>()('@texra/platform/LanguageModel') {
+  static layer(port: LanguageModelPort): Layer.Layer<LanguageModel> {
+    return Layer.succeed(LanguageModel)(port);
+  }
+}

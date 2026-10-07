@@ -1,5 +1,5 @@
 name: golden_delivery
-description: The crash suite's delivery run, a detached child, a background script and a background command, each reporting back.
+description: The crash suite's delivery run, a detached child, a background script that awaits a child of its own, and a background command, each reporting back.
 tools:
   - agent
   - script

@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect, Stream } from 'effect';
+import { Effect, Stream, SubscriptionRef } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 import { RequestAttention } from '@progressView/requestAttention';
@@ -39,11 +39,13 @@ describe('RequestAttention', () => {
         runId,
         requestId: 'bash-1',
         payload: { kind: 'bash' } as never,
-        thread: null,
       };
 
       yield* attention.follow({
-        viewChanges: Stream.make(viewWith([]), viewWith([bash])),
+        view: {
+          ref: yield* SubscriptionRef.make(viewWith([])),
+          changes: Stream.make(viewWith([]), viewWith([bash])),
+        },
       });
 
       expect(sidebar.show).toHaveBeenCalledExactlyOnceWith(true);

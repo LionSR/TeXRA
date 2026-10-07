@@ -14,10 +14,8 @@ import { ONBOARDING_CARD_TITLE } from '@ui/copy/onboarding';
  */
 class WelcomeWebviewProvider implements vscode.WebviewViewProvider {
   resolveWebviewView(webviewView: vscode.WebviewView): void {
-    webviewView.webview.options = {
-      enableScripts: true,
-      enableCommandUris: true,
-    };
+    // No script: the webview host frame handles the command links.
+    webviewView.webview.options = { enableCommandUris: true };
     webviewView.webview.html = renderWelcomeHtml();
   }
 }

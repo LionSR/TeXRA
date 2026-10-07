@@ -3,14 +3,17 @@ import path from 'node:path';
 import { Data, Effect, FileSystem, type PlatformError } from 'effect';
 
 import {
+  type ProcessRuntime,
+  type ProcessServices,
+  withProcessServices,
+} from '@texra-ai/harness';
+import {
   getHelperModelName,
   validateRunRequest,
   type SessionHandle,
   type ValidatedRunRequest,
 } from '@agent/runtime';
-import { documentTaskConfig } from '@agent/runtime';
 import { emitAppSignal } from '@eventBus/AppSignals';
-import type { NotificationFailed, PromptFailed } from '@hosts/uiHosts';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { LaTeXdiffService } from '@latex/latexdiff';
@@ -20,23 +23,19 @@ import {
 } from '@latex/latexdiff/latexdiffCopy';
 import { runLatexdiffForRun } from '@latex/latexdiff/diffOperations';
 import type { DiffRunOutcome } from '@latex/latexdiff/types';
-import type { StateReadFailed } from '@platform/interfaces';
-import {
-  type ProcessRuntime,
-  type ProcessServices,
-  withProcessServices,
-} from '@platform/processRuntime';
-import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
-import type { RunId } from '@shared/schemas';
-import type { Rejected } from '@shared/session/requestErrors';
-import { DocumentsStateKey } from '@shared/settingsView/documentsSettings';
-import { runOutputReader } from '@tools/documents/runOutputs';
+import type { NotificationFailed, PromptFailed } from '@texra/hosts/uiHosts';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
+import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
+import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
+import { runOutputReader } from '@texra/tools/documents/runOutputs';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   createExternalLocation,
   pathToLocationIn,
 } from '@utils/files/fileLocation';
+import type { Rejected, StateReadFailed } from '@texra-ai/harness';
+import type { RunId } from '@texra-ai/harness/schemas';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 const DESKTOP_LATEXDIFF_CHANNEL = 'DesktopProgressFileActions';

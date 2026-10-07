@@ -71,7 +71,6 @@ describe('agent registry load state', () => {
         }),
       customConfigured: () => Effect.succeed(false),
       builtIn: () => Effect.sync(() => agentDir),
-      builtInToolUse: () => Effect.sync(() => agentDir),
     };
   }
 
@@ -110,7 +109,6 @@ describe('agent registry load state', () => {
             ),
           customConfigured: () => Effect.succeed(false),
           builtIn: () => Effect.sync(() => agentDir),
-          builtInToolUse: () => Effect.sync(() => agentDir),
         }),
       );
 

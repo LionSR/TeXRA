@@ -1,6 +1,7 @@
 import { defineCommand } from 'citty';
 import { Effect, type FileSystem, Result } from 'effect';
 
+import { withProcessServices } from '@texra-ai/harness';
 import {
   installPlugins,
   parsePluginOrigin,
@@ -21,7 +22,6 @@ import {
   type PluginReview,
 } from '@common/plugins/pluginTrust';
 import type { PluginEnv } from '@common/plugins/installRecord';
-import { withProcessServices } from '@platform/processRuntime';
 
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';

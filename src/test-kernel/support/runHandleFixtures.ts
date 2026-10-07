@@ -1,10 +1,11 @@
-import { Effect, type Fiber } from 'effect';
+import { Effect, type Fiber, SubscriptionRef } from 'effect';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
 import { RunHandle, type RunFacts } from '@agent/runtime/RunHandle';
 import { RunRegistry, type RunRegistryInit } from '@agent/runtime/runRegistry';
-import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { emptySessionView } from '@shared/session/sessionView';
 import type { RunId, RunIdentity } from '@shared/schemas';
 import { testPinPlugins } from './testPluginServices';
 import { testRuntime } from './testProcessRuntime';
@@ -39,19 +40,30 @@ export function testRunHandle(input: {
 /** A registry over an empty fold: no run has a view, which is what a
  *  fixture that never publishes a phase-moving row would see. */
 export function testRunRegistry(): RunRegistry {
+  // The registry reads its session's view (empty here), claims (no-ops)
+  // and its own `run.detach` batches (dropped); nothing else.
+  const session = {
+    view: { run: () => undefined, ref: emptyView },
+    log: {
+      transact: () => Effect.succeed([]),
+      hold: () => Effect.void,
+    },
+  } as unknown as SessionHandle;
   const registry: RunRegistry = new RunRegistry({
-    runView: () => undefined,
-    commit: () => Effect.void,
-    approvals: createSessionApprovals(),
-    finalizeRun: (input) =>
-      Effect.succeed({ ok: true, outcome: input.outcome }),
-    holdRunClaim: () => Effect.void,
-    borrowRunClaim: () => Effect.void,
+    session: () => session,
     fork: testRunFork,
     pinPlugins: testPinPlugins(() => registry),
   });
+  // No run is ever persisted here: a run's end is accepted as asked.
+  registry.end = (input) =>
+    Effect.succeed({ ok: true, outcome: input.outcome });
   return registry;
 }
+
+/** The empty fold a {@link testRunRegistry} reads its grants from. */
+const emptyView = Effect.runSync(
+  SubscriptionRef.make(emptySessionView('test-run-registry')),
+);
 
 /**
  * A run whose generation is live on the run registry, the way a real launch

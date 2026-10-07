@@ -9,17 +9,16 @@ import {
 } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
-import { codingPlanForApiProvider } from '@texra-ai/llm';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { postMessage } from '@shared/hostBridge';
+import { providerEndpointKey } from '@shared/state/providerSettings';
+import type { SubscriptionUsageSnapshots } from '@shared/schemas';
+import { CODING_PLAN_BY_API_PROVIDER } from '@shared/schemas';
+import { postMessage } from '@texra/shared/hostBridge';
+import { TickerController } from '@texra/shared/litControllers/TickerController';
 import type {
   ProviderKeyStatus,
   ProviderSetting,
-} from '@shared/settingsView/settingsViewMessages';
-import { TickerController } from '@shared/litControllers/TickerController';
-import { providerEndpointKey } from '@shared/state/providerSettings';
-import type { SubscriptionUsageSnapshots } from '@shared/schemas';
-import { createEvent } from '@shared/utils/events';
+} from '@texra/shared/settingsView/settingsViewMessages';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
@@ -90,10 +89,8 @@ export class ProviderKeyList extends LitElement {
           icon: 'key',
           label: `Set ${displayName} API key`,
           tooltip: 'Set API key',
-          // Bubbles to SettingsApp, which owns the desktop-vs-VS Code
-          // provider-key entry flow (modal on desktop, host prompt otherwise).
           onClick: () =>
-            this.dispatchEvent(createEvent('provider-key-set', { provider })),
+            postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY, { provider }),
         })}
         ${renderIconActionButton({
           id: `provider-key-get-${provider}`,
@@ -147,7 +144,7 @@ export class ProviderKeyList extends LitElement {
 
   /** The plan's usage meter, on the provider row whose key the plan uses. */
   private renderPlanUsage(provider: string): TemplateResult | typeof nothing {
-    const plan = codingPlanForApiProvider(provider);
+    const plan = CODING_PLAN_BY_API_PROVIDER.get(provider);
     if (!plan) return nothing;
     return html`<subscription-usage-row
       .snapshot=${this.usage?.[plan.usageProvider] ?? null}

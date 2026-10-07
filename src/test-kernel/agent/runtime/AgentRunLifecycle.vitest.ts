@@ -3,7 +3,10 @@ import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
 
 import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
-import type { FinalizeRunResult } from '@agent/storage/runLifecycle';
+import type {
+  FinalizeRunInput,
+  FinalizeRunResult,
+} from '@agent/storage/runLifecycle';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -56,23 +59,18 @@ const storageMocks = vi.hoisted(() => ({
   ),
 }));
 
-// AgentRunLifecycle deep-imports finalizeRun from runLifecycle
-// (not the `@agent/storage` barrel). Spy only that leaf to avoid re-export
-// recursion through a dual mock.
-vi.mock('@agent/storage/runLifecycle', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/storage/runLifecycle')>()),
-  finalizeRun: storageMocks.finalizeRun,
-}));
-vi.mock('@agent/storage', () => ({
-  finalizeRun: storageMocks.finalizeRun,
-}));
-
+// The lifecycle ends a run through its session's one terminal writer
+// (`Runs.end`); the suite observes that call.
 beforeEach(() => {
   storageMocks.finalizeRun.mockClear();
+  vi.spyOn(testDefaultSession().runs, 'end').mockImplementation((input) =>
+    storageMocks.finalizeRun(testDefaultSession(), input),
+  );
 });
 
 afterEach(() => {
   setLogSink(null);
+  vi.restoreAllMocks();
 });
 
 async function initLifecycleTestPlatform(firstRunDone: boolean) {
@@ -288,7 +286,7 @@ describe('runWithLifecycle', () => {
         );
 
         expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-        yield* ctx.session.settlePublications();
+        yield* ctx.session.log.settled;
         // A run that never ran a turn writes no step of its own: `run.end` is
         // the whole of what it says.
         expect(
@@ -640,22 +638,22 @@ function finalizeFixture(): {
   session: SessionHandle;
   handle: ReturnType<typeof testRunHandle>;
   untrackIfCurrent: Mock<(handle: RunHandle) => boolean>;
-  settlePublications: Mock<(runId?: RunId) => Effect.Effect<void, Error>>;
 } {
   const runId =
     `f${(finalizeFixtureCounter++).toString(16).padStart(5, '0')}` as RunId;
   const untrackIfCurrent = vi.fn<(handle: RunHandle) => boolean>(() => true);
-  const settlePublications = vi.fn(
-    (_runId?: RunId): Effect.Effect<void, Error> => Effect.void,
-  );
+  const session = {
+    runs: {
+      untrackIfCurrent,
+      end: (input: FinalizeRunInput) =>
+        storageMocks.finalizeRun(session, input),
+    },
+    trace: { lost: () => Effect.succeed(undefined) },
+  } as unknown as SessionHandle;
   return {
     runId,
-    session: {
-      runs: { untrackIfCurrent },
-      settlePublications,
-    } as unknown as SessionHandle,
+    session,
     untrackIfCurrent,
-    settlePublications,
     handle: testRunHandle({
       runId,
       parent: PARENT_RUN_ID,
@@ -675,134 +673,8 @@ function finalize(params: Parameters<typeof finalizeRunTerminal>[0]) {
 }
 
 describe('finalizeRunTerminal', () => {
-  it.effect('flushes display artifacts before publishing and untracking', () =>
-    Effect.gen(function* () {
-      const { session, handle, untrackIfCurrent, settlePublications } =
-        finalizeFixture();
-      const flushStarted = yield* Deferred.make<void>();
-      const releaseFlush = yield* Deferred.make<void>();
-      settlePublications.mockImplementation(() =>
-        Deferred.succeed(flushStarted, undefined).pipe(
-          Effect.andThen(Deferred.await(releaseFlush)),
-        ),
-      );
-      const finalization = yield* Effect.forkChild(
-        finalize({
-          session,
-          handle,
-          outcome: RUN_OUTCOME.COMPLETED,
-        }),
-      );
-
-      yield* Deferred.await(flushStarted);
-      expect(settlePublications).toHaveBeenCalledOnce();
-      expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
-      expect(untrackIfCurrent).not.toHaveBeenCalled();
-
-      yield* Deferred.succeed(releaseFlush, undefined);
-      yield* Fiber.join(finalization);
-
-      expect(storageMocks.finalizeRun).toHaveBeenCalledOnce();
-      expect(untrackIfCurrent).toHaveBeenCalledExactlyOnceWith(handle);
-    }),
-  );
-
-  it.effect('ends the transcript stage inside the drain that attests it', () =>
-    Effect.gen(function* () {
-      const { session, handle, settlePublications } = finalizeFixture();
-      const stage = { end: vi.fn() };
-
-      yield* finalize({
-        session,
-        handle,
-        outcome: RUN_OUTCOME.COMPLETED,
-        stage,
-      });
-
-      // `stage.end` queues one more publication, so a row that calls itself the
-      // post-drain fact has to be written after a drain that already has it.
-      expect(stage.end).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.COMPLETED);
-      expect(stage.end.mock.invocationCallOrder[0]).toBeLessThan(
-        settlePublications.mock.invocationCallOrder[0] ?? 0,
-      );
-    }),
-  );
-
-  it.effect("attests the facts this run queued and no other run's", () =>
-    Effect.gen(function* () {
-      const { runId, session, handle, settlePublications } = finalizeFixture();
-
-      yield* finalize({ session, handle, outcome: RUN_OUTCOME.COMPLETED });
-
-      // Another run's rolled-back fact is that run's terminal outcome, so the
-      // drain this row is the post-drain fact of answers for this run alone.
-      expect(settlePublications).toHaveBeenCalledExactlyOnceWith(runId);
-    }),
-  );
-
-  it.effect('records a failed drain as the terminal outcome', () =>
-    Effect.gen(function* () {
-      const { runId, session, handle, untrackIfCurrent, settlePublications } =
-        finalizeFixture();
-      settlePublications.mockReturnValueOnce(
-        Effect.fail(new Error('artifact flush failed')),
-      );
-
-      const finalization = yield* finalize({
-        session,
-        handle,
-        outcome: RUN_OUTCOME.COMPLETED,
-      });
-
-      // The row is the post-drain fact: the facts this run queued rolled back,
-      // so no later reader — the workflow attempt probe above all — may read it
-      // as durably completed. The `artifact-drain` kind is what carries that to
-      // a reader with no access to the in-process drain error: a run whose
-      // queued facts are gone is not a run whose model call failed.
-      expect(finalization?.event.outcome).toBe(RUN_OUTCOME.FAILED);
-      expect(finalization?.event.error?.kind).toBe('artifact-drain');
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-        session,
-        expect.objectContaining({
-          runId,
-          outcome: RUN_OUTCOME.FAILED,
-          error: expect.objectContaining({
-            kind: 'artifact-drain',
-            message: expect.stringContaining('did not commit'),
-          }),
-        }),
-      );
-      expect(untrackIfCurrent).toHaveBeenCalledExactlyOnceWith(handle);
-    }),
-  );
-
-  // A plane whose consumer stopped cannot settle at all: that is a lost drain
-  // like any other, so the run still ends on an `artifact-drain` row.
-  it.effect('records a dead plane as a failed drain', () =>
-    Effect.gen(function* () {
-      const { session, handle } = finalizeFixture();
-      Object.assign(session, {
-        graph: {
-          settle: Effect.die(
-            new Error('Session committed-event consumer stopped'),
-          ),
-        },
-        publications: new Set(),
-        settlePublications: SessionHandle.prototype.settlePublications,
-      });
-
-      const finalization = yield* finalize({
-        session,
-        handle,
-        outcome: RUN_OUTCOME.COMPLETED,
-      });
-
-      expect(finalization?.event.error?.kind).toBe('artifact-drain');
-    }),
-  );
-
   it.effect(
-    'settles and untracks once while reporting terminal metadata failure',
+    'settles and untracks once, and fails a run whose terminal row was not saved',
     () =>
       Effect.gen(function* () {
         const logs = captureLogEntries();
@@ -811,15 +683,16 @@ describe('finalizeRunTerminal', () => {
         storageMocks.finalizeRun.mockReturnValueOnce(
           Effect.succeed({
             ok: false,
-            outcomePersisted: false,
             error: durabilityError,
           }),
         );
 
+        // A run that reported success but whose `run.end` did not commit
+        // failed: its caller hears FAILED, never the unsaved report.
         const event = yield* finalize({
           session,
           handle,
-          outcome: RUN_OUTCOME.FAILED,
+          outcome: RUN_OUTCOME.COMPLETED,
         });
 
         expect(event).toMatchObject({
@@ -827,7 +700,11 @@ describe('finalizeRunTerminal', () => {
             type: 'run.end',
             outcome: RUN_OUTCOME.FAILED,
             runId,
+            error: {
+              message: expect.stringContaining('metadata disk write failed'),
+            },
           },
+          persistFailure: durabilityError,
         });
         expect(untrackIfCurrent).toHaveBeenCalledExactlyOnceWith(handle);
         const [warning, ...rest] = logs.at('WARN', 'agentRunLifecycle');
@@ -836,7 +713,6 @@ describe('finalizeRunTerminal', () => {
         // The sink renders the raw payload once; the durability facts ride it.
         const data = String(warning?.annotations.data);
         expect(data).toContain(`"runId": "${runId}"`);
-        expect(data).toContain('"outcomePersisted": false');
         expect(data).toContain('metadata disk write failed');
       }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
   );
@@ -882,39 +758,5 @@ describe('finalizeRunTerminal', () => {
         );
         expect(logs.at('WARN')).toEqual([]);
       }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
-  );
-
-  it.effect(
-    'keeps the drain marker on the row a stop resolved as cancelled',
-    () =>
-      Effect.gen(function* () {
-        const { runId, session, handle, settlePublications } =
-          finalizeFixture();
-        settlePublications.mockReturnValueOnce(
-          Effect.fail(new Error('artifact flush failed')),
-        );
-
-        const finalized = yield* finalize({
-          session,
-          handle,
-          outcome: RUN_OUTCOME.COMPLETED,
-          stopped: true,
-        });
-
-        // The stop still owns the outcome, but a lost drain is not a fact about
-        // how the run ended: the queued facts are gone either way, so the marker
-        // rides the cancelled row and keeps the attempt non-repeatable for the
-        // in-band caller and the workflow attempt probe alike.
-        expect(finalized?.event.outcome).toBe(RUN_OUTCOME.CANCELLED);
-        expect(finalized?.event.error?.kind).toBe('artifact-drain');
-        expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-          session,
-          expect.objectContaining({
-            runId,
-            outcome: RUN_OUTCOME.CANCELLED,
-            error: expect.objectContaining({ kind: 'artifact-drain' }),
-          }),
-        );
-      }),
   );
 });

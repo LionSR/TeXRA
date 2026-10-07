@@ -24,7 +24,6 @@ import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
-import type { RunId } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import {
@@ -33,27 +32,24 @@ import {
   type Draft,
   type Surface,
 } from '@shared/session/surface';
-import { SessionUiEvents } from '@shared/session/uiEvents';
-import { appendClipboardImageChips } from '@shared/utils/clipboard';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { appendClipboardImageChips } from '@texra/shared/utils/clipboard';
 import {
   clipboardImageFiles,
   getExtensionFromMimeType,
   readFileAsBase64,
   type ExtractedClipboardImage,
-} from '@shared/utils/clipboardImages';
+} from '@texra/shared/utils/clipboardImages';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
+import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { filterNotNullish } from '@utils/core';
 import { generatePastedImageName } from '@utils/files/pastedImageName';
 import './QueuedFollowUps';
 import { launcherChipMenus, type ChipMenu } from './composerChipMenus';
-
-function selectedValue(event: Event): string {
-  const item = (event as CustomEvent<{ item?: { value?: unknown } }>).detail
-    ?.item;
-  return typeof item?.value === 'string' ? item.value : '';
-}
+import type { RunId } from '@texra-ai/harness/schemas';
+import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 @customElement('session-composer')
 export class SessionComposer extends LitElement {
@@ -446,7 +442,8 @@ export class SessionComposer extends LitElement {
   private renderChip(menu: ChipMenu): TemplateResult {
     return html`<wa-dropdown
         placement="top-start"
-        @wa-select=${(event: Event) => menu.onSelect(selectedValue(event))}
+        @wa-select=${(event: WaSelectEvent) =>
+          menu.onSelect(selectedItemValue(event))}
       >
         <wa-button
           slot="trigger"

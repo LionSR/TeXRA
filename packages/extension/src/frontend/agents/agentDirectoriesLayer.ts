@@ -5,9 +5,9 @@ import * as path from 'node:path';
 import { Effect, Layer } from 'effect';
 
 // Local imports
+import { AgentDirectories, AppState } from '@texra-ai/harness';
 import { AgentDirectoryService } from '@agent/index';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
-import { AgentDirectories, AppState } from '@platform/interfaces';
 
 const CHANNEL = 'AgentLoad';
 

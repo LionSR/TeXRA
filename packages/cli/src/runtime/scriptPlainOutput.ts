@@ -8,24 +8,21 @@
 import { Effect, type Scope, Stream, SubscriptionRef } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
-import { RUN_PHASE, type RunId } from '@shared/schemas';
+import { aggregateId, RUN_PHASE, type RunId } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import {
   descendantRuns,
   type RunView,
   type SessionView,
 } from '@shared/session/sessionView';
-import { scriptStages } from '@ui/transcript';
+import { scriptStages } from '@shared/transcript';
 import { formatCostUsd } from '@utils/text/stringUtils';
 
 import { claimRootRun } from './sessionViewFollow';
 
 /** The plain script output also subscribes the transcripts it prints,
  *  since transcript rows fold only for subscribed aggregates. */
-type ScriptPlainSession = Pick<
-  SessionHandle,
-  'view' | 'viewChanges' | 'setTranscriptSubscriptions'
->;
+type ScriptPlainSession = Pick<SessionHandle, 'view'>;
 
 interface ScriptPlainOutputOptions {
   /** The launched run when the request names it, else the first top-level
@@ -77,7 +74,7 @@ export function attachScriptPlainOutput(
     const previous = new Map<RunId, ReadonlyMap<string, string>>();
     let subscribed = '';
     let rootRunId: RunId | undefined;
-    const attachCursor = SubscriptionRef.getUnsafe(session.view).cursor;
+    const attachCursor = SubscriptionRef.getUnsafe(session.view.ref).cursor;
     const write = (line: string): void => {
       options.beforeWrite?.();
       options.writeLine(line);
@@ -91,10 +88,10 @@ export function attachScriptPlainOutput(
       }
     };
     yield* Effect.addFinalizer(() =>
-      session.setTranscriptSubscriptions('script-plain-output', []),
+      session.view.subscribe('script-plain-output', []),
     );
     yield* Effect.forkScoped(
-      Stream.runForEach(session.viewChanges, (view) =>
+      Stream.runForEach(session.view.changes, (view) =>
         Effect.gen(function* () {
           for (const runId of [...previous.keys()]) {
             if (!view.runs.has(runId)) previous.delete(runId);
@@ -121,9 +118,12 @@ export function attachScriptPlainOutput(
           const key = scriptRuns.map((run) => run.id).join('\0');
           if (key !== subscribed) {
             subscribed = key;
-            yield* session.setTranscriptSubscriptions(
+            yield* session.view.subscribe(
               'script-plain-output',
-              scriptRuns.map((run) => ({ id: run.id, fromSeq: 0 })),
+              scriptRuns.map((run) => ({
+                id: aggregateId('run', run.id),
+                fromSeq: 0,
+              })),
             );
           }
           for (const run of scriptRuns) printRun(run, view);

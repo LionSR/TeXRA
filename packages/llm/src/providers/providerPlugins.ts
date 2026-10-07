@@ -1,24 +1,25 @@
 /**
  * The model provider plugin manifest — the one list every model provider
  * belongs to. Each entry is a stable id plus plain data about the
- * provider, never its wire code: its display name, the API-key page
- * and environment variable, the default HTTP endpoint and its regional pair,
- * and the setup assistant's probe model. Beside it, `BACKEND_PROTOCOLS`
- * names the protocol each provider a run can be bound to speaks.
+ * provider, never its wire code: its own name, whether it takes an API key
+ * and under which environment variable, and the default HTTP endpoint and
+ * its regional pair. Beside it, `BACKEND_PROTOCOLS` names the protocol each
+ * provider a run can be bound to speaks.
  *
- * Derived from this list: the provider display names, key URLs, model-source
- * and API-key provider orders (`./providers.ts`), API-key env names
- * (`./apiProviders.ts`), default endpoints (`../models/routeEndpoint.ts`).
- * The host owns the settings over it: the custom-endpoint and region
- * toggles, their keys and their control copy, and it resolves them into
- * `RouteFacts.endpoints`.
+ * Derived from this list: the provider display name and the API-key provider
+ * order (`./providers.ts`), API-key env names (`./apiProviders.ts`), default
+ * endpoints (`../models/routeEndpoint.ts`). The app owns everything a user
+ * sees about a provider beyond its name: key pages, picker grouping and the
+ * setup assistant's probe models, as well as the settings over this list —
+ * the custom-endpoint and region toggles, their keys and their control copy,
+ * which it resolves into `RouteFacts.endpoints`.
  *
  * Rules: an id is persisted (the `apiKey.<id>` secret, model configs,
  * settings, a run's backend), so it never changes and is never reused.
  * Every llm-zoo `ModelProvider` has an entry (checked below). No
  * hooks, event channels or runtime registration: a plugin is data, read by
  * code at every startup. Plain data only — the settings webview imports the
- * derived lists, so nothing here may pull in a Node or Effect module.
+ * derived names, so nothing here may pull in a Node or Effect module.
  */
 
 import type { ModelProvider } from 'llm-zoo';
@@ -33,17 +34,6 @@ import type { TurnProtocolSchema } from '../protocol.js';
  */
 export const OPENAI_DEFAULT_ENDPOINT = 'https://api.openai.com/v1';
 
-/**
- * A provider served from a China and an international platform: the copy
- * that depends on which one the host's region toggle picks. "Set" is the
- * China region.
- */
-interface ProviderRegion {
-  readonly displayName?: string;
-  readonly keyUrlWhenSet?: string;
-  readonly keyUrlWhenUnset?: string;
-}
-
 /** A default endpoint that depends on the provider's region toggle. */
 interface RegionalBaseUrl {
   readonly china: string;
@@ -54,15 +44,12 @@ interface RegionalBaseUrl {
 interface ModelProviderPlugin {
   /** Stable, persisted identifier: the llm-zoo provider or API-key id. */
   readonly id: string;
+  /** The provider's own name. */
   readonly displayName: string;
-  /** Page where a user obtains an API key. */
-  readonly keyUrl?: string;
   /** Users can configure a direct API key for this provider. */
   readonly apiKey?: true;
   /** Environment variable for the key when it is not `<ID>_API_KEY`. */
   readonly apiKeyEnvName?: string;
-  /** Alternate region for endpoint and key-URL derivation. */
-  readonly region?: ProviderRegion;
   /**
    * Default HTTP base URL, or a China/international pair chosen by the
    * region toggle. `null`: an llm-zoo provider with no HTTP route of its
@@ -70,164 +57,101 @@ interface ModelProviderPlugin {
    * a plugin outside llm-zoo's `ModelProvider` (`openRouter`, `kimiCode`).
    */
   readonly baseUrl?: string | RegionalBaseUrl | null;
-  /** Model the setup assistant probes when this is the only credential. */
-  readonly setupModel?: string;
-  /** Listed as a model source in selection lists. */
-  readonly modelSource?: true;
 }
 
-/**
- * Every model provider, in display order. Setup-model pins are literal data:
- * `SetupModelDefaults.vitest.ts` fails an llm-zoo bump that retires or
- * deprecates one. The openai pin must stay Codex-eligible: it proves
- * ChatGPT-subscription access.
- */
+/** Every model provider, in display order. */
 const MANIFEST = [
   {
     id: 'openai',
     displayName: 'OpenAI',
-    keyUrl: 'https://platform.openai.com/api-keys',
     apiKey: true,
     baseUrl: OPENAI_DEFAULT_ENDPOINT,
-    setupModel: 'openai/gpt-6.1-sol',
-    modelSource: true,
   },
   {
     id: 'anthropic',
     displayName: 'Anthropic',
-    keyUrl: 'https://console.anthropic.com/',
     apiKey: true,
     baseUrl: 'https://api.anthropic.com',
-    setupModel: 'anthropic/claude-opus-5-5',
-    modelSource: true,
   },
   {
     id: 'google',
     displayName: 'Google',
-    keyUrl: 'https://aistudio.google.com/app/apikey',
     apiKey: true,
     baseUrl: 'https://generativelanguage.googleapis.com',
-    setupModel: 'google/gemini-3.1-pro-preview',
-    modelSource: true,
   },
   {
     id: 'xai',
     displayName: 'xAI',
-    keyUrl: 'https://console.x.ai/',
     apiKey: true,
     baseUrl: 'https://api.x.ai/v1',
-    setupModel: 'xai/grok-4.7',
-    modelSource: true,
   },
   {
     id: 'deepseek',
     displayName: 'DeepSeek',
-    keyUrl: 'https://platform.deepseek.com/api_keys',
     apiKey: true,
     baseUrl: 'https://api.deepseek.com',
-    setupModel: 'deepseek/deepseek-v4-pro',
-    modelSource: true,
   },
   {
     id: 'moonshot',
     displayName: 'Moonshot',
-    keyUrl: 'https://platform.moonshot.cn/console',
     apiKey: true,
-    // China=true is the default since moonshot.cn is the primary platform;
-    // when toggled off (international), keys come from platform.moonshot.ai.
-    // Keys are platform-specific — a .cn key does not work on .ai.
-    region: {
-      keyUrlWhenUnset: 'https://platform.moonshot.ai/console',
-    },
     // Kimi Code models never reach this: their coding baseUrl wins as the
     // per-model override.
     baseUrl: {
       china: 'https://api.moonshot.cn/v1',
       international: 'https://api.moonshot.ai/v1',
     },
-    setupModel: 'moonshot/kimi-k3',
-    modelSource: true,
   },
   {
     id: 'dashscope',
     displayName: 'Qwen',
-    keyUrl: 'https://dashscope.aliyun.com/api-console/',
     apiKey: true,
-    region: {
-      displayName: 'Bailian',
-      keyUrlWhenSet: 'https://bailian.console.aliyun.com/',
-    },
     baseUrl: {
       china: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
       international: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
     },
-    setupModel: 'dashscope/qwen-plus',
-    modelSource: true,
   },
   {
     id: 'minimax',
     displayName: 'MiniMax',
-    keyUrl: 'https://platform.minimax.io/',
     apiKey: true,
-    region: {
-      keyUrlWhenSet: 'https://platform.minimaxi.com/',
-    },
     baseUrl: {
       china: 'https://api.minimax.cn/v1',
       international: 'https://api.minimax.io/v1',
     },
-    setupModel: 'minimax/MiniMax-M3',
-    modelSource: true,
   },
   {
     id: 'glm',
     displayName: 'GLM',
-    keyUrl: 'https://open.bigmodel.cn/',
     apiKey: true,
-    // China=true is the default since bigmodel.cn is the primary platform;
-    // when toggled off (international), the key URL is z.ai.
-    region: {
-      keyUrlWhenUnset: 'https://z.ai/',
-    },
     // Both regions serve Responses at /api/v1, for API and Coding Plan keys
     // alike (BigModel and Z.AI Codex guides).
     baseUrl: {
       china: 'https://open.bigmodel.cn/api/v1',
       international: 'https://api.z.ai/api/v1',
     },
-    setupModel: 'glm/glm-5.3',
-    modelSource: true,
   },
   {
     id: 'meta',
     displayName: 'Meta',
-    keyUrl: 'https://dev.meta.ai/',
     apiKey: true,
     baseUrl: 'https://api.meta.ai/v1',
-    setupModel: 'meta/muse-spark-1.3',
-    modelSource: true,
   },
   {
     id: 'openRouter',
     displayName: 'OpenRouter',
-    keyUrl: 'https://openrouter.ai/keys',
     apiKey: true,
-    setupModel: 'anthropic/claude-sonnet-5-5',
   },
   {
     id: 'kimiCode',
     displayName: 'Kimi Code',
-    keyUrl: 'https://www.kimi.com/code/console',
     apiKey: true,
     apiKeyEnvName: 'KIMI_CODE_API_KEY',
-    setupModel: 'moonshot/kimi-k3',
-    modelSource: true,
   },
   {
     id: 'copilot',
     displayName: 'Copilot',
     baseUrl: null,
-    modelSource: true,
   },
   {
     id: 'others',

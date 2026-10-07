@@ -19,6 +19,9 @@
  * fresh module instances, and the install has to land in the instance the
  * code under test will import next.
  */
+import { Context, Effect } from 'effect';
+
+import { SessionOwner } from '@agent/runtime/SessionOwner';
 import type { ProcessRuntime } from '@platform/processRuntime';
 
 let runtime: ProcessRuntime | undefined;
@@ -44,3 +47,10 @@ export function testRuntime(): ProcessRuntime {
   }
   return runtime;
 }
+
+/** The installed runtime's session owner, as a composition root reads it
+ *  from its runtime's context; the bare runtime's dies on every member. */
+export const testSessionOwner: Effect.Effect<SessionOwner['Service']> =
+  Effect.suspend(() =>
+    Effect.map(testRuntime().contextEffect, Context.get(SessionOwner)),
+  );

@@ -17,7 +17,7 @@ import { testRuntime } from './testProcessRuntime';
  *
  * Ordering: the `vi.mock` calls below register when this module evaluates, so
  * the import must precede anything that could load either module (see
- * `agentCatalogMock` for the idiom). The bag is `vi.hoisted`, so the mock
+ * `cliOutputMock` for the idiom). The bag is `vi.hoisted`, so the mock
  * factories can never observe it uninitialized.
  */
 const cliInitPlatformMock = vi.hoisted(() => ({

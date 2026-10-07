@@ -7,12 +7,12 @@ import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 import { html, nothing, render } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
+import type { TeXRAIconName } from '@shared/iconNames';
 import {
   formatDesktopAccelerator,
   type DesktopPlatform,
-} from '@shared/commands/accelerators';
-import type { DesktopShortcutEntry } from '@shared/commands/shortcutPreferences';
-import type { TeXRAIconName } from '@shared/iconNames';
+} from '@texra/shared/commands/accelerators';
+import type { DesktopShortcutEntry } from '@texra/shared/commands/shortcutPreferences';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 import {
@@ -21,7 +21,6 @@ import {
   type DesktopCommandActions,
   type DesktopCommandMenuEntry,
 } from '../shared/desktopCommandSurface';
-import { getRendererPlatform } from './rendererPlatform';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
@@ -48,7 +47,7 @@ interface DesktopCommandPaletteOptions {
   document: Document;
   actions: DesktopCommandActions;
   getShortcuts?: () => readonly DesktopShortcutEntry[];
-  platform?: DesktopPlatform;
+  platform: DesktopPlatform;
 }
 
 // Combobox wiring lives on the wa-input HOST, not its shadow input: ARIA
@@ -111,7 +110,7 @@ export function createDesktopCommandPalette({
   document,
   actions,
   getShortcuts,
-  platform = getRendererPlatform(document.defaultView),
+  platform,
 }: DesktopCommandPaletteOptions): CommandPaletteController {
   const getEntries = (): CommandPaletteEntry[] => {
     const shortcutsById = new Map(

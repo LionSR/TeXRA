@@ -1,0 +1,62 @@
+/**
+ * The shared transcript model: the row builders the transcript fold writes
+ * through, one tool-row fold, and the untruncated-text/elision contract both
+ * hosts paint against. This barrel is the module's public surface — the CLI
+ * TUI and the progress view import from here, not from the files below.
+ *
+ * The surface is only what a host actually names. Union members and internal
+ * shapes stay unexported: a painter reaches them by narrowing `TranscriptRow`
+ * or `ToolSection`, so re-exporting each one would be surface nobody imports.
+ */
+export {
+  logPayloadRow,
+  phaseRow,
+  plainLogRow,
+  streamingTextRow,
+  toolRow,
+  type LogRowPayload,
+} from './projectTranscriptRow';
+export {
+  compactionActivityRow,
+  isSettledRow,
+  rowHeadline,
+  type CompactionActivityRow,
+  type ContextManagementRow,
+  type ErrorRow,
+  type FileListRow,
+  type LatexdiffRow,
+  type LogRow,
+  type MissingOutputsRow,
+  type PhaseRow,
+  type ProgressStatusRow,
+  type StatItem,
+  type StreamingTextRow,
+  type ToolCallFacts,
+  type ToolRow,
+  type TranscriptRow,
+  type TranscriptRowBase,
+  type TranscriptRowKind,
+  type UserRow,
+  type WebSearchRow,
+} from './transcriptRow';
+export {
+  dispatchedChildren,
+  scriptStages,
+  SCRIPT_CALL_STATUS_LABEL,
+  TALK_TO_AGENT,
+  TOOL_CUT_BY_RUN_END,
+  type ScriptCallView,
+  type ScriptStageView,
+} from './scriptStage';
+export {
+  type ToolFileGroupsSection,
+  type ToolFileListSection,
+  type ToolFileSection,
+  type ToolSection,
+  type ToolSectionFile,
+} from './toolRowModel';
+export {
+  elideText,
+  transcriptText,
+  type TranscriptText,
+} from './transcriptText';

@@ -6,7 +6,7 @@ import type { ProgressApp } from '@progressView/frontend/ProgressApp';
 import { isPackagedAgentSource, type Theme } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostOutcome } from '@shared/session/sessionFrames';
-import { postMessage } from '@shared/hostBridge';
+import { postMessage } from '@texra/shared/hostBridge';
 
 import {
   DesktopShellStateSchema,
@@ -114,10 +114,7 @@ export function createProjectWorkbench(options: {
     writeFile: async (path, contents) => {
       await workspaceFile({ kind: 'write', path, contents });
     },
-    onRequestOpen: (path) =>
-      updateState(
-        openWorkbenchTab(getState(), { kind: 'editor', target: path }),
-      ),
+    onRequestOpen: openDocument,
     onDirtyChange: (path, dirty) =>
       updateState(
         setWorkbenchTabDirty(getState(), `workbench:editor:${path}`, dirty),
@@ -138,6 +135,13 @@ export function createProjectWorkbench(options: {
       editors.set(tabId, editor);
     }
     return editor;
+  }
+  function openDocument(target: string): void {
+    const id = `workbench:editor:${target}`;
+    // An already active tab emits no activation event. Explicitly reopening it
+    // still checks disk, while preserving unsaved edits through the pane's guard.
+    if (workbench.activeTabId() === id) void editors.get(id)?.open(target);
+    updateState(openWorkbenchTab(getState(), { kind: 'editor', target }));
   }
   const terminalPane = createTerminalPane({
     start: (sessionId, cols, rows) => {
@@ -188,8 +192,13 @@ export function createProjectWorkbench(options: {
     updateState,
     conversationView: options.conversationView,
     fileTree,
-    openDocument: (target: string) =>
-      updateState(openWorkbenchTab(getState(), { kind: 'editor', target })),
+    openDocument,
+    async refreshFiles() {
+      await Promise.all([
+        fileTree.refresh(),
+        ...[...editors.values()].map((editor) => editor.refresh()),
+      ]);
+    },
     saveActiveEditor() {
       const id = workbench.activeTabId();
       if (id) void editors.get(id)?.save();

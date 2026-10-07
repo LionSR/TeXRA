@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Predicate } from 'effect';
 import {
   MODEL_CONFIGS,
   ModelProvider,
@@ -9,19 +9,19 @@ import {
 
 // Local imports - platform
 import { modelConfig } from '@texra-ai/llm';
+import { writeLogLine } from '@logger/logSink';
 import {
   JsonConfigProvider,
   type ConfigStore,
 } from '@platform/defaults/jsonConfigProvider';
 import { nodeFileServices, type JsonStore } from '@platform/defaults/jsonStore';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
-import type { ConfigProvider } from '@platform/interfaces';
 
 // Local imports - shared
 import { canonicalConfigKey } from '@shared/config/configKeys';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { TEXRA_SETTINGS } from '@shared/settingsView/texraSettings';
 import { installSettingsCatalog } from '@shared/state/stateSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 // Local imports - tools
 import { mcpConfigWarnings, USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
@@ -31,7 +31,7 @@ import {
   readConfigSettingFrom,
   writeSettingTo,
 } from '@utils/config/platformSettings';
-import { isObject } from '@utils/core';
+import type { ConfigProvider } from '@texra-ai/harness';
 
 /**
  * The model a `texra` command starts on when nothing else names one.
@@ -256,7 +256,7 @@ function configFileWarnings(
         continue;
       }
       if (!isProjectFile || !COMMAND_SECTION_CONFIG_KEYS.has(key)) continue;
-      if (!isObject(value)) continue;
+      if (!Predicate.isObject(value)) continue;
       for (const nested of Object.keys(value)) {
         if (COMMAND_SECTION_KEYS.has(nested)) continue;
         warnings.push(`Ignoring unknown ${filePath} key "${key}.${nested}".`);
@@ -284,8 +284,19 @@ export function loadCliStartupConfig(
       // which holds the same rows.
       installSettingsCatalog(TEXRA_SETTINGS);
       const degradations: string[] = [];
-      const stores = yield* openTexraConfigStores(storageRoot, cwd, (message) =>
-        degradations.push(message),
+      // Following their files: a run that follows the project's settings
+      // (its approval policy, read at each decision) sees what another
+      // window or terminal saves while it runs.
+      const stores = yield* openTexraConfigStores(
+        storageRoot,
+        cwd,
+        (message) => degradations.push(message),
+        (error) =>
+          writeLogLine(
+            'WARN',
+            'cliConfig',
+            `A TeXRA config file changed but could not be read; this run keeps its previous settings until it is fixed: ${error.message}`,
+          ),
       );
       // The user's MCP server config, which only a run declaring MCP tools
       // otherwise reads: a broken file warns here, not first mid-run.

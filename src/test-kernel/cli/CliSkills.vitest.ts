@@ -29,7 +29,7 @@ import { installTestSkillRoots } from '@test/support/skillFixtures';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { texraPlugins } from '@tools/registry';
+import { texraPlugins } from '@texra/tools/registry';
 
 const tempRoots = useTempDirs();
 

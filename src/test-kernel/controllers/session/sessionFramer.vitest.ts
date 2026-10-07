@@ -22,10 +22,6 @@ import { describe, expect, vi } from 'vitest';
 
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import {
-  frameSubscription,
-  type FramerSource,
-} from '@controllers/session/SessionFramer';
-import {
   LocalRuntimeSource,
   TextChunkSource,
   TranscriptSubscriptions,
@@ -34,10 +30,7 @@ import {
 import { databaseLayer } from '@controllers/session/Database';
 import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
-import { WebviewSessions } from '@controllers/session/webviewSessionLayer';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-import { SessionBridge } from '@controllers/session/SessionBridge';
-import { localSessionBackend } from '@controllers/session/sessionBackend';
 import {
   aggregateId as qualifyAggregateId,
   DEBUG_MODE_KEY,
@@ -68,6 +61,13 @@ import {
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import {
+  frameSubscription,
+  type FramerSource,
+} from '@texra/controllers/session/SessionFramer';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
+import { SessionBridge } from '@texra/controllers/session/SessionBridge';
+import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer';
 
 function textTail(
   text: string,
@@ -251,7 +251,7 @@ describe('session framer', () => {
       // Registered first, so it runs last: the bridge's ports release their
       // transcript sets through the session before it goes.
       yield* Effect.addFinalizer(() => closeSessionOf(session));
-      const setSubscriptions = vi.spyOn(session.subscriptions, 'set');
+      const setSubscriptions = vi.spyOn(session.view, 'subscribe');
       const bridge = yield* SessionBridge.make({
         backend: localSessionBackend(session),
         onPortClosed: () => {},
@@ -321,7 +321,7 @@ describe('session framer', () => {
     return Effect.gen(function* () {
       const session = yield* createTestSession();
       yield* Effect.addFinalizer(() => closeSessionOf(session));
-      vi.spyOn(session, 'inputs').mockReturnValue(
+      vi.spyOn(session.view, 'inputs').mockReturnValue(
         Stream.die(new Error('replay read failed')),
       );
       const bridge = yield* SessionBridge.make({
@@ -345,7 +345,7 @@ describe('session framer', () => {
     Effect.gen(function* () {
       const session = yield* createTestSession();
       yield* Effect.addFinalizer(() => closeSessionOf(session));
-      const setSubscriptions = vi.spyOn(session.subscriptions, 'set');
+      const setSubscriptions = vi.spyOn(session.view, 'subscribe');
       const onPortClosed = vi.fn();
       const bridge = yield* SessionBridge.make({
         backend: localSessionBackend(session),
@@ -431,7 +431,7 @@ describe('session framer', () => {
         // the frame's cursor is the commit the framer drained; two appends
         // to one row in one window merge into one chunk, never two; a chunk
         // of an aggregate the Subscribe did not name is left out.
-        yield* events.publish([running]);
+        yield* events.transact((append) => append([running]));
         const first = textTail('Hel');
         yield* SubscriptionRef.set(
           chunks.ref,
@@ -525,7 +525,6 @@ describe('session framer', () => {
           host: null,
           debug: null,
           replayComplete: false,
-          blocked: [],
           existence: null,
         });
         const ticker = yield* Effect.forkScoped(ticking);
@@ -538,7 +537,7 @@ describe('session framer', () => {
           drawn(yield* SubscriptionRef.get(runtimeView.ref)),
         );
         // A tail commit reaches both folds.
-        yield* events.publish([running]);
+        yield* events.transact((append) => append([running]));
         yield* SubscriptionRef.set(
           chunks.ref,
           new Map([[`${RUN}/row-1`, textTail('Hello again')]]),
@@ -564,9 +563,11 @@ describe('session framer', () => {
         // that has not named it. The shell names a run only once its view
         // holds it (`transcriptAggregates`), and live text is framed only for
         // the aggregates a Subscribe names, so it resubscribes naming it.
-        yield* events.publish([
-          { ...runStart, aggregateId: qualifyAggregateId('run', SECOND) },
-        ]);
+        yield* events.transact((append) =>
+          append([
+            { ...runStart, aggregateId: qualifyAggregateId('run', SECOND) },
+          ]),
+        );
         yield* settle(view.ref, (v) => v.runs.has(SECOND));
         yield* settle(runtimeView.ref, (v) => v.runs.has(SECOND));
         yield* Fiber.interrupt(parentDecoder);
@@ -589,7 +590,9 @@ describe('session framer', () => {
         );
         // The named run's streaming row and the row's first prefix can
         // become ready in one turn.
-        yield* events.publish([streamingRow(SECOND, 'row-2')]);
+        yield* events.transact((append) =>
+          append([streamingRow(SECOND, 'row-2')]),
+        );
         yield* SubscriptionRef.update(
           chunks.ref,
           (held) => new Map([...held, [`${SECOND}/row-2`, textTail('First')]]),
@@ -630,7 +633,6 @@ describe('session framer', () => {
           host: null,
           debug: null,
           replayComplete: false,
-          blocked: [],
           existence: null,
         };
         yield* frames.feed({
@@ -652,7 +654,6 @@ describe('session framer', () => {
           ...sameCursorFrame,
           existence: {
             checkedAggregateIds: [qualifyAggregateId('run', RUN)],
-            removedAggregateIds: [],
             claims: [
               {
                 aggregateId: qualifyAggregateId('run', RUN),
@@ -691,7 +692,6 @@ describe('session framer', () => {
           host: null,
           debug: null,
           replayComplete: false,
-          blocked: [],
           existence: null,
         });
         yield* TestClock.adjust('16 millis');

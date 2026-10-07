@@ -10,15 +10,17 @@ import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
 // Local imports
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
-import { closeSession } from '@agent/runtime/sessionGraph';
 import type { RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
-import { OpenPdfTool } from '@tools/OpenPdfTool';
+import {
+  closeTestSession,
+  openTestDefaultSession,
+} from '@test/support/sessionEnd';
+import { OpenPdfTool } from '@texra/tools/OpenPdfTool';
 
 /** The request shape the host's PDF opener receives, derived from the port. */
 type OpenPdfRequest = Parameters<NonNullable<HostInteractions['openPdf']>>[0];
@@ -41,7 +43,7 @@ describe('OpenPdfTool', () => {
 
   beforeEach(async () => {
     const session = await Effect.runPromise(
-      initializeDefaultSession({
+      openTestDefaultSession({
         roots: testWorkspaceRoots(),
         transcriptMode: { kind: 'ephemeral', reason: 'OpenPdfTool test' },
       }),
@@ -55,7 +57,7 @@ describe('OpenPdfTool', () => {
     const root = sessionRoot;
     sessionRoot = undefined;
     if (root === undefined) return;
-    const report = await Effect.runPromise(closeSession(root));
+    const report = await Effect.runPromise(closeTestSession(root));
     if (!report.settled || report.abandoned.length > 0) {
       throw new Error(
         `OpenPdfTool test session did not close: ${report.abandoned.join(', ')}`,

@@ -1,19 +1,20 @@
 import { Effect } from 'effect';
 
-import { type ApiKeyProviderId, codingPlanForApiProvider } from '@texra-ai/llm';
+import { type ApiKeyProviderId } from '@texra-ai/llm';
 import { loadCliDetailedAccountStatusLines } from '@cli/runtime/apiStatus';
 import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import { type CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import { updateCliModelAccess } from '@cli/runtime/modelAccessSelection';
 
-import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { CODING_PLAN_BY_API_PROVIDER } from '@shared/schemas';
 import {
   type SlashCommandOutput,
   type SlashCommandContext,
   transcriptSlashCommandOutput,
 } from './slashContext';
+import type { PlatformSecrets } from '@texra-ai/harness';
 
 /**
  * Save a provider key through the shared key controller and answer the extra
@@ -29,7 +30,7 @@ export const applyCliProviderApiKey = Effect.fn('applyCliProviderApiKey')(
     key: string,
   ) {
     yield* commitCliProviderApiKey(secrets, stores, provider, key);
-    const codingPlan = codingPlanForApiProvider(provider);
+    const codingPlan = CODING_PLAN_BY_API_PROVIDER.get(provider);
     if (!codingPlan) return undefined;
     if (!codingPlan.exclusiveCredential) {
       return `Tip: ${codingPlan.retryFallbackName} is the default; enable '${codingPlan.preferenceLabel}' in \`/login\` or \`/config\` to use ${codingPlan.displayName}.`;

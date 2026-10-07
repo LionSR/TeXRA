@@ -1,0 +1,90 @@
+/**
+ * Workflow output-file layout — current format (runDir-relative):
+ *   r{round}/output.<ext>
+ *
+ * Per-run isolation (executions/{id}/...) provides uniqueness;
+ * agent/model/round-in-basename tokens are no longer needed.
+ *
+ * The one exception is the extension's "Save as copy" action, which still
+ * names its copy `<base>_<chunk>_r{round}_<model>` beside the base file.
+ * Those copies are ordinary user files: no reader parses that name.
+ */
+
+// Local imports
+import { modelConfig } from '@texra-ai/llm';
+import { agentFileName } from '@shared/schemas';
+
+/** The fixed basename of every workflow output file (no extension). */
+export const WORKFLOW_OUTPUT_BASENAME = 'output';
+
+/** The fixed extension for a document task revision's raw output. */
+export const WORKFLOW_RAW_OUTPUT_EXT = 'xml';
+
+/**
+ * Drop the leading `r{round}/` directory of a runDir-relative path; with
+ * `round`, only that round's. Any other path comes back unchanged.
+ */
+export function stripWorkflowRoundDir(
+  relativePath: string,
+  round?: number,
+): string {
+  const match = /^r(\d+)[/\\]/.exec(relativePath);
+  return match && (round === undefined || Number(match[1]) === round)
+    ? relativePath.slice(match[0].length)
+    : relativePath;
+}
+
+/** The runDir-relative `r{round}` directory segment for a document task revision. */
+export function workflowOutputRoundDir(round: number): string {
+  return `r${round}`;
+}
+
+/**
+ * Build a runDir-relative workflow output path for a round: `r{round}/output.{ext}`.
+ *
+ * IMPORTANT: callers MUST resolve this through a RunFileService bound to an
+ * runId. The fixed-stem filename is only collision-safe when combined
+ * with per-run run storage; a workspace-scoped resolution would route
+ * every round to the same `<workspace>/r{round}/output.{ext}` and clobber
+ * outputs across runs.
+ */
+export function workflowOutputPath(params: {
+  ext: string;
+  round: number;
+}): string {
+  return `${workflowOutputRoundDir(params.round)}/${WORKFLOW_OUTPUT_BASENAME}.${params.ext}`;
+}
+
+/** First-name chunk used in the "Save as copy" stem. */
+function getAgentFirstNameChunk(agent: string): string {
+  const cleanAgent = agentFileName(agent);
+  // A `write-` tool takes the chunk after that prefix; every other agent takes
+  // its first word, delimited by `_` when the name uses that convention and by
+  // `-` otherwise.
+  if (cleanAgent.startsWith('write-')) {
+    return cleanAgent.split('-')[1];
+  }
+  return cleanAgent.split(cleanAgent.includes('_') ? '_' : '-')[0];
+}
+
+/**
+ * The `<base>_<chunk>_r{round}_<model>` stem "Save as copy" writes beside a
+ * base file.
+ */
+export function workflowOutputCopyStem(params: {
+  base: string;
+  agent: string;
+  model: string;
+  round: number;
+}): string {
+  return `${params.base}_${getAgentFirstNameChunk(params.agent)}_r${params.round}_${modelFileName(params.model)}`;
+}
+
+/**
+ * A model string as it may appear in a file or folder name: the model's API
+ * id without its provider or selection suffix (`gpt-6.1-sol`), or the string
+ * with path and shell-unsafe characters replaced when it names no model.
+ */
+export function modelFileName(id: string): string {
+  return (modelConfig(id)?.id ?? id).replaceAll(/[\\/:*?"<>|@+\s]/g, '-');
+}

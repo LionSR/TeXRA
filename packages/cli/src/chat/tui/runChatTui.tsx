@@ -5,13 +5,23 @@
 // Run start/resume/stop orchestration lives in ../chatSessionController;
 // this module keeps only composition, rendering glue, and the Ink lifecycle.
 
-import { Cause, Effect, Exit, Fiber, Result, Scope } from 'effect';
+import {
+  Cause,
+  Effect,
+  Exit,
+  Fiber,
+  Result,
+  Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
-import { getVisibleAgents } from '@agent/index';
+import { aggregateId } from '@texra-ai/harness';
 import type { AgentConfig } from '@agent/runtime';
+import { getVisibleAgents } from '@agent/index';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
-import { reachCliService } from '@cli/runtime/cliService';
+import { linkCliService, reachCliService } from '@cli/runtime/cliService';
 
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
@@ -31,24 +41,26 @@ import {
   clearTerminalScrollback,
 } from '@cli/tui/terminalCleanup';
 import { cliSecrets } from '@cli/runtime/cliSecrets';
-import { localSessionBackend } from '@controllers/session/sessionBackend';
-import { serviceSessionBackend } from '@controllers/server/serviceBackend';
-import { attachWindowHost } from '@controllers/server/windowHost';
-import { DisposableStore } from '@platform/disposable';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
-import { aggregateId } from '@shared/schemas';
 import {
   formatTexraApprovalPolicy,
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+  texraApprovalPolicyLabel,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import type { RunId } from '@shared/schemas';
+import { stricterPolicy } from '@shared/approvalBypassKind';
 import { RUN_PHASE } from '@shared/schemas';
-import { subscribeToSignalChanges } from '@shared/signals';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import {
   isActivePhase,
   isTranscriptSettlementPhase,
 } from '@shared/runs/runStatus';
+import { DisposableStore } from '@texra/platform/disposable';
+import { subscribeToSignalChanges } from '@texra/shared/signals';
+import { attachWindowHost } from '@texra/controllers/server/windowHost';
+import { serviceSessionBackend } from '@texra/controllers/server/serviceBackend';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
+import { writeSettingTo } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { serviceAgentRuns } from '../serviceAgentRuns';
 
@@ -111,6 +123,7 @@ import {
   TuiSession,
 } from './state/sessionRunState';
 import { createSessionExitController } from './sessionExitController';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 interface ChatResult {
   exitCode: number;
@@ -163,7 +176,7 @@ export async function runChat(
       // Every chat is a client of the one service, so other terminals and
       // windows see its task; one that cannot reach it runs here, and says
       // so once.
-      const service = yield* reachCliService(context.storageRoot).pipe(
+      const service = yield* linkCliService(context.storageRoot).pipe(
         Scope.provide(chatScope),
         Effect.result,
       );
@@ -179,22 +192,36 @@ export async function runChat(
         }),
       });
       const runtimeSession = yield* services.session;
-      runtimeSession.setApprovalPolicy(context.approvalPolicy);
       const backend = Result.isSuccess(service)
         ? yield* serviceSessionBackend(
-            service.success.client,
+            service.success,
             context.cwd,
             runtimeSession.roots.storage,
           ).pipe(Scope.provide(chatScope))
         : localSessionBackend(runtimeSession);
       // Said once the view is bound, which the transcript rows need.
       const startupNotices: string[] = [];
-      if (Result.isSuccess(service))
-        yield* backend.setApprovalPolicy(context.approvalPolicy);
-      else
+      if (Result.isSuccess(service)) {
+        // The service decides this chat's requests under the project's
+        // persisted policy. A policy this invocation asked for rides each
+        // launch and narrows its tasks; a more permissive one is said and
+        // ignored, since no client widens the project's policy.
+        const requested = context.requestedApprovalPolicy;
+        const configured = runtimeSession.approvals.policy();
+        if (
+          requested !== undefined &&
+          stricterPolicy(requested, configured) !== requested
+        )
+          startupNotices.push(
+            `This chat's tasks run in the TeXRA service under the project's approval policy, ${texraApprovalPolicyLabel(configured)}, not ${texraApprovalPolicyLabel(requested)}: a launch can only narrow it. Change the project's policy with /approval, or run with TEXRA_NO_SERVICE=1 to use ${texraApprovalPolicyLabel(requested)} in this chat alone.`,
+          );
+      } else {
+        if (context.requestedApprovalPolicy !== undefined)
+          runtimeSession.approvals.override(context.requestedApprovalPolicy);
         startupNotices.push(
           `This chat runs here only, so other terminals and windows will not see it: ${service.failure.message}`,
         );
+      }
       // Without a usable credential the chat still opens: the "Connect a
       // model" panel takes the first foreground slot, and model resolution
       // waits for the connection instead of ending the process.
@@ -260,7 +287,7 @@ export async function runChat(
         model: modelSelection.model,
         modelSource: defaults.modelSource,
         cwd: context.cwd,
-        approvalPolicy: runtimeSession.approvalPolicy,
+        approvalPolicy: runtimeSession.approvals.policy(),
         teamName: yield* readCliTeamName(
           runtimeSession.roots.repoState,
           initialPresetId,
@@ -281,7 +308,7 @@ export async function runChat(
         services,
         runtimeSession,
         backend,
-        client: Result.isSuccess(service) ? service.success.client : undefined,
+        link: Result.isSuccess(service) ? service.success : undefined,
         runsElsewhere: Result.isSuccess(service),
         defaults,
         firstRunSetupAgent,
@@ -301,21 +328,47 @@ export async function runChat(
     ),
   );
   if (startup.exitCode !== undefined) return { exitCode: startup.exitCode };
-  const { services, runtimeSession, backend, runsElsewhere, client } = startup;
+  const { services, runtimeSession, backend, runsElsewhere, link } = startup;
   const { defaults, model } = startup;
   const { inputHistory, followUpQueue, startupNotices } = startup;
   const { agent } = defaults;
 
   const getApprovalPolicy = (): TexraApprovalPolicy =>
-    runtimeSession.approvalPolicy;
+    runtimeSession.approvals.policy();
   const currentSessionContext = (): CliContext => ({
     ...context,
     quietLogs: true,
   });
+  // The policy this chat's launches ask the service for (see
+  // `serviceAgentRuns`): its flag, then each `/approval`.
+  let chatPolicy = context.requestedApprovalPolicy;
+  // Here, `/approval` overrides this chat's own session. In the service it
+  // writes the project's persisted policy, the one the service follows for
+  // every window and terminal of the project, and the status line moves
+  // once the write lands; meanwhile the chat's next launch already asks
+  // for it, which narrows a stricter choice at once.
   const setApprovalPolicy = (policy: TexraApprovalPolicy): void => {
-    runtimeSession.setApprovalPolicy(policy);
-    if (runsElsewhere) runtime.runFork(backend.setApprovalPolicy(policy));
-    patchSessionMeta({ approvalPolicy: policy });
+    chatPolicy = policy;
+    if (!runsElsewhere) {
+      runtimeSession.approvals.override(policy);
+      patchSessionMeta({ approvalPolicy: policy });
+      return;
+    }
+    runtime.runFork(
+      writeSettingTo(
+        runtimeSession.roots,
+        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+        policy,
+      ).pipe(
+        Effect.match({
+          onSuccess: () => patchSessionMeta({ approvalPolicy: policy }),
+          onFailure: (error) =>
+            appendLocalNotice(
+              `The project's approval policy was not saved, so it stays ${texraApprovalPolicyLabel(runtimeSession.approvals.policy())}: ${error.message}`,
+            ),
+        }),
+      ),
+    );
   };
   // The slash-command context is identical at every call site; build it once
   // lazily so the closures it captures (resetSessionForClear,
@@ -355,11 +408,11 @@ export async function runChat(
   // title below derives its attention state from it on install.
   const session = new TuiSession(backend.controls, runsElsewhere);
   disposables.add(() => runtime.runFork(Scope.close(chatScope, Exit.void)));
-  // A dead fold (`viewChanges` failing) is the end of this session: the
+  // A dead fold (`view.changes` failing) is the end of this session: the
   // composer closes on the reason, Ctrl-C still exits, and the exit is a
   // failure on every exit path, since they all read `session.runExitCode`.
-  const unbindSessionView = bindSessionView(runtime, backend.view, {
-    changes: backend.viewChanges,
+  const unbindSessionView = bindSessionView(runtime, backend.view.ref, {
+    changes: backend.view.changes,
     onFailure: (error) => {
       sessionViewFailureSignal.set(
         `The session view stopped updating: ${toErrorMessage(error)} Press Ctrl-C to exit and restart texra. If it repeats, run the same texra version that last opened this project; an older build cannot read a newer session store.`,
@@ -368,6 +421,22 @@ export async function runChat(
     },
   });
   for (const notice of startupNotices) appendLocalNotice(notice);
+  // The service went away (retired by a newer build, or it died) and the
+  // link reaches it again: the chat says so, rather than going quiet.
+  if (link !== undefined)
+    runtime.runFork(
+      Stream.runForEach(
+        SubscriptionRef.changes(link.client).pipe(Stream.drop(1)),
+        (client) =>
+          Effect.sync(() =>
+            appendLocalNotice(
+              client === null
+                ? 'The TeXRA service is offline; TeXRA is reconnecting. If another window runs a newer TeXRA, update this one.'
+                : 'Reconnected to the TeXRA service.',
+            ),
+          ),
+      ).pipe(Scope.provide(chatScope)),
+    );
   // Cosmetic, but "texra-local" or a bare shell prompt in every tab makes a
   // multi-session workflow hard to navigate: show project and attention state.
   // The terminal outlives session subscriptions: only the exit controller
@@ -432,12 +501,12 @@ export async function runChat(
     secrets: services.secrets,
     stores: services,
     runtime,
-    ...(client !== undefined && {
+    ...(link !== undefined && {
       backend,
-      agentRuns: serviceAgentRuns(backend),
+      agentRuns: serviceAgentRuns(backend, () => chatPolicy),
       attachWindow: (host) => {
         runtime.runFork(
-          attachWindowHost(client, context.cwd, host).pipe(
+          attachWindowHost(link, context.cwd, host).pipe(
             Scope.provide(chatScope),
           ),
         );
@@ -593,7 +662,7 @@ export async function runChat(
     runtime,
     followUpsIdle: followUpQueue.idle,
     getApprovalPolicy,
-    flushArtifacts: runtimeSession.settlePublications(),
+    flushArtifacts: runtimeSession.log.settled,
     repaintAfterTerminalResume: viewportController.repaintAfterTerminalResume,
     interruptActive: (reason) => chatController.stop(reason),
     quiet: context.quietLogs,

@@ -8,11 +8,12 @@ import { Effect, Scope, Semaphore, Stream, SubscriptionRef } from 'effect';
 import { app, clipboard, dialog, Menu } from 'electron';
 import { z } from 'zod';
 
-import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
-import type { AgentDirectoriesPort, StateStore } from '@platform/interfaces';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
-import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages.js';
+import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
+import {
+  DESKTOP_PROJECT_COMMANDS,
+  DesktopCloseProjectMessageSchema,
+  DesktopSelectProjectMessageSchema,
+} from '../shared/desktopProjectMessages.js';
 import { DESKTOP_WORKSPACE_INBOUND_COMMANDS } from '../shared/desktopWorkspaceMessages.js';
 import {
   attachRendererConsoleLog,
@@ -25,6 +26,7 @@ import {
 } from './desktopBrowserWindow.js';
 import {
   isDesktopCommandMessage,
+  parsedRoute,
   type DesktopCommandRoute,
   type DesktopCommandRoutes,
 } from './desktopIpcTypes.js';
@@ -36,7 +38,6 @@ import {
   type ProjectBindings,
 } from './desktopProjectBindings.js';
 import { createProjectNavigation } from './desktopProjectNavigation.js';
-import { createDesktopProjectsIpc } from './desktopProjectsIpc.js';
 import {
   openProjectSurface,
   type ProjectSurface,
@@ -59,6 +60,12 @@ import {
 } from './desktopWindows.js';
 import { isFatalDesktopShutdownRequested } from './fatalStartupError.js';
 import { installDesktopHostBridge } from './hostBridge.js';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
+import type {
+  PlatformSecrets,
+  AgentDirectoriesPort,
+  StateStore,
+} from '@texra-ai/harness';
 import type {
   DesktopProjectRegistry,
   DesktopProjectsState,
@@ -99,7 +106,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   const initialProject = projects.active();
   const window = yield* openDesktopBrowserWindow({
     title: getDesktopWindowTitle(
-      initialProject.session,
+      initialProject.backend,
       initialProject.root && initialProject.display.name,
     ),
     mainDir: options.mainDir,
@@ -284,11 +291,20 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
           );
     }),
     claim(DESKTOP_WORKSPACE_INBOUND_COMMANDS, bindings.workspaceRoute),
-    createDesktopProjectsIpc({
-      postProjects,
-      selectProject: navigation.select,
-      closeProject: navigation.close,
-    }),
+    {
+      // The project list the renderer asks for once it boots, and its select
+      // and close requests.
+      [DESKTOP_PROJECT_COMMANDS.REQUEST_PROJECTS]: () =>
+        Effect.sync(postProjects),
+      [DESKTOP_PROJECT_COMMANDS.SELECT_PROJECT]: parsedRoute(
+        DesktopSelectProjectMessageSchema,
+        (message) => navigation.select(message.key),
+      ),
+      [DESKTOP_PROJECT_COMMANDS.CLOSE_PROJECT]: parsedRoute(
+        DesktopCloseProjectMessageSchema,
+        (message) => navigation.close(message.key, message.hasUnsavedChanges),
+      ),
+    },
     createDesktopLogIpc(
       { postToRenderer: host.post },
       {

@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock(
-  '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService',
+  '@texra/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService',
   () => ({
     SubscriptionUsageService: class {
       getUsage = mocks.getSubscriptionUsage;

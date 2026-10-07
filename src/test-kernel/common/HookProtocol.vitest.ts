@@ -7,8 +7,8 @@
 // 4. plain stdout is context on UserPromptSubmit and SessionStart only;
 // 5. a non-zero exit other than 2 with valid JSON lets the JSON decide;
 // 6. a timeout renders no decision, so PreToolUse does not deny;
-// 7. what v1 parses but does not act on (a prompt block, a stop block, an
-//    input rewrite) is named as ignored, not dropped;
+// 7. what v1 parses but does not act on (a prompt block, a second stop
+//    block in a row, an input rewrite) is named as ignored, not dropped;
 // 8. matchers: `*`/empty match all, an exact list, else an unanchored regex.
 import { describe, expect, it } from 'vitest';
 
@@ -31,7 +31,7 @@ const json = (value: unknown) => JSON.stringify(value);
 describe('the Claude Code hooks protocol at our edge', () => {
   it('denies on exit 2 even when the JSON is invalid', () => {
     const verdict = interpretHookRun(
-      'PreToolUse',
+      { hook_event_name: 'PreToolUse' },
       ran(2, '{"hookSpecificOutput": 3}', 'no rm here\nmore'),
     );
     expect(verdict).toMatchObject({
@@ -42,7 +42,7 @@ describe('the Claude Code hooks protocol at our edge', () => {
 
   it('reads allow as no objection and deny as a denial, whatever the exit code', () => {
     const allow = interpretHookRun(
-      'PreToolUse',
+      { hook_event_name: 'PreToolUse' },
       ran(
         0,
         json({
@@ -56,7 +56,7 @@ describe('the Claude Code hooks protocol at our edge', () => {
     );
     expect(allow).toMatchObject({ status: 'ok', deny: null, context: null });
     const deny = interpretHookRun(
-      'PreToolUse',
+      { hook_event_name: 'PreToolUse' },
       ran(
         1,
         json({
@@ -85,7 +85,10 @@ describe('the Claude Code hooks protocol at our edge', () => {
         },
       }),
     ]) {
-      const verdict = interpretHookRun('PreToolUse', ran(0, stdout));
+      const verdict = interpretHookRun(
+        { hook_event_name: 'PreToolUse' },
+        ran(0, stdout),
+      );
       expect(verdict.status).toBe('malformed');
       expect(verdict.deny).toBeNull();
       expect(verdict.context).toBeNull();
@@ -95,12 +98,18 @@ describe('the Claude Code hooks protocol at our edge', () => {
 
   it('adds plain stdout as context only where the reference does', () => {
     expect(
-      interpretHookRun('UserPromptSubmit', ran(0, 'branch: main\n')).context,
+      interpretHookRun(
+        { hook_event_name: 'UserPromptSubmit' },
+        ran(0, 'branch: main\n'),
+      ).context,
     ).toBe('branch: main');
-    expect(interpretHookRun('SessionStart', ran(0, 'hello')).context).toBe(
-      'hello',
-    );
-    expect(interpretHookRun('PreToolUse', ran(0, 'hello'))).toMatchObject({
+    expect(
+      interpretHookRun({ hook_event_name: 'SessionStart' }, ran(0, 'hello'))
+        .context,
+    ).toBe('hello');
+    expect(
+      interpretHookRun({ hook_event_name: 'PreToolUse' }, ran(0, 'hello')),
+    ).toMatchObject({
       status: 'ok',
       context: null,
       deny: null,
@@ -110,7 +119,7 @@ describe('the Claude Code hooks protocol at our edge', () => {
   it('gives PostToolUse feedback from a block reason, context, or exit 2', () => {
     expect(
       interpretHookRun(
-        'PostToolUse',
+        { hook_event_name: 'PostToolUse' },
         ran(
           0,
           json({
@@ -125,23 +134,29 @@ describe('the Claude Code hooks protocol at our edge', () => {
       ).context,
     ).toBe('lint failed\nfile is generated');
     expect(
-      interpretHookRun('PostToolUse', ran(2, '', 'tests broke')),
+      interpretHookRun(
+        { hook_event_name: 'PostToolUse' },
+        ran(2, '', 'tests broke'),
+      ),
     ).toMatchObject({ status: 'blocked', context: 'tests broke' });
   });
 
   it('renders no decision on a timeout', () => {
-    const verdict = interpretHookRun('PreToolUse', {
-      kind: 'timeout',
-      stdout: '',
-      stderr: '',
-    });
+    const verdict = interpretHookRun(
+      { hook_event_name: 'PreToolUse' },
+      {
+        kind: 'timeout',
+        stdout: '',
+        stderr: '',
+      },
+    );
     expect(verdict).toMatchObject({ status: 'timeout', deny: null });
     expect(verdict.warning).toMatch(/timed out/);
   });
 
   it('names what v1 parses but does not act on', () => {
     const prompt = interpretHookRun(
-      'UserPromptSubmit',
+      { hook_event_name: 'UserPromptSubmit' },
       ran(
         0,
         json({
@@ -156,15 +171,24 @@ describe('the Claude Code hooks protocol at our edge', () => {
     );
     expect(prompt.context).toBe('ctx');
     expect(prompt.ignored.join(' ')).toMatch(/block/);
-    const stop = interpretHookRun('Stop', ran(2, '', 'keep going'));
-    expect(stop).toMatchObject({
+    // A stop's block is the instruction the run continues with, once.
+    const stop = { hook_event_name: 'Stop', stop_hook_active: false } as const;
+    expect(interpretHookRun(stop, ran(2, '', 'keep going'))).toMatchObject({
       status: 'blocked',
-      deny: null,
-      context: null,
+      context: 'keep going',
+      ignored: [],
     });
-    expect(stop.ignored.join(' ')).toMatch(/block/);
+    const block = json({ decision: 'block', reason: 'run the tests' });
+    expect(interpretHookRun(stop, ran(0, block)).context).toBe('run the tests');
+    const again = interpretHookRun(
+      { ...stop, stop_hook_active: true },
+      ran(2, block, 'keep going'),
+    );
+    expect(again).toMatchObject({ status: 'blocked', context: null });
+    expect(again.ignored).toHaveLength(1);
+    expect(again.warning).toMatch(/second block/);
     const rewrite = interpretHookRun(
-      'PreToolUse',
+      { hook_event_name: 'PreToolUse' },
       ran(
         0,
         json({
@@ -180,7 +204,7 @@ describe('the Claude Code hooks protocol at our edge', () => {
 
   it('fails a non-zero exit with plain output loudly and without effect', () => {
     const verdict = interpretHookRun(
-      'PreToolUse',
+      { hook_event_name: 'PreToolUse' },
       ran(1, 'oops', 'first line\nsecond'),
     );
     expect(verdict).toMatchObject({ status: 'failed', deny: null });

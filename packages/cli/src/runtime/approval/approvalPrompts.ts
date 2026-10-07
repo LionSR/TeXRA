@@ -2,7 +2,10 @@ import { Effect } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
-import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
+import type {
+  ApprovalPolicyDenial,
+  TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
 import type { RequestDecision, RunId } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
@@ -38,7 +41,7 @@ function onCliPromptLane(context: CliContext) {
 
 /** Why no prompt could answer, from the live policy and this run's mode. */
 function promptUnavailableReason(
-  policy: SessionHandle['approvalPolicy'],
+  policy: TexraApprovalPolicy,
   context: CliContext,
 ): string {
   if (policy === 'never') return 'the approval policy is "never"';
@@ -65,7 +68,7 @@ function retryDenialReason(
 
 function approvalDenialMessage(
   denial: ApprovalPolicyDenial,
-  policy: SessionHandle['approvalPolicy'],
+  policy: TexraApprovalPolicy,
   context: CliContext,
 ): string {
   const reason = promptUnavailableReason(policy, context);
@@ -128,7 +131,7 @@ export function warnApprovalDenied(
   if (warned.has(key)) return;
   warned.add(key);
   writeTextStderr(
-    `[warn] [cli-approval] ${approvalDenialMessage(denial, session.approvalPolicy, context)}`,
+    `[warn] [cli-approval] ${approvalDenialMessage(denial, session.approvals.policy(), context)}`,
   );
 }
 

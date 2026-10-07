@@ -1,22 +1,20 @@
 import { Data, Effect } from 'effect';
-import { OnboardingFunnelRefresher } from '@controllers/onboarding/onboardingFunnel';
-import type { ProcessServices } from '@platform/processRuntime';
-import type {
-  StateStore,
-  StateWriteFailed,
-  StateReadFailed,
-} from '@platform/interfaces';
-import type { LanguageModel } from '@platform/languageModel';
-import type { OnboardingFunnelState } from '@shared/schemas';
 import {
   isRequestRefusal,
   type RequestRefusal,
-} from '@shared/session/requestErrors';
+  LanguageModel,
+  StateStore,
+  StateWriteFailed,
+  StateReadFailed,
+} from '@texra-ai/harness';
+import type { OnboardingFunnelState } from '@shared/schemas';
 import {
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
+import { OnboardingFunnelRefresher } from '@texra/controllers/onboarding/onboardingFunnel';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { ProcessServices } from '@texra-ai/harness';
 
 /**
  * A capability behind a card action that still answers with a promise

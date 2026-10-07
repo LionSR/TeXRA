@@ -8,10 +8,11 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
 import { documentsOutputRow } from '@shared/plugins/documents';
-import { TexraStateKey } from '@shared/settingsView/texraSettings';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
+import { publishTestRows } from '@test/support/sessionTestUtils';
+import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import type * as VSCode from 'vscode';
 
 const mocks = vi.hoisted(() => ({
@@ -131,11 +132,10 @@ async function emitOutputFiles(
   absolutePath: string,
 ): Promise<void> {
   emissions += 1;
-  session.publish([
+  publishTestRows(session, [
     documentsOutputRow(runId, [
       {
         round: emissions,
-        rawOutput: null,
         compileFailures: [],
         missingOutputs: [],
         outputs: [
@@ -154,7 +154,7 @@ async function emitOutputFiles(
       },
     ]),
   ]);
-  await Effect.runPromise(session.settlePublications());
+  await Effect.runPromise(session.log.settled);
 }
 
 /** Diagnostics currently recorded for `absolutePath` in the latest collection. */

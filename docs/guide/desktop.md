@@ -80,9 +80,17 @@ shares:
 
 Enabled agents, default team, tool enablement and availability, model visibility, and
 host-specific LaTeX compile and formatter preferences stay in each host's
-state. Credentials are host-specific too: the extension uses VS Code Secret
-Storage, while the desktop and command-line hosts use their own secure stores,
-so provider API keys and sign-in sessions are added separately in each app.
+state. Provider API keys and sign-ins are shared: every TeXRA app keeps them in
+one folder, `~/.texra/secrets/`, readable by your user alone.
+
+### Tasks run in the background service
+
+On macOS and Linux the desktop app runs a project's tasks in the background
+TeXRA service, the same one the CLI and VS Code use. It starts the service
+when none is running. A task keeps running when you quit the app, and a
+terminal (`/tasks` in `texra chat`) or a VS Code window of the same project
+can follow it. The app still shows the task's notices and its proposed edits
+for review. When the service cannot start, the app runs its tasks itself.
 
 ## Logs
 

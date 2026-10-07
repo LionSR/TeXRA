@@ -1,5 +1,7 @@
 import { Cause, Deferred, Effect, Exit, Result, Scope } from 'effect';
 
+import { RUN_OUTCOME, type RunId } from '@texra-ai/harness/schemas';
+import { withProcessServices, type ProcessRuntime } from '@texra-ai/harness';
 import {
   runAgent,
   SESSION_CLOSE_DEADLINE_MS,
@@ -10,15 +12,14 @@ import {
   type RunAgentOptions,
   type RunAgentRequest,
 } from '@agent/runtime';
-import { deriveResumability, finalizeRun } from '@agent/storage';
+import {
+  deriveResumability,
+  type FinalizeRunInput,
+  type FinalizeRunResult,
+} from '@agent/storage';
 import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
-import {
-  withProcessServices,
-  type ProcessRuntime,
-} from '@platform/processRuntime';
-import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import {
   DatabaseNotOwner,
   type SessionOpenError,
@@ -90,7 +91,10 @@ interface CliExecuteOptions {
    *  predicate; a test harness injects stand-ins rather than mocking. */
   readonly agentRuns?: Partial<{
     readonly launch: (shutdown: () => boolean) => typeof runAgent;
-    readonly finalize: typeof finalizeRun;
+    readonly finalize: (
+      session: SessionHandle,
+      input: FinalizeRunInput,
+    ) => Effect.Effect<FinalizeRunResult>;
     readonly resumability: typeof deriveResumability;
   }>;
 }
@@ -235,12 +239,16 @@ export function executeCliRequest(
   return Effect.gen(function* () {
     const agentRuns = {
       launch: () => runAgent,
-      finalize: finalizeRun,
+      finalize: (session: SessionHandle, input: FinalizeRunInput) =>
+        session.runs.end(input),
       resumability: deriveResumability,
       ...options.agentRuns,
     };
     const session = yield* options.session;
-    session.setApprovalPolicy(runContext.approvalPolicy);
+    // Only a policy this invocation asked for overrides the session; with
+    // none, the run follows the project's setting, read at each decision.
+    if (runContext.requestedApprovalPolicy !== undefined)
+      session.approvals.override(runContext.requestedApprovalPolicy);
     const presentationHost = createCliRuntimeHost(runContext);
     // Everything the run attaches to the session for its output: closed once,
     // after the last result read, so the last line is on the wire before the
@@ -339,7 +347,6 @@ export function executeCliRequest(
             outcome: RUN_OUTCOME.CANCELLED,
             report: reportShutdownFinalizationFailure,
           })).ok;
-          yield* session.commitRunEnd(runId);
           const resumability = terminalStatusPersisted
             ? yield* agentRuns.resumability(runId, session)
             : undefined;
@@ -503,7 +510,7 @@ export function executeCliRequest(
                 ),
         beforeRunEnd: () =>
           Effect.gen(function* () {
-            const handled = yield* finalizeShutdownStatus;
+            yield* finalizeShutdownStatus;
             if (
               launchVerdict.kind === 'interrupted' &&
               launchVerdict.artifactFailure !== undefined
@@ -512,7 +519,6 @@ export function executeCliRequest(
               launchVerdict.artifactFailure = undefined;
               return yield* Effect.fail(ensureError(error));
             }
-            return handled;
           }),
         onRunClaimed: (runId) => {
           ownedRunId = runId;
@@ -571,11 +577,10 @@ export function executeCliRequest(
 
     shutdownStatusArmed = false;
     yield* Scope.close(shutdownStatusScope, Exit.void);
-    const cleanupFailures: unknown[] = [];
     const finalization = yield* Effect.result(
       Effect.gen(function* () {
         yield* finalizeShutdownStatus;
-        yield* session.settlePublications();
+        yield* session.log.settled;
         if (runResult.ok) {
           return yield* readCliRunOutcomeState(
             session,
@@ -586,24 +591,18 @@ export function executeCliRequest(
         return undefined;
       }),
     );
-    if (Result.isFailure(finalization))
-      cleanupFailures.push(finalization.failure);
     Deferred.doneUnsafe(shutdownFinalizationDone, Effect.void);
     if (!runResult.ok || Result.isFailure(finalization)) {
       yield* detachPresentation;
     }
-    if (cleanupFailures.length > 0) {
-      const cleanupFailure = aggregateError(
-        cleanupFailures,
-        'CLI run cleanup encountered multiple failures',
-      );
+    if (Result.isFailure(finalization)) {
       return yield* Effect.die(
         primaryRunFailure
           ? aggregateError(
-              [primaryRunFailure.error, cleanupFailure],
+              [primaryRunFailure.error, finalization.failure],
               'CLI run failed and its final artifacts could not be persisted',
             )
-          : cleanupFailure,
+          : finalization.failure,
       );
     }
     if (primaryRunFailure) return yield* Effect.die(primaryRunFailure.error);
@@ -618,7 +617,7 @@ export function executeCliRequest(
     }
 
     return yield* Effect.sync(() => {
-      const { outcome, outcomePersisted } = Result.getOrThrow(finalization)!;
+      const { outcome, outcomePersisted } = finalization.success!;
       return {
         ok: true as const,
         outcomePersisted,

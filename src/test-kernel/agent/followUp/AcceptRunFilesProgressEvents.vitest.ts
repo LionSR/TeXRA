@@ -13,10 +13,7 @@ import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
-import { closeSession } from '@agent/runtime/sessionGraph';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { WorkspaceFs } from '@platform/rootedFs';
 import type { RequestDecision, RunId } from '@shared/schemas';
@@ -24,7 +21,11 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
+import {
+  closeTestSession,
+  openTestDefaultSession,
+} from '@test/support/sessionEnd';
+import { AcceptRunFilesTool } from '@texra/tools/AcceptRunFilesTool';
 import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
 // Local file imports
@@ -72,7 +73,7 @@ function installTestPlatform(): Promise<void> {
     globalStoragePath: '/global/.texra/storage',
   }).then(async () => {
     session = await Effect.runPromise(
-      initializeDefaultSession({
+      openTestDefaultSession({
         roots: testWorkspaceRoots(),
         transcriptMode: {
           kind: 'ephemeral',
@@ -122,8 +123,12 @@ function withStubbedFiles<A, E, R>(program: Effect.Effect<A, E, R>) {
     return yield* program.pipe(
       Effect.provideService(WorkspaceFs, {
         ...workspaceFs,
-        exists: (target: string) =>
-          Effect.succeed(workspaceReads.get(target)?.exists ?? false),
+        // A declared file answers as one; anything else is the real
+        // view's own `NotFound`.
+        stat: (target: string) =>
+          workspaceReads.get(target)?.exists
+            ? Effect.succeed(fileInfo)
+            : workspaceFs.stat(target),
         readFile: (target: string) =>
           Effect.succeed(
             Buffer.from(workspaceReads.get(target)?.content ?? '', 'utf-8'),
@@ -137,10 +142,6 @@ function withStubbedFiles<A, E, R>(program: Effect.Effect<A, E, R>) {
       }),
       Effect.provideService(FileSystem.FileSystem, {
         ...processFs,
-        exists: (target: string) =>
-          runStorageEntries.has(target)
-            ? Effect.succeed(true)
-            : processFs.exists(target),
         // The entry probe reads a link through `readLink`, so a seeded
         // symlink answers here and everything else falls through.
         readLink: (target: string) =>
@@ -206,12 +207,12 @@ function stubWorkspaceFiles(exists: boolean, content: string) {
 function runAccept(
   tool: typeof AcceptRunFilesTool,
   files: { path: string; original: string }[],
-  workspace = AgentWorkspaceState.create(),
+  readFiles = new Set<string>(),
 ) {
   return withStubbedFiles(tool.call({ execution_id: runId, files })).pipe(
     Effect.provide(
       nativeToolTestLayer({
-        workspace,
+        readFiles,
         run: { runId, session: session, toolPolicy: {} },
       }),
     ),
@@ -252,7 +253,6 @@ describe('accept_run_files progress events', () => {
     absoluteContents.clear();
     absoluteContentFallback = '';
     await installTestPlatform();
-    session.approvals.clearAll();
   });
 
   afterEach(async () => {
@@ -262,15 +262,14 @@ describe('accept_run_files progress events', () => {
     detachHostInteractions();
     detachHostInteractions = () => {};
     stagedToolEdits.clear();
-    session.approvals.clearAll();
-    await Effect.runPromise(closeSession(session.roots.storage));
+    await Effect.runPromise(closeTestSession(session.roots.storage));
   });
 
   it.live('publishes accepted workspace files through app signals', () =>
     Effect.gen(function* () {
       const explicit = createRecordingHost();
       const tool = AcceptRunFilesTool;
-      const workspace = AgentWorkspaceState.create();
+      const readFiles = new Set<string>();
       const { written, delivered } = yield* recordWrittenFiles();
 
       setRunStorageEntries({
@@ -283,7 +282,7 @@ describe('accept_run_files progress events', () => {
       const result = yield* runAccept(
         tool,
         [{ path: 'output.tex', original: 'paper.tex' }],
-        workspace,
+        readFiles,
       );
 
       expect(result.status).toBe('executed');
@@ -291,7 +290,7 @@ describe('accept_run_files progress events', () => {
       // Delivery runs on the recorder's own fiber, a turn after the publish.
       yield* delivered;
       expect(written).toEqual([[path.join(workspacePath, 'paper.tex')]]);
-      expect(workspace.interactions.hasRead('paper.tex')).toBe(true);
+      expect(readFiles.has('paper.tex')).toBe(true);
     }).pipe(Effect.provide(nativeToolTestLayer())),
   );
 
@@ -429,7 +428,7 @@ describe('accept_run_files progress events', () => {
           storage: '/project-storage',
         };
         const tool = AcceptRunFilesTool;
-        const workspace = AgentWorkspaceState.create();
+        const readFiles = new Set<string>();
         const snapshotPath = path.join(
           projectRoots.storage,
           'executions',
@@ -475,7 +474,7 @@ describe('accept_run_files progress events', () => {
         ).pipe(
           Effect.provide(
             nativeToolTestLayer({
-              workspace,
+              readFiles,
               run: { runId, session: session, toolPolicy: {} },
               roots: projectRoots,
             }),

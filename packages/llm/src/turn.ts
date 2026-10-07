@@ -703,25 +703,6 @@ export const BackgroundEventSchema = z.union([
   }).readonly(),
 ]);
 export type BackgroundEvent = z.infer<typeof BackgroundEventSchema>;
-/** A cancellation response reports the state observed, not which request won a race. */
-export const CancellationEvidenceSchema = z.discriminatedUnion('kind', [
-  IdentitySchema.extend({ kind: z.literal('confirmed-cancelled') }).readonly(),
-  IdentitySchema.extend({
-    kind: z.literal('observed-terminal'),
-    status: z.enum([
-      'completed',
-      'requires_action',
-      'failed',
-      'incomplete',
-      'budget_exceeded',
-    ]),
-  }).readonly(),
-  IdentitySchema.extend({
-    kind: z.literal('unconfirmed'),
-    status: z.enum(['queued', 'in_progress']),
-  }).readonly(),
-]);
-export type CancellationEvidence = z.infer<typeof CancellationEvidenceSchema>;
 /** Absolute original deadline; reconnecting does not replenish it. */
 export const ObservationPolicySchema = z
   .strictObject({
@@ -785,20 +766,16 @@ export interface Model {
      * back because a completion's continuation anchors to the exact history
      * prefix it covers, which the handle deliberately does not copy: an
      * accepted operation is a handle, and the run history keeps no second
-     * transcript. The caller owns that history and re-derives the same
-     * admitted turn when a resume observes an operation it did not submit.
-     * Re-derivation can drift: when the turn no longer fingerprints as the
-     * one the operation admitted, the result is still delivered and the
-     * completion simply leaves no continuation.
+     * transcript. The caller owns that history and hands back the turn it
+     * recorded when it submitted, so the completion anchors as a live one.
      */
     observe(
       turn: Extract<ResolvedTurn, { mode: 'background' }>,
       operation: RemoteOperation,
       policy: z.infer<typeof ObservationPolicySchema>,
     ): Stream.Stream<BackgroundEvent, ModelError>;
-    cancel(
-      operation: RemoteOperation,
-    ): Effect.Effect<CancellationEvidence, ModelError>;
+    /** Cancel the work; fails unless the provider confirms it stopped. */
+    cancel(operation: RemoteOperation): Effect.Effect<void, ModelError>;
   };
 }
 

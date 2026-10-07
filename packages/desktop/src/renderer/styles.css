@@ -7,11 +7,11 @@
  *
  * 1. Every value is a token. The canonical controls (`.btn-*`,
  *    `.icon-button`, `.icon-surface`, `.settings-row`, the focus ring) are
- *    not restyled here: the renderer adopts `src/ui/styles/controlStyles.ts`
+ *    not restyled here: the renderer adopts `packages/texra/src/ui/styles/controlStyles.ts`
  *    on its document (designTokens.ts), the same sheets every component
  *    adopts, so there is one definition for both trees.
  * 2. Type and motion resolve through the shared token names (`--font-size-*`,
- *    `--transition-*`) defined in `src/ui/styles/litStyles.ts`. A
+ *    `--transition-*`) defined in `packages/texra/src/ui/styles/litStyles.ts`. A
  *    desktop-private ramp beside them is how the two trees end up at
  *    different sizes.
  */
@@ -93,12 +93,6 @@ wa-dialog.desktop-prompt-overlay .desktop-prompt-title {
   font-size: var(--font-size-h2);
   font-weight: var(--wa-font-weight-semibold);
   line-height: var(--line-height-heading);
-}
-
-wa-dialog.desktop-prompt-overlay .desktop-prompt-subtitle {
-  margin: var(--wa-space-xs) 0 0;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-sm);
 }
 
 .desktop-prompt-form {
@@ -953,7 +947,7 @@ wa-input.desktop-command-palette-input::part(input) {
 }
 
 /* Structure owned by the shared renderLoadingState helper (@ui/wa) — light-DOM
-   mirror of the `.loading-state` rule in src/ui/styles/commonViewStyles.ts,
+   mirror of the `.loading-state` rule in packages/texra/src/ui/styles/commonViewStyles.ts,
    since this tree can't adopt that shadow-DOM stylesheet. Same tokens as the
    canonical rule (padding: --wa-space-l, no font-size override) so it doesn't
    reintroduce the per-consumer mismatch this file's header warns against.

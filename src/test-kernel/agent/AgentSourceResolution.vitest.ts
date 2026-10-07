@@ -8,7 +8,6 @@ import { it } from '@effect/vitest';
 import { afterAll, beforeAll, describe, expect } from 'vitest';
 
 // Local imports
-import { PersonaSchema } from '@agent/core/definition/AgentDataclass';
 import {
   findAgentByIdentifier,
   getCatalogAgent,
@@ -20,6 +19,7 @@ import {
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalStorageFs } from '@platform/rootedFs';
+import { PersonaSchema } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
@@ -87,13 +87,6 @@ describe('shadowed agent resolution', () => {
           builtIn: () =>
             Effect.sync(() =>
               resolve(REPO_ROOT, 'packages/extension/resources/agents'),
-            ),
-          builtInToolUse: () =>
-            Effect.sync(() =>
-              resolve(
-                REPO_ROOT,
-                'packages/extension/resources/tool_use_agents',
-              ),
             ),
         },
       },

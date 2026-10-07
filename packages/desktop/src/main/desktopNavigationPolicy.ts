@@ -11,8 +11,7 @@ export function isAllowedExternalUrl(url: string): boolean {
   const parsed = URL.parse(url);
   if (!parsed || parsed.protocol !== 'https:') return false;
   const host = parsed.hostname;
-  // The site and docs live under texra.ai. A blanket
-  // *.supabase.co rule would let any Supabase project host phishing pages.
+  // The site and docs live under texra.ai.
   if (host === 'texra.ai' || host.endsWith('.texra.ai')) {
     return true;
   }

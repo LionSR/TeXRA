@@ -13,10 +13,10 @@ import { customElement, property } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
-import { matchesEditedFile } from '@shared/launcher/editedFileMatch';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { Surface } from '@shared/session/surface';
-import { SessionUiEvents } from '@shared/session/uiEvents';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { matchesEditedFile } from '@texra/shared/launcher/editedFileMatch';
 import { overlaySurfaceStyles } from '@ui/styles/overlaySurfaceStyles';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';

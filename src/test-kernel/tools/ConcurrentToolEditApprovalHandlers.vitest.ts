@@ -3,17 +3,17 @@
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect, Fiber, Stream } from 'effect';
-import { beforeEach, describe, expect } from 'vitest';
+import { describe, expect } from 'vitest';
 
 // Local imports
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { closeSessionOf } from '@test/support/sessionEnd';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createTestSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import {
   requestToolEditApproval,
@@ -24,10 +24,6 @@ type PendingToolEdit = Omit<ToolEditApprovalRequest, 'permission' | 'roots'>;
 
 describe('Concurrent session tool edit approval handlers', () => {
   setupPlatform({ workspacePath: '/workspace', config: {}, files: {} });
-
-  beforeEach(() => {
-    testDefaultSession().approvals.clearAll();
-  });
 
   it.effect('routes each in-flight request through its owning session', () =>
     Effect.scoped(
@@ -51,11 +47,11 @@ describe('Concurrent session tool edit approval handlers', () => {
               }),
             );
             yield* Effect.forkScoped(
-              Stream.runForEach(session.events.all(session.now()), (event) =>
+              Stream.runForEach(session.log.tail(session.log.now()), (event) =>
                 Effect.sync(() => {
                   if (event.type !== 'request.opened') return;
                   if (event.payload.kind !== 'toolEdit') return;
-                  session.publish([
+                  publishTestRows(session, [
                     {
                       type: 'request.decided',
                       aggregateId: event.aggregateId,
@@ -82,10 +78,9 @@ describe('Concurrent session tool edit approval handlers', () => {
 
         const runA = publishTestRunStart(sessionA);
         const runB = publishTestRunStart(sessionB);
-        yield* Effect.all(
-          [sessionA.settlePublications(), sessionB.settlePublications()],
-          { concurrency: 'unbounded' },
-        );
+        yield* Effect.all([sessionA.log.settled, sessionB.log.settled], {
+          concurrency: 'unbounded',
+        });
 
         const call = (
           session: SessionHandle,

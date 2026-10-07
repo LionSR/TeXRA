@@ -8,7 +8,7 @@ import {
 } from '@cli/tui/ui/colors';
 import { STATUS_DOT } from '@cli/tui/ui/glyphs';
 import type { RunView } from '@shared/session/sessionView';
-import { TOKENS_GENERATED } from '@ui/transcript/workflowCall';
+import { TOKENS_GENERATED } from '@shared/transcript/workflowCall';
 import {
   formatCompactTokenCount,
   formatResultCount,
@@ -37,7 +37,6 @@ const PENDING_APPROVAL_ROW_LABELS: Record<PendingApprovalKind, string> = {
   proposal: 'proposal',
   retry: 'retry',
   userQuestion: 'question',
-  toolOutcome: 'outcome',
 };
 
 /** Terminal width below which the right-aligned metadata column is dropped

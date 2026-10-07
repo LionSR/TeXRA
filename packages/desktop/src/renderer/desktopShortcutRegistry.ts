@@ -2,26 +2,25 @@ import type {
   DesktopShortcutEntry,
   DesktopShortcutOverrides,
   DesktopShortcutService,
-} from '@shared/commands/shortcutPreferences';
+} from '@texra/shared/commands/shortcutPreferences';
 import {
   DESKTOP_SHORTCUT_STORAGE_KEY,
   DesktopShortcutOverridesSchema,
   installDesktopShortcutService,
   keyboardEventToAccelerator,
-} from '@shared/commands/shortcutPreferences';
+} from '@texra/shared/commands/shortcutPreferences';
 
 import {
   toElectronAccelerator,
   type DesktopPlatform,
-} from '@shared/commands/accelerators';
-import { commandCatalogById } from '@shared/commands/catalog';
+} from '@texra/shared/commands/accelerators';
+import { commandCatalogById } from '@texra/shared/commands/catalog';
 import {
   dispatchDesktopCommand,
   getDesktopCommandMenuEntries,
   type DesktopCommandActions,
   type DesktopCommandId,
 } from '../shared/desktopCommandSurface';
-import { getRendererPlatform } from './rendererPlatform';
 
 export const DESKTOP_COMMAND_PALETTE_ID = 'texra.desktop.showCommands';
 
@@ -52,7 +51,7 @@ interface DesktopShortcutRegistryOptions {
   readonly document: Document;
   readonly actions: DesktopCommandActions;
   readonly openCommands: () => void;
-  readonly platform?: DesktopPlatform;
+  readonly platform: DesktopPlatform;
 }
 
 export interface DesktopShortcutRegistry extends DesktopShortcutService {
@@ -64,7 +63,7 @@ export function createDesktopShortcutRegistry(
   options: DesktopShortcutRegistryOptions,
 ): DesktopShortcutRegistry {
   const view = options.document.defaultView;
-  const platform = options.platform ?? getRendererPlatform(view);
+  const { platform } = options;
   let overrides = readOverrides(view?.localStorage);
   const listeners = new Set<
     (entries: readonly DesktopShortcutEntry[]) => void

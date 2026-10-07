@@ -4,14 +4,14 @@ import { useState } from 'react';
 import { tryOpenBrowser } from '@cli/runtime/browser';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { CROSS } from '@cli/tui/ui/glyphs';
-import type { ProcessRuntime } from '@platform/processRuntime';
-import { GITHUB_TOKEN_CREATE_URL } from '@tools/github/githubAuth';
+import { GITHUB_TOKEN_CREATE_URL } from '@texra/tools/github/githubAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { formatStatusViewSummary } from './_shared/formatStatusViewSummary';
 import { ListForm } from './_shared/ListForm';
 import { TextEntryForm } from './_shared/TextEntryForm';
 import { runFormWrite } from './_shared/useAsyncListForm';
+import type { ProcessRuntime } from '@texra-ai/harness';
 import type { Effect } from 'effect';
 
 /**

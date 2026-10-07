@@ -117,6 +117,7 @@ function runViewFields(over: RunViewOverrides): RunView {
     facts: {},
     ...over,
     id,
+    title: over.title ?? (over.description || (over.label ?? over.id)),
   } as RunView;
 }
 

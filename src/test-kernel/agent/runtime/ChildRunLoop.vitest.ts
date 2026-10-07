@@ -16,9 +16,6 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   finalizeRun: vi.fn(),
   submitFollowUp: vi.fn(),
-  commitRunEndAfterArtifacts: vi.fn(
-    async (_session: unknown, _runId: RunId) => {},
-  ),
 }));
 
 // Turn attribution is committed as `child.turn` rows on the run aggregate,
@@ -27,7 +24,7 @@ vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
   finalizeRun: mocks.finalizeRun,
 }));
-// The registry deep-imports finalizeRun from runLifecycle.
+// A run retired from inside the store's own lifecycle code.
 vi.mock('@agent/storage/runLifecycle', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/runLifecycle')>()),
   finalizeRun: mocks.finalizeRun,
@@ -72,6 +69,7 @@ import {
   createProcessSession,
   publishTestRunStart,
   queuedFollowUps,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { testRunHandle } from '@test/support/runHandleFixtures';
@@ -110,7 +108,7 @@ function trackChildHandle(runId: RunId, parentRunId: RunId): RunHandle {
 const foldParentPhase = (active: boolean) =>
   Effect.gen(function* () {
     const aggregateId = qualifyAggregateId('run', PARENT_RUN_ID);
-    session.publish([
+    publishTestRows(session, [
       active
         ? {
             type: 'run.activate',
@@ -123,7 +121,7 @@ const foldParentPhase = (active: boolean) =>
             output: emptyRunEndOutput(),
           },
     ]);
-    yield* session.settlePublications();
+    yield* session.log.settled;
   });
 
 /** The text of each follow-up a run's rows still queue. */
@@ -283,23 +281,22 @@ const stopChildRun = (runId: RunId): Effect.Effect<void, Error> =>
 beforeEach(async () => {
   session = await Effect.runPromise(createProcessSession());
   publishTestRunStart(session, PARENT_RUN_ID);
-  await Effect.runPromise(session.settlePublications());
+  await Effect.runPromise(session.log.settled);
   vi.clearAllMocks();
-  // The loop's terminal drain is the session's one exit choreography; the
-  // suite observes it through the same (session, runId) spy as before.
-  vi.spyOn(session, 'commitRunEnd').mockImplementation((runId) =>
-    Effect.promise(() => mocks.commitRunEndAfterArtifacts(session, runId)),
-  );
   // The fake end commits what a real one carries with its row: the last
   // turn's settlement.
   mocks.finalizeRun.mockImplementation(
     (target: SessionHandle, input: FinalizeRunInput) =>
       (input.settlement?.length
-        ? target.commit(input.settlement)
+        ? target.log.transact(input.settlement)
         : Effect.void
       ).pipe(Effect.as({ ok: true })),
   );
   mocks.submitFollowUp.mockReturnValue(Effect.succeed({ status: 'sent' }));
+  // Every run's end goes through the session's one terminal writer.
+  vi.spyOn(session.runs, 'end').mockImplementation(
+    (input) => mocks.finalizeRun(session, input) as never,
+  );
 });
 
 afterEach(() => {
@@ -315,8 +312,8 @@ describe('childRunLoop E2E fixtures', () => {
     (outcome) =>
       Effect.gen(function* () {
         const runId = loopRunId();
-        yield* session.settlePublications();
-        yield* session.acquireClaims(qualifyAggregateId('run', runId));
+        yield* session.log.settled;
+        yield* session.log.hold(runId);
         mocks.finalizeRun.mockImplementation(realFinalizeRun);
         const launch = vi.fn(() =>
           Effect.fail(new Error('Engine startup failed')),
@@ -351,16 +348,10 @@ describe('childRunLoop E2E fixtures', () => {
             lastCompleted: null,
           });
         }
-        const rows = yield* session.readAggregate(
-          qualifyAggregateId('run', runId),
-        );
+        const rows = yield* session.log.rows(qualifyAggregateId('run', runId));
         expect(rows.filter((row) => row.type === 'run.end')).toMatchObject([
           { outcome },
         ]);
-        expect(mocks.commitRunEndAfterArtifacts).toHaveBeenCalledWith(
-          session,
-          runId,
-        );
       }),
   );
 
@@ -396,51 +387,33 @@ describe('childRunLoop E2E fixtures', () => {
       Effect.gen(function* () {
         const runId = loopRunId();
         const releaseSessionOwnership = vi.fn();
-        trackChildHandle(runId, PARENT_RUN_ID);
-        const interruptRun = vi.spyOn(session.runs, 'interrupt');
-        // The setup's own step fails: the handle refuses the process slot.
-        Object.defineProperty(
-          session.runs.getHandle(runId),
-          'backgroundProcess',
-          {
-            set: () => {
-              throw new Error('loop registration failed');
-            },
-          },
-        );
+        const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
+          run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
+        }).pipe(Effect.provideService(Runs, session.runs));
+        trackedRunIds.add(runId);
+        // The setup's own step fails: the run refuses its tracking.
+        vi.spyOn(childRun, 'track').mockImplementation(() => {
+          throw new Error('loop registration failed');
+        });
         const { strategy } = createFakeStrategy();
-
-        try {
-          const error = yield* Effect.flip(
-            startLoop(
-              runId,
-              {
-                ...strategy,
-                ownsBackgroundProcess: true,
-                releaseSessionOwnership,
-              },
-              { agentName: 'fake-cli' },
-            ),
-          );
-          expect(error.message).toContain('loop registration failed');
-
-          expect(releaseSessionOwnership).toHaveBeenCalledOnce();
-          expect(session.runs.isLive(runId)).toBe(false);
-          // The failed setup left no generation fiber behind, and the
-          // shutdown drain reaches nothing of it.
-          expect(session.runs.interrupt(runId)).toBe(false);
-          interruptRun.mockClear();
-          session.runs.killBackgroundProcesses();
-          expect(interruptRun).not.toHaveBeenCalled();
-          expect(yield* queuedFollowUps(session, runId)).toEqual([]);
-        } finally {
-          interruptRun.mockRestore();
-        }
+        const error = yield* Effect.flip(
+          startLoop(
+            runId,
+            { ...strategy, releaseSessionOwnership },
+            { agentName: 'fake-cli', childRun },
+          ),
+        );
+        expect(error.message).toContain('loop registration failed');
+        expect(releaseSessionOwnership).toHaveBeenCalledOnce();
+        expect(session.runs.isLive(runId)).toBe(false);
+        // The failed setup left no generation fiber behind.
+        expect(session.runs.interrupt(runId)).toBe(false);
+        expect(yield* queuedFollowUps(session, runId)).toEqual([]);
       }),
   );
 
   it.effect(
-    'shutdown drain interrupts a real agent-CLI initial-turn loop and releases ownership once',
+    'a shutdown stop interrupts a real agent-CLI initial-turn loop and releases ownership once',
     () =>
       Effect.gen(function* () {
         const runId = loopRunId();
@@ -460,7 +433,6 @@ describe('childRunLoop E2E fixtures', () => {
 
         const strategy: ChildRunStrategy<FakeTurn> = {
           stageLabel: 'fake-cli session',
-          ownsBackgroundProcess: true,
           launch: (_ports, signal) =>
             Effect.gen(function* () {
               yield* Deferred.succeed(launched, undefined);
@@ -489,7 +461,7 @@ describe('childRunLoop E2E fixtures', () => {
         // The loop body is a generation on the run's lane: it starts once
         // the lane admits it, not inside `startChildRunLoop`.
         yield* Deferred.await(launched);
-        session.runs.killBackgroundProcesses();
+        yield* session.runs.stopAll();
 
         // A process child's loop fiber survives the stop: the aborted turn
         // ends the loop as interrupted and it finalizes CANCELLED.
@@ -516,7 +488,6 @@ describe('childRunLoop E2E fixtures', () => {
           active: { key: expect.any(String), index: 1 },
           lastCompleted: null,
         });
-        expect(mocks.commitRunEndAfterArtifacts).not.toHaveBeenCalled();
 
         // Interrupt the loop through its parent lineage: no turn handle is
         // tracked in this fixture, so the stop reaches the loop via its
@@ -538,10 +509,6 @@ describe('childRunLoop E2E fixtures', () => {
           active: { key: expect.any(String), index: 1 },
           lastCompleted: null,
         });
-        expect(mocks.commitRunEndAfterArtifacts).toHaveBeenCalledWith(
-          session,
-          runId,
-        );
       }),
   );
 
@@ -886,7 +853,7 @@ describe('childRunLoop E2E fixtures', () => {
         // can never take another turn.
         yield* Effect.promise(() =>
           vi.waitFor(() =>
-            expect(session.runView(runId)?.status).toBe(RUN_PHASE.WAITING),
+            expect(session.view.run(runId)?.status).toBe(RUN_PHASE.WAITING),
           ),
         );
         expect(session.runs.getToolUseFollowUpTarget(runId)).toEqual({
@@ -898,8 +865,8 @@ describe('childRunLoop E2E fixtures', () => {
           from: { kind: 'user' as const },
         });
         yield* turnStarted(2);
-        yield* session.settlePublications();
-        expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);
+        yield* session.log.settled;
+        expect(session.view.run(runId)?.status).toBe(RUN_PHASE.RUNNING);
         yield* resolveTurn(2, { kind: 'terminal', value: 'final' });
         yield* Fiber.join(loop);
       }),
@@ -933,7 +900,6 @@ describe('childRunLoop E2E fixtures', () => {
           Effect.succeed({
             ok: false,
             error: new Error('disk full'),
-            outcomePersisted: false,
           }),
         );
         yield* resolveTurn(2, { kind: 'terminal', value: 'final' });
@@ -1035,7 +1001,6 @@ describe('childRunLoop E2E fixtures', () => {
           Effect.succeed({
             ok: false,
             error: new Error('metadata disk full'),
-            outcomePersisted: false,
           }),
         );
 
@@ -1129,7 +1094,6 @@ describe('childRunLoop E2E fixtures', () => {
         // — a resumed parent's wait would resolve immediately instead of racing
         // its own wake.
         const runId = loopRunId();
-        publishTestRunStart(session, runId);
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
         }).pipe(Effect.provideService(Runs, session.runs));

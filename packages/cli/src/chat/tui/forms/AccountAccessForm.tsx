@@ -16,18 +16,18 @@ import {
 
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
-import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
-import type { ProcessRuntime } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
 import {
   DEVICE_CODE_DESCRIPTION,
   SUBSCRIPTION_AUTH_COPY,
 } from '@shared/model/accountAuth';
+import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { ONBOARDING_CHOICE_CHATGPT } from '@ui/copy/onboarding';
 import { ListForm } from './_shared/ListForm';
 import { useAsyncResource } from './_shared/useAsyncListForm';
+import type { ProcessRuntime } from '@texra-ai/harness';
+import type { PlatformSecrets } from '@texra-ai/harness';
 
 export type AccountAccessFormValue =
   | { readonly kind: 'access'; readonly selection: CliModelAccessSelection }

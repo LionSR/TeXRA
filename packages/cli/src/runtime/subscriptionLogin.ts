@@ -7,14 +7,14 @@
 import { Effect } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
+import { Secrets } from '@texra-ai/harness';
+import type { SettingsStores } from '@shared/config/settingsAccess';
+import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
 import {
   subscriptionProvider,
   type SubscriptionProviderId,
   type SubscriptionSignInPresenter,
-} from '@controllers/modelAccess/subscriptionProviders';
-import { Secrets } from '@platform/secrets';
-import type { SettingsStores } from '@shared/config/settingsAccess';
-import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
+} from '@texra/controllers/modelAccess/subscriptionProviders';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { presentCliSignInUrl, type CliSignInProgress } from './signInUrl';

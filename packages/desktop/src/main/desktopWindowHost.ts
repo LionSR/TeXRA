@@ -6,16 +6,19 @@
 import { app, dialog, shell, type BrowserWindow } from 'electron';
 import { Cause, Effect } from 'effect';
 
-import { ExternalOpenFailed, type NotificationFailed } from '@hosts/uiHosts';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { INSTRUCTION_ACTION, type InstructionAction } from '@shared/schemas';
 import type { DownMessage } from '@shared/session/sessionFrames';
+import {
+  ExternalOpenFailed,
+  type NotificationFailed,
+} from '@texra/hosts/uiHosts';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
 import { createDesktopDialogs } from './desktopDialogs.js';
 import { createDesktopDiffHost } from './desktopDiffHost.js';
 import { createDesktopPreviewHost } from './desktopPreviewHost.js';
 import { DESKTOP_RELEASES_PAGE_URL } from './desktopUpdateChecker.js';
+import type { ProcessRuntime } from '@texra-ai/harness';
 import type { DesktopProject } from './desktopProjects.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopAgentRunOptions } from './desktopAgentRun.js';
@@ -50,8 +53,8 @@ export function createDesktopWindowHost(options: {
   };
 
   const dialogs = createDesktopDialogs(window, {
-    openGuide: (docsCommand) =>
-      openExternalInBackground(`https://texra.ai/guide/${docsCommand}`),
+    openGuide: (docsPage) =>
+      openExternalInBackground(`https://texra.ai/guide/${docsPage}`),
     dispatchInstructionAction: (action) => dispatchInstructionAction(action),
   });
   const { showErrorMessage, showInfoMessage, showWarningMessage } = dialogs;
@@ -298,8 +301,8 @@ export function createDesktopWindowHost(options: {
         showWarningMessage: (message) => showWarningMessage(message, name),
         showErrorMessage: (message) =>
           awaitOrReport(showErrorMessage(message, name)),
-        showErrorDialog: (message, docsCommand) =>
-          awaitOrReport(dialogs.showErrorDialog(message, docsCommand, name)),
+        showErrorDialog: (message, docsPage) =>
+          awaitOrReport(dialogs.showErrorDialog(message, docsPage, name)),
         showInstructionDialog: (message, actions) =>
           awaitOrReport(dialogs.showInstructionDialog(message, actions, name)),
         pickTranscriptExportFormat: () =>

@@ -3,7 +3,6 @@
 
 import { Cause, Effect, Fiber } from 'effect';
 
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { formProgress, setTransientNotice } from '../state/cliState';
@@ -13,6 +12,7 @@ import {
   type SlashCommandOutput,
   transcriptSlashCommandOutput,
 } from './handlers/slashContext';
+import type { ProcessRuntime } from '@texra-ai/harness';
 
 export type ErrorHandler = (error: unknown) => void;
 type SelectionCompletion = 'afterAction' | 'beforeAction' | 'busy';

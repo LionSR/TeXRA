@@ -1,8 +1,3 @@
-import {
-  CODING_PLAN_SUBSCRIPTIONS,
-  type CodingPlanSubscription,
-  type CodingPlanSubscriptionId,
-} from '@texra-ai/llm';
 import type { DeclinableUsageRoute, UsageRoute } from '@shared/schemas';
 import {
   SUBSCRIPTION_AUTH_PROVIDERS,
@@ -13,6 +8,11 @@ import {
   GROK_AUTH,
   SUBSCRIPTION_AUTH_COPY,
 } from '@shared/model/accountAuth';
+import {
+  CODING_PLAN_SUBSCRIPTIONS,
+  type CodingPlanSubscription,
+  type CodingPlanSubscriptionId,
+} from '@shared/schemas';
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 
 // Kept to one rendered row: the /login form and the account panel both

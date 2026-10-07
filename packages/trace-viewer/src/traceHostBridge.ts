@@ -20,13 +20,13 @@
  * same `parseTraceData` boundary.
  */
 import {
-  HOST_BRIDGE_API_KEY,
-  type HostBridgeApi,
-} from '@shared/hostBridgeTypes';
-import {
   UpMessageSchema,
   type DownMessage,
 } from '@shared/session/sessionFrames';
+import {
+  HOST_BRIDGE_API_KEY,
+  type HostBridgeApi,
+} from '@texra/shared/hostBridgeTypes';
 import type { TraceDocument } from '@transcript';
 
 import { parseTraceData } from './traceDataSchema';

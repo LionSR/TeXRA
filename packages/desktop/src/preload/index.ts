@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 
-import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin.js';
+import { resolvePostMessageTargetOrigin } from '@texra/shared/postMessageOrigin.js';
 import { installElectronHostBridge } from './hostBridge.js';
 
 const rendererWindow = globalThis as typeof globalThis & {

@@ -10,15 +10,15 @@ import { describe } from 'vitest';
 
 // Local imports
 
-import type { TerminalRunResult } from '@hosts/uiHosts';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { SendToTerminalTool } from '@tools/setup/SendToTerminalTool';
+import type { TerminalRunResult } from '@texra/hosts/uiHosts';
+import { SendToTerminalTool } from '@texra/tools/setup/SendToTerminalTool';
 
 // Local file imports
-import { createFakeSetupPlatform } from './fixtures';
+import { createFakeSetupPlatform, withSetup } from './fixtures';
 
 interface RunRecord {
   name: string;
@@ -50,7 +50,7 @@ async function setupTool(
     },
   );
   const runId = publishTestRunStart(testDefaultSession());
-  await Effect.runPromise(testDefaultSession().settlePublications());
+  await Effect.runPromise(testDefaultSession().log.settled);
   return { tool: SendToTerminalTool, runs, runId };
 }
 
@@ -61,9 +61,11 @@ const callTool = (
 ) =>
   tool.call(input).pipe(
     Effect.provide(
-      nativeToolTestLayer({
-        run: { runId, session: testDefaultSession(), toolPolicy: {} },
-      }),
+      withSetup(
+        nativeToolTestLayer({
+          run: { runId, session: testDefaultSession(), toolPolicy: {} },
+        }),
+      ),
     ),
   );
 

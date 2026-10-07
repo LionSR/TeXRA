@@ -41,7 +41,7 @@
 //      the Exit as its value) forwards its Exit unconditionally and is owned
 //      by whoever awaits that Deferred. `runtime.runFork`
 //      is not this shape: `withForkFailureReporting` observes every root
-//      fiber (src/platform/processRuntime.ts). Production sources only.
+//      fiber (packages/harness/src/platform/processRuntime.ts). Production sources only.
 //
 // An expression is an Effect when its type carries the `~effect/Effect`
 // TypeId property (effect/Effect's `[TypeId]` variance key) AND its apparent
@@ -65,6 +65,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 
 import ts from 'typescript';
 
@@ -707,7 +708,7 @@ const forks = Effect.gen(function* () {
   const actual = scanSourceFile(program.getTypeChecker(), probeFile).map(
     ({ kind, line }) => [kind, line],
   );
-  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+  if (!isDeepStrictEqual(actual, expected)) {
     console.error(
       'unexecuted-Effect gate self-test failed:',
       JSON.stringify({ actual, expected }),

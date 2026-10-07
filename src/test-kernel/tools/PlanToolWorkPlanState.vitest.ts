@@ -4,11 +4,11 @@
 import { it } from '@effect/vitest';
 import { Effect, Fiber } from 'effect';
 import { afterEach, beforeEach, describe, expect } from 'vitest';
+import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { planSummaryLine } from '@shared/schemas';
+import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
 import type { Goal } from '@shared/plugins/goal';
 import type { Plan, RequestDecision, RunId } from '@shared/schemas';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -94,16 +94,24 @@ function startPlanUpdate(
   return Effect.gen(function* () {
     const { session, awaitPlanRequest } = yield* planSession(runId);
     if (seed) yield* seed(session);
-    const workspace = AgentWorkspaceState.create();
-    const workPlanState = workspace.workPlan;
+    // The plans the run shows, in order: what its parent and its view read.
+    const shown: (Plan | null)[] = [];
     const tool = PlanTool;
 
     const resultFiber = yield* Effect.forkScoped(
       tool.call({ command: 'update', objective }).pipe(
         Effect.provide(
           nativeToolTestLayer({
-            run: { runId, session, toolPolicy: {} },
-            workspace,
+            run: {
+              runId,
+              session,
+              toolPolicy: {},
+              callbacks: {
+                onProgress: (update) => {
+                  if (update.kind === 'plan') shown.push(update.plan);
+                },
+              },
+            },
           }),
         ),
       ),
@@ -115,7 +123,7 @@ function startPlanUpdate(
     return {
       result: Fiber.join(resultFiber),
       session,
-      workPlanState,
+      shown,
       permission,
       decide,
     };
@@ -131,8 +139,10 @@ describe('PlanTool — update (plan approval)', () => {
     Effect.scoped(
       Effect.gen(function* () {
         yield* Effect.tryPromise(() => installFakePlatform());
-        const { result, workPlanState, permission, decide } =
-          yield* startPlanUpdate(generateRunId(), plan.objective);
+        const { result, shown, permission, decide } = yield* startPlanUpdate(
+          generateRunId(),
+          plan.objective,
+        );
 
         expect(permission.plan).toEqual(plan);
         decide({ action: 'approve' });
@@ -140,10 +150,7 @@ describe('PlanTool — update (plan approval)', () => {
         const outcome = yield* result;
         expect(outcome.status).toBe('executed');
         expect(outcome.output).toContain('Plan approved');
-        expect(workPlanState.plan).toEqual(plan);
-        expect(workPlanState.toSnapshot().planSummary).toBe(
-          planSummaryLine(plan.objective),
-        );
+        expect(shown.at(-1)).toEqual(plan);
       }),
     ),
   );
@@ -156,22 +163,24 @@ describe('PlanTool — update (plan approval)', () => {
           yield* Effect.tryPromise(() => installFakePlatform());
           const runId = generateRunId();
           const { session, awaitPlanRequest } = yield* planSession(runId);
-          const workspace = AgentWorkspaceState.create();
-          const workPlanState = workspace.workPlan;
 
           yield* Effect.addFinalizer(() =>
             Effect.sync(() => releaseRunResources(runId, session)),
           );
 
-          session.approvals.setDelegatedWorkBypasses(runId, true);
-          expect(session.approvals.proposal.isBypassed(runId)).toBe(true);
+          yield* session.approvals.change(
+            runId,
+            humanGrant(APPROVAL_BYPASS_KINDS, true),
+          );
+          expect(session.approvals.bypass(runId, 'superYolo') !== null).toBe(
+            true,
+          );
 
           const resultFiber = yield* Effect.forkScoped(
             PlanTool.call({ command: 'update', ...followUpPlan }).pipe(
               Effect.provide(
                 nativeToolTestLayer({
                   run: { runId, session, toolPolicy: {} },
-                  workspace,
                 }),
               ),
             ),
@@ -194,7 +203,7 @@ describe('PlanTool — update (plan approval)', () => {
     Effect.scoped(
       Effect.gen(function* () {
         yield* Effect.tryPromise(() => installFakePlatform());
-        const { result, workPlanState, decide } = yield* startPlanUpdate(
+        const { result, shown, decide } = yield* startPlanUpdate(
           generateRunId(),
           plan.objective,
         );
@@ -203,8 +212,7 @@ describe('PlanTool — update (plan approval)', () => {
 
         const outcome = yield* result;
         expect(outcome.status).toBe('error');
-        expect(workPlanState.plan).toBeNull();
-        expect(workPlanState.toSnapshot().planSummary).toBeNull();
+        expect(shown).toEqual([plan, null]);
       }),
     ),
   );
@@ -259,8 +267,8 @@ describe('PlanTool — update (plan approval)', () => {
           expect(goal!.status).toBe('active');
           // The approved plan document seeds the goal verbatim.
           expect(goal!.objective).toBe(plan.objective);
-          expect(session.approvals.bash.bypass.isBypassed(runId)).toBe(true);
-          expect(session.approvals.toolEdit.bypass.isBypassed(runId)).toBe(
+          expect(session.approvals.bypass(runId, 'bash') !== null).toBe(true);
+          expect(session.approvals.bypass(runId, 'toolEdit') !== null).toBe(
             false,
           );
         }),
@@ -291,11 +299,13 @@ describe('PlanTool — update (plan approval)', () => {
           expect(yield* result).toMatchObject({
             status: 'executed',
           });
-          expect(session.approvals.bash.bypass.isBypassed(runId)).toBe(true);
-          expect(session.approvals.toolEdit.bypass.isBypassed(runId)).toBe(
+          expect(session.approvals.bypass(runId, 'bash') !== null).toBe(true);
+          expect(session.approvals.bypass(runId, 'toolEdit') !== null).toBe(
             true,
           );
-          expect(session.approvals.proposal.isBypassed(runId)).toBe(true);
+          expect(session.approvals.bypass(runId, 'superYolo') !== null).toBe(
+            true,
+          );
         }),
       ),
   );
@@ -336,8 +346,8 @@ describe('PlanTool — update (plan approval)', () => {
           expect(goal!.status).toBe('active');
           expect(goal!.objective).toBe(followUpPlan.objective);
           expect(goal!.objective).not.toContain('Old objective');
-          expect(session.approvals.bash.bypass.isBypassed(runId)).toBe(true);
-          expect(session.approvals.toolEdit.bypass.isBypassed(runId)).toBe(
+          expect(session.approvals.bypass(runId, 'bash') !== null).toBe(true);
+          expect(session.approvals.bypass(runId, 'toolEdit') !== null).toBe(
             false,
           );
         }),
@@ -354,7 +364,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
     await installFakePlatform();
     RUN_ID = generateRunId();
     publishTestRunStart(testDefaultSession(), RUN_ID);
-    await Effect.runPromise(testDefaultSession().settlePublications());
+    await Effect.runPromise(testDefaultSession().log.settled);
   });
 
   function callTool(input: unknown) {
@@ -385,7 +395,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
         reason: 'Need API credentials from the user.',
       });
       expect(result.status).toBe('executed');
-      yield* testDefaultSession().settlePublications();
+      yield* testDefaultSession().log.settled;
       expect(goalOf(testDefaultSession(), RUN_ID)?.status).toBe('paused');
     }),
   );
@@ -401,7 +411,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
       expect(result.output).toContain('all 142 tests pass');
       // A finished goal is not archived: the run's next row states that none
       // is in flight, so the wait-node loop has nothing to continue.
-      yield* testDefaultSession().settlePublications();
+      yield* testDefaultSession().log.settled;
       expect(goalOf(testDefaultSession(), RUN_ID)).toBeNull();
     }),
   );

@@ -7,9 +7,10 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { postMessage } from '@shared/hostBridge';
-import { SignalWatcher } from '@shared/signals';
-import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
+import { postMessage } from '@texra/shared/hostBridge';
+import { isUnrecognizedCommand } from '@texra/shared/utils/dispatcher';
+import { SignalWatcher } from '@texra/shared/signals';
+import { installToolbarTooltips } from '@texra/shared/litControllers/TooltipController';
 
 // Local imports - shared styles
 
@@ -18,8 +19,7 @@ import {
   dispatchSettingsViewOutbound,
   type SettingsSectionName,
   type SettingsTabPanelName,
-} from '@shared/settingsView/settingsViewMessages';
-import { isUnrecognizedCommand } from '@shared/utils/dispatcher';
+} from '@texra/shared/settingsView/settingsViewMessages';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { nextTablistIndex } from '@ui/wa/tablistKeyboardNav';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
@@ -194,12 +194,6 @@ export class SettingsApp extends SignalWatcher(LitElement) {
     tabs[next].focus();
   }
 
-  private handleSetProviderKey(event: CustomEvent<{ provider: string }>): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY, {
-      provider: event.detail.provider,
-    });
-  }
-
   /**
    * The pages and sections this host shows: Shortcuts edits desktop key
    * bindings only, and the recommended VS Code settings exist only in VS Code.
@@ -319,7 +313,6 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             .helperModel=${helperModel.get()}
             .preferShortModelNames=${preferShortModelNames.get()}
             .usage=${subscriptionUsage.get()}
-            @provider-key-set=${this.handleSetProviderKey}
           >
             <subscriptions-tab
               slot="subscriptions"

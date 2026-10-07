@@ -3,23 +3,22 @@ import path from 'node:path';
 
 import { Effect, FileSystem, Result } from 'effect';
 
+import { DatabaseOpenFailed, type ConfigProvider } from '@texra-ai/harness';
+import { canonicalizeWorkspacePath } from '@texra-ai/harness/node';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
-import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
-import type { ConfigProvider } from '@platform/interfaces';
+import {
+  CLI_OUTPUT_FORMATS,
+  CLI_OUTPUT_FORMAT_CONFIG_KEY,
+  type CliOutputFormat,
+} from '@shared/schemas';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT,
   parseTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import {
-  CLI_OUTPUT_FORMATS,
-  CLI_OUTPUT_FORMAT_CONFIG_KEY,
-  type CliOutputFormat,
-} from '@shared/schemas';
-import { DatabaseOpenFailed } from '@shared/session/database';
 import type { SkillSourceOptions } from '@skills/skillSources';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { absentReason } from '@utils/files/fsEntryExists';
@@ -46,6 +45,10 @@ export interface CliContext {
   readonly mode: CliMode;
   readonly outputFormat: CliOutputFormat;
   readonly approvalPolicy: TexraApprovalPolicy;
+  /** The policy this invocation asked for itself (`--approval-policy`,
+   *  `TEXRA_APPROVAL_POLICY`, `--no-input`), absent when it follows the
+   *  config: what a service launch sends to narrow its own task. */
+  readonly requestedApprovalPolicy?: TexraApprovalPolicy;
   readonly quietLogs: boolean;
   /**
    * The diagnostics emission threshold this process's runtime builds with,
@@ -424,19 +427,21 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
     // set one — the environment is the only tier that can still carry an
     // unvalidated string. `--no-input` skips the env and config tiers
     // entirely, so it also skips their warnings.
-    const approvalPolicy: TexraApprovalPolicy =
+    const requestedApprovalPolicy: TexraApprovalPolicy | undefined =
       init.globalArgs.approvalPolicy ??
       (noInput
         ? TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT
-        : ((yield* pickEnv(
+        : yield* pickEnv(
             'TEXRA_APPROVAL_POLICY',
             parseTexraApprovalPolicy,
             configWarnings,
-          )) ??
-          readConfigSettingFrom<TexraApprovalPolicy>(
-            config,
-            TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-          )));
+          ));
+    const approvalPolicy: TexraApprovalPolicy =
+      requestedApprovalPolicy ??
+      readConfigSettingFrom<TexraApprovalPolicy>(
+        config,
+        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+      );
     const outputFormat: CliOutputFormat =
       init.globalArgs.outputFormat ??
       (yield* pickEnv(
@@ -460,6 +465,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       mode: cliMode(init.globalArgs, ambient),
       outputFormat,
       approvalPolicy,
+      ...(requestedApprovalPolicy !== undefined && { requestedApprovalPolicy }),
       quietLogs: init.globalArgs.quiet === true,
       minimumLogLevel,
       stdoutIsTty: ambient.stdoutIsTty,

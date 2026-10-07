@@ -3,13 +3,13 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel } from '@logger/effectLog';
 import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type LanguageModelAccessState,
   type LanguageModelInfo,
   type LanguageModelPort,
-} from '@platform/languageModel';
+} from '@texra-ai/harness';
+import { withLogChannel } from '@logger/effectLog';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { acquireVscodeLanguageModel } from './acquireVscodeLanguageModel';
 
@@ -74,16 +74,5 @@ export function createLanguageModelPort(
 
     acquire: (configuration) =>
       acquireVscodeLanguageModel(context, configuration),
-
-    onDidChange(listener) {
-      const models = lmApi.onDidChangeChatModels(listener);
-      const access = accessInformation.onDidChange(listener);
-      return {
-        dispose() {
-          models.dispose();
-          access.dispose();
-        },
-      };
-    },
   };
 }

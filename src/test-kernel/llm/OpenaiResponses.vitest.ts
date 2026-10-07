@@ -8,6 +8,7 @@ import { Cause, Deferred, Effect, Fiber, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, describe, expect, vi } from 'vitest';
 import { WebSocketServer, type WebSocket } from 'ws';
+import { z } from 'zod';
 import {
   type BackgroundEvent,
   completedTurn,
@@ -18,14 +19,11 @@ import {
   type TurnRequest,
 } from '@texra-ai/llm';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { toolDefinitionsFor } from '@tools/catalogEntries';
+import { ViewRangeSchema } from '@tools/formatting';
 import { ContinuationSchema } from '../../../packages/llm/src/message.js';
 import { openaiResponsesModel } from '../../../packages/llm/src/api/openaiResponses.js';
-import {
-  RESPONSES_PREFIX_DOMAIN,
-  openaiResponsesContinuation,
-} from '../../../packages/llm/src/api/openaiResponsesLower.js';
 import { openaiResponsesWebSocketModel } from '../../../packages/llm/src/api/openaiResponsesWebSocket.js';
-import { admittedFingerprint } from '../../../packages/llm/src/api/prefixFingerprint.js';
 import type { OpenAIResponsesConfiguration } from '../../../packages/llm/src/turn.js';
 
 const CONFIG: OpenAIResponsesConfiguration = {
@@ -105,11 +103,6 @@ const OPERATION: RemoteOperation = {
   },
   providerResponseId: 'resp_1',
   afterSequence: null,
-  // A handle only: cancellation never reads the digest, and every case that
-  // observes takes the operation `backgroundTurn` derives from its own
-  // admitted turn.
-  admittedFingerprint: 'f'.repeat(64),
-  store: false,
 };
 const REASONING = {
   type: 'reasoning',
@@ -203,17 +196,7 @@ function backgroundTurn(model: ReturnType<typeof modelWith>) {
       assert(
         turn.mode === 'background' && turn.protocol === 'openai-responses',
       );
-      return {
-        admitted: turn,
-        operation: {
-          ...OPERATION,
-          admittedFingerprint: admittedFingerprint(
-            RESPONSES_PREFIX_DOMAIN,
-            turn,
-          ),
-          store: turn.controls.store,
-        },
-      };
+      return { admitted: turn, operation: OPERATION };
     },
   );
 }
@@ -917,6 +900,40 @@ describe('native OpenAI Responses protocol', () => {
   );
 
   it.effect(
+    'sends a tuple parameter as an array with an items schema, which OpenAI requires',
+    () =>
+      Effect.gen(function* () {
+        const fetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockImplementation(async () => response(events([MESSAGE])));
+        const model = modelWith(fetch);
+        const turn = yield* model.prepareTurn({
+          ...REQUEST,
+          tools: toolDefinitionsFor([
+            {
+              name: 'memory',
+              description: 'Read memory.',
+              zodSchema: z.object({ view_range: ViewRangeSchema.nullish() }),
+            },
+          ]),
+        });
+        assert(turn.mode === 'foreground');
+        yield* completedTurn(model.streamTurn(turn));
+        const [tool] = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body)).tools;
+        expect(tool.parameters.properties.view_range.anyOf[0]).toStrictEqual({
+          type: 'array',
+          items: {
+            type: 'integer',
+            minimum: 1,
+            maximum: Number.MAX_SAFE_INTEGER,
+          },
+          minItems: 2,
+          maxItems: 2,
+        });
+      }),
+  );
+
+  it.effect(
     'refuses a document locally on a route that takes no input files',
     () =>
       Effect.gen(function* () {
@@ -1146,15 +1163,6 @@ describe('native OpenAI Responses protocol', () => {
           },
           providerResponseId: 'resp_1',
           afterSequence: 0,
-          // Recorded at admission, so the resumed observation below can tell
-          // that this turn is still the one the provider answered.
-          admittedFingerprint: admittedFingerprint(
-            RESPONSES_PREFIX_DOMAIN,
-            turn,
-          ),
-          // The storage mode the provider admitted, which a resumed
-          // observation re-prepares with instead of the current setting.
-          store: true,
         });
         // observe subtracts Clock.currentTimeMillis, which TestClock starts at 0.
         const policy = { deadlineAtMs: 60_000 };
@@ -1199,14 +1207,9 @@ describe('native OpenAI Responses protocol', () => {
         ]);
         const terminal = resumed.at(-1);
         assert(terminal?.kind === 'completed');
-        const continuation = yield* openaiResponsesContinuation(
-          configuration,
-          turn,
-          terminal.result,
-        );
-        assert(continuation && 'responseId' in continuation.anchor);
         // An observed background turn anchors exactly as a foreground one does.
-        expect(terminal.result.continuation).toEqual(continuation);
+        const continuation = terminal.result.continuation;
+        assert(continuation && 'responseId' in continuation.anchor);
         expect(continuation).toMatchObject({
           coveredMessages: 2,
           anchor: { kind: 'stored', responseId: 'resp_1', coveredItems: 5 },
@@ -1915,15 +1918,15 @@ describe('native OpenAI Responses protocol', () => {
   );
 
   it.effect.each([
-    ['cancelled', 'confirmed-cancelled'],
-    ['completed', 'observed-terminal'],
-    ['failed', 'observed-terminal'],
-    ['incomplete', 'observed-terminal'],
-    ['queued', 'unconfirmed'],
-    ['in_progress', 'unconfirmed'],
+    'cancelled',
+    'completed',
+    'failed',
+    'incomplete',
+    'queued',
+    'in_progress',
   ])(
-    'reports cancellation status %s as %s without claiming ordering',
-    ([status, kind]) =>
+    'confirms a cancel only when the response reports %s as cancelled',
+    (status) =>
       Effect.gen(function* () {
         const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
           new Response(JSON.stringify(snapshot([], { status })), {
@@ -1932,16 +1935,11 @@ describe('native OpenAI Responses protocol', () => {
         );
         const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
         assert(model.background);
-        const result = yield* model.background.cancel({
-          ...OPERATION,
-          afterSequence: 0,
-        });
-        expect(result).toMatchObject({
-          kind,
-          providerResponseId: 'resp_1',
-          returnedModel: 'returned-model',
-        });
-        expect(result).not.toHaveProperty('result');
+        const exit = yield* Effect.exit(
+          model.background.cancel({ ...OPERATION, afterSequence: 0 }),
+        );
+        // Anything but a confirmed cancel leaves the operation observable.
+        expect(exit._tag).toBe(status === 'cancelled' ? 'Success' : 'Failure');
         expect(fetch).toHaveBeenCalledTimes(1);
         expect(String(fetch.mock.calls[0]?.[0])).toContain(
           '/responses/resp_1/cancel',
@@ -2331,9 +2329,6 @@ describe('native OpenAI Responses protocol', () => {
         assert(result.providerResponseId !== null);
         expect(result.continuation).toBeUndefined();
         expect(
-          yield* openaiResponsesContinuation(configuration, turn, result),
-        ).toBeUndefined();
-        expect(
           (yield* model.prepareTurn({ ...REQUEST, system: '  ' })).system,
         ).toBe("Follow the user's instructions.");
         for (const control of [
@@ -2394,26 +2389,96 @@ describe('native OpenAI Responses protocol', () => {
       }),
   );
 
+  it.effect(
+    'finishes with tool calls when the terminal snapshot omits the streamed calls',
+    () =>
+      Effect.gen(function* () {
+        const fetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockResolvedValue(response(events(CALLS, snapshot([]))));
+        const model = modelWith(fetch);
+        const result = yield* model.prepareTurn(REQUEST).pipe(
+          Effect.flatMap((turn) => {
+            assert(turn.mode === 'foreground');
+            return completedTurn(model.streamTurn(turn));
+          }),
+        );
+        expect(result).toMatchObject({
+          finishReason: 'tool-calls',
+          content: CALLS.map((call) => ({
+            kind: 'local-call',
+            providerCallId: call.call_id,
+          })),
+        });
+      }),
+  );
+
   it.effect.each([
     {
       name: 'changed message phase',
       final: snapshot([REASONING, { ...MESSAGE, phase: 'final_answer' }]),
     },
     {
-      name: 'reordered completed items',
-      final: snapshot([MESSAGE, REASONING]),
+      name: 'reordered items',
+      final: snapshot([...CALLS, MESSAGE, REASONING]),
+    },
+    {
+      name: 'respaced local-call arguments',
+      final: snapshot([
+        REASONING,
+        MESSAGE,
+        { ...CALLS[0], arguments: '{ "path" : "a" }' },
+        ...CALLS.slice(1),
+      ]),
+    },
+  ])(
+    'keeps each item as its done event delivered it against a $name terminal snapshot',
+    ({ final }) =>
+      Effect.gen(function* () {
+        const run = (frames: object[]) =>
+          Effect.gen(function* () {
+            const model = modelWith(
+              vi
+                .fn<typeof globalThis.fetch>()
+                .mockResolvedValue(response(frames)),
+            );
+            const turn = yield* model.prepareTurn(REQUEST);
+            assert(turn.mode === 'foreground');
+            return yield* completedTurn(model.streamTurn(turn));
+          });
+        const faithful = yield* run(events(OUTPUT));
+        const contradicted = yield* run(events(OUTPUT, final));
+        expect(contradicted.content).toEqual(faithful.content);
+        expect(contradicted.content).toMatchObject([
+          { kind: 'reasoning', evidence: { itemId: 'rs_1' } },
+          {
+            kind: 'message',
+            evidence: { itemId: 'msg_1', phase: 'commentary' },
+          },
+          {
+            kind: 'local-call',
+            providerCallId: 'call_1',
+            argumentsText: '{"path":"a"}',
+          },
+          {
+            kind: 'local-call',
+            providerCallId: 'call_2',
+            argumentsText: '{"path":"b"}',
+          },
+        ]);
+      }),
+  );
+
+  it.effect.each([
+    {
+      name: 'a local call only the terminal snapshot names',
+      final: snapshot([...OUTPUT.slice(0, 3)]),
+      output: OUTPUT.slice(0, 2),
     },
     {
       name: 'invalid local-call arguments',
       final: snapshot([{ ...CALLS[0], arguments: '{' }]),
       output: [{ ...CALLS[0], arguments: '{' }],
-    },
-    {
-      // Reconciliation compares the provider's exact bytes, so a terminal
-      // snapshot that re-spaces the same arguments is a conflict, not a match.
-      name: 'respaced local-call arguments',
-      final: snapshot([{ ...CALLS[0], arguments: '{ "path" : "a" }' }]),
-      output: [CALLS[0]!],
     },
     {
       name: 'changed local-call ID',

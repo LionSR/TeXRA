@@ -9,11 +9,16 @@ import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 
 import { AgentConfigSchema, type AgentConfigPayload } from '@agent/runtime';
-import type { ServiceClient } from '@controllers/server/client';
-import type { TaskSummary } from '@controllers/server/protocol';
-import type { RunId } from '@shared/schemas';
-import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+import { stricterPolicy } from '@shared/approvalBypassKind';
+import {
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+  texraApprovalPolicyLabel,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
 import type { RequestErrorWire } from '@shared/session/sessionFrames';
+import type { TaskSummary } from '@texra/controllers/server/protocol';
+import type { ServiceClient } from '@texra/controllers/server/client';
+import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -22,7 +27,7 @@ import { CliUsageError, type CliContext } from '../runtime/cliContext';
 import { connectCliService } from '../runtime/cliService';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
-import { getStdoutColumns } from '../runtime/logSinks';
+import { getStdoutColumns, writeTextStderr } from '../runtime/logSinks';
 import { selectCliRunModel } from '../runtime/runModel';
 import { attachTask, describeWireRefusal } from '../runtime/taskAttach';
 import { runOutcomeExitCode } from '../runtime/terminalStatus';
@@ -31,6 +36,8 @@ import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
+import type { Outcome, RuntimeRequest } from '@texra-ai/harness';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The text width an attach lays rows out at when stdout is not a terminal,
  *  so a saved transcript does not depend on who saved it. */
@@ -172,6 +179,23 @@ const startCommand = defineCliCommand({
           new CliUsageError('--instruction must not be empty.'),
         );
       const services = yield* initCliPlatform(context);
+      // The task runs in the service under the project's persisted policy.
+      // A policy this command asked for (its flag, its env variable,
+      // `--no-input`) rides the launch and narrows this task for good; a
+      // more permissive one is said and ignored, since no client widens
+      // the project's.
+      const requested = context.requestedApprovalPolicy;
+      const configured = readConfigSettingFrom<TexraApprovalPolicy>(
+        services.config,
+        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+      );
+      if (
+        requested !== undefined &&
+        stricterPolicy(requested, configured) !== requested
+      )
+        writeTextStderr(
+          `The task runs in the TeXRA service under the project's approval policy, ${texraApprovalPolicyLabel(configured)}, not ${texraApprovalPolicyLabel(requested)}: a launch can only narrow it. Change the project's policy with /approval in \`texra chat\` or in the settings view.`,
+        );
       const agent = yield* resolveCliRunAgent(services, ctx.args.agent);
       const model = yield* selectCliRunModel(
         context,
@@ -200,13 +224,6 @@ const startCommand = defineCliCommand({
       const runId = yield* Effect.scoped(
         Effect.gen(function* () {
           const { client } = yield* connectCliService(context.storageRoot);
-          // This command's approval policy (its flag, `--no-input`, or the
-          // config) becomes the project's in the service before the task
-          // starts, so the task runs under what this command was asked.
-          yield* client['project.policy']({
-            workspace: context.cwd,
-            policy: context.approvalPolicy,
-          });
           return yield* client['task.start']({
             workspace: context.cwd,
             runId: generateRunId(),
@@ -214,6 +231,7 @@ const startCommand = defineCliCommand({
             continues: null,
             preferHelperModel: false,
             ownApiKeyFallback: false,
+            approvalPolicy: context.requestedApprovalPolicy ?? null,
             approveDelegatedWork: false,
           });
         }),

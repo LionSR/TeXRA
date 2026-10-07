@@ -5,9 +5,11 @@ import * as vscode from 'vscode';
 // Local imports
 import type { SessionHandle } from '@agent/runtime';
 import { getFilterExtensions } from '@common/files/fileTypeUtils';
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import {
+  showLoggedErrorMessage,
+  showLoggedInfoMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import { selectFiles } from '@frontend/ui/dialogs';
-import { withLogChannel } from '@logger/effectLog';
 import type { MultipleDocumentFileType } from '@shared/schemas';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
@@ -23,18 +25,17 @@ function announceSelection<E>(
   select: Effect.Effect<string[] | null, E>,
 ): Effect.Effect<string[] | null> {
   return select.pipe(
-    Effect.flatMap((result) => {
-      if (!result) {
-        return Effect.succeed(null);
-      }
-
-      const message = `Selected files: ${result.join(', ')}`;
-      vscode.window.showInformationMessage(message);
-      return Effect.logInfo(message).pipe(
-        withLogChannel(CHANNEL),
-        Effect.as(result),
-      );
-    }),
+    // The toast resolves only when dismissed, so the picker does not wait on it.
+    Effect.tap((result) =>
+      result
+        ? Effect.forkDetach(
+            showLoggedInfoMessage(
+              CHANNEL,
+              `Selected files: ${result.join(', ')}`,
+            ),
+          )
+        : Effect.void,
+    ),
     Effect.catch((err) =>
       showLoggedErrorMessage(
         CHANNEL,
@@ -48,15 +49,13 @@ function announceSelection<E>(
 function createMultiPicker(
   session: SessionHandle,
   options: PickerOptions,
-): (currentFile?: string) => Effect.Effect<string[] | null> {
-  return (currentFile) =>
+): () => Effect.Effect<string[] | null> {
+  return () =>
     announceSelection(
       selectFiles({
-        currentFile,
         workspacePath: session.roots.workspace,
         openLabel: options.openLabel,
         filters: options.filters(),
-        allowMany: true,
       }),
     );
 }
@@ -67,10 +66,7 @@ function createMultiPicker(
  */
 export function createFileSelectionPickers(
   session: SessionHandle,
-): Record<
-  MultipleDocumentFileType,
-  (currentFile?: string) => Effect.Effect<string[] | null>
-> {
+): Record<MultipleDocumentFileType, () => Effect.Effect<string[] | null>> {
   return {
     input: createMultiPicker(session, {
       openLabel: 'Select Files',

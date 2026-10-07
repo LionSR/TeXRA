@@ -12,12 +12,12 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import { APPROVE_SESSION_ACTION } from '@shared/session/approvalDecision';
-import { SessionUiEvents } from '@shared/session/uiEvents';
-import type { RuntimeRequest } from '@shared/session/runtimeRequest';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { RUN_GRANT_LABEL } from '@ui/copy/delegationApproval';
 
 // Local imports - shared helpers
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { pluralize } from '@utils/text/stringUtils';
 
@@ -26,6 +26,7 @@ import { BaseRequestPanel, type RunGrant } from './BaseRequestPanel';
 
 // Local imports - styles
 import { toolEditRequestPanelStyles } from './ToolEditRequestPanel.styles';
+import type { RuntimeRequest } from '@texra-ai/harness';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 @customElement('tool-edit-request-panel')
@@ -174,8 +175,7 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
   // ===========================================================================
 
   private handleMenuSelect = (event: WaSelectEvent): void => {
-    const { item } = event.detail;
-    const action = 'value' in item ? item.value : undefined;
+    const action = selectedItemValue(event);
     switch (action) {
       case 'showLatexdiff':
       case 'previewProposed':

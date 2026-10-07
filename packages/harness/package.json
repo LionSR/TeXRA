@@ -1,6 +1,6 @@
 {
   "name": "@texra-ai/harness",
-  "version": "0.41.0",
+  "version": "0.1.0",
   "description": "Embeddable TeXRA agent runtime",
   "license": "Apache-2.0",
   "author": "TeXRA.ai",
@@ -12,7 +12,6 @@
   "bugs": {
     "url": "https://github.com/LionSR/TeXRA/issues"
   },
-  "type": "module",
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
   },
@@ -44,23 +43,17 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "example:packed": "npm run build && rm -f example/*.tgz && corepack pnpm pack --pack-destination example && mv example/texra-ai-harness-*.tgz example/harness.tgz && cd example && npm install ./harness.tgz && npm start",
-    "prepack": "npm run build"
+    "example:packed": "npm run build && rm -f example/*.tgz && corepack pnpm --filter @texra-ai/llm pack --pack-destination \"$PWD/example\" && corepack pnpm pack --pack-destination example && mv example/texra-ai-harness-*.tgz example/harness.tgz && mv example/texra-ai-llm-*.tgz example/llm.tgz && cd example && npm install ./llm.tgz ./harness.tgz && npm start",
+    "prepack": "node -e \"if (!/^pnpm\\//.test(process.env.npm_config_user_agent ?? '')) { console.error('Pack and publish with pnpm: only it applies publishConfig.exports and resolves workspace: versions.'); process.exit(1); }\" && npm run build"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "catalog:",
     "@cantoo/pdf-lib": "catalog:",
-    "@date-fns/tz": "catalog:",
     "@effect/platform-node": "catalog:",
     "@effect/sql-sqlite-node": "catalog:",
-    "@google/genai": "catalog:",
     "@jitl/quickjs-wasmfile-release-sync": "catalog:",
-    "@openrouter/sdk": "catalog:",
-    "acorn": "catalog:",
-    "acorn-walk": "catalog:",
+    "@texra-ai/llm": "workspace:*",
     "date-fns": "catalog:",
     "diff": "catalog:",
-    "diff-match-patch": "catalog:",
     "escape-string-regexp": "catalog:",
     "glob": "catalog:",
     "http-status-codes": "catalog:",
@@ -73,7 +66,6 @@
     "mime-types": "catalog:",
     "nanoid": "catalog:",
     "nunjucks": "catalog:",
-    "openai": "catalog:",
     "pathe": "catalog:",
     "postal-mime": "catalog:",
     "pretty-bytes": "catalog:",
@@ -81,20 +73,22 @@
     "quickjs-emscripten-core": "catalog:",
     "safe-stable-stringify": "catalog:",
     "shell-quote": "catalog:",
-    "strip-ansi": "^7.2.0",
     "turndown": "catalog:",
     "turndown-plugin-gfm": "catalog:",
     "undici": "catalog:",
     "which": "catalog:",
     "write-file-atomic": "catalog:",
-    "ws": "^8.22.0",
     "yaml": "catalog:"
   },
   "peerDependencies": {
-    "effect": "4.0.0",
+    "effect": "^4.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/mime-types": "^3.0.1",
+    "@types/nunjucks": "^3.2.6",
+    "@types/turndown": "^5.0.6",
+    "@types/write-file-atomic": "^4.0.3",
     "@typescript/native": "catalog:",
     "effect": "catalog:",
     "esbuild": "catalog:",

@@ -171,7 +171,7 @@ describe('MCP server plugins', () => {
           (session) => closeSessionOf(session),
         );
         publishTestRunStart(session, runId);
-        yield* session.settlePublications();
+        yield* session.log.settled;
         const requestOpened = yield* Deferred.make<void>();
         const requests = yield* Effect.acquireRelease(
           Effect.sync(() =>

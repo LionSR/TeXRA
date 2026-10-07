@@ -8,7 +8,7 @@
  * import for dispatch and palette rendering.
  */
 
-import type { DesktopPlatform } from '@shared/commands/accelerators';
+import type { DesktopPlatform } from '@texra/shared/commands/accelerators';
 
 import {
   DESKTOP_HELP_COMMANDS,

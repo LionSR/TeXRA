@@ -3,7 +3,7 @@ import '@test/support/sessionGraphTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect, Fiber, Stream } from 'effect';
 import { describe, expect, onTestFinished, vi } from 'vitest';
 
 // Local imports
@@ -22,7 +22,9 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   createTestSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import { generateRunId } from '@utils/core';
 
 // Local file imports
@@ -64,6 +66,10 @@ describe('desktop agent run completion hook', () => {
           closeDiff: () => Effect.void,
         },
         session,
+        backend: localSessionBackend(session),
+        focused: Stream.empty,
+        service: undefined,
+        root: undefined,
         runtime: testRuntime(),
         showAgentConfigBanner: () => Effect.void,
         onRunCompleted: Effect.sync(onRunCompleted),
@@ -82,8 +88,8 @@ describe('desktop agent run completion hook', () => {
         { startImmediately: true },
       );
       const completedRun = publishTestRunStart(session, generateRunId());
-      session.publish([completedRunEnd(completedRun)]);
-      yield* session.settlePublications();
+      publishTestRows(session, [completedRunEnd(completedRun)]);
+      yield* session.log.settled;
       expect(onRunCompleted).not.toHaveBeenCalled();
 
       yield* Deferred.succeed(launchSettled, undefined);

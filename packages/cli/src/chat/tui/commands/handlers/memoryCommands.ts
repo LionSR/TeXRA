@@ -7,8 +7,8 @@ import {
   runCliMemory,
 } from '@cli/runtime/memory';
 import { openInfoPane } from '@cli/chat/tui/state/cliState';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 
 /** The roots the chat surface holds, which its memory reads run over. */
 type MemoryRoots = Pick<

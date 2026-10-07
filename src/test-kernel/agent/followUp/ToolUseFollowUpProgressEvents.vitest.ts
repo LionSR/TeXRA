@@ -82,7 +82,7 @@ describe('tool-use follow-up progress events', () => {
         const run = createRecordingHost();
         const session = yield* trackSession();
         publishTestRunStart(session, runId);
-        yield* session.settlePublications();
+        yield* session.log.settled;
         const input = yield* session.followUps.open(runId);
 
         trackRunControls({ session });
@@ -120,7 +120,9 @@ describe('tool-use follow-up progress events', () => {
         // A finished run's driver released its claim when its scope closed;
         // these rows stand in for that driver, so the claim they took goes
         // back here too: a hold taken and let go releases it.
-        yield* Effect.scoped(testDefaultSession().holdRunClaim(runId));
+        yield* Effect.scoped(
+          testDefaultSession().log.hold(runId, { ends: true }),
+        );
         trackRunControls();
 
         const result = yield* submitFollowUp(

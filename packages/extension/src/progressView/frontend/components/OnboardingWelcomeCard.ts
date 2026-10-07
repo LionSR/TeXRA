@@ -4,7 +4,7 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 import { GETTING_STARTED_ACTION_PRESENTATION } from '@shared/schemas';
-import { SessionUiEvents } from '@shared/session/uiEvents';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import {

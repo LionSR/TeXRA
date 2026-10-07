@@ -1,7 +1,7 @@
 import { Effect, type Fiber } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@texra-ai/harness';
 
 /** The in-flight clipboard image pastes of one input bar, as the fibers the
  *  runtime forked for them, and the submit deferred until they land. */

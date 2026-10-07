@@ -1,0 +1,426 @@
+/**
+ * The host-neutral bridge owner of a session's webview ports (PRD
+ * one-fold-three-renderers, 7.4, 8.1 to 8.5): one framer fiber per attached
+ * port, the `Subscribe` handler, and the two request handlers. The
+ * extension attaches its sidebar webview and its editor tab as two ports,
+ * the desktop attaches its renderer per open paper; each port's frames are
+ * cut from the same session graph and each port's transcript set is one
+ * member of the union the fold sees. What the host renders but does not own
+ * rides every port's frames as the `host` snapshot, one level per backend
+ * that the host's producers write through `setHost`.
+ *
+ * Ownership is scoped (7.7): `make` builds the bridge in the scope its host
+ * holds and closes; `attach` forks a port scope from it, and the port's
+ * framer fiber runs in a scope forked from that one, so closing a port
+ * releases its transcript set and tells the host before it interrupts the
+ * replay, and closing the bridge closes every port the same way. A request
+ * runs in the bridge's scope, not the port's, and uninterruptible: a `stop`
+ * or a decision sent just before a tab closes still completes, and closing
+ * the bridge drains the requests in flight rather than cutting them; an
+ * answer whose port is gone is dropped.
+ *
+ * A `runtime.request` runs the backend's `request` and posts one
+ * `Response` under the request's id; a `host.request` runs the host's
+ * handler the same way. A message the bridge cannot parse is answered
+ * `Invalid` when it names a request id, and reported otherwise: a silent
+ * drop would leave the sender's latch pending forever. A handler that dies
+ * is answered `Internal` under the request id the host log carries the
+ * cause under (7.6): the surface hears that it failed, never the text (C3).
+ */
+import {
+  Cause,
+  Data,
+  Effect,
+  Exit,
+  Fiber,
+  Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
+import { z } from 'zod';
+
+import {
+  Internal,
+  isRequestRefusal,
+  type HostRequestFailure,
+  type RequestError,
+} from '@texra-ai/harness';
+import { withLogChannel } from '@logger/effectLog';
+import type { HostRequest } from '@shared/session/hostRequest';
+import type { HostSnapshot } from '@shared/session/hostSnapshot';
+import {
+  UpMessageSchema,
+  type DownMessage,
+  type HostOutcome,
+  type RequestErrorWire,
+  type Response,
+  type Subscribe,
+  type SurfaceActionMessage,
+} from '@shared/session/sessionFrames';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { ProcessServices } from '@texra-ai/harness';
+
+const CHANNEL = 'SessionBridge';
+
+/** Enough of any up message to answer it: a message that names a request
+ *  id gets its `Invalid` response even when the rest did not parse. */
+const RequestEnvelopeSchema = z.object({
+  session: z.string(),
+  requestId: z.string().min(1),
+});
+
+interface SessionBridgeOptions {
+  /** The session this bridge frames and requests through. */
+  readonly backend: SessionBackend;
+  readonly onPortClosed: (port: string) => void;
+  /** The host's capabilities (8.3), performed on the surface's behalf, as
+   *  one program per request that takes the process services from the fiber
+   *  the host's transport runs `receive` on. A handler cancels with
+   *  `Cancelled` or refuses with `Unavailable` or `Rejected`; anything else
+   *  it fails or dies with is a defect, logged here and answered
+   *  `Internal`. The channel is {@link HostRequestFailure}: each host lifts
+   *  a Promise-faced capability once, under the member's name, so every arm
+   *  fails with a tag and a bare rejection value can no longer reach this
+   *  fold. The last arm that widened it to `Error` was the transcript
+   *  export; its steps carry tags now. */
+  readonly handleHostRequest: (
+    request: HostRequest,
+    port: string,
+  ) => Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices>;
+}
+
+/** One attached transport port: the host posts `send`'s messages to it. */
+interface SessionPort {
+  readonly id: string;
+  readonly send: (message: DownMessage) => void;
+}
+
+/** What the backend gives a host per attached port. */
+export interface AttachedPort {
+  /** One message from the port, unparsed. */
+  readonly receive: (
+    message: unknown,
+  ) => Effect.Effect<void, never, ProcessServices>;
+  /** One host action for this port alone (the composer's Send, the
+   *  drawer, the chime), held like {@link SessionBridge.surfaceAction}'s
+   *  until the port is live. */
+  readonly surfaceAction: (action: SurfaceActionMessage['action']) => void;
+  /** The port went away: its transcript set leaves the union, the host
+   *  hears it, and its replay is interrupted. A second close is a no-op. */
+  readonly close: Effect.Effect<void>;
+}
+
+/** Expected refusal when a host attaches after the bridge has closed. */
+class SessionBridgeClosedError extends Data.TaggedError(
+  'SessionBridgeClosedError',
+) {
+  override get message(): string {
+    return 'SessionBridge is closed; cannot attach a port';
+  }
+}
+
+function wireError(error: RequestError): RequestErrorWire {
+  switch (error._tag) {
+    case 'NotOwner':
+      return { _tag: 'NotOwner', runId: error.runId };
+    case 'Unavailable':
+      return {
+        _tag: 'Unavailable',
+        runId: error.runId,
+        reason: error.reason,
+      };
+    case 'Cancelled':
+      return { _tag: 'Cancelled' };
+    case 'Rejected':
+      return {
+        _tag: 'Rejected',
+        reason: error.reason,
+        ...(error.docsPage && { docsPage: error.docsPage }),
+      };
+    case 'Internal':
+      return { _tag: 'Internal', ref: error.ref };
+  }
+}
+
+/** One attached port: its transport, its scopes, and the framer in flight. */
+interface PortEntry {
+  readonly port: SessionPort;
+  /** The port's lifetime: `close` closes it, the bridge's scope closes it
+   *  last. */
+  readonly scope: Scope.Closeable;
+  /** The framer fiber's home, forked from {@link scope} before the release
+   *  finalizer is registered: finalizers close last-in first-out, so the
+   *  port is released (its map entry, its transcript set, the host's
+   *  `onPortClosed`) before the replay is interrupted, and a host that
+   *  closes a port and re-attaches under the same id in one turn finds the
+   *  id free. */
+  readonly framers: Scope.Closeable;
+  readonly close: Effect.Effect<void>;
+  fiber: Fiber.Fiber<void> | null;
+  /** Host actions sent before the port's first `Subscribe`, in order, or
+   *  null once it has subscribed. A port is live only when its surface has
+   *  mounted and asked for frames: a message posted to a webview whose
+   *  document is still loading is dropped, so an action that opens a fresh
+   *  surface would otherwise never reach it (#12495). */
+  held: SurfaceActionMessage[] | null;
+}
+
+export class SessionBridge {
+  /** The bridge in the caller's scope: the host holds that scope and closes
+   *  it when the window it serves goes away. */
+  static make(
+    options: SessionBridgeOptions,
+  ): Effect.Effect<SessionBridge, never, Scope.Scope> {
+    return Effect.gen(function* () {
+      const host = yield* SubscriptionRef.make<HostSnapshot | null>(null);
+      const scope = yield* Effect.scope;
+      return new SessionBridge(options, host, scope);
+    });
+  }
+
+  /** The session key on every message: the session's storage root. */
+  readonly key: string;
+  private readonly ports = new Map<string, PortEntry>();
+
+  private constructor(
+    private readonly options: SessionBridgeOptions,
+    private readonly host: SubscriptionRef.SubscriptionRef<HostSnapshot | null>,
+    private readonly scope: Scope.Scope,
+  ) {
+    this.key = options.backend.key;
+  }
+
+  /** The host's producers write the snapshot every port frames (8.1). */
+  setHost(snapshot: HostSnapshot): Effect.Effect<void> {
+    return SubscriptionRef.set(this.host, snapshot);
+  }
+
+  /** The host acting on surface-owned state (8.5): every attached port
+   *  applies it, so the sidebar and the editor tab follow together. */
+  surfaceAction(action: SurfaceActionMessage['action']): void {
+    for (const entry of this.ports.values()) this.act(entry, action);
+  }
+
+  private act(entry: PortEntry, action: SurfaceActionMessage['action']): void {
+    const message: SurfaceActionMessage = {
+      kind: 'surface.action',
+      session: this.key,
+      action,
+    };
+    if (entry.held) entry.held.push(message);
+    else entry.port.send(message);
+  }
+
+  attach(
+    port: SessionPort,
+  ): Effect.Effect<AttachedPort, SessionBridgeClosedError> {
+    return Effect.gen({ self: this }, function* () {
+      // A port re-attaching under a live id supersedes the previous one.
+      // Close it to completion before installing the replacement so the old
+      // entry's cleanup cannot be skipped by the new map entry.
+      const previous = this.ports.get(port.id);
+      if (previous) {
+        yield* previous.close;
+      }
+      const scope = yield* Scope.fork(this.scope);
+      const framers = yield* Scope.fork(scope);
+      // `Scope.fork` of a closed parent hands back an already-closed child
+      // rather than failing, so the closed-bridge check has to observe the
+      // forked scopes before the port is registered.
+      if (
+        this.scope.state._tag === 'Closed' ||
+        scope.state._tag === 'Closed' ||
+        framers.state._tag === 'Closed'
+      ) {
+        yield* Scope.close(framers, Exit.void);
+        yield* Scope.close(scope, Exit.void);
+        return yield* Effect.fail(new SessionBridgeClosedError());
+      }
+      const entry: PortEntry = {
+        port,
+        scope,
+        framers,
+        close: Scope.close(scope, Exit.void),
+        fiber: null,
+        held: [],
+      };
+      const { backend, onPortClosed } = this.options;
+      yield* Scope.addFinalizer(
+        scope,
+        Effect.suspend(() => {
+          if (this.ports.get(port.id) !== entry) return Effect.void;
+          this.ports.delete(port.id);
+          return backend
+            .transcripts(port.id, [])
+            .pipe(Effect.andThen(Effect.sync(() => onPortClosed(port.id))));
+        }),
+      );
+      this.ports.set(port.id, entry);
+      return {
+        receive: (message) => this.receive(entry, message),
+        surfaceAction: (action) => {
+          if (this.ports.get(port.id) === entry) this.act(entry, action);
+        },
+        close: entry.close,
+      };
+    });
+  }
+
+  /**
+   * Answer a `Subscribe`: the next replay's fiber interrupts the one in
+   * flight before its first frame, so the superseded generation stops
+   * before the next starts and `receive` never waits on it; the frames a
+   * dying fiber still cuts echo its generation and the decoder drops them.
+   */
+  private subscribe(
+    entry: PortEntry,
+    subscribe: Subscribe,
+  ): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      const previous = entry.fiber;
+      // Nothing joins this fiber: a failed replay or tail read would stop the
+      // port's transcript with no trace, so its death is logged here.
+      const frames = Stream.runForEach(
+        this.options.backend.frames(entry.port.id, this.host, subscribe),
+        (frame) => Effect.sync(() => entry.port.send(frame)),
+      ).pipe(
+        Effect.tapCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.void
+            : Effect.logError(
+                `Transcript frames for port ${entry.port.id} stopped; the port no longer updates`,
+                cause,
+              ).pipe(withLogChannel(CHANNEL)),
+        ),
+      );
+      return Effect.forkIn(
+        previous
+          ? Fiber.interrupt(previous).pipe(Effect.andThen(frames))
+          : frames,
+        entry.framers,
+      ).pipe(
+        Effect.map((fiber) => {
+          entry.fiber = fiber;
+        }),
+      );
+    });
+  }
+
+  private receive(
+    entry: PortEntry,
+    message: unknown,
+  ): Effect.Effect<void, never, ProcessServices> {
+    return Effect.suspend(() => {
+      const { port } = entry;
+      if (this.ports.get(port.id) !== entry) return Effect.void;
+      const parsed = UpMessageSchema.safeParse(message);
+      if (!parsed.success) {
+        const envelope = RequestEnvelopeSchema.safeParse(message);
+        const reason = `Unparseable message from port ${port.id}: ${z.prettifyError(parsed.error)}`;
+        return Effect.logWarning(reason).pipe(
+          withLogChannel(CHANNEL),
+          Effect.andThen(
+            Effect.sync(() => {
+              if (!envelope.success) return;
+              port.send({
+                kind: 'response',
+                session: envelope.data.session,
+                requestId: envelope.data.requestId,
+                result: { ok: false, error: { _tag: 'Invalid', reason } },
+              });
+            }),
+          ),
+        );
+      }
+      const up = parsed.data;
+      if (up.session !== this.key) {
+        return Effect.logWarning(
+          `Port ${port.id} addressed session ${up.session}; this backend is ${this.key}`,
+        ).pipe(withLogChannel(CHANNEL));
+      }
+      switch (up.kind) {
+        case 'subscribe': {
+          // The surface is live: what the host did while it loaded lands
+          // now, once, before its first frame.
+          const held = entry.held;
+          entry.held = null;
+          for (const message of held ?? []) port.send(message);
+          return this.subscribe(entry, up);
+        }
+        case 'runtime.request':
+          return this.answer(
+            entry,
+            up.requestId,
+            this.options.backend.request(up.request).pipe(
+              Effect.match({
+                onFailure: (error): Response['result'] => ({
+                  ok: false,
+                  error: wireError(error),
+                }),
+                onSuccess: (outcome): Response['result'] => ({
+                  ok: true,
+                  outcome,
+                }),
+              }),
+            ),
+          );
+        case 'host.request':
+          return this.answer(
+            entry,
+            up.requestId,
+            this.options.handleHostRequest(up.request, port.id).pipe(
+              Effect.matchEffect({
+                onFailure: (error): Effect.Effect<Response['result']> =>
+                  isRequestRefusal(error)
+                    ? Effect.succeed({ ok: false, error: wireError(error) })
+                    : Effect.die(error),
+                onSuccess: (outcome): Effect.Effect<Response['result']> =>
+                  Effect.succeed({ ok: true, outcome }),
+              }),
+            ),
+          );
+      }
+    });
+  }
+
+  /**
+   * Run one request's answer in the bridge's scope and post it under the
+   * request id. A handler that died has its cause logged here and the port
+   * answered `Internal`, so the sender's latch clears.
+   */
+  private answer(
+    entry: PortEntry,
+    requestId: string,
+    result: Effect.Effect<Response['result'], never, ProcessServices>,
+  ): Effect.Effect<void, never, ProcessServices> {
+    return Effect.forkIn(
+      result.pipe(
+        Effect.catchCause((cause) =>
+          Effect.logError(
+            `Request ${requestId} from port ${entry.port.id} failed: ${toErrorMessage(Cause.squash(cause))}`,
+          ).pipe(
+            withLogChannel(CHANNEL),
+            Effect.as<Response['result']>({
+              ok: false,
+              error: wireError(new Internal({ ref: requestId })),
+            }),
+          ),
+        ),
+        Effect.flatMap((answer) =>
+          Effect.sync(() => {
+            if (this.ports.get(entry.port.id) !== entry) return;
+            entry.port.send({
+              kind: 'response',
+              session: this.key,
+              requestId,
+              result: answer,
+            });
+          }),
+        ),
+        Effect.uninterruptible,
+      ),
+      this.scope,
+    ).pipe(Effect.asVoid);
+  }
+}

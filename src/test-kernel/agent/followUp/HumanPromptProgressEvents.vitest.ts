@@ -5,7 +5,8 @@ import { it } from '@effect/vitest';
 // Local imports
 
 // Third-party imports
-import { afterEach, beforeEach, describe, expect } from 'vitest';
+import { beforeEach, describe, expect } from 'vitest';
+import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports
 
@@ -14,7 +15,7 @@ import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { AskUserQuestionTool } from '@tools/userQuestion/UserQuestionTool';
+import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool';
 import { requestBashApproval } from '@tools/approval/bashApproval';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 import { generateRunId } from '@utils/core';
@@ -53,10 +54,6 @@ function startedRun(): RunId {
 describe('human prompt progress events', () => {
   beforeEach(async () => {
     await installPlatform({});
-  });
-
-  afterEach(() => {
-    testDefaultSession().approvals.clearAll();
   });
 
   it.live('opens a bash request on the run and settles on its decision', () =>
@@ -138,7 +135,7 @@ describe('human prompt progress events', () => {
             {
               kind: 'userQuestion',
               data: {
-                requestId: expect.stringContaining('user-question-'),
+                requestId: expect.stringContaining('userQuestion-'),
                 questions: [
                   {
                     question,
@@ -170,9 +167,10 @@ describe('human prompt progress events', () => {
       }));
 
       try {
-        testDefaultSession().approvals.toolEdit.bypass.setBypass(runId, true, {
-          silent: true,
-        });
+        yield* testDefaultSession().approvals.change(
+          runId,
+          humanGrant(['toolEdit'], true),
+        );
 
         const approval = yield* inToolContext(
           explicit.interactions,
@@ -189,9 +187,10 @@ describe('human prompt progress events', () => {
 
         // A bash bypass answers without asking; the edit bypass above is not
         // what silenced it.
-        testDefaultSession().approvals.bash.bypass.setBypass(runId, true, {
-          silent: true,
-        });
+        yield* testDefaultSession().approvals.change(
+          runId,
+          humanGrant(['bash'], true),
+        );
 
         const bypassed = yield* inToolContext(
           explicit.interactions,
@@ -203,9 +202,10 @@ describe('human prompt progress events', () => {
         expect(bypassed).toEqual({ action: 'approve' });
         expect(decided.opened).toHaveLength(1);
 
-        testDefaultSession().approvals.toolEdit.bypass.setBypass(runId, false, {
-          silent: true,
-        });
+        yield* testDefaultSession().approvals.change(
+          runId,
+          humanGrant(['toolEdit'], false),
+        );
 
         const editApproval = yield* inToolContext(
           explicit.interactions,

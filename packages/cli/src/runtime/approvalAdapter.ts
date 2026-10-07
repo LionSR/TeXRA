@@ -13,7 +13,6 @@ import { Effect, Exit, Fiber, Result, Stream } from 'effect';
 
 import { type HostInteractions, type SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { texraApprovalDenialMessage } from '@shared/approvalPolicy';
 import { requestParksItsCaller } from '@shared/schemas';
 import type {
@@ -25,7 +24,6 @@ import type {
 } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-import { TOOL_OUTCOME_COPY } from '@ui/transcript/toolOutcome';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   type CliApprovalContent,
@@ -47,6 +45,7 @@ import {
 } from './userQuestionAnswer';
 import { type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
+import type { ProcessRuntime } from '@texra-ai/harness';
 
 const CHANNEL = 'cli.approval';
 
@@ -144,9 +143,11 @@ export function createHeadlessCliHostInteractions(
   hooks: HeadlessCliHostInteractionHooks = {},
 ): HostInteractions {
   // Headless composition seeds the session before attaching; tests often attach
-  // without that step, so mirror the seed here. TUI uses a different adapter
+  // without that step, so mirror the seed here: only a policy the invocation
+  // asked for overrides the project's setting. TUI uses a different adapter
   // and keeps the live session value from `/approval`.
-  session.setApprovalPolicy(context.approvalPolicy);
+  if (context.requestedApprovalPolicy !== undefined)
+    session.approvals.override(context.requestedApprovalPolicy);
   /** Only an interactive run can answer a prompt. */
   const promptsUnavailable = context.mode !== 'interactive';
   /** Requests this host has taken on, pruned as the fold drops them. */
@@ -261,19 +262,6 @@ export function createHeadlessCliHostInteractions(
           requestId,
           yield* askHeadlessUserQuestion(payload.data, context, hooks),
         );
-      case 'toolOutcome': {
-        const decision = yield* ask({
-          summary: `${TOOL_OUTCOME_COPY.question(payload.data)}\n${payload.data.title}\n${TOOL_OUTCOME_COPY.explanation} Run it again?`,
-        });
-        if (decision.action === 'approve')
-          return yield* decide(runId, requestId, { action: 'retry' });
-        // A prompt that closed decides nothing: the barrier is asked again.
-        return yield* decide(
-          runId,
-          requestId,
-          decision.action === 'reject' ? { action: 'skip' } : decision,
-        );
-      }
     }
   });
 
@@ -320,7 +308,7 @@ export function createHeadlessCliHostInteractions(
       ),
     );
 
-  const fiber = runtime.runFork(Stream.runForEach(session.viewChanges, take));
+  const fiber = runtime.runFork(Stream.runForEach(session.view.changes, take));
 
   return {
     emit: hooks.emit,

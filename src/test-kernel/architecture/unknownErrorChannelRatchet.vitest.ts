@@ -78,11 +78,10 @@ function unknownErrorChannels(file: string): string[] {
  * comparison, and no raw value reaches a typed channel. Counts are exact.
  */
 const IDENTITY_CATCH_JOINS: Readonly<Record<string, number>> = {
-  'packages/harness/src/effect/runtime.ts': 1,
   'packages/extension/src/frontend/lm/acquireVscodeLanguageModel.ts': 2,
   'packages/llm/src/api/openaiResponsesWebSocket.ts': 1,
   'packages/llm/src/api/transport.ts': 1,
-  'src/latex/arxivProcessor.ts': 1,
+  'packages/texra/src/latex/arxivProcessor.ts': 1,
 };
 
 /** The keys a foreign-rejection mapper is handed under: `Effect.try` /

@@ -3,6 +3,7 @@ import tseslint from 'typescript-eslint';
 import importPlugin from 'eslint-plugin-import-x';
 import globals from 'globals';
 import unicorn from 'eslint-plugin-unicorn';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -42,9 +43,9 @@ const COMPOSITION_ROOT_FILES = new Set([
   path.join(__dirname, 'packages/extension/src/extension.ts'),
   path.join(__dirname, 'packages/desktop/src/main/platform/index.ts'),
   path.join(__dirname, 'packages/cli/src/runtime/cliProcessRuntime.ts'),
-  // The package's composition root is `composeProcess`, which the Promise
-  // entry and the Effect subpath's `Sessions.layer` both call.
-  path.join(__dirname, 'packages/harness/src/effect/runtime.ts'),
+  // The package's composition root: `Sessions.layer` composes the process
+  // its projection serves.
+  path.join(__dirname, 'packages/harness/src/effect/sessions.ts'),
   // The test suite's composition root: the one harness file that installs
   // the process runtime the session graph runs on, over the plugin list its
   // setup module passes (`sessionGraphTestSetup`, `builtinSessionGraphTestSetup`).
@@ -103,35 +104,43 @@ const CLI_PROCESS_OUTPUT_BOUNDARY = [
 const CLI_PROCESS_IO_BOUNDARY = ['packages/cli/src/chat/tui/runChatTui.tsx'];
 
 const VSCODE_FREE_ZONE_DIRS = [
-  'src/agent',
-  'src/model',
-  'src/latex',
-  'src/tools',
-  'src/controllers',
-  'src/shared',
-  'src/ui',
-  'src/replacement',
-  'src/eventBus',
-  'src/hosts',
-  'src/common',
-  'src/utils',
-  'src/logger',
   'packages/harness/src',
+  'packages/texra/src',
   'packages/llm/src',
   'packages/desktop/src',
   'packages/extension/src/progressView/frontend',
   'packages/extension/src/settingsView/frontend',
 ].map((dir) => path.join(__dirname, dir));
+// A zone that names a missing directory would hold nothing: fail loudly, so
+// a move cannot leave the rule silently green.
+for (const dir of VSCODE_FREE_ZONE_DIRS) {
+  if (!existsSync(dir)) {
+    throw new Error(`VSCODE_FREE_ZONE_DIRS names a missing directory: ${dir}`);
+  }
+}
+
+// The SDK's entry files: the package's public surface and its Effect
+// boundary (the host door below), as opposed to the harness modules under it.
+const HARNESS_ENTRY_FILES = [
+  'packages/harness/src/index.ts',
+  'packages/harness/src/node.ts',
+  'packages/harness/src/plugins.ts',
+  'packages/harness/src/schemas.ts',
+];
+const HARNESS_ENTRY_GLOBS = [
+  ...HARNESS_ENTRY_FILES,
+  'packages/harness/src/effect/**/*.{ts,tsx,mts}',
+];
 
 // The named runtime entries that may call `Effect.run*` outside a host
 // package (the no-restricted-syntax block below); the core-quality ratchet
 // reads the same list.
 export const EFFECT_RUN_ENTRIES = [
   'packages/extension/src/progressView/frontend/sessionTransport.ts',
-  'src/shared/signals.ts',
-  'src/platform/processRuntime.ts',
+  'packages/texra/src/shared/signals.ts',
+  'packages/harness/src/platform/processRuntime.ts',
   // Worker entry: no process runtime exists in the worker.
-  'src/agent/codeSandbox/worker.ts',
+  'packages/harness/src/agent/codeSandbox/worker.ts',
 ];
 
 // The core the quality bar holds (owner, 2026-10-03: "super high coding
@@ -141,39 +150,15 @@ export const EFFECT_RUN_ENTRIES = [
 // scripts/check-core-quality.mjs over config/ratchets/core-quality/. M8
 // re-keys it to packages/harness and packages/llm.
 export const CORE_QUALITY_DIRS = [
-  'src/agent',
-  'src/shared/session',
-  'src/shared/schemas',
-  'src/tools',
-  'src/controllers/session',
-  'src/platform',
-  'packages/harness/src',
+  'packages/harness/src/agent',
+  'packages/harness/src/shared/session',
+  'packages/harness/src/shared/schemas',
+  'packages/harness/src/tools',
+  'packages/harness/src/controllers/session',
+  'packages/harness/src/platform',
+  'packages/harness/src/effect',
+  ...HARNESS_ENTRY_FILES,
   'packages/llm/src',
-];
-// The app plugins inside src/tools (split doc §3): they leave for
-// packages/texra, so the core bar does not count them.
-export const CORE_QUALITY_APP_PATHS = [
-  // The documents plugin (round mode's output pipeline).
-  'src/agent/output',
-  'src/tools/registry.ts',
-  'src/tools/integrationPlugins.ts',
-  'src/tools/AcceptRunFilesTool.ts',
-  'src/tools/DiagnosticsTool.ts',
-  'src/tools/OpenPdfTool.ts',
-  'src/tools/agentCli*.ts',
-  'src/tools/claudeAgent*.ts',
-  'src/tools/codex*.ts',
-  'src/tools/arxiv',
-  'src/tools/citation',
-  'src/tools/comment',
-  'src/tools/github',
-  'src/tools/inquiry',
-  'src/tools/latex',
-  'src/tools/lean',
-  'src/tools/setup',
-  'src/tools/texcount',
-  'src/tools/wolfram',
-  'src/tools/zotero',
 ];
 
 const HOST_LAYER_RESTRICTED_IMPORT_PATHS = [
@@ -201,6 +186,29 @@ const HOST_LAYER_RESTRICTED_IMPORT_PATTERNS = [
   },
 ];
 
+// The harness imports nothing from the app (split design §4): not by an app
+// alias, not by a relative path into packages/texra.
+const HARNESS_NO_APP_IMPORT_PATTERNS = [
+  {
+    group: [
+      '@texra',
+      '@texra/**',
+      '@latex/**',
+      '@replacement/**',
+      '@telemetry/**',
+      '@housekeeping/**',
+      '@ui/**',
+    ],
+    message:
+      'The harness imports nothing from the app (packages/texra); take the value as an input, or move the module.',
+  },
+  {
+    regex: '(?:^|/)packages/texra/',
+    message:
+      'The harness imports nothing from the app (packages/texra); take the value as an input, or move the module.',
+  },
+];
+
 const AGENT_CORE_RESTRICTED_IMPORT_PATTERNS = [
   {
     group: ['@tools', '@tools/**'],
@@ -208,6 +216,7 @@ const AGENT_CORE_RESTRICTED_IMPORT_PATTERNS = [
       'Agent core must not depend on tool implementations; src/tools consumes agent/core, not the reverse — move shared logic to agent/core or @shared.',
   },
   ...HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
+  ...HARNESS_NO_APP_IMPORT_PATTERNS,
 ];
 
 // `@texra-ai/llm` imports nothing else in the repo: it takes configuration
@@ -355,9 +364,10 @@ function discriminantIsOwnedUnion(checker, tsNode, depth = 0) {
 
 const localRules = {
   rules: {
-    // Imports only: `@typescript-eslint/no-unused-vars` would also report the
-    // module-level schema a type is derived from (`z.infer<typeof X>`), a
-    // value the repo keeps on purpose.
+    // Imports only. `@typescript-eslint/no-unused-vars` ignores `Schema$`
+    // names so it does not report a module-level schema kept for
+    // `z.infer<typeof X>`, and that pattern applies to imports too: this rule
+    // still catches an unused `FooSchema` import.
     'no-unused-imports': {
       meta: {
         type: 'problem',
@@ -458,11 +468,11 @@ const localRules = {
         type: 'problem',
         docs: {
           description:
-            'Disallow installProcessRuntime imports outside composition roots.',
+            'Disallow processLayer imports outside composition roots.',
         },
         messages: {
           forbidden:
-            'installProcessRuntime may only be imported by composition roots; elsewhere read process services from the Effect context and take the workspace roots as data from the session, run or tool call that holds them.',
+            'processLayer may only be imported by composition roots; elsewhere read process services from the Effect context and take the workspace roots as data from the session, run or tool call that holds them.',
         },
         schema: [],
       },
@@ -480,7 +490,7 @@ const localRules = {
               return (
                 specifier.type === 'ImportSpecifier' &&
                 specifier.imported.type === 'Identifier' &&
-                specifier.imported.name === 'installProcessRuntime'
+                specifier.imported.name === 'processLayer'
               );
             });
 
@@ -647,6 +657,7 @@ export default tseslint.config(
     files: [
       'src/**/*.{ts,mts}',
       'packages/harness/src/**/*.{ts,mts}',
+      'packages/texra/src/**/*.{ts,mts}',
       'packages/llm/src/**/*.{ts,mts}',
       'packages/llm/test-live/**/*.{ts,mts}',
       'packages/extension/src/**/*.{ts,mts}',
@@ -725,9 +736,22 @@ export default tseslint.config(
 
       '@typescript-eslint/no-explicit-any': 'off',
       'no-useless-escape': 'off',
-      'no-useless-assignment': 'off',
+      'no-useless-assignment': 'error',
       'preserve-caught-error': 'off',
-      '@typescript-eslint/no-unused-vars': 'off',
+      // `Schema$`: a module-level schema kept only for `z.infer<typeof X>`
+      // reads as "only used as a type", but it is the value the type comes
+      // from, so the repo keeps it on purpose. Unused imports of any name
+      // stay with `local/no-unused-imports`.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          args: 'after-used',
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_|Schema$',
+          caughtErrors: 'none',
+          ignoreRestSiblings: true,
+        },
+      ],
       'local/no-unused-imports': 'error',
       'local/no-vscode-import-in-free-zones': 'error',
       'prefer-const': 'error',
@@ -744,13 +768,10 @@ export default tseslint.config(
   // The core holds no `any` (count 0 at 2026-10-03), so it is a lint error
   // rather than a ratchet row.
   {
-    files: CORE_QUALITY_DIRS.map((dir) => `${dir}/**/*.{ts,tsx,mts}`),
-    ignores: [
-      '**/*.vitest.ts',
-      ...CORE_QUALITY_APP_PATHS.map((entry) =>
-        entry.endsWith('.ts') ? entry : `${entry}/**`,
-      ),
-    ],
+    files: CORE_QUALITY_DIRS.map((entry) =>
+      entry.endsWith('.ts') ? entry : `${entry}/**/*.{ts,tsx,mts}`,
+    ),
+    ignores: ['**/*.vitest.ts'],
     rules: { '@typescript-eslint/no-explicit-any': 'error' },
   },
 
@@ -805,7 +826,7 @@ export default tseslint.config(
   },
 
   {
-    files: ['src/replacement/**/*.{ts,tsx,mts}'],
+    files: ['packages/texra/src/replacement/**/*.{ts,tsx,mts}'],
     rules: {
       'no-useless-escape': 'error',
     },
@@ -817,6 +838,7 @@ export default tseslint.config(
     files: [
       'src/**/*.{ts,tsx,mts}',
       'packages/harness/src/**/*.{ts,tsx,mts}',
+      'packages/texra/src/**/*.{ts,tsx,mts}',
       'packages/llm/src/**/*.{ts,tsx,mts}',
     ],
     ignores: ['src/test-kernel/**'],
@@ -831,10 +853,28 @@ export default tseslint.config(
     },
   },
 
+  // The harness imports nothing from the app: the app plugs in as an input
+  // (its plugin list, a host's layers), never as an import.
+  {
+    files: ['packages/harness/src/**/*.{ts,tsx,mts}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
+          patterns: [
+            ...HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
+            ...HARNESS_NO_APP_IMPORT_PATTERNS,
+          ],
+        },
+      ],
+    },
+  },
+
   // Agent core is the neutral execution layer. It may depend on shared agent
   // contracts, but not on concrete provider-handler implementations.
   {
-    files: ['src/agent/core/**/*.{ts,tsx,mts}'],
+    files: ['packages/harness/src/agent/core/**/*.{ts,tsx,mts}'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -891,6 +931,16 @@ export default tseslint.config(
                 'Extension browser frontends must import runtime values from browser-safe shared modules.',
             },
             {
+              group: [
+                '@texra-ai/harness',
+                '@texra-ai/harness/node',
+                '@texra-ai/harness/plugins',
+              ],
+              allowTypeImports: true,
+              message:
+                'A browser frontend imports only types from this harness entry; take runtime values from @texra-ai/harness/schemas.',
+            },
+            {
               regex: BROWSER_SAFE_UTILS_REGEX,
               allowTypeImports: true,
               message: BROWSER_SAFE_UTILS_MESSAGE,
@@ -906,7 +956,8 @@ export default tseslint.config(
   // every edge and the frontends' reachable closure stays these five files.
   {
     files: BROWSER_SAFE_UTILS.map(
-      (mod) => `${mod.replace('@utils', 'src/utils')}{.ts,/index.ts}`,
+      (mod) =>
+        `${mod.replace('@utils', 'packages/harness/src/utils')}{.ts,/index.ts}`,
     ),
     rules: {
       'import/no-nodejs-modules': 'error',
@@ -1012,7 +1063,7 @@ export default tseslint.config(
   // instead of accumulating parallel hand-rolled `<wa-icon>` templates.
   {
     files: ['src/**/*.{ts,tsx,mts}', 'packages/**/*.{ts,tsx,mts}'],
-    ignores: ['src/ui/wa/webAwesomeIcons.ts', '**/*.vitest.ts'],
+    ignores: ['packages/texra/src/ui/wa/webAwesomeIcons.ts', '**/*.vitest.ts'],
     rules: {
       'no-restricted-syntax': [
         'error',
@@ -1025,7 +1076,7 @@ export default tseslint.config(
     },
   },
 
-  // Effect runs belong at a host entry (packages/{extension,desktop,cli,harness}/src)
+  // Effect runs belong at a host entry (packages/{extension,desktop,cli}/src, or the SDK entry files and packages/harness/src/effect)
   // or at a webview/runtime composition root that owns its runtime (owner
   // ruling 2026-09-06, Effect 4 migration R1; 2026-09-14 for the named
   // entries, which are exempt whole-file: that the run is on the entry's own
@@ -1042,7 +1093,7 @@ export default tseslint.config(
         'Build <wa-icon> markup via waIcon() from @ui/wa/webAwesomeIcons instead of a hand-rolled template.',
     };
     const runMessage =
-      'Effect runs belong at a host entry (packages/{extension,desktop,cli,harness}/src) or a named runtime entry in eslint.config.mjs. Convert this file and its callers so the run moves there.';
+      'Effect runs belong at a host entry (packages/{extension,desktop,cli}/src, or the SDK entry files and packages/harness/src/effect) or a named runtime entry in eslint.config.mjs. Convert this file and its callers so the run moves there.';
     // `runMain` is `NodeRuntime.runMain`, the run of a process or worker entry.
     const runNames = '/^run(Promise|PromiseExit|Sync|Fork|Callback|Main)$/';
     const run = [
@@ -1062,10 +1113,10 @@ export default tseslint.config(
     };
     const entries = EFFECT_RUN_ENTRIES;
     const residents = [
-      'src/agent/runtime/childRunLoop.ts',
-      'src/tools/claudeAgent.ts',
+      'packages/harness/src/agent/runtime/childRunLoop.ts',
+      'packages/texra/src/tools/claudeAgent.ts',
     ];
-    const iconFile = 'src/ui/wa/webAwesomeIcons.ts';
+    const iconFile = 'packages/texra/src/ui/wa/webAwesomeIcons.ts';
     const block = (files, ignores, ...selectors) => ({
       files,
       ignores,
@@ -1078,7 +1129,7 @@ export default tseslint.config(
           'packages/extension/src/**/*.{ts,tsx,mts}',
           'packages/desktop/src/**/*.{ts,tsx,mts}',
           'packages/cli/src/**/*.{ts,tsx,mts}',
-          'packages/harness/src/**/*.{ts,tsx,mts}',
+          ...HARNESS_ENTRY_GLOBS,
         ],
         ['**/*.vitest.ts', iconFile, ...entries],
         waIcon,
@@ -1089,6 +1140,8 @@ export default tseslint.config(
       block(
         [
           'src/**/*.{ts,tsx,mts}',
+          'packages/harness/src/**/*.{ts,tsx,mts}',
+          'packages/texra/src/**/*.{ts,tsx,mts}',
           'packages/llm/src/**/*.{ts,tsx,mts}',
           'packages/trace-viewer/src/**/*.{ts,tsx,mts}',
           'packages/extension/src/progressView/frontend/**/*.{ts,tsx,mts}',
@@ -1100,6 +1153,7 @@ export default tseslint.config(
           iconFile,
           ...entries,
           ...residents,
+          ...HARNESS_ENTRY_GLOBS,
         ],
         waIcon,
         ...run,

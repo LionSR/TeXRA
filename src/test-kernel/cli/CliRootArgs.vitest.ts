@@ -8,8 +8,6 @@ import { Effect } from 'effect';
 import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import { initializeDefaultSession } from '@agent/runtime';
-import { documentTaskConfig } from '@agent/output/documentRecipe';
 import { rootCommand, runCli } from '@cli/commands/root';
 import {
   normalizeRootShortcuts,
@@ -49,6 +47,8 @@ import {
   withTempDir,
   withTempDirEffect,
 } from '@test/support/tempDirPlatform';
+import { openTestDefaultSession } from '@test/support/sessionEnd';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { runDirUnder } from '@utils/files/runStorageFs';
 
 type StoredResumeConfig = Parameters<typeof resumeWorkflowOutputFile>[0];
@@ -81,7 +81,7 @@ async function initNodeBackedPlatform(options: {
     globalStoragePath: options.globalStoragePath,
   });
   await Effect.runPromise(
-    initializeDefaultSession({ roots: testWorkspaceRoots() }),
+    openTestDefaultSession({ roots: testWorkspaceRoots() }),
   );
 }
 

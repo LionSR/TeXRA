@@ -16,7 +16,7 @@ describe('CLI in-chat login arguments (/login)', () => {
       expected: { target: 'chatgpt', noBrowser: false, device: true },
     },
     {
-      input: 'codex --no-browser',
+      input: 'chatgpt --no-browser',
       expected: { target: 'chatgpt', noBrowser: true, device: false },
     },
     {
@@ -24,7 +24,7 @@ describe('CLI in-chat login arguments (/login)', () => {
       expected: { target: 'grok', noBrowser: false, device: false },
     },
     {
-      input: 'xai --device',
+      input: 'grok --device',
       expected: { target: 'grok', noBrowser: false, device: true },
     },
   ])(
@@ -37,6 +37,7 @@ describe('CLI in-chat login arguments (/login)', () => {
   it.each([
     '',
     'slack',
+    'codex',
     'github',
     'chatgpt grok',
     'chatgpt --select-account',

@@ -2,7 +2,6 @@
 import { type Effect, Layer, Scope, SynchronizedRef } from 'effect';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import {
@@ -62,21 +61,21 @@ export const testRunTools = (
   steps: noStep(),
 });
 
-/** Each invocation owns its workspace state; tests may supply a run and the
+/** Each invocation owns its read set; tests may supply a run and the
  *  roots it answers for. The call's `Runs` are its run's session's; a call
  *  outside any run gets a registry over an empty fold, as it tracks no run. */
 export function nativeToolTestLayer(
   options: Partial<ToolEnv> &
     Partial<Pick<ToolContextShape, 'callId' | 'emit'>> & {
       run?: TestCallRun;
-      workspace?: AgentWorkspaceState;
+      readFiles?: Set<string>;
       origin?: Partial<
         Pick<RunCallShape, 'responseId' | 'instruction' | 'attempt' | 'logId'>
       >;
     } = {},
 ) {
   const roots = options.roots ?? testWorkspaceRoots();
-  const { run, workspace, origin, workingDirectory, stepRoots } = options;
+  const { run, readFiles, origin, workingDirectory, stepRoots } = options;
   const callId = options.callId ?? `call-${generateShortId()}`;
   return Layer.mergeAll(
     Layer.effectContext(testRuntime().contextEffect),
@@ -100,7 +99,7 @@ export function nativeToolTestLayer(
           open: (
             payload: PermissionPayload,
             opened?: { readonly onNeverCommitted?: Effect.Effect<void> },
-          ) => run.session.openRequest(run.runId, payload, opened),
+          ) => run.session.requests.ask(run.runId, payload, opened),
         },
       }),
     })),
@@ -124,9 +123,10 @@ export function nativeToolTestLayer(
             task: null,
             opening: null,
             fileService: new RunFileService(run.runId, roots),
+            callbacks: {},
             ...run,
           },
-          workspace: workspace ?? AgentWorkspaceState.create(),
+          readFiles: readFiles ?? new Set<string>(),
           responseId: 'test-response',
           instruction: undefined,
           attempt: 1,

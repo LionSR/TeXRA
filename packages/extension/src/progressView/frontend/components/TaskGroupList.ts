@@ -1,6 +1,7 @@
 /** Declarative task group list — renders groups, headers, and log entries inline. */
 
 // Third-party imports
+import { String as Str } from 'effect';
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -31,12 +32,12 @@ import {
   scriptStages,
   type ScriptStageView,
   type TranscriptRow,
-} from '@ui/transcript';
-import { designTokens } from '@ui/styles';
+} from '@shared/transcript';
 import {
   formatWorkflowPhaseHeading,
   workflowPhaseHeadingOfGroup,
-} from '@ui/transcript/workflowCall';
+} from '@shared/transcript/workflowCall';
+import { designTokens } from '@ui/styles';
 
 // Side-effect imports - register Web Awesome components
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -580,12 +581,13 @@ export class TaskGroupList extends LitElement {
     // pane, so show the same "Task is starting" / idle text instead.
     if (this.rows.length === 0 && this.groups.length === 0) {
       const active = isInFlightPhase(this.runStatus);
+      const noun = this.run?.parentId ? 'agent' : 'task';
       return html`
         <div class="log-placeholder">
           ${
             active
-              ? 'Task is starting. Progress updates will appear here.'
-              : 'No log output for this task yet.'
+              ? `${Str.capitalize(noun)} is starting. Progress updates will appear here.`
+              : `No log output for this ${noun} yet.`
           }
         </div>
       `;

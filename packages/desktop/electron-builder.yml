@@ -42,6 +42,13 @@ extraResources:
     to: resources
     filter:
       - '**/*'
+  # The headless background service (packages/extension/scripts/build-serve.mjs),
+  # which the app starts with Electron as Node. Beside `resources/`, so it finds
+  # the same agents and skills the app does.
+  - from: ../extension/serve
+    to: serve
+    filter:
+      - texra-serve.mjs
 mac:
   category: public.app-category.productivity
   icon: build/icon.icns

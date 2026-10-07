@@ -215,10 +215,7 @@ describe('desktop workspace IPC', () => {
         mkdirSync(custom);
         mkdirSync(builtIn);
         const original = readFileSync(
-          join(
-            REPO_ROOT,
-            'packages/extension/resources/tool_use_agents/assistant.yaml',
-          ),
+          join(REPO_ROOT, 'packages/extension/resources/agents/assistant.yaml'),
           'utf8',
         );
         const packagedPath = join(builtIn, 'assistant.yaml');
@@ -236,7 +233,6 @@ describe('desktop workspace IPC', () => {
                 custom: () => Effect.succeed(custom),
                 customConfigured: () => Effect.succeed(true),
                 builtIn: () => Effect.succeed(builtIn),
-                builtInToolUse: () => Effect.succeed(builtIn),
               },
             },
           ),

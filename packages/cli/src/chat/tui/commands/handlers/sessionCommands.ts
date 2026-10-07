@@ -25,11 +25,11 @@ import {
   appendLocalNotice,
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
-import type { SessionBackend } from '@controllers/session/sessionBackend';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
+import { runBypasses } from '@shared/approvalBypassKind';
 import { goalStateOf } from '@shared/plugins/goal';
 import { isLiveRun } from '@shared/session/sessionView';
-import type { RunId } from '@shared/schemas';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { interruptedTasks } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -43,6 +43,7 @@ import {
   type SlashCommandContext,
   type SlashCommandEffect,
 } from './slashContext';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 export function showCliSlashCommandHelp(): void {
   openInfoPane(
@@ -62,7 +63,7 @@ export function showCliWorkPlan(session: SessionHandle): void {
     return;
   }
   clearTransientNotice();
-  const run = session.runView(runId);
+  const run = session.view.run(runId);
   if (run && run.plan !== null) {
     openWorkPlanReader(runId);
   } else {
@@ -115,7 +116,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
         approvalBypasses:
           activeRunId === undefined
             ? undefined
-            : view.policy.get(activeRunId)?.bypasses,
+            : runBypasses(view, activeRunId),
         statusLabel: run?.statusLabel,
         activeChildSessions,
         goal: goal?.active ? goal : undefined,
@@ -260,7 +261,7 @@ function forkCliTask(context: SlashCommandContext): SlashCommandEffect {
       );
       return;
     }
-    const ended = yield* SubscriptionRef.changes(context.backend.view).pipe(
+    const ended = yield* SubscriptionRef.changes(context.backend.view.ref).pipe(
       Stream.takeUntil((view) => {
         const run = view.runs.get(runId);
         return run === undefined || !isLiveRun(run);
@@ -276,7 +277,7 @@ function forkCliTask(context: SlashCommandContext): SlashCommandEffect {
       return;
     }
     yield* context.resumeRun(fork);
-    const title = source ? source.description || source.label : runId;
+    const title = source ? source.title : runId;
     appendLocalNotice(
       `${TASK_ACTIONS.forkedFrom(title)}. The model holds that conversation; the original is in /resume.`,
       fork,

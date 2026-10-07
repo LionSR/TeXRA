@@ -1,0 +1,239 @@
+import { z, type ZodIssue } from 'zod';
+
+import { JsonValueSchema } from './jsonValue';
+import { LineChangesSchema } from './lineChanges';
+
+/**
+ * Base schema for file references (metadata only, no binary data).
+ * Used when binary data has been stripped for serialization/logging.
+ */
+const FileReferenceSchema = z.looseObject({
+  /** Workspace-relative or descriptive path for the file */
+  path: z.string(),
+  /** MIME type for the file */
+  mimeType: z.string(),
+  /** Optional human readable description */
+  description: z.string().optional(),
+});
+export type FileReference = z.infer<typeof FileReferenceSchema>;
+
+/**
+ * Schema for file attachments with optional binary data.
+ * Extends FileReferenceSchema with binary payload fields.
+ */
+const ToolFileAttachmentSchema = FileReferenceSchema.extend({
+  /** Base64 encoded payload when inline transport is supported */
+  base64Data: z.string().optional(),
+  /** Raw bytes for providers that require binary uploads */
+  bytes: z.instanceof(Uint8Array).optional(),
+});
+export type ToolFileAttachment = z.infer<typeof ToolFileAttachmentSchema>;
+
+/**
+ * Schema for edit records in tool results.
+ */
+const EditRecordSchema = z.object({
+  path: z.string(),
+  lineChanges: LineChangesSchema.optional(),
+  /** 1-based line number where the edit starts (for navigation) */
+  startLine: z.int().positive().optional(),
+});
+export type EditRecord = z.infer<typeof EditRecordSchema>;
+
+// ============================================================================
+// Diagnostics Types (not Zod - these are complex unions with external types)
+// ============================================================================
+
+/**
+ * Diagnostic type identifier for tool parameter validation errors.
+ * Used when Zod validation fails on tool input parameters.
+ */
+export const DIAGNOSTIC_TYPE_VALIDATION_ERROR = 'validation_error' as const;
+
+/**
+ * Formatted Zod issue for model consumption.
+ * Provides structured information that helps models self-correct. Every field
+ * is JSON by construction: the settled tool result is stored as a JSON value,
+ * and a present-but-undefined key there is a refused row, not a dropped key.
+ */
+const FormattedZodIssueSchema = z.object({
+  path: z.string(),
+  message: z.string(),
+  expected: z.string().optional(),
+  code: z.string().optional(),
+});
+type FormattedZodIssue = z.infer<typeof FormattedZodIssueSchema>;
+
+/**
+ * Structured validation error diagnostics. One of several shapes a tool's
+ * `ToolResult.diagnostics` may carry (see that field's own comment) — this is
+ * the one produced for Zod input-validation failures, used to provide rich
+ * error information to models for self-correction.
+ */
+export const ValidationErrorDiagnosticsSchema = z.object({
+  type: z.literal(DIAGNOSTIC_TYPE_VALIDATION_ERROR),
+  formatted: z.array(FormattedZodIssueSchema),
+});
+export type ValidationErrorDiagnostics = z.infer<
+  typeof ValidationErrorDiagnosticsSchema
+>;
+
+/**
+ * Format Zod issues into structured diagnostics for model consumption.
+ * Only an `invalid_type` issue names an `expected` type, so only that issue
+ * carries the key; Zod 4 issues report no `received` value at all.
+ */
+export function formatZodIssuesForDiagnostics(
+  issues: ZodIssue[],
+): FormattedZodIssue[] {
+  return issues.map((issue) => ({
+    path: issue.path.join('.'),
+    message: issue.message,
+    ...(issue.code === 'invalid_type' ? { expected: issue.expected } : {}),
+    code: issue.code,
+  }));
+}
+
+// ============================================================================
+// ToolResult Schema
+// ============================================================================
+
+/**
+ * Schema for tool run results.
+ * Every field a tool wants surfaced to the model must be declared below —
+ * there is no catchall, so an undeclared field is silently stripped rather
+ * than reaching `formatToolResultAsText`.
+ */
+const ToolResultSharedFields = {
+  /** User instruction that was processed */
+  userInstruction: z.string().optional(),
+  /**
+   * Additional diagnostic information. Deliberately `z.unknown()`: every tool
+   * shapes its own payload here (validation issues, severity counts, an
+   * unread-file reason, an error name, …), so there is no single schema to
+   * validate against. Consumers that care about one specific shape — e.g.
+   * {@link ValidationErrorDiagnosticsSchema} — parse it themselves.
+   */
+  diagnostics: z.unknown().optional(),
+  /** Summary added by handlers when attachments are available */
+  attachmentSummary: z.string().optional(),
+};
+
+const ExecutedToolResultSchema = z.object({
+  status: z.literal('executed'),
+  /** Detailed output from the tool */
+  output: z.string().optional(),
+  /** Brief summary of the tool run result */
+  summary: z.string().optional(),
+  /** End the current model turn after this successful tool result is paired. */
+  endTurn: z.boolean().optional(),
+  error: z.undefined().optional(),
+  /** Records of edits made during tool run */
+  edits: z.array(EditRecordSchema).optional(),
+  /** File attachments (may contain binary data) */
+  files: z.array(ToolFileAttachmentSchema).optional(),
+  /** What a script's `await` gets for this call in place of
+   *  `{ output, summary }`: a tool whose answer is data, not prose. */
+  value: JsonValueSchema.optional(),
+  /** The key a later call of the same tool in this run may take this result
+   *  under instead of running again; only an executed result carries one. */
+  reuseKey: z.string().min(1).optional(),
+  /** The call whose result this one took under its `reuseKey`. */
+  reusedFrom: z.string().min(1).optional(),
+  ...ToolResultSharedFields,
+});
+
+const ErrorToolResultSchema = z.object({
+  status: z.literal('error'),
+  /** Error message if tool run failed */
+  error: z.string().min(1),
+  /** The name of the Error a script's `await` throws; `ToolFailed` when
+   *  absent. */
+  name: z.string().min(1).optional(),
+  /** Brief summary for human-facing logs */
+  summary: z.string().optional(),
+  output: z.undefined().optional(),
+  edits: z.undefined().optional(),
+  files: z.undefined().optional(),
+  ...ToolResultSharedFields,
+});
+
+/** The synthetic tool a run with an output schema submits its structured
+ *  output through: its settled result's `value` is the run's output. */
+export const STRUCTURED_OUTPUT_TOOL_NAME = 'submit_output';
+
+export const ToolResultSchema = z.discriminatedUnion('status', [
+  ExecutedToolResultSchema,
+  ErrorToolResultSchema,
+]);
+export type ToolResult = z.infer<typeof ToolResultSchema>;
+
+export class ToolError extends Error {
+  /** Brief human-facing summary carried through to the ToolResult, when set. */
+  readonly summary?: string;
+
+  constructor(
+    message: string,
+    options?: { cause?: unknown; summary?: string },
+  ) {
+    super(message, options);
+    this.name = 'ToolError';
+    this.summary = options?.summary;
+  }
+}
+
+/** `ToolFileAttachment.bytes` is a `Uint8Array`, which JSON does not
+ *  reconstruct; a path alone is not recoverable content; a capture failure
+ *  records the omission and its reason rather than a claim that bytes were
+ *  included. */
+export const SettledAttachmentSchema = z.strictObject({
+  path: z.string().min(1),
+  mimeType: z.string().min(1),
+  description: z.string().optional(),
+  content: z.discriminatedUnion('kind', [
+    z.strictObject({ kind: z.literal('base64'), data: z.base64() }),
+    z.strictObject({
+      kind: z.literal('metadata-only'),
+      reason: z.string().min(1),
+    }),
+  ]),
+});
+
+/**
+ * The follow-up builder's input. Derived from the exported members, never
+ * re-declared: `files` loses its binary payload and `diagnostics` is narrowed
+ * from `z.unknown()` to JSON, because an arbitrary value in a durable payload
+ * is a `JSON.stringify` throw waiting for a cycle or a BigInt.
+ *
+ * `SettledFileSchema` is derived from `ToolFileAttachmentSchema`, NOT rebuilt
+ * as a `strictObject`: its base `FileReferenceSchema` is a `z.looseObject`
+ * and real attachments carry `base64Data`/`bytes` plus whatever extra keys a
+ * tool attached, so a strict rebuild would refuse every executed result that
+ * has an attachment. That same looseness is why the two binary fields go
+ * through a transform rather than `.omit()`: on a loose object an omitted key
+ * is only undeclared, so `base64Data` and the `Uint8Array` in `bytes` would
+ * pass through as unknown keys and land in the row anyway. What the transform
+ * leaves is then validated as JSON, exactly as `diagnostics` is: the loose
+ * keys a tool attached are `unknown`, and a third byte buffer or a cyclic
+ * object among them is the same `JSON.stringify` throw, on a row that is
+ * already committed. The check runs after the transform rather than as a
+ * `.pipe`, so the accepted input stays the real attachment a tool produced.
+ */
+const SettledFileMetadataSchema = ToolFileAttachmentSchema.omit({
+  base64Data: true,
+  bytes: true,
+}).catchall(JsonValueSchema);
+const SettledFileSchema = ToolFileAttachmentSchema.transform(
+  ({ base64Data: _base64Data, bytes: _bytes, ...file }) => file,
+).superRefine((file, ctx) => {
+  const metadata = SettledFileMetadataSchema.safeParse(file);
+  if (metadata.success) return;
+  for (const issue of metadata.error.issues) ctx.addIssue({ ...issue });
+});
+export const SettledToolResultSchema = z.discriminatedUnion('status', [
+  ExecutedToolResultSchema.omit({ files: true }).extend({
+    files: z.array(SettledFileSchema).optional(),
+    diagnostics: JsonValueSchema.optional(),
+  }),
+  ErrorToolResultSchema.extend({ diagnostics: JsonValueSchema.optional() }),
+]);

@@ -14,7 +14,6 @@ import {
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { RunHistoryRefused } from '@shared/session/runHistory';
-import { runHeldMessage } from '@shared/runs/runStatusDisplay';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { createFakeRunRecords } from '@test/support/FakeRunRecords';
 import {
@@ -59,15 +58,6 @@ vi.mock('@agent/storage/runRecords', async (importActual) => ({
     }),
 }));
 
-// The refusal path re-reads the durable facts, which the fixtures below do
-// not seed: every other reader on the records double answers empty.
-const classifyRunMock = vi.hoisted(() => vi.fn());
-vi.mock('@agent/runtime/runClassification', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/runtime/runClassification')>()),
-  classifyRun: (...args: unknown[]) =>
-    Effect.promise(() => classifyRunMock(...args)),
-}));
-
 const RUN = 'aabbcc' as RunId;
 const completed: RunEndResult = {
   outcome: RUN_OUTCOME.COMPLETED,
@@ -107,11 +97,11 @@ const taken: string[] = [];
 const resumedFlowTakes = (session: SessionHandle) =>
   Effect.gen(function* () {
     const input = yield* session.followUps.open(RUN);
-    const batch = input.hasQueued() ? yield* input.take : null;
+    const batch = (yield* input.hasQueued) ? yield* input.take : null;
     if (batch?.kind === 'followUps') {
       taken.push(...batch.followUps.map((followUp) => followUp.content.text));
       // What the loop's consume commits: the rows stop queueing the batch.
-      yield* session.commit(
+      yield* session.log.transact(
         batch.followUps.map((followUp) => ({
           type: 'followup.consumed' as const,
           aggregateId: aggregateId('run', RUN),
@@ -134,7 +124,7 @@ const createSession = Effect.fn('test.createSession')(function* () {
   const session = yield* createTestSession();
   publishTestRunStart(session, RUN);
   sessions.push(session);
-  yield* session.settlePublications();
+  yield* session.log.settled;
   return session;
 });
 
@@ -154,7 +144,6 @@ describe('resumeRun tool-use queue ownership', () => {
       .mockReturnValue(Effect.succeed(snapshot().agentConfig));
     runExistsMock.mockReset().mockReturnValue(Effect.succeed(true));
     retrieveSessionResumeDataMock.mockReset().mockResolvedValue(snapshot());
-    classifyRunMock.mockReset().mockResolvedValue({ kind: 'finished' });
     resumeToolUseFromResumeDataMock.mockReset();
     taken.length = 0;
     resumeToolUseFromResumeDataMock.mockImplementation(
@@ -238,7 +227,7 @@ describe('resumeRun tool-use queue ownership', () => {
       ).toEqual({ kind: 'queued', read: false, wake: false });
 
       yield* Deferred.succeed(exists, false);
-      yield* session.settlePublications();
+      yield* session.log.settled;
       expect(yield* Fiber.join(resumed)).toEqual({ failed: 'not_resumable' });
       expect(yield* queuedTexts(session)).toEqual(['raced']);
     }),
@@ -324,7 +313,7 @@ describe('resumeRun tool-use queue ownership', () => {
       const resumed = yield* Effect.forkChild(resumeOne(RUN, { session }));
       yield* Deferred.await(configRead);
       session.followUps.closeInput(RUN);
-      yield* session.settlePublications();
+      yield* session.log.settled;
       yield* Deferred.succeed(config, snapshot().agentConfig);
 
       expect(yield* Fiber.join(resumed)).toEqual({ failed: 'not_resumable' });
@@ -408,7 +397,7 @@ describe('resumeRun tool-use queue ownership', () => {
       });
       // A root's lifetime is the caller's to await past the acknowledgement.
       if (!('started' in result)) throw new Error('resume refused');
-      expect(yield* result.completion!).toBe(RUN_OUTCOME.COMPLETED);
+      expect((yield* result.completion!).outcome).toBe(RUN_OUTCOME.COMPLETED);
       expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
     }),
   );
@@ -437,40 +426,13 @@ describe('resumeRun tool-use queue ownership', () => {
   it.effect('refuses with `finished` when no checkpoint remains', () =>
     Effect.gen(function* () {
       const session = yield* createSession();
-      const markUnreadable = vi.spyOn(session, 'markUnreadable');
       retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
 
       expect(yield* resumeOne(RUN, { session })).toEqual({
         failed: 'finished',
       });
       expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
-      expect(markUnreadable).not.toHaveBeenCalled();
     }),
-  );
-
-  // An empty retrieval is also what a torn read of the owner's rewrite looks
-  // like, so the refusal is decided from the claim: a run another process is
-  // executing keeps its hold instead of being reported finished.
-  it.effect(
-    'refuses an empty retrieval held elsewhere as owned elsewhere',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* createSession();
-        const markUnreadable = vi.spyOn(session, 'markUnreadable');
-        retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
-        classifyRunMock.mockResolvedValueOnce({
-          kind: 'held_elsewhere',
-          owner: JSON.stringify(['other-host', 4321, null]),
-        });
-
-        expect(yield* resumeOne(RUN, { session })).toEqual({
-          failed: 'owned_elsewhere',
-        });
-        expect(markUnreadable).toHaveBeenCalledWith(
-          RUN,
-          expect.stringContaining('4321'),
-        );
-      }),
   );
 
   // The fold that continues a run is the one reader of its rows, so an
@@ -526,10 +488,9 @@ describe('resumeRun tool-use queue ownership', () => {
     () =>
       Effect.gen(function* () {
         const session = yield* createSession();
-        const markUnreadable = vi.spyOn(session, 'markUnreadable');
         const ownerId = JSON.stringify(['other-host', 4321, 'start-1']);
         // The claim the host's resume takes is refused by its live owner.
-        vi.spyOn(session, 'borrowRunClaim').mockReturnValue(
+        vi.spyOn(session.log, 'hold').mockReturnValue(
           Effect.fail(
             new DatabaseWriteFailed({
               path: ':memory:',
@@ -547,7 +508,6 @@ describe('resumeRun tool-use queue ownership', () => {
         ).toEqual({ failed: 'owned_elsewhere' });
         expect(onResumeResolved).not.toHaveBeenCalled();
         expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
-        expect(markUnreadable).toHaveBeenCalledWith(RUN, runHeldMessage(4321));
       }),
   );
 });

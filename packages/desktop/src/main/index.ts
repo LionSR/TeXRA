@@ -1,13 +1,11 @@
 import { resolve as resolvePath } from 'node:path';
-import { Cause, Effect, Exit, Scope } from 'effect';
+import { Cause, Effect, Exit, Result, Scope } from 'effect';
 import { app, BrowserWindow, dialog, session } from 'electron';
 
-import { closeAllSessions } from '@agent/runtime';
-import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
-import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
-import { NotificationFailed } from '@hosts/uiHosts';
-import { withProcessServices } from '@platform/processRuntime';
+import { SessionOwner, withProcessServices } from '@texra-ai/harness';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
+import { NotificationFailed } from '@texra/hosts/uiHosts';
+import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   DesktopProjectRecords,
@@ -25,6 +23,7 @@ import {
   readRememberedDesktopProjects,
   type DesktopProjectRegistry,
 } from './desktopProjects.js';
+import { reachDesktopService } from './desktopService.js';
 import { openDesktopWindow } from './desktopWindow.js';
 import { installDesktopBeforeQuitWiring } from './desktopWindowLifecycle.js';
 import { createDesktopWindows, type DesktopWindows } from './desktopWindows.js';
@@ -131,7 +130,7 @@ if (ownsSingleInstanceLock) {
             ),
           ),
         );
-      yield* Scope.addFinalizer(shutdownScope, disposeProcessRuntime(runtime));
+      yield* Scope.addFinalizer(shutdownScope, runtime.disposeEffect);
       yield* Scope.addFinalizer(
         shutdownScope,
         Effect.suspend(
@@ -149,7 +148,13 @@ if (ownsSingleInstanceLock) {
         shutdownScope,
         reported('stopping the active recording', draftRequests.shutdown),
       );
-      yield* Scope.addFinalizer(shutdownScope, closeAllSessions());
+      yield* Scope.addFinalizer(
+        shutdownScope,
+        withProcessServices(
+          runtime,
+          Effect.flatMap(SessionOwner, (owner) => owner.closeAll),
+        ).pipe(Effect.asVoid),
+      );
       // Registered last, so it runs first: the sessions never close under a
       // window still tearing down.
       yield* Scope.addFinalizer(
@@ -174,7 +179,20 @@ if (ownsSingleInstanceLock) {
           const remembered = yield* readRememberedDesktopProjects().pipe(
             Effect.provideService(DesktopProjectRecords, projectRecords),
           );
+          // The app is a client of the one background service, so a
+          // folder's tasks keep running when it quits and other windows and
+          // terminals see them. An app that cannot reach it runs them here,
+          // and says so once.
+          const service = yield* reachDesktopService(
+            platformInit.dataRoot,
+            platformInit.mainDir,
+          ).pipe(Scope.provide(processScope), Effect.result);
+          if (Result.isFailure(service))
+            yield* Effect.logWarning(
+              `TeXRA runs this app's tasks here only, so other windows and terminals will not see them: ${service.failure.message}`,
+            );
           const registry = yield* openDesktopProjectRegistry({
+            service: Result.isSuccess(service) ? service.success : undefined,
             dataRoot: platformInit.dataRoot,
             processRoots: platformInit.processRoots,
             processScope,

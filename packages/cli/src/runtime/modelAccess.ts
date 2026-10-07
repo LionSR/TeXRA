@@ -14,7 +14,6 @@ import {
   type RunModelCandidate,
   type RunModelDecisionReason,
 } from '@model/runModelDecision';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { ModelOptionData, UsageRoute } from '@shared/schemas';
 import {
   isModelOptionAvailable,
@@ -25,6 +24,7 @@ import { assertNever, unique } from '@utils/core';
 // Local file imports
 import { resolveKnownCliModelId } from './cliConfig';
 import { formatCliModelAccessRoute } from './modelAccessRoute';
+import type { ProcessRuntime } from '@texra-ai/harness';
 
 export interface CliModelAccess {
   readonly model: ModelOptionData;

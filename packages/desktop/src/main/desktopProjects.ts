@@ -14,30 +14,21 @@ import {
   type PlatformError,
 } from 'effect';
 
+import { SessionOwner } from '@texra-ai/harness';
 import {
-  closeSession,
-  openSessionEffect,
-  type SessionHandle,
-} from '@agent/runtime';
+  createNodeWorkspaceRoots,
+  canonicalizeWorkspacePath,
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@texra-ai/harness/node';
+import type { SessionHandle } from '@agent/runtime';
 import {
   openProjectStateStore,
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
-import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
-import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { openTexraWorkspaceConfigStores } from '@platform/defaults/nodeStores';
-import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
-import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
-import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
 import {
   GlobalDatabase,
   type ProjectDatabases,
@@ -46,12 +37,18 @@ import {
   projectDisplayOf,
   type ProjectDisplay,
 } from '@shared/session/hostSnapshot';
+import {
+  localSessionBackend,
+  type SessionBackend,
+} from '@texra/controllers/session/sessionBackend';
+import { serviceSessionBackend } from '@texra/controllers/server/serviceBackend';
+import type { ServiceLink } from '@texra/controllers/server/client';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { absentReason } from '@utils/files/fsEntryExists';
 import { DesktopProjectRecords } from './desktopProjectRecords.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 export interface DesktopProject {
@@ -65,6 +62,11 @@ export interface DesktopProject {
   readonly display: ProjectDisplay;
   readonly roots: WorkspaceRoots;
   readonly session: SessionHandle;
+  /** Where this project's runs run: the background service, for a folder
+   *  while the app is its client, or this session. */
+  readonly backend: SessionBackend;
+  /** The service the backend reaches, when it is the service's. */
+  readonly service: ServiceLink | undefined;
   /** Release the session from its owner; settles once its entry has unwound. */
   dispose(): Effect.Effect<void>;
 }
@@ -98,6 +100,9 @@ interface DesktopProjectRegistryOptions {
   readonly globalConfigStore: ConfigStore;
   /** The process stores; every project's roots share its global state. */
   readonly stores: ModelOptionStores;
+  /** The background service, when the app is its client: a folder's
+   *  runs run there. */
+  readonly service: ServiceLink | undefined;
 }
 
 export interface DesktopProjectRegistry {
@@ -210,31 +215,36 @@ function openProjectSession(
   roots: WorkspaceRoots,
   // The closeable scope the caller provides; `dispose` closes it.
   scope: Scope.Closeable,
+  service: ServiceLink | undefined,
+  owner: SessionOwner['Service'],
 ): Effect.Effect<DesktopProject, Error, Scope.Scope> {
   return Effect.gen(function* () {
+    // A folder's runs run in the service, which follows its interrupted
+    // tasks; the no-workspace session's, and every run without a service,
+    // run here.
+    const served = root !== undefined ? service : undefined;
     const session = yield* Effect.acquireRelease(
-      openSessionEffect({
+      owner.open({
         roots,
-        responseTextProcessing: createTexraResponseTextProcessing(),
-        interruptedTasks: 'offer',
+        ...(served === undefined && { interruptedTasks: 'offer' }),
       }),
       // The one close every session takes: its runs stopped under the
       // shutdown deadline, the ones still live past it settled, its
       // artifacts flushed, its entry released.
-      (session) => Effect.asVoid(closeSession(session.roots.storage)),
+      (session) => Effect.asVoid(owner.close(session.roots.storage)),
     );
-    session.setApprovalPolicy(
-      yield* readSettingFrom<TexraApprovalPolicy>(
-        roots,
-        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-      ),
-    );
+    const backend =
+      served === undefined || root === undefined
+        ? localSessionBackend(session)
+        : yield* serviceSessionBackend(served, root, roots.storage);
     return {
       key: roots.storage,
       root,
       display: projectDisplayOf(roots.storage, root),
       roots,
       session,
+      backend,
+      service: served,
       dispose: () => Scope.close(scope, Exit.void),
     };
   });
@@ -249,9 +259,10 @@ export function openDesktopProjectRegistry(
 ): Effect.Effect<
   DesktopProjectRegistry,
   Error,
-  DesktopProjectRecords | GlobalDatabase
+  DesktopProjectRecords | GlobalDatabase | SessionOwner
 > {
   return Effect.gen(function* () {
+    const owner = yield* SessionOwner;
     const records = yield* DesktopProjectRecords;
     const globalDatabase = yield* GlobalDatabase;
     const lanes = new Map<string | symbol, PerKeyLane>();
@@ -261,6 +272,8 @@ export function openDesktopProjectRegistry(
         undefined,
         options.processRoots,
         options.processScope,
+        undefined,
+        owner,
       ).pipe(
         Scope.provide(options.processScope),
         Effect.onError(() => Scope.close(options.processScope, Exit.void)),
@@ -333,7 +346,13 @@ export function openDesktopProjectRegistry(
             // Acquire the session and install its registry owner before
             // interruption can leave this operation.
             return yield* Effect.uninterruptible(
-              openProjectSession(root, roots, projectScope).pipe(
+              openProjectSession(
+                root,
+                roots,
+                projectScope,
+                options.service,
+                owner,
+              ).pipe(
                 Effect.tap((project) =>
                   Effect.gen(function* () {
                     const recent = yield* records.readRecent;
@@ -367,33 +386,31 @@ export function openDesktopProjectRegistry(
           // runs.
           yield* Effect.uninterruptible(
             Effect.gen(function* () {
-              yield* Effect.gen(function* () {
-                const wasActive = active() === project;
-                const remembered = yield* records.read;
-                const next =
-                  remembered.findLast(
-                    (candidate) => candidate !== root && byRoot(candidate),
-                  ) ??
-                  current().projects.findLast(
-                    (candidate) => candidate.root !== root,
-                  )?.root;
-                yield* records.forget(root, wasActive ? next : undefined);
-                const recent = yield* records.readRecent;
-                yield* SubscriptionRef.update(state, (s) => ({
-                  projects: s.projects.filter(
-                    (candidate) => candidate !== project,
-                  ),
-                  activeKey: wasActive
-                    ? (
-                        (next === undefined ? undefined : byRoot(next)) ??
-                        fallback
-                      ).key
-                    : s.activeKey,
-                  recent,
-                }));
-                yield* project.dispose();
-              }).pipe(withPerKeyLane(lanes, selection));
-            }),
+              const wasActive = active() === project;
+              const remembered = yield* records.read;
+              const next =
+                remembered.findLast(
+                  (candidate) => candidate !== root && byRoot(candidate),
+                ) ??
+                current().projects.findLast(
+                  (candidate) => candidate.root !== root,
+                )?.root;
+              yield* records.forget(root, wasActive ? next : undefined);
+              const recent = yield* records.readRecent;
+              yield* SubscriptionRef.update(state, (s) => ({
+                projects: s.projects.filter(
+                  (candidate) => candidate !== project,
+                ),
+                activeKey: wasActive
+                  ? (
+                      (next === undefined ? undefined : byRoot(next)) ??
+                      fallback
+                    ).key
+                  : s.activeKey,
+                recent,
+              }));
+              yield* project.dispose();
+            }).pipe(withPerKeyLane(lanes, selection)),
           );
         }).pipe(withPerKeyLane(lanes, root), Effect.mapError(ensureError));
       },

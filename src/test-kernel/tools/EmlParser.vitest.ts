@@ -39,4 +39,26 @@ describe('parseEml', () => {
         assert.doesNotMatch(text, /alert\(/);
       }),
   );
+
+  it.effect(
+    'names an unnamed image by its MIME type, keeping the subtype when it has no known extension',
+    () =>
+      Effect.gen(function* () {
+        const part = (type: string) =>
+          `--b\r\nContent-Type: ${type}\r\nContent-Disposition: inline\r\nContent-Transfer-Encoding: base64\r\n\r\nAAAA\r\n`;
+        const eml =
+          'From: a@example.com\r\nSubject: Pics\r\nContent-Type: multipart/mixed; boundary="b"\r\n\r\n' +
+          '--b\r\nContent-Type: text/plain\r\n\r\nSee images.\r\n' +
+          part('image/jpeg') +
+          part('image/svg+xml') +
+          part('image/x-foo') +
+          '--b--\r\n';
+        const { images } = yield* parseEml(eml);
+
+        assert.deepEqual(
+          images.map((image) => image.filename),
+          ['image-1.jpg', 'image-2.svg', 'image-3.x-foo'],
+        );
+      }),
+  );
 });

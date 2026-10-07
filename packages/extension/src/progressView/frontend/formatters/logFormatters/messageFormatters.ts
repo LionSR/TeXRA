@@ -29,7 +29,7 @@ import type {
   PhaseRow,
   ProgressStatusRow,
   UserRow,
-} from '@ui/transcript';
+} from '@shared/transcript';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
@@ -48,12 +48,9 @@ function buildLevelIcon(level: LogLevel): TemplateResult {
 
 /** Format user message entry as TemplateResult. */
 export function formatUserMessageTemplate(row: UserRow): FormatResult {
-  const { id, timestamp, scriptSummary, attachments } = row;
-  // A fork's composer takes the message back as text: one that carried
-  // media is not offered, since its media would not come with it.
-  const forkAt = attachments?.length ? undefined : row.forkAt;
+  const { id, timestamp, scriptSummary, forkAt, mediaFiles } = row;
   // prettier-ignore
-  return html`<user-message .text=${row.text.full} .logId=${id} .timestamp=${timestamp} .scriptSummary=${scriptSummary ?? null} .forkAt=${forkAt ?? null}></user-message>`;
+  return html`<user-message .text=${row.text.full} .logId=${id} .timestamp=${timestamp} .scriptSummary=${scriptSummary ?? null} .forkAt=${forkAt ?? null} .mediaFiles=${mediaFiles ?? []}></user-message>`;
 }
 
 /** Format progress status entry as TemplateResult. */
@@ -81,12 +78,13 @@ export function formatProgressStatusTemplate(
 
 /**
  * Format error message as TemplateResult. The detail field set and its display
- * order are the row's — see `ERROR_DETAIL_FIELDS` in `@ui/transcript`.
+ * order are the row's — see `ERROR_DETAIL_FIELDS` in `@shared/transcript`.
  */
 export function formatErrorTemplate(row: ErrorRow): FormatResult {
   const { id, groupId, timestamp } = row;
   const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
     new Date(timestamp),
+    'minute',
   );
 
   const summaryText = row.summary.full.trim() || 'Error occurred';
@@ -118,6 +116,7 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
   // prettier-ignore
   const copyButton = buildCopyButton('Copy error details', {
     content: rawContent,
+    labeled: true,
   });
   // prettier-ignore
   const summaryTemplate = html`<div slot="summary" class="details-summary message-header"><span class="message-label">${waIcon('circle-exclamation', { className: 'icon' })}${labelSpan}</span>${timestampLabel}${copyButton}</div>`;

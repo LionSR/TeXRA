@@ -11,7 +11,7 @@ import {
 import { z } from 'zod';
 
 // Local imports - shared state
-import { PersistedState } from '@shared/state/PersistedState';
+import { PersistedState } from '@texra/shared/state/PersistedState';
 
 const StateSchema = z.object({
   density: z.enum(['compact', 'comfortable']).prefault('comfortable'),

@@ -4,23 +4,23 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import {
-  PROVIDER_DISPLAY_NAMES,
-  MODEL_SOURCE_ORDER,
-  EXPENSIVE_MODEL_HINT,
-} from '@texra-ai/llm';
+import { providerDisplayName } from '@texra-ai/llm';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { postMessage } from '@shared/hostBridge';
-import { MODEL_AVAILABILITY_STATUS } from '@shared/schemas';
 import {
-  type ModelSelectionItem,
-  type ProviderKeyStatus,
-} from '@shared/settingsView/settingsViewMessages';
+  EXPENSIVE_MODEL_HINT,
+  MODEL_AVAILABILITY_STATUS,
+} from '@shared/schemas';
 import {
   REASONING_LEVEL_LABELS,
   REASONING_LEVEL_OPTIONS,
 } from '@shared/model/reasoningLabels';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { postMessage } from '@texra/shared/hostBridge';
+import {
+  MODEL_SOURCE_ORDER,
+  type ModelSelectionItem,
+  type ProviderKeyStatus,
+} from '@texra/shared/settingsView/settingsViewMessages';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderKeyStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
@@ -31,8 +31,6 @@ import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
-
-// Local imports - shared constants
 
 // Local imports - profile view styles and events
 import { readSelectValue } from '@ui/wa/selectTemplates';
@@ -98,7 +96,7 @@ export class ModelSelectionList extends LitElement {
         const models = byProvider.get(provider)!;
         return {
           provider,
-          displayName: PROVIDER_DISPLAY_NAMES[provider] ?? provider,
+          displayName: providerDisplayName(provider),
           current: sortFastFirst(models.filter((m) => !m.deprecated)),
           deprecated: models.filter((m) => m.deprecated),
         };

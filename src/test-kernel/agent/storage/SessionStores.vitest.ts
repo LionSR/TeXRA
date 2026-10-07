@@ -21,6 +21,7 @@ import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { goalOf, startGoal } from '@tools/goal';
@@ -51,20 +52,20 @@ describe('committed run removal', () => {
           const child = 'bb0002' as RunId;
           publishTestRunStart(session, parent);
           publishTestRunStart(session, child, { parent });
-          yield* session.settlePublications();
+          yield* session.log.settled;
           const handle = testRunHandle({
             runId: child,
             parent,
             agent: 'chat',
           });
           session.runs.track(handle);
-          yield* session.settlePublications();
+          yield* session.log.settled;
           yield* startGoal(
             session,
             parent,
             'Determine the boundary conditions.',
           );
-          session.publish([
+          publishTestRows(session, [
             {
               type: 'request.opened',
               aggregateId: aggregateId('run', parent),
@@ -86,26 +87,27 @@ describe('committed run removal', () => {
                   allowBypass: false,
                 },
               },
-              thread: null,
             },
           ]);
-          yield* session.settlePublications();
+          yield* session.log.settled;
           expect(
-            SubscriptionRef.getUnsafe(session.view).requests.map(
+            SubscriptionRef.getUnsafe(session.view.ref).requests.map(
               (request) => request.requestId,
             ),
           ).toEqual(['question:removed-parent']);
-          const before = session.now();
-          session.publish([
+          const before = session.log.now();
+          publishTestRows(session, [
             {
               type: 'run.removed',
               aggregateId: aggregateId('run', parent),
             },
           ]);
-          yield* session.settlePublications();
-          expect(SubscriptionRef.getUnsafe(session.view).requests).toEqual([]);
+          yield* session.log.settled;
+          expect(SubscriptionRef.getUnsafe(session.view.ref).requests).toEqual(
+            [],
+          );
           expect(handle.isOwnedBy(parent)).toBe(false);
-          expect(session.now()).toBe(before + 1);
+          expect(session.log.now()).toBe(before + 1);
           expect(goalOf(session, parent)).toBeNull();
         }),
       ),
@@ -178,7 +180,7 @@ describe('indexed background-shell cleanup', () => {
               agent: 'bash',
             }),
           );
-          session.publish([
+          publishTestRows(session, [
             {
               type: 'run.start',
               aggregateId: aggregateId('run', shell),
@@ -205,17 +207,15 @@ describe('indexed background-shell cleanup', () => {
             },
           ]);
           publishTestRunStart(session, agent);
-          yield* session.settlePublications();
+          yield* session.log.settled;
           const rows = yield* Effect.all(
             [shell, active, notAShell, agent].map((id) =>
-              Stream.runCollect(
-                session.events.aggregate(aggregateId('run', id), 0),
-              ),
+              session.log.display(id),
             ),
           );
           yield* sweepLeftoverRuns(session, rows.flat());
           const swept = yield* Stream.runHead(
-            session.viewChanges.pipe(
+            session.view.changes.pipe(
               Stream.filter((view) => !view.runs.has(shell)),
             ),
           );

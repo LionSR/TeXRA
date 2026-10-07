@@ -84,12 +84,7 @@ import {
   type ResumeToolUseFromResumeDataOptions,
 } from '@agent/runtime/executeAgent';
 import {
-  RunArtifactDrainError,
-  SessionHandle,
-} from '@agent/runtime/SessionHandle';
-import {
   aggregateId as qualifyAggregateId,
-  type AggregateId,
   RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
@@ -111,11 +106,6 @@ const NO_USAGE = {
   totalToolUsePromptTokens: 0,
 };
 
-/** The settle the lane's lease release drains; a case may fail it. */
-const settlePublications = vi.fn(
-  (_runId?: RunId): Effect.Effect<void, Error> => Effect.void,
-);
-
 /**
  * The session whose run lane admits the resume. No competing generation
  * exists in this fixture, so the lane is a passthrough.
@@ -127,23 +117,28 @@ const LANE_SESSION = {
     launchRun: (_runId: RunId, operation: Effect.Effect<unknown, unknown>) =>
       operation,
   },
-  // The resume's hold on the run's claim: its release is what the suite
-  // observes, when the resume's scope closes.
-  acquireClaims: (id: AggregateId) =>
-    Effect.succeed(Effect.suspend(() => mocks.releaseClaims(id))),
-  holdRunClaim: SessionHandle.prototype.holdRunClaim,
-  // The resumed run reads its parent edge off the run's records, so the
-  // lineage fixture is that read.
-  readRunRecords: (...args: unknown[]) =>
-    Effect.tryPromise({
-      try: () => mocks.readRunRecords(...args),
-      catch: ensureError,
-    }),
+  log: {
+    // The resume's hold on the run's claim: its release is what the suite
+    // observes, when the resume's scope closes.
+    hold: (runId: RunId) =>
+      Effect.asVoid(
+        Effect.acquireRelease(Effect.void, () =>
+          Effect.suspend(() =>
+            mocks.releaseClaims(qualifyAggregateId('run', runId)),
+          ),
+        ),
+      ),
+    // The resumed run reads its parent edge off the run's records, so the
+    // lineage fixture is that read.
+    records: (...args: unknown[]) =>
+      Effect.tryPromise({
+        try: () => mocks.readRunRecords(...args),
+        catch: ensureError,
+      }),
+  },
   status: {},
   // A surface that can present approval prompts.
   interactions: { approvalPromptsUnavailable: false },
-  settlePublications,
-  commitRunEnd: SessionHandle.prototype.commitRunEnd,
 } as never;
 
 function resumeToolUseFromResumeData(
@@ -182,6 +177,7 @@ function completedTurn() {
     files: [],
     usage: NO_USAGE,
     structured: undefined,
+    memoryMisses: [],
   };
 }
 
@@ -306,61 +302,5 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
           qualifyAggregateId('run', runId),
         );
       }),
-  );
-
-  it.effect(
-    'surfaces a teardown failure after an otherwise successful turn',
-    () =>
-      Effect.gen(function* () {
-        const runId = 'e80501' as RunId;
-        const teardownFailure = new Error(
-          'final artifacts could not be flushed',
-        );
-        mocks.buildAgentLaunchContext.mockResolvedValueOnce(
-          buildResumeContext(runId),
-        );
-        mocks.runToolUse.mockImplementationOnce(() =>
-          Effect.succeed(completedTurn()),
-        );
-        settlePublications.mockReturnValueOnce(Effect.fail(teardownFailure));
-
-        // A failed drain rolled back facts the run had queued, so it reaches
-        // the caller typed, carrying what threw.
-        expect(
-          yield* Effect.flip(
-            resumeToolUseFromResumeData(createToolUseResumeData({ runId })),
-          ),
-        ).toMatchObject({
-          name: 'RunArtifactDrainError',
-          cause: teardownFailure,
-        });
-      }),
-  );
-
-  it.effect('reports the turn failure and the teardown failure together', () =>
-    Effect.gen(function* () {
-      // The run's own failure is not replaced by the teardown's: both reach
-      // the caller, the run's first.
-      const runId = 'e80511' as RunId;
-      const turnFailure = new Error('turn failed');
-      const teardownFailure = new Error('final artifacts could not be flushed');
-      mocks.buildAgentLaunchContext.mockResolvedValueOnce(
-        buildResumeContext(runId),
-      );
-      mocks.runToolUse.mockImplementationOnce(() => Effect.fail(turnFailure));
-      settlePublications.mockReturnValueOnce(Effect.fail(teardownFailure));
-
-      const error = yield* Effect.flip(
-        resumeToolUseFromResumeData(createToolUseResumeData({ runId })),
-      );
-      expect(error).toSatisfy(
-        (value: unknown) =>
-          value instanceof AggregateError &&
-          value.message.includes('could not be persisted') &&
-          value.errors[0] === turnFailure &&
-          value.errors[1] instanceof RunArtifactDrainError &&
-          value.errors[1].cause === teardownFailure,
-      );
-    }),
   );
 });

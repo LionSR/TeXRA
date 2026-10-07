@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { findBraceBalancedMacroCalls } from '@utils/text/braceBalancedMacro';
+import { findBraceBalancedMacroCalls } from '@texra/utils/text/braceBalancedMacro';
 
 describe('findBraceBalancedMacroCalls', () => {
   it('finds a single call and returns its args and span', () => {

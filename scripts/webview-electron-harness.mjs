@@ -121,10 +121,8 @@ export function renderSessionHarnessBridge({
         host: harnessSession.host,
         debug: subscribe.debug,
         replayComplete: true,
-        blocked: [],
         existence: {
           checkedAggregateIds: [...new Set(harnessSession.events.map(event => event.aggregateId))],
-          removedAggregateIds: [],
           claims: [...new Set(harnessSession.events.map(event => event.aggregateId))]
             .map(aggregateId => ({ aggregateId, ownerId: ${JSON.stringify(owner)} })),
         },

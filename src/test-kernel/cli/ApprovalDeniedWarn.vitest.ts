@@ -20,11 +20,11 @@ const EXECUTABLE = { kind: 'executable' } as const;
 describe('warnApprovalDenied', () => {
   beforeEach(() => {
     writeTextStderrMock.mockClear();
-    testDefaultSession().setApprovalPolicy('ask');
+    testDefaultSession().approvals.override('ask');
   });
 
   it('warns once per run and denial kind with the live policy', () => {
-    testDefaultSession().setApprovalPolicy('never');
+    testDefaultSession().approvals.override('never');
     const context = createTestCliContext({ approvalPolicy: 'never' });
 
     warnApprovalDenied(testDefaultSession(), context, EXECUTABLE);
@@ -63,7 +63,7 @@ describe('warnApprovalDenied', () => {
   it('names the live session policy, not the launch-time CLI context', () => {
     // `/approval` in the TUI updates the session only; the frozen CliContext
     // keeps its launch-time value.
-    testDefaultSession().setApprovalPolicy('never');
+    testDefaultSession().approvals.override('never');
     const context = createTestCliContext({ approvalPolicy: 'ask' });
 
     warnApprovalDenied(testDefaultSession(), context, EXECUTABLE);

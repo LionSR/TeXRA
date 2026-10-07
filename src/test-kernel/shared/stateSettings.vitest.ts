@@ -9,29 +9,20 @@ import { describe } from 'vitest';
 // Local imports
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
-import { DocumentsStateKey } from '@shared/settingsView/documentsSettings';
 import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
 import { settingEnumOptions, settingByKey } from '@shared/state/stateSettings';
-import { dispatchSettingsViewOutbound } from '@shared/settingsView/settingsViewMessages';
 import type {
   SettingHost,
   StateSettingEntry,
 } from '@shared/state/stateSettings';
-import type { DerivedSettingsSnapshot } from '@shared/settingsView/settingsViewMessages';
-import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import {
   readSetting,
   resetSetting,
   writeSetting,
 } from '@shared/config/settingsAccess';
-import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
-import {
-  TEXRA_SETTINGS,
-  TexraStateKey,
-} from '@shared/settingsView/texraSettings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   FakeScopedConfigProvider,
@@ -43,6 +34,15 @@ import {
   isStored,
   makeFakeSettingsStores,
 } from '@test/support/settingsStoresFake';
+import {
+  TEXRA_SETTINGS,
+  TexraStateKey,
+} from '@texra/shared/settingsView/texraSettings';
+import { LATEX_CONFIG_DEFAULTS } from '@texra/shared/constants/latexConfig';
+import { buildSettingsSnapshotMessage } from '@texra/shared/settingsView/handlers/settingsSnapshot';
+import type { DerivedSettingsSnapshot } from '@texra/shared/settingsView/settingsViewMessages';
+import { dispatchSettingsViewOutbound } from '@texra/shared/settingsView/settingsViewMessages';
+import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { orchestratorKillDenial } from '@tools/executions/killPolicy';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
@@ -325,7 +325,7 @@ describe('settingsAccess', () => {
     'resolves reliability rows on the merged scope, bounded by their schema',
     () =>
       Effect.gen(function* () {
-        const logs = captureLogEntries();
+        captureLogEntries();
         const reliabilityRows = [
           {
             setting: MODEL_COMPACTION_THRESHOLD_SETTING,
@@ -372,7 +372,7 @@ describe('settingsAccess', () => {
   // #12710: the five Models-tab provider toggles declare `configTarget:
   // 'global'`, so `readSetting` resolves them on the global scope alone. The
   // run now reads them through the same catalog reader (`readSettingFrom` in
-  // `src/agent/runtime/run/modelBinding.ts`), where it used to read the
+  // `packages/harness/src/agent/runtime/run/modelBinding.ts`), where it used to read the
   // merged config and could therefore honor a workspace override the tab had
   // no way to show. One scope, one answer, both sides.
   it.effect(

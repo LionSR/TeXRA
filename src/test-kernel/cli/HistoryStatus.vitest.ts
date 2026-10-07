@@ -9,11 +9,6 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import {
-  initializeDefaultSession,
-  teardownDefaultSession,
-} from '@agent/runtime/sessionGraph';
-import { documentTaskConfig } from '@agent/output/documentRecipe';
 import { cliRunStanding } from '@cli/runtime/toolUseResumeData';
 import {
   formatCliHistoryDetailsText,
@@ -24,10 +19,9 @@ import { withProcessServices } from '@platform/processRuntime';
 import {
   aggregateId,
   CLI_RUN_STATUS,
-  RunSnapshotPayloadSchema,
   HISTORY_RUN_STATUS,
 } from '@shared/schemas';
-import type { RunSnapshotPayload, RunId, RunOutcome } from '@shared/schemas';
+import type { RunId, RunOutcome } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -36,6 +30,11 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
+import {
+  closeTestDefaultSession,
+  openTestDefaultSession,
+} from '@test/support/sessionEnd';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 
 const TOOL_USE_CONFIG: AgentConfig = AgentConfigSchema.parse({
   agent: 'orchestrator',
@@ -55,29 +54,13 @@ const tempDirs = useTempDirs();
 setupPlatform(() => createTempDirPlatform('texra-history-status-', tempDirs));
 
 beforeEach(async () => {
-  await Effect.runPromise(teardownDefaultSession());
+  await Effect.runPromise(closeTestDefaultSession);
   await Effect.runPromise(
-    initializeDefaultSession({ roots: testWorkspaceRoots() }),
+    openTestDefaultSession({ roots: testWorkspaceRoots() }),
   );
 });
 
-const SNAPSHOT_RUNTIME = {
-  modelId: 'deepseek/deepseek-v4-flash',
-  backend: 'deepseek',
-  lastError: null,
-  declinedRoutes: [],
-};
-
-/** A run's opening `run.snapshot`. */
-function snapshotPayload(): RunSnapshotPayload {
-  return RunSnapshotPayloadSchema.parse({
-    family: 'toolUse',
-    runtime: SNAPSHOT_RUNTIME,
-    state: { stateSlices: null },
-  });
-}
-
-/** Commits a run's opening snapshot — the fact resume reads — then releases its lease. */
+/** Commits the position that opens a run — the fact resume reads — then releases its lease. */
 async function seedSnapshot(
   id: RunId,
   config: AgentConfig,
@@ -89,15 +72,14 @@ async function seedSnapshot(
     }),
   );
   await Effect.runPromise(
-    testDefaultSession().commit([
+    testDefaultSession().log.transact([
       {
-        type: 'run.snapshot',
+        type: 'run.position',
         aggregateId: aggregateId('run', id),
-        payload: snapshotPayload(),
+        payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
       },
     ]),
   );
-  await Effect.runPromise(testDefaultSession().commitRunEnd(id));
 }
 
 describe('CLI history status formatting', () => {
@@ -189,7 +171,7 @@ describe('CLI history status formatting', () => {
   it.effect('does not offer a run whose config is missing as resumable', () =>
     Effect.gen(function* () {
       const id = 'baad-c0f' as RunId;
-      yield* testDefaultSession().commit([
+      yield* testDefaultSession().log.transact([
         {
           type: 'run.start',
           aggregateId: aggregateId('run', id),
@@ -199,11 +181,11 @@ describe('CLI history status formatting', () => {
           provenance: null,
         },
       ]);
-      yield* testDefaultSession().commit([
+      yield* testDefaultSession().log.transact([
         {
-          type: 'run.snapshot',
+          type: 'run.position',
           aggregateId: aggregateId('run', id),
-          payload: snapshotPayload(),
+          payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
         },
       ]);
 

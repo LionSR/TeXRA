@@ -9,16 +9,12 @@ import {
   type PlatformError,
 } from 'effect';
 
+import { type ProcessRuntime, withProcessServices } from '@texra-ai/harness';
 import { isLatexFile } from '@common/files/fileTypeUtils';
-import { ExternalOpenFailed, type MessageHost } from '@hosts/uiHosts';
-import {
-  type ProcessRuntime,
-  withProcessServices,
-} from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
-import type { BuildDisplayFn } from '@tools/latex/latexPreview';
+import { ExternalOpenFailed, type MessageHost } from '@texra/hosts/uiHosts';
+import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 import { createExternalLocation } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -30,6 +26,7 @@ import {
   tryShowInRenderer,
   type DesktopOverlayPostOptions,
 } from './desktopIpcTypes.js';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 interface DesktopShellAdapter {

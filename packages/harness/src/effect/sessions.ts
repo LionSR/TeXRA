@@ -1,16 +1,34 @@
-/** Public Effect session and run capabilities for embedders. */
+/**
+ * Public Effect session and run capabilities for embedders: `Sessions` is a
+ * projection of the process's `SessionOwner`, and `Sessions.layer` composes
+ * that process with the same `processLayer` every TeXRA host runs on.
+ */
 import { Context, Effect, Layer, type Stream, type Scope } from 'effect';
 
 import type { AgentEvent } from '@agent/trace';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
+import { SessionOwner } from '@agent/runtime/SessionOwner';
+import { processLayer } from '@controllers/session/sessionLayer';
+import {
+  AppState,
+  AgentDirectories,
+  type AgentDirectoriesPort,
+  type ToolMissingHandler,
+} from '@platform/interfaces';
+import type { LanguageModelPort } from '@platform/languageModel';
+import type { ProcessServices } from '@platform/processRuntime';
+import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
+  InlinePersona,
+  RequestDecision,
   RunId,
   SessionCloseReport,
   TranscriptSubscription,
 } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
+import type { StateSettingEntry } from '@shared/state/stateSettings';
 import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type {
@@ -18,22 +36,69 @@ import type {
   RunView as RuntimeRunView,
   TranscriptView as RuntimeTranscriptView,
 } from '@shared/session/sessionView';
+import type { Plugin } from '@tools/plugins';
+import { seedDisabledToolDefaults } from '@tools/toolAvailability';
+import { toolTable } from '@tools/toolTable';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { acquireProcess, type Composition } from './runtime.js';
-import type {
-  LaunchError,
-  PlatformConflict,
+import {
   PluginsRefused,
-  RunFailure,
+  type LaunchError,
+  type ResumeRefused,
+  type SessionOptionsConflict,
+  type ToolsRefused,
+  type RunFailure,
 } from './errors.js';
+import { makeSessions } from './sessionPrograms.js';
+
+/**
+ * The process services the package composes, together with the workspace
+ * roots the package's runs work in. `nodePlatform()` builds all of them; an
+ * embedder supplying its own names its workspace roots beside them.
+ */
+export interface AgentPlatform {
+  /** The agent directories this process's `AgentDirectories` service serves. */
+  readonly agentDirectories: AgentDirectoriesPort;
+  /** Surfaces a tool-missing error to the embedder, served as
+   *  `ToolMissingReporter`; absent, a missing-tool probe answers without
+   *  surfacing. */
+  readonly toolMissingHandler?: ToolMissingHandler;
+  readonly roots: WorkspaceRoots;
+  /** The secret store this process's `Secrets` service reads from. */
+  readonly secrets: PlatformSecrets;
+  /** The bridge its `LanguageModel` service serves; an embedder with no
+   *  editor passes `UNAVAILABLE_LANGUAGE_MODEL_PORT`, as `nodePlatform()`. */
+  readonly languageModel: LanguageModelPort;
+  /** The MCP config file (`.mcp.json` shape) the process's tool registry
+   *  reads; `nodePlatform()` names the one under its `storageDir`. */
+  readonly mcpConfigPath: string;
+}
+
+/** What an embedder composes the process from: its platform, its
+ *  plugins (the harness's built-ins among them), and the setting rows its
+ *  plugins read, installed beside the harness's. */
+export interface Composition {
+  readonly platform: AgentPlatform;
+  readonly plugins: readonly Plugin[];
+  readonly settings?: readonly StateSettingEntry[];
+}
 
 /**
  * A runtime value as the embedder may hold it: read-only all the way down,
  * every map, array, and record included. The value itself is not copied
  * (the fold publishes immutable levels); the type is what keeps a write
- * from reaching it.
+ * from reaching it. A primitive stays itself, so a branded id (a `RunId`)
+ * is still that id.
  */
-type ReadonlyDeep<T> = T extends (...args: never[]) => unknown
+type ReadonlyDeep<T> = T extends
+  | string
+  | number
+  | boolean
+  | bigint
+  | symbol
+  | null
+  | undefined
+  | ((...args: never[]) => unknown)
   ? T
   : T extends ReadonlyMap<infer K, infer V>
     ? ReadonlyMap<K, ReadonlyDeep<V>>
@@ -51,10 +116,43 @@ export type SessionView = ReadonlyDeep<RuntimeSessionView>;
 export type RunView = ReadonlyDeep<RuntimeRunView>;
 /** A stream's transcript slice: what hosts paint. */
 export type TranscriptView = ReadonlyDeep<RuntimeTranscriptView>;
+/** A request a run waits on a person for, as {@link SessionView} lists it:
+ *  which run asks, the request's id, and its payload (`payload.kind` is
+ *  what is asked: a command, an edit, a plan, a retry, a question). */
+export type PendingRequest = SessionView['requests'][number];
+
+/**
+ * The embedder's answer to each request a run of the session waits on: an
+ * approval, a denial with its reason, or for a retry, `retry` or `cancel`.
+ * The session records it as the request's `request.decided`, through the
+ * same `request.decide` a {@link Session.request} sends. A handler that
+ * fails, throws, or has not answered within ten minutes is a denial, with
+ * the cause logged.
+ */
+export type ApprovalHandler = (
+  request: PendingRequest,
+) => Effect.Effect<RequestDecision, Error>;
+
+/** How {@link Sessions} opens a root's session. A later open of the same
+ *  root gets the session already there, and must ask for the same options:
+ *  one that differs fails with {@link SessionOptionsConflict}. */
+export interface OpenOptions {
+  /** Keep the session's history in the root's SQLite store (under
+   *  `roots.storage`, the store every TeXRA host keeps), so a later process
+   *  reopens it and resumes its runs. Absent, the store is in memory and
+   *  ends with the session. */
+  readonly persistent?: boolean;
+  /** Answer the runs' requests. Absent, nobody answers: the session's
+   *  policy denies every request and offers no approval-gated tool. */
+  readonly approve?: ApprovalHandler;
+}
 
 /** What starting a run on a session takes. */
 export interface StartInput {
-  readonly agent: string;
+  /** The agent: a name the agent directories list, or a persona written
+   *  inline in the agent file format (`InlinePersonaSchema`), which the run
+   *  records so a resume needs no file. */
+  readonly agent: string | InlinePersona;
   readonly instruction: string;
   readonly model?: string;
   readonly tools?: readonly ITool[];
@@ -106,6 +204,18 @@ export interface Session {
   readonly start: (
     input: StartInput,
   ) => Effect.Effect<Run, LaunchError | RunFailure>;
+  /**
+   * Continue a persisted run of this session through the one resume path
+   * every host takes, from its committed history: the same handle and the
+   * same admission as {@link start}, and the same custom `tools`, which a
+   * persisted run needs again to continue a call to one. A resume of a run
+   * already resuming here joins it, with the same handle. A run nothing can
+   * continue fails with {@link ResumeRefused}.
+   */
+  readonly resume: (
+    runId: RunId,
+    input?: Pick<StartInput, 'tools'>,
+  ) => Effect.Effect<Run, ResumeRefused | ToolsRefused | RunFailure>;
   /** The one handler of every request a surface issues to this session:
    *  answered exactly once, an outcome or a request error. */
   readonly request: (
@@ -127,10 +237,11 @@ export class Sessions extends Context.Service<
   Sessions,
   {
     /** The session of these roots, or the runtime's, through the process's
-     *  one owner. */
+     *  one owner; `options` decide its store and who answers its runs. */
     readonly open: (
       roots?: WorkspaceRoots,
-    ) => Effect.Effect<Session, SessionOpenError>;
+      options?: OpenOptions,
+    ) => Effect.Effect<Session, SessionOpenError | SessionOptionsConflict>;
     /**
      * Refuse new runs, settle the ones it owns inside the runtime's
      * shutdown-phase budget, flush, release.
@@ -142,22 +253,72 @@ export class Sessions extends Context.Service<
   }
 >()('@texra-ai/harness/Sessions') {
   /**
-   * The Effect embedder's entry: compose the process once, from its
-   * platform and its plugins (`harnessBuiltins.all` from
-   * `@texra-ai/harness/plugins`, or a list of the embedder's own beside
-   * them), and serve its session owner, with this scope as the lifetime of
-   * the hold it takes on that composition. A second, different platform or
-   * plugin list while this package holds a composition, or a process
-   * runtime a host installed rather than this package, fails with
-   * {@link PlatformConflict}; a plugin list the harness cannot compose
-   * (an id that is not lowercase letters, digits and dashes, an id or tool
-   * name listed twice) fails with {@link PluginsRefused}, and anything else
-   * composition throws is a defect. Acquisition waits for a retiring
-   * runtime.
+   * The Effect embedder's entry: compose the process from its platform and
+   * its plugins (`harnessBuiltins.all` from `@texra-ai/harness/plugins`, or a
+   * list of the embedder's own beside them), and serve its session owner for
+   * this layer's lifetime; the layer's release closes every session still
+   * open. A plugin list the harness cannot compose (an id that is not
+   * lowercase letters, digits and dashes, an id or tool name listed twice)
+   * fails with {@link PluginsRefused}, before anything is built.
+   *
+   * Build it once per process, as any Effect layer is memoized: two live
+   * builds over one storage root are two writers of that root's sessions.
    */
-  static layer(
-    composition: Composition,
-  ): Layer.Layer<Sessions, PlatformConflict | PluginsRefused> {
-    return Layer.effect(Sessions, acquireProcess(composition));
+  static layer({
+    platform,
+    plugins,
+    settings = [],
+  }: Composition): Layer.Layer<Sessions, PluginsRefused> {
+    // A thunk: constructing the process layer installs the settings
+    // catalog, which only a composition that passed the check may do.
+    const sessions = (): Layer.Layer<Sessions> =>
+      Layer.effect(
+        Sessions,
+        Effect.gen(function* () {
+          return yield* makeSessions(
+            platform.roots,
+            yield* SessionOwner,
+            yield* Effect.context<ProcessServices>(),
+            yield* Effect.scope,
+          );
+        }),
+      ).pipe(
+        Layer.provide(
+          processLayer({
+            globalStorage: platform.roots.globalStorage,
+            plugins,
+            settings,
+            mcpConfigPath: platform.mcpConfigPath,
+            secrets: platform.secrets,
+            appState: AppState.layer(platform.roots.globalState),
+            languageModel: platform.languageModel,
+            agentDirectories: AgentDirectories.layer(platform.agentDirectories),
+            toolMissingReporter: platform.toolMissingHandler,
+            // An embedder's console has no live level filter of its own, so the
+            // package speaks at the informational level rather than flooding it.
+            minimumLogLevel: 'Info',
+          }),
+        ),
+      );
+    // The list is checked before anything is composed, so a refusal names
+    // the plugin rather than failing the first session open, and leaves the
+    // process untouched. Then the first-install tool switches are seeded, as
+    // every host's bootstrap seeds them, before the process's catalog first
+    // reads them: the opt-in plugins stay off until the embedder switches
+    // them on. A store that cannot be read or written is a platform defect.
+    return Layer.unwrap(
+      Effect.try({
+        try: () => toolTable(plugins),
+        catch: (thrown) =>
+          new PluginsRefused({ message: toErrorMessage(thrown) }),
+      }).pipe(
+        Effect.tap(() =>
+          seedDisabledToolDefaults(platform.roots.globalState, plugins).pipe(
+            Effect.orDie,
+          ),
+        ),
+        Effect.map(sessions),
+      ),
+    );
   }
 }

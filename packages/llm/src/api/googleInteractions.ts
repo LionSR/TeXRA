@@ -4,15 +4,10 @@ import { Cause, Clock, Effect, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports - canonical model contract
-import {
-  admittedFingerprint,
-  canChain,
-  prefixFingerprint,
-} from './prefixFingerprint.js';
+import { prefixFingerprint } from './prefixFingerprint.js';
 import {
   BackgroundEventSchema,
   BackgroundSubmissionSchema,
-  CancellationEvidenceSchema,
   completedTurn,
   ObservationPolicySchema,
   ModelConfigurationSchema,
@@ -32,7 +27,7 @@ import {
   RemoteOperationSchema,
   sdkModelError,
   boundOperation,
-  cancellationStatus,
+  confirmCancelled,
   fillModelError,
   type RemoteOperation,
 } from '../errors.js';
@@ -896,8 +891,6 @@ export function googleInteractionsModel(
         origin,
         providerResponseId: identity.data.id,
         afterSequence: null,
-        admittedFingerprint: admittedFingerprint(GOOGLE_PREFIX_DOMAIN, turn),
-        store: turn.controls.store,
       });
       const interaction = yield* snapshot(raw, operation);
       if (IN_FLIGHT_STATUSES.includes(interaction.status)) {
@@ -943,7 +936,6 @@ export function googleInteractionsModel(
             operation,
           });
         }
-        const chain = yield* canChain(GOOGLE_PREFIX_DOMAIN, turn, operation);
         const parsedPolicy = ObservationPolicySchema.safeParse(policy);
         if (!parsedPolicy.success)
           return yield* new ModelError({
@@ -1003,7 +995,7 @@ export function googleInteractionsModel(
               return BackgroundEventSchema.parse({
                 kind: 'completed',
                 afterSequence: null,
-                result: chain ? yield* withContinuation(turn, result) : result,
+                result: yield* withContinuation(turn, result),
               });
             }
             yield* Effect.sleep(
@@ -1051,17 +1043,7 @@ export function googleInteractionsModel(
         { isAbortMatch: googleAbortMatch },
       );
       const interaction = yield* snapshot(raw, operation);
-      const evidence = CancellationEvidenceSchema.safeParse({
-        providerResponseId: operation.providerResponseId,
-        requestedOrigin: origin,
-        returnedModel: interaction.model ?? null,
-        ...cancellationStatus(interaction.status),
-      });
-      if (evidence.success) return evidence.data;
-      return yield* new ModelError({
-        kind: 'malformed-output',
-        message: 'Google returned an unknown cancellation status.',
-      });
+      return yield* confirmCancelled(operation, interaction.status);
     }).pipe(
       Effect.catchCause((cause) =>
         Effect.failCause(

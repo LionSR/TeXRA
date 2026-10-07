@@ -6,7 +6,6 @@ import { Cause, Effect, FileSystem, type PlatformError } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - fs
-import type { SessionHandle } from '@agent/runtime';
 import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
@@ -14,9 +13,9 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
-import type { ProcessServices } from '@platform/processRuntime';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ensureError } from '@utils/errors/errorMessage';
+import type { ProcessServices } from '@texra-ai/harness';
 
 const CHANNEL = 'SampleProjectCommands';
 
@@ -81,7 +80,6 @@ export function createSampleProjectWithoutWorkspace(
  */
 export function createSampleProject(
   extensionPath: string,
-  session: SessionHandle,
 ): Effect.Effect<void, never, ProcessServices | WorkspaceFs> {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;

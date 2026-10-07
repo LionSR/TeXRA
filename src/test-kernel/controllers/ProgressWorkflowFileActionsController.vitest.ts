@@ -2,8 +2,8 @@ import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import { Effect, type FileSystem } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import type { RunId } from '@shared/schemas';
+import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
 
 const RUN = 'ab12cd' as RunId;
 

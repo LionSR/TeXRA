@@ -19,10 +19,7 @@ import {
   approvedWriteConflict,
   writeApprovedContent,
 } from '@tools/approval/approvedWrite';
-import {
-  computeLineChangeSummary,
-  firstChangedLine,
-} from '@tools/approval/toolEditApproval';
+import { firstChangedLine } from '@tools/approval/toolEditApproval';
 import { runDirUnder } from '@utils/files/runStorageFs';
 import { unifiedDiffText } from '@utils/text/unifiedDiff';
 
@@ -57,7 +54,6 @@ describe('shared text-diff caller fixtures', () => {
       const runId = 'abcdef' as RunId;
       const meta = yield* buildSubagentResult(
         runId,
-        'workflow-subagent',
         {
           response: '',
           files: [],
@@ -77,7 +73,7 @@ describe('shared text-diff caller fixtures', () => {
             diffs: [],
           },
         },
-        { startedAt: Date.now(), storageRoot },
+        storageRoot,
       );
 
       expect(meta.output.documents?.diffs).toEqual([
@@ -105,10 +101,6 @@ describe('shared text-diff caller fixtures', () => {
         const original = 'alpha\nbeta\nomega\n';
         const final = 'alpha\nBETA\nomega\n';
 
-        expect(computeLineChangeSummary(original, final)).toEqual({
-          added: 1,
-          removed: 1,
-        });
         expect(
           firstChangedLine(
             'alpha\nbeta\nomega\n',

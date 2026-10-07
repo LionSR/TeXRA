@@ -15,10 +15,9 @@ import {
   formatCliHistoryAgentLabel,
   formatCliHistorySubject,
 } from '@cli/runtime/historyLabels';
-import type { ProcessRuntime } from '@platform/processRuntime';
-import type { RunId } from '@shared/schemas';
-
 import { AsyncListForm } from './_shared/ListForm';
+import type { ProcessRuntime } from '@texra-ai/harness';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 interface ResumeListFormProps {
   /**

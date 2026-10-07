@@ -5,25 +5,22 @@
 // their own views. A binding is a scope: everything it holds is a finalizer
 // of it, and releasing a project closes that scope, awaited.
 
-import { Effect, Exit, Scope } from 'effect';
+import { Effect, Exit, Queue, Scope, Stream, SubscriptionRef } from 'effect';
 
-import { localSessionBackend } from '@controllers/session/sessionBackend';
-import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
-import {
-  createHostSnapshotSource,
-  HostSnapshotReadFailed,
-} from '@controllers/session/hostSnapshotSource';
-import {
-  SessionBridge,
-  type AttachedPort,
-} from '@controllers/session/SessionBridge';
-import type { AgentDirectoriesPort } from '@platform/interfaces';
 import {
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
-} from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
+} from '@texra-ai/harness';
+import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
+import {
+  createHostSnapshotSource,
+  HostSnapshotReadFailed,
+} from '@texra/controllers/session/hostSnapshotSource';
+import {
+  SessionBridge,
+  type AttachedPort,
+} from '@texra/controllers/session/SessionBridge';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import {
   DESKTOP_WORKSPACE_COMMANDS,
@@ -44,6 +41,7 @@ import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 import { desktopSpawner } from './desktopWindows.js';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
+import type { PlatformSecrets, AgentDirectoriesPort } from '@texra-ai/harness';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
 import type {
   DesktopProject,
@@ -196,7 +194,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       // Install the recipient before host requests publish the recorder's
       // state.
       const bridge = yield* SessionBridge.make({
-        backend: localSessionBackend(project.session),
+        backend: project.backend,
         handleHostRequest: (request, portId) =>
           hostRequests.handleHostRequest(request, portId),
         onPortClosed: (portId) => hostRequests.closePort(portId),
@@ -223,6 +221,15 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         onError: host.reportBackgroundError,
         publish: (next) => bridge.setHost(next),
       });
+      // The service link's state: offline while it reaches the service
+      // again, so the window never sits frozen without saying why.
+      const service = project.service;
+      if (service !== undefined)
+        yield* Effect.forkScoped(
+          Stream.runForEach(SubscriptionRef.changes(service.client), (client) =>
+            snapshot.setServiceOffline(client === null),
+          ),
+        );
       // The funnel is host state every open project's snapshot carries (8.1).
       yield* Effect.acquireRelease(
         Effect.sync(() =>
@@ -236,11 +243,31 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       const initialSnapshot = funnel
         ? snapshot.setOnboarding(funnel).pipe(Effect.andThen(snapshot.refresh))
         : snapshot.refresh;
+      // The window's focus, told to the service as a VS Code window's is:
+      // the project's host calls go to the window the user last worked in.
+      const focused = Stream.callback<void>((queue) =>
+        Effect.acquireRelease(
+          Effect.sync(() => {
+            const onFocus = () => Queue.offerUnsafe(queue, undefined);
+            host.window.on('focus', onFocus);
+            if (host.window.isFocused()) onFocus();
+            return onFocus;
+          }),
+          (onFocus) =>
+            Effect.sync(() => {
+              if (!host.window.isDestroyed()) host.window.off('focus', onFocus);
+            }),
+        ),
+      );
       const run = yield* createDesktopAgentRun({
         runtime,
         host: hosts.run,
         toolEditPreview: hosts.toolEditPreview,
         session: project.session,
+        backend: project.backend,
+        service: project.service,
+        root: project.root,
+        focused,
         showAgentConfigBanner: ({ agentName }) =>
           withProcessServices(
             runtime,
@@ -259,6 +286,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       const hostRequests = createDesktopHostRequests({
         runtime,
         session: project.session,
+        backend: project.backend,
         secrets: options.secrets,
         draftRequests: options.draftRequests,
         workspaceFile: workspace.file,

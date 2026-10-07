@@ -20,7 +20,10 @@ import {
   createRecordingHost,
   sessionWithInteractions,
 } from '@test/agent/progressTestUtils';
-import { ReadConfigTool, UpdateConfigTool } from '@tools/setup/ConfigTools';
+import {
+  ReadConfigTool,
+  UpdateConfigTool,
+} from '@texra/tools/setup/ConfigTools';
 import { generateRunId } from '@utils/core';
 
 const readTool = ReadConfigTool;
@@ -118,7 +121,7 @@ describe('ConfigTools — update_config approval', () => {
       );
       const runId = generateRunId();
       publishTestRunStart(session, runId);
-      yield* session.settlePublications();
+      yield* session.log.settled;
       const requests = yield* Effect.acquireRelease(
         Effect.sync(() =>
           autoDecideRequests(session, () => ({ action: 'reject' })),

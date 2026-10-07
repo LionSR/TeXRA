@@ -7,7 +7,6 @@ import {
   Data,
   Effect,
   Exit,
-  Fiber,
   FileSystem,
   Queue,
   Scope,
@@ -15,57 +14,24 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { getCatalogAgent, refresh } from '@agent/index';
+import { withProcessServices } from '@texra-ai/harness';
 import {
   PdfOpenFailed,
   type ManualCriticismEntry,
   type SessionHandle,
 } from '@agent/runtime';
-import {
-  BundledViewContentProvider,
-  getCombinedLocalResourceRoots,
-  getSharedLocalResourceRoots,
-} from '@common/webview';
+import { getCatalogAgent, refresh } from '@agent/index';
+import { BundledViewContentProvider } from '@common/webview';
 import {
   EXTENSION_CATEGORIES,
   getFilterExtensions,
 } from '@common/files/fileTypeUtils';
-import type { ServiceClient } from '@controllers/server/client';
-import {
-  attachWindowHost,
-  type WindowHost,
-} from '@controllers/server/windowHost';
-import type { SessionBackend } from '@controllers/session/sessionBackend';
-import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
-import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
-import { OnboardingFunnelRefresher } from '@controllers/onboarding/onboardingFunnel';
-import {
-  SessionBridge,
-  type AttachedPort,
-} from '@controllers/session/SessionBridge';
-import {
-  createHostSnapshotSource,
-  HostSnapshotReadFailed,
-  type HostSnapshotSource,
-} from '@controllers/session/hostSnapshotSource';
-import { workspaceFileOptions } from '@controllers/session/workspaceFileOptions';
-import { attachSessionHost } from '@controllers/session/attachSessionHost';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { withLogChannel } from '@logger/effectLog';
-import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import type {
-  StateStore,
-  StateReadFailed,
-  StateWriteFailed,
-} from '@platform/interfaces';
-import type { LanguageModel } from '@platform/languageModel';
-import { withProcessServices } from '@platform/processRuntime';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
 import { DOCUMENTS_OUTPUT_KEY } from '@shared/plugins/documents';
 import { agentKeyOf, type FileLocation, type RunId } from '@shared/schemas';
 import { isLiveRun } from '@shared/session/sessionView';
@@ -78,20 +44,48 @@ import type {
   DownMessage,
   SurfaceActionMessage,
 } from '@shared/session/sessionFrames';
+import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
+import { OnboardingFunnelRefresher } from '@texra/controllers/onboarding/onboardingFunnel';
+import type { ServiceLink } from '@texra/controllers/server/client';
+import {
+  attachWindowHost,
+  type WindowHost,
+} from '@texra/controllers/server/windowHost';
+import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
+import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
+import {
+  createHostSnapshotSource,
+  HostSnapshotReadFailed,
+  type HostSnapshotSource,
+} from '@texra/controllers/session/hostSnapshotSource';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
+import {
+  SessionBridge,
+  type AttachedPort,
+} from '@texra/controllers/session/SessionBridge';
+import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
+import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
+import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies';
 import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { checkCoreDependencies } from '@utils/system/checkCoreDependencies';
 
 import { createExtensionHostRequests } from './extensionHostRequests';
 import { RequestAttention } from './requestAttention';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
+import type {
+  PlatformSecrets,
+  LanguageModel,
+  StateStore,
+  StateReadFailed,
+  StateWriteFailed,
+} from '@texra-ai/harness';
 
 const CHANNEL = 'ProgressViewProvider';
 const CATALOG_RESCAN_FAILED =
   'Agent catalog rescan after an agent-directory change failed';
 
-export type ProgressRunRevealResult = 'revealed' | 'missing';
+type ProgressRunRevealResult = 'revealed' | 'missing';
 
-/** One transport port: a VS Code webview attached to the bridge. */
 /**
  * A placement the window refused: the sidebar focus command, or a tab
  * attaching to a bridge that has closed. Tagged because these reach the
@@ -105,6 +99,7 @@ export class SurfacePlacementFailed extends Data.TaggedError(
   readonly cause: unknown;
 }> {}
 
+/** One transport port: a VS Code webview attached to the bridge. */
 interface Port {
   readonly attached: AttachedPort;
   readonly disposables: vscode.Disposable[];
@@ -117,11 +112,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public readonly snapshot: HostSnapshotSource;
   public readonly toolEditApprovals: ToolEditApprovalController;
 
-  /** The bridge's lifetime: every port and request it owns ends when
-   *  {@link dispose} closes it. */
-  private readonly bridgeScope = Scope.makeUnsafe();
+  /** Everything the provider holds ends when {@link dispose} closes this,
+   *  last-in first-out: the ports, attached later, close before the host. */
+  private readonly scope = Scope.makeUnsafe();
   private readonly contentProvider: BundledViewContentProvider;
-  private readonly disposables: vscode.Disposable[] = [];
 
   /** The sidebar's `WebviewView` while VS Code holds one resolved. */
   private sidebarView: vscode.WebviewView | undefined;
@@ -173,7 +167,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private readonly draftRequests = new HostDraftRequests();
 
   constructor(
-    private readonly context: vscode.ExtensionContext,
+    context: vscode.ExtensionContext,
     private readonly globalState: StateStore,
     private readonly secrets: PlatformSecrets,
     /** Process runtime shared with every extension surface. */
@@ -183,7 +177,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     /** Where this window's runs run: the session here, or the service's. */
     private readonly backend: SessionBackend,
     /** The background service, when this window is its client. */
-    private readonly service: ServiceClient | undefined,
+    private readonly service: ServiceLink | undefined,
     /** The setup pill: painted from the same credential answer the funnel
      *  reads, so the pill and the "Connect a model" card agree. */
     private readonly paintSetupPill: (credentialUsable: boolean) => void,
@@ -222,7 +216,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         handleHostRequest: (request, port) =>
           hostRequests.handleHostRequest(request, port),
         onPortClosed: (port) => hostRequests.closePort(port),
-      }).pipe(Scope.provide(this.bridgeScope)),
+      }).pipe(Scope.provide(this.scope)),
     );
     const roots = session.roots;
     this.snapshot = createHostSnapshotSource({
@@ -308,10 +302,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // A decision goes where the run runs.
       session: { requests: backend },
     });
-    const attention = this.runtime.runFork(this.attention.follow(backend));
-    this.disposables.push({
-      dispose: () => this.runtime.runFork(Fiber.interrupt(attention)),
-    });
+    this.runtime.runSync(
+      Effect.forkIn(this.attention.follow(backend), this.scope),
+    );
 
     const hostRequests = createExtensionHostRequests({
       session,
@@ -330,7 +323,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       refreshOnboardingFunnel: () => this.refreshOnboardingFunnel(),
       refreshApiKeyStatus: this.refreshApiKeyStatus,
     });
-    this.disposables.push({ dispose: () => hostRequests.dispose() });
+    this.own(hostRequests);
 
     // Attached for the window's life, before the first run of this window
     // asks anything. Requests this host does not present (bash, plan,
@@ -338,7 +331,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // request row decides them. A document task's `run.end` is the completion
     // chime, one per process (PRD 12.4), never a renderer transition hook
     // that every subscriber would replay. A failed run does not chime.
-    const hostScope = this.runtime.runSync(Scope.make());
     // What this window does for a run, whether it runs here or in the
     // service: notices, the editor's diagnostics and inline criticism, and
     // opening a PDF.
@@ -385,19 +377,16 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             )
               this.chime();
           }),
-      }).pipe(Scope.provide(hostScope)),
+      }).pipe(Scope.provide(this.scope)),
     );
     // A window of the service is its project's window too: the service's
     // runs ask it for the same, and it stages their tool edits.
     if (service !== undefined)
       this.runtime.runFork(
         this.attachToService(service, capabilities).pipe(
-          Scope.provide(hostScope),
+          Scope.provide(this.scope),
         ),
       );
-    this.disposables.push({
-      dispose: () => this.runtime.runFork(Scope.close(hostScope, Exit.void)),
-    });
 
     this.watchWorkspace();
   }
@@ -407,7 +396,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    * and chime when one of its document tasks ends, as a run here does.
    */
   private attachToService(
-    service: ServiceClient,
+    service: ServiceLink,
     capabilities: Omit<WindowHost, 'toolEdits'>,
   ): Effect.Effect<void, never, Scope.Scope> {
     const workspace = this.session.roots.workspace;
@@ -454,6 +443,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           : focused,
       );
       yield* Effect.forkScoped(this.chimeOnServiceDocuments());
+      // Offline while the link reaches the service again, so the view never
+      // sits frozen without saying why.
+      yield* Effect.forkScoped(
+        Stream.runForEach(SubscriptionRef.changes(service.client), (client) =>
+          this.snapshot.setServiceOffline(client === null),
+        ),
+      );
     });
   }
 
@@ -462,7 +458,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private chimeOnServiceDocuments(): Effect.Effect<void> {
     return Effect.suspend(() => {
       let live = new Set<RunId>();
-      return Stream.runForEach(this.backend.viewChanges, (view) =>
+      return Stream.runForEach(this.backend.view.changes, (view) =>
         Effect.sync(() => {
           const now = new Set<RunId>();
           for (const run of view.runs.values()) {
@@ -501,7 +497,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // Only a non-first workspace folder can be added or removed here: VS
     // Code restarts the extension host for a first-folder change, so the
     // storage root never moves under a live window (#11432).
-    this.disposables.push(
+    this.own(
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
         void this.runtime.runPromise(
           this.snapshot
@@ -523,7 +519,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       void this.runtime.runPromise(this.snapshot.refreshFiles);
     fileWatcher.onDidCreate(refreshFiles);
     fileWatcher.onDidDelete(refreshFiles);
-    this.disposables.push(
+    this.own(
       fileWatcher,
       // The catalog reloads itself on every change to its sources
       // (`agentCatalogFollower`); this launcher repaints what it lists.
@@ -531,6 +527,17 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         this.debouncedRefreshCatalogs.schedule(),
       ),
     );
+  }
+
+  /** VS Code disposables as finalizers of the provider's scope. */
+  private own(...disposables: vscode.Disposable[]): void {
+    for (const disposable of disposables)
+      this.runtime.runSync(
+        Scope.addFinalizer(
+          this.scope,
+          Effect.sync(() => disposable.dispose()),
+        ),
+      );
   }
 
   /** The agent, team, and model catalogs. */
@@ -581,9 +588,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.options = {
       enableScripts: true,
       enableCommandUris: true,
-      localResourceRoots: getCombinedLocalResourceRoots(this.context, [
-        'progressView',
-      ]),
+      localResourceRoots: this.contentProvider.localResourceRoots,
     };
     this.closeSidebarPort();
     this.sidebarView = webviewView;
@@ -742,7 +747,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  /** The New-task state in the sidebar (`texra.showMainView`). */
   /**
    * "Connect a model" from outside the panel (the setup command, the status
    * pill): bring the one credential prompt into view. A previous "Skip for
@@ -757,6 +761,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
+  /** The New-task state in the sidebar (`texra.showMainView`). */
   public showLauncher() {
     return Effect.gen({ self: this }, function* () {
       yield* this.showInSidebar();
@@ -773,7 +778,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       if (!options?.inPlace) yield* this.showInSidebar();
       // Each surface decides from its own selection: one on the New-task
       // state opens the newest session, one showing a session keeps it.
-      const newest = SubscriptionRef.getUnsafe(this.backend.view).order.at(0);
+      const newest = SubscriptionRef.getUnsafe(this.backend.view.ref).order.at(
+        0,
+      );
       if (newest !== undefined)
         this.surfaceAction({ kind: 'showSessions', runId: newest });
     });
@@ -791,7 +798,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     runId: RunId,
   ): Effect.Effect<ProgressRunRevealResult, SurfacePlacementFailed> {
     return Effect.gen({ self: this }, function* () {
-      const view = SubscriptionRef.getUnsafe(this.backend.view);
+      const view = SubscriptionRef.getUnsafe(this.backend.view.ref);
       if (!view.runs.has(runId)) return 'missing' as const;
       yield* this.showProgressView();
       this.surfaceAction({ kind: 'select', runId });
@@ -800,7 +807,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public runLabel(runId: RunId): string | undefined {
-    return SubscriptionRef.getUnsafe(this.backend.view).runs.get(runId)?.label;
+    return SubscriptionRef.getUnsafe(this.backend.view.ref).runs.get(runId)
+      ?.label;
   }
 
   public popOutToEditor() {
@@ -817,10 +825,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           enableScripts: true,
           enableCommandUris: true,
           retainContextWhenHidden: true,
-          localResourceRoots: getSharedLocalResourceRoots(
-            this.context,
-            'progressView',
-          ),
+          localResourceRoots: this.contentProvider.localResourceRoots,
         },
       );
       panel.iconPath = new vscode.ThemeIcon('pulse');
@@ -844,8 +849,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       this.editor?.panel.dispose();
       this.editor = undefined;
       this.debouncedRefreshCatalogs.cancel();
-      yield* Scope.close(this.bridgeScope, Exit.void);
-      for (const disposable of this.disposables.splice(0)) disposable.dispose();
+      yield* Scope.close(this.scope, Exit.void);
       yield* this.draftRequests.shutdown;
       yield* this.toolEditApprovals.dispose();
     });

@@ -1,4 +1,3 @@
-import { codingPlanForUsageRoute } from '@texra-ai/llm';
 import { isSubscriptionRoute } from '@cli/runtime/modelAccessRoute';
 import {
   firstFittingCandidate,
@@ -8,22 +7,26 @@ import {
 import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
+import { runBypasses } from '@shared/approvalBypassKind';
 import {
   texraApprovalPolicyLabel,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { contextGaugeBand, roundedContextPercent } from '@shared/contextGauge';
 import {
+  codingPlanForUsageRoute,
   type ContextStateData,
-  type SubscriptionUsageSnapshot,
-  type SubscriptionUsageProvider,
-  type ApprovalPolicySnapshot,
   type RunId,
+  type SubscriptionUsageProvider,
+  type SubscriptionUsageSnapshot,
   type TokenUsageStats,
   type UsageRoute,
 } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
 import type { RunView, SessionView } from '@shared/session/sessionView';
+import {
+  contextGaugeBand,
+  roundedContextPercent,
+} from '@texra/shared/contextGauge';
 import { AGENT_LIST, NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { APPROVAL_BYPASS_BADGE } from '@ui/copy/approvalBypass';
 import { assertNever, filterNotNullish, unique } from '@utils/core';
@@ -39,8 +42,8 @@ import { type TransientNotice } from '../state/cliState';
 import { runPhaseOf, runViewOf } from '../state/sessionView';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
-/** The approval bypass flags a run's policy snapshot carries. */
-export type BypassState = ApprovalPolicySnapshot['bypasses'];
+/** Which approval bypasses are on for a run, its own or inherited. */
+export type BypassState = ReturnType<typeof runBypasses>;
 
 /** What the pending-interaction count names: approvals, questions, or both. */
 export type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';
@@ -50,7 +53,6 @@ function statusKindForApproval(
 ): Exclude<ApprovalQueueStatusKind, 'request'> {
   switch (kind) {
     case 'userQuestion':
-    case 'toolOutcome':
       return 'question';
     case 'bash':
     case 'toolEdit':
@@ -433,7 +435,6 @@ function fitTransientNoticeStatusBarLeftSegments(
     statusBarSegmentsWidth(fitted) > innerWidth
   ) {
     fitted.splice(fitted.indexOf(liveness), 1);
-    liveness = undefined;
     fitNotice();
   }
 
@@ -918,9 +919,9 @@ export function buildStatusBarDisplay(
       ] satisfies (StatusBarSegment | undefined)[]
     ).filter(filterNotNullish),
   );
-  const bypass = run === undefined ? undefined : view.policy.get(run.id);
+  const bypasses = run === undefined ? undefined : runBypasses(view, run.id);
   for (const badge of BYPASS_BADGES) {
-    if (bypass?.bypasses[badge.field]) {
+    if (bypasses?.[badge.field] === true) {
       left.push({
         text: badge.text,
         badge: true,

@@ -1,6 +1,7 @@
 import { defineCommand } from 'citty';
 import { Effect, FileSystem } from 'effect';
 
+import { AgentDirectories } from '@texra-ai/harness';
 import {
   agentSourceRoots,
   changedBuiltInOf,
@@ -11,7 +12,6 @@ import {
   keepCustomAgent,
   writeStampedCopy,
 } from '@agent/index';
-import { AgentDirectories } from '@platform/interfaces';
 import { AGENT_SOURCE, agentKey, agentName } from '@shared/schemas';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 
@@ -35,10 +35,7 @@ import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult, emitPagedCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
-export function listAgents(
-  context: CliContext,
-  options: CliAgentListOptions = {},
-) {
+function listAgents(context: CliContext, options: CliAgentListOptions = {}) {
   // The platform init and the list read below are one program, run on the
   // process runtime the command entry installs.
   return Effect.gen(function* () {
@@ -76,7 +73,7 @@ export function listAgents(
   });
 }
 
-export function showAgent(context: CliContext, name: string) {
+function showAgent(context: CliContext, name: string) {
   return Effect.gen(function* () {
     yield* initCliPlatform(context);
     const entry = resolveCliAgent(name);

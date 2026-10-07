@@ -4,15 +4,15 @@ import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  initializeDefaultSession,
-  tryDefaultSession,
-} from '@agent/runtime/sessionGraph';
+  openTestDefaultSession,
+  tryTestDefaultSession,
+} from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
-// An ephemeral session's graph builds synchronously, so the process default
-// is open before the importing suite's first test.
+// An ephemeral session's graph builds synchronously, so the default is open
+// before the importing suite's first test.
 Effect.runSync(
-  initializeDefaultSession({
+  openTestDefaultSession({
     roots: testWorkspaceRoots(),
     transcriptMode: {
       kind: 'ephemeral',
@@ -22,17 +22,15 @@ Effect.runSync(
 );
 
 /**
- * The process-default session this setup installed — or the one a suite
- * reinstalled through `initializeDefaultSession` after a teardown, since the
- * read goes through the owner on each call. Replaces the deleted production
- * `defaultSession()` accessor at test call sites; access with no default
- * installed is a lifecycle error, as it was there.
+ * The file's default session this setup opened, or the one a suite reopened
+ * through `openTestDefaultSession`. Access with none open is a lifecycle
+ * error.
  */
 export function testDefaultSession(): SessionHandle {
-  const session = tryDefaultSession();
+  const session = tryTestDefaultSession();
   if (!session) {
     throw new Error(
-      'The default session has not been initialized. Import @test/support/defaultSessionTestSetup or call initializeDefaultSession() first.',
+      'The default session is not open. Import @test/support/defaultSessionTestSetup or call openTestDefaultSession() first.',
     );
   }
   return session;

@@ -17,8 +17,8 @@ beforeEach(async () => {
 
 const readParentRunId = (runId: RunId) =>
   Effect.runPromise(
-    session
-      .readView([])
+    session.view
+      .read([])
       .pipe(Effect.map((view) => view.runs.get(runId)?.parentId ?? undefined)),
   );
 
@@ -28,8 +28,8 @@ describe('persisted parent edge', () => {
     () =>
       Effect.gen(function* () {
         publishTestRunStart(session, 'aaa0ff' as RunId);
-        yield* session.settlePublications();
-        const rows = yield* session.commit([
+        yield* session.log.settled;
+        const rows = yield* session.log.transact([
           {
             type: 'run.start',
             aggregateId: aggregateId('run', 'aaa010' as RunId),
@@ -42,7 +42,7 @@ describe('persisted parent edge', () => {
         expect(rows[0]).toMatchObject({
           parent: { id: 'aaa0ff', uid: expect.any(String) },
         });
-        const ownRows = yield* session.readRunRecords('aaa010' as RunId);
+        const ownRows = yield* session.log.records('aaa010' as RunId);
         expect(ownRows).toHaveLength(1);
         expect(
           yield* Effect.promise(() => readParentRunId('aaa010' as RunId)),

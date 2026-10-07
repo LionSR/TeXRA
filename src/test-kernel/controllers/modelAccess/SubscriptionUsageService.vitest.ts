@@ -4,15 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as codexAuth from '@texra-ai/llm/node';
 import { SubscriptionOAuthError } from '@texra-ai/llm/node';
-import { parseChatGptUsage } from '@controllers/modelAccess/subscriptionUsage/codexUsageAdapter';
-import { timestampField } from '@controllers/modelAccess/subscriptionUsage/subscriptionUsageParsing';
-import {
-  GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
-  GLM_CODING_PLAN_USAGE_URL,
-  parseGlmCodingPlanUsage,
-} from '@controllers/modelAccess/subscriptionUsage/glmCodingPlanUsageAdapter';
-import { parseKimiCodeUsage } from '@controllers/modelAccess/subscriptionUsage/kimiCodeUsageAdapter';
-import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
@@ -24,6 +15,15 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
+import { SubscriptionUsageService } from '@texra/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
+import { parseKimiCodeUsage } from '@texra/controllers/modelAccess/subscriptionUsage/kimiCodeUsageAdapter';
+import {
+  GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
+  GLM_CODING_PLAN_USAGE_URL,
+  parseGlmCodingPlanUsage,
+} from '@texra/controllers/modelAccess/subscriptionUsage/glmCodingPlanUsageAdapter';
+import { timestampField } from '@texra/controllers/modelAccess/subscriptionUsage/subscriptionUsageParsing';
+import { parseChatGptUsage } from '@texra/controllers/modelAccess/subscriptionUsage/codexUsageAdapter';
 import type { HttpClient } from 'effect/http';
 
 /** The request the adapters make through `FetchHttpClient.Fetch`. */

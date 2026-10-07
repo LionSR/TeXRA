@@ -22,6 +22,8 @@ import { ConfigProvider, Effect, RcMap } from 'effect';
 import { afterEach, beforeEach } from 'vitest';
 
 import { AgentEngine } from '@agent/runtime/AgentEngine';
+import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
+import { RouteRetries } from '@agent/runtime/run/invocation';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { AgentDirectoriesPort, StateStore } from '@platform/interfaces';
@@ -41,14 +43,12 @@ import {
   type Database,
   type DatabaseOpenFailed,
 } from '@shared/session/database';
-import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
-import { InquiryRecords } from '@shared/plugins/externalInquiry';
 import { UsageLog } from '@shared/usageLog';
 import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
-} from '@tools/lean/leanLanguageServices';
-import type { SetupPlatformShape } from '@tools/setup/platform';
+} from '@texra/tools/lean/leanLanguageServices';
+import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import { goalContinuation } from '@tools/goal/goalContinuation';
 import { toolTableLayer } from '@tools/liveTools';
 import { toolTable } from '@tools/toolTable';
@@ -73,7 +73,7 @@ export interface FakeHost {
   readonly roots: WorkspaceRoots;
   /** The store the host's `Secrets` service reads, as a root's own local. */
   readonly secrets: PlatformSecrets;
-  /** The language-model port a real root hands `installProcessRuntime`,
+  /** The language-model port a real root hands `processLayer`,
    *  held here as its own local. */
   readonly languageModel: LanguageModelPort;
   readonly setup?: SetupPlatformShape;
@@ -175,9 +175,9 @@ function installedSetup(): SetupPlatformShape {
 }
 
 /**
- * The `SetupPlatform` service of every test runtime: each member reads the
- * installed host's `setup` when called, so a suite that swaps hosts per test
- * swaps setup platforms with them.
+ * The setup platform of every test's TeXRA plugin list: each member reads
+ * the installed host's `setup` when called, so a suite that swaps hosts per
+ * test swaps setup platforms with them.
  */
 export const fakeSetupPlatform: SetupPlatformShape = {
   get commands() {
@@ -222,8 +222,6 @@ export const fakeHostAppState: StateStore = {
 export const fakeHostLanguageModel: LanguageModelPort = {
   selectModels: (selector) =>
     installedHost().languageModel.selectModels(selector),
-  onDidChange: (listener) =>
-    installedHost().languageModel.onDidChange(listener),
   acquire: (configuration) =>
     installedHost().languageModel.acquire(configuration),
 };
@@ -236,8 +234,6 @@ export const fakeHostAgentDirectories: AgentDirectoriesPort = {
   customConfigured: () =>
     installedHost().platform.agentDirectories.customConfigured(),
   builtIn: () => installedHost().platform.agentDirectories.builtIn(),
-  builtInToolUse: () =>
-    installedHost().platform.agentDirectories.builtInToolUse(),
 };
 
 /** The process services a fake host provides to a program. */
@@ -287,8 +283,8 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { Secrets },
     { AgentDirectories, AppState },
     { LanguageModel },
-    { SetupPlatform },
     { unprobedToolAvailability },
+    { SessionOwner },
   ] = await Promise.all([
     import('@test/support/testWorkspaceRoots'),
     import('./testProcessRuntime'),
@@ -297,8 +293,8 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     import('@platform/secrets'),
     import('@platform/interfaces'),
     import('@platform/languageModel'),
-    import('@tools/setup/platform'),
     import('./toolAvailabilityTestLayer'),
+    import('@agent/runtime/SessionOwner'),
   ]);
   current = host;
   for (const key of Object.keys(harnessEnv)) delete harnessEnv[key];
@@ -320,7 +316,8 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // The process environment, hermetic: the installed host's `env`, never
     // the developer's shell.
     ConfigProvider.layer(ConfigProvider.fromEnvRecord(harnessEnv)),
-    Layer.mock(UpdateCheckRecords, {}),
+    // The process's one route retry gate, as `processLayer` serves it.
+    Layer.effect(RouteRetries, ModelRetryGate.make),
     // A wake resumes as in production. The module is read per call, so a
     // suite's own mock or spy of it is the resume the wake reaches.
     Layer.mock(AgentEngine, {
@@ -370,7 +367,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
           ),
       }),
     ),
-    Layer.mock(InquiryRecords, {}),
     // The Lean plugin's port, which a step serves its tools; a suite that
     // exercises a Lean tool provides its own innermost.
     // The run-end stop is absent, as on a host whose Lean integration owns
@@ -380,7 +376,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     AppState.layer(fakeHostAppState),
     LanguageModel.layer(fakeHostLanguageModel),
     AgentDirectories.layer(fakeHostAgentDirectories),
-    SetupPlatform.layer(fakeSetupPlatform),
     unprobedToolAvailability,
     // The cross-workspace storage view the process runtime serves, over the
     // installed host's global root. A suite that exercises it directly
@@ -398,7 +393,16 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   // `defaultSessionTestSetup`) after its own `vi.mock` registrations, which
   // this install, called from a setup file or a `beforeEach`, cannot promise.
   if (tryTestProcessRuntime() == null) {
-    initTestProcessRuntime(ManagedRuntime.make(processServices));
+    initTestProcessRuntime(
+      ManagedRuntime.make(
+        // No session graph here: it holds no session, and an open dies,
+        // naming the missing member.
+        Layer.merge(
+          processServices,
+          Layer.mock(SessionOwner, { list: Effect.succeed([]) }),
+        ),
+      ),
+    );
   }
 }
 

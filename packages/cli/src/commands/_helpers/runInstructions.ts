@@ -77,7 +77,7 @@ export function formatToolUseAgentRunInstruction(init: {
 }
 
 const PRIVILEGED_ACTION_GUIDANCE =
-  'Do not call approval-gated tools such as bash/shell commands, file edits, setup/config updates, user questions, retry/plan approvals, or new subagent delegations; solve from the provided context or state what approval is needed.';
+  'Do not call approval-gated tools such as bash/shell commands, file edits, setup/config updates, user questions, retry/plan approvals, or new subagents; solve from the provided context or state what approval is needed.';
 const CLI_APPROVAL_POLICY_GUIDANCE =
   'Valid CLI approval policies are "ask", "never", and "yolo" only. If suggesting a rerun, use --approval-policy yolo for headless auto-approval or an interactive run with --approval-policy ask; do not invent other approval mode names.';
 

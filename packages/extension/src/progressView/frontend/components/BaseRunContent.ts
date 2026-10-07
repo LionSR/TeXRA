@@ -15,7 +15,7 @@ import {
   type RunView,
 } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
-import { SessionUiEvents } from '@shared/session/uiEvents';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { interruptedTasks, resumeBlockerFix } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -71,6 +71,7 @@ export abstract class BaseRunContent extends LitElement {
             runId: run.id,
             at: event.detail.at,
             draft: event.detail.draft,
+            mediaFiles: [...event.detail.mediaFiles],
           }),
         );
       }}
@@ -180,7 +181,7 @@ export abstract class BaseRunContent extends LitElement {
     const source = run.forkedFrom;
     if (source === null) return nothing;
     const from = this.view?.runs.get(source.id);
-    const title = from ? from.description || from.label : 'a deleted task';
+    const title = from ? from.title : 'a deleted task';
     return html`<p class="forked-from-line">
       ${waIcon('code-branch')} ${TASK_ACTIONS.forkedFrom(title)} at step
       ${source.at}: the model holds that conversation up to there.

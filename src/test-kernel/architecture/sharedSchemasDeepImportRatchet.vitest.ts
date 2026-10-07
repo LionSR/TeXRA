@@ -7,7 +7,7 @@
 //
 // Scope: repo-root `src/`, repo-root `scripts/`, and every `packages/*/src`
 // and `packages/*/scripts`, excluding only the surface's own interior
-// `src/shared/schemas/` (a sibling import there cannot use the barrel).
+// `packages/harness/src/shared/schemas/` (a sibling import there cannot use the barrel).
 // `scripts/` directories ship dev tooling alongside production code and are
 // not exempt from the prohibition — most of their files are plain
 // .js/.mjs/.cjs rather than TypeScript, so the scan admits those extensions
@@ -37,7 +37,7 @@ import {
   toRepoPath,
 } from '../support/repoScan';
 
-const SURFACE_INTERIOR = 'src/shared/schemas/';
+const SURFACE_INTERIOR = 'packages/harness/src/shared/schemas/';
 const DEEP_IMPORT_PREFIX = '@shared/schemas/';
 
 // Modules the 2026-09-20 tools-and-schema note moved off this surface, each
@@ -45,14 +45,23 @@ const DEEP_IMPORT_PREFIX = '@shared/schemas/';
 // with the state keys it is built from, and the settings-view protocol with
 // the settings-view wiring that speaks it.
 const MOVED_OUT: ReadonlyArray<readonly [string, string]> = [
-  ['stateSettings.ts', 'src/shared/state/stateSettings.ts'],
+  ['stateSettings.ts', 'packages/harness/src/shared/state/stateSettings.ts'],
   [
     'settingsViewMessages.ts',
-    'src/shared/settingsView/settingsViewMessages.ts',
+    'packages/texra/src/shared/settingsView/settingsViewMessages.ts',
   ],
-  ['memoryViewMessages.ts', 'src/shared/settingsView/memoryViewMessages.ts'],
-  ['profileViewMessages.ts', 'src/shared/settingsView/profileViewMessages.ts'],
-  ['messageFactories.ts', 'src/shared/settingsView/messageFactories.ts'],
+  [
+    'memoryViewMessages.ts',
+    'packages/texra/src/shared/settingsView/memoryViewMessages.ts',
+  ],
+  [
+    'profileViewMessages.ts',
+    'packages/texra/src/shared/settingsView/profileViewMessages.ts',
+  ],
+  [
+    'messageFactories.ts',
+    'packages/texra/src/shared/settingsView/messageFactories.ts',
+  ],
 ];
 
 function scanRoots(): string[] {
@@ -62,12 +71,14 @@ function scanRoots(): string[] {
     .map((entry) => entry.name)
     .toSorted((a, b) => a.localeCompare(b));
 
+  // Derived from the tree: a package without a src/ or scripts/ has none to
+  // scan, which is not a renamed zone.
   return [
     'src',
     'scripts',
     ...packageDirs.map((name) => `packages/${name}/src`),
     ...packageDirs.map((name) => `packages/${name}/scripts`),
-  ];
+  ].filter((root) => existsSync(resolve(REPO_ROOT, root)));
 }
 
 function isScriptRoot(root: string): boolean {
@@ -88,7 +99,6 @@ function scanForDeepImports(): Scan {
   for (const root of scanRoots()) {
     for (const file of sourceFilesUnder(resolve(REPO_ROOT, root), {
       excludeTestKernel: false,
-      missingDirReturnsEmpty: true,
       includeJs: isScriptRoot(root),
     })) {
       const repoPath = toRepoPath(file);

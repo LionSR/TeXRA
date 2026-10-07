@@ -12,15 +12,13 @@
  */
 import { Effect } from 'effect';
 
+import { modelConfig, modelRefOf } from '@texra-ai/llm';
 import {
-  isDeprecatedModel,
-  isRetiredModel,
-  modelConfig,
-  modelRefOf,
-} from '@texra-ai/llm';
+  StateWriteFailed,
+  type StateReadFailed,
+  type StateStore,
+} from '@texra-ai/harness';
 import { getEnabledModels, setModelEnabled } from '@model/computeModelOptions';
-import type { StateReadFailed, StateStore } from '@platform/interfaces';
-import { StateWriteFailed } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getModelLabel } from '@shared/model/modelLabel';
 
@@ -42,7 +40,7 @@ export function listCliEnabledModelCatalog(state: StateStore) {
   return Effect.gen(function* () {
     const enabled = new Set(yield* getEnabledModels(state));
     return knownCliModelIds()
-      .filter((id) => !isRetiredModel(id))
+      .filter((id) => !modelConfig(id)?.retired)
       .map((id) => {
         const config = modelConfig(id);
         return {
@@ -50,7 +48,7 @@ export function listCliEnabledModelCatalog(state: StateStore) {
           label: getModelLabel(id),
           provider: config?.provider ?? 'unknown',
           enabled: enabled.has(id),
-          deprecated: isDeprecatedModel(id),
+          deprecated: modelConfig(id)?.deprecated ?? false,
         };
       })
       .toSorted((a, b) => {

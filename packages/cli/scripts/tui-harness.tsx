@@ -1,6 +1,6 @@
 // Test harness: seed the session fold with synthetic runs and rows, render
 // <App /> to the real terminal. Every fixture is published through the
-// runtime session (`SessionHandle.publish`, the transcript store, the
+// runtime session (`SessionHandle.log`, the transcript store, the
 // interaction port), so the TUI under test renders the same `SessionView` a
 // live chat does. Used to verify the TUI without API access. Exits on Ctrl-C.
 
@@ -22,11 +22,11 @@ import React from 'react';
 
 import { apiKeySecretName } from '@texra-ai/llm';
 import { refresh } from '@agent/index';
-import { tryDefaultSession } from '@agent/runtime';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
+import { runBypasses } from '@shared/approvalBypassKind';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import {
   formatTexraApprovalPolicy,
@@ -62,7 +62,6 @@ import {
   type UserQuestionPermission,
 } from '@shared/schemas';
 import { goalStateOf } from '@shared/plugins/goal';
-import { subscribeToSignalChanges } from '@shared/signals';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   isInFlightPhase,
@@ -78,7 +77,8 @@ import {
   PROCESS,
   tail,
 } from '@test/shared/session/fanOutScenario';
-import { clearGoal, setGoalSessionAutoApproval, startGoal } from '@tools/goal';
+import { subscribeToSignalChanges } from '@texra/shared/signals';
+import { clearGoal, startGoal } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -174,7 +174,6 @@ const SCRIPT_PROPOSAL = process.env.HARNESS_SCRIPT_PROPOSAL === '1';
 /** A finished `agent` call whose output is its delivery envelope. */
 const SHOW_AGENT_RESULT = process.env.HARNESS_AGENT_RESULT === '1';
 /** An agent call that may have run before TeXRA stopped, with no result. */
-const SHOW_TOOL_OUTCOME = process.env.HARNESS_TOOL_OUTCOME === '1';
 const PLAN_APPROVAL_OBJECTIVE =
   process.env.HARNESS_PLAN_APPROVAL_OBJECTIVE ??
   [
@@ -370,7 +369,7 @@ if (HARNESS_MEMORY_FILES.length > 0) {
 const harnessRuntimeSession = await harnessRuntime.runPromise(
   HARNESS_PLATFORM_SERVICES.session,
 );
-harnessRuntimeSession.setApprovalPolicy(TEXRA_APPROVAL_POLICY_DEFAULT);
+harnessRuntimeSession.approvals.override(TEXRA_APPROVAL_POLICY_DEFAULT);
 if (process.env.HARNESS_VISIBLE_AGENTS !== undefined) {
   await harnessRuntime.runPromise(
     harnessRoots.repoState.update(WorkspaceStateKey.WORKSPACE_AGENTS, {
@@ -399,20 +398,16 @@ const HARNESS_DISPOSERS: Array<() => void> = [];
 
 /** The session every fixture publishes into and the TUI renders. */
 function session() {
-  const installed = tryDefaultSession();
-  if (!installed) {
-    throw new Error('tui-harness: the default session is not initialized.');
-  }
-  return installed;
+  return harnessRuntimeSession;
 }
 
 function publish(...drafts: SessionEventDraft[]): void {
-  session().publish(drafts);
+  harnessRuntime.runFork(session().log.transact(drafts));
 }
 
 // The TUI reads the session fold (PRD 10.1): bind it and subscribe every
 // run's transcript tier the way `runChat` does.
-HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, session().view));
+HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, session().view.ref));
 {
   let subscribed = '';
   const syncTranscriptSubscriptions = (): void => {
@@ -421,9 +416,9 @@ HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, session().view));
     if (key === subscribed) return;
     subscribed = key;
     harnessRuntime.runFork(
-      session().setTranscriptSubscriptions(
+      session().view.subscribe(
         'tui-harness',
-        ids.map((id) => ({ id, fromSeq: 0 })),
+        ids.map((id) => ({ id: qualifyAggregateId('run', id), fromSeq: 0 })),
       ),
     );
   };
@@ -1059,7 +1054,7 @@ function requestHarnessApproval(
   onSettled: (decision: RequestDecision) => void | Promise<void>,
 ): void {
   void harnessRuntime
-    .runPromise(session().openRequest(runId, payload))
+    .runPromise(session().requests.ask(runId, payload))
     .then(onSettled)
     .catch((error: unknown) => {
       appendLocalErrorTranscript(
@@ -1099,15 +1094,14 @@ async function appendHarnessPlanDecision(
 ): Promise<void> {
   if (result.action === 'approve_and_goal') {
     await harnessRuntime.runPromise(
-      startGoal(session(), HARNESS_RUN_ID, PLAN_APPROVAL_OBJECTIVE),
-    );
-    // The same grant `PlanTool.startGoalForPlan` applies next: approving a
-    // plan as a goal auto-approves commands, and nothing broader unless the
-    // user explicitly widened the scope.
-    setGoalSessionAutoApproval(
-      session(),
-      HARNESS_RUN_ID,
-      result.autoApproveAll ? 'allAgentWork' : 'commands',
+      // The grant `PlanTool.startGoalForPlan` commits with the goal:
+      // commands, and nothing broader unless the user widened the scope.
+      startGoal(
+        session(),
+        HARNESS_RUN_ID,
+        PLAN_APPROVAL_OBJECTIVE,
+        result.autoApproveAll ? 'allAgentWork' : 'commands',
+      ),
     );
     seedPhase(HARNESS_RUN_ID, RUN_PHASE.RUNNING);
     appendHarnessAssistantTranscript('PLAN-GOAL');
@@ -1311,7 +1305,7 @@ if (SHOW_EDIT_APPROVAL) {
     // exactly as `requestToolEditApproval` stages it. Staging hands back the
     // release for an open that never commits; this request is opened right
     // below, so the harness holds that program and never runs it.
-    const releaseStagedPreview = harnessRuntime.runSync(
+    const _releaseStagedPreview = harnessRuntime.runSync(
       session().interactions.presentToolEdit({
         ...request,
         roots: session().roots,
@@ -1338,7 +1332,7 @@ if (SHOW_BASH_APPROVAL) {
   const showApproval = (index = 1) => {
     const permission = makeBashApprovalPayload(index);
     return harnessRuntime.runPromise(
-      session().openRequest(permission.runId, {
+      session().requests.ask(permission.runId, {
         kind: 'bash',
         data: permission,
       }),
@@ -1417,25 +1411,6 @@ if (SHOW_PLAN_APPROVAL) {
   );
 }
 
-if (SHOW_TOOL_OUTCOME) {
-  requestHarnessApproval(
-    HARNESS_RUN_ID,
-    {
-      kind: 'toolOutcome',
-      data: {
-        requestId: 'harness-tool-outcome',
-        runId: HARNESS_RUN_ID,
-        toolName: 'agent',
-        title:
-          "'review' may have done work no result records: the run stopped while it was working",
-        childRunId: RunIdSchema.parse('aaaa0009f10e'),
-      },
-    },
-    (decision) =>
-      appendHarnessAssistantTranscript(`TOOL-OUTCOME: ${decision.action}`),
-  );
-}
-
 if (SHOW_AGENT_PROPOSAL) {
   requestHarnessApproval(
     HARNESS_RUN_ID,
@@ -1490,7 +1465,7 @@ function appendHarnessTranscript(
 }
 
 function setHarnessApprovalPolicy(policy: TexraApprovalPolicy): void {
-  harnessRuntimeSession.setApprovalPolicy(policy);
+  harnessRuntimeSession.approvals.override(policy);
   sessionMeta.set({
     ...sessionMeta.get(),
     approvalPolicy: policy,
@@ -1547,8 +1522,8 @@ function appendHarnessStatus(): void {
       model: meta.model,
       teamName: meta.teamName,
       modelAccess: run?.usage.usageRoute,
-      approvalPolicy: harnessRuntimeSession.approvalPolicy,
-      approvalBypasses: view.policy.get(runId)?.bypasses,
+      approvalPolicy: harnessRuntimeSession.approvals.policy(),
+      approvalBypasses: runBypasses(view, runId),
       statusLabel: run?.statusLabel,
       activeChildSessions: runningChildCount(view, run),
       goal: ((goal) => (goal?.active ? goal : undefined))(
@@ -1651,7 +1626,7 @@ registerBuiltinSlashCommands({
         ? DISABLED_MODEL_SWITCH_REASON
         : undefined,
     ),
-  getApprovalPolicy: () => harnessRuntimeSession.approvalPolicy,
+  getApprovalPolicy: () => harnessRuntimeSession.approvals.policy(),
   onApprovalPolicySelect: setHarnessApprovalPolicy,
   onModelSelect: (model) =>
     Effect.sync(() => {
@@ -1826,24 +1801,24 @@ if (SHOW_STREAMING_TOOL_OUTPUT) {
     Effect.gen(function* () {
       yield* Effect.sleep('1 second');
       seedPhase(HARNESS_RUN_ID, RUN_PHASE.RUNNING);
-      session().publishRunEvent(HARNESS_RUN_ID, {
+      session().trace.publish(HARNESS_RUN_ID, {
         type: 'stream.start',
         id: 'streaming-thinking',
         kind: MESSAGE_TYPES.THINKING,
       });
-      session().publishRunEvent(HARNESS_RUN_ID, {
+      session().trace.publish(HARNESS_RUN_ID, {
         type: 'stream.chunk',
         id: 'streaming-thinking',
         text: 'Checking the streamed calculation.',
       });
-      session().publishRunEvent(HARNESS_RUN_ID, {
+      session().trace.publish(HARNESS_RUN_ID, {
         type: 'tool.start',
         logId: 'streaming-tool',
         toolName: 'bash',
         input: { command: 'python3 calculation.py' },
       });
       for (let index = 1; index <= 12; index += 1) {
-        session().publishRunEvent(HARNESS_RUN_ID, {
+        session().trace.publish(HARNESS_RUN_ID, {
           type: 'stream.chunk',
           id: 'streaming-tool',
           text: `output-${index}: ${'long result '.repeat(30)}\n`,

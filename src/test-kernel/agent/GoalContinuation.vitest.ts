@@ -74,7 +74,7 @@ describe('goalContinuation', () => {
     Effect.gen(function* () {
       const before = yield* startGoal(session, RUN_ID, 'objective');
       yield* atIdle(session);
-      yield* session.settlePublications();
+      yield* session.log.settled;
       // No counter, no audit log: the helper only reads. The loop runs until
       // the model completes or the user stops it.
       expect(goalOf(session, RUN_ID)).toEqual(before);

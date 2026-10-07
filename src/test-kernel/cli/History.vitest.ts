@@ -12,6 +12,7 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   createTestSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
@@ -25,7 +26,7 @@ import {
 } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { documentTaskConfig } from '@agent/output/documentRecipe';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import {
   aggregateId,
   emptyRunEndOutput,
@@ -220,7 +221,7 @@ async function publishRunFacts(
   if (facts.parent) publishTestRunStart(session, facts.parent);
   publishTestRunStart(session, runId, { parent: facts.parent ?? null });
   if (facts.description !== undefined) {
-    session.publish([
+    publishTestRows(session, [
       {
         type: 'run.description',
         by: 'model',
@@ -230,7 +231,7 @@ async function publishRunFacts(
     ]);
   }
   if (facts.outcome) {
-    session.publish([
+    publishTestRows(session, [
       {
         type: 'run.end',
         aggregateId: aggregateId('run', runId),
@@ -239,7 +240,7 @@ async function publishRunFacts(
       },
     ]);
   }
-  await Effect.runPromise(session.settlePublications());
+  await Effect.runPromise(session.log.settled);
   return session;
 }
 
@@ -276,11 +277,11 @@ describe('CLI history runtime', () => {
   });
 
   beforeEach(async () => {
-    const { initializeDefaultSession, teardownDefaultSession } =
-      await import('@agent/runtime/sessionGraph');
-    await Effect.runPromise(teardownDefaultSession());
+    const { openTestDefaultSession, closeTestDefaultSession } =
+      await import('@test/support/sessionEnd');
+    await Effect.runPromise(closeTestDefaultSession);
     await Effect.runPromise(
-      initializeDefaultSession({ roots: testWorkspaceRoots() }),
+      openTestDefaultSession({ roots: testWorkspaceRoots() }),
     );
     vi.clearAllMocks();
     const host = installedHost();
@@ -451,13 +452,13 @@ describe('CLI history runtime', () => {
       const runId = 'a11ce7a11ce7' as RunId;
       const session = testDefaultSession();
       publishTestRunStart(session, runId);
-      session.publishRunEvent(runId, {
+      session.trace.publish(runId, {
         type: 'log',
         level: 'info',
         message: 'Root status only',
         messageType: MESSAGE_TYPES.PROGRESS_STATUS,
       });
-      yield* session.settlePublications();
+      yield* session.log.settled;
       mockNothingPersisted();
       // The run's own `run.start` plus the diagnostic-only transcript row
       // prove the run exists even though it yields no conversation.
@@ -723,7 +724,7 @@ describe('CLI history runtime', () => {
         Effect.gen(function* () {
           const id = 'aabbcc' as RunId;
           publishTestRunStart(session, id);
-          yield* session.settlePublications();
+          yield* session.log.settled;
           expect(yield* deleteCliHistory(session, { all: true })).toEqual({
             deleted: 'all',
             count: 1,
@@ -765,7 +766,7 @@ describe('CLI history runtime', () => {
           );
           // The export stamps the run's own launch time, which the publisher
           // stamped on `run.start`.
-          const launchedAt = (yield* session.readView([])).runs.get(
+          const launchedAt = (yield* session.view.read([])).runs.get(
             runId,
           )?.launchedAt;
 

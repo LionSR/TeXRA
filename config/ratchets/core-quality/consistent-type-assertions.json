@@ -1,8 +1,7 @@
 {
-  "packages/llm/src/api/openaiResponsesRequest.ts": 1,
-  "src/controllers/session/storeSchema.ts": 1,
-  "src/platform/defaults/longRunningModelTransport.ts": 1,
-  "src/shared/schemas/logPayload.ts": 1,
-  "src/shared/session/surface.ts": 1,
-  "src/tools/web/WebFetchTool.ts": 1
+  "packages/harness/src/platform/defaults/longRunningModelTransport.ts": 1,
+  "packages/harness/src/shared/schemas/logPayload.ts": 1,
+  "packages/harness/src/shared/session/surface.ts": 1,
+  "packages/harness/src/tools/web/WebFetchTool.ts": 1,
+  "packages/llm/src/api/openaiResponsesRequest.ts": 1
 }

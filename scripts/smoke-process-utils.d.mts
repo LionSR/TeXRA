@@ -43,8 +43,6 @@ export function waitForExit(
 /** Wait for actual process exit without treating an error event as exit. */
 export function waitForTermination(child: ExitObservable): Promise<ProcessExit>;
 
-export function delay(ms: number): Promise<void>;
-
 export function stopChild(
   child: StoppableChild,
   exitPromise: Promise<ProcessExit>,

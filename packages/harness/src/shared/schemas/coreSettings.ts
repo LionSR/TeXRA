@@ -1,0 +1,197 @@
+// Third-party imports
+import { z } from 'zod';
+
+/**
+ * Config keys, bounded schemas, and defaults shared by more than one reader.
+ *
+ * The settings themselves — schema, default, copy, honoring hosts, rendering
+ * surfaces — live as rows on the one catalog in `stateSettings.ts`. This module
+ * holds only what a runtime reader needs to name a key or reuse a bounded
+ * schema without importing the catalog.
+ */
+
+export const LATEXDIFF_TEMP_FILE_LOCATIONS = [
+  'sameDirectory',
+  'workspaceTemp',
+] as const;
+
+export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
+  'texra.toolUse.requireEditApproval';
+
+/** Canonical config key for the per-session child-run concurrency budget. */
+export const CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY =
+  'texra.childRunConcurrencyBudget';
+
+/** Canonical config key for the usage-telemetry opt-in. */
+export const TELEMETRY_ENABLED_KEY = 'texra.telemetry.enabled';
+
+/**
+ * Canonical config key for `texra.logger.debugMode`, whose one meaning is
+ * transcript verbosity: the debug tier of the transcript fold and the detail
+ * of the payloads it shows. A log surface's own level filter decides what
+ * that surface prints, so no producer reads this key to widen or narrow a
+ * log — only a fold's view build does.
+ */
+export const DEBUG_MODE_KEY = 'texra.logger.debugMode';
+
+/**
+ * Telemetry is on unless a scope opts out. Shared by the catalog row and by
+ * `UsageLogService`, which resolves both scopes itself rather than through the
+ * merged config read.
+ */
+export const TELEMETRY_ENABLED_DEFAULT = true;
+
+/**
+ * Bounds, default, and copy for `model.retry.maxAttempts`. The value is the
+ * number of automatic retries after the initial model request. Shared by
+ * {@link ModelRetryMaxAttemptsSchema} and the settings-view reliability row so
+ * the schema and the UI cannot disagree about the range.
+ */
+export const MODEL_RETRY_MAX_ATTEMPTS_SETTING = Object.freeze({
+  configKey: 'texra.model.retry.maxAttempts',
+  defaultValue: 2,
+  min: 0,
+  max: 5,
+  description:
+    'Additional automatic retries after the initial model request (0–5). A resumed request keeps the retries it already used.',
+} as const);
+
+/**
+ * Bounds, default, and copy for `model.compactionThresholdPercent`. The value
+ * is the share of the model's context window that triggers automatic
+ * compaction, and `0` disables it. Shared by
+ * {@link ModelCompactionThresholdPercentSchema}, the runtime reader, and the
+ * settings-view reliability row so the schema, runtime, and UI cannot disagree
+ * about the range.
+ */
+export const MODEL_COMPACTION_THRESHOLD_SETTING = Object.freeze({
+  configKey: 'texra.model.compactionThresholdPercent',
+  defaultValue: 75,
+  min: 0,
+  max: 100,
+  description:
+    "When the conversation reaches this percentage of the model's context limit, TeXRA automatically summarizes earlier messages to free up space. Lower values trigger summarization sooner. Set to 0 to disable.",
+} as const);
+
+/**
+ * Bounds, default, and copy for the ChatGPT-subscription input budget.
+ *
+ * The stored unit is **thousands of tokens**, and the key says so. Every
+ * budget in play is a round multiple of 1000 (272K, 400K, 872K), so a raw
+ * token count is three zeros nobody wants to type and an off-by-1000 typo
+ * lands inside the valid range instead of being rejected: `872` entered for
+ * 872,000 is a legal 872-token budget that puts every request over the limit,
+ * and the failure then names a number the user never meant to set.
+ */
+export const CHATGPT_CODEX_CONTEXT_WINDOW_SETTING = Object.freeze({
+  configKey: 'texra.chatgptCodex.contextWindowK',
+  /** Tokens per stored unit; the sole reader multiplies by this. */
+  tokensPerUnit: 1_000,
+  defaultValue: 272,
+  min: 1,
+  max: 872,
+  unitLabel: 'K tokens',
+  description:
+    "Input token budget for ChatGPT-subscription (Codex) routing, in thousands of tokens, mirroring Codex CLI's model_context_window. The default 272 (272,000 tokens) matches the Codex default; GPT-5.6 models accept up to 872 (872,000 tokens). Automatic compaction may run earlier according to the separate compaction threshold. TeXRA adds the model's output budget when displaying the total context window. The OpenAI backend enforces the real per-account limit — values above what your subscription allows fail and trigger compaction recovery.",
+} as const);
+
+/**
+ * Bounds, default, and copy for `childRunConcurrencyBudget`. The value caps the
+ * number of live native child model conversations one session runs at once.
+ * Shared by {@link ChildRunConcurrencyBudgetSchema}, the runtime reader, and the
+ * settings-view Agents tab so the schema, runtime, and UI cannot disagree
+ * about the range.
+ */
+export const CHILD_RUN_CONCURRENCY_BUDGET_SETTING = Object.freeze({
+  /** `0` sizes the budget to this machine's core count at runtime — the
+   *  same "special value inside the range" shape as the compaction
+   *  threshold's `0 = disable`, so the number widget needs no second mode. */
+  auto: 0,
+  defaultValue: 0,
+  min: 0,
+  max: 100,
+  description:
+    "Maximum number of agents one task may run at once in the background; a script's agent() calls also run at most this many at once. 0 (the default) sizes it to this machine's CPU count. Agents beyond the budget wait for a slot to free.",
+} as const);
+
+/**
+ * What a TUI, desktop or extension window does at open with the tasks a
+ * closed or crashed TeXRA left interrupted (durable harness, ruling Q2):
+ * `ask` lists them, `auto` continues them. Headless runs and the SDK do
+ * neither, whatever this says.
+ */
+export const RESUME_ON_OPEN_SETTING = Object.freeze({
+  configKey: 'texra.resumeOnOpen',
+  values: ['ask', 'auto'],
+  defaultValue: 'ask',
+  description:
+    'When TeXRA opens and finds tasks it stopped before they finished: list them so you can choose, or continue them all.',
+} as const);
+
+export const ResumeOnOpenSchema = z
+  .enum(RESUME_ON_OPEN_SETTING.values)
+  .prefault(RESUME_ON_OPEN_SETTING.defaultValue);
+export type ResumeOnOpen = z.infer<typeof ResumeOnOpenSchema>;
+
+/**
+ * Bounds, default, and copy for `goal.maxCostUsd`: the run tree's total spend
+ * at which an active goal pauses instead of opening its next turn, and `0`
+ * disables the cap. Read at each idle, so it needs no field on the goal's own
+ * row. Shared by {@link GoalMaxCostSchema}, the goal continuation, and the
+ * settings-view approval row so the three cannot disagree about the range.
+ */
+export const GOAL_MAX_COST_SETTING = Object.freeze({
+  configKey: 'texra.goal.maxCostUsd',
+  defaultValue: 5,
+  min: 0,
+  max: 10_000,
+  description:
+    'Spend in US dollars, across the run and its subagents, at which an autonomous goal pauses instead of starting another turn. Raise it to let the goal continue. Set to 0 to remove the cap (not recommended with auto-approve on your own API key).',
+} as const);
+
+export const ModelRetryMaxAttemptsSchema = z
+  .int()
+  .min(MODEL_RETRY_MAX_ATTEMPTS_SETTING.min)
+  .max(MODEL_RETRY_MAX_ATTEMPTS_SETTING.max)
+  .prefault(MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue);
+
+export const ModelCompactionThresholdPercentSchema = z
+  .number()
+  .min(MODEL_COMPACTION_THRESHOLD_SETTING.min)
+  .max(MODEL_COMPACTION_THRESHOLD_SETTING.max)
+  .prefault(MODEL_COMPACTION_THRESHOLD_SETTING.defaultValue);
+
+export const GoalMaxCostSchema = z
+  .number()
+  .min(GOAL_MAX_COST_SETTING.min)
+  .max(GOAL_MAX_COST_SETTING.max)
+  .prefault(GOAL_MAX_COST_SETTING.defaultValue);
+
+export const ChatgptCodexContextWindowSchema = z
+  .int()
+  .min(CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.min)
+  .max(CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.max)
+  .prefault(CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue);
+
+export const ChildRunConcurrencyBudgetSchema = z
+  .int()
+  .min(CHILD_RUN_CONCURRENCY_BUDGET_SETTING.min)
+  .max(CHILD_RUN_CONCURRENCY_BUDGET_SETTING.max)
+  .prefault(CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue);
+
+/**
+ * Output formats every `texra` command can emit: human text, one JSON result,
+ * or a stream of NDJSON records. Lives here beside the other config-key
+ * constants because the `texra.outputFormat` catalog row, the `--output-format`
+ * flag, and the `TEXRA_OUTPUT_FORMAT` environment read all parse the same list.
+ */
+export const CLI_OUTPUT_FORMATS = ['text', 'json', 'ndjson'] as const;
+
+/** Canonical config key for the CLI's output format. */
+export const CLI_OUTPUT_FORMAT_CONFIG_KEY = 'texra.outputFormat';
+
+export const CliOutputFormatSchema = z
+  .enum(CLI_OUTPUT_FORMATS)
+  .prefault('text');
+
+export type CliOutputFormat = z.infer<typeof CliOutputFormatSchema>;

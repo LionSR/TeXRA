@@ -9,7 +9,7 @@
  * the status-bar CTA, and the setup assistant. Referencing the constant keeps
  * a renamed ID a compile error instead of a silent runtime no-op.
  */
-import type { CommandId } from '@shared/commands/catalog';
+import type { CommandId } from '@texra/shared/commands/catalog';
 
 export const EXTENSION_COMMANDS = {
   CLONE_OVERLEAF_PROJECT: 'texra.cloneOverleafProject',

@@ -5,5 +5,9 @@
     "moduleResolution": "nodenext",
     "types": ["node", "electron"]
   },
-  "include": ["src/preload/**/*.ts", "../../src/types/**/*.d.ts"]
+  "include": [
+    "src/preload/**/*.ts",
+    "../harness/src/types/**/*.d.ts",
+    "../texra/src/types/**/*.d.ts"
+  ]
 }

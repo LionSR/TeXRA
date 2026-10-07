@@ -19,14 +19,12 @@ import type { ConfigProvider } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import type { Plugin } from '@tools/plugins';
 import type { ToolProbeInputs } from '@tools/toolProbes';
 import { LiveTools } from '@tools/liveTools';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
-import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
-import { SetupPlatform } from '@tools/setup/platform';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
-import { createFakeSetupPlatform } from './setup/fixtures';
 
 /** The mocked tool defs read no secrets, so any call here is a test error. */
 const unreadSecret = (): never => {
@@ -60,7 +58,6 @@ const secretsLayer = Secrets.layer({
 /** The services a plugin's availability callbacks may read. */
 const probeServices = Layer.mergeAll(
   secretsLayer,
-  SetupPlatform.layer(createFakeSetupPlatform()),
   // The mocked plugins declare no Lean plugin, so nothing here reads the port.
   Layer.mock(LeanLanguageServices, { listServers: () => [] }),
   testHttpClientLayer,

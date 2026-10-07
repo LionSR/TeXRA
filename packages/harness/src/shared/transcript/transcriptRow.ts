@@ -1,0 +1,383 @@
+/**
+ * The transcript row model both hosts render.
+ *
+ * One row kind per thing a run says, carrying the typed payload and the
+ * complete text. Rows are a fold output built from already-decoded values
+ * (`@shared/session/transcriptFold`), so this is a plain type, not a schema:
+ * nothing parses it, and a schema would own no boundary.
+ *
+ * Text is untruncated. Elision is measurement ({@link TranscriptText}),
+ * applied by the painter at its own width.
+ */
+import {
+  TOOL_CALL_STATUS,
+  type ContextManagementData,
+  type DiffResultDisplay,
+  type ErrorLogData,
+  type FileListEntry,
+  type LoadedMediaMetadata,
+  type LogLevel,
+  type MediaAttachmentKind,
+  type MessageType,
+  type NormalizedToolUse,
+  type ToolUseLog,
+  type ScriptDeliverySummary,
+} from '@shared/schemas';
+import {
+  COMPACTION_ACTIVITY_LABEL,
+  type CompactionActivityBlock,
+} from '@shared/runs/compactionActivityProjection';
+import { assertNever } from '@utils/core';
+import { formatCompactTokenCount } from '@utils/text/stringUtils';
+
+import type { ToolRowModel } from './toolRowModel';
+import type { TranscriptText } from './transcriptText';
+
+// ---------------------------------------------------------------------------
+// Envelope
+// ---------------------------------------------------------------------------
+
+/**
+ * Fields every row carries, stamped by the transcript fold from the event
+ * that wrote it. Optional keys are spread-omitted rather than set to
+ * `undefined`, so a row built from the same facts twice is structurally
+ * identical.
+ */
+export interface TranscriptRowBase {
+  /** The writing event's id (a card's, a stream's, a stage's) or its durable
+   *  coordinates; stable across deltas. */
+  readonly id: string;
+  /** First-appearance order of the row within its run's transcript. */
+  readonly seqNo?: number;
+  /** Order in which the source row became printable, when it has settled. */
+  readonly settlementSeqNo?: number;
+  readonly timestamp: number;
+  readonly level: LogLevel;
+  /** True when the row belongs to the verbose tier of its host's chrome. */
+  readonly verbose?: boolean;
+  readonly groupId?: string;
+  /** Source vocabulary. Absent on the two rows with no message type of their
+   *  own: `phase` (a group row) and `compactionActivity` (a projection). */
+  readonly messageType?: MessageType;
+  /** Present when a host synthesized this row rather than the fold building
+   *  it from an event: a local notice the run itself never recorded. Such a
+   *  row is immutable from birth, carries the host's own id, and anchors into
+   *  the merged order through the {@link seqNo}/{@link settlementSeqNo} the
+   *  host captured when it appended it. */
+  readonly origin?: 'local';
+}
+
+// ---------------------------------------------------------------------------
+// Row variants
+// ---------------------------------------------------------------------------
+
+/** Model text, thinking, and scratchpad share one shape: streaming markdown. */
+export interface StreamingTextRow extends TranscriptRowBase {
+  readonly kind: 'assistant' | 'thinking' | 'scratchpad';
+  readonly text: TranscriptText;
+  /** True while the producer is still appending to `text`. */
+  readonly streaming: boolean;
+  /** True while the text hides an embedded subagent block that has opened but
+   *  not closed. Blocks settlement: the visible text is still going to move. */
+  readonly pendingEmbeddedFollowup?: boolean;
+}
+
+export interface UserRow extends TranscriptRowBase {
+  readonly kind: 'user';
+  /** The message exactly as delivered, including any delivery envelope. */
+  readonly text: TranscriptText;
+  /** Collapsed presentation of a subagent/workflow delivery. Derived, never a
+   *  truncation of `text`: hosts choose which of the two to paint. */
+  readonly summary: TranscriptText;
+  readonly scriptSummary?: ScriptDeliverySummary;
+  /** Media that was sent to the model beside the text, by kind (no bytes). */
+  readonly attachments?: readonly MediaAttachmentKind[];
+  /** The files a follow-up attached, which "Fork from here" carries. */
+  readonly mediaFiles?: readonly string[];
+  /** The settled point "Fork from here" cuts at: the `seq` of the park the
+   *  run stood at before it took this message. Absent on the first message,
+   *  which no park precedes. */
+  readonly forkAt?: number;
+}
+
+/**
+ * One `key: value` line of an error's detail block, pre-stringified so both
+ * hosts show the same rendering of the same field.
+ */
+export interface ErrorRowDetail {
+  readonly key: keyof ErrorLogData;
+  readonly value: string;
+}
+
+export interface ErrorRow extends TranscriptRowBase {
+  readonly kind: 'error';
+  /** The failure headline. */
+  readonly summary: TranscriptText;
+  /** Canonical detail field set, in display order. */
+  readonly details: readonly ErrorRowDetail[];
+  /** The detail block as one text, for copy affordances and full-output
+   *  readers. */
+  readonly detailText: TranscriptText;
+}
+
+/** What a card's `tool.start` says of its call beyond the tool and input:
+ *  a script's call's phase, and the attempt from the second on. */
+export interface ToolCallFacts {
+  readonly phase?: string;
+  readonly attempt?: number;
+}
+
+export interface ToolRow extends TranscriptRowBase, ToolCallFacts {
+  readonly kind: 'tool';
+  readonly toolUse: NormalizedToolUse;
+  readonly model: ToolRowModel;
+  /** The decoded durable payload the row was built from, without live
+   *  output: what a conversation export formats. */
+  readonly log: ToolUseLog;
+}
+
+export interface WebSearchRow extends TranscriptRowBase {
+  readonly kind: 'webSearch';
+  /** `Web Search: "quantum error correction"` */
+  readonly label: string;
+  readonly query?: string;
+}
+
+/** A file that came through the media pipeline as visual/audio model input. */
+export interface LoadedMediaRef {
+  readonly path: string;
+  readonly media: LoadedMediaMetadata;
+}
+
+export interface FileListRow extends TranscriptRowBase {
+  readonly kind: 'fileList';
+  /** Every entry the loader reported, loaded and failed alike. */
+  readonly files: readonly FileListEntry[];
+  /** `Files (3/4 loaded, 1 not found)` — the one statement of partial load. */
+  readonly summary: string;
+  /** The subset a host can preview inline. Kept beside `files`, not instead
+   *  of it: a failed or non-media attachment must stay visible. */
+  readonly media: readonly LoadedMediaRef[];
+}
+
+export interface MissingOutputsRow extends TranscriptRowBase {
+  readonly kind: 'missingOutputs';
+  readonly missing: readonly string[];
+  readonly xmlFile: string | null;
+  /** `Missing outputs (2)` */
+  readonly summary: string;
+}
+
+export interface LatexdiffRow extends TranscriptRowBase {
+  readonly kind: 'latexdiff';
+  readonly entries: readonly DiffResultDisplay[];
+  readonly runId?: string;
+}
+
+/** One labeled number from a context-management row. */
+export interface StatItem {
+  /** Stable key hosts use to pick an icon; never shown as-is. */
+  readonly key: string;
+  readonly label: string;
+  readonly value: string;
+}
+
+export interface ContextManagementRow extends TranscriptRowBase {
+  readonly kind: 'contextManagement';
+  readonly data: ContextManagementData;
+  /** `Compacted`, `Cleared tool uses`, … */
+  readonly label: string;
+  readonly items: readonly StatItem[];
+  readonly summary?: TranscriptText;
+}
+
+export interface ProgressStatusRow extends TranscriptRowBase {
+  readonly kind: 'progressStatus';
+  readonly summary: TranscriptText;
+  readonly detail?: TranscriptText;
+}
+
+export interface CompactionActivityRow extends TranscriptRowBase {
+  readonly kind: 'compactionActivity';
+  readonly block: CompactionActivityBlock;
+  readonly label: string;
+}
+
+export interface PhaseRow extends TranscriptRowBase {
+  readonly kind: 'phase';
+  /** `Reduce (2/3)` */
+  readonly heading: string;
+  readonly phaseLabel: string;
+  readonly phaseIndex?: number;
+  readonly phaseTotal?: number;
+}
+
+/** A plain log line: a `default` row, a row with no message type, or a
+ *  non-phase group heading on a stream that keeps its lifecycle inline. */
+export interface LogRow extends TranscriptRowBase {
+  readonly kind: 'log';
+  readonly text: TranscriptText;
+}
+
+export type TranscriptRow =
+  | StreamingTextRow
+  | UserRow
+  | ErrorRow
+  | ToolRow
+  | WebSearchRow
+  | FileListRow
+  | MissingOutputsRow
+  | LatexdiffRow
+  | ContextManagementRow
+  | ProgressStatusRow
+  | CompactionActivityRow
+  | PhaseRow
+  | LogRow;
+
+export type TranscriptRowKind = TranscriptRow['kind'];
+
+// ---------------------------------------------------------------------------
+// Settlement
+// ---------------------------------------------------------------------------
+
+/**
+ * Kinds whose content is complete the moment the row appears. A tool call or a
+ * workflow task is deliberately absent: it does reach a typed terminal state,
+ * but only in a position the producer chose, so it settles through
+ * {@link isSettledRow} rather than on its own.
+ */
+const IMMEDIATELY_SETTLED_ROW_KINDS = new Set<TranscriptRowKind>([
+  'user',
+  'error',
+  'phase',
+  'fileList',
+  'missingOutputs',
+  'latexdiff',
+  'contextManagement',
+  'progressStatus',
+]);
+
+/**
+ * Whether a row's content is fixed the moment it appears, independent of
+ * anything around it — the recorder assigned it a durable settlement order,
+ * the host synthesized it so no producer is still writing to it, a compaction
+ * block reached a terminal state, or the kind is complete on arrival.
+ *
+ * This is the position-independent half of {@link isSettledRow}, which a host
+ * with an append-only surface asks about a row it holds no position for.
+ */
+function isSelfSettledRow(row: TranscriptRow): boolean {
+  if (row.kind === 'compactionActivity') return row.block.finalized;
+  return (
+    row.settlementSeqNo !== undefined ||
+    row.origin === 'local' ||
+    IMMEDIATELY_SETTLED_ROW_KINDS.has(row.kind)
+  );
+}
+
+/**
+ * Whether a row's content can no longer change, so it is safe to print once
+ * into append-only scrollback.
+ *
+ * Opens with {@link isSelfSettledRow}: a row that is settled independent of
+ * position is settled full stop, without consulting `hasLaterRow` or the
+ * kind-specific terminal-state tests below. That containment
+ * (`isSettledRow` ⊇ `isSelfSettledRow`) is load-bearing — the promotion loop
+ * relies on it to treat both halves as one predicate.
+ *
+ * `hasLaterRow` is the one positional fact the projector cannot answer: a
+ * streaming text block is frozen when the producer has moved on to something
+ * else. Hosts with no append-only surface may pass `true`.
+ */
+export function isSettledRow(
+  row: TranscriptRow,
+  hasLaterRow: boolean,
+): boolean {
+  if (isSelfSettledRow(row)) return true;
+  switch (row.kind) {
+    case 'assistant':
+      return !row.pendingEmbeddedFollowup && hasLaterRow;
+    case 'thinking':
+    case 'scratchpad':
+      return !row.streaming && hasLaterRow;
+    case 'tool':
+      return (
+        row.toolUse.status === TOOL_CALL_STATUS.COMPLETED ||
+        row.toolUse.status === TOOL_CALL_STATUS.FAILED
+      );
+    case 'compactionActivity':
+      return row.block.finalized;
+    case 'webSearch':
+    case 'user':
+    case 'error':
+    case 'fileList':
+    case 'missingOutputs':
+    case 'latexdiff':
+    case 'contextManagement':
+    case 'progressStatus':
+    case 'phase':
+    case 'log':
+      return true;
+    default:
+      return assertNever(row, 'Unhandled transcript row kind');
+  }
+}
+
+/** The headline a row leads with: its own text, untrimmed and unsanitized;
+ *  a host sanitizes for its surface at paint. */
+export function rowHeadline(row: TranscriptRow): string {
+  switch (row.kind) {
+    case 'assistant':
+    case 'log':
+      return row.text.full;
+    case 'user':
+    case 'error':
+    case 'progressStatus':
+      return row.summary.full;
+    case 'phase':
+      return row.heading;
+    case 'thinking':
+      return 'Thinking';
+    case 'scratchpad':
+      return 'Scratchpad';
+    case 'webSearch':
+    case 'contextManagement':
+    case 'compactionActivity':
+      return row.label;
+    case 'fileList':
+    case 'missingOutputs':
+      return row.summary;
+    case 'latexdiff':
+      return `Latexdiff results (${row.entries.length})`;
+    case 'tool':
+      return '';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Compaction activity
+// ---------------------------------------------------------------------------
+
+/**
+ * The row for one projected compaction block. Both hosts previously wrote
+ * this constructor by hand from the same projection; it lives here so the id,
+ * ordering key and label are stated once.
+ */
+export function compactionActivityRow(
+  block: CompactionActivityBlock,
+): CompactionActivityRow {
+  return {
+    kind: 'compactionActivity',
+    id: `compaction:${block.operationId}`,
+    seqNo: block.startPosition,
+    timestamp: block.startedAt,
+    level: 'info',
+    block,
+    // `Context compacted · freed 41k tokens (78% → 22%)`: the one row
+    // carries the figures its stats entry used to repeat as a second row.
+    label:
+      block.freed && block.freed.tokens > 0
+        ? `${COMPACTION_ACTIVITY_LABEL[block.status]} · freed ${formatCompactTokenCount(block.freed.tokens)} tokens (${block.freed.utilizationBefore.toFixed(0)}% → ${block.freed.utilizationAfter.toFixed(0)}%)`
+        : COMPACTION_ACTIVITY_LABEL[block.status],
+  };
+}

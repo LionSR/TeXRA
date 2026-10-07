@@ -5,9 +5,9 @@ import { Cause, Effect, Exit } from 'effect';
 import { describe } from 'vitest';
 
 import { SecretsFailed } from '@texra-ai/llm';
-import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { createFakeUIHosts } from '@test/support/FakeHosts';
 import { FakeSecrets } from '@test/support/FakePlatform';
+import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
 
 async function createController(options?: {
   inputResponses?: readonly (string | undefined)[];

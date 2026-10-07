@@ -9,7 +9,6 @@ import { afterEach } from 'vitest';
 // Platform defaults
 
 // Local imports
-import { closeSession, listSessions } from '@agent/runtime/sessionGraph';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import {
   resolveGlobalStoragePath,
@@ -19,6 +18,7 @@ import { isPathWithin } from '@utils/core/pathCore';
 
 // Local file imports
 import { createFakeHost, type FakeHost } from './setupPlatform';
+import { tryTestProcessRuntime, testSessionOwner } from './testProcessRuntime';
 
 /**
  * Creates a fresh temp directory and records it on `tempDirs` for later
@@ -100,20 +100,27 @@ export function useTempDirs(): string[] {
 /** Removes every directory recorded by `createTempDirPlatform` (or pushed manually), then clears the list. */
 export async function cleanupTempDirs(tempDirs: string[]): Promise<void> {
   const uniqueDirs = [...new Set(tempDirs.splice(0))];
-  const sessionRoots = new Set(
-    (await Effect.runPromise(listSessions()))
-      .filter((session) =>
-        uniqueDirs.some((directory) =>
-          isPathWithin(directory, session.roots.storage),
-        ),
-      )
-      .map((session) => session.roots.storage),
-  );
-  const reports = await Effect.runPromise(
-    Effect.forEach(sessionRoots, (root) => closeSession(root), {
-      concurrency: 'unbounded',
-    }),
-  );
+  // A process with no runtime installed has opened no session.
+  const reports =
+    tryTestProcessRuntime() === undefined
+      ? []
+      : await Effect.runPromise(
+          Effect.gen(function* () {
+            const owner = yield* testSessionOwner;
+            const roots = new Set(
+              (yield* owner.list)
+                .filter((session) =>
+                  uniqueDirs.some((directory) =>
+                    isPathWithin(directory, session.roots.storage),
+                  ),
+                )
+                .map((session) => session.roots.storage),
+            );
+            return yield* Effect.forEach(roots, owner.close, {
+              concurrency: 'unbounded',
+            });
+          }),
+        );
   const abandoned = reports.flatMap((report) => report.abandoned);
   if (reports.some((report) => !report.settled) || abandoned.length > 0) {
     throw new Error(

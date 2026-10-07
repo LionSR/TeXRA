@@ -7,8 +7,8 @@ import { beforeEach, describe, expect, vi, type Mock } from 'vitest';
 import {
   PRPollingSource,
   type PRSubscriptionState,
-} from '@tools/github/PRPollingSource';
-import type { GhCheckRun, GhPullRequest } from '@tools/github/prTypes';
+} from '@texra/tools/github/PRPollingSource';
+import type { GhCheckRun, GhPullRequest } from '@texra/tools/github/prTypes';
 
 // Local imports - test support
 import {
@@ -23,8 +23,10 @@ const mocks = vi.hoisted(() => ({
 // Stub the GitHub client at its module boundary. The importOriginal spread
 // keeps the real error classes, so the source's own instanceof checks run
 // against the classes production reaches, not against look-alikes.
-vi.mock('@tools/github/githubClient', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tools/github/githubClient')>()),
+vi.mock('@texra/tools/github/githubClient', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@texra/tools/github/githubClient')
+  >()),
   ghGet: mocks.ghGet,
 }));
 

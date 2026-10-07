@@ -21,9 +21,7 @@
  * replays. A signal declared any other way is silently left out of the reset.
  */
 
-import { DocumentsStateKey } from '@shared/settingsView/documentsSettings';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
-import { createTrackedSignalRegistry, Signal } from '@shared/signals';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
@@ -44,6 +42,14 @@ import {
   type SkillDisplayItem,
   type SubscriptionUsageSnapshots,
 } from '@shared/schemas';
+import type { AgentScanIssue } from '@shared/schemas';
+import type { MemoryViewItem } from '@shared/tools/memoryView';
+import type { SubscriptionAuthStatuses } from '@shared/model/subscriptionAuth';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import {
+  TEXRA_SETTINGS,
+  TexraStateKey,
+} from '@texra/shared/settingsView/texraSettings';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   type AgentSelectionItem,
@@ -54,15 +60,9 @@ import {
   type SettingsSectionName,
   type SettingsTabPanelName,
   type SettingsViewOutboundMessage,
-} from '@shared/settingsView/settingsViewMessages';
-import type { AgentScanIssue } from '@shared/schemas';
-import type { MemoryViewItem } from '@shared/tools/memoryView';
-import type { SubscriptionAuthStatuses } from '@shared/model/subscriptionAuth';
-import {
-  TEXRA_SETTINGS,
-  TexraStateKey,
-} from '@shared/settingsView/texraSettings';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+} from '@texra/shared/settingsView/settingsViewMessages';
+import { createTrackedSignalRegistry, Signal } from '@texra/shared/signals';
+import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 
 // ---------------------------------------------------------------------------
 // Reset registry — populated by `trackedSignal` as each signal below is

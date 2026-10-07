@@ -31,10 +31,8 @@ type ConsoleLevel = (typeof CONSOLE_LEVELS)[number];
 
 let logFilePath: string | undefined;
 let consoleInstalled = false;
-let logSetupFailed = false;
 
 export function installDesktopAppLog(): string | undefined {
-  logSetupFailed = false;
   logFilePath = initializeDesktopLogFile();
   if (logFilePath == null) return undefined;
 
@@ -155,13 +153,12 @@ function appendDesktopLogLine(level: ConsoleLevel, ...args: unknown[]): void {
 
 /** One entry, one JSON line. The `data` payload arrives already rendered and
  * bounded by the write path, so the file keeps it on the entries the
- * runtime's emission threshold let through. */
+ * runtime's emission threshold let through. Nothing is written when the log
+ * file could not be set up. */
 function appendDesktopLogEntry(entry: LogEntry): void {
-  const path = resolveActiveLogFilePath();
-  if (path == null) return;
-
+  if (logFilePath === undefined) return;
   try {
-    appendFileSync(path, `${JSON.stringify(entry)}\n`);
+    appendFileSync(logFilePath, `${JSON.stringify(entry)}\n`);
   } catch {
     // Logging must never become a startup dependency.
   }
@@ -173,20 +170,7 @@ function initializeDesktopLogFile(): string | undefined {
     mkdirSync(logDir, { recursive: true });
     return join(logDir, LOG_FILE_NAME);
   } catch (error) {
-    logSetupFailed = true;
     console.warn('TeXRA desktop file logging is disabled.', error);
-    return undefined;
-  }
-}
-
-function resolveActiveLogFilePath(): string | undefined {
-  if (logFilePath != null) return logFilePath;
-  if (logSetupFailed) return undefined;
-
-  try {
-    return getDesktopLogFilePath();
-  } catch {
-    logSetupFailed = true;
     return undefined;
   }
 }
