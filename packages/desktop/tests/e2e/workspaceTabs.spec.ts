@@ -47,21 +47,86 @@ async function moveTab(
   source: Locator,
   destination: Locator,
   edge: 'right' | 'bottom' | 'center',
+  inspectPreview = false,
 ) {
   const a = (await source.boundingBox())!;
   const b = (await destination.boundingBox())!;
+  const targetGroup = (await groupOf(source).boundingBox())!;
   await launched.page.mouse.move(
     a.x + Math.min(a.width / 2, 45),
     a.y + a.height / 2,
   );
   await launched.page.mouse.down();
   await launched.page.mouse.move(a.x + 15, a.y + a.height + 15, { steps: 5 });
+  const preview = launched.page.locator('.dv-drop-target-anchor:visible');
+  if (inspectPreview) {
+    // A tab leaving a group with another tab previews exactly the new group's
+    // bounds. Inspect every side before committing a split, in both themes.
+    for (const theme of ['light', 'dark'] as const) {
+      await launched.page.emulateMedia({ colorScheme: theme });
+      for (const side of ['left', 'top', 'right', 'bottom'] as const) {
+        let x = b.x + b.width / 2;
+        let y = b.y + b.height / 2;
+        if (side === 'left') x = b.x + 12;
+        if (side === 'right') x = b.x + b.width - 12;
+        if (side === 'top') y = b.y + 12;
+        if (side === 'bottom') y = b.y + b.height - 12;
+        await launched.page.mouse.move(x, y, { steps: 8 });
+        await expect(preview).toHaveCSS('border-top-style', 'solid');
+        await expect(preview).not.toHaveCSS(
+          'background-color',
+          'rgba(0, 0, 0, 0)',
+        );
+        const r = (await preview.boundingBox())!;
+        const horizontal = side === 'left' || side === 'right';
+        expect(
+          Math.abs(r.width - targetGroup.width / (horizontal ? 2 : 1)),
+        ).toBeLessThan(2);
+        expect(
+          Math.abs(r.height - targetGroup.height / (horizontal ? 1 : 2)),
+        ).toBeLessThan(2);
+        expect(
+          Math.abs(
+            r.x -
+              targetGroup.x -
+              (side === 'right' ? targetGroup.width / 2 : 0),
+          ),
+        ).toBeLessThan(2);
+        expect(
+          Math.abs(
+            r.y -
+              targetGroup.y -
+              (side === 'bottom' ? targetGroup.height / 2 : 0),
+          ),
+        ).toBeLessThan(2);
+        expect(await groupOf(source).boundingBox()).toEqual(targetGroup);
+      }
+      await launched.page.screenshot({
+        path: test.info().outputPath(`split-preview-${theme}.png`),
+        animations: 'disabled',
+      });
+    }
+  }
   await launched.page.mouse.move(
     edge === 'right' ? b.x + b.width - 12 : b.x + b.width / 2,
     edge === 'bottom' ? b.y + b.height - 12 : b.y + b.height / 2,
     { steps: 15 },
   );
+  await expect(preview).toBeVisible();
+  const previewBounds = (await preview.boundingBox())!;
   await launched.page.mouse.up();
+  await expect(preview).toHaveCount(0);
+  if (inspectPreview) {
+    await expect
+      .poll(async () => {
+        const result = (await groupOf(source).boundingBox())!;
+        return Object.entries(previewBounds).every(
+          ([key, value]) =>
+            Math.abs(result[key as keyof typeof result] - value) < 2,
+        );
+      })
+      .toBe(true);
+  }
 }
 
 test.beforeAll(async () => {
@@ -103,7 +168,7 @@ test('splits in both directions, keeps the explorer and agent, and restores the 
   const second = page.locator(
     '.shell-dock-tab[data-tab-id="workbench:editor:second.ts"]',
   );
-  await moveTab(second, panel('editor'), 'bottom');
+  await moveTab(second, panel('editor'), 'bottom', true);
   await expect(panel('editor')).toHaveCount(2);
   const editors = panel('editor');
   const editorBoxes = await editors.evaluateAll((nodes) =>

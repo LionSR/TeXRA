@@ -327,10 +327,17 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
         className: 'dockview-theme-texra',
         gap: 1,
         dndOverlayMounting: 'absolute',
+        dndPanelOverlay: 'group',
       },
       disableFloatingGroups: true,
       defaultRenderer: 'always',
       dndStrategy: 'pointer',
+      // Preview the resulting group, including its tab strip, even when the
+      // destination is compact. Tab-strip drops keep the insertion marker.
+      dropOverlayModel: ({ location }) =>
+        location === 'content'
+          ? { smallWidthBoundary: 0, smallHeightBoundary: 0 }
+          : undefined,
       createComponent: ({ id }) => {
         const tab = tabFor(id);
         if (!tab) throw new Error(`Unknown saved workspace tab: ${id}`);

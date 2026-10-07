@@ -1,6 +1,9 @@
 // Third-party imports
 import { css } from 'lit';
-import { messageHeaderStyles } from '@ui/styles/messageHeaderStyles';
+import {
+  messageHeaderStyles,
+  messageDisclosureStyles,
+} from '@ui/styles/messageHeaderStyles';
 import {
   panelFrameStyles,
   panelHeaderStyles,
@@ -12,6 +15,7 @@ import {
  */
 export const toolUseStyles = css`
   ${messageHeaderStyles}
+  ${messageDisclosureStyles}
   .tool-use-section {
     margin: var(--wa-space-2xs) 0;
   }
@@ -61,49 +65,12 @@ export const toolUseStyles = css`
     overflow-wrap: anywhere;
   }
 
-  wa-details:is(.banner-details--error, .banner-details--assistant)::part(
-      summary
-    ) {
-    width: 100%;
-    min-width: 0;
-  }
-
-  :is(.banner-details--error, .banner-details--assistant) > .details-summary {
-    width: 100%;
-    padding: 0;
-  }
-
   .banner-details--error .message-label > .icon {
     color: var(--color-error);
   }
 
   wa-details.banner-details--error::part(base) {
     ${panelFrameStyles}
-  }
-
-  wa-details:is(.banner-details--error, .banner-details--assistant)::part(
-      header
-    ) {
-    ${panelHeaderStyles}
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) var(--control-size-s);
-    gap: var(--wa-space-xs);
-  }
-
-  wa-details:is(.banner-details--error, .banner-details--assistant)::part(
-      icon
-    ) {
-    display: grid;
-    place-items: center;
-    width: var(--control-size-s);
-    height: var(--control-size-s);
-    margin: 0;
-  }
-
-  wa-details:is(.banner-details--error, .banner-details--assistant)::part(
-      content
-    ) {
-    ${panelContentStyles}
   }
 
   .banner-content--error {

@@ -12,6 +12,7 @@ import {
   mountComponent,
   useLitComponentTestDom,
 } from '../settings/litComponentTestUtils';
+import type WaDetails from '@awesome.me/webawesome/dist/components/details/details.js';
 
 function mount(
   text: string,
@@ -132,4 +133,48 @@ describe('user-message structured delivery', () => {
       bubble?.classList.contains('user-message--structured-delivery'),
     ).toBe(true);
   });
+
+  it.each([
+    'A long user prompt',
+    '<subagent-progress agent="a">Working</subagent-progress>',
+  ])(
+    'collapses %s without hiding or changing its copy action',
+    async (text) => {
+      const element = await mount(text);
+      const disclosure =
+        element.shadowRoot!.querySelector<WaDetails>('wa-details')!;
+      await disclosure.updateComplete;
+      const header =
+        disclosure.shadowRoot!.querySelector<HTMLElement>('[part="header"]')!;
+      header.click();
+      await vi.waitFor(() =>
+        expect(disclosure.shadowRoot!.querySelector('details')!.open).toBe(
+          false,
+        ),
+      );
+      expect(disclosure.open).toBe(false);
+      expect(element.shadowRoot!.querySelector('time')).toBeTruthy();
+      const writeText = vi.fn(async () => undefined);
+      vi.stubGlobal('navigator', { clipboard: { writeText } });
+      try {
+        element
+          .shadowRoot!.querySelector<HTMLElement>('#user-message-copy-button')!
+          .click();
+        await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(text));
+        await element.updateComplete;
+        expect(disclosure.open).toBe(false);
+        header.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+        );
+        await disclosure.updateComplete;
+        expect(disclosure.open).toBe(true);
+        expect(
+          element.shadowRoot!.querySelector('.user-message-content')!
+            .textContent,
+        ).toContain(text);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    },
+  );
 });

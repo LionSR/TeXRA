@@ -122,7 +122,7 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
   // prettier-ignore
   const summaryTemplate = html`<div slot="summary" class="details-summary message-header"><span class="message-label">${waIcon('circle-exclamation', { className: 'icon' })}${labelSpan}</span>${timestampLabel}${copyButton}</div>`;
   // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--error" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}>${summaryTemplate}${contentTemplate}</wa-details>`;
+  return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--error message-disclosure" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}>${summaryTemplate}${contentTemplate}</wa-details>`;
 }
 
 function plainLineText(row: LogRow | PhaseRow): string {

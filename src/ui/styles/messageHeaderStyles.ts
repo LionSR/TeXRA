@@ -1,5 +1,7 @@
 import { css } from 'lit';
 
+import { panelHeaderStyles, panelContentStyles } from './surfaceStyles';
+
 /** One trailing metadata/action group, without empty reserved button columns. */
 export const messageHeaderStyles = css`
   .message-header {
@@ -46,5 +48,33 @@ export const messageHeaderStyles = css`
     margin: 0;
     padding: 0;
     opacity: 1;
+  }
+`;
+
+/** Identical disclosure geometry for user, assistant and error messages. */
+export const messageDisclosureStyles = css`
+  wa-details.message-disclosure::part(summary) {
+    width: 100%;
+    min-width: 0;
+  }
+  .message-disclosure > .message-header {
+    width: 100%;
+    padding: 0;
+  }
+  wa-details.message-disclosure::part(header) {
+    ${panelHeaderStyles}
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--control-size-s);
+    gap: var(--wa-space-xs);
+  }
+  wa-details.message-disclosure::part(icon) {
+    display: grid;
+    place-items: center;
+    width: var(--control-size-s);
+    height: var(--control-size-s);
+    margin: 0;
+  }
+  wa-details.message-disclosure::part(content) {
+    ${panelContentStyles}
   }
 `;

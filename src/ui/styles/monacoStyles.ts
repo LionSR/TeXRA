@@ -55,6 +55,7 @@ export const monacoStyles = css`
     border: var(--border-thin) solid var(--wa-color-surface-border);
     box-shadow: 0 8px 24px var(--wa-color-surface-shadow);
     max-width: calc(100vw - 24px);
+    overflow: auto;
   }
 
   .monaco-hover {
@@ -62,43 +63,21 @@ export const monacoStyles = css`
     overflow-wrap: anywhere;
   }
 
-  /* Override Monaco's inline coordinates only for command descriptions.
-     Native popover placement escapes pane clipping and flips at window edges. */
-  .texra-command-tooltip {
-    position: fixed !important;
-    inset: auto !important;
-    position-area: inline-start;
-    position-try-fallbacks:
-      flip-inline, --texra-tooltip-below, --texra-tooltip-above;
-    width: max-content;
-    max-width: min(360px, calc(100vw - 24px));
-    margin: 0 8px;
-    padding: 0;
-    border: 0;
-    overflow: visible;
-    background: transparent;
-    color: var(--wa-color-text-normal);
+  /* Command descriptions are shown once, in the palette footer. */
+  .quick-input-list .context-view:has(.workbench-hover) {
+    display: none !important;
   }
 
-  .texra-command-tooltip .workbench-hover {
-    max-width: min(360px, calc(100vw - 24px)) !important;
-    border-radius: var(--field-radius);
-    font-family: var(--wa-font-family-body);
-    font-size: var(--font-size-sm);
-  }
-
-  .texra-command-tooltip .workbench-hover-pointer {
-    display: none;
-  }
-
-  @position-try --texra-tooltip-below {
-    position-area: block-end;
-    margin: 8px 0;
-  }
-
-  @position-try --texra-tooltip-above {
-    position-area: block-start;
-    margin: 8px 0;
+  .texra-command-description {
+    box-sizing: border-box;
+    padding: var(--wa-space-xs);
+    border-block-start: var(--border-thin) solid var(--wa-color-surface-border);
+    font: inherit;
+    line-height: var(--line-height-normal);
+    color: var(--wa-color-text-quiet);
+    overflow-wrap: anywhere;
+    max-height: 5lh;
+    overflow: auto;
   }
 
   .monaco-resizable-hover,

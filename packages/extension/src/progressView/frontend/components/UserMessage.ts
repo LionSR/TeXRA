@@ -1,7 +1,7 @@
 /**
  * UserMessage component for displaying user input messages.
  *
- * Renders a styled message bubble with timestamp and content.
+ * Renders a message disclosure with persistent timestamp and copy actions.
  */
 
 // Third-party imports
@@ -13,6 +13,7 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
+import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared styles
 import {
@@ -27,7 +28,10 @@ import { designTokens } from '@ui/styles';
 import { buttonStyles, focusRingStyles } from '@ui/styles/controlStyles';
 import { markdownStyles } from '@ui/styles/markdownStyles';
 import { panelFrameStyles } from '@ui/styles/surfaceStyles';
-import { messageHeaderStyles } from '@ui/styles/messageHeaderStyles';
+import {
+  messageHeaderStyles,
+  messageDisclosureStyles,
+} from '@ui/styles/messageHeaderStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
@@ -67,6 +71,7 @@ export class UserMessage extends LitElement {
     designTokens,
     buttonStyles,
     messageHeaderStyles,
+    messageDisclosureStyles,
     // The only markdownStyles consumer that does not compose commonViewStyles,
     // so it is also the only one that would not inherit the shared focus ring.
     // A user message can contain \ref{}/\cref{}, which render as focusable
@@ -86,16 +91,13 @@ export class UserMessage extends LitElement {
       }
 
       .user-message {
+        width: 100%;
+      }
+
+      .user-message::part(base) {
         ${panelFrameStyles}
         border-color: transparent;
         background: var(--wa-color-surface-raised);
-        position: relative;
-        width: 100%;
-        padding: var(--panel-padding-block) var(--panel-padding-inline);
-      }
-
-      .user-message-header {
-        margin-bottom: var(--wa-space-2xs);
       }
 
       /* Off while the conversation it sits in cannot fork now: the
@@ -141,8 +143,8 @@ export class UserMessage extends LitElement {
 
       /* Host contrast colors keep the message frame visible in both
          high-contrast themes. */
-      :host-context(.vscode-high-contrast) .user-message,
-      :host-context(.vscode-high-contrast-light) .user-message {
+      :host-context(.vscode-high-contrast) .user-message::part(base),
+      :host-context(.vscode-high-contrast-light) .user-message::part(base) {
         background-color: var(--wa-color-surface-default);
         border-color: var(
           --vscode-contrastBorder,
@@ -261,14 +263,18 @@ export class UserMessage extends LitElement {
 
     return html`
       <div class="user-message-container">
-        <article
+        <wa-details
+          appearance="plain"
+          icon-placement="end"
+          open
           aria-label="User message"
           class=${classMap({
             'user-message': true,
+            'message-disclosure': true,
             'user-message--structured-delivery': isStructuredDelivery,
           })}
         >
-          <div class="user-message-header message-header">
+          <div slot="summary" class="user-message-header message-header">
             <span class="message-label"
               >${waIcon('user')}<span class="message-author">You</span></span
             >
@@ -281,7 +287,11 @@ export class UserMessage extends LitElement {
             <wa-tooltip for="user-message-timestamp"
               >${tooltipTimestamp}</wa-tooltip
             >
-            <span class="message-actions">
+            <span
+              class="message-actions"
+              @click=${(event: MouseEvent) => event.stopPropagation()}
+              @keydown=${(event: KeyboardEvent) => event.stopPropagation()}
+            >
               ${renderIconActionButton({
                 id: 'user-message-copy-button',
                 icon: 'copy',
@@ -333,7 +343,7 @@ export class UserMessage extends LitElement {
                   .textContent=${displayText}
                 ></div>`
           }
-        </article>
+        </wa-details>
       </div>
     `;
   }

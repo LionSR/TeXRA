@@ -123,8 +123,20 @@ test('renders the dev app from a cold cache and restores the editor after reload
         .filter({ hasText: 'Convert Indentation to Spaces' })
         .first();
       await command.hover();
-      const description = page.locator('.texra-command-tooltip:popover-open');
+      const description = palette.locator('.texra-command-description');
       await expect(description).toBeVisible();
+      await expect(description).toContainText('indentation');
+      await expect(palette.locator('.workbench-hover')).toBeHidden();
+      await expect(description).toHaveCount(1);
+      const paletteBounds = (await palette.boundingBox())!;
+      const descriptionBounds = (await description.boundingBox())!;
+      expect(descriptionBounds.x).toBeGreaterThanOrEqual(paletteBounds.x);
+      expect(descriptionBounds.x + descriptionBounds.width).toBeLessThanOrEqual(
+        paletteBounds.x + paletteBounds.width,
+      );
+      expect(
+        descriptionBounds.y + descriptionBounds.height,
+      ).toBeLessThanOrEqual(paletteBounds.y + paletteBounds.height);
       // Hit testing verifies that ancestors do not clip or cover the tooltip,
       // which a DOM visibility assertion alone cannot establish.
       await expect
