@@ -136,10 +136,64 @@ function stripDollarSchema(schema: JSONSchemaObject): JSONSchemaObject {
   return rest;
 }
 
+/** Keywords whose value is data, never a schema to walk. */
+const DATA_KEYWORDS: ReadonlySet<string> = new Set([
+  'enum',
+  'const',
+  'default',
+  'examples',
+]);
+
+/**
+ * OpenAI rejects an array schema without an `items` schema, strict mode or
+ * not (HTTP 400: `array schema missing items`), and takes neither
+ * `prefixItems` nor the legacy array form of `items`. Zod v4 emits a tuple
+ * (`view_range`) as `prefixItems` alone. Every array therefore names one
+ * `items` schema: a tuple's element schemas (one, or `anyOf` the distinct
+ * ones) with its length as the bounds it does not declare, and an untyped
+ * array `{}`. Dispatch still validates the call against the tool's own
+ * schema.
+ */
+function withArrayItems(node: JSONSchemaObject): JSONSchemaObject;
+function withArrayItems(node: unknown): unknown;
+function withArrayItems(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(withArrayItems);
+  if (!Predicate.isObject(node)) return node;
+  const walked = Object.fromEntries(
+    Object.entries(node).map(([key, value]) => [
+      key,
+      DATA_KEYWORDS.has(key) ? value : withArrayItems(value),
+    ]),
+  );
+  const { type, prefixItems, items, ...rest } = walked;
+  if (![type].flat().includes('array')) return walked;
+  // The legacy tuple form is `items: [...]`.
+  const tuple = Array.isArray(items) ? items : prefixItems;
+  if (!Array.isArray(tuple)) return { items: {}, ...walked };
+  // A schema `items` beside `prefixItems` types the elements past the tuple.
+  const tail = Predicate.isObject(items) ? [items] : [];
+  const elements = [
+    ...new Map(
+      [...tuple, ...tail].map((schema) => [JSON.stringify(schema), schema]),
+    ).values(),
+  ];
+  return {
+    type,
+    ...rest,
+    items: elements.length > 1 ? { anyOf: elements } : (elements[0] ?? {}),
+    // Declared bounds stand; Zod states none, meaning exactly the tuple.
+    minItems: rest.minItems ?? tuple.length,
+    ...(tail.length > 0 || rest.maxItems !== undefined
+      ? {}
+      : { maxItems: tuple.length }),
+  };
+}
+
 /**
  * Converts a Zod schema to JSON Schema, or returns the pre-converted
- * parameters: top-level discriminated unions are flattened and `$schema` is
- * stripped so the output passes every provider's schema validator.
+ * parameters: top-level discriminated unions are flattened, every array
+ * names its `items`, and `$schema` is stripped so the output passes every
+ * provider's schema validator.
  */
 export function convertToolSchema(
   def: ToolDefinition,
@@ -154,5 +208,5 @@ export function convertToolSchema(
     schema = (def.parameters ?? null) as JSONSchemaObject | null;
   }
   if (!schema) return null;
-  return stripDollarSchema(flattenTopLevelUnion(schema));
+  return withArrayItems(stripDollarSchema(flattenTopLevelUnion(schema)));
 }

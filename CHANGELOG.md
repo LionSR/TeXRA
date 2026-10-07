@@ -880,6 +880,13 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **OpenAI models can use tools.** A task on an OpenAI model, directly
+  or through OpenRouter, failed on its first request with an "Invalid schema
+  for function 'memory'" (or 'executions') error, because the line-range
+  option of those two tools was described in a form OpenAI does not accept.
+  Every bundled agent offers one of them, so every OpenAI task with tools
+  was affected.
+
 - **Each of several messages sent together shows only its own attachments.**
   When a text-only message and a message with an image reached a task in the
   same turn, both rows showed the image badge. Now each row shows the
