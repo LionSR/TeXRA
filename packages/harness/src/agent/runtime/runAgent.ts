@@ -9,7 +9,11 @@ import {
   APPROVAL_BYPASS_KINDS,
   NO_APPROVAL_GRANTS,
 } from '@shared/approvalBypassKind';
-import { inheritedGrants, stricterPolicy } from '@shared/approvalBypassKind';
+import {
+  inheritedGrants,
+  stricterPolicy,
+  type ApprovalPolicyLimit,
+} from '@shared/approvalBypassKind';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type RunId, USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
 import { generateRunId } from '@utils/core';
@@ -144,16 +148,13 @@ export const runAgent = Effect.fn('runAgent')(function* (
           : launchGrants;
       // Only a strictly stricter request narrows; the limit then holds
       // even if the project's policy is widened later.
-      const project =
-        approvalPolicy === undefined
-          ? undefined
-          : runSession.approvals.policy();
-      const limit =
-        approvalPolicy === undefined ||
-        project === undefined ||
-        stricterPolicy(approvalPolicy, project) === project
-          ? undefined
-          : stricterPolicy(approvalPolicy, grants.limit ?? approvalPolicy);
+      const asked = approvalPolicy === 'yolo' ? undefined : approvalPolicy;
+      let limit: ApprovalPolicyLimit | undefined;
+      if (asked !== undefined) {
+        const project = runSession.approvals.policy();
+        if (stricterPolicy(asked, project) !== project)
+          limit = grants.limit === 'never' ? 'never' : asked;
+      }
       yield* registerRun(runSession, runId, definition.config, {
         identity: { kind: 'agent', agent: definition.config.agent },
         userFollowUpSupport,
