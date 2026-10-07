@@ -868,6 +868,12 @@ show` print the same notice, and the new `texra agents customize`,
   grows.** Each decision now reads only the task's request rows instead of
   reloading its whole history.
 
+- **A refused action on an agent names the agent, not "the task".** Stopping,
+  deleting, compacting or answering for an agent that could not take the
+  action said "Stop the task before deleting it.", "This task has no
+  conversation to compact." and similar. These messages now say "agent" for
+  an agent and "task" for a task.
+
 - **An unnamed image in an `.eml` file is named by its standard extension.**
   Reading an email names an image attachment that has no filename after the
   registered extension of its MIME type, so `image/x-icon` becomes

@@ -113,7 +113,7 @@ const ACTION_LABEL: Record<RunAction, string> = {
   diff: 'Latexdiff of the outputs',
   pack: 'Archiving the outputs',
   clean: 'Deleting the output files',
-  delete: 'Deleting the task',
+  delete: 'Deleting',
   rename: 'Renaming',
   openRunStorage: 'Opening the run folder',
   export: 'Export',
