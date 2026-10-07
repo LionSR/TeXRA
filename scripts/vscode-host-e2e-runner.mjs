@@ -112,9 +112,10 @@ try {
       '--extensions-dir',
       path.join(root, 'x'),
       '--disable-extensions',
-      // VS Code's own secret storage in a file, not the login keychain: on
-      // a CI runner the keychain's access dialog holds VS Code open after
-      // the suite ends, so the run never finishes.
+      // VS Code's safe storage on a mock keychain, not the login one: on a
+      // CI runner the keychain's access dialog holds VS Code open after the
+      // suite ends, so the run never finishes (the stuck runs' screenshot).
+      '--use-mock-keychain',
       '--password-store=basic',
     ],
   });
