@@ -45,6 +45,10 @@ export interface CliContext {
   readonly mode: CliMode;
   readonly outputFormat: CliOutputFormat;
   readonly approvalPolicy: TexraApprovalPolicy;
+  /** The policy this invocation asked for itself (`--approval-policy`,
+   *  `TEXRA_APPROVAL_POLICY`, `--no-input`), absent when it follows the
+   *  config: what a service launch sends to narrow its own task. */
+  readonly requestedApprovalPolicy?: TexraApprovalPolicy;
   readonly quietLogs: boolean;
   /**
    * The diagnostics emission threshold this process's runtime builds with,
@@ -423,19 +427,21 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
     // set one — the environment is the only tier that can still carry an
     // unvalidated string. `--no-input` skips the env and config tiers
     // entirely, so it also skips their warnings.
-    const approvalPolicy: TexraApprovalPolicy =
+    const requestedApprovalPolicy: TexraApprovalPolicy | undefined =
       init.globalArgs.approvalPolicy ??
       (noInput
         ? TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT
-        : ((yield* pickEnv(
+        : yield* pickEnv(
             'TEXRA_APPROVAL_POLICY',
             parseTexraApprovalPolicy,
             configWarnings,
-          )) ??
-          readConfigSettingFrom<TexraApprovalPolicy>(
-            config,
-            TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-          )));
+          ));
+    const approvalPolicy: TexraApprovalPolicy =
+      requestedApprovalPolicy ??
+      readConfigSettingFrom<TexraApprovalPolicy>(
+        config,
+        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+      );
     const outputFormat: CliOutputFormat =
       init.globalArgs.outputFormat ??
       (yield* pickEnv(
@@ -459,6 +465,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       mode: cliMode(init.globalArgs, ambient),
       outputFormat,
       approvalPolicy,
+      ...(requestedApprovalPolicy !== undefined && { requestedApprovalPolicy }),
       quietLogs: init.globalArgs.quiet === true,
       minimumLogLevel,
       stdoutIsTty: ambient.stdoutIsTty,

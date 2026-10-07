@@ -36,11 +36,11 @@ export interface ChatAgentRuns {
 }
 
 /** The chat's run boundary over the service's `backend`; each launch asks
- *  for `approvalPolicy()`, the chat's own policy, which narrows the task
- *  when it is stricter than the project's. */
+ *  for `approvalPolicy()`, the policy the chat asked for itself (its flag,
+ *  then `/approval`), which limits the task; none follows the project's. */
 export function serviceAgentRuns(
   backend: SessionBackend,
-  approvalPolicy: () => TexraApprovalPolicy,
+  approvalPolicy: () => TexraApprovalPolicy | undefined,
 ): ChatAgentRuns {
   return {
     launch: (request, options) =>

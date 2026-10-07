@@ -203,19 +203,21 @@ export async function runChat(
       const startupNotices: string[] = [];
       if (Result.isSuccess(service)) {
         // The service decides this chat's requests under the project's
-        // persisted policy. Each launch asks for this chat's own, which
-        // narrows its tasks when stricter; a more permissive one is said
-        // and ignored, since no client widens the project's policy.
+        // persisted policy. A policy this invocation asked for rides each
+        // launch and narrows its tasks; a more permissive one is said and
+        // ignored, since no client widens the project's policy.
+        const requested = context.requestedApprovalPolicy;
         const configured = runtimeSession.approvals.policy();
         if (
-          stricterPolicy(context.approvalPolicy, configured) !==
-          context.approvalPolicy
+          requested !== undefined &&
+          stricterPolicy(requested, configured) !== requested
         )
           startupNotices.push(
-            `This chat's tasks run in the TeXRA service under the project's approval policy, ${texraApprovalPolicyLabel(configured)}, not ${texraApprovalPolicyLabel(context.approvalPolicy)}: a launch can only narrow it. Change the project's policy with /approval, or run with TEXRA_NO_SERVICE=1 to use ${texraApprovalPolicyLabel(context.approvalPolicy)} in this chat alone.`,
+            `This chat's tasks run in the TeXRA service under the project's approval policy, ${texraApprovalPolicyLabel(configured)}, not ${texraApprovalPolicyLabel(requested)}: a launch can only narrow it. Change the project's policy with /approval, or run with TEXRA_NO_SERVICE=1 to use ${texraApprovalPolicyLabel(requested)} in this chat alone.`,
           );
       } else {
-        runtimeSession.approvals.override(context.approvalPolicy);
+        if (context.requestedApprovalPolicy !== undefined)
+          runtimeSession.approvals.override(context.requestedApprovalPolicy);
         startupNotices.push(
           `This chat runs here only, so other terminals and windows will not see it: ${service.failure.message}`,
         );
@@ -339,7 +341,7 @@ export async function runChat(
   });
   // The policy this chat's launches ask the service for (see
   // `serviceAgentRuns`): its flag, then each `/approval`.
-  let chatPolicy = context.approvalPolicy;
+  let chatPolicy = context.requestedApprovalPolicy;
   // Here, `/approval` overrides this chat's own session. In the service it
   // writes the project's persisted policy, the one the service follows for
   // every window and terminal of the project, and the status line moves

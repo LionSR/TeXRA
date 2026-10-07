@@ -11,7 +11,6 @@ import {
 } from '@shared/approvalBypassKind';
 import {
   inheritedGrants,
-  stricterPolicy,
   type ApprovalPolicyLimit,
 } from '@shared/approvalBypassKind';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
@@ -65,10 +64,11 @@ export interface RunAgentOptions
    *  its `run.start`, so no approval opens ahead of the grant. */
   approveDelegatedWork?: boolean;
   /**
-   * The policy the launch asked for (a CLI flag, `--no-input`). Stricter
-   * than the session's, it becomes the run's launch limit on its
-   * `run.start`, narrowing the run and its descendants only; a more
-   * permissive one is ignored, since a launch never widens the project's.
+   * The policy the launch asked for explicitly (a CLI flag, its env
+   * variable, `--no-input`, a chat's `/approval`). Unless it is
+   * Auto-approve, it is the run's launch limit on its `run.start`: the run
+   * and its descendants run under the stricter of it and the project's
+   * policy, for good. A launch never widens the project's policy.
    */
   approvalPolicy?: TexraApprovalPolicy;
 }
@@ -139,22 +139,20 @@ export const runAgent = Effect.fn('runAgent')(function* (
       const launchGrants = approveDelegatedWork
         ? humanGrant(APPROVAL_BYPASS_KINDS, true)(NO_APPROVAL_GRANTS)
         : NO_APPROVAL_GRANTS;
-      const grants =
+      // A chat round takes the human grants of the round it continues,
+      // never its launch limit: the round asks with the chat's policy now.
+      const { limit: _previous, ...grants } =
         continues !== undefined && continues !== runId
           ? inheritedGrants(
               SubscriptionRef.getUnsafe(runSession.view.ref),
               continues,
             )
           : launchGrants;
-      // Only a strictly stricter request narrows; the limit then holds
-      // even if the project's policy is widened later.
-      const asked = approvalPolicy === 'yolo' ? undefined : approvalPolicy;
-      let limit: ApprovalPolicyLimit | undefined;
-      if (asked !== undefined) {
-        const project = runSession.approvals.policy();
-        if (stricterPolicy(asked, project) !== project)
-          limit = grants.limit === 'never' ? 'never' : asked;
-      }
+      // A policy the launch asked for, Auto-approve aside, is the run's
+      // limit whatever the project's is now, so widening the project's
+      // policy later never widens this run.
+      const limit: ApprovalPolicyLimit | undefined =
+        approvalPolicy === 'yolo' ? undefined : approvalPolicy;
       yield* registerRun(runSession, runId, definition.config, {
         identity: { kind: 'agent', agent: definition.config.agent },
         userFollowUpSupport,

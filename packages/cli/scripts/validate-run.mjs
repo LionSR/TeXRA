@@ -2188,8 +2188,9 @@ prompt: |
  * the setting is Auto-approve; window B then sets Ask (a settings write);
  * the service restarts and window A's link reaches the new one. A command
  * task must then wait for approval: nothing window A held replaced Ask.
- * A launch may narrow its own task: with the project back on
- * Auto-approve, `tasks start --approval-policy ask` still asks. The tasks'
+ * A launch may narrow its own task for good: `tasks start
+ * --approval-policy ask`, then the project widened to Auto-approve, still
+ * asks. The tasks'
  * rows, the setting and window A's output are the artifacts.
  */
 async function validateServicePolicyOwner() {
@@ -2330,9 +2331,9 @@ prompt: |
       `after a restart the service should follow the project's Ask setting, not a policy window A held (artifact: ${artifactPath})`,
     );
     texra(['tasks', 'stop', runId], 'texra tasks stop');
-    // A launch narrows its own task: an Auto-approve project, and a task
-    // started with `--approval-policy ask`, still waits for approval.
-    setPolicy('yolo');
+    // A launch narrows its own task for good: started with
+    // `--approval-policy ask` while the project asks, then the project is
+    // widened to Auto-approve, the task still waits for approval.
     const narrowed = texra(
       [
         'tasks',
@@ -2345,8 +2346,12 @@ prompt: |
         '--instruction',
         'Run the command',
       ],
-      'texra tasks start --approval-policy ask (yolo project)',
+      'texra tasks start --approval-policy ask',
     ).stdout.trim();
+    await waitFor('the narrowed task to start', () =>
+      rowTypes(narrowed).includes('run.start'),
+    );
+    setPolicy('yolo');
     await waitFor('the narrowed command to wait for approval', () =>
       rowTypes(narrowed).includes('request.opened'),
     );
@@ -2358,7 +2363,7 @@ prompt: |
     });
     assert(
       !existsSync(approved) && !narrowedRows.includes('request.decided'),
-      'a task started with --approval-policy ask in an Auto-approve project should still ask',
+      'a task started with --approval-policy ask should still ask after the project is widened to Auto-approve',
     );
     texra(['tasks', 'stop', narrowed], 'texra tasks stop (narrowed)');
   } finally {

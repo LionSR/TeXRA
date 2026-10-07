@@ -180,19 +180,21 @@ const startCommand = defineCliCommand({
         );
       const services = yield* initCliPlatform(context);
       // The task runs in the service under the project's persisted policy.
-      // This command's policy (its flag, `--no-input`, or the config) rides
-      // the launch: stricter, it narrows this task only; more permissive,
-      // it is said and ignored, since no client widens the project's.
+      // A policy this command asked for (its flag, its env variable,
+      // `--no-input`) rides the launch and narrows this task for good; a
+      // more permissive one is said and ignored, since no client widens
+      // the project's.
+      const requested = context.requestedApprovalPolicy;
       const configured = readConfigSettingFrom<TexraApprovalPolicy>(
         services.config,
         TEXRA_APPROVAL_POLICY_CONFIG_KEY,
       );
       if (
-        stricterPolicy(context.approvalPolicy, configured) !==
-        context.approvalPolicy
+        requested !== undefined &&
+        stricterPolicy(requested, configured) !== requested
       )
         writeTextStderr(
-          `The task runs in the TeXRA service under the project's approval policy, ${texraApprovalPolicyLabel(configured)}, not ${texraApprovalPolicyLabel(context.approvalPolicy)}: a launch can only narrow it. Change the project's policy with /approval in \`texra chat\` or in the settings view.`,
+          `The task runs in the TeXRA service under the project's approval policy, ${texraApprovalPolicyLabel(configured)}, not ${texraApprovalPolicyLabel(requested)}: a launch can only narrow it. Change the project's policy with /approval in \`texra chat\` or in the settings view.`,
         );
       const agent = yield* resolveCliRunAgent(services, ctx.args.agent);
       const model = yield* selectCliRunModel(
@@ -229,7 +231,7 @@ const startCommand = defineCliCommand({
             continues: null,
             preferHelperModel: false,
             ownApiKeyFallback: false,
-            approvalPolicy: context.approvalPolicy,
+            approvalPolicy: context.requestedApprovalPolicy ?? null,
             approveDelegatedWork: false,
           });
         }),
