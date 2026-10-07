@@ -7,8 +7,6 @@
 import { app, shell } from 'electron';
 import { Effect, Exit, Scope, SubscriptionRef } from 'effect';
 
-import type { PlatformSecrets } from '@platform/secrets';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages.js';
 import {
   createDesktopSettingsIpc,
@@ -22,6 +20,8 @@ import {
   agentDocumentForPath,
   AgentDocumentUnavailable,
 } from './desktopAgentDocuments.js';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
+import type { PlatformSecrets } from '@texra-ai/harness';
 import type { ProjectBindings } from './desktopProjectBindings.js';
 import type { DesktopPromptController } from './desktopPromptController.js';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
@@ -177,16 +177,16 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
             const binding = bindings.active();
             if (!binding) return 'unavailable' as const;
             const view = SubscriptionRef.getUnsafe(
-              binding.project.session.view,
+              binding.project.backend.view.ref,
             );
             if (!view.runs.has(runId)) return 'missing' as const;
             binding.bridge.surfaceAction({ kind: 'select', runId });
             return 'revealed' as const;
           }),
         runLabel: (runId) =>
-          SubscriptionRef.getUnsafe(projects.active().session.view).runs.get(
-            runId,
-          )?.label,
+          SubscriptionRef.getUnsafe(
+            projects.active().backend.view.ref,
+          ).runs.get(runId)?.label,
         stateSettingApplied: () => Effect.void,
         runInTerminal: (_name, command) =>
           Effect.sync(() => {
@@ -197,10 +197,12 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
               initialCommand: command,
             });
           }),
-        // There is no editor whose settings the LaTeX page could recommend.
-        latexRecommendedStatus: () => ({
+        // There is no editor whose settings the LaTeX page could recommend,
+        // nor one to install LaTeX Workshop into.
+        latexEditorStatus: () => ({
           outDir: true,
           autoRevealExclude: true,
+          latexWorkshopInstalled: false,
         }),
       };
     };
@@ -240,7 +242,7 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
         Effect.tap(() =>
           installDesktopWindowTitle(
             host.window,
-            project.session,
+            project.backend,
             project.root && project.display.name,
             () => surfaceScope === owner,
           ),

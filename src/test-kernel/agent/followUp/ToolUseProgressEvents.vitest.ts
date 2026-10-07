@@ -10,7 +10,7 @@ import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { TraceEmitter } from '@agent/trace';
-import { RUN_OUTCOME, type JsonValue } from '@shared/schemas';
+import { aggregateId, RUN_OUTCOME } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runStateFold';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -92,15 +92,11 @@ describe('the tool-use turn', () => {
     () =>
       Effect.gen(function* () {
         const session = yield* quietSession();
-        const finalized: string[] = [];
-        const logger = new TraceEmitter((event) => {
-          if (event.type === 'response.finalized') finalized.push(event.text);
-        });
+        const runId = startedRun(session);
 
         const { state } = yield* runScript({
-          runId: startedRun(session),
+          runId,
           session,
-          logger,
           tools: { echo: echoTool('echo') },
           script: [
             toolCallTurn([{ id: 'call-1', name: 'echo' }]),
@@ -109,8 +105,17 @@ describe('the tool-use turn', () => {
         });
 
         // The tool-calling round is not the end of the turn, so only the
-        // text round's response is finalized, once, with its text.
-        expect(finalized).toEqual(['Done \\checkmark']);
+        // text round's response is finalized, once, with its text, as a row
+        // of the run's history (never a detached trace row).
+        const finalized = yield* session.log.rows(aggregateId('run', runId), [
+          'response.finalized',
+        ]);
+        expect(
+          finalized.map((row) =>
+            row.type === 'response.finalized' ? row.text : null,
+          ),
+        ).toEqual(['Done \\checkmark']);
+        expect(state?.answerFinalized).toBe(true);
         expect(state?.messages.at(-1)?.role).toBe('assistant');
       }),
   );
@@ -173,17 +178,15 @@ describe('the tool-use turn', () => {
   it.effect('returns the text that accompanied the terminal tool', () =>
     Effect.gen(function* () {
       const session = yield* quietSession();
-      const structured: { value: JsonValue | undefined } = { value: undefined };
+      // Its settled value is the run's structured output.
       const submitOutput: ITool = {
         definition: { name: 'submit_output' },
         call: vi.fn(() =>
-          Effect.sync(() => {
-            structured.value = { answer: 'done' };
-            return {
-              status: 'executed' as const,
-              output: 'recorded',
-              endTurn: true,
-            };
+          Effect.succeed({
+            status: 'executed' as const,
+            output: 'recorded',
+            endTurn: true,
+            value: { answer: 'done' },
           }),
         ),
       } as ITool;
@@ -192,7 +195,6 @@ describe('the tool-use turn', () => {
         runId: startedRun(session),
         session,
         finalToolName: 'submit_output',
-        structured,
         tools: { submit_output: submitOutput },
         script: [
           toolCallTurn(

@@ -7,24 +7,19 @@
  */
 import { z } from 'zod';
 
-import { isObject } from './support.js';
-
 /** Non-empty string claim; any other shape degrades to undefined. */
 export const NonEmptyJwtClaim = z.string().min(1).optional().catch(undefined);
 
 /**
  * Decode the middle base64url segment of a JWT to raw JSON. Returns `null` on
- * any structural error; never throws.
+ * any structural error; never throws. The caller's object schema rejects a
+ * payload that is not a JSON object.
  */
-function decodeUnverifiedJwtPayload(
-  token: string,
-): Record<string, unknown> | null {
+function decodeUnverifiedJwtPayload(token: string): unknown {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-    const json = Buffer.from(parts[1], 'base64url').toString('utf-8');
-    const raw: unknown = JSON.parse(json);
-    return isObject(raw) ? raw : null;
+    return JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8'));
   } catch {
     return null;
   }
@@ -39,8 +34,6 @@ export function decodeJwtClaimsWithSchema<T>(
   schema: z.ZodType<T>,
   empty: T,
 ): T {
-  const raw = decodeUnverifiedJwtPayload(token);
-  if (raw == null) return empty;
-  const parsed = schema.safeParse(raw);
+  const parsed = schema.safeParse(decodeUnverifiedJwtPayload(token));
   return parsed.success ? parsed.data : empty;
 }

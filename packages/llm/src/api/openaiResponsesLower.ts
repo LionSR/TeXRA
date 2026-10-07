@@ -4,25 +4,19 @@ import OpenAI from 'openai';
 
 // Local imports - canonical model contract
 import {
-  ModelConfigurationSchema,
-  TurnResultSchema,
-  type OpenAIResponsesConfiguration,
-  type ResolvedTurn,
-  type TurnResult,
-} from '../turn.js';
-import {
   ContinuationSchema,
   replayableHistory,
   systemUpdateText,
-  type Continuation,
 } from '../message.js';
-import { originOf, sameModelOrigin } from '../protocol.js';
+import { sameModelOrigin } from '../protocol.js';
 import { ModelError } from '../errors.js';
 import { prefixFingerprint } from './prefixFingerprint.js';
 import {
   responsesContent,
   type DocumentAccess,
 } from './openaiResponsesCodec.js';
+import type { OpenAIResponsesConfiguration, ResolvedTurn } from '../turn.js';
+import type { HttpTurnResult } from './parts.js';
 import type { UploadCache } from './uploadCache.js';
 
 const documentAccess = Effect.fn('llm.responses.documentAccess')(function* (
@@ -276,40 +270,34 @@ const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
   return input;
 });
 
-export const RESPONSES_PREFIX_DOMAIN = 'texra-openai-responses-prefix-v1';
+const RESPONSES_PREFIX_DOMAIN = 'texra-openai-responses-prefix-v1';
 
-/** Builds only a stored anchor, using the same selected configuration as admission. */
-export const openaiResponsesContinuation = Effect.fn(
+/**
+ * The completed turn with the stored anchor its next round chains on, if the
+ * route stores and the turn ended chainable. The configuration was parsed at
+ * bind and the result by the turn assembly, so neither is parsed again.
+ */
+export const withResponsesContinuation = Effect.fn(
   'llm.responses.continuation',
 )(function* (
-  configuration: OpenAIResponsesConfiguration,
+  config: OpenAIResponsesConfiguration,
   turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
-  completed: TurnResult,
-): Effect.fn.Return<Continuation | undefined, ModelError> {
-  const parsedConfiguration = ModelConfigurationSchema.safeParse(configuration);
-  const parsedResult = TurnResultSchema.safeParse(completed);
-  if (
-    !parsedConfiguration.success ||
-    parsedConfiguration.data.protocol !== 'openai-responses' ||
-    !parsedResult.success ||
-    parsedResult.data.providerResponseId === null ||
-    !sameModelOrigin(turn, parsedResult.data.requestedOrigin) ||
-    !sameModelOrigin(turn, originOf(parsedConfiguration.data))
-  )
+  result: HttpTurnResult,
+): Effect.fn.Return<HttpTurnResult, ModelError> {
+  if (!sameModelOrigin(turn, result.requestedOrigin))
     return yield* new ModelError({
       kind: 'invalid-request',
       message:
         'Continuation requires the original admitted input and matching completed output.',
     });
-  const result = parsedResult.data;
   // HTTP stored-response chaining is separate from temporary background retrieval.
   // https://developers.openai.com/api/docs/guides/conversation-state
   if (
-    !parsedConfiguration.data.supportsStorage ||
+    !config.supportsStorage ||
     !turn.controls.store ||
     (result.finishReason !== 'stop' && result.finishReason !== 'tool-calls')
   )
-    return undefined;
+    return result;
   const prefix: ResolvedTurn['messages'] = [
     ...turn.messages,
     {
@@ -318,7 +306,7 @@ export const openaiResponsesContinuation = Effect.fn(
       content: result.content,
     },
   ];
-  return ContinuationSchema.parse({
+  const continuation = ContinuationSchema.parse({
     origin: result.requestedOrigin,
     coveredMessages: prefix.length,
     prefixFingerprint: prefixFingerprint(
@@ -338,6 +326,7 @@ export const openaiResponsesContinuation = Effect.fn(
       ),
     },
   });
+  return { ...result, continuation };
 });
 
 export const responseInput = Effect.fn('llm.responses.input')(function* (

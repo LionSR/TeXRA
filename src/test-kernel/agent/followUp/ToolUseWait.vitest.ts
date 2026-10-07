@@ -2,6 +2,8 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { randomUUID } from 'node:crypto';
+import { rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
@@ -11,12 +13,7 @@ import { describe, expect, vi } from 'vitest';
 // Local imports
 import type { InboxItem } from '@agent/followUp/Inbox';
 import { type InvokeRequest } from '@agent/runtime/ModelInvoker';
-import {
-  appendRow,
-  rowAggregate,
-  snapshotRow,
-  positionRow,
-} from '@agent/runtime/loop/rows';
+import { appendRow, rowAggregate, positionRow } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import type { RunControls } from '@agent/runtime/RunHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -45,14 +42,10 @@ import {
   createProcessSession,
   publishTestRunStart,
   queuedFollowUps,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { releaseRunResources } from '@tools/approval';
-import {
-  clearGoal,
-  goalOf,
-  setGoalSessionAutoApproval,
-  startGoal,
-} from '@tools/goal';
+import { clearGoal, goalOf, startGoal } from '@tools/goal';
 import { generateRunId } from '@utils/core';
 
 import {
@@ -206,11 +199,6 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       appendRow(runId, [
         { role: 'user', content: [{ kind: 'text', text: 'Do the thing.' }] },
       ]),
-      ...snapshotRow(runId, fresh, {
-        state: {
-          stateSlices: null,
-        },
-      }),
       positionRow(runId, { ...fresh, turn: 1 }, 'turn.begin'),
     ]);
     const invocation = { invocationId: randomUUID(), attempt: 1 };
@@ -223,7 +211,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
           request: '0'.repeat(64),
           invocation,
           origin: TEST_ORIGIN,
-          delivery: 'stream',
+          purpose: 'turn',
         },
       },
       {
@@ -249,7 +237,7 @@ const enqueue = Effect.fn('test.enqueue')(function* (
   runId: RunId,
   items: readonly InboxItem[],
 ) {
-  yield* session.settlePublications();
+  yield* session.log.settled;
   for (const item of items) {
     yield* session.followUps.send(runId, item);
   }
@@ -317,8 +305,8 @@ describe('a parked child run', () => {
           followUpId: 'follow-up-1',
           content: { text: asked, from: { kind: 'user' as const } },
         };
-        session.publish([queued]);
-        yield* session.settlePublications();
+        publishTestRows(session, [queued]);
+        yield* session.log.settled;
 
         const resumed = yield* forkLoop({
           runId,
@@ -330,15 +318,13 @@ describe('a parked child run', () => {
         yield* resumed.park(1);
         const resumedState = yield* session.runHistory.load(runId);
         expect(userTexts(resumedState)).toContain(asked);
-        expect(session.events.pendingFollowUps(rowAggregate(runId))).toEqual(
-          [],
-        );
+        expect((yield* session.followUps.read(runId)).followUps).toEqual([]);
         yield* Fiber.interrupt(resumed.fiber);
 
         // A producer that replays the delivery after a restart writes the
         // same id again; it names a follow-up already consumed.
-        session.publish([queued]);
-        yield* session.settlePublications();
+        publishTestRows(session, [queued]);
+        yield* session.log.settled;
         const again = yield* forkLoop({
           runId,
           session,
@@ -513,7 +499,7 @@ describe('a parked root run', () => {
       const child = publishTestRunStart(session, generateRunId(), {
         parent: runId,
       });
-      session.publish([
+      publishTestRows(session, [
         {
           type: 'run.end',
           aggregateId: rowAggregate(child),
@@ -567,7 +553,6 @@ describe('a parked root run', () => {
         appendRow(runId, [
           { role: 'user', content: [{ kind: 'text', text: 'answer me' }] },
         ]),
-        ...snapshotRow(runId, parked, { runtime: { lastError: null } }),
         positionRow(runId, parked, 'turn.ready'),
       ]);
 
@@ -633,7 +618,7 @@ describe('the batch a parked run consumes', () => {
         const child = publishTestRunStart(session, generateRunId(), {
           parent: runId,
         });
-        session.publish([
+        publishTestRows(session, [
           {
             type: 'run.end',
             aggregateId: rowAggregate(child),
@@ -778,7 +763,9 @@ describe('the batch a parked run consumes', () => {
         yield* Fiber.interrupt(fiber);
 
         expect(warn).toHaveBeenCalledWith(
-          expect.stringContaining('has no vision support'),
+          expect.stringMatching(
+            /^Skipping .*texra-figure\.png: the model does not accept images\.$/,
+          ),
         );
         expect(info).toHaveBeenCalledWith(
           'please inspect this figure',
@@ -787,6 +774,54 @@ describe('the batch a parked run consumes', () => {
           }),
         );
       }),
+  );
+
+  it.effect("gives each row of a batch only its own item's badges", () =>
+    Effect.gen(function* () {
+      const figure = path.join(tmpdir(), `texra-badge-${randomUUID()}.png`);
+      // A 1×1 PNG: within any size limit, so it attaches as it is.
+      writeFileSync(
+        figure,
+        Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+          'base64',
+        ),
+      );
+      const session = yield* quietSession();
+      const runId = startedRun(session);
+      const logger = new TraceEmitter();
+      const info = vi.spyOn(logger, 'info');
+      yield* enqueue(session, runId, [
+        { text: 'just text', from: { kind: 'user' as const } },
+        {
+          text: 'with a figure',
+          mediaFiles: [figure],
+          from: { kind: 'user' as const },
+        },
+      ]);
+
+      const { fiber, park } = yield* forkLoop({
+        runId,
+        session,
+        logger,
+        bound: { supportsVision: true },
+        script: [textTurn('first'), textTurn('second')],
+      });
+      yield* park(1);
+      yield* Fiber.interrupt(fiber);
+      rmSync(figure, { force: true });
+
+      expect(info).toHaveBeenCalledWith(
+        'with a figure',
+        expect.objectContaining({
+          data: expect.objectContaining({ attachments: ['image'] }),
+        }),
+      );
+      expect(info).toHaveBeenCalledWith(
+        'just text',
+        expect.not.objectContaining({ data: expect.anything() }),
+      );
+    }),
   );
 
   it.effect(
@@ -824,9 +859,9 @@ describe('the batch a parked run consumes', () => {
           expect.objectContaining({ messageType: expect.any(String) }),
         );
         expect(
-          session.events
-            .pendingFollowUps(rowAggregate(runId))
-            .map((f) => f.content.text),
+          (yield* session.followUps.read(runId)).followUps.map(
+            (f) => f.content.text,
+          ),
         ).toEqual(['use this diagram']);
       }),
   );
@@ -898,9 +933,8 @@ describe('an active goal at the wait', () => {
       Effect.gen(function* () {
         const session = yield* goalSession();
         const runId = startedRun(session);
-        yield* startGoal(session, runId, 'finish the refactor');
-        // The grant an approved plan makes; pausing ends it.
-        setGoalSessionAutoApproval(session, runId, 'commands');
+        // Under the grant an approved plan makes; pausing ends it.
+        yield* startGoal(session, runId, 'finish the refactor', 'commands');
         const recorded = recordSessionEvents(session);
 
         try {
@@ -915,17 +949,13 @@ describe('an active goal at the wait', () => {
 
           expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
           expect(goalOf(session, runId)?.status).toBe('paused');
-          // The cleared bypasses travel as the run's policy snapshot, the
-          // one channel this state has.
+          // The goal's grant ends as the run's next grants row, the one
+          // record of it.
           const policies = eventsOfType(
             yield* Effect.promise(() => recorded.read()),
             'approval.policy',
           );
-          expect(policies.at(-1)?.snapshot.bypasses).toEqual({
-            bash: false,
-            toolEdit: false,
-            superYolo: false,
-          });
+          expect(policies.at(-1)?.snapshot).toEqual({ own: {}, goal: [] });
         } finally {
           yield* clearGoal(session, runId);
           releaseRunResources(runId, session);
@@ -1005,16 +1035,16 @@ describe('the host wiring a run attaches', () => {
         const detach = vi.fn();
         const blockedFs = {
           ...processFs,
-          exists: (target: string) =>
+          stat: (target: string) =>
             path.basename(target) === 'AGENTS.md'
               ? Deferred.succeed(entered, undefined).pipe(
                   Effect.andThen(Deferred.await(release)),
                   Effect.onInterrupt(() =>
                     Deferred.succeed(interrupted, undefined),
                   ),
-                  Effect.andThen(processFs.exists(target)),
+                  Effect.andThen(processFs.stat(target)),
                 )
-              : processFs.exists(target),
+              : processFs.stat(target),
         };
         const fiber = yield* Effect.forkChild(
           loopProgram(

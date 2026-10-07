@@ -3,8 +3,8 @@ import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@settingsView/frontend';
 import { html, render } from 'lit';
 import { z } from 'zod';
-import type { SettingsTarget } from '@shared/settingsView/settingsViewMessages';
-import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin';
+import type { SettingsTarget } from '@texra/shared/settingsView/settingsViewMessages';
+import { resolvePostMessageTargetOrigin } from '@texra/shared/postMessageOrigin';
 import { readSelectValue } from '@ui/wa/selectTemplates';
 
 import { buildDesktopSettingsTabMessage } from '../shared/desktopCommandSurface';
@@ -84,7 +84,7 @@ export function createDesktopSettingsDialog(
   };
   let settingsView = createSettingsView();
 
-  const { dialog, subtitleEl } = createOverlayDialog({
+  const { dialog } = createOverlayDialog({
     appRoot,
     prefix: 'desktop-settings',
     ariaLabel: 'Settings',
@@ -92,7 +92,6 @@ export function createDesktopSettingsDialog(
     title: 'Settings',
     content,
   });
-  subtitleEl.hidden = true;
   dialog.lightDismiss = true;
   // Nested WebAwesome popups (selects, dropdowns) inside the settings view
   // emit their own show/hide events, which bubble; only the dialog's count.

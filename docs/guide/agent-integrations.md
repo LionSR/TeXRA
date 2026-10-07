@@ -182,7 +182,7 @@ The exact error message is shown inline on the row, below its description. Read 
 
 | Message                                        | Fix                                                                                                     |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `@openai/codex-sdk not found`                  | Select **Install in Terminal** again, then **Re-check**.                                                |
+| `@openai/codex-sdk package not found`          | Select **Install in Terminal** again, then **Re-check**.                                                |
 | `Codex SDK loaded but native binary not found` | Reinstall in the same environment as the extension host. On Windows, follow the **Windows** note above. |
 | `Platform not supported`                       | Codex ships native binaries for Linux, macOS, and Windows (`x64` / `arm64`). On other hosts, use WSL.   |
 
@@ -194,7 +194,7 @@ The exact error message is shown inline on the row, below its description. Read 
 
 | Message                                                     | Fix                                                                                                                   |
 | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `@anthropic-ai/claude-agent-sdk not found`                  | Reinstall TeXRA, or run `npm install @anthropic-ai/claude-agent-sdk`, then **Re-check**.                              |
+| `@anthropic-ai/claude-agent-sdk package not found`          | Reinstall TeXRA (in a source checkout, run `corepack pnpm install`), then **Re-check**.                               |
 | `Claude Code SDK loaded but native claude binary not found` | Run `npm install -g @anthropic-ai/claude-code` in the same environment as the extension host (inside WSL on Windows). |
 
 **`claude login` opens a terminal but nothing happens.** The button runs `claude login` in a fresh integrated terminal. Focus the terminal and press **Enter** if the browser didn't open, or paste the login URL manually.

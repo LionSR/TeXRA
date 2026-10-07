@@ -164,6 +164,17 @@ test('splits in both directions, keeps the explorer and agent, and restores the 
   await expect(panel('editor').locator('.view-lines')).toContainText(
     'secondDocument',
   );
+  // Main's file-refresh fix must survive the dock migration: reactivating a
+  // cached clean document reads external edits into the existing model.
+  writeFileSync(
+    join(workspacePath, 'first.ts'),
+    'export const firstDocument = true; // external update\n',
+  );
+  await openFile('first.ts');
+  await expect(panel('editor').locator('.view-lines')).toContainText(
+    'external update',
+  );
+  await openFile('second.ts');
   expect(await panel('files').boundingBox()).toEqual(treeBounds);
   const second = page.locator(
     '.shell-dock-tab[data-tab-id="workbench:editor:second.ts"]',

@@ -1,5 +1,5 @@
 /**
- * Data-style formatters for file lists, missing outputs, latexdiff, and statistics.
+ * Data-style formatters for file lists, missing outputs, and latexdiff.
  * Uses Lit templates for declarative DOM construction.
  *
  * IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates with
@@ -11,7 +11,6 @@
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Side-effect imports to register the custom elements emitted below
-import '@progressView/frontend/components/ContextManagement';
 import '@progressView/frontend/components/LatexdiffResults';
 
 // Third-party imports - Lit template utilities
@@ -25,8 +24,7 @@ import type {
   FileListRow,
   LatexdiffRow,
   MissingOutputsRow,
-  StatisticsRow,
-} from '@ui/transcript';
+} from '@shared/transcript';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { getBasename } from '@utils/core';
 
@@ -108,42 +106,4 @@ export function formatMissingOutputsTemplate(
 export function formatLatexdiffTemplate(row: LatexdiffRow): FormatResult {
   // prettier-ignore
   return html`<latexdiff-results .logId=${row.id} .runId=${ifDefined(row.runId)} .entries=${row.entries}></latexdiff-results>`;
-}
-
-// =============================================================================
-// Statistics Formatter
-// =============================================================================
-
-/**
- * Icon per statistics item key. Labels, ordering, and value formatting are the
- * row's (`StatisticsRow.items`); only the glyph is this host's choice.
- */
-const STAT_ICONS: Record<string, TeXRAIconName> = {
-  inputTokens: 'arrow-up',
-  outputTokens: 'arrow-down',
-  cacheReadInputTokens: 'clock-rotate-left',
-  cacheMissInputTokens: 'cloud-arrow-up',
-  cacheCreationInputTokens: 'floppy-disk',
-  percentageCached: 'chart-line',
-  reasoningTokens: 'comments',
-  toolUseTokens: 'screwdriver-wrench',
-  elapsedTime: 'clock',
-  cost: 'rocket',
-};
-
-/** Format statistics entry as TemplateResult. The heading is the row's
- *  (`StatisticsRow.label`); only the glyph and color are this host's. */
-export function formatStatisticsTemplate(row: StatisticsRow): FormatResult {
-  const items = row.items.map((item) => ({
-    icon: STAT_ICONS[item.key] ?? 'chart-line',
-    label: item.label,
-    value: item.value,
-  }));
-  const config = {
-    icon: 'chart-line',
-    label: row.label,
-    color: 'var(--wa-color-text-normal)',
-  };
-  // prettier-ignore
-  return html`<context-management .logId=${row.id} .items=${items} .config=${config}></context-management>`;
 }

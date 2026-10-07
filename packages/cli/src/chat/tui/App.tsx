@@ -14,20 +14,17 @@ import {
 } from 'react';
 
 // Local imports - shared runtime
+import { type RunId } from '@texra-ai/harness/schemas';
 import { type SessionHandle } from '@agent/runtime';
-import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
   isCtrlInput,
   isEscapeInput,
   metaChordInput,
   rewriteKittyEnterInput,
 } from '@cli/tui/inputKeys';
-import type { ProcessRuntime } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
-import type { SettingsStores } from '@shared/config/settingsAccess';
+import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { acceptsFollowUp } from '@shared/session/sessionView';
-import { type RunId } from '@shared/schemas';
-import type { RuntimeRequest } from '@shared/session/runtimeRequest';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { AGENT_LIST } from '@ui/copy/nestedRuns';
 import {
   APPROVAL_FOREGROUND_MAX_ROWS,
@@ -94,6 +91,8 @@ import {
   runningChildCount,
 } from './state/sessionView';
 import { useSignal } from './state/useSignal';
+import type { ProcessRuntime } from '@texra-ai/harness';
+import type { PlatformSecrets, RuntimeRequest } from '@texra-ai/harness';
 import type { InputHistory } from './history/inputHistory';
 import type { PastedImageEntry } from './input/draftAttachments';
 

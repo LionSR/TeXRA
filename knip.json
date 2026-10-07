@@ -6,10 +6,13 @@
         "src/test-kernel/**/*.vitest.ts",
         "src/test-kernel/support/setupFakePlatform.ts",
         "src/test-kernel/desktop/electronTestStub.ts",
-        "src/agent/codeSandbox/worker.ts!",
         "scripts/**/*.mjs!"
       ],
-      "project": ["src/**/*.{ts,mts}!", "!src/**/*.js", "!src/test-kernel/**!"]
+      "project": ["src/**/*.{ts,mts}!", "!src/**/*.js", "!src/test-kernel/**!"],
+      "ignoreDependencies": [
+        "@electron/asar",
+        "@jitl/quickjs-wasmfile-release-sync"
+      ]
     },
     "packages/extension": {
       "entry": ["src/**/frontend/index.ts!"],
@@ -21,11 +24,14 @@
         "src/node.ts!",
         "src/plugins.ts!",
         "src/schemas.ts!",
+        "src/agent/codeSandbox/worker.ts!",
         "scripts/*.mjs!"
       ],
-      "project": ["src/**/*.{ts,mts}!", "scripts/*.mjs!"]
+      "project": ["src/**/*.{ts,mts}!", "scripts/*.mjs!"],
+      "ignoreDependencies": ["@typescript/native"]
     },
     "packages/llm": {
+      "entry": ["test-live/**/*.ts"],
       "project": ["src/**/*.{ts,mts}!"]
     },
     "packages/cli": {
@@ -35,7 +41,12 @@
         "scripts/{build-bundle,copy-docs,copy-resources}.mjs!",
         "scripts/**/*.{ts,tsx,mjs}"
       ],
-      "project": ["src/**/*.{ts,tsx,mts}!"]
+      "project": ["src/**/*.{ts,tsx,mts}!"],
+      "ignoreDependencies": [
+        "@babel/preset-react",
+        "@babel/preset-typescript",
+        "babel-plugin-react-compiler"
+      ]
     },
     "packages/desktop": {
       "entry": [
@@ -45,7 +56,8 @@
         "tests/**/*.{ts,tsx}",
         "design-harness/**/*.{ts,mjs}"
       ],
-      "project": ["src/**/*.{ts,tsx,mts}!"]
+      "project": ["src/**/*.{ts,tsx,mts}!"],
+      "ignoreDependencies": ["electron-builder"]
     }
   }
 }

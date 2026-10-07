@@ -54,7 +54,6 @@ function compileFailure(
 function roundOutput(overrides: Partial<RoundOutput> = {}): RoundOutput {
   return {
     round: 2,
-    rawOutput: null,
     outputs: [],
     compileFailures: [],
     missingOutputs: [],

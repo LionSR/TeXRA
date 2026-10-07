@@ -9,7 +9,6 @@ import { BashApproval } from './BashApproval';
 import { EditApproval } from './EditApproval';
 import { PlanApproval } from './PlanApproval';
 import { RetryRequest } from './RetryRequest';
-import { ToolOutcomeRequest } from './ToolOutcomeRequest';
 import { UserQuestion } from './UserQuestion';
 import type { ApprovalPayload } from '../state/approvalQueue';
 
@@ -60,14 +59,6 @@ export function ApprovalModal(props: ApprovalModalProps): React.JSX.Element {
         <RetryRequest
           availableRows={availableRows}
           payload={payload}
-          onDecide={onDecide}
-        />
-      );
-    case 'toolOutcome':
-      return (
-        <ToolOutcomeRequest
-          availableRows={availableRows}
-          payload={payload.data}
           onDecide={onDecide}
         />
       );

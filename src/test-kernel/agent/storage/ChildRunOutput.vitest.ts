@@ -42,7 +42,6 @@ function workflowRounds(absolutePath: string): RoundOutput[] {
   return [
     RoundOutputSchema.parse({
       round: 1,
-      rawOutput: null,
       outputs: [
         {
           source: 'draft',
@@ -63,8 +62,6 @@ function workflowRounds(absolutePath: string): RoundOutput[] {
 
 const completedWorkflowResult: DeliveredResult = {
   producer: 'subagent',
-  agentName: 'draft',
-  wallTimeMs: 10,
   output: {
     response: '',
     files: [],
@@ -80,8 +77,8 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
       `executions/${childRunId}/${relativePath}`,
     );
     publishTestRunStart(session, parentId);
-    yield* session.settlePublications();
-    yield* session.commit([
+    yield* session.log.settled;
+    yield* session.log.transact([
       {
         type: 'run.start',
         aggregateId: aggregateId('run', childRunId),
@@ -95,7 +92,7 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
       completedWorkflowResult,
     );
     // How the child ended, and what it declared, is its `run.end` row's.
-    yield* session.commit([
+    yield* session.log.transact([
       {
         type: 'run.end',
         aggregateId: aggregateId('run', childRunId),

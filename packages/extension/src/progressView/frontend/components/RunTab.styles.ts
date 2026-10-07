@@ -238,7 +238,7 @@ export const runTabStyles = css`
     display: none;
   }
 
-  /* The row's Delete: shown on hover or focus. */
+  /* Always-present actions keep renaming/deletion reachable by keyboard and screen reader. */
   .tab-actions {
     display: block;
     width: var(--control-size-s);

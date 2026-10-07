@@ -8,7 +8,3 @@
  * re-exported here.
  */
 export { BundledViewContentProvider } from './BundledViewContentProvider';
-export {
-  getSharedLocalResourceRoots,
-  getCombinedLocalResourceRoots,
-} from './resourceRoots';

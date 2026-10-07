@@ -1,9 +1,9 @@
 /** The agent detail pane's notice on a customized copy whose built-in changed. */
 import { html, nothing, type TemplateResult } from 'lit';
 
-import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { AgentSelectionItem } from '@shared/settingsView/settingsViewMessages';
+import { postMessage } from '@texra/shared/hostBridge';
+import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsBanner } from '@ui/wa/settingsBanner';
 

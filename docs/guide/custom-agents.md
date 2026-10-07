@@ -15,7 +15,7 @@ This guide walks you through creating your own agent definition files (`.yaml`) 
 Before creating a custom agent, it helps to understand the underlying concepts:
 
 - <wa-icon library="texra" name="symbol-structure"></wa-icon> **Agent architecture and execution flow**: the `.yaml` structure, settings, prompts, and how agents run. Read the [Document tasks: how they work](./agent-architecture.md) guide.
-- <wa-icon library="texra" name="sparkle"></wa-icon> **Built-in agents**: the standard agents TeXRA provides, useful as examples and as inheritance parents. Read the [Built-in agent reference](./built-in-agents.md).
+- <wa-icon library="texra" name="sparkle"></wa-icon> **Built-in agents**: the standard agents TeXRA provides, useful as examples. Read the [Built-in agent reference](./built-in-agents.md).
 - <wa-icon library="texra" name="dashboard"></wa-icon> **Agents tab**: browse and manage agent files from the **Agents** tab (<wa-icon library="texra" name="sparkle"></wa-icon>) in the TeXRA Settings.
   :::
 
@@ -50,20 +50,13 @@ Open the new `.yaml` file. A starter template is already inserted. An agent is t
 
 <AgentAnatomyHero />
 
-<p class="hero-caption">An agent file is <code>inherits</code> + a persona (<code>prompt</code>, <code>temperature</code>) + a <code>task</code> block; the <code>task.requests</code> list maps position-by-position onto revisions (<code>requests[0]</code> is Revision 1, <code>requests[1]</code> Revision 2).</p>
+<p class="hero-caption">An agent file is its identity (<code>name</code>, <code>description</code>) + a persona (<code>prompt</code>, <code>temperature</code>) + a <code>task</code> block; the <code>task.requests</code> list maps position-by-position onto revisions (<code>requests[0]</code> is Revision 1, <code>requests[1]</code> Revision 2).</p>
 
 Customize it to define your agent's structure. These are the key fields:
 
 ```yaml
 name: notation_checker # Lowercase letters, underscores, or dashes.
 description: Standardizes notation across the selected documents.
-
-# --- Agent Inheritance (Optional) ---
-# Inherit fields from another agent in the same directory (a custom agent
-# inherits from another custom agent, such as a customized copy of a built-in).
-# The child's fields override the parent's; a `task` block merges field by
-# field, and a list such as `requests` replaces the parent's list.
-# inherits: my_polish
 
 # --- Persona ---
 temperature: 0.1 # Optional, 0 to 1 (default 1.0). Lower is more deterministic.
@@ -161,7 +154,7 @@ task:
 **Key considerations:**
 
 - <wa-icon library="texra" name="symbol-structure"></wa-icon> **Architecture overview:** For the execution flow and how prompts and settings interact, read the [Document tasks: how they work](./agent-architecture.md) guide.
-- <wa-icon library="texra" name="type-hierarchy"></wa-icon> **Inheritance:** Inheriting from a related agent in the same directory (for example a customized copy of `correct` or `polish`) saves effort. Define only the fields you need to change.
+- <wa-icon library="texra" name="type-hierarchy"></wa-icon> **Start from a copy:** Customizing a related built-in agent (for example `correct` or `polish`) gives you a full copy to edit, which saves effort.
 - <wa-icon library="texra" name="files"></wa-icon> **Multiple outputs:** If your agent needs to generate multiple distinct files, make sure your prompts generate the required XML structure. Read the [Handling multiple files](./multiple-output.md) guide.
 - <wa-icon library="texra" name="rocket"></wa-icon> **Start simple:** Begin with basic settings and prompts and add complexity incrementally.
 - <wa-icon library="texra" name="debug-alt"></wa-icon> **Test iteratively:** Test often and review logs in the ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>).
@@ -213,7 +206,7 @@ for a document task that writes two generated output files:
 
 ```yaml
 name: intro_and_conclusion
-inherits: my_polish
+description: Writes an introduction and a conclusion.
 task:
   rewrite: false
   outputs:

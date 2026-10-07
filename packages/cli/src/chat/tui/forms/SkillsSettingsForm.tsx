@@ -1,19 +1,19 @@
 import { Text } from 'ink';
 import { Effect } from 'effect';
 
-import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   ActiveSkillSourceScopeSchema,
   type ActiveSkillSourceScope,
   type SkillDisplayItem,
 } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { applyStateSettingUpdate } from '@shared/settingsView/handlers/stateSettingWrite';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
+import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
 import { AsyncListForm } from './_shared/ListForm';
+import type { ProcessRuntime } from '@texra-ai/harness';
 
 type SkillToggle =
   | { readonly kind: 'source'; readonly scope: ActiveSkillSourceScope }

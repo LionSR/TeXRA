@@ -229,7 +229,7 @@ function interruptedTasksView(): SessionView {
       {
         type: 'run.start',
         identity: { kind: 'agent', agent: 'assistant' },
-        worktree: { workingDirectory: '/paper', branch: 'main' },
+        worktree: { workingDirectory: '/paper' },
         parent: null,
         provenance: null,
         userFollowUpSupport: 'nativeInteractive',
@@ -308,7 +308,7 @@ function forkView(): SessionView {
     log.emit(id, at, {
       type: 'run.start',
       identity: { kind: 'agent', agent: 'assistant' },
-      worktree: { workingDirectory: '/paper', branch: 'main' },
+      worktree: { workingDirectory: '/paper' },
       parent: null,
       provenance,
       userFollowUpSupport: 'nativeInteractive',
@@ -401,23 +401,13 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
   // Two run grants on: the header's read-only chips, each revocable.
   'ext-auto-approve': () => {
     const view = fanOutView();
-    view.policy.set(CHILD, {
-      policy: 'ask',
-      bypasses: { toolEdit: true, bash: true, superYolo: false },
-      own: {},
-      goal: [],
-    });
+    view.policy.set(CHILD, { own: { toolEdit: 'on', bash: 'on' }, goal: [] });
     return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
   },
   // The same grants in the desktop's wide column.
   'desktop-auto-approve': () => {
     const view = fanOutView();
-    view.policy.set(CHILD, {
-      policy: 'ask',
-      bypasses: { toolEdit: true, bash: true, superYolo: false },
-      own: {},
-      goal: [],
-    });
+    view.policy.set(CHILD, { own: { toolEdit: 'on', bash: 'on' }, goal: [] });
     return desktopColumn(view, surface(view, { kind: 'select', runId: CHILD }));
   },
   // Real-ExtensionSession: inside the child, with the ancestor path (its
@@ -587,7 +577,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     log.emit(ROOT, T.root, {
       type: 'run.start',
       identity: { kind: 'agent', agent: 'review' },
-      worktree: { workingDirectory: '/paper', branch: 'main' },
+      worktree: { workingDirectory: '/paper' },
       parent: null,
       provenance: null,
       userFollowUpSupport: 'unsupported',
@@ -614,7 +604,6 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       value: {
         rounds: [0, 1].map((round) => ({
           round,
-          rawOutput: null,
           outputs: [],
           compileFailures: [],
           missingOutputs: [],

@@ -119,10 +119,8 @@ export function traceFrame(
     host: traceHost(trace),
     debug: subscribe.debug,
     replayComplete: true,
-    blocked: [],
     existence: {
       checkedAggregateIds,
-      removedAggregateIds: [],
       claims: checkedAggregateIds.map((aggregateId) => ({
         aggregateId,
         ownerId: null,

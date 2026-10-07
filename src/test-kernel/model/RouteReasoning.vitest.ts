@@ -2,13 +2,10 @@ import { describe, expect, it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { lookup, ReasoningEffort as E, type ModelConfig } from 'llm-zoo';
 
-import {
-  chooseReasoning,
-  modelFileName,
-  type ReasoningRequest,
-} from '@texra-ai/llm';
+import { chooseReasoning, type ReasoningRequest } from '@texra-ai/llm';
 import { reasoningFor, type ReasoningRoute } from '@model/reasoningLevel';
 
+import { modelFileName } from '@shared/constants/workflowOutput';
 import { FakeStateStore } from '../support/FakePlatform';
 
 const model = (ref: string): ModelConfig => {

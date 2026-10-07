@@ -20,12 +20,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import {
-  installWebviewRuntime,
-  WebviewSessions,
-} from '@controllers/session/webviewSessionLayer';
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
-import { toSignal, type StreamSignal } from '@shared/signals';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import {
   DownMessageSchema,
@@ -37,6 +32,11 @@ import {
   type UpMessage,
 } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
+import { toSignal, type StreamSignal } from '@texra/shared/signals';
+import {
+  installWebviewRuntime,
+  WebviewSessions,
+} from '@texra/controllers/session/webviewSessionLayer';
 
 /** One session's graph as `WebviewSessions.open` hands it out. */
 type WebviewGraph = Effect.Success<ReturnType<typeof WebviewSessions.open>>;

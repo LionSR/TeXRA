@@ -2,18 +2,20 @@
 
 import fs from 'node:fs';
 import process from 'node:process';
-import { parseArgs as parseCittyArgs } from 'citty';
+import { parseArgs as parseNodeArgs } from 'node:util';
+
 import semver from 'semver';
 
 import { readJson } from './extension-package-utils.mjs';
 
+// The app's manifests. `@texra-ai/harness` and `@texra-ai/llm` are versioned
+// on their own, as the npm packages they are, so a release leaves them be.
 const MANIFEST_PATHS = [
   'package.json',
-  'packages/harness/package.json',
   'packages/cli/package.json',
   'packages/desktop/package.json',
   'packages/extension/package.json',
-  'packages/llm/package.json',
+  'packages/texra/package.json',
 ];
 
 // Accept the canonical extension tag (`v0.38.9`), the CLI tag (`cli-v0.38.9`),
@@ -34,7 +36,7 @@ const PRERELEASE_ID = 'preview';
 // train (see release.yml's publish gate), so a 1.x rollover skips one.
 const MAX_PATCH_VERSION = 10;
 
-const ARGS_DEF = {
+const OPTIONS = {
   check: { type: 'boolean', default: false },
   from: { type: 'string' },
   version: { type: 'string' },
@@ -63,33 +65,14 @@ function fail(message) {
   process.exit(1);
 }
 
-const KNOWN_FLAGS = new Set(Object.keys(ARGS_DEF).map((name) => `--${name}`));
-
 function parseArgs(argv) {
-  // citty's parser is intentionally lenient about unrecognized flags (it
-  // mirrors node:util's non-strict mode), so reject them ourselves before
-  // handing off — a typo'd flag should fail loudly, not fall through. This
-  // must also catch single-dash tokens: node:util's non-strict parser reads
-  // an unrecognized `-xyz` as bundled short flags (`-x -y -z`) rather than
-  // an error, so e.g. a `-check` typo would otherwise vanish silently
-  // instead of rejecting — and this script has no single-character flags,
-  // so any `-`-prefixed token that isn't a known long flag is a typo.
-  for (const token of argv) {
-    if (token.startsWith('-') && !KNOWN_FLAGS.has(token)) {
-      fail(`Unknown argument: ${token}`);
-    }
-  }
-
+  // Strict: an unknown flag (a `-check` typo included) or a stray positional
+  // fails loudly instead of falling through.
   let args;
   try {
-    args = parseCittyArgs(argv, ARGS_DEF);
+    ({ values: args } = parseNodeArgs({ args: argv, options: OPTIONS }));
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error));
-  }
-
-  const unknown = args._.filter((token) => token !== '--');
-  if (unknown.length > 0) {
-    fail(`Unknown argument: ${unknown[0]}`);
   }
 
   if ((args.from == null) === (args.version == null)) {

@@ -1,0 +1,209 @@
+// Third-party imports
+import { Effect } from 'effect';
+import { z } from 'zod';
+
+// Internal imports
+import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import { convertToolSchema } from '@agent/core/tools/toolSchema';
+import {
+  ToolError,
+  JsonValueSchema,
+  STRUCTURED_OUTPUT_TOOL_NAME,
+  type ToolResult,
+} from '@shared/schemas';
+
+// Local file imports
+import { defineTool } from './core/define';
+
+type StructuredOutputSchema = {
+  readonly jsonSchema: Record<string, unknown>;
+  readonly zodSchema: z.ZodType;
+};
+
+// A sandbox schema crosses into host Zod compilation via z.fromJSONSchema, so
+// an unbounded tree is a host DoS. These caps keep compilation cheap; 12 levels
+// / 1000 nodes comfortably cover real structured-output shapes while refusing
+// pathological input.
+const MAX_SANDBOX_SCHEMA_DEPTH = 12;
+const MAX_SANDBOX_SCHEMA_NODES = 1000;
+// The node/depth caps count object nodes only, so scalar-heavy keywords the
+// walker does not recurse into (a million-element `enum`, huge `required` /
+// `examples` / `description`) would still reach z.fromJSONSchema unbounded. A
+// serialized-size cap bounds the whole payload; 128 KiB dwarfs any real schema.
+const MAX_SANDBOX_SCHEMA_BYTES = 128 * 1024;
+
+// Property names that could reach Object.prototype when z.fromJSONSchema builds
+// the schema object.
+const FORBIDDEN_SCHEMA_PROPERTY_KEYS = [
+  '__proto__',
+  'constructor',
+  'prototype',
+];
+
+// Schema keywords the walker recurses into, grouped by the shape of their
+// value: a single subschema, an array of subschemas, or a record of them.
+const SUBSCHEMA_KEYS = [
+  'additionalItems',
+  'additionalProperties',
+  'contains',
+  'else',
+  'if',
+  'items',
+  'not',
+  'propertyNames',
+  'then',
+  'unevaluatedItems',
+  'unevaluatedProperties',
+];
+const SUBSCHEMA_LIST_KEYS = ['allOf', 'anyOf', 'oneOf', 'prefixItems'];
+const SUBSCHEMA_RECORD_KEYS = [
+  '$defs',
+  'definitions',
+  'dependentSchemas',
+  'dependencies',
+  'properties',
+];
+
+/**
+ * Guard a JSON Schema authored inside a workflow sandbox (untrusted) before it
+ * crosses into host Zod compilation via z.fromJSONSchema. Walking the schema it
+ * rejects: `pattern`/`patternProperties`/`format` (Zod compiles these to host
+ * RegExps, a catastrophic-backtracking ReDoS vector); `$ref`/`$dynamicRef`
+ * (external/recursive resolution surprises; inline the definition instead);
+ * prototype-polluting property keys; and trees past the node/depth caps.
+ */
+function assertSafeSandboxSchema(schema: unknown): void {
+  if (JSON.stringify(schema).length > MAX_SANDBOX_SCHEMA_BYTES) {
+    throw new Error(
+      `Structured output JSON Schema exceeds the ${MAX_SANDBOX_SCHEMA_BYTES}-byte size limit.`,
+    );
+  }
+  let nodeCount = 0;
+  const walk = (node: unknown, depth: number): void => {
+    if (node === null || typeof node !== 'object') return;
+    if (depth > MAX_SANDBOX_SCHEMA_DEPTH) {
+      throw new Error(
+        `Structured output JSON Schema is nested deeper than the ${MAX_SANDBOX_SCHEMA_DEPTH}-level limit.`,
+      );
+    }
+    nodeCount += 1;
+    if (nodeCount > MAX_SANDBOX_SCHEMA_NODES) {
+      throw new Error(
+        `Structured output JSON Schema exceeds the ${MAX_SANDBOX_SCHEMA_NODES}-node limit.`,
+      );
+    }
+    if (Array.isArray(node)) {
+      for (const child of node) walk(child, depth + 1);
+      return;
+    }
+    const record = node as Record<string, unknown>;
+    if ('pattern' in record || 'patternProperties' in record) {
+      throw new Error(
+        'Structured output JSON Schema cannot use pattern or patternProperties.',
+      );
+    }
+    if ('format' in record) {
+      throw new Error('Structured output JSON Schema cannot use format.');
+    }
+    if ('$ref' in record || '$dynamicRef' in record) {
+      throw new Error(
+        'Structured output JSON Schema cannot use $ref; inline the definition instead.',
+      );
+    }
+
+    for (const key of SUBSCHEMA_KEYS) {
+      walk(record[key], depth + 1);
+    }
+    for (const key of SUBSCHEMA_LIST_KEYS) {
+      const branches = record[key];
+      if (Array.isArray(branches)) {
+        for (const branch of branches) walk(branch, depth + 1);
+      }
+    }
+    for (const key of SUBSCHEMA_RECORD_KEYS) {
+      const schemas = record[key];
+      if (schemas !== null && typeof schemas === 'object') {
+        for (const name of Object.keys(schemas)) {
+          if (FORBIDDEN_SCHEMA_PROPERTY_KEYS.includes(name)) {
+            throw new Error(
+              `Structured output JSON Schema cannot declare a "${name}" property.`,
+            );
+          }
+        }
+        for (const child of Object.values(schemas)) walk(child, depth + 1);
+      }
+    }
+  };
+  walk(schema, 0);
+}
+
+/**
+ * Normalize a structured-output schema at its boundary. Both live Zod schemas
+ * and sandbox JSON Schema land on the same Zod validation path and the same
+ * provider-facing object schema conversion.
+ */
+export function normalizeStructuredOutputSchema(
+  input: z.ZodType | Record<string, unknown>,
+): StructuredOutputSchema {
+  const fromZod = input instanceof z.ZodType;
+  if (!fromZod) assertSafeSandboxSchema(input);
+  const zodSchema = fromZod ? input : (z.fromJSONSchema(input) as z.ZodType);
+  const jsonSchema = convertToolSchema({
+    name: STRUCTURED_OUTPUT_TOOL_NAME,
+    zodSchema,
+  });
+  if (jsonSchema?.type !== 'object') {
+    const got =
+      typeof jsonSchema?.type === 'string'
+        ? `type "${jsonSchema.type}"`
+        : 'no object root';
+    throw new Error(
+      `Structured output schema must be an object at the root (got ${got}). Wrap a scalar or array result in an object property.`,
+    );
+  }
+  return { jsonSchema, zodSchema };
+}
+
+/**
+ * Build a terminal tool from a normalized structured-output schema.
+ *
+ * The guarantee is the tool layer's own spine: `defineTool` validates
+ * the model's call before `execute` runs, and an invalid call surfaces a
+ * `ZodError` the model self-corrects. `execute` then enforces the persisted
+ * JSON-value contract and returns it as the result's `value`: the settled
+ * result is the run's structured output (`RunState.structured`).
+ */
+export function buildTerminalTool(
+  input: z.ZodType | Record<string, unknown>,
+): ITool<Error, never> {
+  const { zodSchema } = normalizeStructuredOutputSchema(input);
+
+  // Built per run, so `captured` belongs to this run's loop alone.
+  let captured = false;
+  return defineTool<unknown, never>({
+    name: STRUCTURED_OUTPUT_TOOL_NAME,
+    description:
+      'Submit the final result. Call this exactly once, with the complete result, when the task is done.',
+    schema: zodSchema,
+    // A repeated call and a malformed payload are the call's own failures,
+    // the latter keeping its Zod issues for the model's diagnostics.
+    execute: (input) =>
+      Effect.suspend(() => {
+        if (captured) {
+          return Effect.fail(
+            new ToolError('submit_output can only be accepted once per run.'),
+          );
+        }
+        const parsed = JsonValueSchema.safeParse(input);
+        if (!parsed.success) return Effect.fail(parsed.error);
+        captured = true;
+        return Effect.succeed<ToolResult>({
+          status: 'executed',
+          endTurn: true,
+          value: parsed.data,
+          summary: 'Structured output captured.',
+          output: 'Structured output captured.',
+        });
+      }),
+  });
+}

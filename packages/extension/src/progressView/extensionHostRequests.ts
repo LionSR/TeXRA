@@ -14,91 +14,58 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Effect, FileSystem } from 'effect';
 
-import type { SessionHandle } from '@agent/runtime';
-import { handleMerge } from '@commands/agent/mergeCommands';
-import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
-import {
-  createFileSelectionPickers,
-  getCurrentFile,
-} from '@commands/files/fileSelectionCommands';
-import { openFile, openLabel } from '@commands/files/openFileCommands';
-import { findCommitInHistory } from '@commands/git/gitCommands';
-import { handleClean } from '@commands/housekeeping/cleanCommands';
-import { handlePack } from '@commands/housekeeping/packCommands';
-import {
-  handleAcceptEdited,
-  handleCompare,
-} from '@commands/latex/compareCommands';
-import {
-  handleLatexdiff,
-  handleLatexdiffCommitAction,
-  handleRunLatexdiff,
-} from '@commands/latex/latexdiffCommands';
-import { getIncludedExtensions } from '@common/files/fileTypeUtils';
-import type { SessionBackend } from '@controllers/session/sessionBackend';
-import type { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
-import { normalizeMainViewFileExtension } from '@controllers/mainView/MainViewDroppedFilesController';
-import { ChatExportController } from '@controllers/progressView/ChatExportController';
-import {
-  exportRunTranscript,
-  TRANSCRIPT_EXPORT_FORMAT_CHOICES,
-  type TranscriptExportOpenKind,
-} from '@controllers/progressView/exportTranscript';
-import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
-import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
-import { ApiKeyPromptFailed } from '@controllers/progressView/ProgressApiKeyRetryController';
-import {
-  fromHost,
-  hostFailure,
-  type HostCallFailed,
-} from '@controllers/session/hostCallFailure';
-import {
-  createHostRunActions,
-  type HostRunActionPorts,
-} from '@controllers/session/hostRunActions';
-import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
-import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
-import {
-  handleSharedHostRequest,
-  isSharedHostRequest,
-  type SharedHostRequestBindings,
-  type SharedHostRequestPorts,
-} from '@controllers/session/sharedHostRequests';
-import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
-import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
-import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
-import { ExternalOpenFailed } from '@hosts/uiHosts';
-import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
-import { withLogChannel } from '@logger/effectLog';
-import { loadModelOptions } from '@model/setupCredentialAccess';
 import {
   AgentDirectories,
   type StateStore,
   type StateReadFailed,
   type StateWriteFailed,
-} from '@platform/interfaces';
-import type { LanguageModel } from '@platform/languageModel';
+  Cancelled,
+  Rejected,
+  type HostRequestFailure,
+  type RequestRefusal,
+  PlatformSecrets,
+  LanguageModel,
+} from '@texra-ai/harness';
 import {
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
-} from '@platform/processRuntime';
+} from '@texra-ai/harness';
+import type { SessionHandle } from '@agent/runtime';
+import {
+  handleLatexdiff,
+  handleLatexdiffCommitAction,
+  handleRunLatexdiff,
+} from '@commands/latex/latexdiffCommands';
+import {
+  handleAcceptEdited,
+  handleCompare,
+} from '@commands/latex/compareCommands';
+import { handlePack } from '@commands/housekeeping/packCommands';
+import { handleClean } from '@commands/housekeeping/cleanCommands';
+import { findCommitInHistory } from '@commands/git/gitCommands';
+import { openFile, openLabel } from '@commands/files/openFileCommands';
+import {
+  createFileSelectionPickers,
+  getCurrentFile,
+} from '@commands/files/fileSelectionCommands';
+import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
+import { handleMerge } from '@commands/agent/mergeCommands';
+import { getIncludedExtensions } from '@common/files/fileTypeUtils';
+import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
+import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
+import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
+import { withLogChannel } from '@logger/effectLog';
 import { withSessionFs, WorkspaceFs, type StorageFs } from '@platform/rootedFs';
-import type { PlatformSecrets } from '@platform/secrets';
 import latexPreamble from '@resources/templates/chatExport.tex';
+import type { HostRequest } from '@shared/session/hostRequest';
 import {
   GETTING_STARTED_COMMANDS,
   isMultipleDocumentFileType,
   type RunId,
 } from '@shared/schemas';
-import type { HostRequest } from '@shared/session/hostRequest';
-import {
-  Cancelled,
-  Rejected,
-  type HostRequestFailure,
-  type RequestRefusal,
-} from '@shared/session/requestErrors';
 import type {
   HostOutcome,
   SurfaceActionMessage,
@@ -107,15 +74,46 @@ import {
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
+import { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import { pathToLocationIn } from '@utils/files/fileLocation';
+import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
+import { normalizeMainViewFileExtension } from '@texra/controllers/mainView/MainViewDroppedFilesController';
+import { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
+import {
+  exportRunTranscript,
+  TRANSCRIPT_EXPORT_FORMAT_CHOICES,
+  type TranscriptExportOpenKind,
+} from '@texra/controllers/progressView/exportTranscript';
+import { ApiKeyPromptFailed } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
+import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
+import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
+import {
+  fromHost,
+  hostFailure,
+  type HostCallFailed,
+} from '@texra/controllers/session/hostCallFailure';
+import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
+import {
+  createHostRunActions,
+  type HostRunActionPorts,
+} from '@texra/controllers/session/hostRunActions';
+import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
+import {
+  handleSharedHostRequest,
+  isSharedHostRequest,
+  type SharedHostRequestBindings,
+  type SharedHostRequestPorts,
+} from '@texra/controllers/session/sharedHostRequests';
+import { loadModelOptions } from '@texra/model/setupCredentialAccess';
+import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies';
+import { getToolDocsPage } from '@texra/utils/system/toolChecks';
 import {
   locateInWorkspace,
   workspaceRelativePath,
 } from '@utils/files/workspaceFS';
-import { checkCoreDependencies } from '@utils/system/checkCoreDependencies';
-import { getToolDocsCommand } from '@utils/system/toolUtils';
+import { pathToLocationIn } from '@utils/files/fileLocation';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const CHANNEL = 'ExtensionHostRequests';
@@ -203,8 +201,7 @@ function commandVerb(command: string, ...args: unknown[]) {
   return Effect.asVoid(runCommand(command, ...args));
 }
 
-/** The typed notification surface the run-action ports, the launch host, and
- *  the transcript export ports take. */
+/** This window's `host.request` handler over its ports. */
 export function createExtensionHostRequests(
   options: ExtensionHostRequestsOptions,
 ): ExtensionHostRequests {
@@ -474,7 +471,7 @@ export function createExtensionHostRequests(
               patch: { commit: parsed.commitHash },
             });
           } else {
-            void runtime.runFork(
+            runtime.runFork(
               vscodeUi.showInfoMessage(
                 `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
               ),
@@ -493,7 +490,7 @@ export function createExtensionHostRequests(
             yield* snapshot.refreshFiles;
             return { kind: 'files', paths: [parsed.sourcePath] } as HostOutcome;
           }
-          void runtime.runFork(
+          runtime.runFork(
             vscodeUi.showInfoMessage(
               `The base file ${parsed.sourcePath} could not be found. Keeping ${currentOpenFile} selected.`,
             ),
@@ -595,14 +592,7 @@ export function createExtensionHostRequests(
     openAgentSettings: commandVerb('texra.showAgents'),
     openCustomAgentDirectory: Effect.gen(function* () {
       const dir = yield* (yield* AgentDirectories).custom();
-      if (dir) {
-        yield* fromHost('revealFileInOS', () =>
-          vscode.commands.executeCommand(
-            'revealFileInOS',
-            vscode.Uri.file(dir),
-          ),
-        );
-      }
+      if (dir) yield* commandVerb('revealFileInOS', vscode.Uri.file(dir));
     }),
     openAgentDocs: commandVerb('texra.openDoc', 'custom-agents'),
     recheckDependencies: Effect.gen(function* () {
@@ -611,16 +601,15 @@ export function createExtensionHostRequests(
     }),
     openInstallGuide: (tool) =>
       Effect.gen(function* () {
-        const docsCommand = getToolDocsCommand(tool);
-        if (!docsCommand) {
+        const page = getToolDocsPage(tool);
+        if (!page) {
           return yield* Effect.fail(
             new Rejected({
               reason: `No install guide is registered for ${tool}.`,
             }),
           );
         }
-        const [command, ...args] = docsCommand.split(',');
-        yield* runCommand(command, ...args);
+        yield* commandVerb('texra.openDoc', page);
       }),
     gettingStarted: (action) =>
       Effect.gen(function* () {

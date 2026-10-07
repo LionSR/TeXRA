@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { normalizeToolUse } from '@shared/toolUse';
 
-describe('normalizeToolUse (src/shared/toolUse.ts)', () => {
+describe('normalizeToolUse (packages/harness/src/shared/toolUse.ts)', () => {
   it('extracts toolName, input, and output text from a flat payload', () => {
     const normalized = normalizeToolUse({
       toolName: 'Bash',

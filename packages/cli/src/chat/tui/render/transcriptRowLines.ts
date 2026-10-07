@@ -1,6 +1,6 @@
 // Terminal paint of a shared transcript row's body.
 //
-// `@ui/transcript` carries every text untruncated plus the measurements
+// `@shared/transcript` carries every text untruncated plus the measurements
 // needed to elide it; this module is where the terminal spends its own budget
 // — a head/tail line slice with a `N lines hidden` marker, and a terminal-safe pass
 // over text a producer wrote. Nothing here truncates the model.
@@ -14,7 +14,7 @@ import {
   type StatItem,
   type TranscriptRow,
   type TranscriptText,
-} from '@ui/transcript';
+} from '@shared/transcript';
 import { formatBytes } from '@utils/text/stringUtils';
 
 // A body block can be arbitrarily large (a 50 KB tool dump, a long error
@@ -115,8 +115,6 @@ export function transcriptRowBodyLines(
               entry.message ? ` — ${entry.message}` : ''
             }`,
         );
-      case 'statistics':
-        return statItemLines(row.items);
       case 'contextManagement':
         return [
           ...statItemLines(row.items),

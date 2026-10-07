@@ -43,6 +43,7 @@ import {
 } from '@agent/runtime/executeAgent';
 import { runWithLaunchGuard } from '@agent/runtime/runLaunchGuard';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
   RUN_OUTCOME,
   RUN_PHASE,
@@ -113,13 +114,13 @@ const captureStartedLaunch = Effect.fn(function* (
       Effect.gen(function* () {
         if (options.parentRunId) {
           publishTestRunStart(session, options.parentRunId);
-          yield* session.settlePublications();
+          yield* session.log.settled;
         }
         if (options.resumedRunId) {
           publishTestRunStart(session, options.resumedRunId, {
             parent: options.parentRunId ?? null,
           });
-          yield* session.settlePublications();
+          yield* session.log.settled;
         }
         const recordedSession = recordSessionEvents(session);
 
@@ -157,14 +158,6 @@ const captureStartedLaunch = Effect.fn(function* (
           'run.end',
         );
         expect(ends).toHaveLength(1);
-        if (options.resumedRunId) {
-          // No `run.start` re-stamps the policy, so the activation does: the
-          // view shows what enforcement holds for the resumed run.
-          const view = yield* session.readView([options.resumedRunId]);
-          expect(view.policy.get(options.resumedRunId)).toStrictEqual(
-            session.approvalPolicySnapshotFor(options.resumedRunId),
-          );
-        }
         return {
           session,
           start: starts[0],
@@ -196,9 +189,7 @@ function expectStartedThenFailed(
       parentRunId === undefined
         ? null
         : expect.objectContaining({ id: parentRunId }),
-    approvalPolicy: launch.session.approvalPolicySnapshotFor(
-      runOf(start.aggregateId),
-    ),
+    approvalPolicy: NO_APPROVAL_GRANTS,
   });
   expectActivatedThenFailed(launch);
   expect(launch.end.aggregateId).toBe(start.aggregateId);
@@ -213,7 +204,7 @@ function expectActivatedThenFailed(launch: StartedLaunch): void {
     aggregateId: launch.activate.aggregateId,
   });
   expect(
-    launch.session.runView(runOf(launch.activate.aggregateId))?.status,
+    launch.session.view.run(runOf(launch.activate.aggregateId))?.status,
   ).toBe(RUN_PHASE.FAILED);
 }
 
@@ -350,7 +341,7 @@ describe('native agent launch activation', () => {
         yield* Deferred.await(descriptionStarted);
         yield* Deferred.succeed(gate, 'Fixing grammar in the introduction');
         expect(yield* Fiber.join(failure)).toBe(RUN_FAILURE);
-        const view = yield* session.readView([DESCRIPTION_RUN_ID]);
+        const view = yield* session.view.read([DESCRIPTION_RUN_ID]);
         expect(view.runs.get(DESCRIPTION_RUN_ID)?.description).toBe(
           'Fixing grammar in the introduction',
         );

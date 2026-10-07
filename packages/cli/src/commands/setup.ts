@@ -1,8 +1,8 @@
 import { Effect } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
@@ -79,7 +79,7 @@ export const setupCommand = withUsageSections(
     meta: {
       name: 'setup',
       description:
-        'Guided setup with the setup agent: environment, agents, and your first task (sign-in, ChatGPT, or API key first)',
+        'Guided setup with the setup agent: environment, agents, and your first task (ChatGPT or an API key first)',
     },
     args: {
       ...INTERACTIVE_GLOBAL_ARGS,

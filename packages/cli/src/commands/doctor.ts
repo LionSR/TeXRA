@@ -1,8 +1,8 @@
 import { defineCommand } from 'citty';
 import { Cause, Effect, Exit } from 'effect';
 
+import { withProcessServices } from '@texra-ai/harness';
 import { nodePlatformServices } from '@platform/defaults/nodePlatform';
-import { withProcessServices } from '@platform/processRuntime';
 import { usageLoggingOptOut } from '@telemetry/UsageLogService';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
@@ -73,7 +73,7 @@ const DOCTOR_ARGS = {
   'prune-storage': {
     type: 'boolean',
     description:
-      'List the workspace stores whose project is gone and old aside copies of history, and delete them once confirmed',
+      'List the workspace stores whose project is gone and the aside copies of session stores, and delete them once confirmed',
   },
   yes: {
     type: 'boolean',

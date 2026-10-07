@@ -1,10 +1,12 @@
 import { type BrowserWindow } from 'electron';
 import { Effect, type Scope, Stream, SubscriptionRef } from 'effect';
-import type { SessionHandle } from '@agent/runtime';
+import type { SessionViewAccess } from '@agent/runtime';
 import { formatSessionTitle, NATIVE_WINDOW_TITLE } from '@shared/sessionTitle';
 import { sessionActivity } from '@shared/session/sessionView';
 
-type DesktopTitleSession = Pick<SessionHandle, 'view' | 'viewChanges'>;
+type DesktopTitleSession = {
+  readonly view: Pick<SessionViewAccess, 'ref' | 'changes'>;
+};
 
 type DesktopTitleWindow = Pick<
   BrowserWindow,
@@ -19,7 +21,7 @@ export function getDesktopWindowTitle(
 ): string {
   return formatSessionTitle(
     projectName,
-    sessionActivity(SubscriptionRef.getUnsafe(session.view)),
+    sessionActivity(SubscriptionRef.getUnsafe(session.view.ref)),
     { style: NATIVE_WINDOW_TITLE },
   );
 }
@@ -52,7 +54,7 @@ export function installDesktopWindowTitle(
       event.preventDefault();
     };
 
-    yield* Stream.runForEach(session.viewChanges, () =>
+    yield* Stream.runForEach(session.view.changes, () =>
       Effect.sync(update),
     ).pipe(
       Effect.catchCause((cause) =>

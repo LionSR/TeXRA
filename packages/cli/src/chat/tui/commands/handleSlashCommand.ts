@@ -1,6 +1,5 @@
 import { Cause, Effect } from 'effect';
 
-import type { ProcessServices } from '@platform/processRuntime';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { setTransientNotice } from '../state/cliState';
@@ -21,6 +20,7 @@ import {
   suggestSlashCommand,
   type SlashCommand,
 } from './slashRegistry';
+import type { ProcessServices } from '@texra-ai/harness';
 
 /**
  * Run a command body with centralized echo and error persistence. A typed

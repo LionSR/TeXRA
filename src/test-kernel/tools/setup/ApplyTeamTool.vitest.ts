@@ -25,7 +25,7 @@ import {
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import { ApplyTeamTool } from '@tools/setup/ApplyTeamTool';
+import { ApplyTeamTool } from '@texra/tools/setup/ApplyTeamTool';
 
 // Local file imports
 import { createFakeSetupPlatform } from './fixtures';
@@ -71,10 +71,6 @@ beforeAll(async () => {
         builtIn: () =>
           Effect.sync(() =>
             resolve(REPO_ROOT, 'packages/extension/resources/agents'),
-          ),
-        builtInToolUse: () =>
-          Effect.sync(() =>
-            resolve(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
           ),
       },
     },

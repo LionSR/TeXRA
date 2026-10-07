@@ -26,7 +26,7 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
  * The `FileSystem`, `Path` and `ChildProcessSpawner` services
- * `installProcessRuntime` provides once per process, for a suite that runs a
+ * `processLayer` provides once per process, for a suite that runs a
  * real-filesystem or child-process program on `it.effect`'s own runtime
  * rather than the installed one. The spawner is the harness's lazy one.
  */
@@ -76,7 +76,7 @@ export function unusedGlobalStorageFs(): Layer.Layer<GlobalStorageFs> {
 
 /**
  * The process's cross-workspace storage view over `root` — what
- * `installProcessRuntime` serves as `GlobalStorageFs` — for a suite that runs
+ * `processLayer` serves as `GlobalStorageFs` — for a suite that runs
  * one of its consumers on `it.effect`'s own runtime.
  */
 export function globalStorageFsTestLayer(

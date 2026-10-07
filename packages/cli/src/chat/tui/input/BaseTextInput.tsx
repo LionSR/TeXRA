@@ -17,7 +17,6 @@ import {
   metaChordInput,
 } from '@cli/tui/inputKeys';
 import { isTuiColorEnabled } from '@cli/tui/noColorOutput';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import {
   clampCursor,
   insertText,
@@ -34,6 +33,7 @@ import {
 } from './textInputBindings';
 import { ImagePasteQueue } from './imagePasteQueue';
 import { useActiveDraft } from './activeDraft';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
 
 const IMAGE_PASTE_TIMEOUT_MS = 15_000;
 

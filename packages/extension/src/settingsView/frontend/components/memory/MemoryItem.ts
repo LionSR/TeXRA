@@ -19,10 +19,10 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports - shared styles
 import type { MemoryViewItem } from '@shared/tools/memoryView';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { postMessage } from '@shared/hostBridge';
-import { DetailsOpenController } from '@shared/litControllers/DetailsOpenController';
-import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 import type { TeXRAIconName } from '@shared/iconNames';
+import { postMessage } from '@texra/shared/hostBridge';
+import { DetailsOpenController } from '@texra/shared/litControllers/DetailsOpenController';
+import { getLightweightMd } from '@texra/shared/highlighting/lightweightMd';
 import { markdownStyles } from '@ui/styles/markdownStyles';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButtonParts } from '@ui/wa/actionButtons';

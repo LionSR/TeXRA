@@ -16,12 +16,9 @@ import {
   type LogEntry,
   type LogSink as HostLogSink,
 } from '@logger/logSink';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-
-// Local file imports
-import { bestEffortStreamWrite } from './bestEffortStreamWrite';
+import type { ProcessRuntime } from '@texra-ai/harness';
 
 const closed = { stdout: false, stderr: false };
 
@@ -62,6 +59,16 @@ let logRuntime: ProcessRuntime | null = null;
 
 export function setCliLogRuntime(runtime: ProcessRuntime | null): void {
   logRuntime = runtime;
+}
+
+/** A synchronous throw from `write` (including `JSON.stringify` in the
+ *  thunk) marks the stream closed and settles, never crashes the process. */
+function bestEffortStreamWrite(write: () => void, onSyncThrow: () => void) {
+  try {
+    write();
+  } catch {
+    onSyncThrow();
+  }
 }
 
 // CLI output is best effort, and a fire-and-forget write has nothing to wait

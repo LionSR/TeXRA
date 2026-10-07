@@ -9,12 +9,12 @@ import {
   fakeProcessServices,
 } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
-import { getListOfFiles, getPromptFileName } from '@utils/prompt';
-import { getXmlFormatFromReadableFiles } from '@utils/files/varsUtils';
 import {
   getExtractedDocOutputFileName,
   getSafeDocumentRelativePath,
-} from '@utils/files/outputFileUtils';
+} from '@texra/utils/files/outputFileUtils';
+import { getListOfFiles, getPromptFileName } from '@utils/prompt';
+import { getXmlFormatFromReadableFiles } from '@utils/files/varsUtils';
 
 describe('workflow prompt file names', () => {
   setupPlatform({

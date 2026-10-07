@@ -4,24 +4,20 @@ import * as vscode from 'vscode';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime';
-import {
-  BundledViewContentProvider,
-  getSharedLocalResourceRoots,
-} from '@common/webview';
-import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
-import { DisposableStore } from '@platform/disposable';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import type { StateStore } from '@platform/interfaces';
-import type { PlatformSecrets } from '@platform/secrets';
+import { BundledViewContentProvider } from '@common/webview';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { SettingsTarget } from '@shared/settingsView/settingsViewMessages';
+import { DisposableStore } from '@texra/platform/disposable';
+import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
+import type { SettingsTarget } from '@texra/shared/settingsView/settingsViewMessages';
 
 // Local file imports
 import {
   postToWebview,
   SettingsViewMessageHandler,
 } from './SettingsViewMessageHandler';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
+import type { PlatformSecrets, StateStore } from '@texra-ai/harness';
 
 function isReadyMessage(message: unknown): boolean {
   return (
@@ -46,7 +42,7 @@ export class SettingsViewProvider {
   private readonly messageHandler: SettingsViewMessageHandler;
 
   constructor(
-    private readonly context: vscode.ExtensionContext,
+    context: vscode.ExtensionContext,
     globalState: StateStore,
     secrets: PlatformSecrets,
     private readonly runtime: ProcessRuntime,
@@ -93,10 +89,7 @@ export class SettingsViewProvider {
           {
             enableScripts: true,
             retainContextWhenHidden: true,
-            localResourceRoots: getSharedLocalResourceRoots(
-              this.context,
-              'settingsView',
-            ),
+            localResourceRoots: this.contentProvider.localResourceRoots,
           },
         );
         panel.iconPath = new vscode.ThemeIcon('gear');

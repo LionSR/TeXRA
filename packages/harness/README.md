@@ -3,9 +3,9 @@
 The embeddable [TeXRA](https://texra.ai) agent runtime: run a TeXRA agent from a
 Node program and consume its trace as a stream.
 
-> **Not published to npm.** This package builds and is consumed inside the
-> repository; the publish job is deliberately disabled until a named external
-> consumer exists. The surface below is real and typechecked, but it is **not
+> **Not published to npm yet.** This package builds, packs and is consumed
+> inside the repository; publication is planned for TeXRA 1.0. It is versioned
+> on its own (`0.1.0`), not with the app. The surface below is real and typechecked, but it is **not
 > yet a stability promise** — treat it as `0.x` and expect the gaps in
 > [Current limits](#current-limits) to move.
 
@@ -19,16 +19,19 @@ Not on the registry yet. Inside this workspace, depend on it by name:
 { "dependencies": { "@texra-ai/harness": "workspace:*" } }
 ```
 
-`effect` and `zod` (v4) are peer dependencies of the whole package: the bundle
+It depends on [`@texra-ai/llm`](../llm/README.md), the model package, which a
+pack resolves to the same-numbered release.
+
+`effect` and `zod` (v4) are peer dependencies of both packages: the bundle
 imports `effect` at runtime (`dist/index.js` opens with
-`import ... from 'effect'`). Install both alongside it, `effect` at the exact
-version the package pins (`4.0.0`). Two copies of `effect` in one
+`import ... from 'effect'`). Install both alongside it, `effect` at any 4.x
+release (`^4.0.0`). Two copies of `effect` in one
 process do not work at all: Streams, Fibers and Context built by one copy do
 not interoperate with another's, and a peer dependency is how a consumer gets
 one copy rather than a second nested one.
 
 ```jsonc
-{ "dependencies": { "effect": "4.0.0", "zod": "^4.4.3" } }
+{ "dependencies": { "effect": "^4.0.0", "zod": "^4.4.3" } }
 ```
 
 ## Usage
@@ -78,15 +81,117 @@ const result = await Effect.runPromise(program);
 console.log(result.outcome);
 ```
 
+### An inline persona
+
+`agent` names an agent file in the platform's agent directories, or it is the
+persona itself, written in the same format as the file
+(`InlinePersonaSchema` from `@texra-ai/harness/schemas`): `name`,
+`description`, `prompt`, `tools` and `temperature`. The run records the
+persona with its configuration, so nothing has to be written to disk. An
+inline persona has no bundled original (`basedOn`) and no `task:` block;
+each is refused with a `RunFailure`. A tool
+it names that no plugin offers fails the run before any model call, as it
+would in a file.
+
+```ts
+const program = Effect.gen(function* () {
+  const session = yield* (yield* Sessions).open();
+  const run = yield* session.start({
+    agent: {
+      name: 'abstract_editor',
+      description: 'Reviews abstracts.',
+      prompt: 'You review LaTeX abstracts for concision. Keep every claim.',
+      tools: ['read_file', 'grep'],
+    },
+    instruction: 'Suggest a tighter abstract for paper.tex.',
+  });
+  return yield* run.result;
+});
+```
+
 Nothing in the package calls `Effect.runPromise` itself: the
 `Effect.runPromise` above is the embedder's own boundary, as is any host
 entry that runs the program.
 
-| Service    | What it is                                                                                                                                                                                                                                                                                                               |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Sessions` | The process's one session owner: `open(roots?)`, `close(roots?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through. `Sessions.layer({ platform, plugins })` composes the process and provides it, with this scope as the lifetime of the hold it takes on that composition. |
-| `Session`  | `start`, `request`, `view.changes`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                                                                                                                                                       |
-| `Run`      | `runId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its row published and its trace live.                                                                                                                                                                    |
+### A persistent session, and resume
+
+`sessions.open(roots, { persistent: true })` keeps the session's history in
+the root's SQLite store, the same store every TeXRA host keeps, under the
+platform's storage directory (`nodePlatform`'s `storageDir`). Without it the
+store is in memory and ends with the session. A later process opens the same
+root the same way and continues a run with `session.resume(runId)`, which
+continues it from its committed history through the resume path every TeXRA
+host takes and hands back the same `Run` that `start` returns. A run that
+nothing can continue fails with `ResumeRefused`, whose `reason` says why:
+`finished`, `owned_elsewhere` (a live process holds it), `blocked` (an agent
+or plugin it needs is missing), `unusable_checkpoint`, or `not_resumable`
+(it is running here, it was deleted, or it is a child that an open call of
+its parent owns, which resumes with that parent). A run that called a
+custom tool needs that tool again, so `resume` takes the same `tools` as
+`start`. A second `resume` of a run already resuming here joins the first
+and gets the same `Run`.
+
+```ts
+const program = Effect.gen(function* () {
+  const session = yield* (yield* Sessions).open(undefined, {
+    persistent: true,
+  });
+  const run = yield* session.resume(runId, { tools });
+  return yield* run.result;
+});
+```
+
+### Approvals
+
+A session opened without a handler answers no request: its policy denies
+every request a run raises, and a run is offered no tool that needs
+approval. `sessions.open(roots, { approve })` gives the session a handler,
+an Effect function from a `PendingRequest` (which run asks, the request's
+id, and its `payload`, whose `kind` is a command, an edit, a plan, a retry
+or a question) to the `RequestDecision` it records. The handler is called
+once for each request a run waits on here, the requests every TeXRA host
+lists from `SessionView.requests`, and its answer goes through the
+session's one `request.decide`. An embedder may instead answer a listed
+request itself, with `session.request({ kind: 'request.decide', ... })`;
+whichever answer lands first is the decision. A handler that fails, throws,
+or has not answered within ten minutes denies the request, and the cause is
+logged at warn: no run stays parked on a handler that went quiet.
+
+A request is a row, so it survives the process. On a persistent session, a
+run killed while it waits for approval still waits after a restart: reopen
+the session with a handler, `resume` the run, and the handler is asked the
+same request, under the same id.
+
+```ts
+const program = Effect.gen(function* () {
+  const session = yield* (yield* Sessions).open(undefined, {
+    persistent: true,
+    approve: (request) =>
+      Effect.succeed(
+        request.payload.kind === 'bash'
+          ? { action: 'approve' }
+          : { action: 'deny', reason: 'Only commands are approved here.' },
+      ),
+  });
+  const run = yield* session.start({
+    agent: 'polish',
+    instruction: 'Tighten the abstract in paper.tex.',
+  });
+  return yield* run.result;
+});
+```
+
+The options belong to the open that builds the root's session. A later
+open of the same root gets that session, and must ask for the same store and
+the same handler (compared by identity). An open that asks for something
+else fails with `SessionOptionsConflict`; close the session first to open
+it differently.
+
+| Service    | What it is                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Sessions` | The process's one session owner: `open(roots?, options?)`, `close(roots?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through. `Sessions.layer({ platform, plugins })` composes the process (`processLayer`, the one every TeXRA host builds) and provides a projection of its `SessionOwner`, for the layer's lifetime. Build it once per process. |
+| `Session`  | `start`, `resume`, `request`, `view.changes`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                                                                                                                                                                                                                    |
+| `Run`      | `runId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its row published and its trace live.                                                                                                                                                                                                                                           |
 
 `run.events` is the run's trace as a `Stream`. Trace events are buffered from
 the moment the run enters its session, so a reader begun right after `start`
@@ -102,8 +207,7 @@ has yet to read.
 
 Every failure is a typed error on the effect that owns it. A refusal before
 any model work fails `session.start` with one of the tagged errors the
-surface names (`AgentNotFound`, `ToolsRefused`, and `PlatformConflict` for a
-second, different platform or a process runtime a host already installed); a run that fails after entering its session
+surface names (`AgentNotFound`, `ToolsRefused`); a run that fails after entering its session
 fails `run.result` and `run.events` with `RunFailure`, whose `cause` is
 exactly what the launch path threw.
 
@@ -136,29 +240,62 @@ descendants as they appear, and stay resident for the life of the process.
 Runs share one session per workspace storage root. The runtime's session
 owner holds it, the same owner every TeXRA host opens its sessions through, so
 opening a root twice resolves the one session already open there; a second
-root gets its own. The package never borrows a host's runtime (see "The
-platform" below), so every session on it is the package's own, and its host answers no
-approval prompt, so the session denies the retries of every run on it. A
-session ends through `sessions.close(roots)`: it refuses new runs on the
+root gets its own. A session's requests are answered by the handler it
+was opened with, or, without one, denied by its policy (see
+[Approvals](#approvals)). A session ends through `sessions.close(roots)`: it refuses new runs on the
 root, interrupts the runs it owns and waits for them to settle within the
 runtime's shutdown budget, flushes its artifacts, and releases the session,
 returning `{ settled, abandoned }`. `settled` is true when every run ended in
 time; otherwise `abandoned` names the runs still live, and the session stays
-open, refusing new runs, until they end. Leaving the `Sessions.layer` scope
-closes every session the owner holds this way and then disposes the runtime
-they ran on — the scope is the lifetime of the composition's hold, so an
-embedder that drains its scopes on shutdown needs no separate close call.
+open, refusing new runs, until they end. Releasing the `Sessions.layer`
+closes every session the owner holds this way and then releases the process
+under them, so an embedder that drains its scope on shutdown needs no
+separate close call.
 
-The composition is held, not owned: each `Sessions.layer` scope takes a hold
-on it, and the last hold to end is what closes every session the owner holds,
-each settling its runs and flushing its artifacts, and then disposes the
-runtime they ran on. So two overlapping scopes over one platform are safe,
-the first one out ends nothing the second is still using, and a later program
-in the same process composes again once the last hold has ended. A
-scope arriving during the last holder's shutdown waits for disposal to finish
-before composing the next runtime. Acquisition is interruption-safe:
-cancellation while waiting aborts without taking a hold, while the retiring
-runtime completes disposal through its own scope.
+**Build the layer once per process.** It is an ordinary Effect layer: provide
+it once at the application's edge (`ManagedRuntime.make(Sessions.layer(...))`,
+or one `Effect.provide` around the whole program) and run every program on
+it. Two live builds compose two processes in one: two session owners over
+the same storage root, both stamped with this process's owner id, which the
+one-writer claim fence cannot tell apart. A later build after the first one
+is released is fine.
+
+## Durable invariants
+
+A run's next step comes from its committed history. The session publishes a
+whole batch through one inbox, and the run fold checks the batch before the
+store commits it. Live trace chunks are transient; they are not recovery input.
+
+The existing [crash-conformance suite](../../src/test-kernel/support/crashConformance.ts)
+checks the following contracts by reopening a real SQLite store at every commit
+point, under both the harness built-ins and TeXRA's plugins:
+
+- **I1** Recovery reaches the clean run's outcome: its committed answers,
+  tool results, owned children, and context edits are preserved.
+- **I2** A tool call has one settlement. A result committed before a crash
+  is reused, and a settled call is not executed again.
+- **I3** A model invocation has at most one committed response. Recovery
+  does not append another answer for an invocation already answered.
+- **I4** A command subject to approval runs only after approval. An unfinished
+  command whose outcome is unknown is retried only after a person chooses to retry
+  that call. Recovery does not assume that an absent result means no effect
+  occurred.
+- **I5** An owned child that ended cleanly answers its awaiting call on
+  recovery. Relaunching a child for the same call requires a retry decision,
+  and owned children are left with terminal rows.
+- **I6** A child's result delivery settles with the turn that produced it.
+  Recovery queues and consumes that delivery once, including results from
+  detached agents, scripts, and commands.
+- **I7** Handoff, compaction, and fork preserve the context they committed.
+  A fork is recovered with the history it was registered with.
+- **I8** A stopped run's halt and terminal outcome commit together.
+  Recovery cannot treat an acknowledged stop as an interrupted run to continue.
+- **I9** Turning off a run's shell approval bypass is acknowledged only
+  after the policy row is durable, so recovery cannot restore the old bypass.
+
+These are committed-state contracts. An external effect that finished before
+its result was committed can remain uncertain; **I4** governs that uncertainty,
+without promising exactly-once execution of arbitrary external effects.
 
 ## Run results
 
@@ -173,13 +310,11 @@ diffsUnavailable? }`, the output files of its newest revision and the
 compilation failures. There is no category to switch on; test for
 `output.documents`.
 
-`run.result` is terminal-only. Internally a run also has a
-non-terminal `WAITING` state — the run is parked mid-session waiting on the
-user rather than finished — and the runtime carries a separate waiting shape
-for it. That shape is deliberately not exported and never completes
-`run.result`: a parked run has no outcome to report, and this surface has no
-interactive channel to un-park it (see [Current limits](#current-limits)).
-Watch the trace stream if you need to observe a run reaching that state.
+`run.result` is terminal-only. A run of this package runs one cycle and
+ends; one parked on a request (an approval, a retry, a question) has no
+outcome yet, so its `result` waits until the request is answered (see
+[Approvals](#approvals)) and the run goes on to end. `SessionView.requests`
+lists what it waits for.
 
 Accounting is `usage`, present once a round recorded any: one totals record
 covering the run and its subagents, whose `usage.totalCost` is the run's cost
@@ -217,11 +352,12 @@ is unpublished and the Promise entry had no consumers; and TeXRA 1.0 keeps no
 parallel surfaces. The composition-once-per-process limit went with the
 Promise entry: each `Sessions.layer` scope owns the composition it made.
 
-Failures are `Data.TaggedError`s. Four come from the package itself —
-`PlatformConflict`, `AgentNotFound`, `ToolsRefused`, and `RunFailure`, whose
-`cause` is exactly what the launch path threw — and two, `DatabaseOpenFailed`
-and `DatabaseReadFailed` (the `SessionOpenError` union), reach the surface from
-the session store when it cannot open or read, for six in all. A
+Failures are `Data.TaggedError`s. Six come from the package itself —
+`PluginsRefused`, `SessionOptionsConflict`, `AgentNotFound`, `ToolsRefused`,
+`ResumeRefused`, and `RunFailure`, whose `cause` is exactly what the launch
+path threw — and two, `DatabaseOpenFailed` and `DatabaseReadFailed` (the
+`SessionOpenError` union), reach the surface from the session store when it
+cannot open or read, for eight in all. A
 `session.request` answers with the runtime's own `Outcome` or its
 `RequestError` union, the same values every TeXRA host reads. Beyond these,
 nothing else is exported: no fold internals, no host widgets.
@@ -248,13 +384,8 @@ Model requests carry their own HTTP transport: the environment's proxy policy
 timeout, bound to each model rather than installed as your process's global
 dispatcher.
 
-The platform is **process-wide** while any `Sessions.layer` scope holds the
-composition. Create one and reuse it for every run: passing a second,
-different platform while a hold is live fails the layer with
-`PlatformConflict`, and so does composing in a process where a TeXRA host
-already installed its own process runtime, since the package does not borrow
-a runtime built for someone else's roots. Once the last hold ends, the next
-scope may compose with a different platform.
+The platform is **process-wide** for the layer's lifetime: create one and
+reuse it for every run, with the one `Sessions.layer` built over it.
 
 Implement the `AgentPlatform` ports and the `roots` yourself when embedding in a
 host that already owns those services. For TeXRA 1.0, supply a fresh,
@@ -287,8 +418,8 @@ const tools = [EchoTool];
 ```
 
 Pass `tools` to `session.start`. A custom tool that requires
-approval fails the launch with `ToolsRefused`: the package has no approval
-channel. A directly implemented `ITool` also returns an Effect from
+approval runs only on a session opened with an approval handler; on any
+other session it fails the launch with `ToolsRefused`. A directly implemented `ITool` also returns an Effect from
 `call`; asynchronous operations compose inside that program. Execute programs
 only at the embedding application's host boundary.
 
@@ -297,15 +428,11 @@ only at the embedding application's host boundary.
 These are enforced, not undocumented — each fails or degrades loudly rather
 than failing quietly:
 
-- **Approval-requiring tools are refused.** A tool with `requiresApproval`
-  fails the launch with `ToolsRefused`. There is no interactive approval
-  channel yet.
-- **Interactive retry always denies.** A run that would prompt to retry gets a
-  denial with a reason instead: on each session the package opens it answers
-  every retry request with `request.decide`, the same door a host answers
-  through, for the life of that session.
-- **No resume.** `nodePlatform` reports no resumable runs; resuming a
-  persisted tool-use session is host-side functionality today.
+- **Without a handler, requests are denied.** A session opened with no
+  `approve` handler denies every request its runs raise, retries included,
+  and fails a launch whose custom tools need approval with `ToolsRefused`.
+- **Runs are one cycle long.** `start` and `resume` both end the run after
+  its cycle rather than waiting for a follow-up message.
 - **No language-model port.** `nodePlatform` wires the unavailable port, so a
   host that needs host-provided models must supply its own.
 

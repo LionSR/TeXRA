@@ -20,6 +20,7 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   createTestSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import {
   prepareToolEditApprovalPrompt,
@@ -45,7 +46,7 @@ export interface RecordingProgressSink {
 /** A request a run opened, as the fold and every surface read it. */
 type OpenedRequest = Extract<DisplaySessionEvent, { type: 'request.opened' }>;
 
-type SessionEventReader = Pick<SessionHandle, 'events' | 'now'>;
+type SessionEventReader = Pick<SessionHandle, 'log'>;
 
 /**
  * Read the committed prefix using its drain coordinate, including private rows
@@ -55,12 +56,12 @@ async function readSessionEvents(
   session: SessionEventReader,
   fromCommit = 0,
 ): Promise<DisplaySessionEvent[]> {
-  const through = session.now();
+  const through = session.log.now();
   if (through <= fromCommit) return [];
   return testRuntime().runPromise(
     Effect.gen(function* () {
       const drained = yield* SubscriptionRef.make(fromCommit);
-      return yield* session.events.all(fromCommit, drained).pipe(
+      return yield* session.log.tail(fromCommit, drained).pipe(
         Stream.interruptWhen(
           SubscriptionRef.changes(drained).pipe(
             Stream.filter((cursor) => cursor >= through),
@@ -81,7 +82,7 @@ export function recordSessionEvents(
   session: SessionEventReader,
   filter: { readonly aggregateId?: string } = {},
 ): { readonly read: () => Promise<DisplaySessionEvent[]> } {
-  const start = session.now();
+  const start = session.log.now();
   return {
     async read() {
       const events = await readSessionEvents(session, start);
@@ -147,7 +148,7 @@ export function decideRequest(
   request: { readonly runId: RunId; readonly requestId: string },
   decision: RequestDecision,
 ): void {
-  session.publish([
+  publishTestRows(session, [
     {
       type: 'request.decided',
       aggregateId: qualifyAggregateId('run', request.runId),
@@ -170,8 +171,8 @@ export function autoDecideRequests(
   const opened: OpenedRequest[] = [];
   const fiber = testRuntime().runFork(
     Stream.runForEach(
-      session.events
-        .all(session.now())
+      session.log
+        .tail(session.log.now())
         .pipe(
           Stream.filter(
             (event): event is OpenedRequest => event.type === 'request.opened',
@@ -207,10 +208,10 @@ async function ensureRunStart(
 ): Promise<void> {
   // A start already queued has yet to reach the view, and a second one is
   // refused by the substrate.
-  await Effect.runPromise(session.settlePublications());
-  if (session.runView(runId) !== undefined) return;
+  await Effect.runPromise(session.log.settled);
+  if (session.view.run(runId) !== undefined) return;
   publishTestRunStart(session, runId);
-  await Effect.runPromise(session.settlePublications());
+  await Effect.runPromise(session.log.settled);
 }
 
 /**
@@ -226,13 +227,13 @@ export async function seedActiveRun(
   await ensureRunStart(session, runId);
   const activations = options.resuming === true ? 2 : 1;
   for (let index = 0; index < activations; index += 1) {
-    session.publish([
+    publishTestRows(session, [
       {
         type: 'run.activate',
         aggregateId: qualifyAggregateId('run', runId),
       },
     ]);
-    await Effect.runPromise(session.settlePublications());
+    await Effect.runPromise(session.log.settled);
   }
 }
 
@@ -244,7 +245,7 @@ export async function seedTerminalRun(
   outcome: RunOutcome,
 ): Promise<void> {
   await ensureRunStart(session, runId);
-  session.publish([
+  publishTestRows(session, [
     {
       type: 'run.end',
       aggregateId: qualifyAggregateId('run', runId),
@@ -252,7 +253,7 @@ export async function seedTerminalRun(
       output: emptyRunEndOutput(),
     },
   ]);
-  await Effect.runPromise(session.settlePublications());
+  await Effect.runPromise(session.log.settled);
 }
 
 /**

@@ -108,9 +108,7 @@ describe('run-tabs over the fold', () => {
       kind: 'select',
       runId: GRANDCHILD,
     });
-    const { element, surfaceActions } = await mountTabs(view, surface, {
-      root: CHILD,
-    });
+    const { element, surfaceActions } = await mountTabs(view, surface);
 
     expect(rowOf(element, GRANDCHILD).hasAttribute('active')).toBe(true);
     expect(rowOf(element, CHILD).hasAttribute('active')).toBe(false);

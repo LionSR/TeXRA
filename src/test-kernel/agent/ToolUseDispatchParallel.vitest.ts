@@ -40,7 +40,6 @@ import {
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import type {
@@ -50,12 +49,7 @@ import type {
 } from '@agent/runtime/ToolServices';
 import { makeRunCell } from '@agent/runtime/loop/runProgram';
 import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
-import {
-  appendRow,
-  rowAggregate,
-  snapshotRow,
-  type ToolUseLoopState,
-} from '@agent/runtime/loop/rows';
+import { appendRow, positionRow, rowAggregate } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
@@ -83,6 +77,12 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { recordSessionEvents } from './progressTestUtils';
 
 const GPT54 = 'openai/gpt-5.4-2026-03-05';
+
+/** The calls a folded state holds settled. */
+const settledIds = (state: RunState | null | undefined): string[] =>
+  Object.entries(state?.pendingResponse?.records ?? {}).flatMap(([id, call]) =>
+    call.status.kind === 'settled' ? [id] : [],
+  );
 
 setupPlatform({ workspacePath: '/workspace' });
 
@@ -236,7 +236,7 @@ interface DispatchKit {
   readonly state: RunState;
   /** The state before the response: the one a live dispatch's cell opened on. */
   readonly opened: RunState;
-  readonly workspace: AgentWorkspaceState;
+  readonly readFiles: Set<string>;
   /** The tools the dispatch's step offers. */
   readonly tools: RuntimeToolRegistry;
   readonly layer: Layer.Layer<
@@ -249,19 +249,11 @@ interface HarnessOptions {
   readonly calls: readonly Call[];
   readonly rootUserInstruction?: string;
   readonly logger?: AgentTrace;
-  /** Opened with the slices a real run carries, for the cases that read the
-   *  workspace a settlement persisted. */
-  readonly stateSlices?: ToolUseLoopState['stateSlices'];
   /** The run's binding, for the cases that read more than capabilities. */
   readonly bound?: BoundModel;
   /** A model switch waiting for the next boundary, for the upload gating. */
   readonly pendingSwitch?: string;
 }
-
-/** The slices of a run that has yet to touch a file. */
-const emptySlices = (): NonNullable<ToolUseLoopState['stateSlices']> => ({
-  workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-});
 
 /**
  * Open a run aggregate and commit the completed turn the dispatch continues
@@ -275,17 +267,13 @@ const openDispatch = Effect.fn('openDispatch')(function* (
   const logger = options.logger ?? noopTrace;
   const tools = new MapToolRegistry(options.tools);
   publishTestRunStart(session, runId);
-  yield* session.settlePublications();
+  yield* session.log.settled;
   yield* session.runHistory.acquire(runId);
   const opened = yield* session.runHistory.appendBatch(runId, null, [
     appendRow(runId, [
       { role: 'user', content: [{ kind: 'text', text: 'go' }] },
     ]),
-    ...snapshotRow(runId, freshState(), {
-      state: {
-        stateSlices: options.stateSlices ?? null,
-      },
-    }),
+    positionRow(runId, freshState(), 'turn.ready'),
   ]);
   const turn = turnWithCalls(options.calls);
   const state = yield* session.runHistory.appendBatch(runId, opened, [
@@ -297,7 +285,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
         request: '0'.repeat(64),
         invocation: INVOCATION,
         origin: ORIGIN,
-        delivery: 'stream',
+        purpose: 'turn',
       },
     },
     {
@@ -339,7 +327,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
     session,
     state,
     opened,
-    workspace: AgentWorkspaceState.create(),
+    readFiles: new Set<string>(),
     tools,
     layer,
   } satisfies DispatchKit;
@@ -350,7 +338,7 @@ const dispatch = (kit: DispatchKit) =>
   makeRunCell(kit.runId, kit.opened).pipe(
     Effect.tap((cell) => cell.adopt(kit.state)),
     Effect.flatMap((cell) =>
-      dispatchPendingResponse(cell, kit.workspace, {
+      dispatchPendingResponse(cell, kit.readFiles, {
         definitions: [],
         registry: kit.tools,
         offered: [],
@@ -424,7 +412,7 @@ describe('tool-use dispatch', () => {
         );
       }
       const saved = yield* kit.session.runHistory.load(kit.runId);
-      expect(Object.keys(saved?.pendingResponse?.settled ?? {})).toEqual([]);
+      expect(settledIds(saved)).toEqual([]);
       expect(saved?.pendingResponse).not.toBeNull();
       yield* closeSessionOf(kit.session);
     }),
@@ -663,10 +651,9 @@ describe('tool-use dispatch', () => {
       }),
   );
 
-  // The settlement is the whole transactional boundary: the result, the card
-  // that reports it, and the workspace the call mutated commit together, so a
-  // stop before the delivering snapshot cannot leave a settled call whose
-  // edits, media and tool-call count existed only in memory.
+  // The settlement is the whole transactional boundary: the result and the
+  // card that reports it commit together, and the edit and the call the
+  // fold reads off the result need no other row.
   it.live('commits the card and the workspace with the tool result', () =>
     Effect.gen(function* () {
       const probe = newProbe();
@@ -693,7 +680,6 @@ describe('tool-use dispatch', () => {
           makeCall('c1', 'edit_file', { path: 'notes.tex' }),
           makeCall('c2', 'slow_barrier', {}),
         ],
-        stateSlices: emptySlices(),
       });
       const recorded = recordSessionEvents(kit.session, {
         aggregateId: rowAggregate(kit.runId),
@@ -714,18 +700,12 @@ describe('tool-use dispatch', () => {
         }),
         kit.layer,
       );
-      expect(Object.keys(folded?.pendingResponse?.settled ?? {})).toEqual([
-        'c1',
-      ]);
-      // No delivery ran, so this workspace can only have come from the
-      // settlement's own state operation.
-      const slices = folded!.loop?.stateSlices;
-      expect(slices?.workspaceSnapshot.interactions.edits).toEqual([
-        { path: 'notes.tex', added: 3, removed: 1 },
-      ]);
-      // The count the settling call had made: the interrupted barrier's own
-      // call is not in it, because it never settled.
-      expect(slices?.workspaceSnapshot.interactions.toolCallCount).toBe(1);
+      expect(settledIds(folded)).toEqual(['c1']);
+      // No delivery ran: the edit and the call are folded from the
+      // settlement itself. The interrupted barrier's call is not counted,
+      // because it never settled.
+      expect(folded?.edited).toEqual(['notes.tex']);
+      expect(folded?.toolCalls).toBe(1);
 
       // The fast tool's card is now two rows of that same batch rather than a
       // pair of trace publications: exactly one open and one close reach the
@@ -740,7 +720,7 @@ describe('tool-use dispatch', () => {
   );
 
   // No fail-fast sibling interruption and no fabricated settlement: an
-  // interrupted call is outcome-unknown, and resume asks rather than guesses.
+  // interrupted call is outcome-unknown until resume settles it as such.
   it.live('commits no settlement for a call interrupted in flight', () =>
     Effect.gen(function* () {
       const probe = newProbe();
@@ -782,13 +762,86 @@ describe('tool-use dispatch', () => {
         kit.layer,
       );
       const pending = folded?.pendingResponse ?? null;
-      expect(Object.keys(pending?.settled ?? {})).toEqual([]);
+      expect(settledIds(folded)).toEqual([]);
       // The duplicate is recognised as one and still settles nothing: with
       // the primary interrupted it waits rather than fabricating a result.
       expect(
         pending?.calls.find((fact) => fact.callId === 'c3')?.duplicateOf,
       ).toBe('c1');
       expect(countStarts(probe, 'grep')).toBe(1);
+      yield* closeSessionOf(kit.session);
+    }),
+  );
+
+  // A person's answer is committed by the decide command, another writer,
+  // while a sibling call of the same parallel partition keeps settling
+  // through the cell: the answer's commit is below the sibling's, so it
+  // cannot be folded onto the cell afterwards. The cell re-reads the run.
+  it.live('reads a decision committed before a sibling call settled', () =>
+    Effect.gen(function* () {
+      const probe = newProbe();
+      const kit = yield* openDispatch({
+        tools: {
+          grep: probeTool(probe, 'grep', 0, { parallelSafe: true }),
+          read_file: probeTool(probe, 'read_file', 0, { parallelSafe: true }),
+        },
+        calls: [
+          makeCall('c1', 'grep', { pattern: 'a' }),
+          makeCall('c2', 'read_file', { path: 'b' }),
+        ],
+      });
+      const aggregateId = rowAggregate(kit.runId);
+      const cell = yield* makeRunCell(kit.runId, kit.state).pipe(
+        Effect.provide(kit.layer),
+      );
+      yield* cell.append(
+        ['c1', 'c2'].map((callId) => ({
+          type: 'tool.intent' as const,
+          aggregateId,
+          payload: {
+            origin: { kind: 'response' as const, responseId: RESPONSE_ID },
+            callId,
+            attempt: 1,
+          },
+        })),
+      );
+      yield* cell.append([
+        {
+          type: 'request.opened',
+          aggregateId,
+          requestId: 'q1',
+          payload: {
+            kind: 'bash',
+            data: {
+              requestId: 'q1',
+              allowBypass: false,
+              runId: kit.runId,
+              command: 'grep a',
+            },
+          },
+        },
+      ]);
+      yield* kit.session.requests.decide(kit.runId, 'q1', { action: 'reject' });
+      yield* cell.append([
+        {
+          type: 'tool.result',
+          aggregateId,
+          payload: {
+            responseId: RESPONSE_ID,
+            callId: 'c2',
+            attempt: 1,
+            disposition: 'executed',
+            duplicateOf: null,
+            result: { status: 'executed', output: 'ok' },
+            attachments: [],
+          },
+        },
+      ]);
+      const state = yield* cell.refresh;
+      expect(state.requests['q1']?.decision).toMatchObject({
+        action: 'reject',
+      });
+      expect(settledIds(state)).toEqual(['c2']);
       yield* closeSessionOf(kit.session);
     }),
   );

@@ -1,21 +1,21 @@
 import type { GettingStartedAction } from '@shared/schemas';
-import type { SettingsTarget } from '@shared/settingsView/settingsViewMessages';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import type { TeXRAIconName } from '@shared/iconNames';
+import type { SettingsTarget } from '@texra/shared/settingsView/settingsViewMessages';
 import {
   toElectronAccelerator,
   type DesktopPlatform,
-} from '@shared/commands/accelerators';
+} from '@texra/shared/commands/accelerators';
 import {
   commandCatalogById,
   settingsTabByCommand,
   type CommandId,
   type SettingsTabCommandId,
-} from '@shared/commands/catalog';
+} from '@texra/shared/commands/catalog';
 import {
   dispatchCommandFromRegistry,
   type CommandHandler,
-} from '@shared/commands/registry';
-import type { TeXRAIconName } from '@shared/iconNames';
+} from '@texra/shared/commands/registry';
 import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopWorkbenchKind,

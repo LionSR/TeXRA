@@ -9,6 +9,7 @@ import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 
 function result(over: Partial<ResultEvent>): ResultEvent {
@@ -45,7 +46,9 @@ async function toastsFor(
     if (parent !== null) publishTestRunStart(session, parent);
     publishTestRunStart(session, event.runId, { parent });
     const { runId, ...row } = event;
-    session.publish([{ ...row, aggregateId: aggregateId('run', runId) }]);
+    publishTestRows(session, [
+      { ...row, aggregateId: aggregateId('run', runId) },
+    ]);
     await swept;
   } finally {
     detachHost();

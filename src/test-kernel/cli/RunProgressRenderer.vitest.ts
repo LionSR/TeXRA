@@ -1,6 +1,7 @@
 import { it } from '@effect/vitest';
-import { Effect, Exit, Scope, SubscriptionRef } from 'effect';
-import { describe, expect } from 'vitest';
+import { Clock, Effect, Exit, Queue, Scope, SubscriptionRef } from 'effect';
+import { TestClock } from 'effect/testing';
+import { afterEach, describe, expect } from 'vitest';
 import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
@@ -30,6 +31,7 @@ import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import {
   createTestSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { makeRunView, viewWith } from './fixtures/sessionViewFixture';
 
@@ -128,6 +130,14 @@ type TestRunProgressRenderer = RunProgressRenderer & {
   ): Promise<void>;
 };
 let createdAt = 0;
+const rendererScopes: Scope.Closeable[] = [];
+afterEach(() =>
+  Effect.runPromise(
+    Effect.all(
+      rendererScopes.splice(0).map((scope) => Scope.close(scope, Exit.void)),
+    ),
+  ),
+);
 /** Let the renderer's fiber observe the latest view before a case reads
  *  the output: a few turns of the event loop cover the stream pipeline. */
 async function settle(): Promise<void> {
@@ -135,14 +145,18 @@ async function settle(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 }
+/** A followed session over a bare view: the renderer reads only its level
+ *  and its changes. */
+const followed = (ref: SubscriptionRef.SubscriptionRef<SessionView>) => ({
+  view: { ref, changes: SubscriptionRef.changes(ref) },
+});
+
 function attached(renderer: RunProgressRenderer): TestRunProgressRenderer {
   const runs = new Map<RunId, RunView>();
   const ref = Effect.runSync(SubscriptionRef.make<SessionView>(viewWith([])));
-  Effect.runSync(
-    renderer
-      .attach({ view: ref, viewChanges: SubscriptionRef.changes(ref) })
-      .pipe(Scope.provide(Scope.makeUnsafe())),
-  );
+  const scope = Scope.makeUnsafe();
+  rendererScopes.push(scope);
+  Effect.runSync(renderer.attach(followed(ref)).pipe(Scope.provide(scope)));
   const setMany = async (
     entries: ReadonlyArray<readonly [string, Partial<RunView>]>,
   ): Promise<void> => {
@@ -290,7 +304,7 @@ function publishRun(
 ): Effect.Effect<void> {
   const runId = (overrides.runId ?? 'e5e5e5') as RunId;
   const agent = overrides.agent ?? 'polish';
-  session.publish([
+  publishTestRows(session, [
     {
       type: 'run.start',
       aggregateId: qualifyAggregateId('run', runId),
@@ -302,7 +316,7 @@ function publishRun(
       approvalPolicy: null,
     },
   ]);
-  session.publishRunEvent(runId, {
+  session.trace.publish(runId, {
     type: 'run.config',
     runId,
     config: AgentConfigSchema.parse({
@@ -313,7 +327,6 @@ function publishRun(
       mediaFiles: [],
       outputFiles: [],
       editedFile: null,
-      editedFiles: [],
       toolConfig: {
         autoExtractFigure: false,
         autoExtractTikzFigure: false,
@@ -325,7 +338,7 @@ function publishRun(
       workingDirectory: '/tmp/project',
     }),
   });
-  session.publish([
+  publishTestRows(session, [
     {
       type: 'run.activate',
       aggregateId: qualifyAggregateId('run', runId),
@@ -380,21 +393,6 @@ function ansiRenderer(
       ...init,
     })!,
   );
-}
-
-function fakeTimers() {
-  const timers = {
-    heartbeat: undefined as (() => void) | undefined,
-    clearCount: 0,
-    setInterval: ((callback: () => void) => {
-      timers.heartbeat = callback;
-      return { unref() {} } as unknown as ReturnType<typeof setInterval>;
-    }) as unknown as typeof setInterval,
-    clearInterval: (() => {
-      timers.clearCount += 1;
-    }) as typeof clearInterval,
-  };
-  return timers;
 }
 
 function captureStreamWrites<E, R>(
@@ -459,26 +457,69 @@ describe('CLI run progress renderer', () => {
     expect(output.text.endsWith('\r\x1b[2K')).toBe(true);
   });
 
-  it('ticks the ANSI status line while a root workflow is quiet', async () => {
-    let now = 0;
-    const output = outputBuffer();
-    const timers = fakeTimers();
-    const renderer = ansiRenderer(output, { nowMs: () => now, ...timers });
+  it.effect('ticks the ANSI status line while a root workflow is quiet', () =>
+    Effect.gen(function* () {
+      const root = {
+        id: 'stream-1' as RunId,
+        label: 'polish',
+        inputFiles: ['paper.tex'],
+      };
+      const clock = yield* Clock.Clock;
+      const writes = yield* Queue.unbounded<string>();
+      const output = outputBuffer();
+      const renderer = createRunProgressRenderer(context(), {
+        colorEnabled: true,
+        nowMs: () => clock.currentTimeMillisUnsafe(),
+        minIntervalMs: 0,
+        write: (text) => {
+          output.write(text);
+          Queue.offerUnsafe(writes, text);
+        },
+      })!;
+      const view = yield* SubscriptionRef.make(viewWith([makeRunView(root)]));
+      const scope = yield* Scope.make();
+      yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
+      yield* renderer
+        .attach(followed(view), { runId: root.id })
+        .pipe(Scope.provide(scope));
+      yield* Queue.take(writes);
+      const initial = '\r\x1b[2Kpolish paper.tex · 0s';
+      expect(output.text).toBe(initial);
+      yield* TestClock.adjust('999 millis');
+      expect(output.text).toBe(initial);
+      yield* TestClock.adjust('1 millis');
+      expect(yield* Queue.take(writes)).toBe('\r\x1b[2Kpolish paper.tex · 1s');
+      yield* TestClock.adjust('1300 millis');
+      expect(yield* Queue.take(writes)).toBe('\r\x1b[2Kpolish paper.tex · 2s');
 
-    await handleRunConfig(renderer);
-
-    expect(timers.heartbeat).toBeDefined();
-    now = 1000;
-    timers.heartbeat?.();
-    now = 2300;
-    timers.heartbeat?.();
-
-    expect(output.text).toContain('\r\x1b[2Kpolish paper.tex · 1s');
-    expect(output.text).toContain('\r\x1b[2Kpolish paper.tex · 2s');
-
-    await handleRunStatus(renderer, 'stream-1', RUN_PHASE.CANCELLED);
-    expect(timers.clearCount).toBe(1);
-  });
+      renderer.preserve();
+      expect(yield* Queue.take(writes)).toBe('\n');
+      const preserved = output.text;
+      yield* TestClock.adjust('1 second');
+      expect(output.text).toBe(preserved);
+      yield* SubscriptionRef.set(
+        view,
+        viewWith([makeRunView({ ...root, turn: 2 })]),
+      );
+      expect(yield* Queue.take(writes)).toContain('[t2]');
+      yield* TestClock.adjust('1 second');
+      expect(yield* Queue.take(writes)).toContain('4s');
+      renderer.clear();
+      expect(yield* Queue.take(writes)).toBe('\r\x1b[2K');
+      const cleared = output.text;
+      yield* TestClock.adjust('1 second');
+      expect(output.text).toBe(cleared);
+      yield* SubscriptionRef.set(
+        view,
+        viewWith([makeRunView({ ...root, turn: 3 })]),
+      );
+      expect(yield* Queue.take(writes)).toContain('[t3]');
+      yield* Scope.close(scope, Exit.void);
+      const closed = output.text;
+      yield* TestClock.adjust('1 second');
+      expect(output.text).toBe(closed);
+    }),
+  );
 
   it('renders the live line from direct session and run facts', async () => {
     const output = outputBuffer();
@@ -497,7 +538,7 @@ describe('CLI run progress renderer', () => {
         'polish paper.tex · tools: 3 · 0s\n' +
         '[t1] · polish paper.tex · tools: 3 · 0s\n' +
         '[t1] · polish paper.tex · drafting · tools: 3 · 0s\n' +
-        '[t1] · polish paper.tex · drafting · subagent: review · 0s\n' +
+        '[t1] · polish paper.tex · drafting · agent: review · 0s\n' +
         '[t1] · polish paper.tex · Completed · tools: 3 · 0s\n',
     );
   });
@@ -537,22 +578,8 @@ describe('CLI run progress renderer', () => {
     // `runOrdering` (newest creation first).
     expect(output.text).toBe(
       'coordinator main.tex · 0s\n' +
-        'coordinator main.tex · subagents: proofreader +2 · 0s\n',
+        'coordinator main.tex · agents: proofreader +2 · 0s\n',
     );
-  });
-
-  it('stops active-child heartbeat when preserving the live line', async () => {
-    const output = outputBuffer();
-    const timers = fakeTimers();
-    const renderer = ansiRenderer(output, timers);
-
-    await handleOrchestratorRootRun(renderer);
-    await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-
-    renderer.preserve();
-
-    expect(timers.clearCount).toBe(1);
-    expect(output.text.endsWith('\n')).toBe(true);
   });
 
   it('keeps the claimed root stream when a child run.config arrives later', async () => {
@@ -591,7 +618,7 @@ describe('CLI run progress renderer', () => {
 
     expect(output.text).toBe(
       'orchestrator · 0s\n' +
-        'orchestrator · subagent: review — Check multiplier signs and resonance counterexa… · 0s\n',
+        'orchestrator · agent: review — Check multiplier signs and resonance counterexa… · 0s\n',
     );
   });
 
@@ -607,7 +634,7 @@ describe('CLI run progress renderer', () => {
 
     expect(output.text).toBe(
       'orchestrator · 0s\n' +
-        'orchestrator · subagent: review — Current review task · 0s\n',
+        'orchestrator · agent: review — Current review task · 0s\n',
     );
   });
 
@@ -631,7 +658,7 @@ describe('CLI run progress renderer', () => {
 
     expect(output.text).toBe(
       'orchestrator · 0s\n' +
-        'orchestrator · subagents: review — Active review task +1 · 0s\n',
+        'orchestrator · agents: review — Active review task +1 · 0s\n',
     );
   });
 
@@ -645,7 +672,7 @@ describe('CLI run progress renderer', () => {
 
     const renderedLines = output.text.split('\r\x1b[2K').filter(Boolean);
     expect(renderedLines).toHaveLength(2);
-    expect(renderedLines.at(-1)).toContain('subagent: review — ');
+    expect(renderedLines.at(-1)).toContain('agent: review — ');
     expect(renderedLines.every((line) => textDisplayWidth(line) <= 80)).toBe(
       true,
     );
@@ -700,7 +727,7 @@ describe('CLI run progress renderer', () => {
 
     expect(output.text).toBe(
       'orchestrator · 0s\n' +
-        'orchestrator · subagent: review · 0s\n' +
+        'orchestrator · agent: review · 0s\n' +
         'orchestrator · Completed · 11s\n',
     );
   });
@@ -717,7 +744,7 @@ describe('CLI run progress renderer', () => {
 
     expect(output.text).toBe(
       'orchestrator · 0s\n' +
-        'orchestrator · subagent: review — Late review task · 0s\n' +
+        'orchestrator · agent: review — Late review task · 0s\n' +
         'orchestrator · Stopped · 0s\n',
     );
   });
@@ -806,10 +833,10 @@ describe('CLI run progress renderer', () => {
             .attachRunProgressRenderer(session)
             .pipe(Scope.provide(scope));
           yield* publishRun(session, { runId: 'b2b2b2' });
-          yield* session.settlePublications();
+          yield* session.log.settled;
           // The terminal phase is the `run.end` row's fact and nothing else, so
           // exactly one line renders for the transition.
-          session.publish([
+          publishTestRows(session, [
             {
               type: 'run.end',
               aggregateId: qualifyAggregateId('run', 'b2b2b2' as RunId),
@@ -817,7 +844,7 @@ describe('CLI run progress renderer', () => {
               output: { response: '', files: [] },
             },
           ]);
-          yield* session.settlePublications();
+          yield* session.log.settled;
 
           yield* Scope.close(scope, Exit.void);
           yield* host.close();
@@ -993,7 +1020,7 @@ describe('CLI run progress renderer', () => {
             // The child list is the fold's: the parent's `childIds` and the child's own
             // row, derived beside the line that folded them.
             const detach = yield* attachCliSessionProgressProjection(session);
-            session.publish([
+            publishTestRows(session, [
               {
                 type: 'run.start',
                 aggregateId: qualifyAggregateId('run', childRunId),

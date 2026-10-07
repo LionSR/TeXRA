@@ -43,9 +43,7 @@ import { refresh } from '@agent/index';
 import { getRunRecords, registerRun } from '@agent/storage';
 import { readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { documentTaskConfig } from '@agent/output/documentRecipe';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import { offeredBy } from '@agent/runtime/loop/step';
@@ -55,10 +53,6 @@ import { executeAgent } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { Runs } from '@agent/runtime/runRegistry';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  initializeDefaultSession,
-  teardownDefaultSession,
-} from '@agent/runtime/sessionGraph';
 
 // Local imports - shared/runtime boundaries
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
@@ -74,6 +68,7 @@ import {
   type RunId,
   type SessionEvent,
 } from '@shared/schemas';
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -100,8 +95,13 @@ import {
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import {
+  closeTestDefaultSession,
+  openTestDefaultSession,
+} from '@test/support/sessionEnd';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
+import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
-import { configureDelegatedChildApprovals } from '@tools/approval';
 import { launchDetachedSubagent } from '@tools/delegation/subagentRun';
 import { readCompletedRunConversation } from '@transcript';
 import { generateRunId } from '@utils/core';
@@ -346,7 +346,6 @@ async function integrationPlatform(): Promise<FakeHost> {
         custom: () => Effect.sync(() => agentsDir),
         customConfigured: () => Effect.succeed(false),
         builtIn: () => Effect.sync(() => agentsDir),
-        builtInToolUse: () => Effect.sync(() => agentsDir),
       },
     },
   };
@@ -413,7 +412,7 @@ function waitForParentTurns(count: number): Effect.Effect<void> {
   return Effect.promise(() =>
     vi.waitFor(
       async () => {
-        await Effect.runPromise(session.settlePublications(PARENT_RUN_ID));
+        await Effect.runPromise(session.log.settled);
         const transcript = await Effect.runPromise(
           readCompletedRunConversation(PARENT_RUN_ID, session),
         );
@@ -424,7 +423,7 @@ function waitForParentTurns(count: number): Effect.Effect<void> {
               row.text !== 'Parent noted progress.',
           ),
         ).toHaveLength(count + 1);
-        expect(session.runView(PARENT_RUN_ID)?.status).toBe(RUN_PHASE.WAITING);
+        expect(session.view.run(PARENT_RUN_ID)?.status).toBe(RUN_PHASE.WAITING);
       },
       { timeout: 20_000 },
     ),
@@ -445,7 +444,7 @@ function queueRecovery(runId: RunId, text: string) {
 
 function waitForClaimRelease(runId: RunId): Promise<void> {
   return vi.waitFor(async () => {
-    expect(await Effect.runPromise(session.ownsRun(runId))).toBe(false);
+    expect(await Effect.runPromise(session.log.owns(runId))).toBe(false);
   });
 }
 
@@ -460,13 +459,7 @@ const launchChild = (
     return yield* launchDetachedSubagent(parent, payload, {
       runId: generateRunId(),
       parentOffered: yield* offeredBy(parent.run),
-      inheritChildRunApprovals: (childRunId) =>
-        configureDelegatedChildApprovals(
-          childRunId,
-          PARENT_RUN_ID,
-          'inherit',
-          parent.run.session,
-        ),
+      grants: NO_APPROVAL_GRANTS,
     });
   });
 
@@ -582,7 +575,7 @@ async function launchWaitingChild(options: {
     callId: 'parent-call',
     env: { roots: session.roots, workingDirectory: process.cwd() },
     emit: () => undefined,
-    workspace: AgentWorkspaceState.create(),
+    readFiles: new Set<string>(),
     responseId: 'parent-response',
     instruction: undefined,
     attempt: 1,
@@ -596,6 +589,7 @@ async function launchWaitingChild(options: {
       session,
       task: null,
       opening: null,
+      callbacks: {},
       fileService: new RunFileService(PARENT_RUN_ID, session.roots),
       scope: Scope.makeUnsafe(),
       config: AgentConfigSchema.parse({
@@ -644,12 +638,12 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     );
     // The process session over a persistent store: one session per root,
     // so the ephemeral default this file's setup installed gives way to it.
-    await Effect.runPromise(teardownDefaultSession());
+    await Effect.runPromise(closeTestDefaultSession);
     session = await Effect.runPromise(
-      initializeDefaultSession({ roots: testWorkspaceRoots() }),
+      openTestDefaultSession({ roots: testWorkspaceRoots() }),
     );
     publishTestRunStart(session, OUTER_RUN_ID);
-    await Effect.runPromise(session.settlePublications());
+    await Effect.runPromise(session.log.settled);
     childId = undefined;
     // Every wake: a send that owed the run a resume.
     resumedRuns = [];
@@ -676,8 +670,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     interruptActiveRuns(session);
     if (parentFiber) await Effect.runPromise(Fiber.await(parentFiber));
     if (childId) await waitForClaimRelease(childId);
-    await Effect.runPromise(session.commitRunEnd(PARENT_RUN_ID));
-    await Effect.runPromise(teardownDefaultSession());
+    await Effect.runPromise(closeTestDefaultSession);
     vi.restoreAllMocks();
   });
 
@@ -732,7 +725,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           'Result A.',
         );
 
-        yield* session.settlePublications();
+        yield* session.log.settled;
         const archivedChild = yield* readCompletedRunConversation(
           runId,
           session,
@@ -830,7 +823,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           outcome: RUN_PHASE.WAITING,
         });
         expect(session.runs.getHandle(runId)).toBeDefined();
-        yield* session.viewChanges.pipe(
+        yield* session.view.changes.pipe(
           Stream.filter(
             (view) => view.runs.get(runId)?.status === RUN_PHASE.WAITING,
           ),
@@ -909,7 +902,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         );
         yield* waitForParentTurns(2);
 
-        yield* session.settlePublications();
+        yield* session.log.settled;
         const archivedChild = yield* readCompletedRunConversation(
           runId,
           session,
@@ -993,7 +986,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         const childNodes = yield* Effect.promise(() =>
           vi.waitFor(
             async () => {
-              await Effect.runPromise(session.settlePublications());
+              await Effect.runPromise(session.log.settled);
               const archived = await Effect.runPromise(
                 readCompletedRunConversation(runId, session),
               );
@@ -1002,7 +995,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
               expect(text).toContain('second assertion');
               expect(text).toContain('third assertion');
               expect(nodes.at(-1)?.kind).toBe('assistant-text');
-              expect(session.runView(runId)?.status).toBe(RUN_PHASE.WAITING);
+              expect(session.view.run(runId)?.status).toBe(RUN_PHASE.WAITING);
               return nodes;
             },
             { timeout: 20_000 },
@@ -1018,7 +1011,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         // Admission order is the rows' commit order, and the child reads the
         // sends in exactly that order, each once.
         const admitted = followUpTexts(
-          yield* session.readAggregate(aggregateId('run', runId)),
+          yield* session.log.rows(aggregateId('run', runId)),
         )
           .map((text) => text.match(/(second|third) assertion/)?.[1])
           .filter((word) => word !== undefined);
@@ -1098,7 +1091,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             { session },
           );
         }
-        yield* session.settlePublications();
+        yield* session.log.settled;
         const afterReplay = JSON.stringify(
           yield* readCompletedRunConversation(PARENT_RUN_ID, session),
         );
@@ -1116,7 +1109,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           { session },
         );
         yield* waitForParentTurns(2);
-        yield* session.settlePublications();
+        yield* session.log.settled;
         const afterDistinct = JSON.stringify(
           yield* readCompletedRunConversation(PARENT_RUN_ID, session),
         );
@@ -1339,9 +1332,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         yield* Effect.promise(() =>
           vi.waitFor(
             async () => {
-              await Effect.runPromise(
-                session.settlePublications(PARENT_RUN_ID),
-              );
+              await Effect.runPromise(session.log.settled);
               const transcript = await Effect.runPromise(
                 readCompletedRunConversation(PARENT_RUN_ID, session),
               );
@@ -1349,7 +1340,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
                 kind: 'assistant-text',
                 text: 'Parent received the workflow result.',
               });
-              expect(session.runView(PARENT_RUN_ID)?.status).toBe(
+              expect(session.view.run(PARENT_RUN_ID)?.status).toBe(
                 RUN_PHASE.WAITING,
               );
             },
@@ -1427,7 +1418,11 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
                 }),
               ),
             },
-            { session, runtime: testRuntime() },
+            {
+              session,
+              backend: localSessionBackend(session),
+              runtime: testRuntime(),
+            },
           ),
         );
 

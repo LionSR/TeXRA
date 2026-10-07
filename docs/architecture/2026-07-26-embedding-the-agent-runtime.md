@@ -30,7 +30,7 @@ agent directories, a session, and a populated registry. When a run can open
 requests, something must also decide them (§3); presentation goes through the
 session's interactions attachment, and there is no separate presentation-host
 argument. The direct Lean language
-services the shipped Node hosts pass to `installProcessRuntime` are a
+services the shipped Node hosts pass to `processLayer` are a
 shipped-feature choice; the raw loop only needs some `LeanLanguageServices`
 layer there.
 
@@ -44,23 +44,23 @@ one of two owners, and an embedder supplies each one there:
   the optional `toolMissingReporter`, the filesystem, `Path`, secrets,
   application state, the resume port, the editor language-model bridge) are
   Effect services provided once per process by `installProcessRuntime`
-  (`src/controllers/session/sessionLayer.ts`).
+  (`packages/harness/src/controllers/session/sessionLayer.ts`).
 - **Per-workspace services** (the workspace root, its storage paths, its
   configuration and its state stores) are a `WorkspaceRoots`
   (`@platform/workspaceRoots`) carried by each `SessionHandle`, so one process
   can hold sessions rooted in several folders. Build one with
-  `createNodeWorkspaceRoots` (`src/platform/defaults/nodeHost.ts:59-76`), which
+  `createNodeWorkspaceRoots` (`packages/harness/src/platform/defaults/nodeHost.ts:59-76`), which
   canonicalizes the workspace path and picks the config provider.
 
 `agentDirectories` is the port that names the three directories the registry
 scans. `new AgentDirectoryService({...})`
-(`src/agent/index/AgentDirectoryService.ts:58-60`) builds one over a
-packaged resources tree; its `builtIn()` and `builtInToolUse()` read that tree
+(`packages/harness/src/agent/index/AgentDirectoryService.ts:58-60`) builds one over a
+packaged resources tree; its `builtIn()` reads that tree
 in place. Nothing is copied into global storage, so there is no bundle-copy
 step to run and no version state key to keep.
 
 Beside that install, a Node root calls `bootstrapHost`
-(`src/controllers/hostBootstrap.ts:75-92`) once, on its own process runtime: it
+(`packages/texra/src/controllers/hostBootstrap.ts:75-92`) once, on its own process runtime: it
 installs the model HTTP dispatcher, the process setting host, the account
 probes, the runtime skill sources, and the first-install disabled-tool seed.
 An embedder that skips it gets a runtime without those, not a broken one.
@@ -70,7 +70,7 @@ to the files in `COMPOSITION_ROOT_FILES` (`eslint.config.mjs`).
 
 ### Feature-parity step — the `lean` layer of `installProcessRuntime`
 
-`src/tools/lean/direct/directLspAdapter.ts`. The Node hosts pass exactly one
+`packages/texra/src/tools/lean/direct/directLspAdapter.ts`. The Node hosts pass exactly one
 layer:
 
 ```ts
@@ -79,7 +79,7 @@ installProcessRuntime({ /* … */, lean: directLeanLanguageServices() });
 
 The two conditional tool injections — `memory` and the unified `plan` tool
 that drives the goal loop — are not part of this step: they are data on the
-memory-workflow plugin (`injectedWhen` in `src/tools/plugins.ts`), and their
+memory-workflow plugin (`injectedWhen` in `packages/harness/src/tools/plugins.ts`), and their
 settings are read when a run resolves its tools against the `ToolRegistry`
 table the process runtime provides.
 
@@ -92,8 +92,8 @@ over it instead; the `memory` and `plan` injections are present either way.
 ### Step 2 — credential resolution
 
 There is no model-access bootstrap call. A run binds its model through
-`src/agent/runtime/run/modelBinding.ts`, which resolves the route's credential
-in `src/agent/runtime/modelRoutes.ts` (`resolveRouteCredential` for API keys,
+`packages/harness/src/agent/runtime/run/modelBinding.ts`, which resolves the route's credential
+in `packages/harness/src/agent/runtime/modelRoutes.ts` (`resolveRouteCredential` for API keys,
 `resolveSubscriptionCredential` for the ChatGPT and Grok subscriptions).
 
 Credential resolution uses the caller's own provider API keys or subscription
@@ -105,13 +105,13 @@ model call.
 ### Step 3 — agent directories
 
 To use the packaged agent definitions, install a port that names the tree they
-sit in. There is no copy step: `builtIn()` and `builtInToolUse()` resolve
+sit in. There is no copy step: `builtIn()` resolves
 inside `resourcesPath`, and the files are read where they are.
 
 ```ts
 const agentDirectories = new AgentDirectoryService({
   channel: 'my-embedder',
-  resourcesPath, // dir containing agents/, tool_use_agents/, skills/
+  resourcesPath, // dir containing agents/, skills/
   state: { get: () => Effect.succeed(undefined) },
 });
 // Served as `AgentDirectories` by the Step 1 install:
@@ -120,7 +120,7 @@ const agentDirectories = new AgentDirectoryService({
 
 `state.get()` reads the stored setting that names the user-configured
 custom agent directory; `undefined` means none. The three methods return Effects, not Promises
-(`src/agent/index/AgentDirectoryService.ts:61-85`); a failure to resolve a
+(`packages/harness/src/agent/index/AgentDirectoryService.ts:61-85`); a failure to resolve a
 directory is an `AgentDirectoriesFailed`, and the `issueReporter` option
 decides how it surfaces (the default logs it at `warn`).
 
@@ -149,11 +149,11 @@ that need no session leave the store unopened.
 
 The registry is **not** lazily populated on the run path.
 `getAgentPath` → `resolveAgentForLaunch` is a synchronous read of already-loaded
-state (`src/agent/index/agentRegistry.ts`); when it misses,
+state (`packages/harness/src/agent/index/agentRegistry.ts`); when it misses,
 `AgentLaunchContext` emits `showAgentConfigBanner` and throws
-`Could not find agent: <name>` (`src/agent/runtime/AgentLaunchContext.ts:158-159`).
+`Could not find agent: <name>` (`packages/harness/src/agent/runtime/AgentLaunchContext.ts:158-159`).
 
-`loadAgents` (`src/agent/index/agentRegistry.ts:113-128`) is what fills it.
+`loadAgents` (`packages/harness/src/agent/index/agentRegistry.ts:113-128`) is what fills it.
 Neither `runAgent`, `executeAgent`, nor `AgentLaunchContext` populates the
 registry, so the caller must ensure that loading has happened before launch.
 
@@ -167,7 +167,7 @@ yields the detach disposer, so it is `yield*`ed. The attachment answers
 nothing: every request a run makes of a person (retry, question, approval) is
 a `request.opened` row the run's fold lists, closed by the
 `request.decided` row a surface's decision commits
-(`src/agent/runtime/HostInteractions.ts:70-77`). An unanswered request stays
+(`packages/harness/src/agent/runtime/HostInteractions.ts:70-77`). An unanswered request stays
 parked on its row. The adapter in the example below only receives
 presentation events, and sets `approvalPromptsUnavailable: true` on the
 object it passes to `use` (§3), which keeps the approval-gated tools away from the model.
@@ -198,7 +198,7 @@ import { validateRunRequest } from '@agent/core/state/runRequests';
 // application state, and the rest.
 const agentDirectories = new AgentDirectoryService({
   channel: 'my-embedder',
-  resourcesPath, // dir containing agents/, tool_use_agents/, skills/
+  resourcesPath, // dir containing agents/, skills/
   state: { get: () => Effect.succeed(undefined) },
 });
 const runtime = installProcessRuntime({
@@ -259,19 +259,19 @@ await runtime.runPromise(
 );
 ```
 
-`validateRunRequest` (`src/agent/core/state/runRequests.ts`)
+`validateRunRequest` (`packages/harness/src/agent/core/state/runRequests.ts`)
 is the result-style validation helper: it returns either a
 `ValidatedExecutionRequest` or a validation message. A caller that prefers
 exceptions may instead run `AgentConfigSchema.parse` and construct the
 `ValidatedExecutionRequest` structurally, as production extension callers do
 (`packages/extension/src/commands/agent/executeCommand.ts:37-46`).
 `agent`, `model`, and `instruction` all have `.prefault()` defaults
-(`src/agent/core/definition/AgentConfig.ts`). A launch names no agent
+(`packages/harness/src/agent/core/definition/AgentConfig.ts`). A launch names no agent
 category: every agent runs as a chat, and launch resolution
-(`resolveAgentForLaunch` in `src/agent/index/agentRegistry.ts`) finds the
+(`resolveAgentForLaunch` in `packages/harness/src/agent/index/agentRegistry.ts`) finds the
 agent by name across sources. Running an agent's document task instead
 means opening the run on the document recipe
-(`documentTaskConfig` in `src/agent/output/documentRecipe.ts`).
+(`documentTaskConfig` in `packages/texra/src/agent/output/documentRecipe.ts`).
 
 ---
 
@@ -284,7 +284,7 @@ an embedder. That is correct only in a narrow sense, and the phrasing invites a
 wrong reading. State it plainly:
 
 ```ts
-// src/platform/interfaces.ts:230-238
+// packages/harness/src/platform/interfaces.ts:230-238
 export interface AgentDirectoriesPort {
   custom(): Effect.Effect<
     string,
@@ -292,7 +292,6 @@ export interface AgentDirectoriesPort {
     GlobalStorageFs | FileSystem.FileSystem
   >;
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
-  builtInToolUse(): Effect.Effect<string, AgentDirectoriesFailed>;
 }
 ```
 
@@ -304,11 +303,11 @@ disk_; that is the entire capability.
 ### Why in-memory definitions cannot work: two filesystem planes in one function
 
 `loadAgents` calls `doLoad`, which resolves the three paths and hands each to
-`scanDirectory` (`src/agent/index/agentRegistry.ts:153,184-186`). Inside
+`scanDirectory` (`packages/harness/src/agent/index/agentRegistry.ts:153,184-186`). Inside
 `scanDirectory`:
 
 - **Enumeration** uses the npm `glob` package with **no `fs` option**
-  (`src/agent/index/agentYamlScanner.ts:75-80`, import at `:5`). `glob` without
+  (`packages/harness/src/agent/index/agentYamlScanner.ts:75-80`, import at `:5`). `glob` without
   an injected `fs` reads the real Node filesystem directly.
 - **Reading** three lines later goes through Effect's own `FileSystem`, which
   a test or an embedder can back with something other than the real disk.
@@ -341,8 +340,8 @@ await writeFile(resolve(customDir, 'chat.yaml'), [...].join('\n'));
 useAgentDirectories({ custom: () => Effect.succeed(customDir) });
 ```
 
-Its `builtIn()`/`builtInToolUse()` point at the real repo tree
-(`packages/extension/resources/agents`, `…/tool_use_agents`) —
+Its `builtIn()` points at the real repo tree
+(`packages/extension/resources/agents`) —
 `src/test-kernel/agent/AgentRegistry.vitest.ts`.
 
 If the codebase's own memfs kernel cannot avoid touching real disk to register
@@ -351,23 +350,21 @@ one agent, an embedder cannot either.
 ### What injection _does_ buy you
 
 - **Skipping the packaged bundle.** `scanDirectory` returns no entries for an
-  empty path (`src/agent/index/agentYamlScanner.ts:71`), so
-  `builtIn: () => Effect.succeed('')` and
-  `builtInToolUse: () => Effect.succeed('')` are legal and cheap. This is the
+  empty path (`packages/harness/src/agent/index/agentYamlScanner.ts:71`), so
+  `builtIn: () => Effect.succeed('')` is legal and cheap. This is the
   "empty-builtIn trick" the proposals mention, and it does work. With it you
   can skip the packaged resources tree entirely and point `custom()` at your
   own directory of YAML.
 - **Choosing where custom agents live.** The CLI builds its port with
   `new AgentDirectoryService({ channel: 'cli', resourcesPath, state })`
   (`packages/cli/src/runtime/cliProcessRuntime.ts:218-229`,
-  `src/agent/index/AgentDirectoryService.ts`). An embedder is free to
+  `packages/harness/src/agent/index/AgentDirectoryService.ts`). An embedder is free to
   supply a three-line literal instead:
 
   ```ts
   const agentDirectories: AgentDirectoriesPort = {
     custom: () => Effect.succeed('/abs/path/to/my/agents'),
     builtIn: () => Effect.succeed(''),
-    builtInToolUse: () => Effect.succeed(''),
   };
   ```
 
@@ -396,13 +393,13 @@ this document.
 
 A run that needs a person commits a `request.opened` row carrying what a
 surface shows (a diff, a command, a question) and parks. The row is answered
-by a `request.decided` row (`src/shared/schemas/sessionEvent.ts:381-396`).
+by a `request.decided` row (`packages/harness/src/shared/schemas/sessionEvent.ts:381-396`).
 "Pending" is nothing but the fold: an opened request with no decision is
 listed in the session view's `requests`
-(`src/shared/session/sessionView.ts:256`;
-`src/shared/session/sessionFold.ts:1621-1640`), which a host reads through
+(`packages/harness/src/shared/session/sessionView.ts:256`;
+`packages/harness/src/shared/session/sessionFold.ts:1621-1640`), which a host reads through
 `SessionHandle.view` or the level stream `SessionHandle.viewChanges`
-(`src/agent/runtime/SessionHandle.ts:208-217`).
+(`packages/harness/src/agent/runtime/SessionHandle.ts:208-217`).
 
 Any surface decides by sending one command through the session's request
 handler:
@@ -417,13 +414,13 @@ yield *
   });
 ```
 
-(`src/shared/session/runtimeRequest.ts:42-52`). The decision lands as the
+(`packages/harness/src/shared/session/runtimeRequest.ts:42-52`). The decision lands as the
 run's `request.decided` row, and the run continues from it.
 
 `HostInteractions` is not part of this path. It is a presentation port —
 events, diagnostics, PDFs, the tool-edit preview a durable payload cannot
 carry — and no method on it returns a decision
-(`src/agent/runtime/HostInteractions.ts:70-77`). Attaching a host with
+(`packages/harness/src/agent/runtime/HostInteractions.ts:70-77`). Attaching a host with
 `session.interactions.use(...)` is how a host sees what a run does; it never
 unparks a run.
 
@@ -431,7 +428,7 @@ unparks a run.
 
 The payload union is the vocabulary: `toolEdit`, `bash`, `retry`,
 `proposal`, `planApproval`, `externalInquiry`, `userQuestion`
-(`src/shared/schemas/progressView/data.ts:106-128`). Every kind but
+(`packages/harness/src/shared/schemas/progressView/data.ts:106-128`). Every kind but
 `externalInquiry` parks the tool or turn that opened it
 (`requestParksItsCaller`, `:144-148`); an external inquiry is answered later
 and parks nothing.
@@ -440,19 +437,19 @@ and parks nothing.
 
 The host says it by supplying `approvalPromptsUnavailable` on the object it
 passes to `session.interactions.use({...})`, as in the §1 example; it is a
-field of `HostInteractions` (`src/agent/runtime/HostInteractions.ts:97`), not
+field of `HostInteractions` (`packages/harness/src/agent/runtime/HostInteractions.ts:97`), not
 an option of `runAgent`, and `RunAgentOptions` has no such property. The
 session's `interactions.approvalPromptsUnavailable` getter reads the attached
 host's answer (`HostInteractions.ts:272-276`), and it is `false` while no host
 is attached. It is a fact of the session, not a launch option: each step
 applies the session's approval policy to it (`withholdsApprovalTools`,
-`src/agent/runtime/requestPolicy.ts:44`) when it resolves the tools it offers
-(`src/agent/runtime/loop/step.ts:204-207`), so a policy change or a host
+`packages/harness/src/agent/runtime/requestPolicy.ts:44`) when it resolves the tools it offers
+(`packages/harness/src/agent/runtime/loop/step.ts:204-207`), so a policy change or a host
 attached mid-run reaches the next step's offer, and a delegated child, which
 runs on its parent's session, and a run the session wakes on its own get the
 same answer. When the answer is to withhold, `resolveAgentTools` drops every
 catalog `requiresApproval` tool before the model sees it
-(`src/agent/runtime/agentToolResolution.ts:245-249`), so a run cannot open the
+(`packages/harness/src/agent/runtime/agentToolResolution.ts:245-249`), so a run cannot open the
 requests those tools would raise. Tools an embedder supplies in
 `RunAgentOptions.tools` are not withheld: they are overlaid after the gates
 (`resolveStepTools`, `agentToolResolution.ts:356-365`) and the model is
@@ -486,14 +483,14 @@ The same holds for a plan, a delegation proposal and a question
 ### What ends a wait without a decision
 
 Stopping the run (`session.runs.stop(runId)`, with the id
-`RunAgentOptions.onRun` hands over; `src/agent/runtime/runRegistry.ts`) ends
+`RunAgentOptions.onRun` hands over; `packages/harness/src/agent/runtime/runRegistry.ts`) ends
 the run. A request opened through `SessionHandle.openRequest` (a command, an
 edit, a plan, a delegation, a question) is closed by the interruption: it
 commits `request.decided` with `{ action: 'cancel', cause: 'Run interrupted.' }`
-(`src/agent/runtime/SessionHandle.ts:706-788`). A loop-owned `retry` request
+(`packages/harness/src/agent/runtime/SessionHandle.ts:706-788`). A loop-owned `retry` request
 is not opened there, and no such row is written for it, so an unanswered
 `retry` stays listed until a `request.decided` resolves it
-(`projectRequests`, `src/shared/session/sessionFold.ts:1138-1156`, rebuilds a
+(`projectRequests`, `packages/harness/src/shared/session/sessionFold.ts:1138-1156`, rebuilds a
 run's list from its unresolved rows). Stopping is the cancellation path, not a
 substitute for answering a run that should continue.
 
@@ -515,29 +512,29 @@ when it opens.
 - **`initializeNodeRuntimeSkills({…}, pluginIds)`:** Runtime skills
   degrade to an empty catalog: with no installed skill contributions the
   fold yields no sources and discovery finds nothing
-  (`installSkillContributions` in `src/skills/runtimeSkills.ts`; registration
-  in `src/platform/defaults/nodeHost.ts`). An embedder that does call it must
+  (`installSkillContributions` in `packages/harness/src/skills/runtimeSkills.ts`; registration
+  in `packages/harness/src/platform/defaults/nodeHost.ts`). An embedder that does call it must
   pass the ids of the tool plugins (`bootstrapHost` passes every plugin's;
   each ships the skills under `<resourcesPath>/plugins/<id>/skills`, today
   `lean4` and `multi-agent`); an empty list drops those plugins' bundled
   skills.
 - **`seedDisabledToolDefaults(key)`:** No first-install tool defaults are
   written, so no plugin whose switch starts `off` is default-disabled. More tools
-  are available, not fewer (`src/tools/toolAvailability.ts:77-95`).
+  are available, not fewer (`packages/harness/src/tools/toolAvailability.ts:77-95`).
 - **`lean: directLeanLanguageServices()`:** The raw loop still runs over any
   `LeanLanguageServices` layer; without the direct one, Lean tools reach
   whatever port the embedder passed. The `memory`/`plan` injections do not
-  depend on this choice (`src/tools/plugins.ts`).
+  depend on this choice (`packages/harness/src/tools/plugins.ts`).
 
 The installed `AgentDirectoriesPort` is the whole of the core agent bundle:
-`AgentDirectoryService` resolves `builtIn()` and `builtInToolUse()` inside the
+`AgentDirectoryService` resolves `builtIn()` inside the
 `resourcesPath` it was given and the files are read where they sit, so a port
 pointed at a tree that does not hold them leaves `loadAgents` with no packaged
 agents (§2). Tool plugins that ship agents (today `lean4`) keep them at
-`<resourcesPath>/plugins/<id>/agents`, and the `builtInToolUse` scan adds
+`<resourcesPath>/plugins/<id>/agents`, and the `builtIn` scan adds
 those directories only once
 `installPluginAgentDirectories(resourcesPath, pluginIds)`
-(`src/agent/index/BundledAgentDirectories.ts`) has run, as `bootstrapHost`
+(`packages/harness/src/agent/index/BundledAgentDirectories.ts`) has run, as `bootstrapHost`
 does. Skipping it drops the Lean agents and nothing else.
 
 ---
@@ -556,14 +553,14 @@ following classification makes that distinction.
   runtime (`packages/cli/src/runtime/cliProcessRuntime.ts:230`), which also
   builds the agent-directories port
   (`:218-229`). The direct Lean language-server layer
-  (`src/tools/lean/direct/directLspAdapter.ts`) is shipped-feature parity, not a raw-loop requirement; an embedder may pass
+  (`packages/texra/src/tools/lean/direct/directLspAdapter.ts`) is shipped-feature parity, not a raw-loop requirement; an embedder may pass
   another layer. The `memory` and `plan` injections are manifest data
-  (`src/tools/plugins.ts`).
+  (`packages/harness/src/tools/plugins.ts`).
 - **`:326-333` — `createNodeWorkspaceRoots(...)`:** Required. The workspace
   roots every session is opened over.
 - **`:370-378` — `bootstrapHost({ host: 'cli', roots, secrets, skills })`:**
   The shared once-per-process install every host runs beside its runtime
-  (`src/controllers/hostBootstrap.ts:75-92`): the model HTTP dispatcher, the
+  (`packages/texra/src/controllers/hostBootstrap.ts:75-92`): the model HTTP dispatcher, the
   process setting host, the account probes, the runtime skill sources, and the
   first-install disabled-tool seed. An embedder that skips it gets a runtime
   without those, not a broken one. The CLI runs it before publishing its roots
@@ -609,18 +606,19 @@ host.
    registration stores a Lean adapter without evaluating host services, and
    the injections are manifest data; the process runtime is needed only when
    a run later reads the memory setting
-   (`src/tools/plugins.ts`;
-   `src/tools/lean/direct/directLspAdapter.ts:47-52`).
+   (`packages/harness/src/tools/plugins.ts`;
+   `packages/texra/src/tools/lean/direct/directLspAdapter.ts:47-52`).
 2. **The process runtime is once-per-process.** The Lean layer is built with
    it and closed with it; a host passes it exactly where it calls
-   `installProcessRuntime` (`src/controllers/session/sessionLayer.ts`).
+   `installProcessRuntime` (`packages/harness/src/controllers/session/sessionLayer.ts`).
 3. **The registry is process-global**, not session-scoped
-   (`src/agent/index/agentRegistry.ts:113-128`). There is no per-embedder agent
+   (`packages/harness/src/agent/index/agentRegistry.ts:113-128`). There is no per-embedder agent
    namespace.
-4. **`initializeDefaultSession` throws when a default is already open over the
-   same storage root** (`src/agent/runtime/sessionGraph.ts:313-316`). Embedding
-   inside a process that already hosts TeXRA means reusing
-   `tryDefaultSession()` or owning your own `SessionHandle`.
+4. **One session per storage root.** `SessionOwner.open`
+   (`packages/harness/src/agent/runtime/SessionOwner.ts`) returns the session
+   already open over the same root, built from what its first opener
+   supplied. Embedding inside a process that already hosts TeXRA shares that
+   session.
 5. **Some failure modes cluster at run time, not startup.** A missing
    `loadAgents` throws at agent resolution, and a request nobody decides
    parks the run mid-way (§3). Neither fails fast at bootstrap.

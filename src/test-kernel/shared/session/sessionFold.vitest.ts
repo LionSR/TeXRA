@@ -29,6 +29,7 @@ import {
 } from '@shared/schemas';
 
 import type { RunHistoryRow } from '@shared/session/historyTurns';
+import { callRequestId } from '@shared/session/inFlight';
 import {
   foldRunState,
   unboundRequests,
@@ -36,6 +37,7 @@ import {
 } from '@shared/session/runStateFold';
 import { fold } from '@shared/session/sessionFold';
 import {
+  acceptsFollowUp,
   emptySessionView,
   type SessionView,
   type RunView,
@@ -86,6 +88,25 @@ const nobody = local({ dead: [OWNER] });
 
 describe('sessionFold', () => {
   const scenario = buildScenario();
+
+  it.each(['cancelled', 'failed', 'completed'] as const)(
+    'keeps the composer available for a %s conversation with saved history',
+    (status) => {
+      const run = {
+        ...runView(foldAll([...scenario.events, nobody]), CHILD),
+        parentId: null,
+        status,
+        durableOutcome: status,
+      };
+      const host = { terminalBacked: true };
+      expect(acceptsFollowUp(run, host)).toBe(true);
+      expect(acceptsFollowUp({ ...run, readOnly: true }, host)).toBe(false);
+      expect(acceptsFollowUp({ ...run, documentTask: true }, host)).toBe(false);
+      expect(
+        acceptsFollowUp({ ...run, turn: null, forkPoint: null }, host),
+      ).toBe(false);
+    },
+  );
 
   it('keeps read conversations read across history replay and restart while detecting later activity', () => {
     const log = new Log();
@@ -274,10 +295,7 @@ describe('sessionFold', () => {
     expect(view.order).toStrictEqual([PROCESS, ROOT]);
 
     expect(root.label).toBe(runIdentityDisplayName(ROOT_IDENTITY));
-    expect(root.worktree).toStrictEqual({
-      workingDirectory: '/paper',
-      branch: 'main',
-    });
+    expect(root.worktree).toStrictEqual({ workingDirectory: '/paper' });
     expect(root.inputFiles).toStrictEqual([]);
     expect(root.childIds).toStrictEqual([CHILD]);
     // The commit ordinal of the run's run.start, never a clock.
@@ -430,7 +448,8 @@ describe('sessionFold', () => {
     expect(runView(withOwner, CHILD).approval).toBe('own');
     expect(runView(withOwner, CHILD).forceExpanded).toBe(true);
     expect(runView(withOwner, CHILD).readOnly).toBe(false);
-    expect(runView(withOwner, CHILD).statusLabel).toBe('Running');
+    expect(runView(withOwner, CHILD).statusLabel).toBe('Waiting on you');
+    expect(runView(withOwner, CHILD).tone).toBe('warning');
     expect(runView(withOwner, CHILD).statusDetail).toBeNull();
     expect(runView(withOwner, ROOT).approval).toBe('descendant');
     expect(runView(withOwner, ROOT).group).toBe('running');
@@ -883,7 +902,6 @@ describe('sessionFold', () => {
     });
     const roundOutput = (round: number) => ({
       round,
-      rawOutput: null,
       outputs: [outputOf(round)],
       compileFailures: round === 0 ? [failureOf(0)] : [],
       missingOutputs: round === 0 ? ['intro.tex'] : [],
@@ -1005,7 +1023,6 @@ describe('sessionFold', () => {
         cursor: 0,
         existence: {
           checkedAggregateIds: [id],
-          removedAggregateIds: [id],
           claims: [],
         },
       },
@@ -1060,7 +1077,6 @@ describe('sessionFold', () => {
           _tag: 'replay.complete',
           existence: {
             checkedAggregateIds: [processStart.aggregateId],
-            removedAggregateIds: [],
             claims: [{ aggregateId: processStart.aggregateId, ownerId: OWNER }],
           },
         },
@@ -1135,6 +1151,10 @@ describe('sessionFold', () => {
       title(next + 1, 'model', 'Summary'),
     ].reduce(fold, settled);
     expect(runView(renamed, CHILD).description).toBe('Renamed');
+    expect(runView(renamed, CHILD).title).toBe('Renamed');
+    // An empty title names the run by its label, never by ''.
+    const blank = fold(renamed, title(next + 2, 'user', ''));
+    expect(runView(blank, CHILD).title).toBe(runView(blank, CHILD).label);
   });
 
   it('mints a run from run.start alone', () => {
@@ -1286,7 +1306,7 @@ describe('sessionFold', () => {
 // Measured serialized size of the snapshot draft below (aggregate id
 // included, parsed defaults filled), so PR 2 has a number before it turns the
 // writes on (before the offered toolset joined the tool-use state): tool-use
-// with `stateSlices: null` was 362 bytes. It grows with the flow state it
+// with no workspace was 362 bytes. It grows with the flow state it
 // carries, never with the conversation, which the rows carry.
 // ---------------------------------------------------------------------------
 
@@ -1347,7 +1367,6 @@ const CALLS = [
     ordinal: 0,
     parallelSafe: false,
     replay: 'unsafe',
-    partition: 0,
     duplicateOf: null,
     logId: 'card-0',
     stageId: null,
@@ -1358,7 +1377,6 @@ const CALLS = [
     ordinal: 1,
     parallelSafe: false,
     replay: 'unsafe',
-    partition: 0,
     duplicateOf: 'call-a',
     logId: 'card-1',
     stageId: null,
@@ -1374,25 +1392,20 @@ const TURN_USAGE = {
   cachedInputTokens: 4,
   cacheMissInputTokens: 6,
 };
-const RUNTIME = {
-  modelId: 'gpt-test',
-  backend: 'openai',
-  lastError: null,
-  declinedRoutes: [],
-};
-const toolUseSnapshot = (runtime: Record<string, unknown> = {}) => ({
-  type: 'run.snapshot',
-  payload: {
-    family: 'toolUse',
-    runtime: { ...RUNTIME, ...runtime },
-    state: { stateSlices: null },
-  },
+/** Where the loop stands: its first position opens the run. */
+const position = (at: string, turn: number) => ({
+  type: 'run.position',
+  payload: { family: 'toolUse', at, turn },
 });
 
-/** The binding row an approval commits beside its `request.opened`. */
-const toolBinding = (callId: string, requestId: string, attempt = 1) => ({
-  type: 'tool.binding',
-  payload: { callId, attempt, requestId, role: 'call' },
+/** The row a call's body starts with. */
+const intent = (callId: string, attempt = 1) => ({
+  type: 'tool.intent',
+  payload: {
+    origin: { kind: 'response', responseId: RESPONSE_ID },
+    callId,
+    attempt,
+  },
 });
 const message = (payload: Record<string, unknown>) => ({
   type: 'model.message',
@@ -1411,7 +1424,6 @@ const settlement = (
     duplicateOf: null,
     result: { status: 'executed', output: 'ok' },
     attachments: [],
-    stateMutation: [],
     ...overrides,
   },
 });
@@ -1469,19 +1481,18 @@ const TURN_ROWS: readonly RunHistoryRow[] = [
     messages: [USER('list the files')],
     sourceResponse: null,
   }),
-  toolUseSnapshot(),
+  position('turn.ready', 0),
   message({
     kind: 'attempt',
     request: '0'.repeat(64),
     invocation: INVOCATION,
     origin: ORIGIN,
-    delivery: 'stream',
+    purpose: 'turn',
   }),
   message({
     kind: 'identified',
     invocation: INVOCATION,
     providerResponseId: 'resp-1',
-    returnedModel: null,
   }),
   message({
     kind: 'response',
@@ -1491,14 +1502,7 @@ const TURN_ROWS: readonly RunHistoryRow[] = [
     calls: CALLS,
     usage: TURN_USAGE,
   }),
-  {
-    type: 'tool.intent',
-    payload: {
-      origin: { kind: 'response', responseId: RESPONSE_ID },
-      callIds: ['call-a'],
-      attempt: 1,
-    },
-  },
+  intent('call-a'),
   settlement('call-a'),
   settlement('call-b', { disposition: 'duplicate', duplicateOf: 'call-a' }),
   message({
@@ -1506,7 +1510,7 @@ const TURN_ROWS: readonly RunHistoryRow[] = [
     messages: [TOOL_GROUP],
     sourceResponse: RESPONSE_ID,
   }),
-  toolUseSnapshot(),
+  position('results.ready', 1),
   {
     type: 'run.position',
     payload: { family: 'toolUse', at: 'turn.end', turn: 1 },
@@ -1529,22 +1533,23 @@ const reasonOf = <A>(result: Result.Result<A, { reason: string }>): string =>
 describe('foldRunState', () => {
   it.each([
     [
-      'between tool.intent and the adapter call: outcome unknown, never fabricated',
+      'after the body started, before its result: outcome unknown, never fabricated',
       () => {
         const state = stateOf(through(6));
-        expect(state?.pendingIntents['call-a']).toEqual({
+        expect(state?.pendingResponse?.records['call-a']?.status).toEqual({
+          kind: 'started',
           attempt: 1,
-          responseId: RESPONSE_ID,
-          binding: null,
         });
-        expect(state?.pendingResponse?.settled).toEqual({});
+        expect(state?.pendingResponse?.records['call-b']?.status).toEqual({
+          kind: 'issued',
+        });
       },
     ],
     [
       'after a paid response, before the turn-end snapshot: process, never re-invoke',
       () => {
         const state = stateOf(through(5));
-        expect(state?.openAttempt).toBeNull();
+        expect(state?.invocation).toBeNull();
         expect(state?.pendingResponse?.responseId).toBe(RESPONSE_ID);
         expect(state?.phase).toBe('model.submitted');
         expect(state?.messages).toHaveLength(1);
@@ -1554,37 +1559,45 @@ describe('foldRunState', () => {
       'during generation, before the response row: the invocation is attributable',
       () => {
         const state = stateOf(through(4));
-        expect(state?.openAttempt?.providerResponseId).toBe('resp-1');
+        expect(state?.invocation?.current.providerResponseId).toBe('resp-1');
         expect(state?.pendingResponse).toBeNull();
       },
     ],
     [
-      'approval requested, never resolved: the binding rides its own row',
+      'approval requested before the body, never resolved: its derived id binds it',
       () => {
-        const state = stateOf(
-          through(
-            6,
-            {
-              type: 'request.opened',
-              requestId: 'req-1',
-              payload: {
-                kind: 'bash',
-                data: {
-                  requestId: 'req-1',
-                  command: 'ls',
-                  allowBypass: true,
-                  runId: RUN_HISTORY_RUN,
-                },
-              },
-            },
-            toolBinding('call-a', 'req-1'),
-          ),
+        const requestId = callRequestId(
+          { responseId: RESPONSE_ID, callId: 'call-a', attempt: 1 },
+          1,
         );
-        expect(state?.requests['req-1']?.resolved).toBe(false);
-        expect(state?.pendingIntents['call-a']?.binding).toEqual({
-          requestId: 'req-1',
-          role: 'call',
+        const approval = {
+          type: 'request.opened',
+          requestId,
+          payload: {
+            kind: 'bash',
+            data: {
+              requestId,
+              command: 'ls',
+              allowBypass: true,
+              runId: RUN_HISTORY_RUN,
+            },
+          },
+        };
+        // Asked before its body started: nothing ran, whatever the answer,
+        // and a resume re-enters the request rather than retiring it.
+        const asking = stateOf(through(5, approval));
+        expect(asking?.requests[requestId]?.resolved).toBe(false);
+        expect(asking?.pendingResponse?.records['call-a']?.status).toEqual({
+          kind: 'issued',
         });
+        expect(asking === null ? [] : unboundRequests(asking)).toEqual([]);
+        // The body starts under it: still the attempt's own request.
+        const started = stateOf(through(5, approval, intent('call-a')));
+        expect(started?.pendingResponse?.records['call-a']?.status).toEqual({
+          kind: 'started',
+          attempt: 1,
+        });
+        expect(started === null ? [] : unboundRequests(started)).toEqual([]);
       },
     ],
     [
@@ -1641,7 +1654,7 @@ describe('foldRunState', () => {
       'an edit that replaced history mid-run: the range spliced by the row',
       () => {
         const held = stateOf(through(11))?.messages.length ?? 0;
-        const compacted = (trigger: 'context-limit' | 'context-window') =>
+        const compacted = (trigger: 'context-limit') =>
           stateOf(
             through(11, {
               type: 'context.edit',
@@ -1659,11 +1672,6 @@ describe('foldRunState', () => {
         expect(state?.messages.map((m) => m.role)).toEqual(['user', 'user']);
         // The edit is the next one's base.
         expect(state?.lastEdit).toBe(12);
-        // Only an overflow compaction spends the round's one overflow retry.
-        expect(state?.overflowRecoveredAtTurn).toBeNull();
-        const overflow = compacted('context-window');
-        expect(overflow?.turn).toBeTypeOf('number');
-        expect(overflow?.overflowRecoveredAtTurn).toBe(overflow?.turn);
       },
     ],
     [
@@ -1711,7 +1719,7 @@ describe('foldRunState', () => {
                 request: '0'.repeat(64),
                 invocation: INVOCATION,
                 origin: continuationOrigin,
-                delivery: 'stream',
+                purpose: 'turn',
               }),
             ),
             ...TURN_ROWS.slice(3, 4),
@@ -1758,7 +1766,6 @@ describe('foldRunState', () => {
         );
         expect(state?.outcome).toBe('completed');
         expect(state?.family).toBe('toolUse');
-        expect(state?.lastSnapshot).not.toBeNull();
       },
     ],
     [
@@ -1776,7 +1783,7 @@ describe('foldRunState', () => {
               request: '0'.repeat(64),
               invocation: second,
               origin: ORIGIN,
-              delivery: 'stream',
+              purpose: 'turn',
             }),
             message({
               kind: 'response',
@@ -1840,7 +1847,7 @@ describe('foldRunState', () => {
               type: 'tool.intent',
               payload: {
                 origin: { kind: 'response', responseId: RESPONSE_ID },
-                callIds: ['__proto__'],
+                callId: '__proto__',
                 attempt: 1,
               },
             },
@@ -1848,8 +1855,13 @@ describe('foldRunState', () => {
         );
         // On a plain object the assignment would call the inherited setter and
         // the barrier would vanish from the state the resume rule reads.
-        expect(Object.keys(state?.pendingIntents ?? {})).toEqual(['__proto__']);
-        expect(state?.pendingIntents['__proto__']?.attempt).toBe(1);
+        expect(Object.keys(state?.pendingResponse?.records ?? {})).toEqual([
+          '__proto__',
+        ]);
+        expect(state?.pendingResponse?.records['__proto__']?.status).toEqual({
+          kind: 'started',
+          attempt: 1,
+        });
       },
     ],
     [
@@ -1880,8 +1892,6 @@ describe('foldRunState', () => {
       origin: ORIGIN,
       providerResponseId: 'resp-remote',
       afterSequence: 7,
-      admittedFingerprint: 'b'.repeat(64),
-      store: true,
     };
     const accepted = message({
       kind: 'accepted',
@@ -1898,7 +1908,7 @@ describe('foldRunState', () => {
       operation: {
         evidence: {
           kind: 'openai-responses',
-          data: { afterSequence: 7, admittedFingerprint: 'b'.repeat(64) },
+          data: { afterSequence: 7 },
         },
       },
     });
@@ -1915,7 +1925,6 @@ describe('foldRunState', () => {
       'tool',
     ]);
     expect(state?.pendingResponse).toBeNull();
-    expect(state?.pendingIntents).toEqual({});
     expect(state?.usage.totalInputTokens).toBe(10);
     expect(state?.usage.totalCacheReadInputTokens).toBe(4);
     // The turn's stamped price: a settlement adds nothing to it.
@@ -1931,16 +1940,15 @@ describe('foldRunState', () => {
     ['out-of-order', () => foldRunState(null, [TURN_ROWS[1], TURN_ROWS[0]])],
     ['orphan-settlement', () => through(2, settlement('call-a'))],
     [
-      // The intent admitted attempt 1; attempt 2 is another dispatch, and
-      // accepting it here would retire attempt 1's uncertainty silently.
+      // A call's attempt never goes back: attempt 2's body started, so
+      // attempt 1 settling now would retire attempt 2's uncertainty silently.
       'out-of-order',
-      () => through(6, settlement('call-a', { attempt: 2 })),
+      () => through(6, intent('call-a', 2), settlement('call-a')),
     ],
     [
-      // A binding names the intent the rows hold, at the attempt the
-      // approval admits; anything else is a row out of order.
-      'out-of-order',
-      () => through(6, toolBinding('call-a', 'req-9', 2)),
+      // A call settles once.
+      'orphan-settlement',
+      () => through(7, settlement('call-a', { attempt: 2 })),
     ],
     [
       'mismatched-delivery',
@@ -1958,15 +1966,42 @@ describe('foldRunState', () => {
     expect(reasonOf(run())).toBe(reason);
   });
 
+  // A `submit_output` a script issued is the run's structured output, read
+  // off the same settlement as a direct call's: under codemode the model
+  // submits from inside its script, and losing it would leave the run with
+  // no output and a latch that refuses a second submission.
+  it('folds a structured output a script submitted', () => {
+    const state = stateOf(
+      through(
+        5,
+        {
+          type: 'script.call',
+          payload: {
+            scriptCallId: 'call-a',
+            seq: 0,
+            callId: 'call-a/0',
+            toolName: 'submit_output',
+            input: {},
+            replay: 'unsafe',
+            logId: 'log-s0',
+            stageId: 'stage-s',
+            phase: null,
+          },
+        },
+        settlement('call-a/0', {
+          result: { status: 'executed', output: 'ok', value: { a: 1 } },
+        }),
+      ),
+    );
+    expect(state?.structured).toEqual({ value: { a: 1 } });
+  });
+
   it('keeps the private run history types out of the listing and off the transport, and lists run.position', () => {
     const runHistoryTypes = [
       'model.message',
       'context.edit',
       'tool.intent',
-      'tool.binding',
       'tool.result',
-      'model.retry',
-      'run.snapshot',
     ] as const;
     for (const type of runHistoryTypes)
       expect(listingTypeOf({ type })).toBeNull();
@@ -2001,17 +2036,6 @@ describe('foldRunState', () => {
     expect(rowAccepted(response(CALLS))).toBe(true);
     expect(
       rowAccepted(response([{ ...CALLS[0], toolName: 'rm' }, CALLS[1]])),
-    ).toBe(false);
-    // The run's usage totals are derived from its priced responses alone
-    // (D12): a settlement never touches them.
-    expect(
-      rowAccepted(
-        settlement('call-a', {
-          stateMutation: [
-            { op: 'set', path: ['usage', 'totalCost'], value: 0 },
-          ],
-        }),
-      ),
     ).toBe(false);
     // The delivered tool group takes its provider-facing status from the
     // result, so a call the run recorded as failed carries an error result.

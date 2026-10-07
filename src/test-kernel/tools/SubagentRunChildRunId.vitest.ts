@@ -5,12 +5,12 @@ import { it } from '@effect/vitest';
 import { Effect, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { RunToolCall } from '@agent/runtime/RunCall';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import type { RunId } from '@shared/schemas';
 import { noStep, testModelCell } from '@test/support/nativeToolTestLayer';
 import { noopTrace } from '@test/support/noopTrace';
@@ -55,10 +55,6 @@ vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
   };
 });
 
-vi.mock('@tools/approval', () => ({
-  configureDelegatedChildApprovals: vi.fn(),
-}));
-
 import { launchDetachedSubagent } from '@tools/delegation/subagentRun';
 import { RunFileService } from '@utils/files/runStorage';
 
@@ -73,7 +69,7 @@ describe('launchDetachedSubagent child run launch', () => {
     callId: 'parent-call',
     env: { roots },
     emit: () => undefined,
-    workspace: AgentWorkspaceState.create(),
+    readFiles: new Set<string>(),
     responseId: 'parent-response',
     instruction: undefined,
     attempt: 1,
@@ -87,6 +83,7 @@ describe('launchDetachedSubagent child run launch', () => {
       session: { tag: 'parent-session' } as never,
       task: null,
       opening: null,
+      callbacks: {},
       fileService: new RunFileService('parent-exec' as RunId, roots),
       steps: noStep(),
       scope: Scope.makeUnsafe(),
@@ -107,7 +104,7 @@ describe('launchDetachedSubagent child run launch', () => {
       launchDetachedSubagent(parent, defaultPayload, {
         runId: 'child-run' as RunId,
         parentOffered: [],
-        inheritChildRunApprovals: () => undefined,
+        grants: NO_APPROVAL_GRANTS,
       }).pipe(Effect.provideService(Runs, testRunRegistry())),
       fakeProcessServices(),
     );

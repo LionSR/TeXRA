@@ -64,7 +64,7 @@ const REAL_KNIP_STDOUT = JSON.stringify({
       ],
     },
     {
-      file: 'src/shared/schemas/goal.ts',
+      file: 'packages/harness/src/shared/schemas/goal.ts',
       duplicates: [
         [
           { name: 'goalElapsedMs', line: 53, col: 17, pos: 1751 },

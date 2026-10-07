@@ -400,6 +400,7 @@ jobs:
           pnpm --filter @texra/desktop run build:main
           pnpm --filter @texra/desktop run build:preload
           pnpm --filter @texra/desktop run build:renderer
+          node packages/extension/scripts/build-serve.mjs
 
       - name: Run desktop e2e suite
         env:

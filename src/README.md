@@ -1,41 +1,54 @@
-# `src/` — host-agnostic production code and centralized tests
+# The source map: the harness, the app, and the test suite
 
-Production code in this directory is host-agnostic and consumed by one or more of
-the VS Code extension (`packages/extension`), Electron desktop app
-(`packages/desktop`), and terminal CLI (`packages/cli`). A module does not need
-to be used by every host to belong here. `src/test-kernel/` centralizes tests for
-both shared and host-specific behavior; suites may import or mock extension,
-desktop, and CLI surfaces. Host-specific production wiring lives in the package
-that owns that host.
+TeXRA's production code lives in three workspace packages (split design
+`.agents/docs/proposed/architecture/2026-10-02-harness-package-split.md`):
 
-There is no `@texra/core` package. Hosts reach this code through the path
-aliases declared in [`tsconfig.json`](../tsconfig.json) (`@agent/*`, `@platform/*`, `@shared/*`, …).
-Use the alias, not a long relative chain.
+- `packages/harness/src` (`@texra-ai/harness`): the Effect-only agent
+  harness: the run loop and its history, sessions and storage, the plugin
+  registry and the built-in plugins, the ports. It imports nothing from the
+  app (an ESLint zone, with a shrink-only list of residents).
+- `packages/texra/src` (`@texra-ai/texra`): the app, TeXRA itself: its
+  plugins, LaTeX, the UI kit, the settings rows and the host-side
+  controllers.
+- `packages/llm/src` (`@texra-ai/llm`): model access.
+
+The VS Code extension (`packages/extension`), the Electron desktop app
+(`packages/desktop`) and the terminal CLI (`packages/cli`) are hosts over
+them. Repo-root `src/` holds only `src/test-kernel/`, which centralizes tests
+for shared and host-specific behavior; suites may import or mock extension,
+desktop, and CLI surfaces.
+
+Code reaches a module through the path aliases declared in
+[`tsconfig.json`](../tsconfig.json) (`@agent/*`, `@platform/*`, `@shared/*`,
+…; an app file that left a mixed directory takes `@texra/*`). Use the alias,
+not a long relative chain.
 
 ## Subsystems
 
-| Directory           | What it is                                                                                                                                                                                                                                     |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/agent/`        | The agent domain model, the two run loops, and provider abstraction. Largest subsystem; has its own READMEs — start with [`agent/core/README.md`](agent/core/README.md)                                                                        |
-| `src/tools/`        | Tool implementations the agent can call (bash, file edits, delegation, search, setup)                                                                                                                                                          |
-| `src/shared/`       | Wire contracts and message types (Zod schemas) plus the host-neutral logic over them. Browser-reachable throughout                                                                                                                             |
-| `src/ui/`           | The shared browser UI kit (`wa/`, `styles/`, `transcript/`, `markdown/`, `copy/`) all three hosts render with. Lit and Web Awesome live here, not in a host package                                                                            |
-| `src/controllers/`  | Host-neutral orchestration — the layer hosts call into instead of driving `agent/` directly                                                                                                                                                    |
-| `src/utils/`        | Host-agnostic helpers. A fixed set is additionally browser-safe (see below)                                                                                                                                                                    |
-| `src/latex/`        | LaTeX compilation, diffing, formatting, and log parsing                                                                                                                                                                                        |
-| `src/common/`       | Cross-cutting helpers that are not wire contracts — notably `common/errors/` error classification                                                                                                                                              |
-| `src/platform/`     | Host port contracts (config, state, lifecycle, agent directories, secrets, rooted fs, workspace roots) served by `installProcessRuntime`                                                                                                       |
-| `src/model/`        | The binding of a run's model choice to the session's settings: route facts, the picker's options, Copilot routing, reasoning levels, subscription preferences. The catalog, routes, providers and sign-in are `@texra-ai/llm` (`packages/llm`) |
-| `src/transcript/`   | Trace and transcript document schemas plus stream logging                                                                                                                                                                                      |
-| `src/replacement/`  | Text-replacement utilities used by editing tools                                                                                                                                                                                               |
-| `src/skills/`       | Skill schema and loading                                                                                                                                                                                                                       |
-| `src/housekeeping/` | Workspace cleanup routines                                                                                                                                                                                                                     |
-| `src/telemetry/`    | Usage-log reporting                                                                                                                                                                                                                            |
-| `src/logger/`       | Channel-keyed logging primitives                                                                                                                                                                                                               |
-| `src/eventBus/`     | `AppSignals` **only** — process-scoped app-lifecycle signals (auth, subscriptions, tool availability). Not run or session progress                                                                                                             |
-| `src/hosts/`        | UI host descriptors shared across the three hosts                                                                                                                                                                                              |
-| `src/types/`        | Ambient module declarations for untyped third-party packages                                                                                                                                                                                   |
-| `src/test-kernel/`  | The test suite. It dominates a directory listing but ships in nothing                                                                                                                                                                          |
+| Directory                           | What it is                                                                                                                                                                                                                                     |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/harness/src/agent/`       | The agent domain model, the run loop, and provider abstraction. Largest subsystem; has its own READMEs — start with [`agent/core/README.md`](../packages/harness/src/agent/core/README.md)                                                     |
+| `packages/harness/src/tools/`       | The tool engine and the built-in plugins (bash and the file tools, web, memory, goal, multi-agent, codemode, MCP)                                                                                                                              |
+| `packages/harness/src/shared/`      | Wire contracts and message types (Zod schemas) plus the host-neutral logic over them, including the transcript row model (`shared/transcript/`)                                                                                                |
+| `packages/harness/src/controllers/` | The session layer the hosts and the app call into instead of driving `agent/` directly                                                                                                                                                         |
+| `packages/harness/src/utils/`       | Host-agnostic helpers. A fixed set is additionally browser-safe (see below)                                                                                                                                                                    |
+| `packages/harness/src/common/`      | Cross-cutting helpers that are not wire contracts — notably `common/errors/` error classification                                                                                                                                              |
+| `packages/harness/src/platform/`    | Host port contracts (config, state, lifecycle, agent directories, secrets, rooted fs, workspace roots) served by `installProcessRuntime`                                                                                                       |
+| `packages/harness/src/model/`       | The binding of a run's model choice to the session's settings: route facts, the picker's options, Copilot routing, reasoning levels, subscription preferences. The catalog, routes, providers and sign-in are `@texra-ai/llm` (`packages/llm`) |
+| `packages/harness/src/transcript/`  | Trace and transcript document schemas plus stream logging                                                                                                                                                                                      |
+| `packages/harness/src/skills/`      | Skill schema and loading                                                                                                                                                                                                                       |
+| `packages/harness/src/logger/`      | Channel-keyed logging primitives                                                                                                                                                                                                               |
+| `packages/harness/src/eventBus/`    | `AppSignals` **only** — process-scoped app-lifecycle signals (auth, subscriptions, tool availability). Not run or session progress                                                                                                             |
+| `packages/harness/src/types/`       | Ambient module declarations for untyped third-party packages                                                                                                                                                                                   |
+| `packages/texra/src/tools/`         | The app's plugins: LaTeX, papers, Lean, setup, the documents plugin, codex, claude-agent, GitHub subscriptions, external inquiry; `registry.ts` is TeXRA's plugin list                                                                         |
+| `packages/texra/src/controllers/`   | The app's controllers: main view, progress view, settings view, model access, onboarding, the service (`server/`) and the host-side session modules                                                                                            |
+| `packages/texra/src/ui/`            | The shared browser UI kit (`wa/`, `styles/`, `markdown/`, `copy/`) all three hosts render with. Lit and Web Awesome live here, not in a host package                                                                                           |
+| `packages/texra/src/latex/`         | LaTeX compilation, diffing, formatting, and log parsing                                                                                                                                                                                        |
+| `packages/texra/src/replacement/`   | Text-replacement utilities used by editing tools                                                                                                                                                                                               |
+| `packages/texra/src/housekeeping/`  | Workspace cleanup routines                                                                                                                                                                                                                     |
+| `packages/texra/src/hosts/`         | UI host descriptors shared across the three hosts                                                                                                                                                                                              |
+| `packages/texra/src/telemetry/`     | Usage-log reporting                                                                                                                                                                                                                            |
+| `src/test-kernel/`                  | The test suite. It dominates a directory listing but ships in nothing                                                                                                                                                                          |
 
 ## Two axes that decide where code goes
 
@@ -62,9 +75,9 @@ wrong.
   (extension host ↔ webview, main ↔ renderer, client ↔ backend): if both sides
   must agree on the shape, it goes here, together with the host-neutral logic
   that folds and reads them.
-- **`ui/`** — the **shared browser UI kit**: `ui/wa/` (Web Awesome icon and
-  component helpers), `ui/styles/`, `ui/transcript/` (the transcript row
-  model), `ui/markdown/` and `ui/copy/` (user-facing strings). That is runtime
+- **`ui/`** — the **shared browser UI kit** (in the app): `ui/wa/` (Web
+  Awesome icon and component helpers), `ui/styles/`, `ui/markdown/` and
+  `ui/copy/` (user-facing strings). That is runtime
   UI code, not a contract — it imports `lit`. Reusable webview UI belongs here,
   not in a host package and not under `shared/`.
 - **`common/`** — cross-cutting logic with domain meaning that is not a wire
@@ -80,7 +93,7 @@ depends on Lit. Check for an existing boundary test near your target directory
 before assuming either extreme.
 
 **Where this document is not authoritative.** [`AGENTS.md`](../AGENTS.md) is the
-canonical statement of conventions; this file is an orientation map for `src/`
+canonical statement of conventions; this file is an orientation map for the source tree
 and defers to it wherever the two overlap. Facts that live in code — the
 VS Code-free zone list, the lint rules, the ratchet baselines — are canonical in
 code, and this file points at them rather than restating them.

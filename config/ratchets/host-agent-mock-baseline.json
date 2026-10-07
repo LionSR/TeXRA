@@ -1,15 +1,4 @@
 {
-  "semantics": "Distinct (file, form, specifier) mock() and doMock() call sites (on vi or on a createModuleMocks() recorder) in host-side (CLI + desktop) test-kernel suites and the shared support modules they import (src/test-kernel/cli/**, src/test-kernel/desktop/**, src/test-kernel/support/**) that mock an internal @agent/* module specifier. Each site pins @agent's current internal module layout from outside src/agent, per issue #7684 QA-2 / #9731. The ratchet fails on any live tuple absent from this baseline (new edge) and on any baseline tuple with no live site (stale headroom); regenerating to remove stale entries is welcome and should shrink this file.",
-  "sites": [
-    {
-      "file": "src/test-kernel/cli/History.vitest.ts",
-      "form": "mock",
-      "specifier": "@agent/storage"
-    },
-    {
-      "file": "src/test-kernel/support/agentCatalogMock.ts",
-      "form": "mock",
-      "specifier": "@agent/index"
-    }
-  ]
+  "semantics": "Retired host mock measurement. scripts/core-quality-measure.mjs (core-module-mocks) is the active measurement owner, including CLI, desktop and shared-support internal @agent mocks. The empty sites list records retirement and remains because the baseline comparison forbids deleting budget files.",
+  "sites": []
 }

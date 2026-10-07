@@ -7,7 +7,6 @@
 import { app, Notification, type BrowserWindow } from 'electron';
 import { Context, Effect, Queue, Stream, SubscriptionRef } from 'effect';
 
-import type { RunId } from '@shared/schemas';
 import {
   attentionOf,
   type RunView,
@@ -16,6 +15,7 @@ import {
 
 import { DesktopProjects, type DesktopProject } from './desktopProjects.js';
 import { DESKTOP_HEADLESS } from './desktopPresentation.js';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The host's attention surfaces, served by the Electron composition root. */
 interface DesktopAttentionPortShape {
@@ -111,7 +111,7 @@ function finishedLine(
   if (previous === undefined || run.parentId !== null) return undefined;
   if (run.durableOutcome === null || previous.durableOutcome !== null)
     return undefined;
-  return `${run.description ?? run.label}: ${run.statusLabel}.`;
+  return `${run.title}: ${run.statusLabel}.`;
 }
 
 /**
@@ -150,7 +150,7 @@ export const followDesktopAttention = Effect.gen(function* () {
           const run = view.runs.get(runId);
           if (run === undefined || notices.some((n) => n.runId === runId))
             continue;
-          const line = `${run.description ?? run.label} is waiting for you.`;
+          const line = `${run.title} is waiting for you.`;
           notices.push({ runId, line });
         }
         for (const run of view.runs.values()) {
@@ -188,7 +188,7 @@ export const followDesktopAttention = Effect.gen(function* () {
     Stream.switchMap(({ projects: open }) =>
       Stream.mergeAll(
         [projects.fallback(), ...open].map((project) =>
-          project.session.viewChanges.pipe(
+          project.backend.view.changes.pipe(
             Stream.map((view) => [project, view] as const),
           ),
         ),

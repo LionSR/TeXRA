@@ -16,6 +16,7 @@ import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 
@@ -47,7 +48,7 @@ afterEach(async () => {
  */
 async function endRun(outcome: RunOutcome): Promise<void> {
   publishTestRunStart(session, RUN_ID);
-  session.publish([
+  publishTestRows(session, [
     {
       type: 'run.end',
       aggregateId: aggregateId('run', RUN_ID),
@@ -56,7 +57,7 @@ async function endRun(outcome: RunOutcome): Promise<void> {
     },
   ]);
   await vi.waitFor(() => {
-    assert.strictEqual(session.runView(RUN_ID)?.status, outcome);
+    assert.strictEqual(session.view.run(RUN_ID)?.status, outcome);
   });
 }
 
@@ -86,7 +87,7 @@ describe('turnAttributionNote', () => {
           turnIndex,
           phase,
         });
-        yield* session.commit([
+        yield* session.log.transact([
           turnRow(1, 'accepted'),
           turnRow(1, 'settled'),
           turnRow(2, 'accepted'),

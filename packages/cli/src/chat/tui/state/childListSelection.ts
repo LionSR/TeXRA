@@ -1,5 +1,5 @@
 // Local imports - shared stream identity
-import type { RunId } from '@shared/schemas';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 export interface ChildListSelectionState {
   readonly focused: boolean;

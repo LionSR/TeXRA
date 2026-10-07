@@ -1,4 +1,4 @@
-import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
+import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 
 /** A `/login` request: one subscription provider and its sign-in transport. */
 export interface CliLoginSlashArgs {
@@ -14,9 +14,6 @@ export type CliLogoutTarget = SubscriptionProviderId | 'all';
  *  parses through `parseChatLoginSlashArgs`. */
 export type LoginFormValue =
   SubscriptionProviderId | `${SubscriptionProviderId} --device`;
-
-const CHATGPT_LOGIN_TARGETS = new Set(['chatgpt', 'codex', 'subscription']);
-const GROK_LOGIN_TARGETS = new Set(['grok', 'xai', 'supergrok']);
 
 // `--device` and `--no-browser` are distinct sign-in transports, not
 // refinements of each other (device-code shows no loopback URL), and the
@@ -46,11 +43,7 @@ export function parseChatLoginSlashArgs(
   }
   if (positionals.length !== 1) return undefined;
   const [name] = positionals;
-  if (CHATGPT_LOGIN_TARGETS.has(name)) {
-    return { target: 'chatgpt', noBrowser, device };
-  }
-  if (GROK_LOGIN_TARGETS.has(name)) {
-    return { target: 'grok', noBrowser, device };
-  }
-  return undefined;
+  return name === 'chatgpt' || name === 'grok'
+    ? { target: name, noBrowser, device }
+    : undefined;
 }

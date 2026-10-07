@@ -7,8 +7,8 @@ import { Secrets } from '@platform/secrets';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 // Local imports - tools
-import { getNewestTimestamp } from '@tools/github/githubPaths';
-import { DedupedResource } from '@tools/github/pollingDedup';
+import { getNewestTimestamp } from '@texra/tools/github/githubPaths';
+import { DedupedResource } from '@texra/tools/github/pollingDedup';
 import {
   PollingSourceBase,
   createBasePollState,
@@ -16,7 +16,7 @@ import {
   type BasePollSubscriptionState,
   type PollHookRejected,
   type PollingLifetime,
-} from '@tools/github/PollingSourceBase';
+} from '@texra/tools/github/PollingSourceBase';
 
 interface TestItem {
   id: number;

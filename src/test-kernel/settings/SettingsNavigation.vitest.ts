@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@shared/hostBridge', () => ({
+vi.mock('@texra/shared/hostBridge', () => ({
   postMessage: vi.fn(),
   hostBridge: {
     postMessage: vi.fn(),
@@ -10,7 +10,7 @@ vi.mock('@shared/hostBridge', () => ({
 }));
 
 import type { SettingsNavEntry } from '@settingsView/frontend/settingsNav';
-import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
+import type { SettingsTabPanelName } from '@texra/shared/settingsView/settingsViewMessages';
 
 import { useLitComponentTestDom } from './litComponentTestUtils';
 

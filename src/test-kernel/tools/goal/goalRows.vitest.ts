@@ -11,6 +11,7 @@ import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import {
   createTestSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
@@ -84,10 +85,27 @@ describe('the goal row is the goal', () => {
         });
         yield* Effect.addFinalizer(() => closeSessionOf(session));
         publishTestRunStart(session, RUN_A);
-        const started = yield* startGoal(session, RUN_A, 'prove the estimate');
+        const started = yield* startGoal(
+          session,
+          RUN_A,
+          'prove the estimate',
+          'commands',
+        );
+        expect(session.approvals.bypass(RUN_A, 'bash')).toBe('goal');
 
         yield* pauseGoal(session, RUN_A);
         expect(goalOf(session, RUN_A)?.status).toBe('paused');
+        // The pause and the end of its grant are one transaction: no grant
+        // outlives the goal that armed it.
+        expect(session.approvals.bypass(RUN_A, 'bash')).toBeNull();
+        const [paused, revoked] = (yield* session.log.rows(
+          qualifyAggregateId('run', RUN_A),
+        )).slice(-2);
+        expect([paused?.type, revoked?.type]).toEqual([
+          'plugin.fact',
+          'approval.policy',
+        ]);
+        expect(revoked?.at).toBe(paused?.at);
 
         yield* retargetGoal(session, RUN_A, 'prove the sharp estimate');
         expect(goalOf(session, RUN_A)).toEqual({
@@ -124,13 +142,13 @@ describe('the goal row is the goal', () => {
       publishTestRunStart(session, RUN_A);
       yield* startGoal(session, RUN_A, 'objective a');
 
-      session.publish([
+      publishTestRows(session, [
         {
           type: 'run.removed',
           aggregateId: qualifyAggregateId('run', RUN_A),
         },
       ]);
-      yield* session.settlePublications();
+      yield* session.log.settled;
 
       expect(goalOf(session, RUN_A)).toBeNull();
     }),

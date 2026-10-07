@@ -7,20 +7,20 @@
  */
 import * as path from 'node:path';
 
-import {
-  ensureService,
-  spawnService,
-  type ServiceConnection,
-} from '@controllers/server/client';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
+import {
+  linkService,
+  spawnService,
+  type ServiceLink,
+} from '@texra/controllers/server/client';
 import type { Effect, Scope } from 'effect';
 
-/** Connect to the service, starting it when none answers, for the
- *  caller's scope. */
+/** Hold the service, starting it when none answers, for the caller's
+ *  scope; the link reaches it again when it goes away. */
 export function reachExtensionService(
   extensionPath: string,
-): Effect.Effect<ServiceConnection, Error, Scope.Scope> {
-  return ensureService(
+): Effect.Effect<ServiceLink, Error, Scope.Scope> {
+  return linkService(
     DEFAULT_NODE_STORAGE_ROOT,
     spawnService(
       DEFAULT_NODE_STORAGE_ROOT,

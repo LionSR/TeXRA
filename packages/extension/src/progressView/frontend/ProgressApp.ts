@@ -35,23 +35,23 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared webview
 import '@ui/wa/spinner';
-import {
-  FILE_SELECT_CONFIGS,
-  LAUNCH_FILE_LISTS,
-} from '@shared/launcher/fileSelectConfigs';
-import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
 import { agentName } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
-import { SessionUiEvents } from '@shared/session/uiEvents';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import {
+  FILE_SELECT_CONFIGS,
+  LAUNCH_FILE_LISTS,
+} from '@texra/shared/launcher/fileSelectConfigs';
+import { installToolbarTooltips } from '@texra/shared/litControllers/TooltipController';
 import { designTokens } from '@ui/styles';
 import {
   renderIconActionButton,
   renderIconActionButtonParts,
 } from '@ui/wa/actionButtons';
-import { registerTeXRAWebAwesomeIcons } from '@ui/wa/webAwesomeIcons';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { selectedItemValue } from '@ui/wa/selectTemplates';
+import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 import { ONBOARDING_SETUP_HANDOFF } from '@ui/copy/onboarding';
 import { getBasename } from '@utils/core';
 
@@ -86,6 +86,7 @@ import './components/GettingStartedBanner';
 import './components/OnboardingWelcomeCard';
 import './components/RunHeader';
 import type { HeaderMenuItem } from './components/RunHeader';
+import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 registerTeXRAWebAwesomeIcons();
 
@@ -231,9 +232,9 @@ export class ProgressApp extends LitElement {
         <div>
           ${message}
           ${
-            error._tag === 'Rejected' && error.docsCommand
+            error._tag === 'Rejected' && error.docsPage
               ? html`<a
-                  href=${`https://texra.ai/guide/${error.docsCommand}`}
+                  href=${`https://texra.ai/guide/${error.docsPage}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   >Read the file management guide</a
@@ -329,9 +330,8 @@ export class ProgressApp extends LitElement {
     return html`
       <wa-dropdown
         placement="bottom-end"
-        @wa-select=${(event: Event) => {
-          const value = (event as CustomEvent<{ item?: { value?: unknown } }>)
-            .detail?.item?.value;
+        @wa-select=${(event: WaSelectEvent) => {
+          const value = selectedItemValue(event);
           items.find((item) => item.value === value)?.activate();
         }}
       >
@@ -478,7 +478,6 @@ export class ProgressApp extends LitElement {
                           .config=${config}
                           .files=${launch[LAUNCH_FILE_LISTS[config.type]]}
                           .checkboxValues=${launch}
-                          .sessionType=${launch.sessionType}
                         ></file-select-group>
                       `,
                     )}

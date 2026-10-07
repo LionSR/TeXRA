@@ -5,9 +5,9 @@ import { Text } from 'ink';
 import {
   apiKeyEnvName,
   type ApiKeyProviderId,
-  PROVIDER_URLS,
   providerDisplayName,
 } from '@texra-ai/llm';
+import { providerKeyUrl } from '@texra/model/providerPresentation';
 
 import { TextEntryForm } from './_shared/TextEntryForm';
 
@@ -25,7 +25,7 @@ export function ApiKeyEntryForm(
   props: ApiKeyEntryFormProps,
 ): React.JSX.Element {
   const label = providerDisplayName(props.provider);
-  const keyUrl = PROVIDER_URLS[props.provider];
+  const keyUrl = providerKeyUrl(props.provider);
 
   return (
     <TextEntryForm

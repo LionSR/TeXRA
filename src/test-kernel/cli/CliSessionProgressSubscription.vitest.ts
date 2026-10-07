@@ -19,6 +19,7 @@ import type { RunId } from '@shared/schemas';
 import {
   createTestSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 
 const runId = 'c11a01' as RunId;
@@ -174,9 +175,9 @@ const projectionOver = Effect.fnUntraced(function* (session: SessionHandle) {
     writeRecord,
   );
   const publish = async (source: Source): Promise<void> => {
-    if ('run' in source) session.publishRunEvent(runId, source.run);
-    else session.publish([source.draft]);
-    await Effect.runPromise(session.settlePublications());
+    if ('run' in source) session.trace.publish(runId, source.run);
+    else publishTestRows(session, [source.draft]);
+    await Effect.runPromise(session.log.settled);
   };
   const all = (): CliNdjsonRecord[] =>
     vi.mocked(writeRecord).mock.calls.map(([record]) => record);
@@ -196,7 +197,7 @@ describe('attachCliSessionProgressProjection', () => {
         publishTestRunStart(session, childRunId, { parent: runId });
         // The projection attaches at the current ordinal: settle the seeded
         // existence facts first so only what the test publishes is projected.
-        yield* session.settlePublications();
+        yield* session.log.settled;
         const { records, publish, detach } = yield* projectionOver(session);
         yield* Effect.addFinalizer(() => detach);
         for (const { source } of PASS_THROUGH_CASES) {
@@ -218,7 +219,7 @@ describe('attachCliSessionProgressProjection', () => {
       Effect.gen(function* () {
         const session = yield* createTestSession();
         publishTestRunStart(session, runId);
-        yield* session.settlePublications();
+        yield* session.log.settled;
         const { records, publish, detach } = yield* projectionOver(session);
         yield* Effect.addFinalizer(() => detach);
         yield* Effect.promise(() =>
@@ -270,7 +271,7 @@ describe('attachCliSessionProgressProjection', () => {
         const session = yield* createTestSession();
         // The recorded history: a launch that ran and stopped before this
         // process attached its projection.
-        session.publish([
+        publishTestRows(session, [
           {
             type: 'run.start',
             aggregateId: runAggregate,
@@ -306,7 +307,7 @@ describe('attachCliSessionProgressProjection', () => {
             output: { response: '', files: [] },
           },
         ]);
-        yield* session.settlePublications();
+        yield* session.log.settled;
 
         const { all, publish, detach } = yield* projectionOver(session);
         yield* Effect.addFinalizer(() => detach);
@@ -338,7 +339,7 @@ describe('attachCliSessionProgressProjection', () => {
       Effect.gen(function* () {
         const session = yield* createTestSession();
         publishTestRunStart(session, runId);
-        yield* session.settlePublications();
+        yield* session.log.settled;
         const { all, publish, detach } = yield* projectionOver(session);
         yield* Effect.addFinalizer(() => detach);
         const childLists = () =>
@@ -425,7 +426,7 @@ describe('attachCliSessionProgressProjection', () => {
     Effect.gen(function* () {
       const session = yield* createTestSession();
       publishTestRunStart(session, runId);
-      yield* session.settlePublications();
+      yield* session.log.settled;
       const { writeRecord, publish, detach } = yield* projectionOver(session);
       yield* Effect.promise(() =>
         publish({
@@ -440,7 +441,7 @@ describe('attachCliSessionProgressProjection', () => {
       expect(writeRecord).toHaveBeenCalledTimes(1);
 
       yield* detach;
-      yield* session.settlePublications();
+      yield* session.log.settled;
       yield* Effect.promise(() =>
         publish({
           draft: {

@@ -3,15 +3,15 @@ import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
 
 import {
-  OnboardingFunnelRefresher,
-  planOnboardingFunnelTransition,
-} from '@controllers/onboarding/onboardingFunnel';
-import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
 import type { OnboardingFunnelState } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
+import {
+  OnboardingFunnelRefresher,
+  planOnboardingFunnelTransition,
+} from '@texra/controllers/onboarding/onboardingFunnel';
 
 type OnboardingFunnelInputs = Parameters<
   typeof planOnboardingFunnelTransition

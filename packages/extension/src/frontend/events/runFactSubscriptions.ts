@@ -14,13 +14,13 @@ import type { SessionView } from '@shared/session/sessionView';
  * background service sees them as one whose runs run here does.
  */
 export function outputFilesProduced(source: {
-  readonly viewChanges: Stream.Stream<SessionView>;
+  readonly view: { readonly changes: Stream.Stream<SessionView> };
 }): Stream.Stream<AddOutputFilesPayload> {
   return Stream.suspend(() => {
     // By value: a view rebuilt from the same rows (a resubscribed window)
     // names no new output.
     let seen: ReadonlyMap<RunId, string> | undefined;
-    return source.viewChanges.pipe(
+    return source.view.changes.pipe(
       Stream.flatMap((view) => {
         const now = new Map<RunId, string>();
         const changed: AddOutputFilesPayload[] = [];

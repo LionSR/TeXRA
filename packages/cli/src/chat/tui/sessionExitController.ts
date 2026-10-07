@@ -8,6 +8,7 @@
 // then skips the graceful queue/run drain and exits with the signal code.
 
 import { Cause, Effect } from 'effect';
+import { withProcessServices, type ProcessRuntime } from '@texra-ai/harness';
 import { readCliCwd } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
@@ -20,15 +21,9 @@ import {
   supportsTerminalJobControl,
   type TuiTerminal,
 } from '@cli/tui/terminalCleanup';
-import { DisposableStore } from '@platform/disposable';
-import {
-  withProcessServices,
-  type ProcessRuntime,
-} from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import type { RunId } from '@shared/schemas';
-import type { RunStopReason } from '@shared/session/runtimeRequest';
 import type { SessionView } from '@shared/session/sessionView';
+import { DisposableStore } from '@texra/platform/disposable';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -49,6 +44,8 @@ import {
   formatResumeHint,
 } from './state/resumeHint';
 import { chatTuiRunPending, type TuiSession } from './state/sessionRunState';
+import type { RunStopReason } from '@texra-ai/harness';
+import type { RunId } from '@texra-ai/harness/schemas';
 import type { Instance as InkInstance } from 'ink';
 
 const EXIT_CONFIRMATION_TTL_MS = 800;
@@ -184,9 +181,8 @@ export function createSessionExitController(
       ctx.interruptActive('user');
       armExit();
     } else if (session.isResumableIdle()) {
-      // Exit WITHOUT a user stop. The suspended tool-use run keeps its latest
-      // `run.snapshot` on the run aggregate, so `texra resume` can continue
-      // it. Preserve the session's current terminal status too; an
+      // Exit WITHOUT a user stop. The suspended tool-use run keeps its rows
+      // on the run aggregate, so `texra resume` can continue it. Preserve the session's current terminal status too; an
       // intentional idle exit after a successful turn should not report
       // SIGINT/130. The platform shutdown's session close still ends the
       // generation with its cancelled `run.end` (see
@@ -198,7 +194,7 @@ export function createSessionExitController(
     }
   };
   // Only interrupt an actively-running turn; an idle/WAITING session is left
-  // suspended so its `run.snapshot` stays resumable (see handleSigint).
+  // suspended so its rows stay resumable (see handleSigint).
   const handleTermSignal = (exitCode: number) => (): void => {
     if (session.canStopVisibleRun()) {
       ctx.interruptActive('shutdown');

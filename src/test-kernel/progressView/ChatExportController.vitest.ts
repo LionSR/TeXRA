@@ -7,7 +7,6 @@ import { beforeEach, describe, expect } from 'vitest';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import {
   resolveGlobalStoragePath,
@@ -29,6 +28,7 @@ import { installPlatform } from '@test/support/setupPlatform';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { seedRunRecord } from '@test/support/runRecordSeeds';
+import { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
 
 const TEMPLATE =
   '<!doctype html><html><head><title>t</title>' +
@@ -72,7 +72,6 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
     agent: 'orchestrator',
     model: 'deepseek/deepseek-v4-flash',
     instruction: 'Solve the problem.',
-    editedFiles: [],
     toolConfig: DEFAULT_TOOL_CONFIG,
     memories: [],
     workingDirectory: '/workspace',
@@ -82,7 +81,7 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
 }
 
 const persistTranscriptEntry = (runId: RunId) =>
-  session.commit([
+  session.log.transact([
     {
       type: 'log',
       aggregateId: aggregateId('run', runId),
@@ -93,7 +92,6 @@ const persistTranscriptEntry = (runId: RunId) =>
   ]);
 
 /** The session's settle, run by each test that waits on its publications. */
-const settlePublications = Effect.suspend(() => session.settlePublications());
 
 describe('ChatExportController.exportAsHtml', () => {
   let controller: ChatExportController;
@@ -133,7 +131,7 @@ describe('ChatExportController.exportAsHtml', () => {
           model: 'anthropic/claude-sonnet-4-6',
         });
         publishTestRunStart(session, runId);
-        yield* settlePublications;
+        yield* session.log.settled;
         yield* seedRunRecord(session, runId, runConfigRecord);
         yield* persistTranscriptEntry(runId);
 
@@ -177,7 +175,7 @@ describe('ChatExportController.buildExportInput', () => {
       Effect.gen(function* () {
         const runId = 'eec003' as RunId;
         publishTestRunStart(session, runId);
-        yield* settlePublications;
+        yield* session.log.settled;
         yield* seedRunRecord(session, runId, config());
 
         expect(yield* controller.buildExportInput(runId)).toEqual({

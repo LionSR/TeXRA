@@ -17,7 +17,6 @@ import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
 import { withLogChannel } from '@logger/effectLog';
-import type { StateStore } from '@platform/interfaces';
 import {
   LEAN4_EXTENSION_ID,
   type FetchDiagnosticsResult,
@@ -28,14 +27,15 @@ import {
   type LspResult,
   type PlainGoal,
   type PlainTermGoal,
-} from '@tools/lean/leanTypes';
+} from '@texra/tools/lean/leanTypes';
 import {
   createLeanServerRoster,
   type LeanServerRoster,
-} from '@tools/lean/leanServerRegistry';
-import type { LeanLanguageServicesShape } from '@tools/lean/leanLanguageServices';
+} from '@texra/tools/lean/leanServerRegistry';
+import type { LeanLanguageServicesShape } from '@texra/tools/lean/leanLanguageServices';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import type { StateStore } from '@texra-ai/harness';
 
 const CHANNEL = 'VscodeLeanIntegration';
 
@@ -326,7 +326,6 @@ function sendPositionRequest<T>(
   method: string,
 ): Effect.Effect<LspResult<T>> {
   return Effect.gen(function* () {
-    const uri = vscode.Uri.file(absolutePath);
     const leanUri = createLeanFileUri(absolutePath);
 
     const provider = yield* Effect.result(getClientProvider(globalState));

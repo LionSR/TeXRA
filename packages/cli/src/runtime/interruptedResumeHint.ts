@@ -1,12 +1,12 @@
 import { Effect } from 'effect';
 
 import type { ResumabilityDecision } from '@agent/storage';
-import type { RunId } from '@shared/schemas';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
 import { formatResumeCommand } from '../chat/tui/state/resumeHint';
 import { readCliCwd, type CliContext } from './cliContext';
 import { writeTextStderr, writeTextStderrAndWait } from './logSinks';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The one resumability answer a hint can be advertised from. */
 type ResumableCheckpoint = Extract<

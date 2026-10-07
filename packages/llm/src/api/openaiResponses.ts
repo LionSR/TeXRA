@@ -9,12 +9,10 @@ import { z } from 'zod';
 // Local imports - canonical model contract
 import {
   BackgroundSubmissionSchema,
-  CancellationEvidenceSchema,
   completedTurn,
   FILE_UPLOAD_LIFETIME_SECONDS,
   ModelConfigurationSchema,
   ObservationPolicySchema,
-  TurnResultSchema,
   type BackgroundEvent,
   type BackgroundSubmission,
   type Model,
@@ -26,7 +24,7 @@ import {
   ModelError,
   RemoteOperationSchema,
   boundOperation,
-  cancellationStatus,
+  confirmCancelled,
   enrichModelError,
   fillModelError,
   type RemoteOperation,
@@ -35,11 +33,7 @@ import { originOf, sameModelOrigin } from '../protocol.js';
 import { ownedAbortSafeRequest } from './transport.js';
 import { filesApiUploads } from './uploadCache.js';
 import { openaiFailure } from './openaiError.js';
-import { admittedFingerprint, canChain } from './prefixFingerprint.js';
-import {
-  RESPONSES_PREFIX_DOMAIN,
-  openaiResponsesContinuation,
-} from './openaiResponsesLower.js';
+import { withResponsesContinuation } from './openaiResponsesLower.js';
 import {
   ResponseEventSchema,
   ResponseSchema,
@@ -170,13 +164,7 @@ export function openaiResponsesModel(
           fillModelError(error, { requestId });
         const chunks = yield* sdkEvents(opened.data, enrich);
         return responseEvents(chunks, origin, (result) =>
-          Effect.map(
-            openaiResponsesContinuation(config, turn, result),
-            (continuation) =>
-              continuation
-                ? TurnResultSchema.parse({ ...result, continuation })
-                : result,
-          ),
+          withResponsesContinuation(config, turn, result),
         ).pipe(Stream.mapError(enrich));
       }).pipe(
         Effect.mapError((error) =>
@@ -266,11 +254,6 @@ export function openaiResponsesModel(
           origin,
           providerResponseId: response.id,
           afterSequence: sequence_number,
-          admittedFingerprint: admittedFingerprint(
-            RESPONSES_PREFIX_DOMAIN,
-            turn,
-          ),
-          store: turn.controls.store,
         });
         if (
           (type === 'response.completed' && response.status === 'completed') ||
@@ -280,16 +263,13 @@ export function openaiResponsesModel(
             assembleTurn(Stream.make(yield* terminalParts(response, type)), {
               origin,
               provider: 'The model',
+              finalize: (completed) =>
+                withResponsesContinuation(config, turn, completed),
             }),
-          );
-          const continuation = yield* openaiResponsesContinuation(
-            config,
-            turn,
-            result,
           );
           return BackgroundSubmissionSchema.parse({
             kind: 'completed',
-            result: continuation ? { ...result, continuation } : result,
+            result,
           });
         }
         if (
@@ -337,11 +317,6 @@ export function openaiResponsesModel(
             kind: 'unsupported',
             message: 'The admitted turn belongs to another model binding.',
           });
-        const chains = yield* canChain(
-          RESPONSES_PREFIX_DOMAIN,
-          turn,
-          operation,
-        );
         const parsedPolicy = ObservationPolicySchema.safeParse(policy);
         if (!parsedPolicy.success)
           return yield* new ModelError({
@@ -447,13 +422,10 @@ export function openaiResponsesModel(
               const result = yield* assembly.complete;
               // The same anchor the foreground completion builds: an
               // observed turn chains on `previous_response_id` too.
-              const continuation = chains
-                ? yield* openaiResponsesContinuation(config, turn, result)
-                : undefined;
               return {
                 kind: 'completed',
                 afterSequence: sequence,
-                result: continuation ? { ...result, continuation } : result,
+                result: yield* withResponsesContinuation(config, turn, result),
               };
             });
             return Stream.concat(progress, Stream.fromEffect(completion)).pipe(
@@ -524,17 +496,7 @@ export function openaiResponsesModel(
           message: 'Cancellation returned invalid response identity or status.',
           requestId,
         });
-      const {
-        status,
-        id: providerResponseId,
-        model: returnedModel,
-      } = parsed.data;
-      return CancellationEvidenceSchema.parse({
-        providerResponseId,
-        requestedOrigin: origin,
-        returnedModel,
-        ...cancellationStatus(status),
-      });
+      return yield* confirmCancelled(operation, parsed.data.status);
     }).pipe(
       Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, enrich))),
     );

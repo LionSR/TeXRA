@@ -18,7 +18,7 @@ import {
 import {
   editDistance,
   typoSuggestionThreshold,
-} from '@utils/text/editDistance';
+} from '@texra/utils/text/editDistance';
 import {
   GLOBAL_ARGS,
   GLOBAL_BOOL_FLAGS,

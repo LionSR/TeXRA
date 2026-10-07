@@ -27,16 +27,6 @@ import { html, render, type TemplateResult } from 'lit';
 import { desktopScenes } from './scenes/desktop';
 import { extensionScenes } from './scenes/extension';
 import { settingsScenes } from './scenes/settings';
-// ── small pieces ────────────────────────────────────────────────────────
-const extFrame = (inner: TemplateResult) =>
-  html` <div class="h-ext" id="frame">
-    <div class="h-vscode-strip">
-      <span>New Agent</span><span class="active">TeXRA</span
-      ><span>Terminal</span>
-    </div>
-    ${inner}
-  </div>`;
-
 // ── scenes ──────────────────────────────────────────────────────────────
 
 // ── styles for the harness chrome (tokens only; components bring their own) ──

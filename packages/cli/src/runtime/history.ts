@@ -12,7 +12,6 @@ import {
   type RunResult,
 } from '@agent/storage';
 import type { AgentConfig, SessionHandle } from '@agent/runtime';
-import { loadChatExportInput, type ChatExportInput } from '@agent/export';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
   RunIdSchema,
@@ -24,9 +23,9 @@ import {
   type RunId,
   type HistoryRunStatus,
 } from '@shared/schemas';
-import type { SessionOpenError } from '@shared/session/database';
 import type { RunView } from '@shared/session/sessionView';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
+import { loadChatExportInput, type ChatExportInput } from '@texra/agent/export';
 import {
   listRunGeneratedFiles,
   type RunGeneratedFile,
@@ -41,7 +40,6 @@ import { CliUsageError } from './cliContext';
 import { cliErrorMessage } from './logSinks';
 import { cliRunStanding } from './toolUseResumeData';
 import {
-  blockedHistoryEntry,
   formatCliHistoryAgentLabel,
   formatCliHistorySubject,
 } from './historyLabels';
@@ -51,6 +49,7 @@ import {
   formatConversationPreview,
   formatConversationTranscript,
 } from './history/conversationFormat';
+import type { SessionOpenError } from '@texra-ai/harness';
 
 /** A run's generated files and its edited workspace files render alike.
  *  First group wins on a path collision; generated output precedes workspace. */
@@ -95,7 +94,7 @@ interface CliHistoryDetails {
   readonly conversationPreview: CliHistoryConversationPreview | null;
   readonly conversation?: CliHistoryConversationPreview | null;
   readonly files: readonly RunGeneratedFile[];
-  /** Whether the run aggregate carries a `run.snapshot`. */
+  /** Whether the run's loop opened it: its rows hold a `run.position`. */
   readonly checkpointPresent: boolean;
   /** The model the run is on; `config.model` is its launch model. */
   readonly currentModel?: string;
@@ -156,11 +155,7 @@ export const listCliHistoryEntries = Effect.fn('cli.listCliHistoryEntries')(
     const opened = yield* session;
     return (yield* listRuns(opened))
       .filter(isUserVisibleRun)
-      .map((entry) =>
-        entry.kind === 'blocked'
-          ? blockedHistoryEntry(entry)
-          : toCliHistoryEntry(entry),
-      );
+      .map(toCliHistoryEntry);
   },
 );
 
@@ -183,7 +178,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       resumeFrom,
     ] = yield* Effect.all(
       [
-        session.readView([]).pipe(Effect.map((view) => view.runs.get(id))),
+        session.view.read([]).pipe(Effect.map((view) => view.runs.get(id))),
         store.readConfig(),
         store.readResult(),
         store.readReport(),
@@ -207,7 +202,6 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
         (checkpointPresent || resumeFrom.kind === 'unopened'),
       phase: run?.status,
       paused: run?.substate === RUN_SUBSTATE.PAUSED,
-      blocked: (run?.blocked ?? null) !== null,
     });
     const workspaceFiles = yield* listRunWorkspaceFiles(
       config,
@@ -340,7 +334,7 @@ export const deleteCliHistory = Effect.fn('deleteCliHistory')(function* (
   if (!options.all && !options.id) {
     return yield* Effect.fail(new Error('Expected a run id, or --all.'));
   }
-  const rows = yield* Stream.runCollect(session.events.listing());
+  const rows = yield* Stream.runCollect(session.log.listing());
   const removed = new Set(
     rows
       .filter((row) => row.type === 'run.removed')
@@ -446,7 +440,6 @@ function toNdjsonHistoryStatus(status: HistoryRunStatus): string {
   if (
     status === HISTORY_RUN_STATUS.RESUMABLE ||
     status === HISTORY_RUN_STATUS.PAUSED ||
-    status === HISTORY_RUN_STATUS.BLOCKED ||
     status === HISTORY_RUN_STATUS.UNKNOWN
   ) {
     return status;
@@ -536,7 +529,6 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
     resumable: entry.resumable,
     phase: entry.status,
     paused: entry.paused,
-    blocked: entry.blocked !== undefined,
   });
   return {
     id: entry.id,

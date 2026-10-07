@@ -23,20 +23,20 @@ import * as vscode from 'vscode';
 
 // Local imports
 import type { ManualCriticismEntry } from '@agent/runtime';
-import type { SessionBackend } from '@controllers/session/sessionBackend';
 import { outputFilesProduced } from '@frontend/events/runFactSubscriptions';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
 import { withLogChannel } from '@logger/effectLog';
-import type { StateReadFailed } from '@platform/interfaces';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { AddOutputFilesPayload, OutputFileInfo } from '@shared/schemas';
-import { TexraStateKey } from '@shared/settingsView/texraSettings';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
+import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { hasExtension } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
+import type { ProcessRuntime } from '@texra-ai/harness';
+import type { StateReadFailed } from '@texra-ai/harness';
 
 const CHANNEL = 'InlineCriticism';
 const COLLECTION_NAME = 'texra-criticism';
@@ -47,7 +47,7 @@ const CODE_TOOL = 'criticize:tool';
 /** What {@link registerInlineCriticism} attached the feature to. */
 interface CriticismRegistration {
   readonly context: vscode.ExtensionContext;
-  readonly session: Pick<SessionBackend, 'viewChanges'>;
+  readonly session: Pick<SessionBackend, 'view'>;
   readonly runtime: ProcessRuntime;
   readonly stores: SettingsStores;
 }
@@ -233,7 +233,7 @@ export function pushManualCriticism(entry: ManualCriticismEntry): boolean {
 export function registerInlineCriticism(
   context: vscode.ExtensionContext,
   runtime: ProcessRuntime,
-  session: Pick<SessionBackend, 'viewChanges'>,
+  session: Pick<SessionBackend, 'view'>,
   stores: SettingsStores,
 ): Effect.Effect<void, StateReadFailed> {
   return Effect.suspend(() => {

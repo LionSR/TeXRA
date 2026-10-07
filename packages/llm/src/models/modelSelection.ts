@@ -40,12 +40,3 @@ export function modelConfig(id: string): ModelConfig | undefined {
 export function modelRefOf(id: string): string | undefined {
   return selectModel(id)?.config.ref;
 }
-
-/**
- * A model string as it may appear in a file or folder name: the model's API
- * id without its provider or selection suffix (`gpt-6.1-sol`), or the string
- * with path and shell-unsafe characters replaced when it names no model.
- */
-export function modelFileName(id: string): string {
-  return (modelConfig(id)?.id ?? id).replaceAll(/[\\/:*?"<>|@+\s]/g, '-');
-}

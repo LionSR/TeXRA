@@ -39,12 +39,7 @@ export function showLoggedErrorMessage(
   prefix: string,
   err: unknown,
 ): Effect.Effect<string> {
-  return Effect.gen(function* () {
-    const message = formatError(prefix, err);
-    yield* Effect.logError(message).pipe(withLogChannel(channel));
-    yield* announce(channel, vscodeUi.showErrorMessage(message), undefined);
-    return message;
-  });
+  return showLoggedMessage(channel, formatError(prefix, err));
 }
 
 /** Log a pre-formatted message and display it to the user as an error. */

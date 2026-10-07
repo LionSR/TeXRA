@@ -1,5 +1,5 @@
 // esbuild plugin that keeps the package-validation model
-// (`src/agent/runtime/run/validationModel.ts`) out of a shipped bundle. Every
+// (`packages/harness/src/agent/runtime/run/validationModel.ts`) out of a shipped bundle. Every
 // import that resolves to that file, through the `@agent/*` alias or a
 // relative path, loads a stand-in instead: its gate is an Effect of `false`
 // (matching the real module's Effect-returning gate) and its canned model
@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 const realModule = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  '../src/agent/runtime/run/validationModel.ts',
+  '../packages/harness/src/agent/runtime/run/validationModel.ts',
 );
 
 const STUB = `import { Effect } from 'effect';
@@ -26,7 +26,7 @@ export function validationModel() {
 export const stubInternalValidationModel = {
   name: 'stub-internal-validation-model',
   setup(build) {
-    build.onResolve({ filter: /validationModel$/ }, async (args) => {
+    build.onResolve({ filter: /validationModel(?:\.js)?$/ }, async (args) => {
       if (args.pluginData === realModule) return undefined;
       const resolved = await build.resolve(args.path, {
         kind: args.kind,

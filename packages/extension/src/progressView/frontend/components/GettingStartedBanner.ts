@@ -6,7 +6,7 @@ import {
   GETTING_STARTED_ACTION_PRESENTATION,
   type GettingStartedAction,
 } from '@shared/schemas';
-import { SessionUiEvents } from '@shared/session/uiEvents';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { designTokens, commonViewStyles, bannerStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 

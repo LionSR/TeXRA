@@ -11,18 +11,19 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
-import type { RunId } from '@shared/schemas';
+import { type ApprovalBypassKind } from '@shared/approvalBypassKind';
+import { resolveBypass } from '@shared/approvalBypassKind';
 import { goalStateOf, type GoalState } from '@shared/plugins/goal';
 import type { SessionView, RunView } from '@shared/session/sessionView';
-import { SessionUiEvents } from '@shared/session/uiEvents';
-import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import type { TeXRAIconName } from '@shared/iconNames';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { CopyButtonController } from '@texra/shared/litControllers/CopyButtonController';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { formatTaskDiagnostics } from '@ui/copy/taskDiagnostics';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { statusIndicatorStyles } from '@ui/styles/statusIndicatorStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
+import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import '@progressView/frontend/components/ToolTimer';
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -42,7 +43,7 @@ import {
 } from '../constants';
 import { progressBadgeLabel } from '../formatters/progressBadgeFormatter';
 import { renderRunGrantChips, runGrantStyles } from './runGrantChips';
-import type WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
+import type { RunId } from '@texra-ai/harness/schemas';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 /** A window-level item the shell appends to the run's menu: pop out,
@@ -319,8 +320,7 @@ export class RunHeader extends LitElement {
     if (!this.renaming) return;
     this.renaming = false;
     const title = input.value.trim();
-    if (!save || title === '' || title === (run.description || run.label))
-      return;
+    if (!save || title === '' || title === run.title) return;
     this.dispatchEvent(
       SessionUiEvents.runtime({ kind: 'run.rename', runId: run.id, title }),
     );
@@ -331,7 +331,7 @@ export class RunHeader extends LitElement {
       return html`<input
         class="rename-input inline-rename"
         aria-label="Task title"
-        .value=${run.description || run.label}
+        .value=${run.title}
         @keydown=${(event: KeyboardEvent) => {
           const input = event.target as HTMLInputElement;
           if (event.key === 'Enter') this.finishRename(run, input, true);
@@ -341,7 +341,7 @@ export class RunHeader extends LitElement {
           this.finishRename(run, event.target as HTMLInputElement, true)}
       />`;
     return html`<h1 id=${ELEMENT_IDS.ACTIVE_RUN_NAME} data-run=${run.id}>
-        ${run.description || run.label}
+        ${run.title}
       </h1>
       <wa-tooltip for=${ELEMENT_IDS.ACTIVE_RUN_NAME}>${run.label}</wa-tooltip>`;
   }
@@ -351,9 +351,7 @@ export class RunHeader extends LitElement {
     const source = run.forkedFrom;
     if (source === null) return nothing;
     const from = this.view?.runs.get(source.id);
-    const label = TASK_ACTIONS.forkedFrom(
-      from ? from.description || from.label : 'a deleted task',
-    );
+    const label = TASK_ACTIONS.forkedFrom(from ? from.title : 'a deleted task');
     return html`<button
       type="button"
       class="forked-from"
@@ -414,9 +412,9 @@ export class RunHeader extends LitElement {
     </div>`;
   }
 
-  /** Whether a run grant is on, per the run's policy snapshot. */
+  /** Whether a run grant is on, its own or its ancestry's. */
   private grantActive(run: RunView, kind: ApprovalBypassKind): boolean {
-    return this.view?.policy.get(run.id)?.bypasses[kind] === true;
+    return this.view != null && resolveBypass(this.view, run.id, kind) !== null;
   }
 
   /** Revoke one run grant; granting is the approval card's. */
@@ -523,9 +521,7 @@ export class RunHeader extends LitElement {
       <wa-dropdown
         placement="bottom-end"
         @wa-select=${(event: WaSelectEvent) => {
-          const { item } = event.detail;
-          if (item.localName !== 'wa-dropdown-item') return;
-          const { value } = item as WaDropdownItem;
+          const value = selectedItemValue(event);
           if (value === RENAME_TASK) {
             this.startRename();
             return;
@@ -602,7 +598,7 @@ export class RunHeader extends LitElement {
           (fork) =>
             html`<wa-dropdown-item value=${`${OPEN_FORK}${fork.id}`}
               >${waIcon('code-branch', { slot: 'icon' })}${TASK_ACTIONS.openFork(
-                fork.description || fork.label,
+                fork.title,
               )}</wa-dropdown-item
             >`,
         )}
@@ -630,7 +626,7 @@ export class RunHeader extends LitElement {
           canDelete
             ? html`<wa-divider></wa-divider
                 ><wa-dropdown-item value=${DELETE_SESSION} variant="danger"
-                  >${waIcon('trash', { slot: 'icon' })}${TASK_ACTIONS.delete}</wa-dropdown-item
+                  >${waIcon('trash', { slot: 'icon' })}${run.parentId === null ? TASK_ACTIONS.delete : TASK_ACTIONS.deleteAgent}</wa-dropdown-item
                 >`
             : nothing
         }

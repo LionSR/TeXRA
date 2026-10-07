@@ -1,8 +1,8 @@
 /** Pure foreground-surface and keyboard interaction policy for the root TUI. */
 
+import { type RunId } from '@texra-ai/harness/schemas';
 import { isUnhandledControlInput, metaChordInput } from '@cli/tui/inputKeys';
 // Local imports - shared schemas and utilities
-import { type RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import type { Key } from 'ink';
 
@@ -25,7 +25,6 @@ export const APPROVAL_FOREGROUND_MAX_ROWS: Record<
   planApproval: undefined,
   retry: undefined,
   userQuestion: undefined,
-  toolOutcome: undefined,
 };
 
 // A bare Esc and the second key of an `Esc 1..9` chord are two

@@ -11,29 +11,31 @@ import { Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 import type { SessionHandle } from '@agent/runtime';
-import type {
-  ToolEditApprovalHost,
-  ToolEditPreview,
-  ToolEditPreviewContext,
-} from '@controllers/approval/ToolEditApprovalController';
-import { fromHost, hostFailure } from '@controllers/session/hostCallFailure';
 import {
   VscodeDiffViewHost,
   type DiffSession,
 } from '@frontend/approval/VscodeDiffViewHost';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import type { ProcessRuntime } from '@platform/processRuntime';
-import type { HostRequestFailure } from '@shared/session/requestErrors';
-import type { BuildDisplayFn } from '@tools/latex/latexPreview';
-import type { ApprovalTempFiles } from '@tools/approval/tempFileManager';
-import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import {
-  computeLineChangeSummary,
+  fromHost,
+  hostFailure,
+} from '@texra/controllers/session/hostCallFailure';
+import type {
+  ToolEditApprovalHost,
+  ToolEditPreview,
+  ToolEditPreviewContext,
+} from '@texra/controllers/approval/ToolEditApprovalController';
+import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
+import type { ApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
+import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
+import {
   firstChangedLine,
   type ToolEditApprovalRequest,
 } from '@tools/approval/toolEditApproval';
 import { pluralize } from '@utils/text/stringUtils';
+import type { ProcessRuntime } from '@texra-ai/harness';
+import type { HostRequestFailure } from '@texra-ai/harness';
 
 const CHANNEL = 'ToolEditApproval';
 
@@ -170,10 +172,8 @@ class VscodeToolEditPreview implements ToolEditPreview {
   }
 
   private title(): string {
-    const { added, removed } = computeLineChangeSummary(
-      this.request.originalContent,
-      this.request.proposedContent,
-    );
+    const { addedLines: added, removedLines: removed } =
+      this.request.permission;
     const changeParts: string[] = [];
     if (added > 0) changeParts.push(`+${added}`);
     if (removed > 0) changeParts.push(`-${removed}`);

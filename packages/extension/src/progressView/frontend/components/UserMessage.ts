@@ -23,7 +23,7 @@ import {
 } from '@shared/subagentFollowup';
 import type { ScriptDeliverySummary } from '@shared/schemas';
 import { DELIVERY_TAGS } from '@shared/deliveryTags';
-import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
+import { CopyButtonController } from '@texra/shared/litControllers/CopyButtonController';
 import { designTokens } from '@ui/styles';
 import { buttonStyles, focusRingStyles } from '@ui/styles/controlStyles';
 import { markdownStyles } from '@ui/styles/markdownStyles';
@@ -32,7 +32,10 @@ import {
   messageHeaderStyles,
   messageDisclosureStyles,
 } from '@ui/styles/messageHeaderStyles';
-import { renderIconActionButton } from '@ui/wa/actionButtons';
+import {
+  renderIconActionButton,
+  renderLabeledActionButton,
+} from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
@@ -47,11 +50,12 @@ const XML_ESCAPED_TAGS = new Set(
   DELIVERY_TAGS.filter((entry) => entry.escaped).map((entry) => entry.tag),
 );
 
-/** A user message's "Fork from here": the cut and the message, which the
- *  fork's composer holds. */
+/** A user message's "Fork from here": the cut and the message with the
+ *  files it attached, which the fork's composer holds. */
 export interface ForkFromHere {
   readonly at: number;
   readonly draft: string;
+  readonly mediaFiles: readonly string[];
 }
 const FORK_FROM_HERE = 'fork-from-here';
 
@@ -175,6 +179,10 @@ export class UserMessage extends LitElement {
    *  conversation that owns the row turns the event into its run's fork. */
   @property({ attribute: false }) forkAt: number | null = null;
 
+  /** The files the message attached (`UserRow.mediaFiles`), which "Fork
+   *  from here" carries with its text. */
+  @property({ attribute: false }) mediaFiles: readonly string[] = [];
+
   private copyController = new CopyButtonController(this, {
     defaultTitle: 'Copy message',
   });
@@ -200,7 +208,11 @@ export class UserMessage extends LitElement {
     if (this.forkAt === null) return;
     this.dispatchEvent(
       new CustomEvent<ForkFromHere>(FORK_FROM_HERE, {
-        detail: { at: this.forkAt, draft: this.text },
+        detail: {
+          at: this.forkAt,
+          draft: this.text,
+          mediaFiles: this.mediaFiles,
+        },
         bubbles: true,
         composed: true,
       }),
@@ -246,8 +258,10 @@ export class UserMessage extends LitElement {
 
   override render(): TemplateResult {
     const messageDate = new Date(this.timestamp);
-    const { timeDisplay, tooltipTimestamp } =
-      formatDisplayTimestamp(messageDate);
+    const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
+      messageDate,
+      'minute',
+    );
     const copyState = this.copyController.state;
     const rawMessageCopyState = this.rawMessageCopyController.state;
     // processMarkdownContent uses MarkdownIt with html:false and escapes
@@ -289,15 +303,18 @@ export class UserMessage extends LitElement {
             >
             <span
               class="message-actions"
-              @click=${(event: MouseEvent) => event.stopPropagation()}
+              @click=${(event: MouseEvent) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
               @keydown=${(event: KeyboardEvent) => event.stopPropagation()}
             >
-              ${renderIconActionButton({
+              ${renderLabeledActionButton({
                 id: 'user-message-copy-button',
-                icon: 'copy',
+                text: copyState.copied ? 'Copied' : 'Copy',
                 label: copyState.ariaLabel,
                 tooltip: copyState.title,
-                className: `user-message-copy ${copyState.copied ? copyState.successClass : ''}`,
+                className: `user-message-copy message-copy ${copyState.copied ? copyState.successClass : ''}`,
                 onClick: () => this.copyController.copy(copyText),
               })}
               ${

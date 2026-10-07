@@ -7,8 +7,8 @@ import {
   TOOL_CALL_STATUS,
   type RunId,
 } from '@shared/schemas';
+import type { TranscriptRow } from '@shared/transcript';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
-import type { TranscriptRow } from '@ui/transcript';
 
 /** A fold built into a fresh trace, plus its rows and groups. */
 function attachRecorder(runId: RunId = 'stream:test' as RunId) {
@@ -16,6 +16,7 @@ function attachRecorder(runId: RunId = 'stream:test' as RunId) {
   const rows = recorder.rows;
   return {
     trace: recorder.trace,
+    finalize: recorder.finalize,
     settlePhase: recorder.settlePhase,
     rows,
     row: (id: string | undefined): TranscriptRow | undefined =>
@@ -89,7 +90,7 @@ describe('createTestRunTrace undecodable compaction payload', () => {
 
 describe('createTestRunTrace response.finalized (issue #7086)', () => {
   it('upserts the round MODEL_RESPONSE stream entry to the authoritative text', () => {
-    const { trace, rows } = attachRecorder();
+    const { trace, finalize, rows } = attachRecorder();
 
     // The round's own stream writes raw provider text in real time...
     const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
@@ -98,7 +99,7 @@ describe('createTestRunTrace response.finalized (issue #7086)', () => {
     // ...then the flow boundary emits the authoritative, replacement-clean
     // text once the response is final.
     const completedText = 'Done \\checkmark\n'.repeat(4000);
-    trace.emit({ type: 'response.finalized', text: completedText });
+    finalize(completedText);
 
     const responses = assistantRows(rows());
     expect(responses).toHaveLength(1);
@@ -107,9 +108,9 @@ describe('createTestRunTrace response.finalized (issue #7086)', () => {
   });
 
   it('appends a fresh MODEL_RESPONSE entry when the round never streamed', () => {
-    const { trace, rows } = attachRecorder();
+    const { finalize, rows } = attachRecorder();
 
-    trace.emit({ type: 'response.finalized', text: 'The answer is 2.' });
+    finalize('The answer is 2.');
 
     const responses = assistantRows(rows());
     expect(responses).toHaveLength(1);
@@ -117,7 +118,7 @@ describe('createTestRunTrace response.finalized (issue #7086)', () => {
   });
 
   it('does not let an earlier round leak its stream id into a later round', () => {
-    const { trace, rows } = attachRecorder();
+    const { trace, finalize, rows } = attachRecorder();
 
     const round0 = trace.openStage('r0', { kind: 'round', index: 0 });
     const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
@@ -129,7 +130,7 @@ describe('createTestRunTrace response.finalized (issue #7086)', () => {
     // call) — its `response.finalized` must append a new entry, not
     // overwrite round 0's already-closed stream entry.
     const round1 = trace.openStage('r1', { kind: 'round', index: 1 });
-    trace.emit({ type: 'response.finalized', text: 'Final answer.' });
+    finalize('Final answer.');
     round1.end();
 
     const responses = assistantRows(rows());
@@ -142,7 +143,7 @@ describe('createTestRunTrace response.finalized (issue #7086)', () => {
   });
 
   it('does not let an earlier invocation in the same round stage overwrite a later finalized response', () => {
-    const { trace, rows } = attachRecorder();
+    const { trace, finalize, rows } = attachRecorder();
 
     const round = trace.openStage('r0', { kind: 'round', index: 0 });
     const toolRequest = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
@@ -157,10 +158,7 @@ describe('createTestRunTrace response.finalized (issue #7086)', () => {
     });
     trace.emit({ type: 'tool.end', logId: 'tool:read', status: 'completed' });
 
-    trace.emit({
-      type: 'response.finalized',
-      text: 'The file contains the theorem statement.',
-    });
+    finalize('The file contains the theorem statement.');
     round.end();
 
     const responses = assistantRows(rows());
@@ -175,7 +173,7 @@ describe('createTestRunTrace response.finalized (issue #7086)', () => {
 describe('createTestRunTrace settlement', () => {
   it('assigns source settlement order before terminal status projection', () => {
     const runId = 'stream:terminal-settlement' as RunId;
-    const { trace, settlePhase, row, rows } = attachRecorder(runId);
+    const { trace, finalize, settlePhase, row, rows } = attachRecorder(runId);
 
     const phase = trace.openStage('Audit', { kind: 'phase' });
     const response = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
@@ -225,7 +223,7 @@ describe('createTestRunTrace settlement', () => {
     });
 
     settlePhase(RUN_PHASE.RUNNING);
-    trace.emit({ type: 'response.finalized', text: 'Fresh turn response' });
+    finalize('Fresh turn response');
     const responses = assistantRows(rows());
     expect(responses).toMatchObject([
       { settlementSeqNo: 4, text: { full: 'Fresh turn response' } },

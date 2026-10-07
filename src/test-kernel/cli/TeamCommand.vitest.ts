@@ -8,7 +8,6 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 // Shared mock registrations must evaluate before anything that loads
 // the mocked modules — keep these imports immediately after the vitest
 // import (enforced by architecture/supportMockImportOrder.vitest.ts).
-import { agentCatalogMock } from '@test/support/agentCatalogMock';
 import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 import { cliOutputMock } from '@test/support/cliOutputMock';
@@ -232,7 +231,7 @@ function mockMaterializedStdin(inputFiles: string[]): void {
 describe('CLI team run command', () => {
   const tempDirs = useTempDirs();
   const headlessAskError =
-    'Cannot run team "mathematician" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.';
+    'Cannot run team "mathematician" with headless approval policy "ask": approval prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.';
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -251,14 +250,9 @@ describe('CLI team run command', () => {
       'blocked preset message',
     );
     mocks.formatCliTeamRunWarnings.mockReturnValue([]);
-    mocks.planTeamRuns.mockImplementation((presets) =>
-      presets.map((preset: unknown) =>
-        mocks.planTeamRun(preset, {
-          resolveAgent: agentCatalogMock.getCatalogAgent,
-        }),
-      ),
+    mocks.planTeamRuns.mockImplementation((presets, options) =>
+      presets.map((preset: unknown) => mocks.planTeamRun(preset, options)),
     );
-    agentCatalogMock.getCatalogAgents.mockReturnValue([ORCHESTRATOR_AGENT]);
     mocks.planTeamRun.mockReturnValue(teamPlan());
     mocks.executeCliToolUseConfig.mockResolvedValue({
       ok: true,

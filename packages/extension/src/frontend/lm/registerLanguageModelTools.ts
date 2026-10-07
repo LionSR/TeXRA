@@ -5,7 +5,7 @@
  *
  * This is the `copilot` plugin's process layer, which this host passes with
  * TeXRA's plugins (`texraPlugins` in `@tools/registry`) to
- * `installProcessRuntime`: it is up while the plugin is on, and closing it
+ * `processLayer`: it is up while the plugin is on, and closing it
  * disposes every registration. While up, Copilot sees each of these tools
  * the live catalog's current generation (`@tools/liveTools`) holds, and it
  * re-reads on each generation the catalog publishes. The process applies a
@@ -37,7 +37,6 @@ import {
   ToolContext,
   type SessionHandle,
 } from '@agent/runtime';
-import type { PluginContext, ProcessRuntime } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 
 import type { ToolResult } from '@shared/schemas';
@@ -51,6 +50,7 @@ import {
   buildLanguageModelToolInvocationMessage,
   type LanguageModelResearchToolName,
 } from './languageModelToolInvocationMessage';
+import type { PluginContext, ProcessRuntime } from '@texra-ai/harness';
 
 /** VS Code tool name (manifest) → canonical TeXRA registry tool name. */
 const LM_TOOL_NAMES = {

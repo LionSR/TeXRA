@@ -1,10 +1,6 @@
 // Local imports - shared schemas and constants
-import {
-  API_KEY_PROVIDER_IDS,
-  PROVIDER_DISPLAY_NAMES,
-  PROVIDER_URLS,
-} from '@texra-ai/llm';
-import type { ProviderKeyStatus } from '@shared/settingsView/settingsViewMessages';
+import { API_KEY_PROVIDER_IDS, providerDisplayName } from '@texra-ai/llm';
+import type { ProviderKeyStatus } from '@texra/shared/settingsView/settingsViewMessages';
 
 /**
  * Shared placeholder rows. Frozen because every caller receives the same
@@ -15,9 +11,8 @@ const DEFAULT_PROVIDER_KEY_STATUSES: readonly ProviderKeyStatus[] =
     API_KEY_PROVIDER_IDS.map((provider) =>
       Object.freeze({
         provider,
-        displayName: PROVIDER_DISPLAY_NAMES[provider] ?? provider,
+        displayName: providerDisplayName(provider),
         status: 'not-set' as const,
-        keyUrl: PROVIDER_URLS[provider] ?? '',
         customEndpoint: '',
         supportsCustomEndpoint: false,
         providerSettings: [],

@@ -7,7 +7,10 @@
 // Each finding is identified by (file, category, kind, name), deliberately
 // never by line number. `category` records whether the normal run found it as
 // unused or only the production run found it as production-dead; `kind`
-// preserves Knip's files/exports/types/duplicates classification.
+// preserves Knip's files/exports/types/duplicates classification, plus the
+// manifest kinds (dependencies, devDependencies, optionalPeerDependencies,
+// unlisted), which have no baseline entries: a declared package nothing
+// imports fails at once.
 
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -46,7 +49,7 @@ function runKnip({ production = false } = {}) {
   const args = [
     '--no-progress',
     '--include',
-    'files,exports,types,duplicates',
+    'files,exports,types,duplicates,dependencies,unlisted',
     '--reporter',
     'json',
   ];

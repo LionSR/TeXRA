@@ -1,0 +1,7 @@
+name: golden_effect
+description: The golden store's run killed after its command's effect and before its result committed.
+tools:
+  - bash
+
+prompt: |-
+  GOLDEN-APPROVAL: run one command.

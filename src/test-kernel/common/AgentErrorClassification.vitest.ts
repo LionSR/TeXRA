@@ -84,21 +84,21 @@ describe('classifyAgentError', () => {
 });
 
 describe('agentErrorPresentation', () => {
-  it("threads a refusing request's docsCommand into the error payload", () => {
+  it("threads a refusing request's docsPage into the error payload", () => {
     // The desktop host presents request rejections as a native dialog built
-    // from this payload; dropping docsCommand here loses the launch
+    // from this payload; dropping docsPage here loses the launch
     // refusal's guide link (#11959).
     expect(
       agentErrorPresentation({
         kind: 'unexpected',
         message: 'Choose an input file first.',
-        docsCommand: 'file-management',
+        docsPage: 'file-management',
       }),
     ).toStrictEqual({
       type: 'error',
       payload: {
         message: 'Choose an input file first.',
-        docsCommand: 'file-management',
+        docsPage: 'file-management',
       },
     });
   });

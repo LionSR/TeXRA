@@ -1,10 +1,10 @@
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
-import { Result } from 'effect';
+import { Hash, Result } from 'effect';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
-import { postMessage } from '@shared/hostBridge';
 import type { TeXRAIconName } from '@shared/iconNames';
+import { postMessage } from '@texra/shared/hostBridge';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLoadingState } from '@ui/wa/loadingState';
@@ -102,13 +102,9 @@ function parseDesktopLogEntries(text: string): DesktopLogEntry[] {
     const line = Result.isSuccess(parsed) ? parsed.success : undefined;
     const message = line ? desktopLogLineText(line) : raw;
 
-    let hash = 2_166_136_261;
-    // charCodeAt is intentional: the same UTF-16 log contents must keep the same
-    // row key across refreshes, including content outside the basic plane.
-    for (let index = 0; index < raw.length; index += 1) {
-      hash = Math.imul(hash ^ raw.charCodeAt(index), 16_777_619);
-    }
-    const baseId = `desktop-log-${(hash >>> 0).toString(36)}`;
+    // The same log line keeps the same row key across refreshes; a collision
+    // takes the duplicate suffix below.
+    const baseId = `desktop-log-${(Hash.string(raw) >>> 0).toString(36)}`;
     const duplicateCount = duplicateIds.get(baseId) ?? 0;
     duplicateIds.set(baseId, duplicateCount + 1);
 

@@ -7,20 +7,19 @@ import {
   API_KEY_PROVIDER_IDS,
   type ApiKeyProviderId,
   loadApiKeyStatusMap,
-  PROVIDER_DISPLAY_NAMES,
 } from '@texra-ai/llm';
 import { settleQuickInput } from '@commands/_shared/quickInputUtils';
-import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
 import {
   getProviderDisplayName,
   getProviderKeyUrl,
-} from '@utils/config/providerConfig';
+} from '@texra/model/providerPresentation';
+import type { PlatformSecrets } from '@texra-ai/harness';
 
 const CHANNEL = 'ApiKeyCommands';
 
@@ -42,11 +41,7 @@ function createProfileKeyController(
     prompt: vscodeUi,
     externalOpener: new VscodeExternalOpener(),
     getProviderDisplayName: (provider) =>
-      getProviderDisplayName(
-        stores,
-        provider,
-        PROVIDER_DISPLAY_NAMES[provider] ?? provider,
-      ),
+      getProviderDisplayName(stores, provider),
     getProviderKeyUrl: (provider) => getProviderKeyUrl(stores, provider),
   });
 }

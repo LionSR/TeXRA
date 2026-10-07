@@ -4,13 +4,13 @@ const mocks = vi.hoisted(() => ({
   postMessage: vi.fn(),
 }));
 
-vi.mock('@shared/hostBridge', () => ({
+vi.mock('@texra/shared/hostBridge', () => ({
   postMessage: mocks.postMessage,
 }));
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { AGENT_SOURCE } from '@shared/schemas';
-import type { AgentSelectionItem } from '@shared/settingsView/settingsViewMessages';
+import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import {
   mountComponent,
   useLitComponentTestDom,
@@ -25,7 +25,7 @@ const taskAgent: AgentSelectionItem = {
   name: 'summarize',
   hasTask: true,
   source: AGENT_SOURCE.BUILT_IN,
-  hasPath: true,
+  filePath: '/agents/summarize.yaml',
   enabled: true,
 };
 

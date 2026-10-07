@@ -6,14 +6,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentTrace } from '@agent/trace';
 import type { RunId } from '@shared/schemas';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
-import { runStreamedTurn } from '@tools/claudeAgent';
+import { runStreamedTurn } from '@texra/tools/claudeAgent';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
 }));
 
-vi.mock('@tools/claudeAgentImport', async (importActual) => ({
-  ...(await importActual<typeof import('@tools/claudeAgentImport')>()),
+vi.mock('@texra/tools/claudeAgentImport', async (importActual) => ({
+  ...(await importActual<typeof import('@texra/tools/claudeAgentImport')>()),
   importClaudeAgentSdk: () => Effect.succeed(mocks.query),
   findClaudeBinaryPath: () => Effect.succeed(undefined),
 }));

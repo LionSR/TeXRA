@@ -6,8 +6,8 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
-} from '@tools/lean/leanLanguageServices';
-import { LeanInspectTool } from '@tools/lean/LspTools';
+} from '@texra/tools/lean/leanLanguageServices';
+import { LeanInspectTool } from '@texra/tools/lean/LspTools';
 
 const GOAL_INSPECT_INPUT = {
   type: 'goal',

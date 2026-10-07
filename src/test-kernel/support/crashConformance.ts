@@ -15,31 +15,42 @@
  * commits whole, so those are the crash points. For each point N the suite
  * copies the clean store, truncates it to commits 1..N (the store a process
  * killed after commit N leaves), hands its claims to a dead owner, opens a
- * fresh session over it and resumes the root run. The handoff, the
+ * fresh session over it and resumes the root run. The copy is rebuilt as
+ * the store stood at commit N (`crashAt`), and the run's files and the
+ * workspace's command effects are put back as the clean pass had them at
+ * that commit. A truncation cannot place the cut between an external
+ * effect and its result, which is the consequential crash; the golden
+ * suite's `golden_effect` is a real kill there. The handoff, the
  * compaction, the fork and the bypass changes are a user's requests, which
  * a crash loses: they are issued again when their rows are not in the
  * prefix. Every request is approved, and an unfinished call whose outcome
  * is unknown is retried.
  *
  * Failure modes, each checked at every point:
- * - the conversation comes to another end than the clean one: the root's
+ * - invariant I1: the conversation comes to another end than the clean one: the root's
  *   answers, its view edits, what each executed call returned, its owned
  *   children and their answers, its fork;
- * - a call settled before the crash settles again, or any call twice; a
- *   command runs before its approval, or an unfinished one again without a
- *   person's retry;
+ * - invariant I2: a call settled before the crash settles again, or any call twice;
+ * - invariant I4: a command runs before its approval, or an unfinished one again
+ *   without a person's retry;
  * - a command's side effect (the line it appends) happens during the resume
  *   with no newly executed command to account for it, or one is missing;
- * - one model invocation is answered twice (a turn paid twice);
- * - an owned child launches again for its call without a person choosing
+ * - invariant I3: one model invocation has two committed responses;
+ * - invariant I5: an owned child launches again for its call without a person choosing
  *   to retry it, or a child is left without a terminal row;
- * - a fork is left without the history it was registered with;
+ * - invariant I7: a fork is left without the history it was registered with;
  * - a text answer any run committed is never finalized for display;
- * - a run's halt commits apart from its end (a stopped run that reads as
+ * - invariant I8: a run's halt commits apart from its end (a stopped run that reads as
  *   interrupted, which an automatic resume carries on);
  * - a person is asked whether to run again an awaited child that had
  *   ended cleanly before the crash;
- * - a bypass turned off is acknowledged before its row is durable (a
+ * - a person is asked whether a command ran that the crash stopped before
+ *   its body started (before its approval);
+ * - approvals durable: a crash between a request and its answer leaves it
+ *   pending, and the resume's answer is to that same request; a crash
+ *   between the answer and the body it admits honours that answer. Either
+ *   way the attempt never asks again;
+ * - invariant I9: a bypass turned off is acknowledged before its row is durable (a
  *   resume would restore it on).
  */
 import {
@@ -69,14 +80,9 @@ import { afterEach, beforeEach, describe, expect } from 'vitest';
 import { apiKeySecretName } from '@texra-ai/llm';
 import { refresh } from '@agent/index';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { documentTaskConfig } from '@agent/output/documentRecipe';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { runAgent } from '@agent/runtime/runAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  initializeDefaultSession,
-  teardownDefaultSession,
-} from '@agent/runtime/sessionGraph';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
 import {
@@ -101,8 +107,13 @@ import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
+import {
+  closeTestDefaultSession,
+  openTestDefaultSession,
+} from '@test/support/sessionEnd';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { generateRunId } from '@utils/core';
 
 const AGENTS = resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/agents');
@@ -149,10 +160,16 @@ const rowsOf = (storage: string): Row[] => {
   }
 };
 
+/** A file's lines, none when it is absent. */
+const linesOf = (file: string): string[] =>
+  existsSync(file)
+    ? readFileSync(file, 'utf8').split('\n').filter(Boolean)
+    : [];
 const json = (row: Row) => JSON.parse(row.data) as Record<string, unknown>;
 const payload = (row: Row) => json(row).payload as Record<string, unknown>;
 const isResponse = (row: Row) =>
   row.type === 'model.message' && payload(row).kind === 'response';
+
 /** A provider's call ids restart with each model binding, so a resumed
  *  run's differ from the clean run's by their counter; run ids are minted,
  *  and a command's summary names how long it took. */
@@ -221,9 +238,9 @@ function outcome(rows: readonly Row[], root: string) {
       );
       return [`${control.kind} consumed ${consumed.length}`];
     }),
-    model: of(root, 'run.snapshot')
+    model: of(root, 'run.config')
       .flatMap((row) => [
-        (payload(row).runtime as { readonly modelId: string }).modelId,
+        (json(row).config as { readonly model: string }).model,
       ])
       .at(-1),
     // What each executed call returned, by call: a retried call returns
@@ -279,9 +296,17 @@ function outcome(rows: readonly Row[], root: string) {
   };
 }
 
-/** Truncate a copy of the clean store to its first `n` commits, as a process
- *  killed after commit `n` leaves it, its claims held by a dead owner. The
- *  projections rebuild from the rows on open. */
+/**
+ * Rebuild a copy of the clean store as a process killed after commit `n`
+ * left it, its claims held by a dead owner: every durable table at the cut,
+ * not the later store with rows cut away. Rows, their blobs and sequences
+ * go back to commit `n`; a plugin aggregate hangs where its last fact at
+ * the cut put it; current values and input history written after the cut's
+ * clock go (one the later run overwrote in place reads as never written).
+ * `stored_kind` is append-only and kept: every version in it is this
+ * build's, so the gate reads it as it would at the cut.
+ * The projections rebuild from the rows on open.
+ */
 function crashAt(clean: string, storage: string, n: number): void {
   mkdirSync(storage, { recursive: true });
   cpSync(clean, join(storage, 'texra.db'));
@@ -292,6 +317,11 @@ function crashAt(clean: string, storage: string, n: number): void {
   ]);
   const db = new DatabaseSync(join(storage, 'texra.db'));
   try {
+    const at = db
+      .prepare(
+        'SELECT at FROM event WHERE "commit" <= ? ORDER BY "commit" DESC LIMIT 1',
+      )
+      .get(n)?.at;
     db.exec(`
       DELETE FROM projection_state; DELETE FROM projected_row;
       DELETE FROM listing_entry; DELETE FROM run_usage; DELETE FROM run_model;
@@ -303,6 +333,14 @@ function crashAt(clean: string, storage: string, n: number): void {
         seq = (SELECT max(seq) FROM event WHERE aggregate = event_sequence.id),
         closed_by = CASE WHEN closed_by > ${n} THEN NULL ELSE closed_by END,
         owner_id = CASE WHEN owner_id IS NULL THEN NULL ELSE '${dead}' END;
+      UPDATE event_sequence SET parent_id = (
+        SELECT p.id FROM event e JOIN event_sequence p
+          ON p.kind = 'run' AND p.logical_id = json_extract(e.data, '$.parent')
+        WHERE e.aggregate = event_sequence.id AND e.type = 'plugin.fact'
+        ORDER BY e.seq DESC LIMIT 1)
+      WHERE kind <> 'run';
+      DELETE FROM current_value WHERE at > ${Number(at ?? 0)};
+      DELETE FROM input_history WHERE at > ${Number(at ?? 0)};
       UPDATE sqlite_sequence SET seq = ${n} WHERE name = 'event';
     `);
   } finally {
@@ -310,26 +348,42 @@ function crashAt(clean: string, storage: string, n: number): void {
   }
 }
 
-/** Answer every request the runs open, those the prefix left pending
- *  included: approve, and retry an unfinished call whose outcome is
- *  unknown. */
-const approveAll = (session: SessionHandle) =>
+/** The files a run keeps beside the store and the command effects in the
+ *  workspace, copied as the clean pass reached commit `n`: what a process
+ *  killed there left on disk. */
+const snapshotOf = (storage: string, n: number) =>
+  join(storage, 'snapshots', String(n));
+const FILES_BESIDE = ['executions'];
+const takeSnapshot = (
+  roots: ReturnType<typeof testWorkspaceRoots>,
+  n: number,
+): void => {
+  const to = snapshotOf(roots.storage, n);
+  for (const name of FILES_BESIDE) {
+    const from = join(roots.storage, name);
+    if (existsSync(from)) cpSync(from, join(to, name), { recursive: true });
+  }
+  const effects = join(roots.workspace!, 'effects.log');
+  mkdirSync(to, { recursive: true });
+  if (existsSync(effects)) cpSync(effects, join(to, 'effects.log'));
+};
+
+/** Approve every request the runs open above commit `after`. */
+const approveAll = (session: SessionHandle, after = 0) =>
   Stream.runForEach(
-    session.events
-      .all(0)
-      .pipe(Stream.filter((event) => event.type === 'request.opened')),
+    session.log
+      .tail(0)
+      .pipe(
+        Stream.filter(
+          (event) => event.type === 'request.opened' && event.commit > after,
+        ),
+      ),
     (event) => {
       if (event.type !== 'request.opened') return Effect.void;
       const target = aggregateTarget(event.aggregateId);
       if (target.kind !== 'run') return Effect.void;
-      return session
-        .decideRequest(
-          target.id,
-          event.requestId,
-          event.payload.kind === 'toolOutcome'
-            ? { action: 'retry' }
-            : { action: 'approve' },
-        )
+      return session.requests
+        .decide(target.id, event.requestId, { action: 'approve' })
         .pipe(Effect.ignore);
     },
   ).pipe(Effect.forkScoped);
@@ -475,60 +529,52 @@ function violations(
       (row) =>
         (payload(row).invocation as { invocationId: string }).invocationId,
     );
-  // A person's retry of a call whose outcome is unknown: the decision's
-  // commit, by the tool the question is about and the call it is bound to.
-  const questions = new Map(
-    final.flatMap((row): [string, string][] => {
-      if (row.type !== 'request.opened') return [];
-      const opened = json(row) as {
-        readonly requestId: string;
-        readonly payload: {
-          readonly kind: string;
-          readonly data: { readonly toolName?: string };
-        };
-      };
-      return opened.payload.kind === 'toolOutcome'
-        ? [[opened.requestId, opened.payload.data.toolName ?? '']]
-        : [];
-    }),
+  // A call's requests carry ids its attempt derives,
+  // `<responseId>/<callId>:<attempt>:<ordinal>`: the attempt is the id
+  // without its ordinal.
+  const requestIdOf = (row: Row) => String(json(row).requestId);
+  const attemptOfRequest = (requestId: string) =>
+    requestId.replace(/:\d+$/, '');
+  const callOfRequest = (requestId: string) =>
+    /^[^/]+\/(.+):\d+:\d+$/.exec(requestId)?.[1];
+  // A crash between a request and its answer, or between the answer and
+  // the body it admits, loses no person's decision: the resume joins the
+  // request the attempt opened, pending or answered, and never asks that
+  // attempt again, nor retires what it left pending.
+  const askedBefore = new Set(
+    prefix
+      .filter((row) => row.type === 'request.opened')
+      .map((row) => attemptOfRequest(requestIdOf(row))),
   );
-  const boundTo = new Map(
-    final
-      .filter((row) => row.type === 'tool.binding')
-      .map((row) => [
-        String(payload(row).requestId),
-        String(payload(row).callId),
-      ]),
-  );
-  const retries = final.flatMap((row) => {
-    if (row.type !== 'request.decided') return [];
-    const decided = json(row) as {
-      readonly requestId: string;
-      readonly decision: { readonly action: string };
-    };
-    const tool = questions.get(decided.requestId);
-    return tool !== undefined && decided.decision.action === 'retry'
-      ? [
-          {
-            tool,
-            callId: boundTo.get(decided.requestId) ?? null,
-            commit: row.commit,
-          },
-        ]
-      : [];
-  });
-  // An unfinished command runs again only once a person chose to retry it.
-  const unaskedReruns = resumed.filter(
+  const reasked = final.filter(
     (row) =>
-      payload(row).disposition === 'executed' &&
+      row.commit > n &&
+      row.type === 'request.opened' &&
+      askedBefore.has(attemptOfRequest(requestIdOf(row))),
+  );
+  const decidedIn = (rows: readonly Row[], requestId: string) =>
+    rows.find(
+      (row) => row.type === 'request.decided' && requestIdOf(row) === requestId,
+    );
+  const pendingLost = prefix.filter(
+    (row) =>
+      row.type === 'request.opened' &&
+      decidedIn(prefix, requestIdOf(row)) === undefined &&
+      decidedIn(final, requestIdOf(row))?.data.includes(
+        '"action":"approve"',
+      ) !== true,
+  );
+  const isCommand = (callId: unknown) =>
+    /validation-(bash-\d+|script-\d+\/1)$/.test(String(callId));
+  // An unfinished command never runs again, whatever a second run would
+  // have returned: its outcome is unknown, and the model decides. A body
+  // that starts again is a second intent of the call.
+  const reruns = final.filter(
+    (row) =>
+      row.commit > n &&
+      row.type === 'tool.intent' &&
       Number(payload(row).attempt) > 1 &&
-      /validation-(bash-\d+|script-\d+\/1)$/.test(
-        String(payload(row).callId),
-      ) &&
-      !retries.some(
-        (retry) =>
-          retry.callId === payload(row).callId && retry.commit < row.commit,
-      ),
+      isCommand(payload(row).callId),
   );
   // A command runs only once a person approved it, before its result.
   const approvals = final.flatMap((row) => {
@@ -538,7 +584,7 @@ function violations(
       readonly decision: { readonly action: string };
     };
     return decided.decision.action === 'approve'
-      ? [{ callId: boundTo.get(decided.requestId), commit: row.commit }]
+      ? [{ callId: callOfRequest(decided.requestId), commit: row.commit }]
       : [];
   });
   const unapproved = resumed.filter(
@@ -553,7 +599,8 @@ function violations(
           approval.commit < row.commit,
       ),
   );
-  // A call's child launches again only after a person chose to retry it.
+  // A call's child never launches again: one an earlier attempt left
+  // answers the call or resumes under its own id.
   const children = final.filter(
     (row) => row.type === 'run.start' && row.parent !== null,
   );
@@ -565,42 +612,6 @@ function violations(
         earlier.commit < child.commit && callOf(earlier) === callOf(child),
     ),
   );
-  // Each relaunch of a call needs its own retry of that call before it.
-  const unaskedRelaunches = relaunches.filter(
-    (child) =>
-      retries.filter(
-        (retry) =>
-          retry.tool === 'agent' &&
-          retry.callId === callOf(child) &&
-          retry.commit < child.commit,
-      ).length <
-      relaunches.filter(
-        (other) =>
-          callOf(other) === callOf(child) && other.commit <= child.commit,
-      ).length,
-  );
-  // An awaited child that ended cleanly answers its call: nobody is asked
-  // whether the work it finished should run again.
-  const cleanlyEnded = new Set(
-    prefix
-      .filter(
-        (row) => row.type === 'run.end' && json(row).outcome === 'completed',
-      )
-      .map((row) => row.run),
-  );
-  const askedAboutEnded = final.some((row) => {
-    if (row.type !== 'request.opened' || row.commit <= n) return false;
-    const opened = json(row) as {
-      readonly payload: {
-        readonly kind: string;
-        readonly data: { readonly childRunId?: string };
-      };
-    };
-    return (
-      opened.payload.kind === 'toolOutcome' &&
-      cleanlyEnded.has(opened.payload.data.childRunId ?? '')
-    );
-  });
   // A run's halt and its end are one fact: a halt committed without its end
   // reads as an interrupted run, which an automatic resume carries on. The
   // prefix ends where a transaction did, so a halt in it has its end too.
@@ -616,6 +627,33 @@ function violations(
       ),
   );
   const got = outcome(final, root);
+  // A command whose body the prefix started and never settled is not run
+  // again: it settles as outcome unknown, and the model decides. What the
+  // conversation settled from there on is then the model's choice, not
+  // the clean pass's, so those fields are not compared.
+  const isSettled = (callId: unknown) =>
+    prefix.some(
+      (row) => row.type === 'tool.result' && payload(row).callId === callId,
+    );
+  const cutShort = prefix.filter(
+    (row) =>
+      row.type === 'tool.intent' &&
+      isCommand(payload(row).callId) &&
+      !isSettled(payload(row).callId),
+  );
+  const unknownOutcomes = cutShort.filter(
+    (intent) =>
+      !final.some(
+        (row) =>
+          row.type === 'tool.result' &&
+          payload(row).callId === payload(intent).callId &&
+          payload(row).disposition === 'skipped' &&
+          JSON.stringify(payload(row).result).includes('outcome is unknown'),
+      ),
+  );
+  const modelDecides = new Set(
+    cutShort.length > 0 ? ['settled', 'children', 'childAnswers'] : [],
+  );
   // Every run's committed answers, each finalized once.
   const unfinalized = [...new Set(final.map((row) => row.run))].filter(
     (run) =>
@@ -626,11 +664,15 @@ function violations(
   );
   return [
     ...Object.entries(got).map(([field, value]) =>
+      modelDecides.has(field) ||
       JSON.stringify(value) ===
-      JSON.stringify(expected[field as keyof typeof expected])
+        JSON.stringify(expected[field as keyof typeof expected])
         ? null
         : `the conversation's ${field} came to ${JSON.stringify(value)}`,
     ),
+    unknownOutcomes.length === 0
+      ? null
+      : 'an interrupted command did not settle as outcome unknown',
     resumed.some((row) => settledBefore.has(key(row)))
       ? 'a call settled before the crash settled again'
       : null,
@@ -643,22 +685,21 @@ function violations(
     new Set(invocations).size === invocations.length
       ? null
       : 'an invocation was answered twice',
-    unaskedReruns.length === 0
-      ? null
-      : 'an unfinished command ran again with no one asked',
+    reruns.length === 0 ? null : 'an unfinished command ran again',
     unapproved.length === 0 ? null : 'a command ran before its approval',
-    unaskedRelaunches.length === 0
+    reasked.length === 0
       ? null
-      : 'a child launched again with no one asked',
+      : 'a call attempt that asked before the crash asked again',
+    pendingLost.length === 0
+      ? null
+      : 'a request the crash left pending was not answered after it',
+    relaunches.length === 0 ? null : 'a child launched again',
     children.every((child) =>
       final.some((row) => row.run === child.run && row.type === 'run.end'),
     )
       ? null
       : 'a child was left without a terminal row',
     unfinalized.length === 0 ? null : 'an answer was never finalized',
-    askedAboutEnded
-      ? 'a person was asked about a child that had ended cleanly'
-      : null,
     haltedApart.length === 0
       ? null
       : 'a run halted in another transaction than its end',
@@ -679,7 +720,7 @@ const cleanPass = (
   Effect.gen(function* () {
     const points = yield* Effect.scoped(
       Effect.gen(function* () {
-        const session = yield* initializeDefaultSession({ roots });
+        const session = yield* openTestDefaultSession({ roots });
         // The session's own store handle: the process holds one per root.
         const databases = yield* withProcessServices(
           testRuntime(),
@@ -691,14 +732,17 @@ const cleanPass = (
         const commits: number[] = [];
         yield* SubscriptionRef.changes(db.observedCommit).pipe(
           Stream.runForEach((commit) =>
-            Effect.sync(() => commits.push(commit)),
+            Effect.sync(() => {
+              commits.push(commit);
+              takeSnapshot(roots, commit);
+            }),
           ),
           Effect.forkScoped,
         );
         yield* approveAll(session);
         const run = yield* launch(session).pipe(Effect.forkChild);
         yield* steps(session);
-        yield* teardownDefaultSession();
+        yield* closeTestDefaultSession;
         yield* Fiber.interrupt(run);
         // Every transaction observed, through the store's last commit.
         const last = Math.max(
@@ -738,18 +782,50 @@ const resumeFrom = (
   Effect.gen(function* () {
     const storage = join(roots.storage, `crash-${n}`);
     crashAt(clean, storage, n);
-    // The files runs keep beside the store outlive the process: a revision's
+    // The files on disk at the cut, never the later run's: a revision's
     // reply is on disk before the row that names it commits.
-    const files = join(roots.storage, 'executions');
-    if (existsSync(files))
-      cpSync(files, join(storage, 'executions'), { recursive: true });
+    const snapshot = snapshotOf(roots.storage, n);
+    for (const name of FILES_BESIDE)
+      if (existsSync(join(snapshot, name)))
+        cpSync(join(snapshot, name), join(storage, name), { recursive: true });
+    const effectsLog = join(roots.workspace!, 'effects.log');
+    rmSync(effectsLog, { force: true });
+    if (existsSync(join(snapshot, 'effects.log')))
+      cpSync(join(snapshot, 'effects.log'), effectsLog);
+    const effectsBefore = linesOf(effectsLog).length;
     const prefix = rowsOf(storage);
     const refused = yield* Effect.scoped(
       Effect.gen(function* () {
-        const session = yield* initializeDefaultSession({
+        const session = yield* openTestDefaultSession({
           roots: { ...roots, storage },
         });
-        yield* approveAll(session);
+        yield* approveAll(session, n);
+        // What the prefix left pending is answered a beat after the resume
+        // starts: a resume that retired it instead does so as it loads the
+        // run, so the answer then finds it cancelled.
+        const pending = prefix.filter(
+          (row) =>
+            row.type === 'request.opened' &&
+            !prefix.some(
+              (decided) =>
+                decided.type === 'request.decided' &&
+                json(decided).requestId === json(row).requestId,
+            ),
+        );
+        yield* Effect.sleep('1 second').pipe(
+          Effect.andThen(
+            Effect.forEach(pending, (row) =>
+              session.requests
+                // cast: the store's logical id of a run aggregate is its RunId.
+                .decide(row.run as RunId, String(json(row).requestId), {
+                  action: 'approve',
+                })
+                .pipe(Effect.ignore),
+            ),
+          ),
+          Effect.when(Effect.succeed(pending.length > 0)),
+          Effect.forkScoped,
+        );
         if (!prefix.some((row) => row.run === root && row.type === 'run.end')) {
           const resumed = yield* withProcessServices(
             testRuntime(),
@@ -761,14 +837,16 @@ const resumeFrom = (
         yield* steps(session, storage);
         return null;
       }).pipe(
-        Effect.ensuring(teardownDefaultSession()),
+        Effect.ensuring(closeTestDefaultSession),
         Effect.timeout('60 seconds'),
         Effect.catchCause((cause) =>
           Effect.succeed(`the resume stalled: ${String(cause)}`),
         ),
       ),
     );
-    return { prefix, final: rowsOf(storage), refused };
+    // What the resume's commands appended after the cut's effects.
+    const effects = linesOf(effectsLog).slice(effectsBefore);
+    return { prefix, final: rowsOf(storage), refused, effects };
   });
 
 export function crashConformanceSuite(plugins: string): void {
@@ -782,7 +860,6 @@ export function crashConformanceSuite(plugins: string): void {
         // The bundled personas, `polish` among them: the golden agents
         // resolve from the custom source first.
         builtIn: () => Effect.succeed(BUNDLED_AGENTS),
-        builtInToolUse: () => Effect.succeed(AGENTS),
       };
       return {
         ...host,
@@ -825,10 +902,10 @@ export function crashConformanceSuite(plugins: string): void {
       await Effect.runPromise(
         fakeHostSecrets.set(apiKeySecretName('openai'), 'validation-fake-key'),
       );
-      await Effect.runPromise(teardownDefaultSession());
+      await Effect.runPromise(closeTestDefaultSession);
     });
     afterEach(async () => {
-      await Effect.runPromise(teardownDefaultSession());
+      await Effect.runPromise(closeTestDefaultSession);
       for (const [key, value] of Object.entries(restore)) {
         if (value === undefined) delete process.env[key];
         else process.env[key] = value;
@@ -840,7 +917,6 @@ export function crashConformanceSuite(plugins: string): void {
       () =>
         Effect.gen(function* () {
           const roots = testWorkspaceRoots();
-          const effectsLog = join(roots.workspace!, 'effects.log');
           const root = generateRunId();
 
           const { points, clean } = yield* cleanPass(
@@ -871,7 +947,7 @@ export function crashConformanceSuite(plugins: string): void {
               `Model saw: ${HANDOFF} (+0)`,
               'Model saw: [Previous conversation summary]\n\nThe golden chat so far. (+0)',
             ],
-            edits: ['handoff', 'compaction', 'compaction'],
+            edits: ['handoff', 'compaction'],
             requests: ['model consumed 1', 'compact consumed 1'],
             model: SWITCH_TO,
             children: 1,
@@ -897,24 +973,29 @@ export function crashConformanceSuite(plugins: string): void {
               'request.decided',
             ].filter((type) => !cleanRows.some((row) => row.type === type)),
           ).toEqual([]);
+          // The script's `agent()` approval, which its calls share, is the
+          // script call's (attempt 0): every crash point while it is pending
+          // must resume to that same card, never a second one.
+          expect(
+            cleanRows.some(
+              (row) =>
+                row.type === 'request.opened' &&
+                /:0:\d+$/.test(String(json(row).requestId)),
+            ),
+          ).toBe(true);
           expect(
             violations([], cleanRows, 0, root, expected, ['batch', 'script']),
           ).toEqual([]);
 
           const broken: string[] = [];
           for (const n of points) {
-            rmSync(effectsLog, { force: true });
-            const { prefix, final, refused } = yield* resumeFrom(
+            const { prefix, final, refused, effects } = yield* resumeFrom(
               roots,
               clean,
               n,
               root,
               (session, storage) => userSteps(session, storage, root),
             );
-            // No file: no command ran during the resume.
-            const effects = existsSync(effectsLog)
-              ? readFileSync(effectsLog, 'utf8').split('\n').filter(Boolean)
-              : [];
             const found = [
               ...(refused === null ? [] : [refused]),
               ...violations(prefix, final, n, root, expected, effects),
@@ -927,12 +1008,14 @@ export function crashConformanceSuite(plugins: string): void {
       600_000,
     );
     /**
-     * A child's result is never lost or read twice across a crash: a
+     * Checks invariant I6: a child's result is never lost or read twice across a crash: a
      * detached child's turn, a background script's and a background
      * command's last turn each settle in the batch that ends them, and a
      * resumed parent relays every settled result it has not read. Every
      * crash point after the first settlement resumes the parent until it
-     * has read each result its children settled, once.
+     * has read each result its children settled, once. The background
+     * script awaits an `agent()` child of its own: a resume never launches
+     * that child again for its call (I5).
      */
     it.live(
       'reads every child result settled before the crash, exactly once',
@@ -957,6 +1040,26 @@ export function crashConformanceSuite(plugins: string): void {
             const consumed = new Set(ids(rows, 'followup.consumed'));
             return settled(rows).every((id) => consumed.has(id));
           };
+          /** Every result read, and every child the resume launched (a
+           *  command it re-ran after its outcome was unknown) settled. */
+          const quiet = (rows: readonly Row[], n: number) =>
+            allRead(rows) &&
+            rows
+              .filter(
+                (row) =>
+                  row.commit > n &&
+                  row.type === 'run.start' &&
+                  row.parent === root,
+              )
+              .every((child) =>
+                rows.some(
+                  (row) =>
+                    row.run === child.run &&
+                    (row.type === 'run.end' ||
+                      (row.type === 'child.turn' &&
+                        json(row).phase === 'settled')),
+                ),
+              );
           const { points, clean } = yield* cleanPass(
             roots,
             (session) =>
@@ -981,8 +1084,17 @@ export function crashConformanceSuite(plugins: string): void {
               ),
           );
           const cleanRows = rowsOf(roots.storage);
-          // The child's turn, the script and the command each reported.
+          // The child's turn, the script and the command each reported, and
+          // the script's own `agent()` child ran under it.
           expect(settled(cleanRows)).toHaveLength(3);
+          expect(
+            cleanRows.filter(
+              (row) =>
+                row.type === 'run.start' &&
+                row.parent !== null &&
+                row.parent !== root,
+            ),
+          ).toHaveLength(1);
 
           const first = Math.min(
             ...cleanRows
@@ -996,14 +1108,24 @@ export function crashConformanceSuite(plugins: string): void {
               clean,
               n,
               root,
-              (_, storage) => until(storage, allRead),
+              (_, storage) => until(storage, (rows) => quiet(rows, n)),
             );
             const twice = (type: string) =>
               ids(final, type).filter(
                 (id, index, all) => all.indexOf(id) !== index,
               );
+            const calls = final.flatMap((row) =>
+              row.type === 'run.start' && row.parent !== null
+                ? [
+                    `${row.parent}/${(json(row).parent as { callId: string }).callId}`,
+                  ]
+                : [],
+            );
             const found = [
               ...(refused === null ? [] : [refused]),
+              new Set(calls).size === calls.length
+                ? null
+                : 'a child launched again for its call',
               allRead(final) ? null : 'a settled child result was never read',
               twice('followup.queued').length === 0
                 ? null

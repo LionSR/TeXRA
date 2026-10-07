@@ -3,9 +3,8 @@ import { Effect, FileSystem, Result } from 'effect';
 
 import { deriveResumability, getRunRecords } from '@agent/storage';
 import { type AgentConfigPayload, type SessionHandle } from '@agent/runtime';
-import { documentTaskConfig } from '@agent/runtime';
 import { DEFAULT_TOOL_CONFIG, RUN_OUTCOME, type RunId } from '@shared/schemas';
-import type { SessionOpenError } from '@shared/session/database';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 
 import {
   failUsage,
@@ -69,6 +68,7 @@ import {
   resumeWorkflowOutputDirectory,
   resumeWorkflowOutputFile,
 } from '../runtime/workflowOutput';
+import type { SessionOpenError } from '@texra-ai/harness';
 
 const MULTI_INPUT_OUTPUT_MESSAGE =
   'Use --output-dir for multi-input document tasks; --output is only for a single final artifact.';
@@ -111,8 +111,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   const instruction = yield* resolveFileBackedInstruction(init, context.cwd);
   // Nothing can run this: a document task needs at least one input file, a
   // chat needs an instruction. Rejecting it before the
-  // platform init keeps a plain usage error off the agent-catalog fetch a
-  // signed-in session would otherwise pay for.
+  // platform init keeps a plain usage error cheap.
   if (!instruction && init.inputFiles.length === 0) {
     return yield* failUsage(
       'Provide --instruction or --instruction-file for an agent, or --input for a document task.',
@@ -322,10 +321,13 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const outputDir = resumeWorkflowOutputDirectory(config);
     const recoveryProcessCwd = tryReadCliCwd();
     const recoveryInputIsDurable = options.recoveryInputIsDurable ?? true;
-    // Not a run a model failure stopped (`runtime.lastError`): read from the
-    // rows, so no verdict held in memory can be missed by an interrupt.
-    const canAdvertiseInterruptedRun: CheckpointRefinement = ({ snapshot }) =>
-      Effect.succeed(snapshot.runtime.lastError == null);
+    // Not a run a model failure stopped (its folded `lastError`): read from
+    // the rows, so no verdict held in memory can be missed by an interrupt.
+    const canAdvertiseInterruptedRun: CheckpointRefinement = (_, runId) =>
+      Effect.map(
+        session.runHistory.load(runId),
+        (state) => state?.lastError == null,
+      );
     const writeResumeHint = (
       runId: RunId,
       waitForWrite = false,
@@ -393,12 +395,6 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
           yield* getRunRecords(session, result.runId).writeResultMeta({
             producer: 'cliWorkflow',
             output: workflowResult?.output ?? result.output,
-            ...(workflowResult?.copiedOutput !== undefined && {
-              copiedOutput: workflowResult.copiedOutput,
-            }),
-            ...(workflowResult?.copiedOutputs !== undefined && {
-              copiedOutputs: [...workflowResult.copiedOutputs],
-            }),
           });
           // The fact the run decides its verdict from; the run, not this
           // host, commits the outcome.

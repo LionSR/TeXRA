@@ -40,6 +40,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, posix, relative, resolve } from 'node:path';
 import process from 'node:process';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // Local imports - shared packaging invariants
@@ -53,7 +54,6 @@ import { walkFiles } from './walkFiles.mjs';
 // Local imports - smoke process helpers
 import {
   appendBoundedLog,
-  delay,
   formatExit,
   hasExited,
   stopChild,
@@ -500,16 +500,16 @@ function verifySigningEnv(args) {
 const desktopIconPath = join(desktopRoot, 'build', 'icon.icns');
 const bundledRuntimeResourceDirs = [
   'agents',
-  'tool_use_agents',
   'skills',
   'plugins',
   'plugins/lean4/agents',
 ];
 // The Codex and Claude Code SDKs each pull a per-platform package carrying a
 // 250-410 MiB native CLI binary. The desktop app resolves a user-installed CLI
-// at runtime (src/tools/codexImport.ts, src/tools/claudeAgentImport.ts), so
-// none of these packages may ship inside the app — keeping the SDKs in
-// devDependencies is what stops electron-builder from copying them.
+// at runtime (packages/texra/src/tools/codexImport.ts, packages/texra/src/tools/claudeAgentImport.ts), so
+// none of these packages may ship inside the app. The desktop manifest does not
+// declare the SDKs (packages/texra does, and esbuild inlines them from there),
+// and electron-builder copies only the manifest's production dependencies.
 const forbiddenNativeCliPackages = [
   {
     label: 'OpenAI Codex CLI',
@@ -1044,6 +1044,12 @@ async function checkBundledResources(app, failures) {
     'trace-viewer HTML template',
     failures,
   );
+  await checkExists(
+    app,
+    'serve/texra-serve.mjs',
+    'background service bundle',
+    failures,
+  );
 }
 
 async function checkMonacoWorkerAssets(app, failures) {
@@ -1131,7 +1137,7 @@ async function verifyPackage() {
     '- dist/renderer/assets/*.js',
     '- dist/renderer/assets/*.css',
     '- dist/renderer/assets Monaco worker chunks',
-    '- resources/agents, resources/tool_use_agents, resources/skills, and resources/plugins',
+    '- resources/agents, resources/skills, and resources/plugins',
     '- resources/traceViewer/index.html',
     '- package.json runtime dependencies',
     '- node_modules runtime dependency packages',
@@ -1342,7 +1348,7 @@ async function closeApplication(application, exitPromise) {
       () => null,
       (error) => error,
     ),
-    delay(SHUTDOWN_GRACE_MS).then(
+    sleep(SHUTDOWN_GRACE_MS, undefined, { ref: false }).then(
       () => new Error('ElectronApplication.close() timed out.'),
     ),
   ]);
@@ -1350,7 +1356,7 @@ async function closeApplication(application, exitPromise) {
     if (hasExited(child)) return;
     const exitObserved = await Promise.race([
       exitPromise.then(() => true),
-      delay(SHUTDOWN_GRACE_MS).then(() => false),
+      sleep(SHUTDOWN_GRACE_MS, false, { ref: false }),
     ]);
     if (exitObserved && hasExited(child)) return;
     closeFailure = new Error(
@@ -1416,7 +1422,7 @@ async function smokePackagedLaunch(args) {
       ),
       exitPromise.then((exit) => ({ kind: 'exit', exit })),
       runtimeFailure.promise.then((error) => ({ kind: 'failure', error })),
-      delay(READINESS_TIMEOUT_MS).then(() => ({ kind: 'timeout' })),
+      sleep(READINESS_TIMEOUT_MS, { kind: 'timeout' }, { ref: false }),
     ]);
     if (outcome.kind === 'failure') throw outcome.error;
     if (outcome.kind === 'exit') {
@@ -1529,6 +1535,7 @@ const hostSnapshot = {
     agentConfig: { visible: false },
     dependency: { visible: false },
     gettingStarted: false,
+    serviceOffline: false,
     login: false,
   },
   onboarding: 'done',

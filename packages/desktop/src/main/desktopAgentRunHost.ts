@@ -1,8 +1,12 @@
-import type { TranscriptExportFormat } from '@controllers/progressView/exportTranscript';
-import type { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
-import type { DiffViewHost, MessageHost, PromptFailed } from '@hosts/uiHosts';
 import type { InstructionAction } from '@shared/schemas';
-import type { BuildDisplayFn } from '@tools/latex/latexPreview';
+import type {
+  DiffViewHost,
+  MessageHost,
+  PromptFailed,
+} from '@texra/hosts/uiHosts';
+import type { TranscriptExportFormat } from '@texra/controllers/progressView/exportTranscript';
+import type { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
+import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 import type { Effect } from 'effect';
 
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
@@ -21,13 +25,13 @@ export interface DesktopAgentRunHost extends MessageHost {
     actions: readonly InstructionAction[] | undefined,
   ): Effect.Effect<void>;
   /**
-   * Presents a failure dialog. A `docsCommand` (from a refusing request's
+   * Presents a failure dialog. A `docsPage` (from a refusing request's
    * `Rejected`) adds a guide button opening the matching docs page — the
    * native form of the link the extension's request-error callout renders.
    * A dialog that could not be shown is reported by the implementation, as
    * `showErrorMessage` is: this program has no failure of its own.
    */
-  showErrorDialog(message: string, docsCommand?: string): Effect.Effect<void>;
+  showErrorDialog(message: string, docsPage?: string): Effect.Effect<void>;
   /** The export's format dialog. The Electron dialog behind it is a
    *  promise, lifted once there; a cancelled dialog answers `undefined`. */
   pickTranscriptExportFormat(): Effect.Effect<

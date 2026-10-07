@@ -2,17 +2,17 @@ import { Effect } from 'effect';
 
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { withSessionFs, type StorageFs } from '@platform/rootedFs';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { MemoryViewItem } from '@shared/tools/memoryView';
+import { displayToStoragePath, toDisplayPath } from '@tools/memory/memoryUtils';
 import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
 import { loadMemoryPreview } from '@tools/memory/memoryFileSystem';
-import { displayToStoragePath, toDisplayPath } from '@tools/memory/memoryUtils';
 import { filterNotNullish, normalizeFilePath } from '@utils/core';
 import {
   formatBytes,
   formatLocaleTimestamp,
   truncateSummary,
 } from '@utils/text/stringUtils';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 
 export const CLI_MEMORY_LIST_LIMIT = 50;
 const MEMORY_DESCRIPTION_MAX = 72;

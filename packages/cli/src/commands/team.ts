@@ -3,10 +3,15 @@ import { defineCommand } from 'citty';
 
 import { getCatalogAgent } from '@agent/index';
 import type { AgentConfigPayload } from '@agent/runtime';
-import { canLaunchTeam, planTeamRuns } from '@common/teams/TeamPlan';
+import {
+  canLaunchTeam,
+  planTeamRun,
+  planTeamRuns,
+} from '@common/teams/TeamPlan';
+import { findTeamPreset } from '@common/teams/TeamPresets';
 import { filterNotNullish } from '@utils/core';
 
-import { missingAgentMessage } from '../runtime/agents';
+import { missingAgentMessage, missingTeamMessage } from '../runtime/agents';
 import {
   failUsage,
   readCliStdinText,
@@ -27,7 +32,6 @@ import {
   formatCliTeamRunWarnings,
   readCliTeams,
 } from '../runtime/cliTeams';
-import { loadCliTeamRunPlan } from '../runtime/teamRunPlan';
 import {
   buildHeadlessRunContext,
   selectCliRunModel,
@@ -60,6 +64,22 @@ interface TeamRunInit {
   readonly instruction: string;
   readonly instructionFile?: string;
 }
+
+/** A team's run plan against the loaded catalog, for `team show` and `team run`. */
+const loadTeamRunPlan = Effect.fn('loadTeamRunPlan')(function* (
+  init: { readonly team: string; readonly agent?: string },
+  services: CliPlatformServices,
+) {
+  const team = findTeamPreset(
+    yield* readCliTeams(services.repoState),
+    init.team,
+  );
+  if (!team) return yield* failUsage(missingTeamMessage(init.team));
+  return planTeamRun(team, {
+    resolveAgent: getCatalogAgent,
+    agentOverride: init.agent,
+  });
+});
 
 const TEAM_TASK_REQUIRED_MESSAGE =
   'Provide --input, --instruction, or --instruction-file for the team task. Example: texra team run physicist --instruction "Check this derivation"';
@@ -99,10 +119,7 @@ const runTeamShow = Effect.fn('runTeamShow')(function* (
   teamIdOrName: string,
   services: CliPlatformServices,
 ) {
-  const plan = yield* loadCliTeamRunPlan(
-    { team: teamIdOrName },
-    services.repoState,
-  );
+  const plan = yield* loadTeamRunPlan({ team: teamIdOrName }, services);
 
   emitCliResult(context, {
     json: plan,
@@ -125,10 +142,10 @@ export const runTeam = Effect.fn('runTeam')(function* (
 
   const rejectsHeadlessAsk =
     context.mode === 'headless' && context.approvalPolicy === 'ask';
-  const plan = yield* loadCliTeamRunPlan(init, services.repoState);
+  const plan = yield* loadTeamRunPlan(init, services);
   if (rejectsHeadlessAsk) {
     writeTextStderr(
-      `Cannot run team "${plan.preset.id}" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
+      `Cannot run team "${plan.preset.id}" with headless approval policy "ask": approval prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
     );
     return CliExitCode.Usage;
   }
@@ -170,7 +187,7 @@ export const runTeam = Effect.fn('runTeam')(function* (
       Effect.gen(function* () {
         if (runContext.approvalPolicy === 'never') {
           writeTextStderr(
-            `WARN team ${plan.preset.id} may run without subagent delegation because approval policy "never" denies approval-gated delegation tools. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
+            `WARN team ${plan.preset.id} may run without subagents because approval policy "never" denies approval-gated tools, the agent tool included. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
           );
         }
 

@@ -19,7 +19,7 @@ export const seedRunRecord = (
   record: RunRecord,
 ) =>
   Effect.suspend(() =>
-    session.commit([
+    session.log.transact([
       {
         type: 'run.config',
         aggregateId: aggregateId('run', runId),
@@ -33,8 +33,8 @@ export const seedReport = (
   runId: RunId,
   report: string,
 ) =>
-  session
-    .commit([
+  session.log
+    .transact([
       { type: 'run.report', aggregateId: aggregateId('run', runId), report },
     ])
     .pipe(Effect.asVoid);

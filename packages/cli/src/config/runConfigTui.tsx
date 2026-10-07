@@ -2,10 +2,10 @@ import { Effect } from 'effect';
 import { useApp, useWindowSize } from 'ink';
 
 import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
-import type { ProcessRuntime } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { CliConfigForm } from '../chat/tui/forms/CliConfigForm';
+import type { ProcessRuntime } from '@texra-ai/harness';
+import type { PlatformSecrets } from '@texra-ai/harness';
 
 export function ConfigApp(props: {
   /** The settings slots this view reads and writes, from the command's roots. */

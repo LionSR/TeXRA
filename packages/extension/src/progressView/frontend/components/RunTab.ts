@@ -15,7 +15,7 @@ import { classMap } from 'lit/directives/class-map.js';
 // Local imports
 import type { RunView } from '@shared/session/sessionView';
 import { type TeXRAIconName } from '@shared/iconNames';
-import { SessionUiEvents } from '@shared/session/uiEvents';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { designTokens } from '@ui/styles';
 import {
   buttonStyles,
@@ -55,7 +55,7 @@ function buildTooltip(run: RunView): string {
       : undefined;
   const worktree = run.worktree;
   const worktreeDisplay = worktree
-    ? `Worktree: ${worktree.branch ?? getBasename(worktree.workingDirectory)}`
+    ? `Worktree: ${getBasename(worktree.workingDirectory)}`
     : undefined;
   const mainLine = [
     run.label,
@@ -177,8 +177,10 @@ export class RunTab extends LitElement {
     const accessibleStatusLabel = pendingApproval
       ? 'Needs approval'
       : run.statusLabel;
-    const runTitle = run.description || run.label;
+    const runTitle = run.title;
     const tooltip = buildTooltip(run);
+    const deleteLabel =
+      run.parentId === null ? TASK_ACTIONS.delete : TASK_ACTIONS.deleteAgent;
     const childCountLabel = formatResultCount(
       run.rollup.total,
       NESTED_AGENT.countNoun,
@@ -366,11 +368,14 @@ export class RunTab extends LitElement {
                   id: 'run-tab-actions',
                   icon: 'ellipsis',
                   slot: 'trigger',
-                  label: `Actions for task ${runTitle}`,
-                  tooltip: 'Task actions',
+                  label: `Actions for ${run.identity.kind === 'agent' ? 'agent' : 'task'} ${runTitle}`,
+                  tooltip:
+                    run.identity.kind === 'agent'
+                      ? 'Agent actions'
+                      : 'Task actions',
                 })}
                 ${run.actions.includes('rename') ? html`<wa-dropdown-item value="rename">${waIcon('pencil', { slot: 'icon' })}Rename…</wa-dropdown-item>` : nothing}
-                ${this.removable ? html`<wa-dropdown-item class="tab-remove" value="delete" variant="danger">${waIcon('trash', { slot: 'icon' })}${TASK_ACTIONS.delete}</wa-dropdown-item>` : nothing}
+                ${this.removable ? html`<wa-dropdown-item class="tab-remove" value="delete" variant="danger">${waIcon('trash', { slot: 'icon' })}${deleteLabel}</wa-dropdown-item>` : nothing}
               </wa-dropdown>`
             : nothing
         }

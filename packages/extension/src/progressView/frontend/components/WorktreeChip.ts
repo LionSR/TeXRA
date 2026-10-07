@@ -9,11 +9,7 @@ import { getBasename } from '@utils/core';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
-/**
- * Compact chip naming the worktree an agent runs in: the checked-out branch
- * (or the worktree folder when git metadata is absent), plus a dot when the
- * working tree has uncommitted changes.
- */
+/** Compact chip naming the worktree folder an agent runs in. */
 @customElement('worktree-chip')
 export class WorktreeChip extends LitElement {
   static override styles = [
@@ -44,20 +40,6 @@ export class WorktreeChip extends LitElement {
         white-space: nowrap;
         max-width: 16ch;
       }
-
-      .dirty-dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background-color: var(--color-warning);
-        flex-shrink: 0;
-      }
-
-      @media (forced-colors: active) {
-        .dirty-dot {
-          background-color: CanvasText;
-        }
-      }
     `,
   ];
 
@@ -65,33 +47,16 @@ export class WorktreeChip extends LitElement {
 
   override render(): TemplateResult | typeof nothing {
     if (!this.info) return nothing;
-    const branch = this.info.branch ?? this.worktreeLabel();
-    if (!branch) return nothing;
-    const branchKind = this.info.branch ? 'Branch' : 'Worktree';
+    const path = this.info.workingDirectory.trim();
+    const folder = getBasename(path) || path;
+    if (!folder) return nothing;
     return html`<span id="worktree-branch" class="branch">
         ${waIcon('code-branch')}
-        <bdi class="branch-name" dir="auto">${branch}</bdi>
-        ${
-          this.info.dirty
-            ? html`<span
-                class="dirty-dot"
-                role="img"
-                aria-label="uncommitted changes"
-              ></span>`
-            : nothing
-        }
+        <bdi class="branch-name" dir="auto">${folder}</bdi>
       </span>
       <wa-tooltip for="worktree-branch"
-        >${branchKind}: <bdi dir="auto">${branch}</bdi>${
-          this.info.dirty ? ' — uncommitted changes' : nothing
-        }</wa-tooltip
+        >Worktree: <bdi dir="auto">${folder}</bdi></wa-tooltip
       >`;
-  }
-
-  private worktreeLabel(): string | undefined {
-    const path = this.info.workingDirectory?.trim();
-    if (!path) return undefined;
-    return getBasename(path) || path;
   }
 }
 

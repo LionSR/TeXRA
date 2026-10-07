@@ -20,22 +20,6 @@ const ResponsesOperationSchema = z
     }).readonly(),
     providerResponseId: z.string().min(1),
     afterSequence: z.int().nonnegative().nullable(),
-    /**
-     * The inputs the provider was given, hashed by the same function a
-     * continuation's prefix fingerprint uses: origin, system text and the
-     * admitted history. A resume rebuilds the turn from the caller's current
-     * system text, so an observation compares this digest before it lets the
-     * completion leave an anchor the next round would chain on. A digest is
-     * not a transcript: the handle still carries no history.
-     */
-    admittedFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-    /**
-     * The storage mode the turn was admitted under. An observation re-prepares
-     * with this rather than the current setting: a temporary background
-     * response leaves nothing to chain on, so re-preparing it as stored would
-     * mint an anchor for a response the provider never kept.
-     */
-    store: z.boolean(),
   })
   .readonly();
 export const RemoteOperationSchema = z.union([
@@ -191,21 +175,24 @@ export const boundOperation = Effect.fn('llm.boundOperation')(function* (
 });
 
 /**
- * What a cancel reply's status says about the work: `cancelled` confirms it,
- * a queued or running status leaves it unconfirmed, and any other status is
- * the terminal outcome it reached first, bounded by the cancellation
- * evidence schema the caller parses this into.
+ * A cancel reply's status, read as the one fact a caller acts on: only
+ * `cancelled` confirms the work stopped. Any other status (still queued or
+ * running, or a terminal outcome reached first) leaves the operation
+ * observable, so it fails rather than let the caller retire it.
  */
-export const cancellationStatus = (status: string) =>
+export const confirmCancelled = (
+  operation: RemoteOperation,
+  status: string,
+): Effect.Effect<void, ModelError> =>
   status === 'cancelled'
-    ? { kind: 'confirmed-cancelled' as const }
-    : {
-        kind:
-          status === 'queued' || status === 'in_progress'
-            ? ('unconfirmed' as const)
-            : ('observed-terminal' as const),
-        status,
-      };
+    ? Effect.void
+    : Effect.fail(
+        new ModelError({
+          kind: 'provider-rejection',
+          retryable: false,
+          message: `The background response ${operation.providerResponseId} was not cancelled; it is ${status}.`,
+        }),
+      );
 
 /**
  * Rebuild a `ModelError` with `patch` applied over the fields it already

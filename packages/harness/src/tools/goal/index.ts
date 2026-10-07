@@ -1,0 +1,17 @@
+/**
+ * Goal tools — the shared goal-lifecycle surface for agent, controller, and
+ * host code.
+ *
+ * Consumers import `@tools/goal` instead of reaching into the row or
+ * approval modules individually. Those modules are implementation
+ * details of one goal subsystem; tests use the same door as production so a
+ * future internal split does not create a second public surface accidentally.
+ */
+export {
+  clearGoal,
+  goalOf,
+  pauseGoal,
+  retargetGoal,
+  startGoal,
+  type GoalAutoApprovalScope,
+} from './goalRows';

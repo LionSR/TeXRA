@@ -3,5 +3,9 @@
   "compilerOptions": {
     "types": ["node", "electron"]
   },
-  "include": ["src/main/**/*.ts", "../../src/types/**/*.d.ts"]
+  "include": [
+    "src/main/**/*.ts",
+    "../harness/src/types/**/*.d.ts",
+    "../texra/src/types/**/*.d.ts"
+  ]
 }

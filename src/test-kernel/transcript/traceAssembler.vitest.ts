@@ -21,6 +21,7 @@ import { settleSessionEvents } from '@test/agent/progressTestUtils';
 import {
   createTestSession,
   publishTestRunStart,
+  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import {
   createTempDirPlatform,
@@ -36,7 +37,7 @@ let session: SessionHandle;
 /** Populate the transcript input consumed by the export. */
 async function appendLogEntry(runId: RunId, text: string): Promise<void> {
   await Effect.runPromise(
-    session.commit([
+    session.log.transact([
       {
         type: 'log',
         aggregateId: aggregateId('run', runId),
@@ -65,12 +66,12 @@ async function writeRun(
   runConfigRecord: AgentConfig = config(),
 ): Promise<void> {
   publishTestRunStart(session, runId);
-  await Effect.runPromise(session.settlePublications());
+  await Effect.runPromise(session.log.settled);
   await Effect.runPromise(seedRunRecord(session, runId, runConfigRecord));
   // The terminal fact is `run.end`; the view's outcome is folded from it.
   if (meta.outcome)
     await Effect.runPromise(
-      session.commit([
+      session.log.transact([
         {
           type: 'run.end',
           aggregateId: aggregateId('run', runId),
@@ -118,7 +119,7 @@ describe('assembleTrace', () => {
       );
       yield* Effect.promise(() => appendLogEntry(runId, 'hello'));
       const plan = { objective: 'Check the argument' };
-      session.publish([
+      publishTestRows(session, [
         {
           type: 'run.fact',
           aggregateId: aggregateId('run', runId),

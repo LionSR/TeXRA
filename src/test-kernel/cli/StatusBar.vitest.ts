@@ -76,7 +76,12 @@ function renderBar(input: StatusBarCase): StatusBarDisplay {
   });
   const view = viewWith([run]);
   if (bypass) {
-    view.policy.set(run.id, { bypasses: bypass } as never);
+    view.policy.set(run.id, {
+      own: Object.fromEntries(
+        Object.entries(bypass).map(([kind, on]) => [kind, on ? 'on' : 'off']),
+      ),
+      goal: [],
+    });
   }
   if (queuedFollowUpMessages.length > 0) {
     view.queuedFollowUps.set(

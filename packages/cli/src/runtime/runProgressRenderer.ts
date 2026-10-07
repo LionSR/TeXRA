@@ -6,7 +6,13 @@
  */
 import path from 'node:path';
 
-import { Effect, type Scope, Stream, SubscriptionRef } from 'effect';
+import {
+  Effect,
+  type Fiber,
+  type Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 import { RUN_PHASE, type RunId, type RunPhase } from '@shared/schemas';
 import {
@@ -49,8 +55,6 @@ export interface RunProgressRendererInit {
   readonly minIntervalMs?: number;
   readonly heartbeatIntervalMs?: number;
   readonly getColumns?: () => number | undefined;
-  readonly setInterval?: typeof setInterval;
-  readonly clearInterval?: typeof clearInterval;
 }
 
 export function shouldRenderRunProgress(
@@ -83,8 +87,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private readonly nowMs: () => number;
   private readonly minIntervalMs: number;
   private readonly heartbeatIntervalMs: number;
-  private readonly setInterval: typeof setInterval;
-  private readonly clearInterval: typeof clearInterval;
   private readonly ansi: boolean;
   private readonly getColumns: () => number | undefined;
   private lastRenderAt = 0;
@@ -96,7 +98,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private attachCursor = 0;
   /** The last root phase the renderer painted; a repeat is not a change. */
   private paintedPhase: RunPhase | undefined;
-  private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+  private heartbeat: Fiber.Fiber<never> | undefined;
 
   constructor(
     init: RunProgressRendererInit & {
@@ -107,8 +109,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     this.nowMs = init.nowMs ?? Date.now;
     this.minIntervalMs = init.minIntervalMs ?? 100;
     this.heartbeatIntervalMs = init.heartbeatIntervalMs ?? 1000;
-    this.setInterval = init.setInterval ?? setInterval;
-    this.clearInterval = init.clearInterval ?? clearInterval;
     this.ansi = init.colorEnabled;
     this.getColumns = init.getColumns;
     this.attachedAt = this.nowMs();
@@ -120,7 +120,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   ): Effect.Effect<void, never, Scope.Scope> {
     return Effect.suspend(() => {
       this.wantedRunId = options.runId;
-      this.attachCursor = SubscriptionRef.getUnsafe(session.view).cursor;
+      this.attachCursor = SubscriptionRef.getUnsafe(session.view.ref).cursor;
       return Effect.addFinalizer(() =>
         Effect.sync(() => {
           this.view = undefined;
@@ -128,9 +128,26 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       ).pipe(
         Effect.andThen(
           Effect.forkScoped(
-            Stream.runForEach(session.viewChanges, (view) =>
-              Effect.sync(() => this.applyView(view)),
-            ),
+            Effect.scoped(
+              Stream.runForEach(session.view.changes, (view) =>
+                Effect.gen({ self: this }, function* () {
+                  this.applyView(view);
+                  if (this.rootRunTerminal || !this.rootRunId) {
+                    this.stopHeartbeat();
+                  } else if (this.ansi && !this.heartbeat) {
+                    // A start waits a full interval. This stream's scope
+                    // interrupts and joins the heartbeat when it ends.
+                    this.heartbeat = yield* Effect.sleep(
+                      this.heartbeatIntervalMs,
+                    ).pipe(
+                      Effect.andThen(Effect.sync(() => this.render(true))),
+                      Effect.forever,
+                      Effect.forkScoped({ startImmediately: true }),
+                    );
+                  }
+                }),
+              ),
+            ).pipe(Effect.ensuring(Effect.sync(() => this.stopHeartbeat()))),
             { startImmediately: true },
           ),
         ),
@@ -179,7 +196,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     if (phaseChanged) this.paintedPhase = phase;
     // A terminal root freezes the line: the final status is its last paint.
     if (wasTerminal && !phaseChanged) return;
-    this.updateHeartbeat();
     this.render(phaseChanged || this.rootRunTerminal);
   }
 
@@ -211,22 +227,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     this.lastRenderAt = now;
   }
 
-  private updateHeartbeat(): void {
-    if (this.rootRunTerminal || !this.rootRunId) {
-      this.stopHeartbeat();
-      return;
-    }
-    if (!this.ansi || this.heartbeatTimer) return;
-    this.heartbeatTimer = this.setInterval(() => {
-      this.render(true);
-    }, this.heartbeatIntervalMs);
-    (this.heartbeatTimer as { unref?: () => void }).unref?.();
-  }
-
   private stopHeartbeat(): void {
-    if (!this.heartbeatTimer) return;
-    this.clearInterval(this.heartbeatTimer);
-    this.heartbeatTimer = undefined;
+    this.heartbeat?.interruptUnsafe();
+    this.heartbeat = undefined;
   }
 
   /** The status line, and the same line without its elapsed clock. */
@@ -300,7 +303,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
 function livePhaseText(root: RunView): string | undefined {
   if (root.status === 'ready') return undefined;
   if (root.status === RUN_PHASE.RUNNING) {
-    return root.description ?? root.statusLabel;
+    return root.description || root.statusLabel;
   }
   return root.statusLabel;
 }
@@ -321,7 +324,7 @@ function formatActiveChildren(
   const first =
     agents.find((child) => child.status === RUN_PHASE.RUNNING) ?? agents[0];
   if (!first) return undefined;
-  const label = pluralize(agents.length, 'subagent');
+  const label = pluralize(agents.length, 'agent');
   const suffix = agents.length > 1 ? ` +${agents.length - 1}` : '';
   const description = first.description;
   const safeDescription =

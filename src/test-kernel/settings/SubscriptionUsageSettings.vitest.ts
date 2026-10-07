@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatSubscriptionUsagePercent } from '@shared/subscriptionUsagePresentation';
+import { formatSubscriptionUsagePercent } from '@texra/shared/subscriptionUsagePresentation';
 
 describe('subscription usage percent formatting', () => {
   it.each([

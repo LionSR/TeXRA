@@ -30,7 +30,7 @@ import {
   getCoreSettingDefault,
   type SettingHost,
 } from '@shared/state/stateSettings';
-import type { SetupPlatformShape } from '@tools/setup/platform';
+import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import type { SecretsFailed } from '@texra-ai/llm';
 
 /**
@@ -408,7 +408,7 @@ export interface FakeProcessPorts {
  * Overrides for one fake host: the process ports above, the two
  * workspace-root ports a suite substitutes (a scoped config provider, a
  * hand-built state store), the process ports a root hands
- * `installProcessRuntime`, and the setup platform a setup-tool suite
+ * `processLayer`, and the setup platform a setup-tool suite
  * provides. The workspace and storage paths come from `FakePlatformOptions`.
  */
 export type FakeHostOverrides = Partial<FakeProcessPorts> &
@@ -450,8 +450,6 @@ const FAKE_AGENT_DIRECTORIES: AgentDirectoriesPort = {
   custom: () => Effect.sync(() => fakePath('workspace/.texra/agents')),
   customConfigured: () => Effect.succeed(false),
   builtIn: () => Effect.sync(() => fakePath('workspace/resources/agents')),
-  builtInToolUse: () =>
-    Effect.sync(() => fakePath('workspace/resources/tool_use_agents')),
 };
 
 export function createFakePlatform(

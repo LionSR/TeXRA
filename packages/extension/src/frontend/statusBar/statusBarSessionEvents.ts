@@ -1,11 +1,11 @@
 import { Effect, Stream } from 'effect';
 
 // Local imports - runtime events
-import type { SessionHandle } from '@agent/runtime';
+import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import type { StatusBarUsageTracker } from './StatusBarUsageTracker';
 
 interface StatusBarSessionEventOptions {
-  session: Pick<SessionHandle, 'viewChanges'>;
+  session: Pick<SessionBackend, 'view'>;
   /** What the two callbacks paint: the subscription refreshes the bar when
    *  one of these projections moves, and nothing else. */
   tracker: Pick<
@@ -22,7 +22,7 @@ interface StatusBarSessionEventOptions {
  * scope).
  *
  * The one input is the session's view as a level stream
- * (`SessionHandle.viewChanges`, PRD 7.2): the fold's own state, so it carries
+ * (`SessionHandle.view.changes`, PRD 7.2): the fold's own state, so it carries
  * both the durable rows and the local facts no row records — an owner proved
  * dead reclassifies its runs as interrupted with nothing committed, and the
  * fold-gated event tail would never wake this listener for it. Nothing is
@@ -35,13 +35,13 @@ export function refreshStatusBarOnViewChanges({
   onStatusChanged,
   onUsageChanged,
 }: StatusBarSessionEventOptions): Effect.Effect<void> {
-  // Unseeded on purpose: `viewChanges` replays the current view on subscribe,
+  // Unseeded on purpose: `view.changes` replays the current view on subscribe,
   // and that first emission must paint both projections (a run already
   // RUNNING when the bar subscribes would otherwise read Idle until the count
   // next changes).
   let status: string | undefined;
   let usage: StatusBarUsageTracker['totalUsage'] | undefined;
-  return Stream.runForEach(session.viewChanges, () =>
+  return Stream.runForEach(session.view.changes, () =>
     Effect.sync(() => {
       const nextStatus = `${tracker.activity}/${tracker.activeRunCount}`;
       if (nextStatus !== status) {

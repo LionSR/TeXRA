@@ -12,7 +12,7 @@ import {
   mountComponent,
   useLitComponentTestDom,
 } from '../settings/litComponentTestUtils';
-import type WaDetails from '@awesome.me/webawesome/dist/components/details/details.js';
+import type { LitElement } from 'lit';
 
 function mount(
   text: string,
@@ -141,8 +141,9 @@ describe('user-message structured delivery', () => {
     'collapses %s without hiding or changing its copy action',
     async (text) => {
       const element = await mount(text);
-      const disclosure =
-        element.shadowRoot!.querySelector<WaDetails>('wa-details')!;
+      const disclosure = element.shadowRoot!.querySelector<
+        LitElement & { open: boolean }
+      >('wa-details')!;
       await disclosure.updateComplete;
       const header =
         disclosure.shadowRoot!.querySelector<HTMLElement>('[part="header"]')!;

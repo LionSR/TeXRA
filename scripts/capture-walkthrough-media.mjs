@@ -29,7 +29,7 @@ const fixturePath = join(outputDir, 'session-fixture.cjs');
 await build({
   stdin: {
     contents: `export { buildScenario, ROOT, OWNER, BOARD_NOW } from './src/test-kernel/shared/session/fanOutScenario';
-      export { emptyHostSnapshot } from './src/shared/session/hostSnapshot';`,
+      export { emptyHostSnapshot } from './packages/harness/src/shared/session/hostSnapshot';`,
     resolveDir: repoRoot,
     loader: 'ts',
   },
@@ -260,7 +260,6 @@ function providerStatus(provider, displayName, status) {
     provider,
     displayName,
     status,
-    keyUrl: `https://example.com/${provider}/keys`,
     streaming: true,
     customEndpoint: '',
     supportsCustomEndpoint: provider === 'openai',

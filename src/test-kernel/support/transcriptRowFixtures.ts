@@ -1,6 +1,6 @@
 // Test-only builders for the transcript rows the suites replay.
 //
-// The CLI paints `@ui/transcript` rows directly, so a tool row is a
+// The CLI paints `@shared/transcript` rows directly, so a tool row is a
 // normalized payload plus the shared fold over it, as `toolRow` hands the
 // painter. Suites that hand-build rows
 // (ToolRenderers, ConversationTranscript, SubagentListDisplay,
@@ -18,13 +18,13 @@ import {
 } from '@shared/schemas';
 import type { CompactionActivityStatus } from '@shared/runs/compactionActivityProjection';
 import { COMPACTION_ACTIVITY_LABEL } from '@shared/runs/compactionActivityProjection';
-import { toolRowModel } from '@ui/transcript/toolRowModel';
+import { toolRowModel } from '@shared/transcript/toolRowModel';
 import {
   transcriptText,
   type ToolRow,
   type TranscriptRow,
   type CompactionActivityRow,
-} from '@ui/transcript';
+} from '@shared/transcript';
 
 /** A normalized tool-use payload with every field a caller did not name
  *  defaulted to its empty/successful value. */

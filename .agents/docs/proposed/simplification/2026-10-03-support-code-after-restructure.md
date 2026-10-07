@@ -102,14 +102,16 @@ the two can pin different binaries for the same name.
 Proposal: one resolver for both. The extended PATH is the one TeXRA's
 spawns use. Not done because it changes which hooks load.
 
-## 5. `entryTypeIn` and `entryExists` disagree on ENOTDIR
+## 5. `entryTypeIn` and `entryExists` disagree on ENOTDIR (done in sweep base-2)
 
 `src/utils/files/fsEntryExists.ts`: `entryExists` reads a path under a
 regular file as absent (`absentReason` covers ENOTDIR). `entryTypeIn` only
-recovers `NotFound`, so the same path fails with `BadResource`, even though
-its doc says "only absence is recovered". Proposal: have `entryTypeIn`
-recover through `absentReason`. Not done because it changes a failure into
-a value for its callers.
+recovered `NotFound`, so the same path failed with `BadResource`, even though
+its doc said "only absence is recovered". `entryTypeIn` now recovers through
+`absentReason`. `entryExists` keeps its `exists` probe rather than becoming
+`entryTypeIn(...) !== undefined`: `AcceptRunFilesProgressEvents.vitest.ts`
+and `ToolUseWait.vitest.ts` stub `FileSystem.exists` (the latter parks the
+run on it), so that collapse is a test rewrite, not a code change.
 
 ## 6. Config file paths derived twice (done with M7)
 

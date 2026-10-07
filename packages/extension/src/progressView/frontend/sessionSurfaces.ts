@@ -11,12 +11,8 @@
  */
 import { signal, type Signal } from '@lit-labs/signals';
 
-import type { RunId } from '@shared/schemas';
-import { subscribeToSignalChanges } from '@shared/signals';
-import { LAUNCH_FILE_LISTS } from '@shared/launcher/fileSelectConfigs';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
-import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { Response, UpMessage } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 import {
@@ -34,7 +30,9 @@ import {
 import {
   PersistedState,
   type KeyValueStore,
-} from '@shared/state/PersistedState';
+} from '@texra/shared/state/PersistedState';
+import { LAUNCH_FILE_LISTS } from '@texra/shared/launcher/fileSelectConfigs';
+import { subscribeToSignalChanges } from '@texra/shared/signals';
 
 import { playCompletionSound } from './audioNotification';
 import {
@@ -43,6 +41,8 @@ import {
   type WebviewSession,
   type WebviewTransport,
 } from './sessionTransport';
+import type { RuntimeRequest } from '@texra-ai/harness';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /** One open session as the root holds it: its three records as signals. */
 interface SessionSurface {
@@ -443,6 +443,10 @@ export function createSessionSurfaces(options: {
     const { launch } = surface;
     const instruction = launch.instruction.trim();
     if (instruction === '') return;
+    // Auto-approve is this launch's alone: the request carries it, and the
+    // request settles only with the run, so the next task must not find it.
+    if (launch.approval !== 'policy')
+      act(entry, { kind: 'launch', patch: { approval: 'policy' } });
     void hostRequestFor(entry, { kind: 'launch', launch, instruction });
   }
 
@@ -456,7 +460,7 @@ export function createSessionSurfaces(options: {
       act(entry, {
         kind: 'draft',
         runId: action.runId,
-        patch: { text: action.text },
+        patch: { text: action.text, images: action.images },
       });
     else if (action.kind !== 'showSessions') act(entry, action);
     // Show Sessions opens the newest session only from the New-task state.

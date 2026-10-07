@@ -21,13 +21,15 @@
  */
 
 // The services and their layer. `Sessions.layer({ platform, plugins })` is
-// the only way in: the composition root and the session factory under it stay internal,
-// because a caller that reached them directly would hold a composed process
-// and an open session with no scope to end either.
-export type { AgentPlatform, Composition } from './effect/runtime.js';
+// an embedder's way in: the process and its sessions live for that layer's
+// scope, so nothing is held without a scope to end it.
+export type { AgentPlatform, Composition } from './effect/sessions.js';
 export type { Plugin } from '@tools/plugins';
 export { Sessions } from './effect/sessions.js';
 export type {
+  ApprovalHandler,
+  OpenOptions,
+  PendingRequest,
   Run,
   Session,
   SessionView,
@@ -35,13 +37,31 @@ export type {
   RunView,
   TranscriptView,
 } from './effect/sessions.js';
+export type { InlinePersona } from '@shared/schemas';
+
+// The process the hosts compose and the session owner it serves: one
+// `processLayer` for every TeXRA host and for `Sessions.layer` above.
+export { SessionOwner } from '@agent/runtime/SessionOwner';
+export {
+  processLayer,
+  type ProcessLayerOptions,
+} from '@controllers/session/sessionLayer';
+export {
+  withForkFailureReporting,
+  withProcessServices,
+  type AgentCatalogServices,
+  type PluginContext,
+  type ProcessRuntime,
+  type ProcessServices,
+} from '@platform/processRuntime';
 
 // The failures the surface names.
 export {
   AgentNotFound,
-  PlatformConflict,
   PluginsRefused,
+  ResumeRefused,
   RunFailure,
+  SessionOptionsConflict,
   ToolsRefused,
 } from './effect/errors.js';
 export type { LaunchError } from './effect/errors.js';
@@ -77,9 +97,66 @@ export { defineTool } from '@tools/core/definition';
 export type { DefinedTool } from '@tools/core/definition';
 export type {
   AggregateId,
+  RequestDecision,
   RunId,
   SessionCloseReport,
   TranscriptSubscription,
 } from '@shared/schemas';
-export type { RequestError } from '@shared/session/requestErrors';
-export type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+// A request's refusals, as `Session.request` fails with them.
+export {
+  Cancelled,
+  HostRequestFailure,
+  Internal,
+  isRequestRefusal,
+  NotOwner,
+  Rejected,
+  Unavailable,
+} from '@shared/session/requestErrors';
+export type {
+  RequestError,
+  RequestRefusal,
+} from '@shared/session/requestErrors';
+export type {
+  Outcome,
+  RunStopReason,
+  RuntimeRequest,
+} from '@shared/session/runtimeRequest';
+
+// The platform's ports: what an `AgentPlatform` implements, the failures its
+// stores answer with, and the services a plugin's code reads them as.
+export type {
+  AgentDirectoriesPort,
+  ConfigProvider,
+  Disposable,
+  StateStore,
+  ToolMissingHandler,
+} from '@platform/interfaces';
+export {
+  AgentDirectories,
+  AgentDirectoriesFailed,
+  AppState,
+  ConfigWriteFailed,
+  StateReadFailed,
+  StateWriteFailed,
+  ToolMissingReporter,
+} from '@platform/interfaces';
+export type { PlatformSecrets } from '@platform/secrets';
+export { Secrets } from '@platform/secrets';
+export type {
+  LanguageModelAccessState,
+  LanguageModelInfo,
+  LanguageModelPort,
+} from '@platform/languageModel';
+export {
+  LanguageModel,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+} from '@platform/languageModel';
+export type { WorkspaceRoots } from '@platform/workspaceRoots';
+
+// What a plugin's `availability` answers with, and reads.
+export type {
+  ToolAvailabilityChecks,
+  ToolProbeError,
+  ToolProbeInputs,
+  ToolProbeServices,
+} from '@tools/toolProbes';

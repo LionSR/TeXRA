@@ -18,15 +18,11 @@
  * is loud.
  *
  * This module is the CLI's composition root for that runtime, and every
- * entry that calls the install holds the result in a local and threads it on: there
- * is no process-wide runtime slot for anything below an entry to read it
- * back from (rulings ledger, #12720). Whether one is installed is asked of
- * the session owner `installProcessRuntime` installs beside it, which
- * carries the runtime it runs on, rather than tracked in a latch here: a
- * boolean set beside the install goes stale in both directions -- true while
- * `selfIdentity()` is still in flight, and still true after the disposal,
- * which is how a caller after a platform shutdown ends up selecting a
- * disposed runtime.
+ * entry that calls the install holds the result in a local and threads it
+ * on: nothing below an entry reads it back (rulings ledger, #12720). The
+ * one slot is this module's own: set with the runtime it built and cleared
+ * as its disposal starts, so a caller after a platform shutdown builds a
+ * fresh runtime rather than selecting a disposed one.
  *
  * The process identity is read as the runtime's own layer, over the
  * spawner that runtime serves, and `initCliPlatform`'s open of the default
@@ -36,32 +32,27 @@
  * scoped connection. Platform-less entries provide refusing services instead.
  * initCliPlatform reads that AppState and opens only the workspace scope.
  */
-import { Effect, Layer, Stream } from 'effect';
+import { Effect, Layer, ManagedRuntime, Stream } from 'effect';
 
-import { installedProcessRuntime } from '@agent/runtime';
-import { AgentDirectoryService } from '@agent/index';
-import { appStateStoreFromDatabase } from '@controllers/session/appStateStore';
-import { globalDatabaseLayer } from '@controllers/session/Database';
-import {
-  disposeProcessRuntime,
-  installProcessRuntime,
-} from '@controllers/session/sessionLayer';
-import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import {
   AgentDirectories,
   AppState,
+  processLayer,
   StateWriteFailed,
+  type ProcessRuntime,
   type StateStore,
-} from '@platform/interfaces';
-import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
-import type { ProcessRuntime } from '@platform/processRuntime';
-import { nodeProcesses } from '@platform/defaults/nodeProcesses';
-import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+  withForkFailureReporting,
+} from '@texra-ai/harness';
+import { resolveGlobalStoragePath } from '@texra-ai/harness/node';
+import { AgentDirectoryService } from '@agent/index';
+import { appStateStoreFromDatabase } from '@controllers/session/appStateStore';
+import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import { GlobalDatabase } from '@shared/session/database';
-import { TEXRA_SETTING_ROWS } from '@shared/settingsView/texraSettings';
 import { usageLogLayer } from '@telemetry/UsageLogService';
+import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
+import { texraPlugins } from '@texra/tools/registry';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
-import { texraPlugins } from '@tools/registry';
 
 import { readCliVersion } from './cliContext';
 import { cliSecrets } from './cliSecrets';
@@ -164,6 +155,9 @@ export const NO_PLATFORM_INSTALL: CliProcessRuntimeInstall = Object.freeze({
   globalDatabase: refusingGlobalDatabase,
 });
 
+/** The runtime this module built, until its disposal starts. */
+let installed: ProcessRuntime | undefined;
+
 /**
  * Install the process runtime, or join the one already installed: every entry
  * that calls this holds it in a local and threads it on, so nothing below
@@ -189,13 +183,7 @@ export function installCliProcessRuntime(
   storageRoot: string,
   options?: CliProcessRuntimeInstall,
 ): ProcessRuntime {
-  const current = installedProcessRuntime();
-  if (current) {
-    // The output plane runs on whichever runtime this process ended up with,
-    // installed here or found installed.
-    setCliLogRuntime(current);
-    return current;
-  }
+  if (installed) return installed;
   // The global root resolves here, at install, with the pure calculator:
   // the directory is the state store's and the global database's to create
   // when they open below, and clone — whose storage root may be read-only,
@@ -222,36 +210,41 @@ export function installCliProcessRuntime(
         }),
     ),
   );
-  const runtime: ProcessRuntime = installProcessRuntime({
-    processStart: nodeProcesses.selfIdentity(),
-    globalStorage: globalStoragePath,
-    plugins: texraPlugins(),
-    settings: TEXRA_SETTING_ROWS,
-    mcpConfigPath: USER_MCP_CONFIG_PATH,
-    secrets,
-    appState: options?.appState
-      ? AppState.layer(options.appState)
-      : Layer.effect(
-          AppState,
-          Effect.map(GlobalDatabase, (database) =>
-            appStateStoreFromDatabase(globalStoragePath, database.values),
-          ),
-        ),
-    // A terminal has no editor language models; the CLI's platform installs
-    // the same port.
-    languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
-    agentDirectories: agentDirectoriesLayer,
-    // CLI model traffic goes to the same anonymous usage log the other hosts
-    // write to, tagged with editorType 'cli' and the CLI version. The
-    // runtime's disposal drains the queue, and that disposal is the last
-    // shutdown step of every exit path this process has.
-    usageLog: usageLogLayer({ version, editorType: 'cli' }),
-    // The one handle on the global root, held for this runtime's life and
-    // closed with it — or clone's refusal, which opens nothing.
-    globalDatabase:
-      options?.globalDatabase ?? globalDatabaseLayer(globalStoragePath),
-    minimumLogLevel: options?.minimumLogLevel ?? 'Info',
-  });
+  const runtime: ProcessRuntime = withForkFailureReporting(
+    ManagedRuntime.make(
+      processLayer({
+        globalStorage: globalStoragePath,
+        plugins: texraPlugins(),
+        settings: TEXRA_SETTING_ROWS,
+        mcpConfigPath: USER_MCP_CONFIG_PATH,
+        secrets,
+        appState: options?.appState
+          ? AppState.layer(options.appState)
+          : Layer.effect(
+              AppState,
+              Effect.map(GlobalDatabase, (database) =>
+                appStateStoreFromDatabase(globalStoragePath, database.values),
+              ),
+            ),
+        // A terminal has no editor language models; the CLI's platform installs
+        // the same port.
+        languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
+        agentDirectories: agentDirectoriesLayer,
+        // CLI model traffic goes to the same anonymous usage log the other hosts
+        // write to, tagged with editorType 'cli' and the CLI version. The
+        // runtime's disposal drains the queue, and that disposal is the last
+        // shutdown step of every exit path this process has.
+        usageLog: usageLogLayer({ version, editorType: 'cli' }),
+        // Absent, the one handle on the global root, held for this runtime's
+        // life and closed with it; clone's refusal opens nothing.
+        ...(options?.globalDatabase && {
+          globalDatabase: options.globalDatabase,
+        }),
+        minimumLogLevel: options?.minimumLogLevel ?? 'Info',
+      }),
+    ),
+  );
+  installed = runtime;
   // The output plane runs its Effects on this runtime from here on; the
   // disposal below hands it back the no-runtime state.
   setCliLogRuntime(runtime);
@@ -260,8 +253,8 @@ export function installCliProcessRuntime(
 
 /**
  * Dispose this process's runtime, if one is installed: the CLI's own end of
- * the lifecycle this module owns the start of, asked of the same owner the
- * install above joins. The output plane is handed back the no-runtime state
+ * the lifecycle this module owns the start of: the runtime the install above
+ * built. The output plane is handed back the no-runtime state
  * after the disposal settles, so a write racing the teardown still reaches
  * the runtime that is unwinding, exactly as it did before the shutdown began.
  *
@@ -273,9 +266,10 @@ export function installCliProcessRuntime(
  */
 export const disposeCliProcessRuntime: Effect.Effect<void> = Effect.suspend(
   () => {
-    const runtime = installedProcessRuntime();
+    const runtime = installed;
     if (!runtime) return Effect.void;
-    return disposeProcessRuntime(runtime).pipe(
+    installed = undefined;
+    return runtime.disposeEffect.pipe(
       Effect.ensuring(
         Effect.sync(() => {
           setCliLogRuntime(null);

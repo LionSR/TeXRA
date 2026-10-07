@@ -9,9 +9,12 @@
     "types": ["node"]
   },
   "include": [
-    "packages/harness/src/**/*.ts",
-    "packages/llm/src/**/*.ts",
-    "src/types/ambient.d.ts"
+    "packages/harness/src/index.ts",
+    "packages/harness/src/node.ts",
+    "packages/harness/src/plugins.ts",
+    "packages/harness/src/schemas.ts",
+    "packages/harness/src/effect/**/*.ts",
+    "packages/harness/src/types/ambient.d.ts"
   ],
   "exclude": ["node_modules", "src/test-kernel"]
 }

@@ -22,15 +22,15 @@ import '@progressView/frontend/ProgressApp';
 import './TexraDiffView';
 import type { ProgressApp } from '@progressView/frontend/ProgressApp';
 import { createSessionSurfaces } from '@progressView/frontend/sessionSurfaces';
-import { hostBridge, postMessage } from '@shared/hostBridge';
 import { DESKTOP_THEME_KIND } from '@shared/schemas';
-import type { Shell } from '@shared/session/shell';
+import { hostBridge, postMessage } from '@texra/shared/hostBridge';
+import { type Shell } from '@texra/shared/session/shell';
 import {
   PersistedState,
   type KeyValueStore,
-} from '@shared/state/PersistedState';
+} from '@texra/shared/state/PersistedState';
 
-import { formatDesktopAccelerator } from '@shared/commands/accelerators';
+import { formatDesktopAccelerator } from '@texra/shared/commands/accelerators';
 
 import { applyHostBodyTheme } from '@ui/wa/hostTheme';
 import {
@@ -675,11 +675,13 @@ const shortcuts = createDesktopShortcutRegistry({
   document,
   actions: desktopRendererCommandActions,
   openCommands: () => palette.open(),
+  platform: rendererPlatform,
 });
 const palette = createDesktopCommandPalette({
   document,
   actions: desktopRendererCommandActions,
   getShortcuts: () => shortcuts.entries(),
+  platform: rendererPlatform,
 });
 document.body.append(palette.element);
 shortcuts.subscribe((entries) => {
@@ -710,7 +712,7 @@ const routeMessage = createMessageRoutes({
   // so this stays consistent with how the pane behaves everywhere else rather
   // than introducing a second, subtler kind of refresh.
   'desktop:workspace:filesChanged': (message) => {
-    void projectWorkbenches.get(message.session)?.fileTree.refresh();
+    void projectWorkbenches.get(message.session)?.refreshFiles();
   },
   'desktop:workspace:openDocument': (message) => {
     const project = projectWorkbenches.get(message.session);

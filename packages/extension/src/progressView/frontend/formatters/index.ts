@@ -3,7 +3,7 @@
  * kind.
  *
  * Membership (which rows exist at all) is decided once by the transcript
- * fold's row builders (`@ui/transcript`). This map is exhaustive over
+ * fold's row builders (`@shared/transcript`). This map is exhaustive over
  * `TranscriptRowKind`, so a new row kind is a compile error here rather than a
  * row that silently never paints.
  */
@@ -12,7 +12,7 @@
 import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared transcript model
-import type { TranscriptRow, TranscriptRowKind } from '@ui/transcript';
+import type { TranscriptRow, TranscriptRowKind } from '@shared/transcript';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -24,7 +24,6 @@ import {
   formatFileListTemplate,
   formatLatexdiffTemplate,
   formatMissingOutputsTemplate,
-  formatStatisticsTemplate,
 } from './logFormatters/dataFormatters';
 import {
   formatDefaultLogMessageTemplate,
@@ -59,7 +58,6 @@ const ROW_FORMATTERS: RowFormatters = {
   fileList: formatFileListTemplate,
   missingOutputs: formatMissingOutputsTemplate,
   latexdiff: formatLatexdiffTemplate,
-  statistics: formatStatisticsTemplate,
   contextManagement: formatContextManagementTemplate,
   progressStatus: formatProgressStatusTemplate,
   compactionActivity: formatCompactionActivityTemplate,

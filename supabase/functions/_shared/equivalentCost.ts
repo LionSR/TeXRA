@@ -3,14 +3,14 @@
  *
  * Subscription rounds (ChatGPT/Codex, Kimi Code, Grok) reach the client's
  * pricing layer with zeroed rates (`zeroCostAccessOverrides` in
- * `src/model/subscriptionAccessOverrides.ts`), so their entries arrive here
+ * `packages/harness/src/model/subscriptionAccessOverrides.ts`), so their entries arrive here
  * with `cost: 0` even though llm-zoo still carries the models' API list
  * prices. This module recovers the notional cost server-side so
  * `subscription_usage_logs.cost` answers "what would this usage have cost at
  * list price" for every client version, old or new.
  *
  * Formula parity: mirrors the client's `standardCost`
- * (`src/agent/runtime/run/pricing.ts`) on the wire fields. The client reports
+ * (`packages/harness/src/agent/runtime/run/pricing.ts`) on the wire fields. The client reports
  * `inputTokens` as cache-MISS tokens (`UsageMonitor.logToBackend` sends
  * `usage.cacheMissInputTokens`) with cached tokens separate, so
  *   miss·in + cached·in·discount + (output + separate reasoning)·out

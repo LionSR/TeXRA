@@ -9,10 +9,10 @@ by a specific package.
   to released versions that still load hosted agents. It serves those versions
   only: the build no longer reads it, and the agents the current app runs ship
   bundled (as copies) in `packages/extension/resources/agents/`.
-- The tool-use agents and specialists (the orchestrator, `search`,
-  `simplifier`, `presenter`, and `progressCheck`) ship bundled in
-  `packages/extension/resources/tool_use_agents/`, which is their only
-  source of truth. The Lean 4 agents belong to the lean4 tool plugin and
+- Every other bundled agent (the orchestrator, `search`, `simplifier`,
+  `presenter`, `progressCheck`, …) ships in
+  `packages/extension/resources/agents/`, which is its only source of
+  truth. The Lean 4 agents belong to the lean4 tool plugin and
   ship in `packages/extension/resources/plugins/lean4/agents/`. The remote delivery path still accepts tool-use agents
   under `agents/remote/tool_use/`; none live there today.
 - `agents/remote/catalog.json` gives each remote agent its storage folder and
@@ -25,7 +25,6 @@ by a specific package.
 Package-owned prompts stay next to the code that packages them:
 
 - `packages/extension/resources/agents/`
-- `packages/extension/resources/tool_use_agents/`
 - `packages/extension/resources/plugins/<id>/agents/`
 - `packages/extension/resources/templates/`
 

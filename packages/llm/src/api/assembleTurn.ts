@@ -29,7 +29,7 @@ export interface AssemblyOptions {
   /**
    * The stream may begin mid-response (a resumed observation): progress on
    * a position it never saw open is shown, not kept, and the terminal
-   * snapshot supplies what it missed.
+   * snapshot supplies the items it did not see close.
    */
   readonly partial?: boolean;
   /** What the codec adds to a completed turn: its continuation anchor. */
@@ -217,58 +217,13 @@ function step(turn: Assembly, event: PartEvent): Folded {
   }
 }
 
-/** The streamed position a snapshot item restates, in order and in agreement. */
-function restated(
-  turn: Assembly,
-  streamed: readonly (readonly [number, Slot])[],
-  item: Part,
-  previous: number,
-): Effect.Effect<readonly [number, Slot] | undefined, ModelError> {
-  const match = streamed.find(
-    ([, slot]) => slot.part && keyOf(slot.part) === keyOf(item),
-  );
-  if (match === undefined) return Effect.succeed(undefined);
-  const [index, slot] = match;
-  if (
-    index <= previous ||
-    !slot.part ||
-    !sameIdentity(slot.part, item) ||
-    (slot.closed && !restates(slot.part, item))
-  )
-    return fail(turn, 'returned a snapshot contradicting its output');
-  if (!slot.closed) Object.assign(slot, { part: item, closed: true });
-  return Effect.succeed(match);
-}
-
-/** The snapshot's items, each streamed one replaced by what streamed. */
-const reconcile = Effect.fn('llm.reconcileSnapshot')(function* (
-  turn: Assembly,
-  streamed: readonly (readonly [number, Slot])[],
-  snapshot: readonly Part[],
-  streamCovers: boolean,
-) {
-  const content: (Part | null)[] = [];
-  let previous = -1;
-  let matched = 0;
-  for (const item of snapshot) {
-    const match = yield* restated(turn, streamed, item, previous);
-    if (match === undefined && streamCovers)
-      return yield* fail(turn, 'returned a snapshot beyond its output');
-    content.push(match ? match[1].part : item);
-    previous = match?.[0] ?? previous;
-    matched += match ? 1 : 0;
-  }
-  if (!streamCovers && matched < streamed.length)
-    return yield* fail(turn, 'returned a snapshot that omits its output');
-  return content;
-});
-
 /**
- * The content a terminal snapshot settles. A stream that saw a whole
- * response covers it, and the snapshot may restate a subset of its items.
- * Otherwise (a resumed observation, or no item streamed) the snapshot covers
- * it, and every streamed item must be among its items. A matched pair keeps
- * its order and agrees; the streamed item is the one kept.
+ * The content of a finished response. Each item's done event owns its
+ * content. A stream that saw the whole response is the content, and its
+ * snapshot may name only items the stream delivered; the terminal
+ * snapshot is read only when no item streamed or the stream joined late (a
+ * resumed observation), and then supplies the items the stream did not
+ * close, each streamed item standing in for the snapshot entry it names.
  */
 const settle = Effect.fn('llm.settleTurn')(function* (
   turn: Assembly,
@@ -278,28 +233,45 @@ const settle = Effect.fn('llm.settleTurn')(function* (
   const streamed = [...turn.slots].toSorted(([left], [right]) => left - right);
   if (!partial && streamed.some(([index], ordinal) => index !== ordinal))
     return yield* fail(turn, 'omitted an output position');
-  const streamCovers =
-    snapshot === undefined || (!partial && streamed.length > 0);
-  const content = yield* reconcile(
-    turn,
-    streamed,
-    snapshot ?? [],
-    streamCovers,
+  const parts = streamed.flatMap(([, slot]) => (slot.part ? [slot.part] : []));
+  const names = (list: readonly Part[]) => new Set(list.map(keyOf));
+  if (snapshot === undefined || (!partial && streamed.length > 0)) {
+    if (streamed.some(([, slot]) => !slot.closed))
+      return yield* fail(turn, 'left an output item unfinished');
+    // An item only the snapshot names never streamed: never drop it quietly.
+    const delivered = names(parts);
+    if (snapshot?.some((item) => !delivered.has(keyOf(item))))
+      return yield* fail(turn, 'returned a snapshot beyond its output');
+    return parts;
+  }
+  const named = names(snapshot);
+  if (parts.some((part) => !named.has(keyOf(part))))
+    return yield* fail(turn, 'returned a snapshot that omits its output');
+  // One item per name on each side, so the match below is one-to-one and a
+  // repeated call can never dispatch twice.
+  if (named.size < snapshot.length || names(parts).size < parts.length)
+    return yield* fail(turn, 'repeated an output item');
+  const done = new Map(
+    streamed.flatMap(([, slot]) =>
+      slot.closed && slot.part ? [[keyOf(slot.part), slot.part] as const] : [],
+    ),
   );
-  if (streamed.some(([, slot]) => !slot.closed))
-    return yield* fail(turn, 'left an output item unfinished');
-  const parts = streamCovers ? streamed.map(([, slot]) => slot.part) : content;
-  return parts.filter((part) => part !== null);
+  return snapshot.map((item) => done.get(keyOf(item)) ?? item);
 });
+
 /** The completed turn, once the parts have ended. */
 const complete = Effect.fn('llm.completeTurn')(function* (turn: Assembly) {
   if (turn.id === undefined || turn.finish === undefined)
     return yield* fail(turn, 'ended without an identified terminal result');
   const content = yield* settle(turn, turn.finish.snapshot);
   const calls = content.some((part) => part.kind === 'local-call');
-  const reason = turn.finish.finish.finishReason;
+  const reason =
+    turn.finish.finish.finishReason ?? (calls ? 'tool-calls' : 'stop');
   // A tool-call finish names calls, and a plain stop leaves none.
-  if ((reason === 'tool-calls' && !calls) || (reason === 'stop' && calls))
+  if (
+    (reason === 'tool-calls' || reason === 'stop') &&
+    calls !== (reason === 'tool-calls')
+  )
     return yield* fail(turn, 'returned inconsistent tool calls and finish');
   const result = TurnResultSchema.safeParse({
     kind: 'http',
@@ -309,6 +281,7 @@ const complete = Effect.fn('llm.completeTurn')(function* (turn: Assembly) {
     modelFingerprint: turn.fingerprint ?? null,
     content,
     ...turn.finish.finish,
+    finishReason: reason,
     usage: turn.usage,
   });
   if (!result.success || result.data.providerResponseId === null)

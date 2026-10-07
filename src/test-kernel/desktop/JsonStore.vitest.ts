@@ -15,6 +15,8 @@ import { moduleFileUrl, repoPath } from './desktopTestPaths.ts';
 import { loadSourceModule } from './loadSourceModule.ts';
 
 const JSON_STORE_SOURCE = repoPath(
+  'packages',
+  'harness',
   'src',
   'platform',
   'defaults',

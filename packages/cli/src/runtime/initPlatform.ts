@@ -3,40 +3,33 @@ import { Cause, Effect, Exit, Scope } from 'effect';
 
 // Local imports
 import {
-  closeAllSessions,
-  initializeDefaultSession,
-  teardownDefaultSession,
-  tryDefaultSession,
-  type SessionHandle,
-} from '@agent/runtime';
-import { bootstrapHost } from '@controllers/hostBootstrap';
+  AppState,
+  SessionOwner,
+  type ProcessRuntime,
+  type StateStore,
+  type StateWriteFailed,
+  Secrets,
+  type PlatformSecrets,
+  type WorkspaceRoots,
+  type SessionOpenError,
+  withProcessServices,
+} from '@texra-ai/harness';
+import {
+  createNodeWorkspaceRoots,
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@texra-ai/harness/node';
+import type { SessionHandle } from '@agent/runtime';
 import {
   openProjectStateStore,
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
-import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { setLogSink, silentLogSink } from '@logger/logSink';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import {
-  AppState,
-  type StateStore,
-  type StateWriteFailed,
-} from '@platform/interfaces';
-import { Secrets, type PlatformSecrets } from '@platform/secrets';
-import { DisposableStore } from '@platform/disposable';
-import {
-  withProcessServices,
-  type ProcessRuntime,
-} from '@platform/processRuntime';
-import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
-import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
+import { DisposableStore } from '@texra/platform/disposable';
+import { bootstrapHost } from '@texra/controllers/hostBootstrap';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -63,9 +56,7 @@ type CliShutdownSignal = 'SIGINT' | 'SIGTERM';
 // handlers are currently installed.
 let shutdownHandlers: DisposableStore | undefined;
 // The one memoized open of the process session (`CliPlatformServices.session`),
-// built by the first init beside the roots it installs; undefined only when
-// another root opened the process session before this init ran (a test
-// harness's fake host), in which case the session is that one.
+// built by the first init beside the roots it installs.
 let sessionOpen: Effect.Effect<SessionHandle, SessionOpenError> | undefined;
 // The process's shutdown scope, made by the first init: its close is the
 // CLI's shutdown, run once whichever exit path asks first (`shutdown`).
@@ -88,7 +79,7 @@ type CliPlatformInitOptions = Pick<
   | 'version'
 > & {
   readonly installSignalHandlers?: boolean;
-  /** The caller shows `SessionHandle.storeMovedAside` itself: the chat TUI,
+  /** The caller shows `SessionHandle.log.movedAside` itself: the chat TUI,
    *  in its transcript (`createChatSessionController`), since stderr written before Ink mounts is left
    *  above its header. Otherwise this init prints it to stderr: the
    *  platform's log sink is always silent. */
@@ -127,10 +118,8 @@ export type CliPlatformServices = SettingsStores & {
   readonly secrets: PlatformSecrets;
   /**
    * The process roots this init installed: one process, one project (the
-   * `--cwd` workspace) -- or, when another root opened the process session
-   * before this init ran (a test harness's fake host), the roots that
-   * session was opened over. A process with neither builds its own, so
-   * every caller gets roots rather than branching on their absence.
+   * `--cwd` workspace), built by the first init and found by every later
+   * one, so every caller gets roots rather than branching on their absence.
    */
   readonly roots: WorkspaceRoots;
   /**
@@ -333,12 +322,9 @@ export function initCliPlatform(
       Effect.gen(function* () {
         const globalState = yield* AppState;
         // The three setting slots this process answers a catalog row from:
-        // the roots an earlier init built, or -- when another root opened the
-        // process session before this init ran (a test harness's fake host)
-        // -- the roots that session was opened over, which is where `session`
-        // below already looks.
-        const joined = installedRoots ?? tryDefaultSession()?.roots;
-        if (joined) return { globalState, roots: joined };
+        // the roots an earlier init built.
+        if (installedRoots) return { globalState, roots: installedRoots };
+        const owner = yield* SessionOwner;
 
         const projectScope = yield* Scope.make();
         const closeProject = Scope.close(projectScope, Exit.void);
@@ -373,19 +359,18 @@ export function initCliPlatform(
           // opens one.
           const openSession = yield* Effect.cached(
             Effect.acquireRelease(
-              initializeDefaultSession({
+              owner.open({
                 roots,
-                responseTextProcessing: createTexraResponseTextProcessing(),
                 ...(context.interruptedTasks !== undefined && {
                   interruptedTasks: context.interruptedTasks,
                 }),
               }),
-              () => teardownDefaultSession(),
+              (session) => Effect.asVoid(owner.close(session.roots.storage)),
             ).pipe(
               Scope.provide(projectScope),
               Effect.tap((session) =>
                 Effect.sync(() => {
-                  const moved = session.storeMovedAside;
+                  const moved = session.log.movedAside;
                   if (moved && context.presentsStoreMovedAside !== true) {
                     writeTextStderr(sessionStoreMovedAsideMessage(moved));
                   }
@@ -429,7 +414,7 @@ export function initCliPlatform(
             scope,
             closeProject.pipe(Effect.ensuring(flushNdjsonStdout())),
           );
-          yield* Scope.addFinalizer(scope, closeAllSessions());
+          yield* Scope.addFinalizer(scope, Effect.asVoid(owner.closeAll));
           shutdownScope = scope;
           shutdown = yield* Effect.cached(Scope.close(scope, Exit.void));
 
@@ -468,18 +453,7 @@ export function initCliPlatform(
       secrets,
       session:
         sessionOpen ??
-        Effect.suspend(() => {
-          const opened = tryDefaultSession();
-          return opened
-            ? Effect.succeed(opened)
-            : Effect.die(
-                new Error(
-                  'The CLI process session was opened by another root and is no longer open.',
-                ),
-              );
-        }),
-      // A platform joined over another root's session (a test harness's fake
-      // host) has no CLI shutdown of its own to act before.
+        Effect.die(new Error('The CLI process session was never opened.')),
       shutdownScope: shutdownScope ?? Scope.makeUnsafe(),
       roots,
     };

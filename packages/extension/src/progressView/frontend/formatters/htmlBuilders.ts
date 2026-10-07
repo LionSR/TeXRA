@@ -15,10 +15,10 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { diffWordsWithSpace } from 'diff';
 
 import type { FileListEntry } from '@shared/schemas';
-import { highlightSpans } from '@shared/highlighting/highlightCode';
-import { copyWithFeedback } from '@shared/utils/clipboard';
 import type { TeXRAIconName } from '@shared/iconNames';
-import type { FileListRow } from '@ui/transcript';
+import type { FileListRow } from '@shared/transcript';
+import { copyWithFeedback } from '@texra/shared/utils/clipboard';
+import { highlightSpans } from '@texra/shared/highlighting/highlightCode';
 
 // Local imports - shared utilities
 import { stopSpinnerMotion } from '@ui/wa/spinner';
@@ -131,6 +131,9 @@ async function copyFromClick(
   successClass?: string,
 ): Promise<void> {
   if (content == null) return;
+  // A click inside a slotted custom button can still activate the native
+  // summary's default action even when its event no longer bubbles.
+  event.preventDefault();
   event.stopPropagation();
   const button = event.currentTarget;
   if (!(button instanceof HTMLElement)) return;
@@ -140,11 +143,11 @@ async function copyFromClick(
 /** Build a copy button for banner content. */
 export function buildCopyButton(
   title: string,
-  options: { hidden?: boolean; content?: string } = {},
+  options: { hidden?: boolean; content?: string; labeled?: boolean } = {},
 ): TemplateResult {
-  const { hidden = false, content } = options;
+  const { hidden = false, content, labeled = false } = options;
   // prettier-ignore
-  return html`<wa-button class="action-icon-button banner-content-copy" appearance="plain" variant="neutral" size="s" type="button" title=${title} aria-label=${title} ?hidden=${hidden} @click=${(event: Event) => copyFromClick(event, content)} @keydown=${stopSummaryToggleKeydown}>${waIcon('copy')}</wa-button>`;
+  return html`<wa-button class="${labeled ? 'action-button message-copy' : 'action-icon-button'} banner-content-copy" appearance="plain" variant="neutral" size="s" type="button" title=${title} aria-label=${title} ?hidden=${hidden} @click=${(event: Event) => copyFromClick(event, content)} @keydown=${stopSummaryToggleKeydown}>${labeled ? html`<span class="copy-label">Copy</span><span class="copied-label">Copied</span>` : waIcon('copy')}</wa-button>`;
 }
 
 /**

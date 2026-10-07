@@ -2,10 +2,6 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import {
-  DocumentTaskSchema,
-  PersonaSchema,
-} from '@agent/core/definition/AgentDataclass';
 import type { AgentEntry } from '@agent/index';
 import {
   cliTeamListRecord,
@@ -14,6 +10,7 @@ import {
 } from '@cli/runtime/cliTeams';
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
+import { DocumentTaskSchema, PersonaSchema } from '@shared/schemas';
 import { agentMatchesIdentifier } from '@shared/schemas';
 
 function agent(name: string, tools: string[] = []): AgentEntry {

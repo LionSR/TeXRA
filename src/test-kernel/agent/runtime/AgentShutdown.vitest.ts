@@ -7,10 +7,10 @@ import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 
-import { closeAllSessions } from '@agent/runtime/sessionGraph';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { closeAllTestSessions } from '@test/support/sessionEnd';
 
 describe('agent shutdown', () => {
   afterEach(() => {
@@ -27,20 +27,14 @@ describe('agent shutdown', () => {
         ),
       );
       const compatibilitySession = testDefaultSession();
-      const firstDrain = vi.spyOn(firstSession.runs, 'killBackgroundProcesses');
-      const secondDrain = vi.spyOn(
-        secondSession.runs,
-        'killBackgroundProcesses',
-      );
-      const compatibilityDrain = vi.spyOn(
-        compatibilitySession.runs,
-        'killBackgroundProcesses',
-      );
+      const firstDrain = vi.spyOn(firstSession.runs, 'close');
+      const secondDrain = vi.spyOn(secondSession.runs, 'close');
+      const compatibilityDrain = vi.spyOn(compatibilitySession.runs, 'close');
 
       // A host's shutdown closes every held session; a later close finds
       // them released and drains nothing again.
-      yield* closeAllSessions();
-      yield* closeAllSessions();
+      yield* closeAllTestSessions;
+      yield* closeAllTestSessions;
 
       expect(firstDrain).toHaveBeenCalledOnce();
       expect(secondDrain).toHaveBeenCalledOnce();

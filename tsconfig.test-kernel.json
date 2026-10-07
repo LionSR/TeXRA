@@ -6,6 +6,10 @@
     "moduleResolution": "bundler",
     "types": ["node"]
   },
-  "include": ["src/test-kernel/**/*.ts", "src/types/**/*.d.ts"],
+  "include": [
+    "src/test-kernel/**/*.ts",
+    "packages/harness/src/types/**/*.d.ts",
+    "packages/texra/src/types/**/*.d.ts"
+  ],
   "exclude": ["node_modules"]
 }

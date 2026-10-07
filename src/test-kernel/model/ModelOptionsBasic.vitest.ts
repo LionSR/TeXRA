@@ -2,16 +2,12 @@
 import { describe, expect, it } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import {
-  isDeprecatedModel,
-  isExpensiveModel,
-  isRetiredModel,
-  modelConfig,
-} from '@texra-ai/llm';
+import { modelConfig } from '@texra-ai/llm';
 import {
   DEFAULT_HELPER_MODEL,
   DEFAULT_MODELS,
 } from '@shared/constants/defaultModels';
+import { isExpensiveModel } from '@shared/schemas';
 
 // Local imports - model
 
@@ -35,7 +31,8 @@ describe('default model list', () => {
   it('only contains live, non-deprecated models', () => {
     expect(
       DEFAULT_MODELS.filter(
-        (model) => isRetiredModel(model) || isDeprecatedModel(model),
+        (model) =>
+          modelConfig(model)?.retired || modelConfig(model)?.deprecated,
       ),
     ).toEqual([]);
   });

@@ -11,57 +11,60 @@
  * bundle `validate-run.mjs` builds), against a temporary HOME and project
  * from `mkdtemp`, set only in each child's environment: no live model, no API
  * key, and never the developer's `~/.texra`. The scripted conversation is
- * `goldenTurn` in `src/agent/runtime/run/validationModel.ts`, over the agents
+ * `goldenTurn` in `packages/harness/src/agent/runtime/run/validationModel.ts`, over the agents
  * in `src/test-kernel/fixtures/storage/agents/`; this script orders the runs,
- * each in its own process:
+ * each in its own process and every one finishes cleanly: interrupted states
+ * are the crash suite's (`crashConformance.ts`), which truncates a clean
+ * store at each commit.
  *
- * - `golden_park`: killed (`SIGKILL`) while its model call is open, the
- *   parked run the conformance suite resumes.
  * - `golden_parent` (headless, `yolo`): a `read_file` call; a `plan` update
  *   the policy approves (a decided `planApproval` request); and an
  *   `agent` child that looks its parent up and messages it, which
  *   is refused: a one-shot parent never reads a message. Headless
  *   delegation runs in band, so every row commits in one order.
  * - two `review` runs over the same notes: the context blobs they share.
- * - `golden_chat`, the interactive `texra chat` driven under a PTY: a plan
- *   the user runs as a goal (`r` on the approval, the `goal` plugin fact)
- *   and the goal completed, then `/model` and a message, so the switch is
- *   recorded at the run's next model boundary; then `/compact`, whose turn
- *   commits a `context.edit` replacing the history; then a held turn, a message
- *   typed behind it, and the user's stop, so that follow-up stays queued.
- *   Only the chat makes a goal: the headless policy approves a plan
- *   without one. Each keystroke
+ * - a `polish` document task with `--output`: the documents plugin's output
+ *   fact and the CLI's `run.result` (producer `cliWorkflow`).
+ * - `golden_chat`, the interactive `texra chat` driven under a PTY, with
+ *   "Keep agents running" turned on in `/config` and a plugin's
+ *   `PostToolUse` hook on `codex` enabled: a plan the user runs as a goal
+ *   (`r` on the approval, the `goal` plugin fact) and the goal completed,
+ *   then `/model` and a message, so the switch is recorded at the run's
+ *   next model boundary; then `/compact`, whose turn commits a
+ *   `context.edit` replacing the history; then a turn whose approved
+ *   `codex` call runs the hook (`hook.outcome`) and launches a Codex child,
+ *   on a stand-in Codex CLI first on PATH, that parks after its turn
+ *   (`child.park`); then the turn held, a message typed behind it, and the
+ *   user's stop, which detaches the child (`run.detach`), so that
+ *   follow-up stays queued; the exit ends the child. The stand-in is a
+ *   POSIX script, so the generator runs on macOS and Linux. Only the chat
+ *   makes a goal: the headless policy approves a plan without one. Each
+ *   keystroke
  *   waits for the screen or the store to show the step before it, so the
  *   rows commit in one order.
- * - `golden_approval`, a second `texra chat` under a PTY: a `bash` command
- *   waiting for its approval, bound to its call, killed (`SIGKILL`) before
- *   anyone answers, the pending approval the conformance suite resumes.
  * - `golden_script` (headless, `yolo`): a `script` call whose guest finds
- *   its read tool with `searchTools` and `describeTool`, then reads twice
- *   and runs one command in a `Promise.all`, killed (`SIGKILL`) while
- *   the command waits, after the first read settled: the interrupted script
- *   the conformance suite resumes. The command is a barrier, so the second
- *   read waits behind it and every row commits in one order.
- * - `golden_fanout` (headless, `yolo`): a `script` call whose guest awaits
- *   two `agent()` calls in one `Promise.all`, one child at a time under a
- *   project child-run budget of 1, killed (`SIGKILL`) after the first child
- *   completed and its call settled, while the second child's model call
- *   waits for `golden-fanout.release`: the interrupted fan-out the
- *   conformance suite resumes.
- * - `golden_background`, a third `texra chat` under a PTY (`yolo`): a
- *   `script` call sent to the background, whose run (`{ kind: 'script' }`)
- *   awaits one `agent()` call, and the parent's turn ended; killed
- *   (`SIGKILL`) while that child's model call waits for
- *   `golden-background.release`: the background script the conformance
- *   suite resumes. The parent's reply waits for
- *   `golden-background-reply.release` until that child is at its model
- *   call, so the two runs of one process do not race their rows.
+ *   its read tool with `searchTools` and `describeTool`, then reads and runs
+ *   one command in a `Promise.all`.
  * - `golden_fork` (headless), then `texra resume --fork` under a PTY: the
  *   fork, whose `run.start.provenance` names its source and whose first
  *   history row is a `context.edit` (cause `fork`); then `texra resume
  *   --handoff` on the fork: a `context.edit` (cause `handoff`).
- * - one `golden_child` run deleted last with `texra history delete`: the
- *   tombstoned run, which no later open is left to collect.
+ * - `golden_effect` (headless, `yolo`): its command
+ *   appends to `approved.txt`, then a plugin's `PostToolUse` hook on `bash`
+ *   holds the call, and the process is killed (`SIGKILL`) there. A call's
+ *   PostToolUse rows commit with its settlement, so the store holds the
+ *   command's intent and no result: the consequential crash, after an
+ *   external effect and before its result commits. The file it left is the
+ *   fixture's artifact (`golden-effect/approved.txt`), which the golden
+ *   suite puts back before it resumes the run.
+ * - one `golden_child` run, deleted with `texra history delete` once
+ *   `texra serve` holds the project open: the tombstoned run, which no
+ *   later open is left to collect.
+ * - last, a `golden_script` task in that service (`texra tasks start`) that
+ *   sends a shell command to the background, and the service's
+ *   `task.resume` of the finished command: a run with no agent record, so
+ *   the resume closes its input (`followup.closed`). No open follows, which
+ *   would remove the finished command; `texra tasks stop` ends the task.
  *
  * What differs between two generations is normalized before the dump: the
  * temporary paths, the process identities, the clock, the random ids, and
@@ -77,10 +80,12 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -98,6 +103,12 @@ const binaryPath = path.join(validationRoot, 'bin', 'texra.js');
 const fixturePath = path.join(
   repoRoot,
   'src/test-kernel/fixtures/storage/golden-1.0.sql',
+);
+/** The killed command's effect, kept beside the store it was killed in. */
+const effectPath = path.join(
+  path.dirname(fixturePath),
+  'golden-effect',
+  'approved.txt',
 );
 const FLAG_CONTENT = 'texra-cli-run-validation\n';
 const FAKE_KEY = 'texra-validation-fake-key';
@@ -117,6 +128,8 @@ const PROVIDER_KEYS = [
 const args = process.argv.slice(2).filter((arg) => arg !== '--');
 const noBuild = args.includes('--no-build');
 const keep = args.includes('--keep');
+/** The processes a step starts, reaped however the generation ends. */
+const spawned = new Set();
 if (args.some((arg) => !['--no-build', '--keep'].includes(arg))) {
   console.error(
     'usage: node scripts/generate-golden-store.mjs [--no-build] [--keep]',
@@ -172,6 +185,63 @@ function scenario(root) {
     path.join(project, 'notes.tex'),
     '\\section{Notes}\nThe golden store reads this file.\n',
   );
+  writeFileSync(
+    path.join(project, 'paper.tex'),
+    '\\section{Input}\nThe golden document task polishes this file.\n',
+  );
+  // The Codex CLI the Codex child runs: first on PATH, with an empty global
+  // npm prefix so no installed Codex is found first. Its one turn answers
+  // once it has read its prompt and `codex.release` appears beside the flag.
+  const bin = path.join(root, 'bin');
+  mkdirSync(bin);
+  writeFileSync(
+    path.join(bin, 'codex'),
+    `#!/usr/bin/env node
+const { existsSync } = require('node:fs');
+const release = require('node:path').join(__dirname, '..', 'codex.release');
+const events = [
+  { type: 'thread.started', thread_id: 'golden-codex-thread' },
+  { type: 'turn.started' },
+  { type: 'item.completed', item: { id: 'item_0', type: 'agent_message', text: 'Codex answered.' } },
+  { type: 'turn.completed', usage: { input_tokens: 10, cached_input_tokens: 0, output_tokens: 5, reasoning_output_tokens: 0 } },
+];
+process.stdin.resume();
+process.stdin.on('end', function answer() {
+  // A generation that failed removed its root: there is no turn to answer.
+  if (!existsSync(release))
+    return existsSync(__dirname) ? setTimeout(answer, 20) : process.exit(1);
+  for (const event of events) console.log(JSON.stringify(event));
+});
+`,
+    { mode: 0o755 },
+  );
+  // A plugin whose \`PostToolUse\` hook sees each \`codex\` call.
+  const hooks = path.join(root, 'golden-hooks');
+  mkdirSync(path.join(hooks, '.claude-plugin'), { recursive: true });
+  mkdirSync(path.join(hooks, 'hooks'));
+  writeFileSync(
+    path.join(hooks, '.claude-plugin', 'plugin.json'),
+    `${JSON.stringify({ name: 'golden-hooks', version: '1.0.0' })}\n`,
+  );
+  writeFileSync(
+    path.join(hooks, 'hooks', 'hooks.json'),
+    `${JSON.stringify({
+      hooks: {
+        PostToolUse: [
+          {
+            matcher: 'codex',
+            hooks: [
+              {
+                type: 'command',
+                command: 'node',
+                args: ['-e', 'process.stdin.resume()'],
+              },
+            ],
+          },
+        ],
+      },
+    })}\n`,
+  );
   // The caller's environment (Windows needs `SystemRoot` and the like), less
   // its TeXRA settings, provider keys and `CI` (which would force the chat
   // headless), with every home the CLI could resolve (`HOME`, and
@@ -184,6 +254,10 @@ function scenario(root) {
     ),
     ...Object.fromEntries(PROVIDER_KEYS.map((name) => [name, ''])),
     OPENAI_API_KEY: FAKE_KEY,
+    // The helper model's provider: a run's session label (`run.description`).
+    DEEPSEEK_API_KEY: FAKE_KEY,
+    PATH: [bin, process.env.PATH].join(path.delimiter),
+    npm_config_prefix: path.join(root, 'npm'),
     HOME: home,
     USERPROFILE: home,
     APPDATA: path.join(home, 'AppData/Roaming'),
@@ -199,8 +273,8 @@ function scenario(root) {
     LANG: 'C',
     TEXRA_NO_UPDATE_CHECK: '1',
     TEXRA_NO_TELEMETRY: '1',
-    // Each chat is its runs' writer, so killing it is the crash the
-    // conformance suite resumes from; a service would outlive the kill.
+    // Each chat is its runs' one writer, in the generator's order; a
+    // service would outlive the generation.
     TEXRA_NO_SERVICE: '1',
     TEXRA_INTERNAL_VALIDATE_MODEL: '1',
     TEXRA_INTERNAL_VALIDATE_MODEL_FLAG: flag,
@@ -208,35 +282,18 @@ function scenario(root) {
     TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
   };
   const argv = (command) => [binaryPath, ...command, '--cwd', project];
-  const run = (command) => {
+  const run = (command, input, runEnv = env) => {
     const result = spawnSync(process.execPath, argv(command), {
       cwd: project,
-      env,
+      env: runEnv,
       encoding: 'utf8',
+      input,
     });
     if (result.status !== 0)
       fail(
         `texra ${command.join(' ')} exited ${result.status}\n${result.stdout}\n${result.stderr}`,
       );
     return result.stdout;
-  };
-  const start = (command) => {
-    const child = spawn(process.execPath, argv(command), {
-      cwd: project,
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let output = '';
-    let done = false;
-    child.stdout.on('data', (chunk) => (output += chunk));
-    child.stderr.on('data', (chunk) => (output += chunk));
-    const exited = new Promise((resolve) =>
-      child.on('exit', (code, signal) => {
-        done = true;
-        resolve({ code, signal, output });
-      }),
-    );
-    return { child, exited, output: () => output, done: () => done };
   };
   // The interactive chat, on a PTY whose screen a headless terminal keeps.
   const chat = async (command) => {
@@ -254,10 +311,12 @@ function scenario(root) {
       cwd: project,
       env: { ...env, TERM: 'xterm-256color' },
     });
+    spawned.add(child);
     let done = false;
     child.onData((data) => term.write(data));
     const exited = new Promise((resolve) =>
       child.onExit((exit) => {
+        spawned.delete(child);
         done = true;
         resolve(exit);
       }),
@@ -272,19 +331,100 @@ function scenario(root) {
     };
     return {
       write: (data) => child.write(data),
-      kill: (signal) => child.kill(signal),
       screen,
       exited,
       output: screen,
       done: () => done,
     };
   };
+  // The project's store; the service keeps one for no workspace beside it.
   const store = () => {
     const dir = path.join(home, '.texra/v1/workspace-storage');
-    const [key] = existsSync(dir) ? readdirSync(dir) : [];
+    const key = existsSync(dir)
+      ? readdirSync(dir).find((name) => name.startsWith('project-'))
+      : undefined;
     return key === undefined ? null : path.join(dir, key, 'texra.db');
   };
-  return { run, start, chat, store, project };
+  // `texra serve` in the foreground, as a window's service, for `use`,
+  // which runs its client commands (`texra tasks`) and calls procedures
+  // over its socket (the Effect RPC NDJSON framing), hearing each one's
+  // exit; then `texra service stop`.
+  const serve = async (use) => {
+    const { TEXRA_NO_SERVICE: _, ...serviceEnv } = env;
+    const service = spawn(process.execPath, argv(['serve']), {
+      cwd: project,
+      env: serviceEnv,
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+    spawned.add(service);
+    service.on('exit', () => spawned.delete(service));
+    let log = '';
+    service.stderr.on('data', (data) => (log += data));
+    const exited = new Promise((resolve) => service.on('exit', resolve));
+    const record = path.join(home, '.texra/run/serve.json');
+    const handle = { done: () => service.exitCode !== null, output: () => log };
+    await until('the service', () => existsSync(record), handle);
+    const { socket } = JSON.parse(readFileSync(record, 'utf8'));
+    const call = (tag, payload) =>
+      new Promise((resolve, reject) => {
+        const client = connect(socket);
+        let buffered = '';
+        client.on('error', reject);
+        // A connection that ends without the exit fails the call (a settled
+        // call ignores it).
+        client.on('close', () =>
+          reject(new Error(`the service closed ${tag} unanswered\n${log}`)),
+        );
+        client.on('data', (data) => {
+          buffered += data;
+          try {
+            for (let end; (end = buffered.indexOf('\n')) >= 0;) {
+              const message = JSON.parse(buffered.slice(0, end));
+              buffered = buffered.slice(end + 1);
+              if (message._tag !== 'Exit') continue;
+              resolve(message.exit);
+              client.end();
+            }
+          } catch (error) {
+            reject(error);
+            client.destroy();
+          }
+        });
+        client.write(
+          `${JSON.stringify({ _tag: 'Request', id: '0', tag, payload, headers: [] })}\n`,
+        );
+      });
+    const client = (command) => run(command, undefined, serviceEnv);
+    await use({ client, call, handle });
+    run(['service', 'stop']);
+    const code = await exited;
+    if (code !== 0) fail(`texra serve exited ${code}\n${log}`);
+  };
+  // A headless run in the background, for the generator to kill.
+  const start = (command) => {
+    const child = spawn(process.execPath, argv(command), {
+      cwd: project,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    spawned.add(child);
+    let output = '';
+    child.stdout.on('data', (chunk) => (output += chunk));
+    child.stderr.on('data', (chunk) => (output += chunk));
+    const exited = new Promise((resolve) =>
+      child.on('exit', (code, signal) => {
+        spawned.delete(child);
+        resolve({ code, signal });
+      }),
+    );
+    return {
+      exited,
+      kill: () => child.kill('SIGKILL'),
+      done: () => child.exitCode !== null || child.signalCode !== null,
+      output: () => output,
+    };
+  };
+  return { run, start, chat, serve, store, project, hooks };
 }
 
 /** Rows of the workspace store, read from outside the CLI. */
@@ -329,41 +469,6 @@ async function generate(root) {
   const cli = scenario(root);
   cli.run(['tools', 'enable', 'multi-agent', '--print']);
 
-  // The parked run: its model call held open, then killed.
-  const park = cli.start([
-    'run',
-    'golden_park',
-    '--model',
-    'gpt56',
-    '--instruction',
-    'Park at the model call.',
-    '--approval-policy',
-    'never',
-    '--output-format',
-    'json',
-    '--print',
-  ]);
-  const parkId = await until(
-    'the parked run',
-    () => query(cli.store(), RUN_OF_AGENT, ['golden_park'])[0]?.id,
-    park,
-  );
-  await until(
-    'the open model call of the parked run',
-    () =>
-      query(
-        cli.store(),
-        `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
-         WHERE s.logical_id = ? AND e.type = 'model.message'
-           AND json_extract(e.data, '$.payload.kind') = 'attempt'`,
-        [parkId],
-      ).length > 0,
-    park,
-  );
-
-  park.child.kill('SIGKILL');
-  await park.exited;
-
   cli.run([
     'run',
     'golden_parent',
@@ -395,6 +500,29 @@ async function generate(root) {
       'json',
       '--print',
     ]);
+
+  // A document task through `texra run --output`: the documents plugin's
+  // output fact and the CLI's `run.result` (producer `cliWorkflow`).
+  cli.run([
+    'run',
+    'polish',
+    '--model',
+    'gpt56',
+    '--input',
+    'paper.tex',
+    '--output',
+    'paper.polished.tex',
+    '--approval-policy',
+    'never',
+    '--output-format',
+    'json',
+    '--print',
+  ]);
+
+  // The chat's Codex call runs the hook plugin's `PostToolUse` hook.
+  cli.run(['tools', 'enable', 'codex', '--print']);
+  cli.run(['plugin', 'install', cli.hooks, '--print']);
+  cli.run(['plugin', 'enable', 'golden-hooks', '--print'], 'y\n');
 
   // The interactive chat: each keystroke waits for the step before it.
   const tty = await cli.chat([
@@ -428,6 +556,30 @@ async function generate(root) {
         ).length > 0,
       tty,
     );
+  // "Keep agents running" on, in `/config`: the user's stop detaches the
+  // chat's Codex child instead of stopping it.
+  /** Press the hotkey the open list shows for `label`. */
+  const pick = async (label) => {
+    const pattern = new RegExp(`(\\w)\\. ${label}`);
+    const [, key] = await until(
+      `the ${label} row`,
+      () => pattern.exec(tty.screen()),
+      tty,
+    );
+    tty.write(key);
+  };
+  await send('/config');
+  await pick('Tasks and agents');
+  await pick('Keep agents running — off');
+  await shows('the setting on', 'Keep agents running — on');
+  tty.write('\x1b');
+  await shows('the settings categories', 'Tasks and agents —');
+  tty.write('\x1b');
+  await until(
+    'the closed /config',
+    () => !tty.screen().includes('/config'),
+    tty,
+  );
   await send('Start the golden chat.');
   await until(
     'the plan approval',
@@ -452,33 +604,52 @@ async function generate(root) {
   await send('/compact');
   await shows('the compaction notice', 'Context compaction requested');
   await waiting(3);
-  // A held turn, a message typed behind it, and the user's stop: the
-  // follow-up stays queued on the stopped run.
+  // A turn that launches a Codex child and is then held, a message typed
+  // behind it, and the user's stop: the follow-up stays queued on the
+  // stopped run, and the stop detaches the parked child.
   await send('Hold this turn.');
-  const chatRows = (sql) =>
+  await shows('the Codex call approval', 'y approve');
+  tty.write('y');
+  const rowsOf = (runId, sql) =>
     query(
       cli.store(),
       `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
        WHERE s.logical_id = ? AND ${sql}`,
-      [chatRun()],
+      [runId],
     ).length;
+  const chatRows = (sql) => rowsOf(chatRun(), sql);
+  const codexRows = (sql) =>
+    rowsOf(query(cli.store(), RUN_OF_AGENT, ['codex'])[0]?.id, sql);
+  // The held model call, after the Codex call's result: the Codex turn
+  // answers only then, so its rows commit after the chat's.
   await until(
     'the held model call',
     () =>
-      chatRows(`e.type = 'run.position'
-        AND json_extract(e.data, '$.payload.at') = 'turn.begin'
-        AND json_extract(e.data, '$.payload.turn') = 4`) > 0 &&
-      tty.screen().includes('Ctrl-C stop'),
+      chatRows(`e.type = 'model.message'
+        AND json_extract(e.data, '$.payload.kind') = 'attempt'
+        AND e."commit" > (SELECT r."commit" FROM event r
+          WHERE r.aggregate = e.aggregate AND r.type = 'tool.result'
+            AND json_extract(r.data, '$.payload.callId') LIKE 'validation-codex-%')`) >
+        0 && tty.screen().includes('Ctrl-C stop'),
+    tty,
+  );
+  writeFileSync(path.join(root, 'codex.release'), '');
+  await until(
+    'the parked Codex child',
+    () =>
+      codexRows(`e.type = 'child.park'
+        AND json_extract(e.data, '$.phase') = 'parked'`) > 0,
     tty,
   );
   tty.write('Queued behind the held turn.');
   await shows('the typed follow-up', '› Queued behind the held turn.');
   tty.write('\r');
+  // Two messages typed to the open chat, the Codex turn's result, and this.
   await until(
     'the queued follow-up',
     () =>
       chatRows(`e.type = 'followup.queued'
-        AND json_extract(e.data, '$.control') IS NULL`) === 3,
+        AND json_extract(e.data, '$.control') IS NULL`) === 4,
     tty,
   );
   tty.write('\x03');
@@ -486,7 +657,8 @@ async function generate(root) {
     'the stopped chat',
     () =>
       chatRows(`e.type = 'run.position'
-        AND json_extract(e.data, '$.payload.at') = 'halted'`) > 0,
+        AND json_extract(e.data, '$.payload.at') = 'halted'`) > 0 &&
+      codexRows(`e.type = 'run.detach'`) > 0,
     tty,
   );
   await shows('the idle prompt', 'Ctrl-C exit');
@@ -494,47 +666,9 @@ async function generate(root) {
   const exit = await tty.exited;
   if (exit.exitCode !== 0)
     fail(`texra chat exited ${exit.exitCode}\n${tty.screen()}`);
+  cli.run(['plugin', 'disable', 'golden-hooks', '--print']);
 
-  // The pending approval: a command waits for its approval in the chat, and
-  // the process is killed before anyone answers it.
-  const asking = await cli.chat([
-    'chat',
-    '--agent',
-    'golden_approval',
-    '--model',
-    'gpt56',
-  ]);
-  await until(
-    'the idle approval chat',
-    () => asking.screen().includes('Ctrl-C exit'),
-    asking,
-  );
-  asking.write('Run the command.');
-  await until(
-    'the typed instruction',
-    () => asking.screen().includes('› Run the command.'),
-    asking,
-  );
-  asking.write('\r');
-  const approvalRun = () =>
-    query(cli.store(), RUN_OF_AGENT, ['golden_approval'])[0]?.id;
-  await until(
-    'the bound command approval',
-    () =>
-      query(
-        cli.store(),
-        `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
-         WHERE s.logical_id = ? AND e.type = 'tool.binding'
-           AND json_extract(e.data, '$.payload.role') = 'call'`,
-        [approvalRun()],
-      ).length > 0 && asking.screen().includes('echo approved'),
-    asking,
-  );
-  asking.kill('SIGKILL');
-  await asking.exited;
-  // The interrupted script: killed while its command waits for the release
-  // file, which only the orphaned command reads once the process is gone.
-  const scripted = cli.start([
+  cli.run([
     'run',
     'golden_script',
     '--model',
@@ -547,159 +681,6 @@ async function generate(root) {
     'json',
     '--print',
   ]);
-  await until(
-    'the script command waiting',
-    () => existsSync(path.join(cli.project, 'golden-script.started')),
-    scripted,
-  );
-  scripted.child.kill('SIGKILL');
-  await scripted.exited;
-  writeFileSync(path.join(cli.project, 'golden-script.release'), '');
-
-  // The fan-out: a script's two `agent()` calls under one `Promise.all`,
-  // one child at a time under a project child-run budget of 1, killed after
-  // the first child completed while the second waits on its model call.
-  mkdirSync(path.join(cli.project, '.texra'), { recursive: true });
-  writeFileSync(
-    path.join(cli.project, '.texra/config.json'),
-    `${JSON.stringify({ 'texra.childRunConcurrencyBudget': 1 })}\n`,
-  );
-  const fanout = cli.start([
-    'run',
-    'golden_fanout',
-    '--model',
-    'gpt56',
-    '--instruction',
-    'Fan out in one script.',
-    '--approval-policy',
-    'yolo',
-    '--output-format',
-    'json',
-    '--print',
-  ]);
-  const fanoutRun = await until(
-    'the fan-out run',
-    () => query(cli.store(), RUN_OF_AGENT, ['golden_fanout'])[0]?.id,
-    fanout,
-  );
-  const fanoutRows = (child, type, extra = '') =>
-    query(
-      cli.store(),
-      `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
-       WHERE s.logical_id = ? AND e.type = ? ${extra}`,
-      [child, type],
-    ).length;
-  await until(
-    'the first fan-out child completed and the second waiting',
-    () => {
-      const [first, second] = query(
-        cli.store(),
-        `SELECT s.logical_id AS id FROM event e
-         JOIN event_sequence s ON s.id = e.aggregate
-         WHERE e.type = 'run.start' AND json_extract(e.data, '$.parent.id') = ?
-         ORDER BY e."commit"`,
-        [fanoutRun],
-      ).map((row) => row.id);
-      return (
-        first !== undefined &&
-        second !== undefined &&
-        fanoutRows(first, 'run.end') > 0 &&
-        fanoutRows(
-          fanoutRun,
-          'tool.result',
-          `AND json_extract(e.data, '$.payload.callId') LIKE '%/0'`,
-        ) > 0 &&
-        fanoutRows(
-          second,
-          'model.message',
-          `AND json_extract(e.data, '$.payload.kind') = 'attempt'`,
-        ) > 0
-      );
-    },
-    fanout,
-  );
-  fanout.child.kill('SIGKILL');
-  await fanout.exited;
-
-  // The background script: the parent's turn ends while its script's one
-  // `agent()` child waits for its release, and the chat is killed there.
-  const background = await cli.chat([
-    'chat',
-    '--agent',
-    'golden_background',
-    '--model',
-    'gpt56',
-    '--approval-policy',
-    'yolo',
-  ]);
-  await until(
-    'the idle background chat',
-    () => background.screen().includes('Ctrl-C exit'),
-    background,
-  );
-  background.write('Send the script to the background.');
-  await until(
-    'the typed background instruction',
-    () => background.screen().includes('› Send the script to the background.'),
-    background,
-  );
-  background.write('\r');
-  const childOf = (parent) =>
-    query(
-      cli.store(),
-      `SELECT s.logical_id AS id FROM event e
-       JOIN event_sequence s ON s.id = e.aggregate
-       WHERE e.type = 'run.start' AND json_extract(e.data, '$.parent.id') = ?
-       ORDER BY e."commit"`,
-      [parent],
-    )[0]?.id;
-  const backgroundRows = (run, sql) =>
-    query(
-      cli.store(),
-      `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
-       WHERE s.logical_id = ? AND ${sql}`,
-      [run],
-    ).length;
-  // The parent and its script run are two fibers of one process: the
-  // parent's reply is held (`golden-background-reply.release`) until the
-  // script's child waits at its model call, then the parent ends its turn
-  // alone, so the two runs' rows commit in one order.
-  const backgroundParent = await until(
-    'the background child at its model call',
-    () => {
-      const parent = query(cli.store(), RUN_OF_AGENT, ['golden_background'])[0]
-        ?.id;
-      const script = parent && childOf(parent);
-      const child = script && childOf(script);
-      return (
-        child !== undefined &&
-        backgroundRows(
-          child,
-          `e.type = 'model.message'
-           AND json_extract(e.data, '$.payload.kind') = 'attempt'`,
-        ) > 0 &&
-        parent
-      );
-    },
-    background,
-  );
-  writeFileSync(path.join(root, 'golden-background-reply.release'), '');
-  // The turn's last row is its `conversation.progress`, published after
-  // `waiting`: the kill waits for it too.
-  await until(
-    'the background parent waiting',
-    () =>
-      backgroundRows(
-        backgroundParent,
-        `e.type = 'run.position'
-         AND json_extract(e.data, '$.payload.at') = 'waiting'
-         AND json_extract(e.data, '$.payload.turn') = 1`,
-      ) > 0 &&
-      backgroundRows(backgroundParent, `e.type = 'conversation.progress'`) > 0,
-    background,
-  );
-  background.kill('SIGKILL');
-  await background.exited;
 
   // The fork and its handoff (durable harness, H5): a headless run answers
   // once; `texra resume --fork` continues a new task holding that
@@ -724,10 +705,27 @@ async function generate(root) {
   /** Resume under a PTY with `flags`, type `message` once the chat idles
    *  (null: the flags start the turn), and exit once `reply` shows. */
   const resumeChat = async (flags, message, reply) => {
+    const starts = () =>
+      query(cli.store(), `SELECT 1 FROM event WHERE type = 'run.start'`).length;
+    const before = starts();
     const tty = await cli.chat(['resume', ...flags]);
     const shows = (label, text) =>
       until(label, () => tty.screen().includes(text), tty);
     if (message !== null) {
+      // Typed once the new run has offered its tools, so the message
+      // commits after its activation, not among its rows.
+      await until(
+        'the new run offering its tools',
+        () =>
+          starts() > before &&
+          query(
+            cli.store(),
+            `SELECT 1 FROM event e WHERE e.type = 'tools.offered'
+             AND e.aggregate = (SELECT aggregate FROM event
+               WHERE type = 'run.start' ORDER BY "commit" DESC LIMIT 1)`,
+          ).length > 0,
+        tty,
+      );
       await shows('the idle resumed chat', 'Ctrl-C exit');
       tty.write(message);
       await shows(`the typed ${JSON.stringify(message)}`, `› ${message}`);
@@ -757,8 +755,63 @@ async function generate(root) {
     'Saw: The handoff note.',
   );
 
-  // The tombstone: a finished run deleted last, before any later open could
-  // collect it.
+  // The consequential crash: the command's effect lands, then its
+  // PostToolUse hook holds the call until the process is killed, before
+  // the command's result commits.
+  const held = path.join(root, 'golden-effect-hooks');
+  mkdirSync(path.join(held, '.claude-plugin'), { recursive: true });
+  mkdirSync(path.join(held, 'hooks'));
+  writeFileSync(
+    path.join(held, '.claude-plugin', 'plugin.json'),
+    `${JSON.stringify({ name: 'golden-effect-hooks', version: '1.0.0' })}\n`,
+  );
+  const started = path.join(root, 'golden-effect.started');
+  writeFileSync(
+    path.join(held, 'hooks', 'hooks.json'),
+    `${JSON.stringify({
+      hooks: {
+        PostToolUse: [
+          {
+            matcher: 'bash',
+            hooks: [
+              {
+                type: 'command',
+                command: 'node',
+                args: [
+                  '-e',
+                  `require('node:fs').writeFileSync(${JSON.stringify(started)}, ''); setTimeout(() => {}, 60_000)`,
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    })}\n`,
+  );
+  cli.run(['plugin', 'install', held, '--print']);
+  cli.run(['plugin', 'enable', 'golden-effect-hooks', '--print'], 'y\n');
+  const effect = cli.start([
+    'run',
+    'golden_effect',
+    '--model',
+    'gpt56',
+    '--instruction',
+    'Run the command.',
+    '--approval-policy',
+    'yolo',
+    '--output-format',
+    'json',
+    '--print',
+  ]);
+  await until('the held command', () => existsSync(started), effect);
+  effect.kill();
+  await effect.exited;
+  cli.run(['plugin', 'disable', 'golden-effect-hooks', '--print']);
+  mkdirSync(path.dirname(effectPath), { recursive: true });
+  cpSync(path.join(cli.project, 'approved.txt'), effectPath);
+
+  // The tombstone's run: a finished run, deleted in the service step below
+  // with no later open left to collect it.
   const before = new Set(
     query(cli.store(), RUN_OF_AGENT, ['golden_child']).map((row) => row.id),
   );
@@ -779,7 +832,94 @@ async function generate(root) {
     .map((row) => row.id)
     .find((id) => !before.has(id));
   if (doomed === undefined) fail('no golden_child run to delete');
-  cli.run(['history', 'delete', doomed, '--yes', '--print']);
+
+  // The service (`texra serve`, a window's), last: its task sends a shell
+  // command to the background, which runs once `bash.release` appears and
+  // reports back. The service's `task.resume` of that finished command, a
+  // run with no agent record, closes its input (`followup.closed`) and
+  // refuses it. No open follows, which would remove the finished command.
+  // The service follows the project's persisted policy (the user's local
+  // config beside its store), never a client's: Auto-approve, so the
+  // background command runs unasked.
+  const localConfig = path.join(path.dirname(cli.store()), 'config.json');
+  writeFileSync(
+    localConfig,
+    `${JSON.stringify({
+      ...(existsSync(localConfig)
+        ? JSON.parse(readFileSync(localConfig, 'utf8'))
+        : {}),
+      'texra.approvalPolicy': 'yolo',
+    })}\n`,
+  );
+  await cli.serve(async ({ client, call, handle: service }) => {
+    // The tombstone, made once the service holds the project open (any
+    // project call opens it): a later open would collect it.
+    await call('request.preview', { workspace: cli.project, requestId: '-' });
+    cli.run(['history', 'delete', doomed, '--yes', '--print']);
+    const { runId: task } = JSON.parse(
+      client([
+        'tasks',
+        'start',
+        'golden_script',
+        '--model',
+        'gpt56',
+        '--instruction',
+        'Run in the background.',
+        '--approval-policy',
+        'yolo',
+        '--output-format',
+        'json',
+      ]),
+    );
+    const rowsOf = (runId, sql) =>
+      query(
+        cli.store(),
+        `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
+         WHERE s.logical_id = ? AND ${sql}`,
+        [runId],
+      ).length;
+    const waited = (turn) =>
+      until(
+        `the service task waiting after turn ${turn}`,
+        () =>
+          rowsOf(
+            task,
+            `e.type = 'run.position'
+             AND json_extract(e.data, '$.payload.at') = 'waiting'
+             AND json_extract(e.data, '$.payload.turn') = ${turn}`,
+          ) > 0,
+        service,
+      );
+    await waited(1);
+    writeFileSync(path.join(root, 'bash.release'), '');
+    await waited(2);
+    const [shell] = query(
+      cli.store(),
+      `SELECT s.logical_id AS id FROM event e
+       JOIN event_sequence s ON s.id = e.aggregate
+       WHERE e.type = 'run.start'
+         AND json_extract(e.data, '$.identity.tool') = 'bash'`,
+    );
+    if (shell === undefined) fail('no background command run to resume');
+    const resumed = await call('task.resume', {
+      workspace: cli.project,
+      runId: shell.id,
+    });
+    if (resumed._tag !== 'Failure')
+      fail(`the service resumed ${shell.id}: ${JSON.stringify(resumed)}`);
+    await until(
+      'the closed input',
+      () => rowsOf(shell.id, `e.type = 'followup.closed'`) > 0,
+      service,
+    );
+    client(['tasks', 'stop', task]);
+    await until(
+      'the stopped service task',
+      () => rowsOf(task, `e.type = 'run.end'`) > 0,
+      service,
+    );
+  });
+
   return cli.store();
 }
 
@@ -944,11 +1084,12 @@ function normalize(file, root) {
         (other) =>
           intents.includes(other) &&
           other.value.payload.origin.kind === 'response' &&
-          other.value.payload.callIds.includes(scriptCallId),
+          other.value.payload.callId === scriptCallId,
       )?.value.payload.origin.responseId;
     for (const intent of intents) {
-      const { origin, callIds, attempt } = intent.value.payload;
-      if (origin.kind !== 'script' || !callIds.includes(callId)) continue;
+      const { origin, attempt } = intent.value.payload;
+      if (origin.kind !== 'script' || intent.value.payload.callId !== callId)
+        continue;
       const parentRunId = logicalOf.get(row.aggregate);
       const fields = { parentRunId, responseId, callId, attempt };
       children.set(derive(fields), fields);
@@ -1004,11 +1145,18 @@ function normalize(file, root) {
     ...uuids.seen,
     ...nanos.seen,
     ...times.seen,
+    // The project's storage folder, named by a hash of its temporary path.
+    [
+      /workspace-storage\/project-[0-9a-f]+/g,
+      'workspace-storage/project-golden',
+    ],
     [/Date: \d{4}-\d{2}-\d{2}/g, 'Date: 2026-01-01'],
     [/Platform: [^\n]*/g, 'Platform: golden'],
     [/Shell: [^\n]*/g, 'Shell: golden'],
     [/<wall-time>[^<]*<\/wall-time>/g, '<wall-time>0s</wall-time>'],
     [/"durationMs":\d+/g, '"durationMs":0'],
+    // A process child's turn time in its run-log line.
+    [/Turn completed in [\dhms ]+/g, 'Turn completed in 1s'],
     // A call's wall time in its run-log line.
     [/ · (?:\d+m )?\d+s · \$/g, ' · 0s · $'],
   ];
@@ -1179,5 +1327,6 @@ try {
   writeFileSync(fixturePath, dump(copy));
   console.log(`[golden-store] wrote ${path.relative(repoRoot, fixturePath)}`);
 } finally {
+  for (const child of spawned) child.kill('SIGKILL');
   if (!keep) rmSync(root, { recursive: true, force: true });
 }

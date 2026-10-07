@@ -5,13 +5,13 @@ const mocks = vi.hoisted(() => ({
   postMessage: vi.fn(),
 }));
 
-vi.mock('@shared/hostBridge', () => ({
+vi.mock('@texra/shared/hostBridge', () => ({
   postMessage: mocks.postMessage,
 }));
 
 // Local imports - shared schemas
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { CopilotRouteInfo } from '@shared/settingsView/settingsViewMessages';
+import type { CopilotRouteInfo } from '@texra/shared/settingsView/settingsViewMessages';
 
 // Local imports - test utilities
 import {

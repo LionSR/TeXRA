@@ -17,10 +17,9 @@ import {
 } from '@cli/tui/selectWindow';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
-import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { AgentOptionData, TeamOptionData } from '@shared/schemas';
 import { agentName } from '@shared/schemas';
+import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 
 import {
   CompactPickerKeyHints,
@@ -28,6 +27,7 @@ import {
   PickerKeyHints,
 } from './_shared/FormFrame';
 import { useAsyncPickerForm } from './_shared/ListForm';
+import type { ProcessRuntime } from '@texra-ai/harness';
 
 interface AgentListFormProps {
   /** The process runtime the catalog read runs on, from the surface that

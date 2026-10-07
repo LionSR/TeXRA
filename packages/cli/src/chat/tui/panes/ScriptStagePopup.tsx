@@ -1,5 +1,5 @@
 // The script popup: the calls a run's `script` call issued, painted from the
-// shared script-stage model (`scriptStages` in `@ui/transcript`), the one the
+// shared script-stage model (`scriptStages` in `@shared/transcript`), the one the
 // progress view paints. A foreground surface like the Ctrl-T reader:
 // row-budgeted, and Esc restores the conversation untouched. Its title is
 // the card's summary line; each phase lists its calls in issue order. Enter
@@ -24,14 +24,12 @@ import {
 import { fillRows, safeTerminalText } from '@cli/runtime/terminalText';
 
 // Local imports - shared schemas and model
-import type { RunId } from '@shared/schemas';
-import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import {
   SCRIPT_CALL_STATUS_LABEL,
   scriptStages,
   TALK_TO_AGENT,
   type ScriptCallView,
-} from '@ui/transcript';
+} from '@shared/transcript';
 
 // Local imports - TUI state
 import { type ScriptPopupView } from '../state/cliState';
@@ -43,6 +41,8 @@ import {
 } from '../state/sessionView';
 import { useSignal } from '../state/useSignal';
 import { RowSegment } from './SubagentList';
+import type { RuntimeRequest } from '@texra-ai/harness';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /** Rows the popup paints besides its list: the focused call's facts. */
 const POPUP_EXTRA_ROWS = 1;

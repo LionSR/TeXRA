@@ -8,10 +8,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '@test/support/sessionGraphTestSetup';
 
 // Local imports
-import {
-  initializeDefaultSession,
-  teardownDefaultSession,
-} from '@agent/runtime';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -23,6 +19,10 @@ import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
+import {
+  closeTestDefaultSession,
+  openTestDefaultSession,
+} from '@test/support/sessionEnd';
 
 const cliRequire = createRequire(
   new URL('../../../packages/cli/package.json', import.meta.url),
@@ -77,9 +77,7 @@ vi.doMock(cliRequire.resolve('ink'), () => ({
 }));
 
 vi.mock('@latex/texraResponseTextProcessing', () => ({
-  createTexraResponseTextProcessing: () => ({
-    postProcessResponse: (text: string) => Effect.succeed(text),
-  }),
+  postProcessResponse: (text: string) => Effect.succeed(text),
 }));
 
 vi.mock('@cli/runtime/initPlatform', () => ({
@@ -99,9 +97,10 @@ vi.mock('@cli/runtime/cliProcessRuntime', () => ({
 // wherever the service cannot start.
 vi.mock('@cli/runtime/cliService', () => ({
   reachCliService: () => Effect.fail(new Error('no TeXRA service in tests')),
+  linkCliService: () => Effect.fail(new Error('no TeXRA service in tests')),
 }));
 
-vi.mock('@model/setupCredentialAccess', () => ({
+vi.mock('@texra/model/setupCredentialAccess', () => ({
   hasUsableSetupCredential: mocks.hasUsableSetupCredential,
 }));
 
@@ -264,9 +263,9 @@ describe('runChat signal ownership wiring', () => {
     mocks.callOrder.length = 0;
     // The init opens the process session over the roots it installed; here
     // the suite opens it over the fake host's roots, once per test.
-    await Effect.runPromise(teardownDefaultSession());
+    await Effect.runPromise(closeTestDefaultSession);
     const session = await Effect.runPromise(
-      initializeDefaultSession({ roots: testWorkspaceRoots() }),
+      openTestDefaultSession({ roots: testWorkspaceRoots() }),
     );
     // The init hands back the services the composition root holds; the fake
     // host installed above owns those stores here.

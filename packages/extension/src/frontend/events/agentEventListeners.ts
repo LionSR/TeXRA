@@ -12,6 +12,7 @@
 import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
 
+import { withProcessServices, type ProcessRuntime } from '@texra-ai/harness';
 import {
   type HostInteractions,
   type HostPresentation,
@@ -25,8 +26,6 @@ import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { withLogChannel } from '@logger/effectLog';
-import type { StateStore } from '@platform/interfaces';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import {
   INSTRUCTION_ACTION,
@@ -36,6 +35,7 @@ import {
   type RequestShowInstructionPayload,
 } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import type { StateStore } from '@texra-ai/harness';
 
 const CHANNEL = 'agentEventListeners';
 
@@ -208,13 +208,11 @@ export function createAgentPresentationHost(
     // The open-and-build program takes this window's file services from the
     // runtime's context, which the session that forks it does not carry.
     requestOpenFile: (payload) =>
-      Effect.flatMap(runtime.contextEffect, (context) =>
-        Effect.provideContext(
-          openBuildDisplayIfTex(session, payload.location, {
-            preserveFocus: payload.preserveFocus,
-          }),
-          context,
-        ),
+      withProcessServices(
+        runtime,
+        openBuildDisplayIfTex(session, payload.location, {
+          preserveFocus: payload.preserveFocus,
+        }),
       ).pipe(Effect.asVoid),
     requestShowInstruction: (payload) =>
       handleRequestShowInstruction(globalState, payload),
