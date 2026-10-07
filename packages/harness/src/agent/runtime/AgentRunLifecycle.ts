@@ -173,23 +173,17 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
       output,
       ...(settlement.length > 0 ? { settlement } : {}),
     });
-    if (!finalization.ok) {
+    if (!finalization.ok)
       yield* logLifecycleWarning('Failed to finalize durable run state', {
         agentIdentifier: handle.agentName,
         runId: handle.runId,
         error: finalization.error,
       });
-    }
-    // The run has produced its canonical terminal result. Guard the cleanup so
-    // a throw from untrack's listeners or a run-status host emit cannot
-    // escape past an already-settled result.
+    // Guard the cleanup: a throw from untrack's listeners must not escape
+    // past a settled result. Only this handle's registration goes; a run
+    // that started again is its successor's.
     yield* Effect.try({
-      try: () => {
-        // Only this handle's registration: a run that started again is the
-        // successor's, and a late terminal of the generation it replaced must
-        // not untrack it.
-        runs.untrackIfCurrent(handle);
-      },
+      try: () => runs.untrackIfCurrent(handle),
       catch: ensureError,
     }).pipe(
       Effect.catch((cleanupErr) =>
@@ -199,9 +193,14 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
         }),
       ),
     );
+    if (finalization.ok) return { event };
+    // A run whose `run.end` did not commit failed, whatever it reported.
+    const unsaved = ensureError(finalization.error);
+    const message = `The run's end could not be saved: ${unsaved.message}`;
+    const failed = { kind: classifyAgentError(unsaved), message };
     return {
-      event,
-      ...(finalization.ok ? {} : { persistFailure: finalization.error }),
+      event: { ...event, outcome: RUN_OUTCOME.FAILED, error: failed },
+      persistFailure: finalization.error,
     };
   },
   // The run's terminal is atomic: the run's stop is its fiber's interruption,

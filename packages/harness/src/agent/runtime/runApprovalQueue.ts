@@ -132,12 +132,14 @@ export interface SessionApprovals {
    * Commit a run's next grants, `edit` applied to what its rows hold, and
    * return once they are durable and folded; an edit that changes nothing
    * writes nothing. Read and append are one job of the publisher, so two
-   * changes of one run never lose each other's kind. The caller holds the
-   * run's claim.
+   * changes of one run never lose each other's kind. `rows` commit in
+   * the same transaction (a goal's row beside the grant it implies), and is
+   * written even when the grants stand. The caller holds the run's claim.
    */
   change(
     runId: RunId,
     edit: (grants: ApprovalGrants) => ApprovalGrants,
+    rows?: readonly SessionEventDraft[],
   ): Effect.Effect<void, GrantWriteError>;
   /**
    * The grants row a run's activation commits beside its `run.activate`, if
@@ -239,24 +241,34 @@ export function createSessionApprovals(
               },
             ];
       }),
-    change: (runId, edit) => {
+    change: (runId, edit, rows = []) => {
       // The claim holder's own grants are folded by the time each change
       // returns, so a change the view already shows writes nothing.
       const shown = view().policy.get(runId);
-      if (shown !== undefined && sameGrants(shown, edit(shown)))
+      if (
+        rows.length === 0 &&
+        shown !== undefined &&
+        sameGrants(shown, edit(shown))
+      )
         return Effect.void;
       return session().log.transact((tx) =>
         Effect.gen(function* () {
           const recorded = recordedGrants(yield* session().log.records(runId));
           const next = edit(recorded);
-          if (sameGrants(recorded, next)) return;
-          yield* tx.append([
-            {
-              type: 'approval.policy',
-              aggregateId: aggregateId('run', runId),
-              snapshot: next,
-            },
-          ]);
+          const policy: readonly SessionEventDraft[] = sameGrants(
+            recorded,
+            next,
+          )
+            ? []
+            : [
+                {
+                  type: 'approval.policy',
+                  aggregateId: aggregateId('run', runId),
+                  snapshot: next,
+                },
+              ];
+          if (rows.length + policy.length > 0)
+            yield* tx.append([...rows, ...policy]);
         }),
       );
     },

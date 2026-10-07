@@ -53,14 +53,11 @@ import {
 import type { HistoryMessage, Live, RunHistoryRow } from './historyTurns';
 
 /**
- * The rows `RunHistory.appendBatch` commits: the six run history arms plus the
- * display arms a batch has to commit atomically with them. A tool call's card
- * settles with its `tool.result`; a streaming row open when the loop parks
- * closes with the `waiting` step; a run's binding and a model switch are its
- * `run.config`; a child turn's settlement commits with its boundary.
- * Publishing those companions separately is the crash window where a settled
- * tool keeps an active card, a card claims a result no row holds, or a listing names a model the history does
- * not. An explicit list narrowed from `SessionEventDraft`.
+ * The rows `RunHistory.appendBatch` commits: the run history arms plus the
+ * display arms a batch commits atomically with them (a card with its
+ * `tool.result`, an open stream with the `waiting` step, a binding as its
+ * `run.config`, a child's settlement with its boundary, a final answer).
+ * Published apart, each is a crash window. Narrowed from the drafts.
  */
 export type RunHistoryDraft = Live<
   Extract<SessionEventDraft, { type: RunHistoryDraftType }>
@@ -82,6 +79,7 @@ type RunHistoryDraftType =
   | 'request.opened'
   | 'request.decided'
   | 'followup.consumed'
+  | 'response.finalized'
   | SettlementType;
 
 export class RunHistoryInconsistent extends Data.TaggedError(
@@ -169,8 +167,10 @@ export type RunState = RunPosition &
     readonly hookOutcomes: HookOutcomes;
   };
 
-/** Companions committed beside the run history fact; the loop ignores them. */
-type CardRowType = 'tool.start' | 'tool.end' | 'stream.end' | SettlementType;
+/** Companions committed beside the run history fact, which the loop
+ *  ignores (`response.finalized` folds into the run's facts alone). */
+type CardRowType = CardType | SettlementType;
+type CardType = 'tool.start' | 'tool.end' | 'stream.end' | 'response.finalized';
 type SettlementType = 'run.report' | 'run.result' | 'child.turn';
 
 /** The rows `foldRow` applies: the shared rows and the run history's own arms. */

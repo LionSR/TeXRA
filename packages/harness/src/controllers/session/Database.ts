@@ -925,7 +925,7 @@ export const databaseLayer = (
         readListing: () => projected(decodedRows(READ_LISTING, [])),
         readPendingDeletions: () => query(decodedRows(pendingDeletions, [])),
         readRunRecords: (id) =>
-          projected(decodedRows(READ_RUN_RECORDS, aggregateColumns(id))),
+          projected(decodedRows(READ_RUN_RECORDS, aggregateColumns(id), true)),
         ...currentValues({
           exec,
           execOne,

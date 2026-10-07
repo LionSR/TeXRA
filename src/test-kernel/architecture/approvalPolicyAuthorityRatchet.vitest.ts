@@ -60,7 +60,8 @@ const BYPASS_WRITE_ALLOWLIST = new Set([
   'packages/harness/src/controllers/session/pendingUnderBypass.ts',
   'packages/harness/src/tools/approval/index.ts',
   'packages/harness/src/tools/delegation/AgentTool.ts',
-  'packages/harness/src/tools/goal/goalAutoApproval.ts',
+  // A goal's grant, committed with its goal row.
+  'packages/harness/src/tools/goal/goalRows.ts',
 ]);
 
 const EVALUATOR_CALL =
