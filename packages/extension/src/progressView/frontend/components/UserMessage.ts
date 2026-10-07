@@ -105,12 +105,6 @@ export class UserMessage extends LitElement {
       }
 
       .user-message-copy {
-        opacity: 0;
-        transition: opacity var(--transition-fast);
-      }
-
-      .user-message:hover .user-message-copy,
-      .user-message:focus-within .user-message-copy {
         opacity: 1;
       }
 

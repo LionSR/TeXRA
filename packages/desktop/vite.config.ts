@@ -22,6 +22,9 @@ export default defineConfig({
     outDir: resolve(import.meta.dirname, 'dist/renderer'),
     emptyOutDir: true,
     target: 'es2022',
+    // Electron supports native light-dark(). Lowering it to OS media queries
+    // prevents the in-app theme preference from recoloring inherited tokens.
+    cssTarget: 'chrome140',
     rollupOptions: {
       input: resolve(import.meta.dirname, 'src/renderer/index.html'),
     },

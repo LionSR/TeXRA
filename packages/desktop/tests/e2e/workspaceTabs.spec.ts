@@ -1,14 +1,8 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type Locator } from '@playwright/test';
 
 import {
   closeTexraApp,
@@ -18,34 +12,67 @@ import {
 } from './electronApp.js';
 import { cleanupDirectory } from './workspaceStorageFixture.js';
 
-// End-to-end coverage for the task-centric shell. The conversation is permanent
-// while workbench tabs can live in independently resizable Right and Bottom
-// panes. The desktop shell reducer is unit-tested separately; this suite checks the
-// wiring that unit tests cannot reach — that movable tabs mount their panes,
-// Monaco loads a real file from disk, and a pty produces output.
-
+// Real offscreen Electron: exercise grid changes at resource boundaries, not
+// screenshots of a mocked layout or implementation-shaped reducer assertions.
 let launched: LaunchedApp;
 let workspacePath: string;
 const rendererErrors: string[] = [];
+test.describe.configure({ mode: 'serial' });
+const panel = (kind: string) =>
+  launched.page.locator(
+    `.shell-project-workbench:not([hidden]) .shell-dock-surface[data-kind="${kind}"]:visible`,
+  );
+const tab = (kind: string) =>
+  launched.page.locator(
+    `.shell-project-workbench:not([hidden]) .shell-dock-tab[data-kind="${kind}"]`,
+  );
+
+async function menu(group: Locator, value: string) {
+  const dropdown = group.locator('.shell-dock-actions wa-dropdown');
+  await dropdown.locator('wa-button[slot="trigger"]').click();
+  await dropdown.locator(`wa-dropdown-item[value="${value}"]`).click();
+}
+function groupOf(tab: Locator) {
+  return tab.locator(
+    'xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " dv-groupview ")]',
+  );
+}
+async function openFile(name: string) {
+  await launched.page.locator('#shellToggleSidePanel').click();
+  await panel('files')
+    .locator(`.desktop-editor-tree-row[data-path="${name}"]`)
+    .click();
+}
+async function moveTab(
+  source: Locator,
+  destination: Locator,
+  edge: 'right' | 'bottom' | 'center',
+) {
+  const a = (await source.boundingBox())!;
+  const b = (await destination.boundingBox())!;
+  await launched.page.mouse.move(
+    a.x + Math.min(a.width / 2, 45),
+    a.y + a.height / 2,
+  );
+  await launched.page.mouse.down();
+  await launched.page.mouse.move(a.x + 15, a.y + a.height + 15, { steps: 5 });
+  await launched.page.mouse.move(
+    edge === 'right' ? b.x + b.width - 12 : b.x + b.width / 2,
+    edge === 'bottom' ? b.y + b.height - 12 : b.y + b.height / 2,
+    { steps: 15 },
+  );
+  await launched.page.mouse.up();
+}
 
 test.beforeAll(async () => {
-  workspacePath = mkdtempSync(join(tmpdir(), 'texra-shell-e2e-'));
+  workspacePath = mkdtempSync(join(tmpdir(), 'texra-docking-e2e-'));
   writeFileSync(
-    join(workspacePath, 'sample.tex'),
-    '\\documentclass{article}\n\\begin{document}\nhello\n\\end{document}\n',
-    'utf8',
+    join(workspacePath, 'first.ts'),
+    'export const firstDocument = true;\n',
   );
   writeFileSync(
-    join(workspacePath, 'sample.ts'),
-    'export const projectTreeLoaded = true;\n',
-    'utf8',
-  );
-  writeFileSync(join(workspacePath, 'paper-retention.tex'), 'Paper A.\n');
-  mkdirSync(join(workspacePath, 'src', 'components'), { recursive: true });
-  writeFileSync(
-    join(workspacePath, 'src', 'components', 'Panel.ts'),
-    'export class Panel {}\n',
-    'utf8',
+    join(workspacePath, 'second.ts'),
+    'export const secondDocument = true;\n',
   );
   launched = await launchTexraApp({ workspacePath });
   launched.page.on('pageerror', (error) => rendererErrors.push(error.message));
@@ -55,735 +82,282 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   if (launched) await closeTexraApp(launched);
   if (workspacePath) cleanupDirectory(workspacePath);
-  expect(rendererErrors, 'Uncaught errors in the workspace renderer').toEqual(
-    [],
-  );
+  expect(rendererErrors).toEqual([]);
 });
 
-const SETTINGS_DIALOG = 'wa-dialog.desktop-settings-overlay';
-
-/** Opens the Settings popup from the sidebar footer. */
-async function openSettings(): Promise<void> {
-  const { page } = launched;
-  await page
-    .locator('.shell-sidebar-footer .shell-sidebar-action')
-    .filter({ hasText: 'Settings' })
-    .click();
-  await expect(page.locator(SETTINGS_DIALOG)).toHaveJSProperty('open', true);
-}
-
-/**
- * Closes the Settings popup (its × or Escape) and waits for `wa-after-hide`:
- * the dialog keeps `open === true` until its hide animation ends, so the
- * event, registered before the close, is the completion signal.
- */
-async function closeSettings(via: 'button' | 'escape'): Promise<void> {
-  const dialog = launched.page.locator(SETTINGS_DIALOG);
-  // Install the listener in its own awaited step so the close cannot fire
-  // before it is registered.
-  await dialog.evaluate((element) => {
-    const host = element as HTMLElement & { hidden$?: Promise<void> };
-    host.hidden$ = new Promise<void>((resolve) => {
-      const onHide = (event: Event) => {
-        if (event.target !== element) return;
-        element.removeEventListener('wa-after-hide', onHide);
-        resolve();
-      };
-      element.addEventListener('wa-after-hide', onHide);
-    });
-  });
-  if (via === 'escape') await launched.page.keyboard.press('Escape');
-  else await dialog.locator('.desktop-settings-close').click();
-  await dialog.evaluate(
-    (element) => (element as HTMLElement & { hidden$?: Promise<void> }).hidden$,
+test('splits in both directions, keeps the explorer and agent, and restores the grid', async () => {
+  const { page, app } = launched;
+  await expect(panel('agent').locator('session-composer')).toBeVisible();
+  await openFile('first.ts');
+  await expect(panel('editor').locator('.view-lines')).toContainText(
+    'firstDocument',
   );
-  await expect(dialog).toHaveJSProperty('open', false);
-}
-
-/**
- * Opens a tool from a visible workbench's "+" menu. With no workbench
- * showing, the side-panel toggle opens one first (on Files).
- */
-async function openTool(
-  kind: 'files' | 'terminal' | 'browser' | 'logs',
-): Promise<void> {
-  const { page } = launched;
-  const add = page.locator('.shell-workbench-add:visible').first();
-  if ((await add.count()) === 0) {
-    await page.locator('#shellToggleSidePanel').click();
-  }
-  await add.locator('wa-button[slot="trigger"]').click();
-  await add.locator(`wa-dropdown-item[value="${kind}"]`).click();
-}
-
-/** The hide control of one workbench placement. */
-function hideWorkbench(placement: 'right' | 'bottom'): string {
-  return `.shell-workbench[data-placement="${placement}"] [id$="-${placement}-hide"]`;
-}
-
-const ACTIVE_PROJECT_ROW = '.shell-project-row[aria-current="true"]';
-
-/**
- * Opens a file from the project tree: the Files tab's, or the column beside
- * an open editor. With neither showing, Files is brought forward first.
- */
-async function clickTreeRow(path: string): Promise<void> {
-  const { page } = launched;
-  if (!(await page.locator('.shell-workspace-view').isVisible()))
-    await page.locator('#shellWorkspaceView').click();
-  const row = page.locator(
-    `.shell-project-workbench:not([hidden]) .desktop-editor-tree-row[data-path="${path}"]`,
+  await expect(panel('files')).toBeVisible();
+  await expect(panel('agent')).toBeVisible();
+  const treeBounds = await panel('files').boundingBox();
+  await openFile('second.ts');
+  await expect(panel('editor').locator('.view-lines')).toContainText(
+    'secondDocument',
   );
-  if (!(await row.isVisible())) {
-    const filesTab = page.locator(
-      '.shell-project-workbench:not([hidden]) .shell-workbench-tab[data-kind="files"] .shell-workbench-tab-activate',
-    );
-    if ((await filesTab.count()) === 0) await openTool('files');
-    else await filesTab.click();
-  }
-  await row.click();
-}
-
-function activeWorkbenchTab(kind: string): string {
-  return `.shell-workbench-tab[data-kind="${kind}"][data-active="true"]`;
-}
-
-const BOTTOM_PANE = 'xpath=ancestor::aside[@data-placement="bottom"]';
-const BOTTOM_WORKBENCH_TABS =
-  '.shell-workbench[data-placement="bottom"] .shell-workbench-tab';
-
-test('opens with a permanent task conversation and no workbench', async () => {
-  const { page } = launched;
-
-  await expect(page.locator('.shell-frame')).toBeVisible();
-  await expect(page.locator('.shell-frame')).toHaveAttribute(
-    'data-workbench-open',
-    'false',
+  expect(await panel('files').boundingBox()).toEqual(treeBounds);
+  const second = page.locator(
+    '.shell-dock-tab[data-tab-id="workbench:editor:second.ts"]',
   );
-  await expect(page.locator('.shell-conversation')).toBeVisible();
-  await expect(
-    page.locator('.shell-conversation-pane[data-pane="conversation"]'),
-  ).toBeVisible();
-  await expect(
-    page.locator('progress-app[data-desktop-view="progress"]'),
-  ).toBeVisible();
-  await expect(page.locator('session-composer.launch-composer')).toBeVisible();
-  await expect(page.locator('.shell-workbench:visible')).toHaveCount(0);
-});
-
-test('loads the project tree before an editor panel is opened', async () => {
-  const { page } = launched;
-
-  await openTool('files');
-  await expect(
-    page.locator('.desktop-editor-tree-row:has-text("sample.tex")'),
-  ).toBeVisible({ timeout: 15_000 });
-  await expect(
-    page.locator('.desktop-editor-tree-row:has-text("sample.ts")'),
-  ).toBeVisible();
-  const sourceDirectory = page.locator(
-    '.desktop-editor-tree-row[data-kind="directory"][data-path="src"]',
+  await moveTab(second, panel('editor'), 'bottom');
+  await expect(panel('editor')).toHaveCount(2);
+  const editors = panel('editor');
+  const editorBoxes = await editors.evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const r = node.getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    }),
   );
-  await expect(sourceDirectory).toBeVisible();
-  await expect(
+  expect(Math.abs(editorBoxes[0]!.x - editorBoxes[1]!.x)).toBeLessThan(2);
+  expect(Math.abs(editorBoxes[0]!.y - editorBoxes[1]!.y)).toBeGreaterThan(100);
+  const first = page.locator(
+    '.shell-dock-tab[data-tab-id="workbench:editor:first.ts"]',
+  );
+  await moveTab(
+    second,
     page.locator(
-      '.desktop-editor-tree-row[data-kind="directory"][data-path="src/components"]',
+      '.shell-dock-editor[data-panel-id="workbench:editor:first.ts"]:visible',
     ),
-  ).not.toBeVisible();
-  await sourceDirectory.locator('[part="expand-button"]').click();
-  const componentsDirectory = page.locator(
-    '.desktop-editor-tree-row[data-kind="directory"][data-path="src/components"]',
+    'right',
   );
-  await expect(componentsDirectory).toBeVisible();
-  await componentsDirectory.locator('[part="expand-button"]').click();
-  const nestedFile = page.locator(
-    '.desktop-editor-tree-row[data-kind="file"][data-path="src/components/Panel.ts"]',
-  );
-  await expect(nestedFile).toBeVisible();
-  await expect(nestedFile.locator('.desktop-editor-tree-label')).toHaveText(
-    'Panel.ts',
-  );
-  await expect(
-    page.locator('.desktop-editor-tree-empty:has-text("No files found")'),
-  ).toHaveCount(0);
-});
-
-test('collapses and restores project navigation', async () => {
-  const { app, page } = launched;
-
-  const toggle = page.locator('.shell-header-button[aria-label$="sidebar"]');
-  await toggle.click();
-  await expect(page.locator('.shell-frame-collapsed')).toBeVisible();
-
-  const platform = await app.evaluate(() => process.platform);
-  const toggleBounds = await toggle.boundingBox();
-  expect(toggleBounds).not.toBeNull();
-  if (platform === 'darwin') {
-    expect(toggleBounds?.x).toBeGreaterThanOrEqual(92);
-  }
-
-  await toggle.click();
-  await expect(page.locator('.shell-sidebar')).toBeVisible();
-});
-
-test('opens settings over either main view', async () => {
-  const { page } = launched;
-
-  await openSettings();
-
-  await expect(
-    page.locator(
-      `${SETTINGS_DIALOG} settings-app[data-desktop-view="settings"]`,
-    ),
-  ).toBeVisible();
-  // Settings is not a workbench tab: nothing opens beside the conversation.
-  await expect(
-    page.locator('.shell-workbench-tab[data-kind="settings"]'),
-  ).toHaveCount(0);
-
-  await closeSettings('escape');
-  await expect(page.locator('.shell-workspace-view')).toBeVisible();
-  await page.locator('#shellTaskView').click();
-  await expect(page.locator('.shell-conversation')).toBeVisible();
-});
-
-test('toggles and restores the bottom and side bars', async () => {
-  const { page } = launched;
-
-  await openTool('logs');
-  const sideToggle = page.locator('#shellToggleSidePanel');
-  await expect(page.locator('#shellWorkspaceView')).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
-
-  await openTool('terminal');
-  const bottomWorkbench = page.locator(
-    '.shell-workbench[data-placement="bottom"]',
-  );
-  await expect(bottomWorkbench).toBeVisible();
-  await expect(page.locator(activeWorkbenchTab('terminal'))).toBeVisible();
-
-  const initialBottomHeight = (await bottomWorkbench.boundingBox())?.height;
-  expect(initialBottomHeight).toBeDefined();
-  if (initialBottomHeight != null) {
-    const divider = page
-      .locator('.shell-bottom-split [part="divider"]')
-      .first();
-    await divider.focus();
-    await page.keyboard.press('Shift+ArrowUp');
-    await expect
-      .poll(async () => (await bottomWorkbench.boundingBox())?.height ?? 0)
-      .toBeGreaterThan(initialBottomHeight + 40);
-  }
-
-  await page.locator(hideWorkbench('bottom')).click();
-  await expect(bottomWorkbench).toBeHidden();
-  await expect(page.locator('.shell-sidebar-footer')).toBeVisible();
-
-  await page.locator(hideWorkbench('right')).click();
-  await expect(page.locator('.shell-workbench:visible')).toHaveCount(0);
-  await expect(page.locator('.shell-workspace-empty')).toBeVisible();
-  await expect(sideToggle).toBeVisible();
-  await sideToggle.click();
-  await expect(page.locator(activeWorkbenchTab('files'))).toBeVisible();
-  await expect(page.locator('#shellWorkspaceView')).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
-});
-
-test('moves tabs between Bottom and Right from the context menu', async () => {
-  const { page } = launched;
-
-  await openTool('terminal');
-  const terminalTab = page.locator(activeWorkbenchTab('terminal'));
-  await expect(terminalTab).toBeVisible();
-  await expect(terminalTab.locator(BOTTOM_PANE)).toBeVisible();
-
-  await terminalTab.click({ button: 'right' });
-  const contextMenu = terminalTab.locator('.shell-workbench-tab-menu');
-  await expect(contextMenu).toHaveAttribute('open', '');
-  await contextMenu.locator('wa-dropdown-item[value="move-right"]').click();
-  await expect(
-    terminalTab.locator('xpath=ancestor::aside[@data-placement="right"]'),
-  ).toBeVisible();
-  await expect(page.locator('.shell-frame')).toHaveAttribute(
-    'data-bottom-panel-open',
-    'true',
-  );
-
-  await terminalTab.click({ button: 'right' });
-  await terminalTab.locator('wa-dropdown-item[value="move-bottom"]').click();
-  await expect(terminalTab.locator(BOTTOM_PANE)).toBeVisible();
-  await expect(page.locator(activeWorkbenchTab('files'))).toBeVisible();
-
-  await openTool('terminal');
-  const bottomTabs = page.locator(BOTTOM_WORKBENCH_TABS);
-  const countBeforeContextClose = await bottomTabs.count();
-  const closeCandidate = page.locator(activeWorkbenchTab('terminal'));
-  await closeCandidate.click({ button: 'right' });
-  await closeCandidate.locator('wa-dropdown-item[value="close"]').click();
-  await expect(bottomTabs).toHaveCount(countBeforeContextClose - 1);
-});
-
-test('loads plugins, centers every compact nav icon, and customizes shortcuts', async () => {
-  const { app, page } = launched;
-
-  await openSettings();
-  // Narrow the popup so the settings view takes its compact layout.
-  await page
-    .locator(SETTINGS_DIALOG)
-    .evaluate((dialog) =>
-      (dialog as HTMLElement).style.setProperty('--width', '480px'),
-    );
   await expect
     .poll(async () => {
-      const bounds = await page.locator('settings-app').boundingBox();
-      return bounds?.width ?? Number.POSITIVE_INFINITY;
+      const a = (await groupOf(first).boundingBox())!;
+      const b = (await groupOf(second).boundingBox())!;
+      return Math.abs(a.y - b.y) < 2 && b.x > a.x + 100;
     })
-    .toBeLessThanOrEqual(520);
-
-  await page.evaluate(() => {
-    window.postMessage({ command: 'setTab', tab: 'plugins' }, '*');
-  });
-  await expect(page.locator('plugins-tab plugin-card').first()).toBeVisible({
-    timeout: 5_000,
-  });
-
-  // A narrow pane keeps each page's name and drops its icon.
-  const compactButtons = await page.evaluate(() => {
-    const root = document.querySelector('settings-app')?.shadowRoot;
-    const buttons =
-      root?.querySelectorAll<HTMLElement>(
-        '.settings-page-button[data-panel]',
-      ) ?? [];
-    return [...buttons].map((button) => {
-      const start =
-        button.shadowRoot?.querySelector<HTMLElement>('[part~="start"]');
-      const label =
-        button.shadowRoot?.querySelector<HTMLElement>('[part~="label"]');
-      if (!start || !label) {
-        throw new Error('Compact settings navigation was not mounted.');
-      }
-      return {
-        iconDisplay: getComputedStyle(start).display,
-        labelDisplay: getComputedStyle(label).display,
-        ariaLabel: button.getAttribute('aria-label'),
-      };
-    });
-  });
-  expect(compactButtons.length).toBeGreaterThan(0);
-  for (const button of compactButtons) {
-    expect(button.iconDisplay).toBe('none');
-    expect(button.labelDisplay).not.toBe('none');
-    expect(button.ariaLabel).toBeTruthy();
-  }
-
-  // The active Settings page owns scrolling for every hierarchical page: with
-  // the Tools content mounted the panel must overflow its viewport, and its
-  // scrollTop must move when set. Measured at the narrow panel width above.
-  const scrollMetrics = await page.evaluate(() => {
-    const root = document.querySelector(
-      'settings-app[data-desktop-view="settings"]',
-    )?.shadowRoot;
-    const panel = root?.querySelector<HTMLElement>('.settings-panel');
-    if (!panel) return null;
-    const overflows = panel.scrollHeight > panel.clientHeight;
-    panel.scrollTop = panel.scrollHeight;
-    return { overflows, scrollTop: panel.scrollTop };
-  });
-  expect(scrollMetrics).not.toBeNull();
-  expect(scrollMetrics!.overflows).toBe(true);
-  expect(scrollMetrics!.scrollTop).toBeGreaterThan(0);
-
-  await page.evaluate(() => {
-    window.postMessage({ command: 'setTab', tab: 'shortcuts' }, '*');
-  });
-  const shortcuts = page.locator('shortcuts-tab');
+    .toBe(true);
+  // Return the second tab through its keyboard-accessible context menu.
+  await second.locator('xpath=..').focus();
+  await page.keyboard.press('Shift+F10');
+  const moveChoice = second
+    .locator('wa-dropdown-item')
+    .filter({ hasText: 'Move to first.ts' });
+  await moveChoice.click();
+  await expect(panel('editor')).toHaveCount(1);
   await expect(
-    shortcuts.getByText('Toggle Bottom Panel', { exact: true }),
-  ).toBeVisible();
-  await expect(
-    shortcuts.getByText('Toggle Side Panel', { exact: true }),
-  ).toBeVisible();
-  const recorder = page.locator('shortcuts-tab .shortcut-recorder').first();
-  await expect(recorder).toBeVisible();
-  await recorder.click();
+    groupOf(first).locator('.shell-dock-tab[data-kind="editor"]'),
+  ).toHaveCount(2);
+  await menu(groupOf(second), 'split-below');
+  await expect(panel('editor')).toHaveCount(2);
+  // Resize the actual sash and keep this grid across a reload.
+  const sash = page.locator('.shell-dock .dv-sash.dv-enabled:visible').first();
+  const bounds = (await sash.boundingBox())!;
+  await page.mouse.move(
+    bounds.x + bounds.width / 2,
+    bounds.y + bounds.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    bounds.x + bounds.width / 2 + 40,
+    bounds.y + bounds.height / 2,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await page.screenshot({
+    path: test.info().outputPath('docked-workspace.png'),
+    animations: 'disabled',
+  });
+  const before = await panel('editor').evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const r = node.getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    }),
+  );
+  await page.reload();
+  await expect(panel('editor')).toHaveCount(2);
+  await expect
+    .poll(async () => {
+      const after = await panel('editor').evaluateAll((nodes) =>
+        nodes.map((node) => {
+          const r = node.getBoundingClientRect();
+          return { x: r.x, y: r.y, width: r.width, height: r.height };
+        }),
+      );
+      return after.every((r, i) =>
+        Object.entries(r).every(
+          ([key, value]) =>
+            Math.abs(value - before[i]![key as keyof typeof r]) < 3,
+        ),
+      );
+    })
+    .toBe(true);
+  await expect(panel('agent')).toBeVisible();
+  // New task reveals Agent without disturbing document groups.
+  await page.getByRole('button', { name: 'New task', exact: true }).click();
+  await expect(panel('agent').locator('session-composer')).toBeVisible();
+  await expect(panel('editor')).toHaveCount(2);
+  await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]!.setSize(960, 760),
+  );
+  await expect(panel('editor')).toHaveCount(2);
+  await page.screenshot({
+    path: test.info().outputPath('docked-compact.png'),
+    animations: 'disabled',
+  });
+  await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]!.setSize(1280, 860),
+  );
+});
+
+test('moves live terminals and unsaved editors without recreating resources', async () => {
+  const { page, app } = launched;
+  const first = page.locator(
+    '.shell-dock-tab[data-tab-id="workbench:editor:first.ts"]',
+  );
+  const source = page.locator(
+    '.shell-dock-editor[data-panel-id="workbench:editor:first.ts"]:visible',
+  );
+  await source.locator('.view-line').first().click();
   const platform = await app.evaluate(() => process.platform);
-  const customShortcut =
-    platform === 'darwin' ? 'Meta+Shift+J' : 'Control+Shift+J';
-  await page.keyboard.press(customShortcut);
-  await expect(recorder).toContainText(
-    platform === 'darwin' ? '⌘⇧J' : 'Ctrl+Shift+J',
+  const mod = platform === 'darwin' ? 'Meta' : 'Control';
+  await page.keyboard.press(`${mod}+End`);
+  await page.keyboard.type('// retained edit');
+  await expect(source.locator('.view-lines')).toContainText('retained edit');
+  const editorNode = await source.locator('.monaco-editor').elementHandle();
+  await page.locator('#shellToggleTerminalPanel').click();
+  const terminal1 = tab('terminal').first();
+  const terminalSurface1 = page.locator(
+    '.shell-dock-terminal[data-panel-id="workbench:terminal:1"] .desktop-terminal-surface',
   );
-
-  await recorder.evaluate((element) => (element as HTMLElement).blur());
-  await closeSettings('button');
-  await page.keyboard.press(customShortcut);
+  const pidPath = join(workspacePath, 'terminal.pid');
+  await terminalSurface1.locator('.xterm').click();
+  await page.keyboard.type(`printf '%s' "$$" > '${pidPath}'`);
+  await page.keyboard.press('Enter');
+  await expect
+    .poll(() => existsSync(pidPath) && readFileSync(pidPath, 'utf8').trim())
+    .toMatch(/^\d+$/);
+  const pid = Number(readFileSync(pidPath, 'utf8'));
+  const terminalNode = await terminalSurface1.elementHandle();
+  await page.locator('#shellToggleTerminalPanel').click();
+  await expect(tab('terminal')).toHaveCount(1);
+  await menu(groupOf(terminal1), 'terminal');
+  const terminal2 = tab('terminal').last();
+  await menu(groupOf(terminal2), 'split-right');
+  await expect(panel('terminal')).toHaveCount(2);
+  expect(await terminalNode?.evaluate((node) => node.isConnected)).toBe(true);
+  expect(process.kill(pid, 0)).toBe(true);
+  await moveTab(first, panel('agent'), 'right');
+  expect(await editorNode?.evaluate((node) => node.isConnected)).toBe(true);
   await expect(
-    page.locator('wa-dialog.desktop-command-palette'),
-  ).toHaveJSProperty('open', true);
-  await page.keyboard.press('Escape');
+    page.locator(
+      '.shell-dock-editor[data-panel-id="workbench:editor:first.ts"]:visible .view-lines',
+    ),
+  ).toContainText('retained edit');
+  await page
+    .locator(
+      '.shell-dock-editor[data-panel-id="workbench:editor:first.ts"]:visible .view-line',
+    )
+    .first()
+    .click();
+  await page.keyboard.press(`${mod}+z`);
+  await expect(
+    page.locator(
+      '.shell-dock-editor[data-panel-id="workbench:editor:first.ts"]:visible .view-lines',
+    ),
+  ).not.toContainText('retained edit');
+  await page.keyboard.press(`${mod}+s`);
+  // Closing one PTY releases only that session.
+  await terminal1.locator('.shell-dock-tab-close wa-button').click();
+  await expect
+    .poll(() => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    })
+    .toBe(false);
+  await expect(panel('terminal')).toHaveCount(1);
 });
 
-test('loads a workspace file into the Monaco editor workbench', async () => {
-  const { page } = launched;
-
-  await openTool('files');
-  const latexRow = page.locator(
-    '.desktop-editor-tree-row[data-path="sample.tex"]',
-  );
-  const typescriptRow = page.locator(
-    '.desktop-editor-tree-row[data-path="sample.ts"]',
-  );
-  await expect(latexRow).toBeVisible({ timeout: 15_000 });
-  await expect(typescriptRow).toBeVisible();
-  const treeBefore = await latexRow.boundingBox();
-
-  // Hit the cold Monaco path with two immediate selections: the tree stays
-  // beside the editor it opened, so the second click needs no tab switch.
-  // Both requests share one editor load, and the last click must remain the
-  // visible model even if the first file read resolves later.
-  await clickTreeRow('sample.tex');
-  await expect(latexRow).toBeVisible();
-  const treeAfter = await latexRow.boundingBox();
-  expect(Math.abs(treeBefore!.x - treeAfter!.x)).toBeLessThan(1);
-  expect(Math.abs(treeBefore!.y - treeAfter!.y)).toBeLessThan(1);
-  await clickTreeRow('sample.ts');
-  await expect(page.locator(activeWorkbenchTab('editor'))).toBeVisible();
-  await expect(page.locator(activeWorkbenchTab('editor'))).toContainText(
-    'sample.ts',
-  );
-  await expect(
-    page.locator('.desktop-editor-surface .view-lines'),
-  ).toContainText('projectTreeLoaded', { timeout: 20_000 });
-  const editorColors = await page.evaluate(() => ({
-    canvas: getComputedStyle(document.querySelector('.monaco-editor')!)
-      .backgroundColor,
-    surface: getComputedStyle(document.body).backgroundColor,
-    text: getComputedStyle(document.querySelector('.monaco-editor')!).color,
-  }));
-  expect(editorColors.canvas).toBe(editorColors.surface);
-  expect(editorColors.text).not.toBe(editorColors.canvas);
-
-  await clickTreeRow('sample.tex');
-  await expect(
-    page.locator('.desktop-editor-surface .view-lines'),
-  ).toContainText('documentclass', { timeout: 20_000 });
-});
-
-test('workbench menus remain usable above an embedded browser', async () => {
-  const { app, page } = launched;
+test('keeps browser menus above native content and close controls inside tab bounds', async () => {
+  const { page, app } = launched;
   const attachedViews = () =>
     app.evaluate(
       ({ BrowserWindow }) =>
         BrowserWindow.getAllWindows()[0]!.contentView.children.length,
     );
-  const viewsWithoutBrowser = await attachedViews();
-  await openTool('browser');
-  await expect.poll(attachedViews).toBe(viewsWithoutBrowser + 1);
-  const add = page.locator('.shell-workbench-add:visible').first();
-  await add.locator('wa-button[slot="trigger"]').click();
-  await expect(add.locator('wa-dropdown-item[value="files"]')).toBeVisible();
-  await expect.poll(attachedViews).toBe(viewsWithoutBrowser);
+  const baseline = await attachedViews();
+  await menu(groupOf(tab('editor').first()), 'browser');
+  await expect.poll(attachedViews).toBe(baseline + 1);
+  const browser = tab('browser');
+  await expect(browser).toBeVisible();
+  const close = browser.locator('.shell-dock-tab-close wa-button');
+  await expect
+    .poll(async () =>
+      close.evaluate((element) => {
+        const r = element.getBoundingClientRect();
+        const hit = document.elementFromPoint(
+          r.x + r.width / 2,
+          r.y + r.height / 2,
+        );
+        return element === hit || element.contains(hit);
+      }),
+    )
+    .toBe(true);
+  const dropdown = groupOf(browser).locator('.shell-dock-actions wa-dropdown');
+  await dropdown.locator('wa-button[slot="trigger"]').click();
+  await expect(
+    dropdown.locator('wa-dropdown-item[value="terminal"]'),
+  ).toBeVisible();
+  await expect.poll(attachedViews).toBe(baseline);
   await page.screenshot({
-    path: test.info().outputPath('browser-add-menu.png'),
+    path: test.info().outputPath('browser-group-menu.png'),
     animations: 'disabled',
   });
   await page.keyboard.press('Escape');
-  await expect.poll(attachedViews).toBe(viewsWithoutBrowser + 1);
-  await page.locator('#shellTaskView').click();
-  await expect(page.locator('.shell-conversation')).toBeVisible();
-  await expect.poll(attachedViews).toBe(viewsWithoutBrowser);
-  await page.locator('#shellWorkspaceView').click();
-  await expect.poll(attachedViews).toBe(viewsWithoutBrowser + 1);
-  await add.locator('wa-button[slot="trigger"]').click();
-  await add.locator('wa-dropdown-item[value="files"]').click();
-  await expect(
-    page.locator('.desktop-editor-tree-row[data-path="sample.tex"]'),
-  ).toBeVisible();
-  await expect.poll(attachedViews).toBe(viewsWithoutBrowser);
-  await clickTreeRow('sample.tex');
+  await expect.poll(attachedViews).toBe(baseline + 1);
+  await close.click();
+  await expect.poll(attachedViews).toBe(baseline);
 });
 
-test('switches layout without losing the editor and keeps narrow panes usable', async () => {
-  const { app, page } = launched;
-  // Earlier pane-movement coverage leaves a bottom tab open.
-  const terminalToggle = page.locator('#shellToggleTerminalPanel');
-  if ((await terminalToggle.getAttribute('aria-pressed')) === 'true')
-    await terminalToggle.click();
-  // Reproduced regression: layout changes reopened the current file over IPC,
-  // even when only the terminal or window dimensions changed.
-  const fileReads = await app.evaluateHandle(({ ipcMain }) => {
-    let count = 0;
-    const listener = (
-      _event: unknown,
-      message: {
-        kind?: string;
-        request?: { kind?: string; action?: { kind?: string } };
-      },
-    ) => {
-      if (
-        message.kind === 'host.request' &&
-        message.request?.kind === 'workspaceFile' &&
-        message.request.action?.kind === 'read'
-      )
-        count += 1;
-    };
-    ipcMain.on('texra:session-message', listener);
-    return {
-      count: () => count,
-      dispose: () => ipcMain.off('texra:session-message', listener),
-    };
-  });
-  for (const width of [1600, 960]) {
-    await app.evaluate(({ BrowserWindow }, contentWidth) => {
-      BrowserWindow.getAllWindows()[0].setContentSize(contentWidth, 800);
-    }, width);
-    await page.locator('#shellWorkspaceView').click();
-    await expect(page.locator('.shell-conversation')).toBeHidden();
-    await expect(
-      page.locator('.desktop-editor-surface .view-lines'),
-    ).toContainText('documentclass');
-    await expect(
-      page.locator('.shell-editor-workspace .shell-editor-tree'),
-    ).toBeVisible();
-    await page.screenshot({
-      path: test.info().outputPath(`workspace-${width}.png`),
-    });
-
-    await page.locator('#shellTaskView').click();
-    await expect(page.locator('.shell-conversation')).toBeVisible();
-    await expect(page.locator('.desktop-editor-surface')).toBeHidden();
-    await page.locator('#shellWorkspaceView').click();
-    await expect(
-      page.locator('.desktop-editor-surface .view-lines'),
-    ).toContainText('documentclass');
-    await page.locator('#shellToggleTerminalPanel').click();
-    await expect(
-      page.locator('.shell-workbench[data-placement="bottom"]'),
-    ).toBeVisible();
-    await page.screenshot({
-      path: test.info().outputPath(`split-terminal-${width}.png`),
-    });
-    await page.locator('#shellToggleTerminalPanel').click();
-  }
-  const readsDuringLayout = await fileReads.evaluate((probe) => {
-    probe.dispose();
-    return probe.count();
-  });
-  await fileReads.dispose();
+test('preserves each project’s grid and unsaved editor when switching projects', async () => {
+  const { page, app } = launched;
+  const otherPath = mkdtempSync(join(tmpdir(), 'texra-dock-other-'));
   writeFileSync(
-    test.info().outputPath('layout-io.json'),
-    JSON.stringify(
-      { fileReadsDuringResizeAndPanelToggles: readsDuringLayout },
-      null,
-      2,
-    ),
+    join(otherPath, 'first.ts'),
+    'export const otherProject = true;\n',
   );
-  expect(readsDuringLayout).toBe(0);
-  await page.locator(hideWorkbench('right')).click();
-  await expect(page.locator('.shell-workbench:visible')).toHaveCount(0);
-  await page.locator('#shellToggleSidePanel').click();
-  const filesWidth = (await page
-    .locator('.shell-workbench[data-placement="right"]')
-    .boundingBox())!.width;
-  await clickTreeRow('sample.tex');
-  const editorWidth = (await page
-    .locator('.shell-workbench[data-placement="right"]')
-    .boundingBox())!.width;
-  expect(Math.abs(editorWidth - filesWidth)).toBeLessThan(1);
-  await expect(
-    page.locator('.desktop-editor-surface .view-lines'),
-  ).toContainText('documentclass');
-  await app.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows()[0].setContentSize(1280, 800);
+  const activeRow = page.locator('.shell-project-row[aria-current="true"]');
+  const projectA = (await activeRow.getAttribute('title'))!;
+  await openFile('first.ts');
+  const editorA = panel('editor').filter({
+    has: page.locator('[title="first.ts"]'),
   });
-});
-
-test('reloads a clean cached editor model after an external file change', async () => {
-  const { page } = launched;
-  const typescriptRow = page.locator(
-    '.desktop-editor-tree-row[data-path="sample.ts"]',
-  );
-  const latexRow = page.locator(
-    '.desktop-editor-tree-row[data-path="sample.tex"]',
-  );
-
-  await clickTreeRow('sample.ts');
-  await expect(
-    page.locator('.desktop-editor-surface .view-lines'),
-  ).toContainText('projectTreeLoaded', { timeout: 20_000 });
-
-  writeFileSync(
-    join(workspacePath, 'sample.tex'),
-    '\\documentclass{article}\n\\begin{document}\nexternal update\n\\end{document}\n',
-    'utf8',
-  );
-  await clickTreeRow('sample.tex');
-
-  await expect(
-    page.locator('.desktop-editor-surface .view-lines'),
-  ).toContainText('external update', { timeout: 20_000 });
-});
-
-test('runs an interactive shell in a terminal workbench tab', async () => {
-  const { page } = launched;
-
-  await openTool('terminal');
-  const terminalTab = page.locator(activeWorkbenchTab('terminal'));
-  await expect(terminalTab).toBeVisible();
-  await expect(terminalTab.locator(BOTTOM_PANE)).toBeVisible();
-
-  // xterm renders rows into .xterm-rows. A prompt appearing at all proves the
-  // pty spawned, node-pty loaded under Electron's ABI, and output streamed back
-  // through IPC.
-  const terminalSurface = terminalTab
-    .locator(BOTTOM_PANE)
-    .locator('.desktop-terminal-surface:not([hidden])');
-  const rows = terminalSurface.locator('.xterm-rows');
-  await expect(rows).toBeVisible({ timeout: 20_000 });
-  await expect(rows).not.toBeEmpty({ timeout: 20_000 });
-
-  // Echo a unique token to confirm keystrokes reach the shell.
-  await terminalSurface.locator('.xterm').click();
-  await page.keyboard.type('echo texra-pty-ok');
-  await page.keyboard.press('Enter');
-  await expect(rows).toContainText('texra-pty-ok', { timeout: 20_000 });
-});
-
-test('runs host-requested setup commands in a new bottom terminal', async () => {
-  const { page } = launched;
-  const bottomTabs = page.locator(BOTTOM_WORKBENCH_TABS);
-  const before = await bottomTabs.count();
-
-  await page.evaluate(() => {
-    window.postMessage(
-      {
-        command: 'desktop:terminal:openCommand',
-        session: document
-          .querySelector('.shell-project-row[aria-current="true"]')
-          ?.getAttribute('title'),
-        initialCommand: 'printf "texra-integrated-command-ok\\n"',
-      },
-      '*',
-    );
-  });
-
-  await expect(bottomTabs).toHaveCount(before + 1);
-  const activeTerminal = page
-    .locator(activeWorkbenchTab('terminal'))
-    .locator(BOTTOM_PANE)
-    .locator('.desktop-terminal-surface:not([hidden])');
-  await expect(activeTerminal.locator('.xterm-rows')).toContainText(
-    'texra-integrated-command-ok',
-    { timeout: 20_000 },
-  );
-});
-
-test('closes a bottom tab and falls back within the same pane', async () => {
-  const { page } = launched;
-
-  // Establish two terminal tabs in Bottom so the fallback cannot accidentally
-  // select a tab from Right.
-  await openTool('terminal');
-  await openTool('terminal');
-
-  const tabs = page.locator(BOTTOM_WORKBENCH_TABS);
-  const before = await tabs.count();
-  const terminalTab = page.locator(activeWorkbenchTab('terminal'));
-  const fallbackLabel = await tabs
-    .nth(before - 2)
-    .locator('.shell-workbench-tab-label')
-    .innerText();
-  await terminalTab.hover();
-  await terminalTab.locator('.shell-workbench-tab-close').click();
-
-  await expect(tabs).toHaveCount(before - 1);
-  await expect(
-    page.locator(
-      '.shell-workbench[data-placement="bottom"] .shell-workbench-tab[data-active="true"] .shell-workbench-tab-label',
-    ),
-  ).toHaveText(fallbackLabel);
-  await expect(
-    page.locator(
-      '.shell-workbench[data-placement="bottom"] .shell-workbench-pane',
-    ),
-  ).toBeVisible();
-  await page.locator('#shellTaskView').click();
-  await expect(page.locator('.shell-conversation')).toBeVisible();
-});
-
-test('keeps project workbenches alive across selection and releases them on closure', async () => {
-  const { app, page } = launched;
-  const otherWorkspace = mkdtempSync(join(tmpdir(), 'texra-other-project-'));
-  writeFileSync(join(otherWorkspace, 'sample.tex'), 'A different paper.\n');
-  const pidPath = join(workspacePath, 'project-process.pid');
-  const hiddenPidPath = join(workspacePath, 'hidden-project-process.pid');
+  await editorA.locator('.view-line').first().click();
+  await page.keyboard.type('// project A draft ');
+  await expect(editorA.locator('.view-lines')).toContainText('project A draft');
+  const retained = await editorA.locator('.monaco-editor').elementHandle();
+  const groupCount = await page
+    .locator('.shell-project-workbench:not([hidden]) .dv-groupview')
+    .count();
   try {
-    const projectA = await page
-      .locator(ACTIVE_PROJECT_ROW)
-      .getAttribute('title');
-    expect(projectA).toBeTruthy();
-    await clickTreeRow('paper-retention.tex');
-    const editor = page.locator(
-      '.desktop-editor-surface .monaco-editor:visible',
-    );
-    await expect(editor).toBeVisible({ timeout: 20_000 });
-    await expect(editor.locator('.view-lines')).toContainText('Paper A.');
-    await editor.locator('.view-line').filter({ hasText: 'Paper A.' }).click();
-    await page.keyboard.type('paper-a-unsaved');
-    await expect(editor.locator('.view-lines')).toContainText(
-      'paper-a-unsaved',
-    );
-    await openTool('terminal');
-    const terminal = page.locator(
-      '.shell-project-workbench:not([hidden]) .desktop-terminal-surface:not([hidden])',
-    );
-    await terminal.locator('.xterm').click();
-    await page.keyboard.type(`printf '%s' "$$" > ${JSON.stringify(pidPath)}`);
-    await page.keyboard.press('Enter');
-    await expect
-      .poll(
-        () => existsSync(pidPath) && readFileSync(pidPath, 'utf8').length > 0,
-      )
-      .toBe(true);
-    const pid = Number.parseInt(readFileSync(pidPath, 'utf8'), 10);
-    const originalTerminal = await terminal.elementHandle();
-    const originalEditor = await editor.elementHandle();
-    let navigations = 0;
-    const onNavigate = () => {
-      navigations += 1;
-    };
-    page.on('framenavigated', onNavigate);
-
     await app.evaluate(({ dialog }, directory) => {
       dialog.showOpenDialog = async () => ({
         canceled: false,
         filePaths: [directory],
       });
-    }, otherWorkspace);
-    const platform = await app.evaluate(() => process.platform);
-    await page.keyboard.press(platform === 'darwin' ? 'Meta+o' : 'Control+o');
+    }, otherPath);
+    await page
+      .getByRole('button', { name: 'Open project folder', exact: true })
+      .click();
     await expect(page.locator('.shell-project-row')).toHaveCount(2);
-    const projectB = await page
-      .locator(ACTIVE_PROJECT_ROW)
-      .getAttribute('title');
+    const projectB = (await activeRow.getAttribute('title'))!;
     expect(projectB).not.toBe(projectA);
-    expect(process.kill(pid, 0)).toBe(true);
-    expect(await originalTerminal?.evaluate((node) => node.isConnected)).toBe(
-      true,
+    await expect(panel('agent')).toBeVisible();
+    await expect(tab('terminal')).toHaveCount(0);
+    await openFile('first.ts');
+    await expect(panel('editor').locator('.view-lines')).toContainText(
+      'otherProject',
     );
-    await expect(
-      page.locator(
-        '.shell-project-workbench:not([hidden]) .shell-workbench-tab[data-kind="terminal"]',
-      ),
-    ).toHaveCount(0);
-    await clickTreeRow('sample.tex');
-    await expect(
-      page.locator('.desktop-editor-surface .view-lines:visible'),
-    ).toContainText('A different paper.');
+    // An explicit command addressed to an offscreen project still runs there.
+    const commandOutput = join(workspacePath, 'background-command.txt');
     await page.evaluate(
       ({ session, initialCommand }) => {
         window.postMessage(
@@ -793,75 +367,32 @@ test('keeps project workbenches alive across selection and releases them on clos
       },
       {
         session: projectA,
-        initialCommand: `printf '%s' "$$" > ${JSON.stringify(hiddenPidPath)}`,
+        initialCommand: `printf background > '${commandOutput}'`,
       },
     );
     await expect
       .poll(
-        () =>
-          existsSync(hiddenPidPath) &&
-          readFileSync(hiddenPidPath, 'utf8').length > 0,
+        () => existsSync(commandOutput) && readFileSync(commandOutput, 'utf8'),
       )
-      .toBe(true);
-    const hiddenPid = Number.parseInt(readFileSync(hiddenPidPath, 'utf8'), 10);
-    await expect(page.locator(ACTIVE_PROJECT_ROW)).toHaveAttribute(
-      'title',
-      projectB!,
-    );
-
+      .toBe('background');
+    await expect(activeRow).toHaveAttribute('title', projectB);
     await page.locator(`.shell-project-row[title="${projectA}"]`).click();
     await expect(
-      page.locator('.desktop-editor-surface .view-lines:visible'),
-    ).toContainText('paper-a-unsaved');
-    expect(await originalEditor?.evaluate((node) => node.isConnected)).toBe(
-      true,
-    );
-    expect(process.kill(pid, 0)).toBe(true);
-    expect(navigations).toBe(0);
-    page.off('framenavigated', onNavigate);
-
-    await page
-      .locator(
-        '.shell-project-workbench:not([hidden]) .shell-workbench-tab[data-kind="terminal"][data-active="true"] .shell-workbench-tab-close',
-      )
-      .click();
-    await expect
-      .poll(() => {
-        try {
-          return process.kill(hiddenPid, 0);
-        } catch {
-          return false;
-        }
-      })
-      .toBe(false);
-    expect(process.kill(pid, 0)).toBe(true);
-    await page.locator(`.shell-project-row[title="${projectB}"]`).click();
-    await app.evaluate(({ dialog }) => {
-      dialog.showMessageBoxSync = () => 1;
-    });
-    // Project actions stay in one menu, including for an inactive project.
-    const itemA = page.locator(
-      `.shell-project-item:has(.shell-project-row[title="${projectA}"])`,
-    );
-    await itemA.hover();
-    await itemA.getByRole('button', { name: /^Actions for / }).click();
-    await itemA.locator('wa-dropdown-item[value="close"]').click();
+      panel('editor').filter({ hasText: 'project A draft' }),
+    ).toBeVisible();
+    expect(await retained?.evaluate((node) => node.isConnected)).toBe(true);
     await expect(
-      page.locator(`.shell-project-row[title="${projectA}"]`),
-    ).toHaveCount(0);
-    expect(await originalEditor?.evaluate((node) => node.isConnected)).toBe(
-      false,
-    );
-    await expect
-      .poll(() => {
-        try {
-          return process.kill(pid, 0);
-        } catch {
-          return false;
-        }
-      })
-      .toBe(false);
+      page.locator('.shell-project-workbench:not([hidden]) .dv-groupview'),
+    ).toHaveCount(groupCount);
+    const platform = await app.evaluate(() => process.platform);
+    await panel('editor')
+      .filter({ hasText: 'project A draft' })
+      .locator('.view-line')
+      .first()
+      .click();
+    await page.keyboard.press(platform === 'darwin' ? 'Meta+z' : 'Control+z');
+    await page.keyboard.press(platform === 'darwin' ? 'Meta+s' : 'Control+s');
   } finally {
-    cleanupDirectory(otherWorkspace);
+    cleanupDirectory(otherPath);
   }
 });

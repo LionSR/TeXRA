@@ -69,7 +69,6 @@ export const toolUseStyles = css`
   }
 
   :is(.banner-details--error, .banner-details--assistant) > .details-summary {
-    --message-actions-width: var(--control-size-s);
     width: 100%;
     padding: 0;
   }

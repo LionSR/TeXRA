@@ -4,8 +4,10 @@ import { test, expect, type TestInfo } from '@playwright/test';
 
 import {
   closeTexraApp,
+  chooseDesktopTheme,
   dismissOnboarding,
   launchTexraApp,
+  openDesktopAppearance,
   showLauncher,
   type LaunchedApp,
 } from './electronApp.js';
@@ -163,4 +165,65 @@ test('settings navigation and appearance across window sizes', async () => {
       BrowserWindow.getAllWindows()[0].setContentSize(1280, 800);
     });
   }
+});
+
+test('appearance settings override the system and remember the choice', async () => {
+  const { page } = launched;
+  async function chooseTheme(theme: 'light' | 'dark' | 'system') {
+    await chooseDesktopTheme(page, theme);
+  }
+  async function expectTheme(theme: 'light' | 'dark') {
+    await expect(page.locator('body')).toHaveClass(
+      new RegExp(`vscode-${theme}`),
+    );
+    await expect(page.locator('html')).toHaveCSS('color-scheme', theme);
+  }
+
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expectTheme('light');
+  const lightBackground = await page
+    .locator('.shell-frame')
+    .evaluate((element) => getComputedStyle(element).backgroundColor);
+  await chooseTheme('dark');
+  await expectTheme('dark');
+  await expect(page.locator('.shell-frame')).not.toHaveCSS(
+    'background-color',
+    lightBackground,
+  );
+  // Selecting the current choice must retain a valid single selection.
+  await chooseTheme('dark');
+  await page.reload();
+  await expectTheme('dark');
+  const themeControl = await openDesktopAppearance(page);
+  await expect(themeControl).toHaveJSProperty('value', 'dark');
+  await themeControl.click();
+  await page.screenshot({
+    path: test.info().outputPath('appearance-theme-dark.png'),
+    animations: 'disabled',
+  });
+  await page.keyboard.press('Escape');
+  await page.locator('.desktop-settings-close').click();
+
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await chooseTheme('light');
+  await expectTheme('light');
+  await expect(page.locator('.shell-frame')).toHaveCSS(
+    'background-color',
+    lightBackground,
+  );
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expectTheme('light');
+  await page.screenshot({
+    path: test.info().outputPath('theme-override-light.png'),
+    animations: 'disabled',
+  });
+  await chooseTheme('system');
+  await expectTheme('dark');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expectTheme('light');
+  await page.emulateMedia({ forcedColors: 'active' });
+  await expect(page.locator('body')).toHaveClass(/vscode-high-contrast/);
+  await page.emulateMedia({ forcedColors: 'none', colorScheme: 'dark' });
+  await expectTheme('dark');
 });

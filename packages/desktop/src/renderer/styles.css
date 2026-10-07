@@ -1026,15 +1026,14 @@ wa-input.desktop-command-palette-input::part(input) {
   background: var(--wa-color-surface-default);
 }
 
-.desktop-terminal-pane .desktop-terminal-surface {
+.desktop-terminal-surface {
   padding: var(--wa-space-xs);
   border: 0;
   border-radius: 0;
   background: var(--wa-color-surface-default);
 }
 
-/* Sessions stack in one cell; inactive ones are [hidden]. Keeping them mounted
-   preserves scrollback and the running shell. */
+/* Each docked terminal owns its surface and retains its running shell. */
 .desktop-terminal-surface {
   grid-area: 1 / 1;
   min-width: 0;

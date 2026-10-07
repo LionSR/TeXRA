@@ -23,6 +23,7 @@ import { loadMonaco, type MonacoModule } from '@shared/monaco/monacoLoader';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { applyMonacoTheme } from '@ui/wa/monacoTheme';
 import { monacoPresentationOptions } from '@ui/wa/monacoOptions';
+import { installMonacoCommandTooltips } from '@ui/wa/monacoCommandTooltips';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLoadingState } from '@ui/wa/loadingState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -88,6 +89,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   treeHost.className = 'desktop-editor-tree';
   const editorHost = document.createElement('div');
   editorHost.className = 'desktop-editor-surface';
+  const disposeCommandTooltips = installMonacoCommandTooltips(editorHost);
   const notice = createEditorFileNotice({
     onError: callbacks.onError,
     retrySave: (path) => void open(path).then(save),
@@ -614,6 +616,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
 
     dispose() {
       disposed = true;
+      disposeCommandTooltips();
       latestOpenRequest += 1;
       treeRevision += 1;
       editor?.dispose();

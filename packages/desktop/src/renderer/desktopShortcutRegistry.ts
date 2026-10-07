@@ -124,7 +124,7 @@ export function createDesktopShortcutRegistry(
   }
 
   function handleKeydown(event: KeyboardEvent): void {
-    if (event.isComposing || event.repeat) return;
+    if (event.defaultPrevented || event.isComposing || event.repeat) return;
     if (isRecordingShortcut(view, event)) return;
     const accelerator = keyboardEventToAccelerator(event, platform);
     if (!accelerator) return;
@@ -149,7 +149,10 @@ export function createDesktopShortcutRegistry(
     dispatchDesktopCommand(entry.id as DesktopCommandId, options.actions);
   }
 
-  view?.addEventListener('keydown', handleKeydown, { capture: true });
+  // Let the focused editor, terminal, or form handle its own keys first.
+  // In particular, Cmd/Ctrl+K can begin an editor chord and Ctrl+J is terminal
+  // input; a capturing application listener used to steal both.
+  view?.addEventListener('keydown', handleKeydown);
 
   const registry: DesktopShortcutRegistry = {
     entries,
@@ -169,7 +172,7 @@ export function createDesktopShortcutRegistry(
     reset,
     dispose(): void {
       listeners.clear();
-      view?.removeEventListener('keydown', handleKeydown, { capture: true });
+      view?.removeEventListener('keydown', handleKeydown);
       uninstallService();
     },
   };

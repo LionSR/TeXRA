@@ -83,7 +83,7 @@ describe('settings navigation', () => {
 
     expect(
       app.shadowRoot?.querySelectorAll('.settings-page-nav [role="tab"]'),
-    ).toHaveLength(navEntries.length + navEntries[0].sections.length);
+    ).toHaveLength(navEntries.length);
     for (const entry of navEntries) {
       pageButton(app, entry.panel).click();
       await app.updateComplete;
@@ -139,7 +139,7 @@ describe('settings navigation', () => {
     ]);
     teams.dispatchEvent(
       new KeyboardEvent('keydown', {
-        key: 'ArrowDown',
+        key: 'ArrowRight',
         bubbles: true,
         composed: true,
       }),

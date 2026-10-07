@@ -88,7 +88,12 @@ const SETTINGS_TAB_METADATA: {
     icon: 'gear',
     label: 'General',
     description: 'When agents ask first, privacy, and Git commit attribution.',
-    sections: { approval: 'Approval', privacy: 'Privacy', git: 'Git' },
+    sections: {
+      appearance: 'Appearance',
+      approval: 'Approval',
+      privacy: 'Privacy',
+      git: 'Git',
+    },
   },
   shortcuts: {
     icon: 'code',

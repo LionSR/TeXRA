@@ -288,14 +288,14 @@ export const commandCatalog = [
   {
     id: 'texra.desktop.toggleBottomBar',
     host: 'desktop',
-    title: 'Toggle Bottom Panel',
+    title: 'Show Terminal',
     category: 'View',
     keybinding: { key: 'ctrl+j', mac: 'cmd+j' },
   },
   {
     id: 'texra.desktop.toggleSidePanel',
     host: 'desktop',
-    title: 'Toggle Side Panel',
+    title: 'Show Files',
     category: 'View',
     keybinding: { key: 'ctrl+alt+b', mac: 'cmd+option+b' },
   },

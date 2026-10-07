@@ -1,7 +1,11 @@
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
+import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@settingsView/frontend';
+import { html, render } from 'lit';
+import { z } from 'zod';
 import type { SettingsTarget } from '@shared/settingsView/settingsViewMessages';
 import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin';
+import { readSelectValue } from '@ui/wa/selectTemplates';
 
 import { buildDesktopSettingsTabMessage } from '../shared/desktopCommandSurface';
 import { createOverlayDialog } from './overlayDialog';
@@ -12,6 +16,9 @@ interface DesktopSettingsDialog {
   /** Swap in a fresh view after the active project changed. */
   remount(): void;
 }
+
+export const DesktopThemePreferenceSchema = z.enum(['system', 'light', 'dark']);
+type ThemePreference = z.infer<typeof DesktopThemePreferenceSchema>;
 
 /**
  * Settings as a popup over the shell. The one `<settings-app>` is mounted on
@@ -26,13 +33,52 @@ interface DesktopSettingsDialog {
  */
 export function createDesktopSettingsDialog(
   appRoot: HTMLElement,
-  hooks: { onShown(): void; onHidden(): void },
+  hooks: {
+    onShown(): void;
+    onHidden(): void;
+    getTheme(): ThemePreference;
+    setTheme(theme: ThemePreference): void;
+  },
 ): DesktopSettingsDialog {
   const content = document.createElement('div');
   content.classList.add('desktop-settings-content');
   const createSettingsView = (): HTMLElement => {
     const view = document.createElement('settings-app');
     view.setAttribute('data-desktop-view', 'settings');
+    const appearance = document.createElement('section');
+    appearance.slot = 'appearance';
+    render(
+      html`
+        <div class="settings-row">
+          <div class="settings-row-text">
+            <label for="desktopTheme" class="settings-row-label">Theme</label>
+            <span id="desktopThemeHelp" class="settings-row-help">
+              Choose light or dark, or follow your system appearance.
+            </span>
+          </div>
+          <div class="settings-row-control">
+            <wa-select
+              id="desktopTheme"
+              size="s"
+              aria-describedby="desktopThemeHelp"
+              .value=${hooks.getTheme()}
+              @change=${(event: Event) => {
+                const result = DesktopThemePreferenceSchema.safeParse(
+                  readSelectValue(event),
+                );
+                if (result.success) hooks.setTheme(result.data);
+              }}
+            >
+              <wa-option value="system">System</wa-option>
+              <wa-option value="light">Light</wa-option>
+              <wa-option value="dark">Dark</wa-option>
+            </wa-select>
+          </div>
+        </div>
+      `,
+      appearance,
+    );
+    view.append(appearance);
     return view;
   };
   let settingsView = createSettingsView();

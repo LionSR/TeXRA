@@ -2,6 +2,7 @@
 // only tab closure, project closure, or document disposal releases its resources.
 
 import type { SessionSurfaces } from '@progressView/frontend/sessionSurfaces';
+import type { ProgressApp } from '@progressView/frontend/ProgressApp';
 import type { Theme } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostOutcome } from '@shared/session/sessionFrames';
@@ -27,6 +28,7 @@ export function createProjectWorkbench(options: {
   session: string;
   surfaces: SessionSurfaces;
   logsPane: HTMLElement;
+  conversationView: ProgressApp;
   isActive(): boolean;
   isBrowserCovered(): boolean;
   onLayoutChanged(
@@ -93,7 +95,7 @@ export function createProjectWorkbench(options: {
       },
       action.kind === 'write' ? undefined : FILE_REQUEST_TIMEOUT_MS,
     );
-  const editorPane = createEditorPane({
+  const editorCallbacks = {
     listFiles: async (directory) => {
       const outcome = await workspaceFile({ kind: 'list', directory });
       if (outcome.kind !== 'entries') throw unexpected(outcome);
@@ -119,7 +121,19 @@ export function createProjectWorkbench(options: {
       // Closing a project rejects its pending I/O as part of disposal.
       if (!disposed) console.error('TeXRA editor pane', error);
     },
-  });
+  } satisfies Parameters<typeof createEditorPane>[0];
+  const fileTree = createEditorPane(editorCallbacks);
+  const editors = new Map<string, ReturnType<typeof createEditorPane>>();
+  let currentTheme: Theme | undefined;
+  function editorFor(tabId: string) {
+    let editor = editors.get(tabId);
+    if (!editor) {
+      editor = createEditorPane(editorCallbacks);
+      if (currentTheme) editor.setTheme(currentTheme);
+      editors.set(tabId, editor);
+    }
+    return editor;
+  }
   const terminalPane = createTerminalPane({
     start: (sessionId, cols, rows) => {
       const initialCommand = workbench.takePendingTerminalCommand(sessionId);
@@ -147,7 +161,13 @@ export function createProjectWorkbench(options: {
     session,
     isActive: options.isActive,
     isBrowserCovered: options.isBrowserCovered,
-    editorPane,
+    conversationView: options.conversationView,
+    fileTree,
+    editorFor,
+    closeEditor: (id) => {
+      editors.get(id)?.dispose();
+      editors.delete(id);
+    },
     terminalPane,
     reviewPane,
     pdfPane,
@@ -161,18 +181,29 @@ export function createProjectWorkbench(options: {
     session,
     getState,
     updateState,
-    editorPane,
+    conversationView: options.conversationView,
+    fileTree,
+    saveActiveEditor() {
+      const id = workbench.activeTabId();
+      if (id) void editors.get(id)?.save();
+    },
+    hasUnsavedChanges() {
+      return [...editors.values()].some((editor) => editor.hasUnsavedChanges());
+    },
     terminalPane,
     reviewPane,
     workbench,
     setTheme(theme: Theme) {
-      editorPane.setTheme(theme);
+      currentTheme = theme;
+      for (const editor of editors.values()) editor.setTheme(theme);
       reviewPane.setTheme(theme);
       terminalPane.refreshTheme();
     },
     dispose() {
       disposed = true;
-      editorPane.dispose();
+      workbench.dispose();
+      fileTree.dispose();
+      for (const editor of editors.values()) editor.dispose();
       terminalPane.disposeAll();
       for (const tab of getState().workbenchTabs) {
         if (tab.kind === 'pdf') pdfPane.dispose(tab.id);
@@ -193,7 +224,14 @@ export function createProjectWorkbench(options: {
 function restoredLayout(session: string, restored: unknown): DesktopShellState {
   if (restored === null) return initialDesktopShellState();
   const parsed = DesktopShellStateSchema.safeParse(restored);
-  if (parsed.success) return parsed.data;
+  if (parsed.success) {
+    if (
+      !parsed.data.dockLayout &&
+      !parsed.data.workbenchTabs.some((tab) => tab.kind === 'agent')
+    )
+      return openWorkbenchTab(parsed.data, { kind: 'agent' });
+    return parsed.data;
+  }
   console.warn(
     `[desktop] resetting the unreadable workbench layout of ${session}: ${parsed.error.message}`,
   );

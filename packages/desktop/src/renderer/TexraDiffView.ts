@@ -10,6 +10,7 @@ import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderLoadingState } from '@ui/wa/loadingState';
 import { applyMonacoTheme } from '@ui/wa/monacoTheme';
 import { monacoPresentationOptions } from '@ui/wa/monacoOptions';
+import { installMonacoCommandTooltips } from '@ui/wa/monacoCommandTooltips';
 
 // Local imports - errors
 import { extractErrorMessage } from '@utils/errors/errorMessage';
@@ -93,6 +94,7 @@ export class TexraDiffView extends LitElement {
   private resizeObserver?: ResizeObserver;
   private loadGeneration = 0;
   private readonly editorContainer = document.createElement('div');
+  private disposeCommandTooltips: (() => void) | undefined;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -157,6 +159,7 @@ export class TexraDiffView extends LitElement {
       const monaco = await loadMonaco();
       if (!this.isConnected || generation !== this.loadGeneration) return;
       const container = this.editorContainer;
+      this.disposeCommandTooltips = installMonacoCommandTooltips(container);
 
       this.monaco = monaco;
       this.applyTheme();
@@ -217,6 +220,8 @@ export class TexraDiffView extends LitElement {
   }
 
   private disposeMonacoObjects(): void {
+    this.disposeCommandTooltips?.();
+    this.disposeCommandTooltips = undefined;
     this.editor?.dispose();
     this.editor = undefined;
     this.originalModel?.dispose();

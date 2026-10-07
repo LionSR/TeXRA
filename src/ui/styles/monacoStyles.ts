@@ -62,6 +62,45 @@ export const monacoStyles = css`
     overflow-wrap: anywhere;
   }
 
+  /* Override Monaco's inline coordinates only for command descriptions.
+     Native popover placement escapes pane clipping and flips at window edges. */
+  .texra-command-tooltip {
+    position: fixed !important;
+    inset: auto !important;
+    position-area: inline-start;
+    position-try-fallbacks:
+      flip-inline, --texra-tooltip-below, --texra-tooltip-above;
+    width: max-content;
+    max-width: min(360px, calc(100vw - 24px));
+    margin: 0 8px;
+    padding: 0;
+    border: 0;
+    overflow: visible;
+    background: transparent;
+    color: var(--wa-color-text-normal);
+  }
+
+  .texra-command-tooltip .workbench-hover {
+    max-width: min(360px, calc(100vw - 24px)) !important;
+    border-radius: var(--field-radius);
+    font-family: var(--wa-font-family-body);
+    font-size: var(--font-size-sm);
+  }
+
+  .texra-command-tooltip .workbench-hover-pointer {
+    display: none;
+  }
+
+  @position-try --texra-tooltip-below {
+    position-area: block-end;
+    margin: 8px 0;
+  }
+
+  @position-try --texra-tooltip-above {
+    position-area: block-start;
+    margin: 8px 0;
+  }
+
   .monaco-resizable-hover,
   .monaco-editor .monaco-hover {
     border-radius: var(--wa-tooltip-border-radius, var(--field-radius));

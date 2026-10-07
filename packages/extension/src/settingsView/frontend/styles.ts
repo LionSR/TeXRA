@@ -49,11 +49,30 @@ export const settingsViewStyles: CSSResult[] = [
       padding: 0 var(--wa-space-xs);
     }
 
-    /* The current page's sections: a second strip of text sub-tabs, on the
-       page's own surface so it reads as part of the page below it. */
+    /* Sections belong below the current page heading, beside their content. */
     .settings-section-nav {
-      border-top: var(--border-thin) solid var(--border-hairline);
-      background: var(--wa-color-surface-default);
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--wa-space-2xs);
+      margin-bottom: var(--wa-space-m);
+      padding-bottom: var(--wa-space-xs);
+      border-bottom: var(--border-thin) solid var(--border-hairline);
+    }
+
+    .settings-section-button::part(base) {
+      min-height: var(--height-control);
+      padding-inline: var(--wa-space-xs);
+      font-size: var(--font-size-sm);
+      border: 0;
+      border-radius: var(--row-radius);
+      background: transparent;
+      color: var(--wa-color-text-quiet);
+    }
+
+    .settings-section-button[data-active='true']::part(base) {
+      background: var(--surface-selected);
+      color: var(--wa-color-text-normal);
+      font-weight: var(--font-weight-medium);
     }
 
     .settings-page-button {
@@ -144,6 +163,10 @@ export const settingsViewStyles: CSSResult[] = [
       grid-template-columns: clamp(136px, 20%, 196px) minmax(0, 1fr);
     }
 
+    :host([data-desktop-view]) {
+      --settings-section-icon-display: none;
+    }
+
     :host([data-desktop-view]) .settings-navigation {
       min-height: 0;
       padding: var(--wa-space-xs);
@@ -162,12 +185,6 @@ export const settingsViewStyles: CSSResult[] = [
       overflow: visible;
     }
 
-    :host([data-desktop-view]) .settings-section-nav {
-      margin-top: var(--wa-space-m);
-      padding-top: var(--wa-space-m);
-      background: transparent;
-    }
-
     :host([data-desktop-view]) .settings-page-button::part(base) {
       justify-content: flex-start;
       min-height: var(--height-button);
@@ -183,11 +200,6 @@ export const settingsViewStyles: CSSResult[] = [
       background: var(--surface-selected);
       color: var(--wa-color-brand-on-quiet);
       font-weight: var(--font-weight-semibold);
-    }
-
-    :host([data-desktop-view]) .settings-section-button::part(base) {
-      min-height: var(--height-control-compact);
-      font-size: var(--font-size-xs);
     }
 
     @container settings (max-width: 520px) {

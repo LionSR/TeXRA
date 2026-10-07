@@ -50,6 +50,34 @@ export interface LaunchedApp {
   ownsUserData: boolean;
 }
 
+export async function openDesktopAppearance(page: Page) {
+  await page
+    .locator('.shell-sidebar-footer .shell-sidebar-action')
+    .filter({ hasText: 'Settings' })
+    .click();
+  const settings = page.locator('wa-dialog.desktop-settings-overlay');
+  await expect(settings).toHaveJSProperty('open', true);
+  await settings.getByRole('tab', { name: 'General', exact: true }).click();
+  await settings.locator('[data-section="appearance"]').click();
+  const select = settings.locator('#desktopTheme');
+  await expect(select).toBeVisible();
+  return select;
+}
+
+export async function chooseDesktopTheme(
+  page: Page,
+  theme: 'light' | 'dark' | 'system',
+) {
+  const select = await openDesktopAppearance(page);
+  await select.click();
+  await select.locator(`wa-option[value="${theme}"]`).click();
+  await expect(select).toHaveJSProperty('value', theme);
+  await page.locator('.desktop-settings-close').click();
+  await expect(
+    page.locator('wa-dialog.desktop-settings-overlay'),
+  ).toHaveJSProperty('open', false);
+}
+
 /** Resolve project storage through the production path function in the fixture bundle. */
 export async function findWorkspaceStoragePath(input: {
   userDataPath: string;
@@ -238,18 +266,13 @@ export async function openWorkbench(
   }, kind);
   await launched.page.waitForFunction(
     (targetKind) => {
-      const shell = document.querySelector<HTMLElement>('.shell-frame');
       const tab = document.querySelector<HTMLElement>(
-        `.shell-workbench-tab[data-kind="${targetKind}"][data-active="true"]`,
+        `.shell-dock-tab[data-kind="${targetKind}"]`,
       );
       const surface = document.querySelector<HTMLElement>(
         `[data-desktop-view="${targetKind}"]`,
       );
-      return (
-        shell?.dataset.workbenchOpen === 'true' &&
-        tab != null &&
-        surface != null
-      );
+      return tab != null && surface != null;
     },
     kind,
     { timeout: 5000 },

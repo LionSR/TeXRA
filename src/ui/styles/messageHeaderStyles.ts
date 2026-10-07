@@ -1,13 +1,9 @@
 import { css } from 'lit';
 
-/** The label, timestamp and action slots share columns across message kinds. */
+/** One trailing metadata/action group, without empty reserved button columns. */
 export const messageHeaderStyles = css`
   .message-header {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto var(
-        --message-actions-width,
-        calc(2 * var(--control-size-s) + var(--wa-space-xs))
-      );
+    display: flex;
     align-items: center;
     gap: var(--wa-space-xs);
     min-height: var(--control-size-s);
@@ -16,6 +12,7 @@ export const messageHeaderStyles = css`
   }
   .message-label {
     display: flex;
+    flex: 1;
     align-items: center;
     gap: var(--wa-space-xs);
     min-width: 0;
@@ -29,6 +26,9 @@ export const messageHeaderStyles = css`
     height: var(--font-size-icon-sm);
   }
   .message-timestamp {
+    flex: none;
+    margin-inline-start: auto;
+    text-align: end;
     font-size: var(--font-size-xs);
     font-variant-numeric: tabular-nums;
     color: var(--wa-color-text-quiet);
@@ -36,8 +36,15 @@ export const messageHeaderStyles = css`
   }
   .message-actions {
     display: flex;
+    flex: none;
     align-items: center;
     justify-content: flex-end;
     gap: var(--wa-space-xs);
+  }
+  .message-header > .banner-content-copy {
+    flex: none;
+    margin: 0;
+    padding: 0;
+    opacity: 1;
   }
 `;

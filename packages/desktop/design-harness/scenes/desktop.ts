@@ -1,12 +1,16 @@
 // Desktop scenes: the real rail, workbench, and pane templates over folded
 // SessionViews (one per project), never hand-built run fixtures. Screenshots
 // of these are the verification for the desktop boards.
-import { html, nothing, type TemplateResult } from 'lit';
+import { html, nothing, render, type TemplateResult } from 'lit';
+import { ref } from 'lit/directives/ref.js';
+import { createDockview, type DockviewApi } from 'dockview';
+import 'dockview/dist/styles/dockview.css';
+import '@desktop/renderer/dockStyles.css';
+import { dockTab } from '@desktop/renderer/dockControls';
 
 import { createPdfPane } from '@desktop/renderer/pdfPane.js';
 import {
   shellSidebarTemplate,
-  workbenchTabsTemplate,
   type RailProject,
 } from '@desktop/renderer/desktopShell.js';
 import type { WorkbenchTab } from '@desktop/shared/desktopShellState.js';
@@ -141,14 +145,6 @@ const sidebarCallbacks = {
   onProjectAction: noop,
   onOpenSettings: noop,
 };
-const workbenchCallbacks = {
-  onOpenKind: noop,
-  onActivate: noop,
-  onClose: noop,
-  onHide: noop,
-  onMove: noop,
-};
-
 // ── real chrome over the fixtures ─────────────────────────────────────────
 
 const rail = (projects: readonly RailProject[], shell: Shell) =>
@@ -222,25 +218,55 @@ const tab = (
 ): WorkbenchTab => ({
   id: target ? `workbench:${kind}:${target}` : `workbench:${kind}`,
   kind,
-  placement: 'right',
   title,
   ...(target ? { target } : {}),
 });
 
+// The static board embeds the real docking controls; Electron journeys own
+// resource and persistence verification for this layout.
 const workbench = (
   session: string,
   tabs: readonly WorkbenchTab[],
   activeId: string,
   content: TemplateResult | HTMLElement,
-) =>
-  html`<aside class="shell-workbench" data-placement="right">
-    ${workbenchTabsTemplate(tabs, activeId, 'right', workbenchCallbacks, session)}
-    <div class="shell-workbench-body">
-      <section class="shell-workbench-pane">
-        <div class="shell-workbench-surface">${content}</div>
-      </section>
-    </div>
-  </aside>`;
+) => {
+  let api: DockviewApi | undefined;
+  return html`<div
+    class="shell-dock"
+    data-session=${session}
+    ${ref((host) => {
+      if (!host) {
+        api?.dispose();
+        return;
+      }
+      api = createDockview(host as HTMLElement, {
+        theme: { name: 'texra', className: 'dockview-theme-texra' },
+        createComponent: ({ id }) => {
+          const element = document.createElement('div');
+          element.className = 'shell-dock-surface';
+          render(
+            id === activeId
+              ? content
+              : tabs.find((tab) => tab.id === id)?.title,
+            element,
+          );
+          return { element, init() {} };
+        },
+        createTabComponent: ({ id }) =>
+          dockTab(id, {
+            api: () => api!,
+            tab: (id) => tabs.find((tab) => tab.id === id),
+            open: noop,
+            close: (id) => api?.getPanel(id)?.api.close(),
+          }),
+        defaultTabComponent: 'texra',
+      });
+      for (const tab of tabs)
+        api.addPanel({ id: tab.id, title: tab.title, component: 'surface' });
+      api.getPanel(activeId)?.api.setActive();
+    })}
+  ></div>`;
+};
 
 const desktopFrame = (cols: string, ...panes: TemplateResult[]) =>
   html`<div class="h-desktop" id="frame" style="grid-template-columns:${cols}">

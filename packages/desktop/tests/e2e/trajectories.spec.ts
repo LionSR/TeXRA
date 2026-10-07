@@ -78,9 +78,7 @@ test('first launch shows a usable launcher chrome', async () => {
   // The conversation view renders the launcher or the no-workspace empty
   // state — both are valid first-launch outcomes. The audit doc tracks which
   // one each user actually hits.
-  const mainSection = launched.page.locator(
-    '.shell-conversation-pane[data-pane="conversation"]',
-  );
+  const mainSection = launched.page.locator('.shell-dock-agent');
   await expect(mainSection).toBeVisible();
 });
 
@@ -215,13 +213,13 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
 
   await launched.page.evaluate((message) => {
     const session = document.querySelector<HTMLElement>(
-      '.shell-launcher-surface',
+      '.shell-project-workbench:not([hidden])',
     )?.dataset.session;
     window.postMessage({ ...message, session }, '*');
   }, payload);
 
   const reviewTab = launched.page.locator(
-    '.shell-workbench-tab[data-kind="review"][data-active="true"]',
+    '.shell-dock-tab[data-kind="review"]',
   );
   await expect(reviewTab).toBeVisible();
   const review = launched.page.locator('.desktop-review-pane');
@@ -264,14 +262,15 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
       {
         command: 'desktop:closeDiff',
         previewId: 'a-superseded-preview',
-        session: document.querySelector<HTMLElement>('.shell-launcher-surface')
-          ?.dataset.session,
+        session: document.querySelector<HTMLElement>(
+          '.shell-project-workbench:not([hidden])',
+        )?.dataset.session,
       },
       '*',
     );
   });
   await expect(
-    launched.page.locator('.shell-workbench-tab[data-kind="review"]'),
+    launched.page.locator('.shell-dock-tab[data-kind="review"]'),
   ).toHaveCount(1);
 
   // Close via desktop:closeDiff naming the diff it opened — the Review tab
@@ -281,14 +280,15 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
       {
         command: 'desktop:closeDiff',
         previewId: 'trajectory-review',
-        session: document.querySelector<HTMLElement>('.shell-launcher-surface')
-          ?.dataset.session,
+        session: document.querySelector<HTMLElement>(
+          '.shell-project-workbench:not([hidden])',
+        )?.dataset.session,
       },
       '*',
     );
   });
   await expect(
-    launched.page.locator('.shell-workbench-tab[data-kind="review"]'),
+    launched.page.locator('.shell-dock-tab[data-kind="review"]'),
   ).toHaveCount(0);
 });
 
@@ -297,9 +297,9 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
   const { page } = launched;
   const pdfUrl = 'file:///tmp/texra-trajectory/output.pdf';
   const session = await page
-    .locator('.shell-launcher-surface')
+    .locator('.shell-project-workbench:not([hidden])')
     .getAttribute('data-session');
-  const pdfTab = page.locator('.shell-workbench-tab[data-kind="pdf"]');
+  const pdfTab = page.locator('.shell-dock-tab[data-kind="pdf"]');
   const frame = page.locator('iframe.shell-workbench-pdf-frame');
 
   await page.evaluate(
@@ -317,7 +317,10 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
     { session, pdfUrl },
   );
   await expect(pdfTab).toBeVisible();
-  await expect(pdfTab).toHaveAttribute('data-active', 'true');
+  await expect(pdfTab.locator('xpath=..')).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
   await expect(pdfTab).toContainText('output.pdf');
   await expect(frame).toBeVisible();
   await expect(frame).toHaveAttribute('src', pdfUrl);
@@ -343,7 +346,7 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
   await expect(frame).toHaveAttribute('src', pdfUrl);
 
   // A PDF is a workbench tab, closed from its own tab like any other.
-  await pdfTab.locator('.shell-workbench-tab-close').click();
+  await pdfTab.locator('.shell-dock-tab-close wa-button').click();
   await expect(pdfTab).toHaveCount(0);
   await expect(frame).toHaveCount(0);
 });

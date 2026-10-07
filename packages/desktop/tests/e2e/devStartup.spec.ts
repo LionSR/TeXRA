@@ -7,6 +7,7 @@ import { createServer } from 'vite';
 
 import {
   closeTexraApp,
+  chooseDesktopTheme,
   dismissOnboarding,
   launchTexraApp,
   type LaunchedApp,
@@ -62,6 +63,15 @@ test('renders the dev app from a cold cache and restores the editor after reload
       .click();
     const editor = page.locator('.desktop-editor-surface .view-lines');
     await expect(editor).toContainText('A dev editor document.');
+    await expect(page.locator('session-composer')).toBeVisible();
+    const platform = await launched.app.evaluate(() => process.platform);
+    await editor.locator('.view-line').first().click();
+    await page.keyboard.press(platform === 'darwin' ? 'Meta+k' : 'Control+k');
+    await expect(page.locator('.desktop-command-palette')).not.toHaveAttribute(
+      'open',
+      '',
+    );
+    await page.keyboard.press('Escape');
     expect(navigations, 'Opening the editor must not reload the dev app').toBe(
       0,
     );
@@ -69,15 +79,26 @@ test('renders the dev app from a cold cache and restores the editor after reload
     await page.reload();
     await expect(page.locator('.shell-sidebar')).toBeVisible();
     await expect(editor).toContainText('A dev editor document.');
+    await expect(page.locator('session-composer')).toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath('dev-reloaded-editor.png'),
       animations: 'disabled',
     });
     for (const theme of ['dark', 'light'] as const) {
-      await page.emulateMedia({ colorScheme: theme });
+      await page.emulateMedia({
+        colorScheme: theme === 'dark' ? 'light' : 'dark',
+      });
+      await chooseDesktopTheme(page, theme);
       await expect(page.locator('body')).toHaveClass(
         new RegExp(`vscode-${theme}`),
       );
+      await expect
+        .poll(() =>
+          page
+            .locator('.shell-dock-tab[data-kind="files"] .shell-dock-tab-label')
+            .evaluate((label) => label.scrollWidth <= label.clientWidth + 1),
+        )
+        .toBe(true);
       await expect
         .poll(() =>
           page.evaluate(() => {
@@ -96,6 +117,35 @@ test('renders the dev app from a cold cache and restores the editor after reload
       await page.keyboard.press('F1');
       const palette = page.locator('.quick-input-widget');
       await expect(palette).toBeVisible();
+      await palette.locator('input').fill('>Convert Indentation to Spaces');
+      const command = palette
+        .locator('.monaco-list-row')
+        .filter({ hasText: 'Convert Indentation to Spaces' })
+        .first();
+      await command.hover();
+      const description = page.locator('.texra-command-tooltip:popover-open');
+      await expect(description).toBeVisible();
+      // Hit testing verifies that ancestors do not clip or cover the tooltip,
+      // which a DOM visibility assertion alone cannot establish.
+      await expect
+        .poll(() =>
+          description.evaluate((element) => {
+            const bounds = element.getBoundingClientRect();
+            const margin = 2;
+            return (
+              bounds.left >= 0 &&
+              bounds.top >= 0 &&
+              bounds.right <= innerWidth &&
+              bounds.bottom <= innerHeight &&
+              [bounds.left + margin, bounds.right - margin].every((x) =>
+                [bounds.top + margin, bounds.bottom - margin].every((y) =>
+                  element.contains(document.elementFromPoint(x, y)),
+                ),
+              )
+            );
+          }),
+        )
+        .toBe(true);
       await page.screenshot({
         path: testInfo.outputPath(`editor-commands-${theme}.png`),
         animations: 'disabled',
@@ -121,7 +171,7 @@ test('renders the dev app from a cold cache and restores the editor after reload
       await page.keyboard.press('Escape');
       await expect(menu).toBeHidden();
     }
-    const platform = await launched.app.evaluate(() => process.platform);
+    await chooseDesktopTheme(page, 'system');
     await editor.locator('.view-line').first().click();
     await page.keyboard.press(
       platform === 'darwin' ? 'Meta+ArrowDown' : 'Control+End',

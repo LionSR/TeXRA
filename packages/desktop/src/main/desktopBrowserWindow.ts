@@ -15,54 +15,57 @@ export const openDesktopBrowserWindow = (options: {
   readonly mainDir: string;
 }) =>
   Effect.acquireRelease(
-    Effect.sync(
-      () =>
-        new BrowserWindow({
-          // The task canvas remains useful with a project sidebar and an
-          // optional workbench open beside it at the default size.
-          width: 1280,
-          height: 860,
-          minWidth: 860,
-          minHeight: 600,
-          // Present the window only after Chromium has painted its first
-          // frame. Relying on BrowserWindow's implicit show can strand a
-          // hidden-inset window behind the launching macOS Space while the app
-          // itself is active.
-          show: false,
-          focusable: !DESKTOP_HEADLESS,
-          skipTaskbar: DESKTOP_HEADLESS,
-          title: options.title,
-          // Frameless chrome. The OS title bar was a dead 28px strip in the
-          // app's own color scheme that no amount of theming could reach, and
-          // it visually cut the window off from the shell below it.
-          //
-          // `hiddenInset` (macOS) keeps the traffic-light buttons but removes
-          // the bar, so the desktop shell header becomes the drag region. On
-          // Windows/Linux, `titleBarOverlay` hands us the same arrangement with
-          // system controls drawn over our surface.
-          titleBarStyle: 'hiddenInset',
-          // Inset the traffic lights so they sit centred in the 48px header
-          // rather than crowding its top-left corner.
-          ...(process.platform === 'darwin'
-            ? { trafficLightPosition: { x: 18, y: 18 } }
-            : { titleBarOverlay: true }),
-          // Match the operating-system theme before the renderer paints to
-          // avoid a contrasting flash behind the frameless window.
-          backgroundColor: nativeTheme.shouldUseDarkColors
-            ? '#212121'
-            : '#f7f7f7',
-          webPreferences: {
-            offscreen: DESKTOP_HEADLESS,
-            backgroundThrottling: !DESKTOP_HEADLESS,
-            preload: join(options.mainDir, '../preload/index.cjs'),
-            contextIsolation: true,
-            nodeIntegration: false,
-            sandbox: true,
-            webSecurity: true,
-            allowRunningInsecureContent: false,
-          },
-        }),
-    ),
+    Effect.sync(() => {
+      const window = new BrowserWindow({
+        // The task canvas remains useful with a project sidebar and an
+        // optional workbench open beside it at the default size.
+        width: 1280,
+        height: 860,
+        minWidth: 860,
+        minHeight: 600,
+        // Present the window only after Chromium has painted its first
+        // frame. Relying on BrowserWindow's implicit show can strand a
+        // hidden-inset window behind the launching macOS Space while the app
+        // itself is active.
+        show: false,
+        focusable: !DESKTOP_HEADLESS,
+        skipTaskbar: DESKTOP_HEADLESS,
+        title: options.title,
+        // Frameless chrome. The OS title bar was a dead 28px strip in the
+        // app's own color scheme that no amount of theming could reach, and
+        // it visually cut the window off from the shell below it.
+        //
+        // `hiddenInset` (macOS) keeps the traffic-light buttons but removes
+        // the bar, so the desktop shell header becomes the drag region. On
+        // Windows/Linux, `titleBarOverlay` hands us the same arrangement with
+        // system controls drawn over our surface.
+        titleBarStyle: 'hiddenInset',
+        // Inset the traffic lights so they sit centred in the 48px header
+        // rather than crowding its top-left corner.
+        ...(process.platform === 'darwin'
+          ? { trafficLightPosition: { x: 18, y: 18 } }
+          : { titleBarOverlay: true }),
+        // Match the operating-system theme before the renderer paints to
+        // avoid a contrasting flash behind the frameless window.
+        backgroundColor: nativeTheme.shouldUseDarkColors
+          ? '#212121'
+          : '#f7f7f7',
+        webPreferences: {
+          offscreen: DESKTOP_HEADLESS,
+          backgroundThrottling: !DESKTOP_HEADLESS,
+          preload: join(options.mainDir, '../preload/index.cjs'),
+          contextIsolation: true,
+          nodeIntegration: false,
+          sandbox: true,
+          webSecurity: true,
+          allowRunningInsecureContent: false,
+        },
+      });
+      // Native content/resize operations can mark an offscreen window visible
+      // independently of our first-paint presentation callback.
+      if (DESKTOP_HEADLESS) window.on('show', () => window.hide());
+      return window;
+    }),
     (opened) =>
       Effect.sync(() => {
         if (!opened.isDestroyed()) opened.destroy();

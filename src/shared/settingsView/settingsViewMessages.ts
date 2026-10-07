@@ -104,7 +104,7 @@ export const SETTINGS_PAGE_SECTIONS = {
   plugins: [],
   latex: ['dependencies', 'compile', 'formatting', 'vscode'],
   memory: [],
-  general: ['approval', 'privacy', 'git'],
+  general: ['appearance', 'approval', 'privacy', 'git'],
   shortcuts: [],
 } as const satisfies Record<SettingsTabPanelName, readonly string[]>;
 

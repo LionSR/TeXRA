@@ -1,30 +1,25 @@
-import { html, nothing, type TemplateResult } from 'lit';
-import { repeat } from 'lit/directives/repeat.js';
+import 'dockview/dist/styles/dockview.css';
+import './dockStyles.css';
+import {
+  createDockview,
+  type DockviewApi,
+  type DockviewGroupPanel,
+  type AddPanelPositionOptions,
+} from 'dockview';
+import { html, nothing, render } from 'lit';
 
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
 import {
-  workbenchPanelDomId,
-  workbenchTabDomId,
-  workbenchTabsTemplate,
-} from './desktopShell';
-import {
-  activeWorkbenchTab,
-  closeWorkbench,
   closeWorkbenchTab,
-  focusWorkbenchTab,
-  moveWorkbenchTab,
   openWorkbenchTab,
-  toggleWorkbench,
-  WORKBENCH_PLACEMENTS,
-  workbenchTabsForPlacement,
   type DesktopShellState,
   type WorkbenchKind,
-  type WorkbenchPlacement,
   type WorkbenchTab,
 } from '../shared/desktopShellState';
 import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages';
+import { dockGroupActions, dockTab } from './dockControls';
 import type { createEditorPane } from './editorPane';
 import type { createPdfPane } from './pdfPane';
 import type { createTerminalPane } from './terminalPane';
@@ -33,9 +28,11 @@ import type { createReviewPane } from './reviewPane';
 interface WorkbenchControllerDeps {
   session: string;
   isActive(): boolean;
-  /** DOM menus and dialogs cover the shell; the native browser view stays hidden. */
   isBrowserCovered(): boolean;
-  editorPane: ReturnType<typeof createEditorPane>;
+  conversationView: HTMLElement;
+  fileTree: ReturnType<typeof createEditorPane>;
+  editorFor(id: string): ReturnType<typeof createEditorPane>;
+  closeEditor(id: string): void;
   terminalPane: ReturnType<typeof createTerminalPane>;
   reviewPane: ReturnType<typeof createReviewPane>;
   pdfPane: ReturnType<typeof createPdfPane>;
@@ -45,387 +42,475 @@ interface WorkbenchControllerDeps {
   postMessage(command: string, payload?: Record<string, unknown>): void;
 }
 
-interface WorkbenchController {
-  openKind(kind: WorkbenchKind): void;
-  openTerminalCommand(initialCommand: string): void;
-  disposeWorkbenchTab(tabId: string): void;
-  togglePlacementVisibility(
-    placement: WorkbenchPlacement,
-    emptyKind: WorkbenchKind,
-  ): void;
-  layoutVisibleSurfaces(options?: {
-    focus?: boolean;
-    activate?: readonly WorkbenchPlacement[];
-  }): void;
-  syncBrowserViewBounds(): void;
-  template(placement: WorkbenchPlacement): TemplateResult;
-  takePendingTerminalCommand(sessionId: string): string | undefined;
-}
-
-export function createWorkbenchController({
-  session,
-  isActive,
-  isBrowserCovered,
-  editorPane,
-  terminalPane,
-  reviewPane,
-  pdfPane,
-  logsPane,
-  getState,
-  updateShell,
-  postMessage,
-}: WorkbenchControllerDeps): WorkbenchController {
+/** A project owns one dock. Reparenting a panel never disposes its resources. */
+export function createWorkbenchController(deps: WorkbenchControllerDeps) {
+  const {
+    getState,
+    updateShell,
+    postMessage,
+    isActive,
+    editorFor,
+    terminalPane,
+  } = deps;
+  const element = document.createElement('div');
+  element.className = 'shell-dock';
+  element.dataset.session = deps.session;
+  element.addEventListener('keydown', (event) => {
+    if (event.defaultPrevented || event.key !== 'F10' || !event.shiftKey)
+      return;
+    const tab = (event.target as HTMLElement)
+      .closest('.dv-tab')
+      ?.querySelector<HTMLElement>('.shell-dock-tab');
+    if (!tab) return;
+    event.preventDefault();
+    const bounds = tab.getBoundingClientRect();
+    tab.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        clientX: bounds.left,
+        clientY: bounds.bottom,
+      }),
+    );
+  });
+  let dock: DockviewApi | undefined;
+  let reconciling = false;
+  let disposed = false;
+  let persistFrame: number | undefined;
+  let layoutFrame: number | undefined;
+  let openingGroup: DockviewGroupPanel | undefined;
+  let lastRequestedTab: string | undefined;
+  let dragging = false;
   const pendingTerminalCommands = new Map<string, string>();
+  const loadedBrowserTabs = new Set<string>();
+  const mounted = new Map<string, HTMLElement>();
+  const subscriptions: { dispose(): void }[] = [];
+  const tabFor = (id: string) =>
+    getState().workbenchTabs.find((tab) => tab.id === id);
 
-  /**
-   * Reports the browser slot's geometry to the main process, which positions the
-   * WebContentsView over it. A WebContentsView is not part of renderer layout, so
-   * this runs on every render, resize, and layout change — otherwise the view
-   * would float where the slot used to be.
-   *
-   * Only one browser view can be shown at a time: each is a separate
-   * WebContentsView layered over the window, and two would need two rectangles the
-   * main process tracks independently. The active browser workbench tab wins; the
-   * rest render their placeholder.
-   */
-  function syncBrowserViewBounds(): void {
-    const tab = WORKBENCH_PLACEMENTS.map((placement) =>
-      activeWorkbenchTab(getState(), placement),
-    ).find((candidate) => candidate?.kind === 'browser');
+  function persist() {
+    if (reconciling || disposed || !dock || persistFrame !== undefined) return;
+    persistFrame = requestAnimationFrame(() => {
+      persistFrame = undefined;
+      if (!dock || disposed) return;
+      const activeTabId = dock.activePanel?.id;
+      lastRequestedTab = activeTabId;
+      updateShell({ ...getState(), activeTabId, dockLayout: dock.toJSON() });
+    });
+  }
+
+  function syncBrowserViewBounds() {
+    const tab = getState().workbenchTabs.find(
+      (entry) => entry.kind === 'browser',
+    );
+    const slot = tab ? mounted.get(tab.id) : undefined;
+    const visible = tab && dock?.getPanel(tab.id)?.api.isVisible;
     if (
-      !getState().focusWorkspace ||
-      tab?.kind !== 'browser' ||
-      isBrowserCovered()
+      !isActive() ||
+      !visible ||
+      !slot ||
+      deps.isBrowserCovered() ||
+      dragging
     ) {
       postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_HIDE);
       return;
     }
-    const tabId = tab.id;
-    // Measure after layout settles; a workbench that just appeared has no box
-    // until the browser has flushed the style change.
-    requestAnimationFrame(() => {
-      if (!isActive() || !getState().focusWorkspace || isBrowserCovered())
-        return;
-      const slot = document.querySelector(
-        `[data-session="${CSS.escape(session)}"] [data-browser-slot="${CSS.escape(tabId)}"]`,
-      );
-      if (!slot) return;
-      const rect = slot.getBoundingClientRect();
-      postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS, {
-        tabId,
-        bounds: {
-          x: Math.round(rect.left),
-          y: Math.round(rect.top),
-          width: Math.round(rect.width),
-          height: Math.round(rect.height),
-        },
-      });
+    const rect = slot.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS, {
+      tabId: tab.id,
+      bounds: {
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      },
     });
   }
 
-  /**
-   * Re-measures the active workbench surface. Monaco and xterm both render at
-   * zero size if they measured while hidden. `focus` marks explicit user
-   * activation (a tab was switched or opened) versus a layout pass that should
-   * only re-fit surfaces.
-   */
-  function layoutVisibleSurfaces({
-    focus = false,
-    activate = WORKBENCH_PLACEMENTS,
-  }: { focus?: boolean; activate?: readonly WorkbenchPlacement[] } = {}): void {
-    if (!getState().focusWorkspace) return;
-    for (const placement of WORKBENCH_PLACEMENTS) {
-      const tab = activeWorkbenchTab(getState(), placement);
-      if (!tab) continue;
-      if (tab.kind === 'editor') {
-        editorPane.layout();
-        if (activate.includes(placement) && tab.target)
-          void editorPane.open(tab.target);
-      }
-      // activate() creates the terminal on first use and re-fits an existing one.
-      if (tab.kind === 'terminal') {
-        if (activate.includes(placement))
-          terminalPane.activate(tab.id, { focus });
-        else terminalPane.layout();
-      }
-      // The main process owns the WebContentsView, so hand it the URL once.
+  function layoutVisibleSurfaces() {
+    if (disposed || !isActive() || layoutFrame !== undefined) return;
+    layoutFrame = requestAnimationFrame(() => {
+      layoutFrame = undefined;
+      if (!dock) syncState();
+      if (!dock || disposed || !isActive()) return;
       if (
-        tab.kind === 'browser' &&
-        tab.target &&
-        !loadedBrowserTabs.has(tab.id)
-      ) {
-        loadedBrowserTabs.add(tab.id);
-        postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_OPEN, {
-          tabId: tab.id,
-          url: tab.target,
-        });
-      }
-    }
-  }
-
-  /**
-   * Browser tabs whose URL has already been handed to the main process. Without
-   * this the page would reload on every re-render.
-   */
-  const loadedBrowserTabs = new Set<string>();
-
-  /** Opens a surface in its default pane with a sensible default target. */
-  function openKind(kind: WorkbenchKind): void {
-    if (kind === 'terminal') {
-      updateShell(
-        // The main process starts it in the project's folder.
-        openWorkbenchTab(getState(), { kind }),
-      );
-      return;
-    }
-    if (kind === 'browser') {
-      updateShell(
-        openWorkbenchTab(getState(), {
-          kind,
-          target: 'https://texra.ai/',
-          title: 'texra.ai',
-        }),
-      );
-      return;
-    }
-    if (kind === 'editor' || kind === 'files') {
-      updateShell(openWorkbenchTab(getState(), { kind }));
-      void editorPane.refresh();
-      return;
-    }
-    updateShell(openWorkbenchTab(getState(), { kind }));
-  }
-
-  /** Opens a visible bottom terminal and executes a settings-provided command. */
-  function openTerminalCommand(initialCommand: string): void {
-    const next = openWorkbenchTab(getState(), {
-      kind: 'terminal',
-      placement: 'bottom',
-    });
-    const terminal = activeWorkbenchTab(next, 'bottom');
-    if (terminal?.kind !== 'terminal') return;
-    pendingTerminalCommands.set(terminal.id, initialCommand);
-    updateShell(next);
-    // An explicit command belongs to its project even when another project is shown.
-    if (!isActive()) terminalPane.activate(terminal.id, { focus: false });
-  }
-
-  /** Toggles a workbench pane, opening `emptyKind` when it holds no tabs yet. */
-  function togglePlacementVisibility(
-    placement: WorkbenchPlacement,
-    emptyKind: WorkbenchKind,
-  ): void {
-    if (
-      !activeWorkbenchTab(getState(), placement) &&
-      workbenchTabsForPlacement(getState(), placement).length === 0
-    ) {
-      openKind(emptyKind);
-      return;
-    }
-    updateShell(toggleWorkbench(getState(), placement));
-  }
-
-  // =============================================================================
-  // Pane content
-  // =============================================================================
-
-  /**
-   * Content for one tab. Every surface stays mounted once opened and is hidden when
-   * its tab is inactive, so Monaco models and terminal scrollback survive both
-   * tab switches and layout changes.
-   *
-   * The editor, terminal, and logs surfaces are single shared instances,
-   * so they render in whichever pane currently holds their tab — Lit moves the DOM
-   * node rather than duplicating it.
-   */
-  function workbenchPlaceholderTemplate(): TemplateResult {
-    return renderEmptyState({
-      icon: 'file-code',
-      title: 'Choose a file',
-      body: 'Choose a document or source file from the explorer.',
-      headingTag: 'h2',
-      className: 'shell-workbench-placeholder',
-      iconSurfaceSize: 'l',
-    });
-  }
-
-  function workbenchSurfaceTemplate(content: unknown): TemplateResult {
-    return html`<div class="shell-workbench-surface">${content}</div>`;
-  }
-
-  /**
-   * Which surface holds the project tree, a single node that can be mounted
-   * in one place only: the Files tab while it is showing, otherwise the
-   * editor beside the file it opened, so picking the next file does not mean
-   * switching tabs back to Files.
-   */
-  function treeSurface(): 'files' | 'editor' {
-    const shown = WORKBENCH_PLACEMENTS.map((side) =>
-      activeWorkbenchTab(getState(), side),
-    );
-    if (shown.some((active) => active?.kind === 'files')) return 'files';
-    return shown.some((active) => active?.kind === 'editor' && active.target)
-      ? 'editor'
-      : 'files';
-  }
-
-  function workbenchContentTemplate(
-    tab: WorkbenchTab,
-  ): TemplateResult | typeof nothing {
-    switch (tab.kind) {
-      case 'files':
-        return html`<div class="shell-workbench-surface shell-editor-with-tree">
-          <div class="shell-files shell-editor-tree" data-scroll="true">
-            ${treeSurface() === 'files' ? editorPane.treeElement : nothing}
-          </div>
-          <div class="shell-workbench-placeholder">
-            ${renderEmptyState({ icon: 'file-lines', title: 'Choose a file', body: 'Select a file in the explorer to open it here.' })}
-          </div>
-        </div>`;
-      case 'editor':
-        if (!tab.target) return workbenchPlaceholderTemplate();
-        return html`
-          <div class="shell-editor-workspace">
-            <div
-              class="shell-workbench-surface ${treeSurface() === 'editor' ? 'shell-editor-with-tree' : ''}"
-            >
-              ${
-                treeSurface() === 'editor'
-                  ? html`<div class="shell-editor-tree" data-scroll="true">
-                      ${editorPane.treeElement}
-                    </div>`
-                  : nothing
-              }
-              ${editorPane.element}
-            </div>
-            <div class="shell-editor-toolbar">
-              <span class="shell-editor-path" title=${tab.target}
-                >${tab.target}</span
-              >
-              ${renderLabeledActionButton({
-                text: tab.dirty ? 'Save changes' : 'Saved',
-                icon: tab.dirty ? 'floppy-disk' : 'check',
-                kind: 'ghost',
-                className: 'is-compact',
-                disabled: !tab.dirty,
-                onClick: () => void editorPane.save(),
-              })}
-            </div>
-          </div>
-        `;
-      case 'terminal':
-        return workbenchSurfaceTemplate(terminalPane.element);
-      case 'browser':
-        return html`<div
-          class="shell-workbench-surface"
-          data-browser-slot=${tab.id}
-        ></div>`;
-      case 'review':
-        return workbenchSurfaceTemplate(reviewPane.element);
-      case 'logs':
-        return isActive() ? workbenchSurfaceTemplate(logsPane) : nothing;
-      case 'pdf':
-        return workbenchSurfaceTemplate(pdfPane.frameFor(tab));
-    }
-  }
-
-  function disposeWorkbenchTab(tabId: string): void {
-    const tab = getState().workbenchTabs.find((entry) => entry.id === tabId);
-    if (tab?.kind === 'editor' && tab.target) {
-      if (
-        tab.dirty &&
-        !window.confirm(`Discard unsaved changes to ${tab.title}?`)
+        dock.width !== element.clientWidth ||
+        dock.height !== element.clientHeight
       )
-        return;
-      editorPane.close(tab.target);
-    }
-    if (tab?.kind === 'browser') {
-      loadedBrowserTabs.delete(tabId);
-      postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE, { tabId });
-    }
-    if (tab?.kind === 'terminal') {
-      pendingTerminalCommands.delete(tabId);
-      terminalPane.dispose(tabId);
-    }
-    if (tab?.kind === 'pdf') pdfPane.dispose(tabId);
-    updateShell(closeWorkbenchTab(getState(), tabId));
-  }
-
-  function workbenchTemplate(placement: WorkbenchPlacement): TemplateResult {
-    const state = getState();
-    const tab = activeWorkbenchTab(state, placement);
-    const tabs = workbenchTabsForPlacement(state, placement);
-    // Each shared pane has one mount in the placement that currently owns it.
-    // PDFs have one mount per tab; keeping these nodes connected preserves the viewer.
-    const surfaces = tabs.filter((candidate) => {
-      if (candidate.kind === 'pdf') return true;
-      const owner =
-        WORKBENCH_PLACEMENTS.map((side) =>
-          activeWorkbenchTab(state, side),
-        ).find((active) => active?.kind === candidate.kind) ??
-        state.workbenchTabs.findLast((entry) => entry.kind === candidate.kind);
-      return candidate.id === owner?.id;
+        dock.layout(element.clientWidth, element.clientHeight);
+      for (const panel of dock.panels) {
+        if (!panel.api.isVisible) continue;
+        // The library reveals tabs chosen from its overflow menu, but API
+        // activations and asynchronous browser titles also need the complete
+        // tab (including Close) inside the available strip.
+        const tabElement = element
+          .querySelector<HTMLElement>(
+            `.dv-tabs-container .shell-dock-tab[data-tab-id="${CSS.escape(panel.id)}"]`,
+          )
+          ?.closest<HTMLElement>('.dv-tab');
+        const strip = tabElement?.closest<HTMLElement>('.dv-tabs-container');
+        const header = strip?.closest<HTMLElement>(
+          '.dv-tabs-and-actions-container',
+        );
+        if (tabElement && strip && header && strip.clientWidth) {
+          const controlsWidth = [
+            ...header.querySelectorAll<HTMLElement>(
+              ':scope > .dv-pre-actions-container, :scope > .dv-left-actions-container, :scope > .dv-right-actions-container',
+            ),
+          ].reduce((width, control) => width + control.offsetWidth, 0);
+          // Measure the available header, not the current tab's shrink-wrapped
+          // strip, or repeated layouts gradually truncate even short titles.
+          tabElement.style.maxWidth = `${Math.min(260, Math.max(56, header.clientWidth - controlsWidth))}px`;
+          const left = tabElement.offsetLeft;
+          const right = left + tabElement.offsetWidth;
+          if (right > strip.scrollLeft + strip.clientWidth)
+            strip.scrollLeft = right - strip.clientWidth;
+          else if (left < strip.scrollLeft) strip.scrollLeft = left;
+        }
+        const tab = tabFor(panel.id);
+        if (tab?.kind === 'editor' && tab.target) editorFor(tab.id).layout();
+        if (tab?.kind === 'terminal')
+          terminalPane.activate(tab.id, { focus: false });
+        if (
+          tab?.kind === 'browser' &&
+          tab.target &&
+          !loadedBrowserTabs.has(tab.id)
+        ) {
+          loadedBrowserTabs.add(tab.id);
+          postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_OPEN, {
+            tabId: tab.id,
+            url: tab.target,
+          });
+        }
+        if (tab?.kind === 'logs') mounted.get(tab.id)?.append(deps.logsPane);
+      }
+      syncBrowserViewBounds();
     });
-    const placementLabel = placement === 'right' ? 'Side' : 'Bottom';
-    return html`
-      <aside
-        class="shell-workbench"
-        data-placement=${placement}
-        aria-label=${`${placementLabel} panel`}
-      >
-        ${workbenchTabsTemplate(
-          workbenchTabsForPlacement(getState(), placement),
-          getState().activeWorkbenchTabIds[placement],
-          placement,
-          {
-            onOpenKind: openKind,
-            onActivate: (tabId) =>
-              updateShell(focusWorkbenchTab(getState(), tabId)),
-            onClose: disposeWorkbenchTab,
-            onHide: () => updateShell(closeWorkbench(getState(), placement)),
-            onMove: (tabId, placement) =>
-              updateShell(moveWorkbenchTab(getState(), tabId, placement)),
-          },
-          session,
-        )}
-        <div class="shell-workbench-body">
-          <section
-            class="shell-workbench-pane"
-            role="tabpanel"
-            id=${workbenchPanelDomId(placement, session)}
-            aria-labelledby=${tab ? workbenchTabDomId(tab.id, session) : nothing}
-          >
-            ${repeat(
-              surfaces,
-              (entry) => (entry.kind === 'pdf' ? entry.id : entry.kind),
-              (entry) =>
-                html`<div
-                  class="shell-workbench-retained-surface"
-                  ?hidden=${entry.id !== tab?.id}
-                >
-                  ${workbenchContentTemplate(entry)}
-                </div>`,
-            )}
-          </section>
-        </div>
-      </aside>
-    `;
   }
 
-  function takePendingTerminalCommand(sessionId: string): string | undefined {
-    const initialCommand = pendingTerminalCommands.get(sessionId);
-    pendingTerminalCommands.delete(sessionId);
-    return initialCommand;
+  function mount(tab: WorkbenchTab): HTMLElement {
+    const host = document.createElement('section');
+    host.className = `shell-dock-surface shell-dock-${tab.kind}`;
+    host.dataset.kind = tab.kind;
+    host.dataset.panelId = tab.id;
+    if (tab.kind === 'agent') {
+      host.classList.add('shell-conversation');
+      host.append(deps.conversationView);
+    } else if (tab.kind === 'files') {
+      host.classList.add('shell-files');
+      host.append(deps.fileTree.treeElement);
+      void deps.fileTree.refresh();
+    } else if (tab.kind === 'editor' && tab.target) {
+      const editor = editorFor(tab.id);
+      host.append(editor.element);
+      const footer = document.createElement('footer');
+      footer.className = 'shell-editor-toolbar';
+      render(
+        html`<span class="shell-editor-path" title=${tab.target}
+            >${tab.target}</span
+          >
+          ${renderLabeledActionButton({
+            text: 'Save',
+            icon: 'floppy-disk',
+            kind: 'ghost',
+            className: 'is-compact',
+            onClick: () => void editor.save(),
+          })}`,
+        footer,
+      );
+      host.append(footer);
+      void editor.open(tab.target);
+    } else if (tab.kind === 'terminal')
+      host.append(terminalPane.elementFor(tab.id));
+    else if (tab.kind === 'review') host.append(deps.reviewPane.element);
+    else if (tab.kind === 'pdf') host.append(deps.pdfPane.frameFor(tab));
+    else if (tab.kind === 'browser') host.dataset.browserSlot = tab.id;
+    else if (tab.kind === 'logs' && isActive()) host.append(deps.logsPane);
+    mounted.set(tab.id, host);
+    return host;
+  }
+
+  function release(tab: WorkbenchTab) {
+    mounted.delete(tab.id);
+    if (tab.kind === 'editor') deps.closeEditor(tab.id);
+    if (tab.kind === 'terminal') {
+      pendingTerminalCommands.delete(tab.id);
+      terminalPane.dispose(tab.id);
+    }
+    if (tab.kind === 'pdf') deps.pdfPane.dispose(tab.id);
+    if (tab.kind === 'browser') {
+      loadedBrowserTabs.delete(tab.id);
+      postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE, { tabId: tab.id });
+    }
+  }
+
+  function disposeWorkbenchTab(id: string) {
+    const tab = tabFor(id);
+    if (
+      !tab ||
+      (tab.dirty && !window.confirm(`Discard unsaved changes to ${tab.title}?`))
+    )
+      return;
+    reconciling = true;
+    try {
+      const panel = dock?.getPanel(id);
+      if (panel) dock?.removePanel(panel);
+      release(tab);
+      const next = closeWorkbenchTab(getState(), id);
+      lastRequestedTab = dock?.activePanel?.id;
+      updateShell({
+        ...next,
+        activeTabId: lastRequestedTab,
+        dockLayout: dock?.toJSON() ?? null,
+      });
+    } finally {
+      reconciling = false;
+    }
+    layoutVisibleSurfaces();
+  }
+
+  function openKind(kind: WorkbenchKind, group?: DockviewGroupPanel) {
+    openingGroup = group;
+    const request =
+      kind === 'browser'
+        ? { kind, target: 'https://texra.ai/', title: 'texra.ai' }
+        : { kind };
+    updateShell(openWorkbenchTab(getState(), request));
+    syncState();
+    if (group) {
+      const panel = dock?.getPanel(getState().activeTabId ?? '');
+      if (panel && panel.group !== group) panel.api.moveTo({ group });
+    }
+    openingGroup = undefined;
+  }
+
+  function positionFor(tab: WorkbenchTab): AddPanelPositionOptions | undefined {
+    if (openingGroup) return { referenceGroup: openingGroup };
+    if (!dock?.panels.length) return undefined;
+    const sameKind = dock.panels.find(
+      (panel) => tabFor(panel.id)?.kind === tab.kind,
+    );
+    if (sameKind) return { referencePanel: sameKind };
+    const document = dock.panels.find((panel) =>
+      ['editor', 'pdf', 'review', 'browser'].includes(
+        tabFor(panel.id)?.kind ?? '',
+      ),
+    );
+    if (tab.kind === 'terminal' || tab.kind === 'logs') {
+      return {
+        referencePanel: document ?? dock.activePanel ?? dock.panels[0]!,
+        direction: 'below',
+      };
+    }
+    if (tab.kind === 'agent') return { direction: 'left' };
+    if (tab.kind === 'files' && document)
+      return { referencePanel: document, direction: 'left' };
+    const files = dock.getPanel('workbench:files');
+    if (['editor', 'pdf', 'review', 'browser'].includes(tab.kind) && document)
+      return { referencePanel: document };
+    return {
+      referencePanel: files ?? dock.activePanel ?? dock.panels[0]!,
+      direction: 'right',
+    };
+  }
+
+  function ensureDock() {
+    if (
+      dock ||
+      !element.isConnected ||
+      !element.clientWidth ||
+      !element.clientHeight
+    )
+      return;
+    dock = createDockview(element, {
+      theme: {
+        name: 'texra',
+        className: 'dockview-theme-texra',
+        gap: 1,
+        dndOverlayMounting: 'absolute',
+      },
+      disableFloatingGroups: true,
+      defaultRenderer: 'always',
+      dndStrategy: 'pointer',
+      createComponent: ({ id }) => {
+        const tab = tabFor(id);
+        if (!tab) throw new Error(`Unknown saved workspace tab: ${id}`);
+        return {
+          element: mounted.get(id) ?? mount(tab),
+          init() {},
+          layout: layoutVisibleSurfaces,
+          onShow: layoutVisibleSurfaces,
+        };
+      },
+      createTabComponent: ({ id }) => dockTab(id, actions),
+      defaultTabComponent: 'texra',
+      createRightHeaderActionComponent: (group) =>
+        dockGroupActions(group, actions),
+      createWatermarkComponent: () => {
+        const watermark = document.createElement('div');
+        watermark.className = 'shell-dock-empty';
+        render(
+          renderEmptyState({
+            icon: 'table-columns',
+            title: 'Arrange your workspace',
+            body: 'Drag a tab here, or use the group menu to open a view.',
+          }),
+          watermark,
+        );
+        return { element: watermark, init() {} };
+      },
+    });
+    reconciling = true;
+    if (getState().dockLayout) {
+      try {
+        dock.fromJSON(getState().dockLayout!);
+      } catch (error) {
+        console.warn('[desktop] Rebuilding unreadable docking layout', error);
+        dock.clear();
+      }
+    }
+    reconciling = false;
+    subscriptions.push(
+      dock.onDidLayoutChange(() => {
+        persist();
+        layoutVisibleSurfaces();
+      }),
+    );
+    subscriptions.push(
+      dock.onDidActivePanelChange(() => {
+        persist();
+        layoutVisibleSurfaces();
+      }),
+    );
+    subscriptions.push(
+      dock.onWillDragPanel(() => {
+        dragging = true;
+        syncBrowserViewBounds();
+      }),
+    );
+    subscriptions.push(
+      dock.onWillDragGroup(() => {
+        dragging = true;
+        syncBrowserViewBounds();
+      }),
+    );
+  }
+
+  const actions = {
+    api: () => dock!,
+    tab: tabFor,
+    open: openKind,
+    close: disposeWorkbenchTab,
+  };
+  function finishDrag() {
+    dragging = false;
+    layoutVisibleSurfaces();
+  }
+  document.addEventListener('pointerup', finishDrag);
+  document.addEventListener('dragend', finishDrag);
+
+  function syncState() {
+    if (disposed || reconciling) return;
+    ensureDock();
+    if (!dock) return;
+    reconciling = true;
+    let changed = false;
+    try {
+      for (const tab of getState().workbenchTabs) {
+        let panel = dock.getPanel(tab.id);
+        if (!panel) {
+          changed = true;
+          panel = dock.addPanel({
+            id: tab.id,
+            component: 'surface',
+            title: tab.title,
+            position: positionFor(tab),
+            renderer: 'always',
+            minimumWidth: 160,
+            minimumHeight: 100,
+          });
+          if (tab.kind === 'files') panel.api.setSize({ width: 220 });
+          if (tab.kind === 'agent') panel.api.setSize({ width: 380 });
+          if (tab.kind === 'terminal' || tab.kind === 'logs')
+            panel.api.setSize({ height: 220 });
+          if (
+            tab.kind === 'editor' &&
+            !dock.panels.some(
+              (other) =>
+                other.id !== tab.id && tabFor(other.id)?.kind === 'editor',
+            )
+          ) {
+            dock.getPanel('workbench:agent')?.api.setSize({
+              width: Math.min(380, element.clientWidth * 0.35),
+            });
+            dock.getPanel('workbench:files')?.api.setSize({
+              width: Math.min(220, element.clientWidth * 0.2),
+            });
+          }
+        }
+        if (panel.title !== tab.title) panel.api.setTitle(tab.title);
+        if (panel.params?.dirty !== tab.dirty)
+          panel.api.updateParameters({ dirty: tab.dirty });
+      }
+      const requested = getState().activeTabId;
+      if (requested !== lastRequestedTab) {
+        dock.getPanel(requested ?? '')?.api.setActive();
+        changed = true;
+      }
+      lastRequestedTab = requested;
+    } finally {
+      reconciling = false;
+    }
+    layoutVisibleSurfaces();
+    if (changed) persist();
   }
 
   return {
+    element,
+    syncState,
     openKind,
-    openTerminalCommand,
+    showKind(kind: WorkbenchKind) {
+      const existing = getState().workbenchTabs.findLast(
+        (tab) => tab.kind === kind,
+      );
+      if (!existing) return openKind(kind);
+      updateShell({ ...getState(), activeTabId: existing.id });
+      syncState();
+    },
     disposeWorkbenchTab,
-    togglePlacementVisibility,
-    layoutVisibleSurfaces,
     syncBrowserViewBounds,
-    template: workbenchTemplate,
-    takePendingTerminalCommand,
+    layoutVisibleSurfaces,
+    activeTabId: () => dock?.activePanel?.id,
+    isVisible: (kind: WorkbenchKind) =>
+      dock?.panels.some(
+        (panel) => panel.api.isVisible && tabFor(panel.id)?.kind === kind,
+      ) ?? false,
+    openTerminalCommand(initialCommand: string) {
+      const next = openWorkbenchTab(getState(), { kind: 'terminal' });
+      if (next.activeTabId)
+        pendingTerminalCommands.set(next.activeTabId, initialCommand);
+      updateShell(next);
+      syncState();
+      if (!isActive() && next.activeTabId)
+        terminalPane.activate(next.activeTabId, {
+          focus: false,
+          background: true,
+        });
+    },
+    takePendingTerminalCommand(id: string) {
+      const command = pendingTerminalCommands.get(id);
+      pendingTerminalCommands.delete(id);
+      return command;
+    },
+    dispose() {
+      disposed = true;
+      if (persistFrame !== undefined) cancelAnimationFrame(persistFrame);
+      if (layoutFrame !== undefined) cancelAnimationFrame(layoutFrame);
+      document.removeEventListener('pointerup', finishDrag);
+      document.removeEventListener('dragend', finishDrag);
+      for (const subscription of subscriptions) subscription.dispose();
+      dock?.dispose();
+      for (const host of mounted.values()) render(nothing, host);
+      mounted.clear();
+    },
   };
 }

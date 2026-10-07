@@ -110,15 +110,11 @@ two halves:
 - Fields and labeled actions are 30px tall. Compact toolbar actions opt
   into `.is-compact` at 24px. Controls use 4–6px radii, cards 8px, and
   overlays 10px. Keep panel seams square; soften bounded controls and content.
-- The toolbar exposes Files and Terminal directly. An open file pane has
-  one contextual expand/restore action instead of a row of layout modes.
-  The left rail owns project/task history. Its rows share a disclosure gutter,
-  a label column, and a fixed action column; task selection starts at the label
-  column. Project names and task titles can be renamed from their row menus.
-  Files and Editor share the same workspace width and persistent explorer.
-  Opening a file must not move or replace the tree under the pointer. File
-  selection wraps the label and icon, leaving the disclosure gutter clear. Terminals
-  and logs default to the bottom pane. Task controls stay in the task header.
+- The toolbar opens Agent, Files and Terminal. Each is a dockable tab, alongside
+  editors, previews, review and logs. The left rail owns project and task history.
+  Files opens a document in an adjacent group, preserving the explorer under the
+  pointer. Terminal and logs default below documents. These are starting positions,
+  not fixed regions: every group can split horizontally or vertically.
 - Follow-up input has at least two lines above its action row. Controls stay
   visible and use the same sizes as the new-task composer.
 - Native browser views render above DOM overlays. The desktop overlay tracker
@@ -137,13 +133,11 @@ two halves:
 
 ## Desktop workspace composition
 
-The title bar contains the Tasks / Workspace view switch. These are full-width
-views; opening Files or Terminal enters Workspace, and selecting a task returns
-to Tasks. Both stay mounted, so draft text, editor models and terminal scrollback
-survive switching. Native browser content is hidden while Tasks is selected.
+Dockview owns the recursive grid and serializes it per project. Content owners
+retain their editor models, PTYs, browser views and conversation while tabs move.
+The dock adapter maps all visual tokens to TeXRA; do not add a second palette.
+Group menus offer splits and maximize/restore. Tab menus offer moves and closure;
+dragging a tab to any group edge creates a split. Opening a new task reveals Agent
+without replacing document groups. The Theme preference lives in Settings > General
 
-The rail lists open projects first, followed by the active project's task history.
-There are no nested project/task disclosure trees. Project rows and task rows
-share trailing status and action columns. Tool tabs use a compact selected surface
-rather than an accent underline. Files remain beside the editor; the terminal
-uses a separate bottom region.
+> Appearance. All Electron verification uses isolated, offscreen windows.

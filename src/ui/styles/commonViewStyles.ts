@@ -451,10 +451,14 @@ export const commonViewStyles: CSSResult = css`
     margin: 0 auto;
   }
 
+  .tab-content-container > section + section {
+    margin-block-start: var(--wa-space-l);
+  }
+
   .settings-section-heading {
     display: grid;
     gap: var(--wa-space-3xs);
-    margin: var(--wa-space-m) 0 var(--wa-space-2xs);
+    margin: 0 0 var(--wa-space-xs);
     padding-bottom: var(--wa-space-2xs);
   }
 
@@ -466,7 +470,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .settings-section-heading-icon {
-    display: grid;
+    display: var(--settings-section-icon-display, grid);
     width: 1em;
     height: 1em;
     flex: 0 0 auto;
@@ -478,8 +482,8 @@ export const commonViewStyles: CSSResult = css`
   .settings-section-heading-title {
     margin: 0;
     color: var(--wa-color-text-normal);
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size);
+    font-weight: var(--font-weight-medium);
     line-height: var(--line-height-heading);
   }
 

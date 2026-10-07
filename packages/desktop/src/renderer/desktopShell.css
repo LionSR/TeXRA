@@ -1,11 +1,11 @@
-/* Desktop composition: one title bar, a project/history rail, and two views.
+/* Desktop composition: a title bar, project/history rail, agent and workspace.
    Controls and typography use the shared skins; this sheet only owns layout. */
 :root {
   --shell-frame-header-height: 44px;
   --shell-frame-icon-size: 14px;
   --shell-frame-icon-box: 24px;
   --shell-workbench-tab-height: 38px;
-  --macos-titlebar-safe-inset: 88px;
+  --macos-titlebar-safe-inset: 96px;
 }
 .desktop-app {
   display: grid;
@@ -26,12 +26,6 @@
 body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   padding-inline-start: var(--macos-titlebar-safe-inset);
 }
-.shell-wordmark {
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-icon-sm);
-  letter-spacing: -0.04em;
-  padding-inline-end: 4px;
-}
 .shell-header-button-slot {
   display: inline-flex;
   align-items: center;
@@ -51,28 +45,19 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--wa-color-text-quiet);
+  color: var(--wa-color-text-normal);
   font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
 }
 .shell-view-switch {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border-radius: var(--panel-radius);
-  background: var(--wa-color-surface-raised);
+  gap: 4px;
   -webkit-app-region: no-drag;
 }
-.shell-view-switch .action-button::part(base) {
-  min-height: 28px;
-  height: 28px;
-  padding-inline: 12px;
-  border-radius: var(--row-radius);
-}
 .shell-view-switch .action-button[aria-pressed='true']::part(base) {
-  background: var(--wa-color-surface-default);
+  background: var(--wa-color-surface-raised);
   color: var(--wa-color-text-normal);
-  box-shadow: 0 1px 3px var(--wa-color-surface-shadow);
 }
 .shell-workspace-tools {
   display: flex;
@@ -95,54 +80,29 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 .shell-frame-collapsed {
   display: block;
 }
-.shell-frame::part(panel),
-.shell-bottom-split::part(panel) {
+.shell-frame::part(panel) {
   min-width: 0;
   min-height: 0;
   overflow: clip;
 }
-.shell-frame::part(divider),
-.shell-bottom-split::part(divider) {
+.shell-frame::part(divider) {
   background: var(--wa-color-surface-border);
 }
-.shell-frame::part(divider):is(:hover, :focus-visible),
-.shell-bottom-split::part(divider):is(:hover, :focus-visible) {
+.shell-frame::part(divider):is(:hover, :focus-visible) {
   background: var(--wa-color-focus);
 }
 .shell-frame-main-panel,
 .shell-workspace-layout,
-.shell-view-stack,
-.shell-task-view,
-.shell-workspace-view,
-.shell-workbench-panel,
-.shell-bottom-workbench-panel,
-.shell-sidebar-slot {
+.shell-sidebar-slot,
+.shell-project-workbench {
   min-width: 0;
   min-height: 0;
   width: 100%;
   height: 100%;
   overflow: hidden;
 }
-.shell-view-stack {
-  position: relative;
-}
-.shell-task-view,
-.shell-workspace-view {
-  position: absolute;
-  inset: 0;
-}
-.shell-task-view[hidden],
-.shell-workspace-view[hidden] {
+.shell-project-workbench[hidden] {
   display: none;
-}
-.shell-bottom-split {
-  --divider-width: 1px;
-  --divider-hit-area: 10px;
-  --min: 160px;
-  --max: min(600px, 65%);
-  display: grid;
-  width: 100%;
-  height: 100%;
 }
 
 /* Two lists with the same row grid. History belongs to the selected project. */
@@ -313,249 +273,25 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   background: var(--wa-color-surface-default);
   container: shell-conversation / inline-size;
 }
-.shell-conversation-body {
-  display: grid;
-  flex: 1;
-  grid-template-rows: minmax(0, 1fr);
-  min-height: 0;
-}
-.shell-conversation-pane {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-}
-.shell-conversation-pane > *,
-.shell-launcher-surface {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  width: 100%;
-  height: 100%;
-}
-
-/* Tools use one tab strip; files stay beside their document. */
-.shell-workbench {
-  --workbench-tabs-height: var(--shell-workbench-tab-height);
-  display: grid;
-  grid-template-rows: var(--workbench-tabs-height) minmax(0, 1fr);
-  min-width: 0;
-  min-height: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background: var(--wa-color-surface-default);
-  container: workbench / inline-size;
-}
-.shell-workbench-tabs {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 6px;
-  border-bottom: 1px solid var(--wa-color-surface-border);
-  background: var(--wa-color-surface-lowered);
-  min-width: 0;
-}
-.shell-workbench-tabs-scroll {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  flex: 1;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.shell-workbench-tab {
-  position: relative;
-  display: flex;
-  align-items: center;
-  height: 28px;
-  min-width: 64px;
-  max-width: 200px;
-  flex: 0 0 auto;
-  border-radius: var(--row-radius);
-  color: var(--wa-color-text-quiet);
-}
-.shell-workbench-tab:hover {
-  background: var(--surface-hover);
-}
-.shell-workbench-tab[data-active='true'] {
-  background: var(--wa-color-surface-default);
-  color: var(--wa-color-text-normal);
-  box-shadow: 0 1px 3px var(--wa-color-surface-shadow);
-}
-.shell-workbench-tab-activate {
-  display: block;
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-}
-.shell-workbench-tab-activate::part(base) {
-  min-height: 28px;
-  height: 28px;
-  padding: 0 4px 0 8px;
-  justify-content: start;
-  width: 100%;
-  background: transparent;
-  font-weight: var(--font-weight-normal);
-  font-size: var(--font-size-sm);
-}
-.shell-workbench-tab-activate::part(label) {
-  min-width: 0;
-}
-.shell-workbench-tab-label {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.shell-workbench-tab-icon {
-  width: 14px;
-  height: 14px;
-  font-size: var(--font-size-icon-sm);
-}
-.shell-workbench-tab-dirty {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-.shell-workbench-tab-close {
-  opacity: 0;
-  flex: 0 0 auto;
-}
-.shell-workbench-tab:hover .shell-workbench-tab-close,
-.shell-workbench-tab[data-active='true'] .shell-workbench-tab-close,
-.shell-workbench-tab:focus-within .shell-workbench-tab-close {
-  opacity: 1;
-}
-.shell-workbench-close {
-  flex: 0 0 auto;
-}
-.shell-workbench-add {
-  display: flex;
-  align-items: center;
-}
-.shell-workbench-tab-menu {
-  position: absolute;
-  width: 0;
-  height: 0;
-}
-
-.shell-workbench-tab-menu-anchor {
-  position: fixed;
-  z-index: -1;
-  top: var(--context-menu-y, 0);
-  left: var(--context-menu-x, 0);
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  border: 0;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.shell-workbench-tab-menu wa-dropdown-item wa-icon {
-  display: grid;
-  place-items: center;
-  width: var(--shell-frame-icon-box);
-  height: var(--shell-frame-icon-box);
-  font-size: var(--shell-frame-icon-size);
-  line-height: 1;
-}
-
-.shell-workbench-body,
-.shell-workbench-pane,
-.shell-workbench-surface {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr);
-  min-width: 0;
-  min-height: 0;
-  height: 100%;
-  overflow: hidden;
-}
-.shell-workbench-pane[hidden],
-.shell-project-workbench[hidden],
-.shell-workbench-retained-surface[hidden] {
-  display: none;
-}
-.shell-project-workbench,
-.shell-workbench-retained-surface {
-  height: 100%;
-  min-height: 0;
-}
-.shell-workbench-surface[data-scroll='true'] {
-  overflow: auto;
-}
-.shell-workbench-placeholder,
-.shell-workspace-empty {
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  padding: 24px;
-  color: var(--wa-color-text-quiet);
-  text-align: center;
-  height: 100%;
-  box-sizing: border-box;
-}
-.shell-workspace-empty h2 {
-  font-size: var(--font-size-h1);
-  font-weight: var(--font-weight-medium);
-  color: var(--wa-color-text-normal);
-  margin: 0 0 8px;
-}
-.shell-workspace-empty p {
-  margin: 0;
-  font-size: var(--font-size-sm);
-}
-.shell-workbench-placeholder .empty-state-icon-surface {
-  margin: 0 auto 12px;
-}
-.shell-workbench-placeholder .empty-state-title {
-  font-size: var(--font-size-h2);
-  margin: 0 0 6px;
-}
-.shell-workbench-placeholder .empty-state-body {
-  max-width: 34ch;
-  font-size: var(--font-size-sm);
-}
-.shell-editor-workspace {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) 28px;
-  height: 100%;
-  min-height: 0;
-  min-width: 0;
-}
-.shell-editor-with-tree {
-  grid-template-columns: 210px minmax(0, 1fr);
-}
-.shell-files,
-.shell-editor-tree {
+.shell-files {
   align-content: start;
   padding: 8px;
 }
-.shell-editor-tree {
-  display: grid;
-  min-height: 0;
-  overflow: auto;
-  border-inline-end: 1px solid var(--wa-color-surface-border);
-  background: var(--wa-color-surface-lowered);
-}
-:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-header > span {
+.shell-files .desktop-editor-tree-header > span {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
   color: var(--wa-color-text-quiet);
 }
-:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-list {
+.shell-files .desktop-editor-tree-list {
   display: block;
   max-height: none;
   padding: 0;
   overflow: visible;
 }
-:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-row {
+.shell-files .desktop-editor-tree-row {
   --indent-size: 14px;
 }
-:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-row::part(item) {
+.shell-files .desktop-editor-tree-row::part(item) {
   min-height: 28px;
   padding: 0 4px;
 }
@@ -593,11 +329,6 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   height: 100%;
   border: 0;
   background: var(--wa-color-surface-default);
-}
-@container workbench (max-width: 640px) {
-  .shell-editor-with-tree {
-    grid-template-columns: 160px minmax(0, 1fr);
-  }
 }
 @media (max-width: 900px) {
   .shell-workspace-project {

@@ -1,0 +1,142 @@
+/* Docking geometry comes from Dockview; visual tokens come from TeXRA. */
+.shell-dock {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+.shell-dock.dockview-theme-texra {
+  --dv-tabs-and-actions-container-height: 34px;
+  --dv-tabs-and-actions-container-font-size: var(--font-size-sm);
+  --dv-tab-font-size: var(--font-size-sm);
+  --dv-group-view-background-color: var(--wa-color-surface-default);
+  --dv-tabs-and-actions-container-background-color: var(
+    --wa-color-surface-lowered
+  );
+  --dv-activegroup-visiblepanel-tab-background-color: var(
+    --wa-color-surface-default
+  );
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(
+    --wa-color-surface-default
+  );
+  --dv-activegroup-hiddenpanel-tab-background-color: var(
+    --wa-color-surface-lowered
+  );
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(
+    --wa-color-surface-lowered
+  );
+  --dv-activegroup-visiblepanel-tab-color: var(--wa-color-text-normal);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--wa-color-text-normal);
+  --dv-activegroup-hiddenpanel-tab-color: var(--wa-color-text-quiet);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--wa-color-text-quiet);
+  --dv-tab-divider-color: var(--wa-color-surface-border);
+  --dv-separator-border: var(--wa-color-surface-border);
+  --dv-active-sash-color: var(--wa-color-focus);
+  --dv-sash-color: transparent;
+  --dv-drag-over-background-color: var(--wa-color-brand-fill-quiet);
+  --dv-drag-over-border: 1px solid var(--wa-color-focus);
+  --dv-icon-hover-background-color: var(--wa-color-neutral-fill-quiet);
+  --dv-tabs-container-scrollbar-color: var(--wa-color-surface-border);
+  --dv-scrollbar-background-color: var(--wa-color-surface-border);
+  --dv-border-radius: var(--field-radius);
+  --dv-tab-margin: 0;
+  --dv-tab-border-radius: 0;
+  --dv-floating-box-shadow: var(--wa-shadow-m);
+  --dv-tab-close-icon-size: 14px;
+  --dv-overlay-z-index: 100;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: var(--wa-color-surface-border);
+  font-family: var(--wa-font-family-body);
+  color: var(--wa-color-text-normal);
+}
+.shell-dock .dv-tabs-and-actions-container {
+  border-bottom: 1px solid var(--wa-color-surface-border);
+  box-sizing: border-box;
+}
+.shell-dock .dv-tab {
+  max-width: min(260px, 100%);
+  min-width: 0;
+}
+.shell-dock-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-inline: 10px 4px;
+  box-sizing: border-box;
+  height: 100%;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+.shell-dock-tab > wa-icon {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+}
+.shell-dock-tab-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shell-dock-tab-close {
+  display: flex;
+  align-items: center;
+  flex: 0 0 var(--control-size-s);
+  margin-inline-start: auto;
+}
+.shell-dock-dirty {
+  flex: none;
+}
+.shell-dock-actions {
+  display: flex;
+  align-items: center;
+  flex: none;
+  padding-inline: 3px;
+}
+.shell-dock-tab-menu {
+  display: contents;
+}
+.shell-dock-menu-anchor {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+}
+.shell-dock-surface {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  background: var(--wa-color-surface-default);
+}
+.shell-dock-editor {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.shell-dock-agent > progress-app {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+.shell-dock-files {
+  overflow: auto;
+  align-content: start;
+}
+.shell-dock-empty {
+  display: grid;
+  place-content: center;
+  height: 100%;
+  padding: 16px;
+  color: var(--wa-color-text-quiet);
+}
+.shell-dock .dv-drop-target,
+.shell-dock .dv-drop-target-container {
+  --dv-transition-duration: 0ms;
+}
