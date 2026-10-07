@@ -4,6 +4,7 @@
 // objects.
 
 import { z } from 'zod';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** What the worker is started with: one script and the limits it runs under. */
 export const WorkerInputSchema = z.object({
@@ -46,7 +47,7 @@ const JsonText = z.string().transform((text, ctx): unknown => {
     ctx.issues.push({
       code: 'custom',
       input: text,
-      message: `not JSON text: ${error instanceof Error ? error.message : String(error)}`,
+      message: `not JSON text: ${toErrorMessage(error)}`,
     });
     return z.NEVER;
   }
