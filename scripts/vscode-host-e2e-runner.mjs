@@ -70,8 +70,20 @@ const watchdog = setTimeout(() => {
         .filter((line) => /Code|serve|node|vsh-/.test(line))
         .join('\n'),
     );
+  // Whether the live service is what holds VS Code open: stop it, and
+  // say whether VS Code then quits.
   stopService(path.join(home, '.texra', 'run', 'serve.json'));
-  process.exit(1);
+  setTimeout(() => {
+    const left = spawnSync('pgrep', ['-f', `user-data-dir ${root}/u`], {
+      encoding: 'utf8',
+    }).stdout.trim();
+    console.error(
+      left === ''
+        ? 'VS Code quit once the service stopped'
+        : `VS Code is still running after the service stopped (${left})`,
+    );
+    process.exit(1);
+  }, 30_000);
 }, WATCHDOG_MS);
 
 try {
