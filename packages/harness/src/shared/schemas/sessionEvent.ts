@@ -24,7 +24,7 @@ import { z } from 'zod';
 
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 
-import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
+import { ApprovalPolicySnapshotSchema } from '@shared/approvalBypassKind';
 import { JsonValueSchema } from './jsonValue';
 import {
   RunEndRowSchema,
@@ -166,22 +166,6 @@ const SeqSchema = z.int().positive();
  *  stores one. */
 export const CommitOrdinalSchema = z.int().nonnegative();
 export type CommitOrdinal = z.infer<typeof CommitOrdinalSchema>;
-
-const OWN_GRANT = z.enum(['on', 'off', 'parent']);
-/**
- * A run's approval grants after a change, the one record of them: what the
- * run itself decided, never what it inherits. A kind the run decides
- * nothing about defers to its parent's grants while the edge stands, which
- * is read off the rows (`resolveBypass`), never stored here.
- */
-export const ApprovalPolicySnapshotSchema = z.object({
-  /** A human's `on` or `off` per kind, or `parent`: derived when a resume
-   *  ended an ancestor's goal grant, following the ancestry's human values. */
-  own: z.partialRecord(z.enum(APPROVAL_BYPASS_KINDS), OWN_GRANT),
-  /** The kinds the run's own goal grants it, over its own values, until the
-   *  goal ends, a human decides the kind, or a resume ends the goal. */
-  goal: z.array(z.enum(APPROVAL_BYPASS_KINDS)).readonly(),
-});
 
 /**
  * The envelope every durable arm rides (contract C1). A run-scoped fact's

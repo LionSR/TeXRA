@@ -21,7 +21,6 @@
  * - `task.start` / `task.resume`: launch or continue a task in the service;
  *   `task.ended`: the outcome it ends with.
  * - `task.model`: switch a running task's model.
- * - `project.policy`: the approval policy of a project's session.
  * - `host.attach` / `host.focus` / `host.answer`: a window offering its host
  *   capabilities to its project's tasks (see `hostCalls.ts`).
  * - `request.preview`: a pending tool edit's original and proposed content,
@@ -65,7 +64,7 @@ export const BUILD_VERSION: string =
 
 /** Bumped whenever a procedure or a payload changes shape. A client newer
  *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 13;
+export const PROTOCOL_VERSION = 14;
 
 /** `value` as JSON carries it: an absent field (`undefined`) is left out,
  *  which the wire's JSON check otherwise refuses. */
@@ -196,6 +195,9 @@ export const TexraRpcs = RpcGroup.make(
       /** An Auto-approve launch: the run starts with delegated work
        *  approved, as the run header's switch would set it. */
       approveDelegatedWork: Schema.Boolean,
+      /** The policy the launch asked for: one stricter than the project's
+       *  narrows this task only; a more permissive one is ignored. */
+      approvalPolicy: zodWire(TexraApprovalPolicySchema.nullable()),
     },
     /** The run that started: the asked id, or the one the launch resolved. */
     success: zodWire(RunIdSchema),
@@ -229,10 +231,6 @@ export const TexraRpcs = RpcGroup.make(
    *  refused with the run's reason. */
   Rpc.make('task.model', {
     payload: { workspace, runId: zodWire(RunIdSchema), model: Schema.String },
-    error: zodWire(TaskFailedSchema),
-  }),
-  Rpc.make('project.policy', {
-    payload: { workspace, policy: zodWire(TexraApprovalPolicySchema) },
     error: zodWire(TaskFailedSchema),
   }),
   Rpc.make('host.attach', {

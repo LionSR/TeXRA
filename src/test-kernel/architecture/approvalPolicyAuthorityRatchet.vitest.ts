@@ -32,29 +32,17 @@ const EVALUATOR_CALL_ALLOWLIST = new Set([
 ]);
 
 /**
- * Sites allowed to call `setApprovalPolicy`. Seed/update only — extend in the
- * same PR when a new composition root is intentional.
+ * Sites allowed to override a session's approval policy. The persisted
+ * `texra.approvalPolicy` setting owns a project's policy and every session
+ * reads it live; only a CLI invocation overrides it for its own in-process
+ * session (`--approval-policy`, a local chat's `/approval`). A host window
+ * or the service never joins: a window writes the setting, and the service
+ * follows it for every client of the project.
  */
-const SEED_CALL_ALLOWLIST = new Set([
-  'packages/harness/src/agent/runtime/SessionHandle.ts',
+const OVERRIDE_CALL_ALLOWLIST = new Set([
   'packages/cli/src/runtime/executeCli.ts',
-  'packages/texra/src/controllers/settingsView/sharedSettingsCommands.ts',
   'packages/cli/src/runtime/approvalAdapter.ts',
   'packages/cli/src/chat/tui/runChatTui.tsx',
-  'packages/cli/src/chat/tui/commands/handlers/approvalCommand.ts',
-  'packages/cli/scripts/tui-harness.tsx',
-  'packages/extension/src/extension.ts',
-  'packages/desktop/src/main/desktopProjects.ts',
-  // The service seeds each project it opens from that project's settings,
-  // and `project.policy` is a window's settings change reaching it.
-  'packages/cli/src/runtime/cliService.ts',
-  'packages/texra/src/controllers/server/handlers.ts',
-  // A window's settings change reaches its session through its backend:
-  // the window's own session, or `project.policy` to the service.
-  'packages/texra/src/controllers/session/sessionBackend.ts',
-  // The desktop settings surface sets a paper's policy on its session and
-  // on the service that runs its tasks.
-  'packages/desktop/src/main/desktopSettingsIpc.ts',
 ]);
 
 /**
@@ -79,7 +67,7 @@ const EVALUATOR_CALL =
   /\b(?:decideTexraApproval|decideRetryApproval|decideHumanInputRequest|decideProposalApproval)\s*\(/;
 const BYPASS_WRITE_CALL =
   /\b(?:humanGrant|goalGrant|delegatedChildGrants)\s*\(|\.approvals\.change\s*\(/;
-const SET_APPROVAL_POLICY_CALL = /\bsetApprovalPolicy\s*\(/;
+const POLICY_OVERRIDE_CALL = /\.approvals\.override\s*\(/;
 const POLICY_VOCABULARY_DEFINITION =
   /\b(?:const|type)\s+(?:TEXRA_APPROVAL_POLICIES|TexraApprovalPolicySchema)\b/;
 
@@ -122,10 +110,10 @@ describe('approval policy authority ratchet', () => {
     );
   });
 
-  it('restricts setApprovalPolicy call sites to composition and settings seeds', () => {
+  it('restricts policy overrides to the CLI invocations that own their session', () => {
     expectNoOffenders(
-      offendersMatching(SET_APPROVAL_POLICY_CALL, SEED_CALL_ALLOWLIST),
-      'call setApprovalPolicy; if intentional, extend SEED_CALL_ALLOWLIST in this PR',
+      offendersMatching(POLICY_OVERRIDE_CALL, OVERRIDE_CALL_ALLOWLIST),
+      'override a session approval policy; a window or the service writes the persisted setting instead',
     );
   });
 

@@ -745,10 +745,23 @@ async function generate(root) {
   // reports back. The service's `task.resume` of that finished command, a
   // run with no agent record, closes its input (`followup.closed`) and
   // refuses it. No open follows, which would remove the finished command.
+  // The service follows the project's persisted policy (the user's local
+  // config beside its store), never a client's: Auto-approve, so the
+  // background command runs unasked.
+  const localConfig = path.join(path.dirname(cli.store()), 'config.json');
+  writeFileSync(
+    localConfig,
+    `${JSON.stringify({
+      ...(existsSync(localConfig)
+        ? JSON.parse(readFileSync(localConfig, 'utf8'))
+        : {}),
+      'texra.approvalPolicy': 'yolo',
+    })}\n`,
+  );
   await cli.serve(async ({ client, call, handle: service }) => {
-    // The tombstone, made once the service holds the project open: a later
-    // open would collect it.
-    await call('project.policy', { workspace: cli.project, policy: 'yolo' });
+    // The tombstone, made once the service holds the project open (any
+    // project call opens it): a later open would collect it.
+    await call('request.preview', { workspace: cli.project, requestId: '-' });
     cli.run(['history', 'delete', doomed, '--yes', '--print']);
     const { runId: task } = JSON.parse(
       client([

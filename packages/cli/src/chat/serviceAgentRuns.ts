@@ -15,6 +15,7 @@ import type {
   RunAgentRequest,
   RunEndResult,
 } from '@agent/runtime';
+import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import type { ProcessServices } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
@@ -34,13 +35,19 @@ export interface ChatAgentRuns {
   readonly resumeBeside: (runId: RunId) => Effect.Effect<void>;
 }
 
-/** The chat's run boundary over the service's `backend`. */
-export function serviceAgentRuns(backend: SessionBackend): ChatAgentRuns {
+/** The chat's run boundary over the service's `backend`; each launch asks
+ *  for `approvalPolicy()`, the policy the chat asked for itself (its flag,
+ *  then `/approval`), which limits the task; none follows the project's. */
+export function serviceAgentRuns(
+  backend: SessionBackend,
+  approvalPolicy: () => TexraApprovalPolicy | undefined,
+): ChatAgentRuns {
   return {
     launch: (request, options) =>
       backend.launch(request, {
         continues: options.continues,
         onRunResolved: options.onRunResolved,
+        approvalPolicy: approvalPolicy(),
       }),
     resumeBeside: (runId) =>
       backend

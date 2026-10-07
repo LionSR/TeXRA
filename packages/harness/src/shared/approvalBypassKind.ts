@@ -6,20 +6,81 @@
  * `superYolo` here is the delegated-work scoped bypass, not a TeXRA policy
  * value.
  */
+import { z } from 'zod';
+
+import type { TexraApprovalPolicy } from './approvalPolicy';
+
 export const APPROVAL_BYPASS_KINDS = ['bash', 'toolEdit', 'superYolo'] as const;
 
 export type ApprovalBypassKind = (typeof APPROVAL_BYPASS_KINDS)[number];
 
 /** A run's own value for one kind: a human's `on` or `off`, or `parent`,
  *  derived at an activation: follow the ancestry's human values, not its
- *  goals (`ApprovalPolicySnapshotSchema`). */
+ *  goals. */
 type OwnGrant = 'on' | 'off' | 'parent';
 
-/** A run's own approval grants, as its latest `approval.policy` row (or its
- *  `run.start`) records them. */
-export interface ApprovalGrants {
-  readonly own: Partial<Record<ApprovalBypassKind, OwnGrant>>;
-  readonly goal: readonly ApprovalBypassKind[];
+/** The policies a launch can narrow a run to: anything below Auto-approve,
+ *  which is never stricter than a project's policy. */
+const APPROVAL_POLICY_LIMITS = ['never', 'ask'] as const;
+export type ApprovalPolicyLimit = (typeof APPROVAL_POLICY_LIMITS)[number];
+
+/**
+ * A run's own approval grants, the one record of them (its latest
+ * `approval.policy` row, else its `run.start`): what the run itself
+ * decided, never what it inherits. A kind the run decides nothing about
+ * defers to its parent's grants while the edge stands, which is read off
+ * the rows (`resolveBypass`), never stored here.
+ */
+export const ApprovalPolicySnapshotSchema = z.object({
+  /** A human's `on` or `off` per kind, or `parent`: derived when a resume
+   *  ended an ancestor's goal grant, following the ancestry's human values. */
+  own: z.partialRecord(
+    z.enum(APPROVAL_BYPASS_KINDS),
+    z.enum(['on', 'off', 'parent']),
+  ),
+  /** The kinds the run's own goal grants it, over its own values, until the
+   *  goal ends, a human decides the kind, or a resume ends the goal. */
+  goal: z.array(z.enum(APPROVAL_BYPASS_KINDS)).readonly(),
+  /** The most permissive policy the run and its descendants run under: a
+   *  launch that asked for a stricter policy than the project's narrows it
+   *  for this run only, never widened (`policyLimit`). */
+  limit: z.enum(APPROVAL_POLICY_LIMITS).optional(),
+});
+export type ApprovalGrants = z.infer<typeof ApprovalPolicySnapshotSchema>;
+
+const STRICTNESS: Readonly<Record<TexraApprovalPolicy, number>> = {
+  never: 0,
+  ask: 1,
+  yolo: 2,
+};
+
+/** The stricter of two policies (`never` < `ask` < `yolo`). */
+export function stricterPolicy(
+  a: TexraApprovalPolicy,
+  b: TexraApprovalPolicy,
+): TexraApprovalPolicy {
+  return STRICTNESS[a] <= STRICTNESS[b] ? a : b;
+}
+
+/** The strictest launch limit on a run's ancestry while its edges stand,
+ *  or undefined when no launch narrowed it. */
+export function policyLimit<Id>(
+  source: ApprovalGrantSource<Id>,
+  runId: Id,
+): ApprovalPolicyLimit | undefined {
+  const seen = new Set<Id>();
+  let limit: ApprovalPolicyLimit | undefined;
+  for (
+    let current: Id | null | undefined = runId;
+    current !== null && current !== undefined && !seen.has(current);
+    current = source.runs.get(current)?.parentId
+  ) {
+    seen.add(current);
+    const own = source.policy.get(current)?.limit;
+    // Block is the strictest limit; any other is Ask.
+    if (own !== undefined && limit !== 'never') limit = own;
+  }
+  return limit;
 }
 
 /** No grants of its own: every kind defers to the run's ancestry. */
@@ -95,5 +156,6 @@ export function inheritedGrants<Id>(
       break;
     }
   }
-  return { own, goal: [] };
+  const limit = policyLimit(source, runId);
+  return { own, goal: [], ...(limit !== undefined && { limit }) };
 }

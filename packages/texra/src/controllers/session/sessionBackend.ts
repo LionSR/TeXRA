@@ -30,7 +30,6 @@ import type {
   SessionHandle,
   SessionViewAccess,
 } from '@agent/runtime/SessionHandle';
-import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   RUN_OUTCOME,
   type RunId,
@@ -39,6 +38,7 @@ import {
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
 import { isLiveRun } from '@shared/session/sessionView';
+import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import type { ToolEditPreview } from '@texra/controllers/server/protocol';
 import type { ProcessServices } from '@texra-ai/harness';
@@ -99,10 +99,6 @@ export interface SessionBackend {
   readonly ended: (runId: RunId) => Effect.Effect<RunEndResult>;
   /** A live run's model switch, while its loop runs; undefined otherwise. */
   readonly controls: (runId: RunId) => RunModelControls | undefined;
-  /** The session's approval policy, from this window's settings. */
-  readonly setApprovalPolicy: (
-    policy: TexraApprovalPolicy,
-  ) => Effect.Effect<void>;
 }
 
 /** How a window launches a run, whichever backend runs it. */
@@ -121,6 +117,9 @@ interface SessionLaunchOptions {
   readonly suppressErrorNotification?: boolean;
   /** The chat's previous root: its approval bypasses carry over. */
   readonly continues?: RunId;
+  /** The policy the launch asked for: a stricter one than the project's
+   *  narrows this run only (`RunAgentOptions.approvalPolicy`). */
+  readonly approvalPolicy?: TexraApprovalPolicy;
 }
 
 /**
@@ -188,6 +187,7 @@ export function localSessionBackend(session: SessionHandle): SessionBackend {
         continues: options.continues,
         onRunResolved: options.onRunResolved,
         suppressErrorNotification: options.suppressErrorNotification,
+        approvalPolicy: options.approvalPolicy,
       }),
     request: (request) => session.requests.request(request),
     controls: (runId) => session.runs.getHandle(runId)?.controls,
@@ -209,7 +209,5 @@ export function localSessionBackend(session: SessionHandle): SessionBackend {
       }),
     // A tool this process runs stages its own preview (`presentToolEdit`).
     preview: () => Effect.succeed(null),
-    setApprovalPolicy: (policy) =>
-      Effect.sync(() => session.approvals.setPolicy(policy)),
   };
 }

@@ -12,11 +12,11 @@
  */
 import { z } from 'zod';
 
+import { ApprovalPolicySnapshotSchema } from '@shared/approvalBypassKind';
 import type { SessionTitleState } from '@shared/sessionTitle';
 
 import {
   AggregateIdSchema,
-  ApprovalPolicySnapshotSchema,
   ResumeBlockerSchema,
   CommitOrdinalSchema,
   ContextStateDataSchema,

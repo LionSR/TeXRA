@@ -173,7 +173,7 @@ function inRun<A, E>(effect: Effect.Effect<A, E, ToolServices>) {
 describe('Tool edit approval gating', () => {
   beforeEach(async () => {
     await installPlatform();
-    testDefaultSession().approvals.setPolicy('ask');
+    testDefaultSession().approvals.override('ask');
     policyDenials = 0;
     workspaceWrites.mockReset();
     relativeFiles.clear();
@@ -363,7 +363,7 @@ describe('Tool edit approval gating', () => {
       yield* Effect.tryPromise(() =>
         installPlatform({ 'texra.toolUse.requireEditApproval': false }),
       );
-      testDefaultSession().approvals.setPolicy('never');
+      testDefaultSession().approvals.override('never');
 
       const tool = writeFileTool();
       const write = stubWorkspaceFile('denied.txt', {

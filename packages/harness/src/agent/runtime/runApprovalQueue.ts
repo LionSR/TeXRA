@@ -17,14 +17,16 @@
 import { Effect, SubscriptionRef } from 'effect';
 
 import {
-  TEXRA_APPROVAL_POLICY_DEFAULT,
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 
 import {
   APPROVAL_BYPASS_KINDS,
   NO_APPROVAL_GRANTS,
+  policyLimit,
   resolveBypass,
+  stricterPolicy,
   type ApprovalBypassKind,
   type ApprovalGrants,
   type ApprovalGrantSource,
@@ -43,10 +45,10 @@ import type {
 } from '@shared/session/database';
 import { writeRefused, type RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
-import type { SessionView } from '@shared/session/sessionView';
+import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
-import type { SessionHandle, SessionLog } from './SessionHandle';
+import type { SessionHandle } from './SessionHandle';
 
 /**
  * One queued approval. `bypassed` exists because the queue can hold a request
@@ -68,12 +70,6 @@ type QueuedKind = Extract<ApprovalBypassKind, 'bash' | 'toolEdit'>;
 /** A write of a run's grants refused: the store's own refusals. */
 export type GrantWriteError =
   DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed;
-
-/** The session doors the grants are read from and committed through. */
-interface GrantStore {
-  readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
-  readonly log: Pick<SessionLog, 'transact' | 'records'>;
-}
 
 /** A run's grants as its rows record them: the latest `approval.policy`,
  *  else the snapshot its `run.start` carried. */
@@ -108,12 +104,12 @@ function afterActivation(
   if (recorded.goal.length === 0 && pinned.length === 0) return null;
   const own = { ...recorded.own };
   for (const kind of pinned) own[kind] = 'parent';
-  return { own, goal: [] };
+  return { ...recorded, own, goal: [] };
 }
 
 const sameGrants = (a: ApprovalGrants, b: ApprovalGrants): boolean =>
-  JSON.stringify([a.own, [...a.goal].sort()]) ===
-  JSON.stringify([b.own, [...b.goal].sort()]);
+  JSON.stringify([a.own, [...a.goal].sort(), a.limit]) ===
+  JSON.stringify([b.own, [...b.goal].sort(), b.limit]);
 
 /**
  * The session's approvals: prompt lanes and the run's grants. Enforcement
@@ -151,15 +147,31 @@ export interface SessionApprovals {
   activationRows(
     runId: RunId,
   ): Effect.Effect<readonly SessionEventDraft[], DatabaseReadFailed>;
-  /** The session's approval policy, the host's setting, read live. */
-  policy(): TexraApprovalPolicy;
-  /** Set the session's approval policy: every request any of its runs
-   *  opens from now on is decided under it. */
-  setPolicy(policy: TexraApprovalPolicy): void;
+  /**
+   * The approval policy `runId`'s requests are decided under: this
+   * process's override, else the project's persisted
+   * `texra.approvalPolicy`, read at each call, narrowed by the strictest
+   * launch limit on the run's ancestry (`policyLimit`). The persisted
+   * setting is the one owner of a project's policy; a client changes it by
+   * writing that setting, never by telling a session. Without a run, the
+   * session's own policy.
+   */
+  policy(runId?: RunId): TexraApprovalPolicy;
+  /**
+   * Override the persisted policy for this process's own session (a CLI
+   * invocation's `--approval-policy`, a chat's `/approval`); null follows
+   * the setting again. The service never takes one: its sessions serve
+   * every window of a project, so they follow the setting alone.
+   */
+  override(policy: TexraApprovalPolicy | null): void;
 }
 
-/** Build the session's approvals over its view and its record door. */
-export function createSessionApprovals(store: GrantStore): SessionApprovals {
+/** Build the session's approvals over its view, its record door and its
+ *  config, read from `session` when first used. */
+export function createSessionApprovals(
+  session: () => Pick<SessionHandle, 'view' | 'log' | 'roots'>,
+): SessionApprovals {
+  const view = () => SubscriptionRef.getUnsafe(session().view.ref);
   // One exclusive lane per kind and run: the queue a run's prompts take in
   // turn. `withPerKeyLane` owns the entries, so a lane leaves its map once
   // its last prompt settles.
@@ -168,13 +180,23 @@ export function createSessionApprovals(store: GrantStore): SessionApprovals {
     toolEdit: new Map(),
   };
   const bypass: SessionApprovals['bypass'] = (runId, kind) =>
-    resolveBypass(SubscriptionRef.getUnsafe(store.view), runId, kind);
-  let policy = TEXRA_APPROVAL_POLICY_DEFAULT;
+    resolveBypass(view(), runId, kind);
+  let overridden: TexraApprovalPolicy | null = null;
   return {
     bypass,
-    policy: () => policy,
-    setPolicy: (next) => {
-      policy = next;
+    policy: (runId) => {
+      const policy =
+        overridden ??
+        readConfigSettingFrom<TexraApprovalPolicy>(
+          session().roots.config,
+          TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+        );
+      const limit =
+        runId === undefined ? undefined : policyLimit(view(), runId);
+      return limit === undefined ? policy : stricterPolicy(policy, limit);
+    },
+    override: (next) => {
+      overridden = next;
     },
     enqueue: (kind, runId, approval) =>
       Effect.suspend(() =>
@@ -187,7 +209,8 @@ export function createSessionApprovals(store: GrantStore): SessionApprovals {
         const runs = new Map<RunId, { parentId: RunId | null }>();
         const policy = new Map<RunId, ApprovalGrants>();
         for (let id: RunId | null = runId; id !== null && !runs.has(id);) {
-          const rows: readonly SessionEvent[] = yield* store.log.records(id);
+          const rows: readonly SessionEvent[] =
+            yield* session().log.records(id);
           const start = rows.find(
             (row: SessionEvent) => row.type === 'run.start',
           );
@@ -219,12 +242,12 @@ export function createSessionApprovals(store: GrantStore): SessionApprovals {
     change: (runId, edit) => {
       // The claim holder's own grants are folded by the time each change
       // returns, so a change the view already shows writes nothing.
-      const shown = SubscriptionRef.getUnsafe(store.view).policy.get(runId);
+      const shown = view().policy.get(runId);
       if (shown !== undefined && sameGrants(shown, edit(shown)))
         return Effect.void;
-      return store.log.transact((tx) =>
+      return session().log.transact((tx) =>
         Effect.gen(function* () {
-          const recorded = recordedGrants(yield* store.log.records(runId));
+          const recorded = recordedGrants(yield* session().log.records(runId));
           const next = edit(recorded);
           if (sameGrants(recorded, next)) return;
           yield* tx.append([
@@ -245,6 +268,7 @@ export function createSessionApprovals(store: GrantStore): SessionApprovals {
 export const humanGrant =
   (kinds: readonly ApprovalBypassKind[], enabled: boolean) =>
   (grants: ApprovalGrants): ApprovalGrants => ({
+    ...grants,
     own: {
       ...grants.own,
       ...Object.fromEntries(

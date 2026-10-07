@@ -947,7 +947,7 @@ describe('headless delegation', () => {
           // Failure modes: `never` approves the proposal because the run
           // cannot present prompts, or opens a prompt nobody may answer.
           const session = yield* createTestSession();
-          session.approvals.setPolicy('never');
+          session.approvals.override('never');
           const decider = answerOpenedRequests(session, { action: 'approve' });
           yield* Effect.addFinalizer(() =>
             decider.stop().pipe(Effect.ensuring(closeSessionOf(session))),
@@ -968,7 +968,7 @@ describe('headless delegation', () => {
     Effect.scoped(
       Effect.gen(function* () {
         const session = yield* createTestSession();
-        session.approvals.setPolicy('yolo');
+        session.approvals.override('yolo');
         const decider = answerOpenedRequests(session, { action: 'approve' });
         yield* Effect.addFinalizer(() =>
           decider.stop().pipe(Effect.ensuring(closeSessionOf(session))),

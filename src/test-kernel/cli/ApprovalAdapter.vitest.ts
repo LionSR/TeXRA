@@ -54,7 +54,7 @@ function context(overrides: Partial<CliContext> = {}): CliContext {
     version: 'test',
     ...overrides,
   });
-  testDefaultSession().approvals.setPolicy(ctx.approvalPolicy);
+  testDefaultSession().approvals.override(ctx.approvalPolicy);
   return ctx;
 }
 
@@ -67,7 +67,7 @@ function useCliHostInteractions(
   hooks: CliApprovalPromptHooks = {},
 ): void {
   detachHostInteractions();
-  testDefaultSession().approvals.setPolicy(cliContext.approvalPolicy);
+  testDefaultSession().approvals.override(cliContext.approvalPolicy);
   detachHostInteractions = Effect.runSync(
     testDefaultSession().interactions.use(
       createHeadlessCliHostInteractions(

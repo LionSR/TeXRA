@@ -30,10 +30,6 @@ import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { openTexraWorkspaceConfigStores } from '@platform/defaults/nodeStores';
 import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
-import {
   GlobalDatabase,
   type ProjectDatabases,
 } from '@shared/session/database';
@@ -49,7 +45,6 @@ import { serviceSessionBackend } from '@texra/controllers/server/serviceBackend'
 import type { ServiceLink } from '@texra/controllers/server/client';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { absentReason } from '@utils/files/fsEntryExists';
 import { DesktopProjectRecords } from './desktopProjectRecords.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
@@ -238,18 +233,10 @@ function openProjectSession(
       // artifacts flushed, its entry released.
       (session) => Effect.asVoid(owner.close(session.roots.storage)),
     );
-    session.approvals.setPolicy(
-      yield* readSettingFrom<TexraApprovalPolicy>(
-        roots,
-        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-      ),
-    );
     const backend =
       served === undefined || root === undefined
         ? localSessionBackend(session)
         : yield* serviceSessionBackend(served, root, roots.storage);
-    if (served !== undefined)
-      yield* backend.setApprovalPolicy(session.approvals.policy());
     return {
       key: roots.storage,
       root,

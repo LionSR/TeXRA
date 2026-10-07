@@ -275,6 +275,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
         preferHelperModel,
         ownApiKeyFallback,
         approveDelegatedWork,
+        approvalPolicy,
       }) =>
         Effect.gen(function* () {
           yield* refuseWhileDraining;
@@ -289,6 +290,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
                 // Admitted once the run is registered, so a `task.ended`
                 // that follows the answer finds it.
                 approveDelegatedWork,
+                ...(approvalPolicy !== null && { approvalPolicy }),
                 onRun: (registered) =>
                   Deferred.succeed(admitted, registered).pipe(Effect.asVoid),
                 ...(continues !== null && { continues }),
@@ -325,10 +327,6 @@ export const serviceHandlers = TexraRpcs.toLayer(
         ),
       'host.focus': ({ attachment }) => hosts.focus(attachment),
       'host.answer': ({ id, answer }) => hosts.answer(id, answer),
-      'project.policy': ({ workspace, policy }) =>
-        open(workspace).pipe(
-          Effect.map((session) => session.approvals.setPolicy(policy)),
-        ),
       'task.resume': ({ workspace, runId }) =>
         Effect.gen(function* () {
           yield* refuseWhileDraining;

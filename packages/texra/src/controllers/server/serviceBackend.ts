@@ -159,28 +159,15 @@ export const serviceSessionBackend = Effect.fn('serviceSessionBackend')(
       }),
     );
     yield* resubscribe;
-    // The window's approval policy, told again to a service the link
-    // reaches anew, which holds none.
-    let policy: Parameters<SessionBackend['setApprovalPolicy']>[0] | undefined;
-    const tellPolicy = (client: ServiceClient) =>
-      policy === undefined
-        ? Effect.void
-        : client['project.policy']({ workspace, policy }).pipe(
-            Effect.catch((error) =>
-              Effect.logWarning(
-                `The TeXRA service did not take ${workspace}'s approval policy; its tasks keep the previous one`,
-              ).pipe(Effect.annotateLogs({ data: error })),
-            ),
-          );
     // The service went (offline: the watch stops) or the link reached it
-    // again (the view resubscribes from where it is).
+    // again (the view resubscribes from where it is). The window tells it
+    // nothing else: the project's approval policy is its persisted setting,
+    // which the service reads itself.
     yield* Effect.forkScoped(
       SubscriptionRef.changes(link.client).pipe(
         Stream.drop(1),
         Stream.runForEach((client) =>
-          client === null
-            ? Effect.void
-            : Effect.andThen(tellPolicy(client), resubscribe),
+          client === null ? Effect.void : resubscribe,
         ),
       ),
     );
@@ -302,6 +289,7 @@ export const serviceSessionBackend = Effect.fn('serviceSessionBackend')(
               preferHelperModel: options.preferHelperModel ?? false,
               ownApiKeyFallback: options.ownApiKeyFallback ?? false,
               approveDelegatedWork: options.approveDelegatedWork ?? false,
+              approvalPolicy: options.approvalPolicy ?? null,
             }).pipe(
               Effect.mapError(
                 (error) =>
@@ -368,13 +356,6 @@ export const serviceSessionBackend = Effect.fn('serviceSessionBackend')(
               Effect.mapError((error) => new Error(error.message)),
             ),
         ),
-      setApprovalPolicy: (next) =>
-        Effect.suspend(() => {
-          policy = next;
-          // Offline: told when the link is back.
-          const client = SubscriptionRef.getUnsafe(link.client);
-          return client === null ? Effect.void : tellPolicy(client);
-        }),
     };
   },
 );

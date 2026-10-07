@@ -24,8 +24,6 @@ import {
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
-import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
 import type { ProcessServices } from '@texra-ai/harness';
@@ -34,9 +32,6 @@ import type { DesktopSpawn } from './desktopWindows.js';
 
 const NO_EXTENSION_HOSTING =
   'TeXRA Desktop runs standalone and cannot host VS Code extensions.';
-
-/** Each project's policy updates to the service, one at a time. */
-const policyLanes = new WeakMap<SessionBackend, PerKeyLane>();
 
 export interface DesktopSettingsIpcOptions {
   /** This window's half of the shared settings body; the subscription
@@ -63,9 +58,6 @@ export interface DesktopSettingsIpcOptions {
   /** The session of the project this settings surface serves. The desktop has
    *  no process-default session, so it must be passed. */
   readonly session: SessionHandle;
-  /** Where the project's runs run: an approval policy set here applies
-   *  there too. */
-  readonly backend: SessionBackend;
   readonly secrets: PlatformSecrets;
   /** Root of the packaged resources tree, which holds the agent templates. */
   readonly resourcesPath: string;
@@ -179,27 +171,9 @@ export function createDesktopSettingsIpc(
 
   const body = createSettingsViewBody({
     host: 'desktop',
-    session: {
-      roots: options.session.roots,
-      // The policy holds here and in the service that runs the project's
-      // tasks. Telling the service outlives this surface, in the order set:
-      // a project switch or a closed window must not leave the service on
-      // an older policy.
-      approvals: {
-        setPolicy: (policy) => {
-          options.session.approvals.setPolicy(policy);
-          spawn(
-            Effect.asVoid(
-              Effect.forkDetach(
-                options.backend
-                  .setApprovalPolicy(policy)
-                  .pipe(withPerKeyLane(policyLanes, options.backend)),
-              ),
-            ),
-          );
-        },
-      },
-    },
+    // The approval policy is the project's persisted setting: the write
+    // is the change, which this session and the service both read.
+    session: { roots: options.session.roots },
     secrets: options.secrets,
     resourcesPath: options.resourcesPath,
     skillDisplay: loadRuntimeSkillDisplay(

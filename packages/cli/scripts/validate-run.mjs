@@ -2183,6 +2183,200 @@ prompt: |
 }
 
 /**
+ * The project's approval policy has one owner, its persisted setting, which
+ * the service reads itself (audit 2026-10-07 #1). Window A attaches while
+ * the setting is Auto-approve; window B then sets Ask (a settings write);
+ * the service restarts and window A's link reaches the new one. A command
+ * task must then wait for approval: nothing window A held replaced Ask.
+ * A launch may narrow its own task for good: `tasks start
+ * --approval-policy ask`, then the project widened to Auto-approve, still
+ * asks. The tasks'
+ * rows, the setting and window A's output are the artifacts.
+ */
+async function validateServicePolicyOwner() {
+  const cwd = makeScratch('texra-cli-service-policy-');
+  const project = echoProject(cwd);
+  const storageRoot = path.join(cwd, 'home', '.texra');
+  writeFileSync(
+    path.join(storageRoot, 'v1', 'global-storage', 'custom_agents', 'cmd.yaml'),
+    `name: approval_validation
+description: Run one command once it is approved.
+tools: [bash]
+
+prompt: |
+  GOLDEN-APPROVAL
+`,
+  );
+  const env = {
+    ...project.ptyEnv,
+    TEXRA_NO_TELEMETRY: '1',
+    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+  };
+  const texra = (args, label) => {
+    const result = run(
+      process.execPath,
+      [binaryPath, ...args, '--cwd', project.work],
+      { cwd: project.work, env },
+    );
+    assertSuccess(result, label);
+    return result;
+  };
+  const waitFor = async (label, check, timeoutMs = 120_000) => {
+    const deadline = Date.now() + timeoutMs;
+    while (!check()) {
+      assert(Date.now() < deadline, `timed out waiting for ${label}`);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  };
+  const storage = path.join(storageRoot, 'v1', 'workspace-storage');
+  const projectDir = () => {
+    const dir = existsSync(storage)
+      ? readdirSync(storage).find((name) => name.startsWith('work-'))
+      : undefined;
+    return dir === undefined ? null : path.join(storage, dir);
+  };
+  // The user's local config for the project: where a window's settings
+  // view writes `texra.approvalPolicy`.
+  const setPolicy = (policy) =>
+    writeFileSync(
+      path.join(projectDir(), 'config.json'),
+      `${JSON.stringify({ 'texra.approvalPolicy': policy })}\n`,
+    );
+  const rowTypes = (runId) => {
+    const db = new DatabaseSync(path.join(projectDir(), 'texra.db'), {
+      readOnly: true,
+    });
+    try {
+      return db
+        .prepare(
+          `SELECT e.type FROM event e
+           JOIN event_sequence s ON s.id = e.aggregate
+           WHERE s.logical_id = ? ORDER BY e."commit"`,
+        )
+        .all(runId)
+        .map((row) => row.type);
+    } finally {
+      db.close();
+    }
+  };
+  let windowA;
+  try {
+    // A first task opens the project in the service, which makes its
+    // store; then the setting is Auto-approve and window A attaches.
+    texra(
+      [
+        'tasks',
+        'start',
+        'echo_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        'Open the project',
+      ],
+      'texra tasks start echo_validation',
+    );
+    await waitFor('the project store', () => projectDir() !== null);
+    setPolicy('yolo');
+    const child = spawn(
+      process.execPath,
+      [hostHarnessPath, storageRoot, project.work, 'answer'],
+      { cwd: project.work, env: { ...process.env, ...env } },
+    );
+    windowA = { child, stdout: '' };
+    child.stdout.on('data', (chunk) => (windowA.stdout += chunk));
+    await waitFor('window A to attach', () =>
+      windowA.stdout.includes('ATTACHED'),
+    );
+    // Window B sets Ask; the service restarts and window A reconnects.
+    setPolicy('ask');
+    texra(['service', 'stop'], 'texra service stop');
+    texra(['tasks', 'list'], 'texra tasks list (starts the service)');
+    await waitFor(
+      'window A to reach the restarted service',
+      () => windowA.stdout.split('LINKED').length - 1 >= 2,
+    );
+    const started = texra(
+      [
+        'tasks',
+        'start',
+        'approval_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        'Run the command',
+      ],
+      'texra tasks start approval_validation',
+    );
+    const runId = started.stdout.trim();
+    await waitFor('the command to wait for approval', () =>
+      rowTypes(runId).includes('request.opened'),
+    );
+    // Long enough for an Auto-approve run to have run its command.
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    const approved = path.join(project.work, 'approved.txt');
+    const rows = rowTypes(runId);
+    const artifactPath = writeArtifact('service-policy-owner.json', {
+      setting: JSON.parse(
+        readFileSync(path.join(projectDir(), 'config.json'), 'utf8'),
+      ),
+      rows,
+      commandRan: existsSync(approved),
+      startNotice: started.stderr.trim(),
+      windowA: windowA.stdout.trim().split('\n'),
+    });
+    assert(
+      !existsSync(approved) &&
+        !rows.includes('request.decided') &&
+        !started.stderr.includes('approval policy'),
+      `after a restart the service should follow the project's Ask setting, not a policy window A held (artifact: ${artifactPath})`,
+    );
+    texra(['tasks', 'stop', runId], 'texra tasks stop');
+    // A launch narrows its own task for good: started with
+    // `--approval-policy ask` while the project asks, then the project is
+    // widened to Auto-approve, the task still waits for approval.
+    const narrowed = texra(
+      [
+        'tasks',
+        'start',
+        'approval_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--approval-policy',
+        'ask',
+        '--instruction',
+        'Run the command',
+      ],
+      'texra tasks start --approval-policy ask',
+    ).stdout.trim();
+    await waitFor('the narrowed task to start', () =>
+      rowTypes(narrowed).includes('run.start'),
+    );
+    setPolicy('yolo');
+    await waitFor('the narrowed command to wait for approval', () =>
+      rowTypes(narrowed).includes('request.opened'),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    const narrowedRows = rowTypes(narrowed);
+    writeArtifact('service-policy-narrowed.json', {
+      rows: narrowedRows,
+      commandRan: existsSync(approved),
+    });
+    assert(
+      !existsSync(approved) && !narrowedRows.includes('request.decided'),
+      'a task started with --approval-policy ask should still ask after the project is widened to Auto-approve',
+    );
+    texra(['tasks', 'stop', narrowed], 'texra tasks stop (narrowed)');
+  } finally {
+    windowA?.child.kill('SIGKILL');
+    run(process.execPath, [binaryPath, 'service', 'stop'], {
+      cwd: project.work,
+      env,
+    });
+    removeScratch(cwd);
+  }
+}
+
+/**
  * `/tasks` in the chat (D1–D4): a task started in the service under the
  * `ask` policy opens a command approval; `texra chat` lists it with
  * `/tasks`, attaches, approves the command in place and sends a follow-up,
@@ -2824,6 +3018,7 @@ async function validateCliRunArtifacts(options = {}) {
   await validateServiceTasksInTui();
   await validateServiceChatsSeeEachOther();
   await validateServiceHostCalls();
+  await validateServicePolicyOwner();
   await validateServiceBuildIdentity();
   validateScriptFanoutRunCommand();
   validateTeamRunCommand();

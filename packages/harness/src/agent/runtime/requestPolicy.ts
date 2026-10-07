@@ -58,9 +58,9 @@ const canPresent = (session: SessionHandle): boolean =>
  * approval-gated tool) under what the host can answer. One reading for
  * every run of the session, whoever triggers it.
  */
-const executableDecision = (session: SessionHandle) =>
+const executableDecision = (session: SessionHandle, runId: RunId) =>
   decideTexraApproval({
-    policy: session.approvals.policy(),
+    policy: session.approvals.policy(runId),
     promptRequired: true,
     scopedBypass: false,
     canPresent: canPresent(session),
@@ -72,6 +72,7 @@ const executableDecision = (session: SessionHandle) =>
  *  answered on a person's behalf. */
 function answerFor(
   session: SessionHandle,
+  runId: RunId,
   payload: PermissionPayload,
 ):
   | {
@@ -79,10 +80,10 @@ function answerFor(
       readonly denial?: ApprovalPolicyDenial;
     }
   | undefined {
-  const policy = session.approvals.policy();
+  const policy = session.approvals.policy(runId);
   switch (payload.kind) {
     case 'planApproval': {
-      const decision = executableDecision(session);
+      const decision = executableDecision(session, runId);
       if (decision === 'present') return undefined;
       if (decision === 'allow') return { decision: { action: 'approve' } };
       return {
@@ -142,7 +143,7 @@ export function policyDecidedRows(
   runId: RunId,
   payload: PermissionPayload,
 ): Extract<RunHistoryDraft, { type: 'request.decided' }>[] {
-  const answer = answerFor(session, payload);
+  const answer = answerFor(session, runId, payload);
   if (answer === undefined) return [];
   if (answer.denial) session.interactions.approvalDenied(answer.denial, runId);
   return [
@@ -159,10 +160,11 @@ export function policyDecidedRows(
  *  asked, and what its host serves now. */
 export function liveToolGates(
   session: SessionHandle,
+  runId: RunId,
 ): Pick<StepToolInputs, 'approvalPromptsUnavailable' | 'hostCapabilities'> {
   return {
     approvalPromptsUnavailable: isTexraApprovalDenied(
-      executableDecision(session),
+      executableDecision(session, runId),
     ),
     hostCapabilities: new Set(
       session.interactions.readDiagnostics ? ['diagnostics'] : [],

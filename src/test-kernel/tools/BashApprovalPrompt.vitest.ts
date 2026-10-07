@@ -70,7 +70,7 @@ describe('requestBashApproval queueing', () => {
         Effect.gen(function* () {
           const session = yield* createTestSession();
           yield* Effect.addFinalizer(() => closeSessionOf(session));
-          session.approvals.setPolicy('ask');
+          session.approvals.override('ask');
           const keys = [
             BASH_APPROVAL_CONFIG_KEY,
             TOOL_EDIT_APPROVAL_CONFIG_KEY,
@@ -128,7 +128,7 @@ describe('requestBashApproval queueing', () => {
             policyDenials += 1;
           },
         });
-        session.approvals.setPolicy('never');
+        session.approvals.override('never');
         publishTestRunStart(session, runId);
         yield* session.approvals.change(runId, humanGrant(['bash'], true));
         const requests = yield* watchBashRequests(session);

@@ -145,7 +145,7 @@ export function createHeadlessCliHostInteractions(
   // Headless composition seeds the session before attaching; tests often attach
   // without that step, so mirror the seed here. TUI uses a different adapter
   // and keeps the live session value from `/approval`.
-  session.approvals.setPolicy(context.approvalPolicy);
+  session.approvals.override(context.approvalPolicy);
   /** Only an interactive run can answer a prompt. */
   const promptsUnavailable = context.mode !== 'interactive';
   /** Requests this host has taken on, pruned as the fold drops them. */
