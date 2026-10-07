@@ -44,6 +44,10 @@ import {
   type DesktopWorkspaceInboundMessage,
   type DesktopWorkspaceReply,
 } from '../shared/desktopWorkspaceMessages.js';
+import {
+  AgentDocumentUnavailable,
+  resolveAgentDocument,
+} from './desktopAgentDocuments.js';
 import type { DesktopPtyHost } from './desktopPtyHost.js';
 import type { DesktopBrowserViews } from './desktopBrowserViews.js';
 
@@ -119,7 +123,9 @@ class WorkspaceHostCallFailed extends Data.TaggedError(
 
 /** Everything a file-I/O program here can fail with. */
 type WorkspaceFileFailure =
-  WorkspaceRequestRefused | PlatformError.PlatformError;
+  | WorkspaceRequestRefused
+  | AgentDocumentUnavailable
+  | PlatformError.PlatformError;
 
 /** The single workspace-boundary error every containment path reports. */
 const WORKSPACE_BOUNDARY_ERROR =
@@ -357,10 +363,9 @@ export function createDesktopWorkspaceIpc(
   const readFile = (path: string) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const absolutePath = yield* resolveWorkspacePath(
-        options.getWorkspacePath(),
-        path,
-      );
+      const absolutePath = yield* path.startsWith('texra-agent:')
+        ? resolveAgentDocument(path, false)
+        : resolveWorkspacePath(options.getWorkspacePath(), path);
       // The editor's buffers are LF-only, as every read of a workspace file
       // through the shared facade this replaces already was. Decoding the
       // bytes ourselves keeps a UTF-8 BOM, which `readFileString`'s decoder
@@ -374,10 +379,9 @@ export function createDesktopWorkspaceIpc(
   const writeFile = (path: string, contents: string) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const absolutePath = yield* resolveWorkspaceWritePath(
-        options.getWorkspacePath(),
-        path,
-      );
+      const absolutePath = yield* path.startsWith('texra-agent:')
+        ? resolveAgentDocument(path, true)
+        : resolveWorkspaceWritePath(options.getWorkspacePath(), path);
       yield* fs.writeFileString(absolutePath, contents);
       return { kind: 'done' } satisfies HostOutcome;
     });

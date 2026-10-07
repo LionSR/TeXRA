@@ -712,6 +712,12 @@ const routeMessage = createMessageRoutes({
   'desktop:workspace:filesChanged': (message) => {
     void projectWorkbenches.get(message.session)?.fileTree.refresh();
   },
+  'desktop:workspace:openDocument': (message) => {
+    const project = projectWorkbenches.get(message.session);
+    if (!project) return;
+    if (message.session === shell.active) settingsDialog.close();
+    project.openDocument(message.target);
+  },
   'desktop:openWorkbench': (message) =>
     projectWorkbenches.get(shell.active)?.workbench.openKind(message.kind),
   'desktop:openSettings': () => settingsDialog.open(),

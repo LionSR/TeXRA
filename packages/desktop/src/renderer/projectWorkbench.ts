@@ -3,7 +3,7 @@
 
 import type { SessionSurfaces } from '@progressView/frontend/sessionSurfaces';
 import type { ProgressApp } from '@progressView/frontend/ProgressApp';
-import type { Theme } from '@shared/schemas';
+import { isPackagedAgentSource, type Theme } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostOutcome } from '@shared/session/sessionFrames';
 import { postMessage } from '@shared/hostBridge';
@@ -21,6 +21,7 @@ import { createPdfPane } from './pdfPane';
 import { createReviewPane } from './reviewPane';
 import { createTerminalPane } from './terminalPane';
 import { createWorkbenchController } from './workbenchController';
+import { agentDocumentIdentity } from '../shared/desktopAgentDocument';
 
 const FILE_REQUEST_TIMEOUT_MS = 60_000;
 
@@ -96,6 +97,10 @@ export function createProjectWorkbench(options: {
       action.kind === 'write' ? undefined : FILE_REQUEST_TIMEOUT_MS,
     );
   const editorCallbacks = {
+    isReadOnly: (path: string) => {
+      const identity = agentDocumentIdentity(path);
+      return identity ? isPackagedAgentSource(identity.source) : false;
+    },
     listFiles: async (directory) => {
       const outcome = await workspaceFile({ kind: 'list', directory });
       if (outcome.kind !== 'entries') throw unexpected(outcome);
@@ -183,6 +188,8 @@ export function createProjectWorkbench(options: {
     updateState,
     conversationView: options.conversationView,
     fileTree,
+    openDocument: (target: string) =>
+      updateState(openWorkbenchTab(getState(), { kind: 'editor', target })),
     saveActiveEditor() {
       const id = workbench.activeTabId();
       if (id) void editors.get(id)?.save();

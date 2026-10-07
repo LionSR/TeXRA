@@ -4,10 +4,8 @@
 // lives in a child of the window's scope, closed and replaced, awaited, when
 // the window switches projects.
 
-import { join } from 'node:path';
-
 import { app, shell } from 'electron';
-import { Effect, Exit, FileSystem, Scope, SubscriptionRef } from 'effect';
+import { Effect, Exit, Scope, SubscriptionRef } from 'effect';
 
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
@@ -20,6 +18,10 @@ import {
 import { desktopSignInPresenters } from './desktopSignInPresenters.js';
 import { installDesktopWindowTitle } from './desktopWindowTitle.js';
 import { desktopSpawner } from './desktopWindows.js';
+import {
+  agentDocumentForPath,
+  AgentDocumentUnavailable,
+} from './desktopAgentDocuments.js';
 import type { ProjectBindings } from './desktopProjectBindings.js';
 import type { DesktopPromptController } from './desktopPromptController.js';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
@@ -76,6 +78,22 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
       const { dialogs, previewHost } = host;
       const postForActiveProject = (message: unknown) =>
         surfaceScope === owner && host.post(message);
+      const openAgentDocument = (filePath: string) =>
+        Effect.gen(function* () {
+          const target = agentDocumentForPath(filePath);
+          if (!target)
+            return yield* Effect.fail(
+              new AgentDocumentUnavailable({
+                message:
+                  'This agent definition is no longer in the catalog. Refresh Settings and try again.',
+              }),
+            );
+          postForActiveProject({
+            command: DESKTOP_WORKSPACE_COMMANDS.OPEN_DOCUMENT,
+            session: project.key,
+            target,
+          });
+        });
       return {
         post: (message) =>
           Effect.flatMap(message, (built) =>
@@ -115,22 +133,13 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
         externalOpener: {
           openExternal: (url) => host.openExternalProgram(url, false),
         },
-        openPath: previewHost.openPath,
+        openPath: (filePath) =>
+          agentDocumentForPath(filePath)
+            ? openAgentDocument(filePath)
+            : previewHost.openPath(filePath),
         revealPath: (filePath) =>
           Effect.sync(() => shell.showItemInFolder(filePath)),
-        // The desktop has no editor of its own and hands the path to the OS,
-        // so read-only YAML is shown through a temporary copy the external
-        // editor may save without touching the original.
-        showReadOnlyYaml: (fileName, text) =>
-          Effect.gen(function* () {
-            const fs = yield* FileSystem.FileSystem;
-            const target = join(
-              yield* fs.makeTempDirectory({ prefix: 'texra-agent-yaml-' }),
-              fileName,
-            );
-            yield* fs.writeFileString(target, text);
-            yield* previewHost.openPath(target);
-          }),
+        showReadOnlyYaml: (filePath) => openAgentDocument(filePath),
         pickFolder: (title) =>
           host.pickFolder(
             title,

@@ -12,6 +12,7 @@ import { createOverlayDialog } from './overlayDialog';
 
 interface DesktopSettingsDialog {
   open(tab?: SettingsTarget): void;
+  close(): void;
   isOpen(): boolean;
   /** Swap in a fresh view after the active project changed. */
   remount(): void;
@@ -111,6 +112,9 @@ export function createDesktopSettingsDialog(
         buildDesktopSettingsTabMessage(tab),
         resolvePostMessageTargetOrigin(window.location.origin),
       );
+    },
+    close: () => {
+      dialog.open = false;
     },
     isOpen: () => dialog.open,
     remount() {
