@@ -74,10 +74,7 @@ describe('desktop composition root and launch environment', () => {
   const tempDirs = useTempDirs();
 
   async function createResourceTree(resourcesPath: string): Promise<void> {
-    await Promise.all([
-      mkdir(join(resourcesPath, 'agents'), { recursive: true }),
-      mkdir(join(resourcesPath, 'tool_use_agents'), { recursive: true }),
-    ]);
+    await mkdir(join(resourcesPath, 'agents'), { recursive: true });
   }
 
   effectIt.live(

@@ -20,7 +20,7 @@ export {
   writeStampedCopy,
 } from './customAgentCopy';
 
-export { BUNDLED_AGENT_DIRECTORY_NAMES } from './BundledAgentDirectories';
+export { BUNDLED_AGENTS_DIRECTORY } from './BundledAgentDirectories';
 
 export { InvalidAgentTeamError } from '../workspaceAgents/WorkspaceAgentsController';
 

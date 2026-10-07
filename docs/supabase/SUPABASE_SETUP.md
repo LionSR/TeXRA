@@ -433,7 +433,7 @@ supabase storage cp "prompts/agents/remote/<source>" "ss:///agent-configs/<folde
 
 Run `npm run sync:remote-agents` (generate only) to preview; the apply step is manual.
 
-The sync only upserts the agents it finds under `prompts/agents/remote/`; it never deletes a row. When an agent leaves the remote catalog (for example because it now ships bundled in `packages/extension/resources/tool_use_agents/`), its `remote_agents` row and `agent-configs` object stay behind. They are harmless: the registry ranks the bundled sources above `remote` for the same name, so signed-in users resolve the bundled copy. Deleting them by hand is cleanup only.
+The sync only upserts the agents it finds under `prompts/agents/remote/`; it never deletes a row. When an agent leaves the remote catalog (for example because it now ships bundled in `packages/extension/resources/agents/`), its `remote_agents` row and `agent-configs` object stay behind. They are harmless: the registry ranks the bundled sources above `remote` for the same name, so signed-in users resolve the bundled copy. Deleting them by hand is cleanup only.
 
 ---
 

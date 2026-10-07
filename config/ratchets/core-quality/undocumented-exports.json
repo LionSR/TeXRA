@@ -8,7 +8,7 @@
   "packages/harness/src/agent/followUp/followUpSender.ts": 1,
   "packages/harness/src/agent/followUp/ToolUseFollowUp.ts": 3,
   "packages/harness/src/agent/index/AgentDirectoryService.ts": 2,
-  "packages/harness/src/agent/index/BundledAgentDirectories.ts": 4,
+  "packages/harness/src/agent/index/BundledAgentDirectories.ts": 1,
   "packages/harness/src/agent/runtime/AgentLaunchContext.ts": 3,
   "packages/harness/src/agent/runtime/AgentRunLifecycle.ts": 1,
   "packages/harness/src/agent/runtime/childRunLoop.ts": 2,

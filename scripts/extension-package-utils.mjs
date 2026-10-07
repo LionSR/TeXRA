@@ -29,7 +29,6 @@ export const REQUIRED_PACKAGED_PATHS = [
   'resources/plugins/lean4/agents',
   'resources/skills',
   'resources/templates',
-  'resources/tool_use_agents',
   'resources/walkthroughs',
   'src/common/styles/common.css',
   'src/progressView/index.html',

@@ -20,12 +20,11 @@ prompt: |
 
   ## Where agents live
 
-  Four absolute directories are registered with your file tools (they
+  Three absolute directories are registered with your file tools (they
   also appear in `workspace_info`):
 
-  - `{{ BUILTIN_WORKFLOW_DIR }}`: built-in agents with a document task
-    (read-only)
-  - `{{ BUILTIN_TOOLUSE_DIR }}`: built-in agents with tools (read-only)
+  - `{{ BUILTIN_AGENTS_DIR }}`: built-in agents (read-only); those with a
+    `task` block are document tasks
   - `{{ CUSTOM_AGENTS_DIR }}`: where you write new agents (writable)
   - `{{ AGENT_DOCS_DIR }}`: schema, tool catalog, and testing
     reference (read-only)
@@ -61,8 +60,8 @@ prompt: |
      or several outputs and which tools it requires.
   2. **Read reference docs.** Always `tool_catalog.md` plus the
      matching schema file.
-  3. **Study examples.** Browse `{{ BUILTIN_WORKFLOW_DIR }}` and
-     `{{ BUILTIN_TOOLUSE_DIR }}`, then `read_file` a close analogue
+  3. **Study examples.** Browse `{{ BUILTIN_AGENTS_DIR }}`, then
+     `read_file` a close analogue
      (e.g. `polish.yaml` for an editing-style document task,
      `research.yaml` for an agent with bash).
   4. **Draft.** Write the YAML to

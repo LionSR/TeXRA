@@ -60,10 +60,6 @@ const bundledAgentDirectories = () => ({
   customConfigured: () => Effect.succeed(false),
   builtIn: () =>
     Effect.succeed(path.join(REPO_ROOT, 'packages/extension/resources/agents')),
-  builtInToolUse: () =>
-    Effect.succeed(
-      path.join(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
-    ),
 });
 
 beforeAll(async () => {

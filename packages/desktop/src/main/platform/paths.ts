@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { app } from 'electron';
 import { Data, Effect, FileSystem } from 'effect';
 
-import { BUNDLED_AGENT_DIRECTORY_NAMES } from '@agent/index';
+import { BUNDLED_AGENTS_DIRECTORY } from '@agent/index';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { absentReason } from '@utils/files/fsEntryExists';
 import { envVar } from '@utils/system/envFlags';
@@ -88,10 +88,7 @@ export const resolveResourcesPath = Effect.fn('resolveResourcesPath')(
 const hasRequiredResourceDirectories = Effect.fn(
   'hasRequiredResourceDirectories',
 )(function* (fs: FileSystem.FileSystem, candidate: string) {
-  for (const path of [
-    candidate,
-    ...BUNDLED_AGENT_DIRECTORY_NAMES.map((name) => join(candidate, name)),
-  ]) {
+  for (const path of [candidate, join(candidate, BUNDLED_AGENTS_DIRECTORY)]) {
     if (!(yield* isExistingDirectory(fs, path))) return false;
   }
   return true;

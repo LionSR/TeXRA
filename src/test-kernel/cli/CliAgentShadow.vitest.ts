@@ -71,13 +71,6 @@ describe('CLI agent validation with a shadowed name', () => {
             Effect.sync(() =>
               resolve(REPO_ROOT, 'packages/extension/resources/agents'),
             ),
-          builtInToolUse: () =>
-            Effect.sync(() =>
-              resolve(
-                REPO_ROOT,
-                'packages/extension/resources/tool_use_agents',
-              ),
-            ),
         },
       },
     );
