@@ -59,6 +59,16 @@ writeFileSync(
 const WATCHDOG_MS = 8 * 60_000;
 const watchdog = setTimeout(() => {
   console.error(`VS Code host e2e did not finish within ${WATCHDOG_MS} ms`);
+  // What the stuck window shows (a dialog that holds it open, say).
+  if (process.platform === 'darwin') {
+    mkdirSync(path.join(repoRoot, 'artifacts', 'vscode-e2e'), {
+      recursive: true,
+    });
+    spawnSync('screencapture', [
+      '-x',
+      path.join(repoRoot, 'artifacts', 'vscode-e2e', 'stuck.png'),
+    ]);
+  }
   printLogs();
   // What is still alive, and which of it holds VS Code open.
   if (process.platform !== 'win32')

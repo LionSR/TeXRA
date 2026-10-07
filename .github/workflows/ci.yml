@@ -386,6 +386,15 @@ jobs:
       - name: Run VS Code host e2e
         run: pnpm run test:vscode -- --vscode ${{ matrix.vscode }}
 
+      - name: Upload VS Code host e2e screenshot
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: vscode-host-e2e-${{ matrix.vscode }}
+          path: artifacts/vscode-e2e/
+          if-no-files-found: ignore
+          retention-days: 7
+
   desktop-e2e:
     name: desktop e2e (macOS)
     needs: changes
