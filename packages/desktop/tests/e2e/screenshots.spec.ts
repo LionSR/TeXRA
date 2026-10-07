@@ -133,6 +133,7 @@ test('settings navigation and appearance across window sizes', async () => {
     const pages = settings.getByRole('tablist', { name: 'Settings pages' });
     await expect(pages).toHaveAttribute('aria-orientation', 'vertical');
     const tabs = pages.getByRole('tab');
+    await expect(tabs.first()).toHaveAccessibleName('General');
     for (const tab of await tabs.all()) {
       await tab.click();
       await expect(tab).toHaveAttribute('aria-selected', 'true');
@@ -145,6 +146,9 @@ test('settings navigation and appearance across window sizes', async () => {
     await tabs.first().focus();
     await page.keyboard.press('ArrowDown');
     await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+    // Crossing a visual group heading still advances to the next page.
+    await page.keyboard.press('ArrowDown');
+    await expect(tabs.nth(2)).toHaveAttribute('aria-selected', 'true');
     await page.keyboard.press('Home');
     await expect(tabs.first()).toHaveAttribute('aria-selected', 'true');
     await app.evaluate(({ BrowserWindow }) => {
