@@ -442,7 +442,7 @@ describe('executeCliRequest', () => {
 
       yield* executeCliRequest(
         baseRequest(),
-        cliContext({ approvalPolicy: 'yolo' }),
+        cliContext({ approvalPolicy: 'yolo', requestedApprovalPolicy: 'yolo' }),
       );
 
       expect(testDefaultSession().approvals.policy()).toBe('yolo');

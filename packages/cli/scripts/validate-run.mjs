@@ -2357,12 +2357,32 @@ prompt: |
     );
     await new Promise((resolve) => setTimeout(resolve, 3_000));
     const narrowedRows = rowTypes(narrowed);
+    // The limit is what holds it, recorded on its run.start; the project's
+    // Auto-approve may land before or after that row.
+    const db = new DatabaseSync(path.join(projectDir(), 'texra.db'), {
+      readOnly: true,
+    });
+    let limit;
+    try {
+      limit = db
+        .prepare(
+          `SELECT json_extract(e.data, '$.approvalPolicy.limit') AS limit_ FROM event e
+           JOIN event_sequence s ON s.id = e.aggregate
+           WHERE s.logical_id = ? AND e.type = 'run.start'`,
+        )
+        .get(narrowed)?.limit_;
+    } finally {
+      db.close();
+    }
     writeArtifact('service-policy-narrowed.json', {
+      limit,
       rows: narrowedRows,
       commandRan: existsSync(approved),
     });
     assert(
-      !existsSync(approved) && !narrowedRows.includes('request.decided'),
+      limit === 'ask' &&
+        !existsSync(approved) &&
+        !narrowedRows.includes('request.decided'),
       'a task started with --approval-policy ask should still ask after the project is widened to Auto-approve',
     );
     texra(['tasks', 'stop', narrowed], 'texra tasks stop (narrowed)');
