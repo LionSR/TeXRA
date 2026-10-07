@@ -136,7 +136,7 @@ function printLogs() {
   walk(path.join(home, '.texra', 'run'));
   for (const file of files) {
     const text = readFileSync(file, 'utf8');
-    if (!/exthost|texra|TeXRA|serve/i.test(file + text.slice(0, 200))) continue;
-    console.error(`----- ${file}\n${text.slice(-8000)}`);
+    if (text.trim() === '') continue;
+    console.error(`----- ${file}\n${text.slice(-6000)}`);
   }
 }
