@@ -74,8 +74,11 @@ export function loginShellEnvironment(
           // profile left hanging stops with it. The group is gone once
           // everything in it exited, and then only the shell is signalled.
           return Effect.sync(() => {
+            const { pid } = child;
             try {
-              process.kill(-(child.pid ?? 0), 'SIGKILL');
+              // Without a pid the shell never started, and `-0` would
+              // signal this process's own group.
+              if (pid !== undefined) process.kill(-pid, 'SIGKILL');
             } catch {
               child.kill('SIGKILL');
             }

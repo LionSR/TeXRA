@@ -355,9 +355,12 @@ export const workspaceEnvironmentLayer = (
     try: () => (workspace === undefined ? '' : readFileSync(file, 'utf8')),
     catch: (cause) => new ProjectEnvUnreadable({ file, cause }),
   }).pipe(
+    // No file is none, and so is a directory of that name (a virtualenv
+    // made with `python -m venv .env`): neither holds variables.
     Effect.catchIf(
       ({ cause }) =>
-        Predicate.hasProperty(cause, 'code') && cause.code === 'ENOENT',
+        Predicate.hasProperty(cause, 'code') &&
+        (cause.code === 'ENOENT' || cause.code === 'EISDIR'),
       () => Effect.succeed(''),
     ),
     Effect.map((text): Record<string, string> =>

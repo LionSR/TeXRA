@@ -6,6 +6,7 @@
 // of it, and releasing a project closes that scope, awaited.
 
 import {
+  Cause,
   Effect,
   Exit,
   Layer,
@@ -373,7 +374,18 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       eachSnapshot: (op) =>
         Effect.forEach(
           [...bindings.values()],
-          (b) => Effect.provide(op(b.snapshot), b.env),
+          // One project's failure (its unreadable `.env`) is that project's:
+          // logged, and never stops the others' refresh.
+          (b) =>
+            Effect.provide(op(b.snapshot), b.env).pipe(
+              Effect.catchCause((cause) =>
+                Cause.hasInterruptsOnly(cause)
+                  ? Effect.failCause(cause)
+                  : Effect.logWarning(
+                      `The project ${b.project.root ?? b.project.key} did not refresh: ${Cause.pretty(cause)}`,
+                    ),
+              ),
+            ),
           {
             concurrency: 'unbounded',
             discard: true,
