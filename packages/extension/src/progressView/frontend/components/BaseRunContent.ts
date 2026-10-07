@@ -71,6 +71,7 @@ export abstract class BaseRunContent extends LitElement {
             runId: run.id,
             at: event.detail.at,
             draft: event.detail.draft,
+            mediaFiles: [...event.detail.mediaFiles],
           }),
         );
       }}

@@ -33,13 +33,31 @@ describe('logUserMessage', () => {
   });
 
   it('records attachment kinds (not bytes) on the row data', () => {
-    logUserMessage(logger, 'See the attached figure.', ['image', 'document']);
+    logUserMessage(logger, 'See the attached figure.', {
+      attachments: ['image', 'document'],
+    });
 
     const rows = runTrace.rows();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       kind: 'user',
       attachments: ['image', 'document'],
+    });
+  });
+
+  // #13662: "Fork from here" refills the fork's composer from the row, so
+  // the row keeps the files the follow-up attached, not only their kinds.
+  it('records the attached files a fork puts back in its composer', () => {
+    const pasted = '/storage/pasted/pasted-image-1.png';
+    logUserMessage(logger, 'See [pasted-image-1.png]', {
+      attachments: ['image'],
+      mediaFiles: [pasted],
+    });
+
+    expect(runTrace.rows()[0]).toMatchObject({
+      kind: 'user',
+      attachments: ['image'],
+      mediaFiles: [pasted],
     });
   });
 });

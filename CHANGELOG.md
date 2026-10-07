@@ -863,6 +863,13 @@ show` print the same notice, and the new `texra agents customize`,
   `image-1.ico` instead of `image-1.x-icon`. Known types such as JPEG, SVG
   and TIFF keep the names they had.
 
+- **"Fork from here" keeps the images a message carried.** Forking from a
+  message with pasted images put only its text back in the new task's
+  composer, so the menu item was hidden on such messages. The fork's
+  composer now holds the message's images beside its text, and the item is
+  offered on every message after the first again (#13662). A message sent
+  by an earlier build forks with its text only.
+
 - **A resumed subagent follows its parent's later approval toggles again.**
   When a subagent ran under its parent's goal approval and was resumed on its
   own, its resume recorded that kind as turned off, as if you had refused it.

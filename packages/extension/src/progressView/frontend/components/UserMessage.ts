@@ -41,11 +41,12 @@ const XML_ESCAPED_TAGS = new Set(
   DELIVERY_TAGS.filter((entry) => entry.escaped).map((entry) => entry.tag),
 );
 
-/** A user message's "Fork from here": the cut and the message, which the
- *  fork's composer holds. */
+/** A user message's "Fork from here": the cut and the message with the
+ *  files it attached, which the fork's composer holds. */
 export interface ForkFromHere {
   readonly at: number;
   readonly draft: string;
+  readonly mediaFiles: readonly string[];
 }
 const FORK_FROM_HERE = 'fork-from-here';
 
@@ -212,6 +213,10 @@ export class UserMessage extends LitElement {
    *  conversation that owns the row turns the event into its run's fork. */
   @property({ attribute: false }) forkAt: number | null = null;
 
+  /** The files the message attached (`UserRow.mediaFiles`), which "Fork
+   *  from here" carries with its text. */
+  @property({ attribute: false }) mediaFiles: readonly string[] = [];
+
   private copyController = new CopyButtonController(this, {
     defaultTitle: 'Copy message',
   });
@@ -237,7 +242,11 @@ export class UserMessage extends LitElement {
     if (this.forkAt === null) return;
     this.dispatchEvent(
       new CustomEvent<ForkFromHere>(FORK_FROM_HERE, {
-        detail: { at: this.forkAt, draft: this.text },
+        detail: {
+          at: this.forkAt,
+          draft: this.text,
+          mediaFiles: this.mediaFiles,
+        },
         bubbles: true,
         composed: true,
       }),

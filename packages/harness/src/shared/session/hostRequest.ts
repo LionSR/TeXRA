@@ -39,13 +39,15 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
   /**
    * Fork: a new task holding this conversation up to `at` (its latest
    * settled point when absent), continued and shown; with `draft` (Fork
-   * from here), the message it was cut before waits in its composer.
+   * from here), the message it was cut before waits in its composer, with
+   * the files it attached (`mediaFiles`).
    */
   z.object({
     kind: z.literal('fork'),
     ...runScoped,
     at: z.int().positive().nullish(),
     draft: z.string().nullish(),
+    mediaFiles: z.array(z.string()).nullish(),
   }),
   /** The latexFixer follow-up over a workflow run's compile failures. */
   z.object({ kind: z.literal('runCompileFixer'), ...runScoped }),
