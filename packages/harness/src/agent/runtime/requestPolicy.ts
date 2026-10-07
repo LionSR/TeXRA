@@ -36,7 +36,6 @@ import {
   type RunId,
   type SessionEvent,
 } from '@shared/schemas';
-import { foldRunRows } from '@shared/session/runRows';
 import type { RunHistoryDraft } from '@shared/session/runStateFold';
 import type { Append, SessionEventsShape } from '@shared/session/sessionEvents';
 
@@ -173,6 +172,12 @@ export function liveToolGates(
 
 const CHANNEL = 'requestPolicy';
 
+/** The rows one request's state is read off. */
+const REQUEST_TYPES: readonly SessionEvent['type'][] = [
+  'request.opened',
+  'request.decided',
+];
+
 /** What a session's asks are built over. */
 export interface RequestAsksInit {
   /** The session the requests are asked on, resolved when first used. */
@@ -193,7 +198,9 @@ export function requestAsks({
 }: RequestAsksInit): Pick<SessionRequests, 'ask' | 'decide' | 'decision'> {
   /** The `request.decided` row for `requestId`, if the request is still
    *  open: the body of one publisher transaction, whether a surface awaits
-   *  it or an interrupted {@link ask} detaches it. */
+   *  it or an interrupted {@link ask} detaches it. It reads the run's
+   *  request rows alone, through the type index, so a decision costs the
+   *  same however long the run's history grows. */
   const decisionRow = (
     runId: RunId,
     requestId: string,
@@ -202,8 +209,12 @@ export function requestAsks({
   ) =>
     Effect.gen(function* () {
       const aggregateId = qualifyAggregateId('run', runId);
-      const { requests } = foldRunRows(yield* session().log.rows(aggregateId));
-      if (requests[requestId]?.resolved !== false) return false;
+      const rows = yield* session().log.rows(aggregateId, REQUEST_TYPES);
+      const mine = rows.filter(
+        (row) => 'requestId' in row && row.requestId === requestId,
+      );
+      if (!mine.some((row) => row.type === 'request.opened')) return false;
+      if (mine.some((row) => row.type === 'request.decided')) return false;
       yield* append([
         { type: 'request.decided', aggregateId, requestId, decision },
       ]);

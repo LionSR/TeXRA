@@ -247,6 +247,20 @@ export function classifyModelFailure(
   return failure;
 }
 
+/** A binding that could not be replaced (a renewal or rebind that failed),
+ *  read as a failure no retry repeats, so the user reads why. */
+export function bindingFailure(error: Error, bound: Bound): ModelFailure {
+  const failed = classifyModelFailure(error, bound);
+  const formatted = { ...failed.formatted, userRetryable: false };
+  attachProviderError(failed.error, formatted);
+  return {
+    ...failed,
+    formatted,
+    info: toRetryErrorInfo(formatted),
+    autoRetryable: false,
+  };
+}
+
 /** A failed attempt's classification; the rows it left are its driver's. */
 export class AttemptFailed extends Data.TaggedError('AttemptFailed')<{
   readonly failure: ModelFailure;

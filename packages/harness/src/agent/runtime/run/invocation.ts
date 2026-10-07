@@ -14,14 +14,10 @@ import { StatusCodes } from 'http-status-codes';
 import { Cause, Context, Effect, Exit, Result } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
-import {
-  attachProviderError,
-  hasMissingApiKeyErrorMarker,
-} from '@common/errors/sdkError/errorMetadata';
+import { hasMissingApiKeyErrorMarker } from '@common/errors/sdkError/errorMetadata';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
-  toRetryErrorInfo,
   type FailedNext,
   type InvocationRef,
   type RetryErrorInfo,
@@ -40,7 +36,7 @@ import type { RunPosition } from '@shared/session/runRows';
 import { refreshRejectedSubscription } from '../modelRoutes';
 import {
   AttemptFailed,
-  classifyModelFailure,
+  bindingFailure,
   routePolicies,
   type ModelFailure,
 } from './modelFailure';
@@ -167,20 +163,37 @@ const credentialRenewal = <R>(
       Effect.andThen(rebind('configured', bound)),
       Effect.flatMap(Effect.fromResult),
       Effect.as(true as const),
-      Effect.catch((error: Error) => {
-        const failed = classifyModelFailure(error, bound);
-        const formatted = { ...failed.formatted, userRetryable: false };
-        attachProviderError(failed.error, formatted);
-        return Effect.succeed({
-          ...failed,
-          formatted,
-          info: toRetryErrorInfo(formatted),
-          autoRetryable: false,
-        });
-      }),
+      Effect.catch((error: Error) =>
+        Effect.succeed(bindingFailure(error, bound)),
+      ),
     );
   };
 };
+
+/** Rebind before attempt `ref` where `move` needs it: on a person's retry
+ *  answer, or for a `resend` on a Responses WebSocket, which dies with a
+ *  failed turn (#13407). A failed rebind is `ref`'s failure, recorded unsent,
+ *  so nothing goes out on the binding it meant to leave: false then. */
+const rebound = Effect.fn('ModelInvoker.rebound')(function* <A, E, R>(
+  driver: InvocationDriver<A, E, R>,
+  move: Extract<Move, { kind: 'send' | 'observe' }>,
+  resend: boolean,
+  ref: InvocationRef,
+): Effect.fn.Return<boolean, E, R> {
+  const bound = yield* driver.binding;
+  const credentials =
+    move.kind === 'send'
+      ? (move.retry ??
+        (resend && bound.persistentConnection ? 'configured' : null))
+      : null;
+  if (credentials === null) return true;
+  const result = yield* driver.rebind(credentials, bound);
+  if (Result.isSuccess(result)) return true;
+  const failure = bindingFailure(result.failure, bound);
+  const next = yield* moveAfter(driver, failure, ref, bound, false);
+  yield* driver.failed(ref, failure, next, bound);
+  return false;
+});
 
 /**
  * Make the attempt `move` names on `bound`: a send under the process's route
@@ -240,14 +253,12 @@ const consult = <A, E, R>(
     : asker.await(move.requestId);
 };
 
-/** The pause before an automatic resend, unchained or not: the backoff,
- *  then a fresh connection where the failed one died with the attempt. */
+/** The pause before an automatic resend, unchained or not. */
 const pauseBefore = <A, E, R>(
   driver: InvocationDriver<A, E, R>,
   next: FailedNext,
   failure: ModelFailure,
-  bound: BoundModel,
-): Effect.Effect<void, never, R> => {
+): Effect.Effect<void> => {
   if (next.kind === 'unchain')
     driver.logger.warn(
       `Chained response gone (${failure.info.message}); retrying once with the full transcript.`,
@@ -258,15 +269,7 @@ const pauseBefore = <A, E, R>(
       { data: failure.info.message },
     );
   else return Effect.void;
-  return Effect.sleep(RETRY_BACKOFF_MS).pipe(
-    // A Responses WebSocket dies with a failed turn and ages out after 55
-    // minutes, so retrying on it cannot succeed (#13407).
-    Effect.andThen(
-      bound.persistentConnection
-        ? Effect.asVoid(driver.rebind('configured', bound))
-        : Effect.void,
-    ),
-  );
+  return Effect.sleep(RETRY_BACKOFF_MS);
 };
 
 /** The move after `failure` of attempt `ref`, read off the attempts
@@ -369,12 +372,10 @@ export const runInvocation = Effect.fn('ModelInvoker.invocation')(function* <
       if (!(yield* consult(driver, move))) return CANCELLED;
       continue;
     }
-    // A key or preference may have changed while the person decided.
-    if (move.kind === 'send' && move.retry !== null)
-      yield* driver.rebind(move.retry, yield* driver.binding);
-    const bound = yield* driver.binding;
     const ref =
       move.kind === 'observe' ? move.attempt.ref : nextRef(invocation);
+    if (!(yield* rebound(driver, move, invocation !== null, ref))) continue;
+    const bound = yield* driver.binding;
     const tried = yield* tryAttempt(driver, move, ref, bound);
     if ('ok' in tried) return tried.ok;
     const after = yield* afterFailure(
@@ -394,6 +395,6 @@ export const runInvocation = Effect.fn('ModelInvoker.invocation')(function* <
     if (next.kind === 'stop')
       return { kind: 'failed', error: failure.info, cause: failure.error };
     if (next.kind === 'cancel') return CANCELLED;
-    yield* pauseBefore(driver, next, failure, bound);
+    yield* pauseBefore(driver, next, failure);
   }
 });
