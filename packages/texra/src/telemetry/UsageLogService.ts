@@ -65,10 +65,17 @@ const TELEMETRY_OPT_OUT_ENV_VARS = [
   'DO_NOT_TRACK',
 ] as const;
 
+/** The variable that opts usage logging out, in the process's environment
+ *  or in the recording run's (its project's `.env` over the process's):
+ *  either one opting out suffices, so a project can never turn it back on. */
 const telemetryOptOutEnvVar = (
   env?: Readonly<Record<string, string | undefined>>,
 ): string | undefined =>
-  TELEMETRY_OPT_OUT_ENV_VARS.find((name) => isEnvFlagEnabled(name, env));
+  TELEMETRY_OPT_OUT_ENV_VARS.find(
+    (name) =>
+      isEnvFlagEnabled(name) ||
+      (env !== undefined && isEnvFlagEnabled(name, env)),
+  );
 
 /**
  * The user's usage-logging opt-out, read live rather than snapshotted when
