@@ -63,9 +63,14 @@ interface PublicationJob {
   readonly refuse: Effect.Effect<void>;
 }
 
-/** The refusal of a publication the plane will not run. */
-const refusal = (): Error =>
-  new Error('Session publication refused: the plane has closed');
+/** Why the close settled a publication it did not finish: never run, or
+ *  cut at the deadline (it may have committed before the cut). */
+const refusal = (cut: boolean): Error =>
+  new Error(
+    cut
+      ? 'Session publication cut at the close deadline; whether it committed is unknown'
+      : 'Session publication refused: the plane has closed',
+  );
 
 /** What the publisher keeps open per aggregate, from the rows it commits:
  *  `track` folds a committed batch in, `openWork` reads one aggregate's. */
@@ -114,17 +119,18 @@ function settling<A, E>(
   job: Effect.Effect<A, E>,
   done: Deferred.Deferred<A, E>,
 ): PublicationJob {
-  const refuse = Effect.asVoid(Deferred.die(done, refusal()));
+  const refuse = (cut: boolean) =>
+    Effect.asVoid(Deferred.die(done, refusal(cut)));
   return {
     run: job.pipe(
       Effect.exit,
       Effect.flatMap((exit) =>
-        Exit.hasInterrupts(exit) ? refuse : Deferred.done(done, exit),
+        Exit.hasInterrupts(exit) ? refuse(true) : Deferred.done(done, exit),
       ),
-      Effect.onInterrupt(() => refuse),
+      Effect.onInterrupt(() => refuse(true)),
       Effect.asVoid,
     ),
-    refuse,
+    refuse: refuse(false),
   };
 }
 
@@ -207,10 +213,13 @@ export const sessionEventsLayer = Layer.effect(
         Effect.uninterruptible,
       );
     const inbox = yield* Queue.unbounded<PublicationJob, Cause.Done>();
-    // Its scope's finalizer, after `drain`, interrupts the job the
-    // deadline found running and waits only for that job's masked write.
+    // One job per take, never a batch: a job the close refuses is one the
+    // consumer never took. It ends when the ended inbox runs dry.
     const consumer = yield* Effect.forkScoped(
-      Stream.fromQueue(inbox).pipe(Stream.runForEach((job) => job.run)),
+      Effect.forever(
+        Effect.flatMap(Queue.take(inbox), (job) => job.run),
+        { disableYield: true },
+      ).pipe(Effect.catchIf(Cause.isDone, () => Effect.void)),
     );
     const drain: SessionEventsShape['drain'] = Effect.gen(function* () {
       yield* Queue.end(inbox);
@@ -220,8 +229,10 @@ export const sessionEventsLayer = Layer.effect(
         Effect.interruptible,
         Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
       );
-      if (
-        Option.isSome(ended) &&
+      // At the deadline the running job is cut; the interrupt waits only for
+      // its masked atomic write.
+      if (Option.isNone(ended)) yield* Fiber.interrupt(consumer);
+      else if (
         Exit.isFailure(ended.value) &&
         !Cause.hasInterruptsOnly(ended.value.cause)
       ) {
