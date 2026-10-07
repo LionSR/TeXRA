@@ -111,6 +111,9 @@ const traceHandover = (runId: RunId): Effect.Effect<TraceHandover> =>
 /** What a launch reports to its handle: every trace event, from the run's
  *  first, and the moment the run exists in its session. */
 interface LaunchHooks {
+  /** Whether the handoff was abandoned before the run could be stopped by
+   *  id: a launch that reads it starts no run once it is true. */
+  readonly isCancellationRequested: () => boolean;
   readonly onTraceEvent: (event: AgentEvent) => void;
   readonly onRunResolved: () => void;
 }
@@ -166,7 +169,11 @@ export function handOver(
     // outside the mask covers the rest, the boundary included: an interrupt
     // that lands while the tail runs is raised the moment the mask lifts,
     // with a `Run` built that reaches no one.
-    const interruptLaunch = (): boolean => session.runs.interrupt(runId);
+    let cancelled = false;
+    const interruptLaunch = (): boolean => {
+      cancelled = true;
+      return session.runs.interrupt(runId);
+    };
     const spawned: Fiber.Fiber<unknown, Error>[] = [];
     return yield* Effect.uninterruptibleMask((restore) =>
       Effect.gen(function* () {
@@ -175,6 +182,7 @@ export function handOver(
             // The run's trace is built with this tap, so it hears the run
             // from its first event.
             onTraceEvent: trace.offer,
+            isCancellationRequested: () => cancelled,
             onRunResolved: () => {
               Deferred.doneUnsafe(admitted, Effect.void);
             },

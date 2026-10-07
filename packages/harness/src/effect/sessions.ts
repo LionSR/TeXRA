@@ -131,7 +131,7 @@ export type PendingRequest = SessionView['requests'][number];
  */
 export type ApprovalHandler = (
   request: PendingRequest,
-) => Effect.Effect<RequestDecision>;
+) => Effect.Effect<RequestDecision, Error>;
 
 /** How {@link Sessions} opens a root's session. A later open of the same
  *  root gets the session already there, and must ask for the same options:

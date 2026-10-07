@@ -54,7 +54,10 @@ export function answerRequests(
   approve: ApprovalHandler,
   ended: Deferred.Deferred<void>,
 ): Effect.Effect<void> {
+  // Keyed by run and request, as the fold keys a pending request.
   const acted = new Set<string>();
+  const keyOf = (request: PendingRequest): string =>
+    `${request.runId}\0${request.requestId}`;
   const answer = (pending: PendingRequest): Effect.Effect<void> =>
     decisionOf(approve, pending).pipe(
       Effect.flatMap((decision) =>
@@ -72,7 +75,7 @@ export function answerRequests(
         ).pipe(
           Effect.annotateLogs({ data: cause }),
           withLogChannel(CHANNEL),
-          Effect.andThen(Effect.sync(() => acted.delete(pending.requestId))),
+          Effect.andThen(Effect.sync(() => acted.delete(keyOf(pending)))),
         ),
       ),
     );
@@ -83,10 +86,10 @@ export function answerRequests(
         attentionOf(view).requests.filter(
           (pending) =>
             requestParksItsCaller(pending.payload) &&
-            !acted.has(pending.requestId),
+            !acted.has(keyOf(pending)),
         ),
         (pending) => {
-          acted.add(pending.requestId);
+          acted.add(keyOf(pending));
           // One handler awaiting its embedder never holds the next.
           return Effect.forkChild(answer(pending));
         },
@@ -95,7 +98,7 @@ export function answerRequests(
         // A request gone from the list is decided for good: forget it.
         Effect.andThen(
           Effect.sync(() => {
-            const listed = new Set(view.requests.map((r) => r.requestId));
+            const listed = new Set(view.requests.map(keyOf));
             for (const id of acted) if (!listed.has(id)) acted.delete(id);
           }),
         ),

@@ -356,8 +356,12 @@ describe('agent package sessions', () => {
       }),
   );
 
-  it.live('denies a request whose approval handler throws', () =>
+  it.effect('denies a request whose approval handler throws', () =>
     Effect.gen(function* () {
+      const decided = yield* Deferred.make<unknown>();
+      mocks.decide.mockImplementationOnce((request: unknown) =>
+        Deferred.succeed(decided, request).pipe(Effect.as({ kind: 'done' })),
+      );
       const sessions = yield* Sessions;
       yield* sessions.open(undefined, {
         approve: () => {
@@ -378,10 +382,7 @@ describe('agent package sessions', () => {
           },
         ],
       }));
-      yield* Effect.promise(() =>
-        vi.waitFor(() => expect(mocks.decide).toHaveBeenCalledOnce()),
-      );
-      expect(mocks.decide).toHaveBeenCalledWith({
+      expect(yield* Deferred.await(decided)).toEqual({
         kind: 'request.decide',
         runId: 'ae0001',
         requestId: 'r1',
