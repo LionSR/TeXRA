@@ -7,14 +7,52 @@ const path = require('node:path');
 const vscode = require('vscode');
 
 const EXTENSION_ID = 'texra-ai.texra';
+const serviceRun = path.join(os.homedir(), '.texra', 'run');
+const serviceLog = path.join(serviceRun, 'serve.log');
+
+/**
+ * One step of the suite, said as it starts and bounded: a step that never
+ * settles fails with its name instead of holding the job until CI cancels
+ * it with no output (#13761 to #13868 hung that way).
+ */
+async function step(label, program, ms = 90_000) {
+  console.log(`[texra e2e] ${label}`);
+  let timer;
+  try {
+    return await Promise.race([
+      program(),
+      new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`timed out after ${ms} ms: ${label}`)),
+          ms,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 async function run() {
+  try {
+    await checks();
+  } catch (error) {
+    // What the service said is the evidence a failed run needs.
+    const log = existsSync(serviceLog)
+      ? readFileSync(serviceLog, 'utf8').slice(-6000)
+      : '(no service log)';
+    console.log(`[texra e2e] failed; service log tail:\n${log}`);
+    throw error;
+  }
+}
+
+async function checks() {
   const extension = vscode.extensions.getExtension(EXTENSION_ID);
   assert.ok(
     extension,
     `${EXTENSION_ID} is not loaded from extensionDevelopmentPath`,
   );
-  await extension.activate();
+  await step('activate', () => extension.activate());
   assert.equal(extension.isActive, true, 'the extension did not activate');
 
   // A manifest command with no registration is a silent failure otherwise.
@@ -29,9 +67,12 @@ async function run() {
   );
 
   // The commands that open the extension's own surfaces run without throwing.
-  await vscode.commands.executeCommand('texra.showProgressView');
-  await vscode.commands.executeCommand('texra.showAgents');
-  await vscode.commands.executeCommand('texra.openProgressViewInTab');
+  for (const command of [
+    'texra.showProgressView',
+    'texra.showAgents',
+    'texra.openProgressViewInTab',
+  ])
+    await step(command, () => vscode.commands.executeCommand(command), 30_000);
 
   // The panel opens asynchronously after the command resolves.
   const isTexraWebviewTab = (tab) =>
@@ -52,8 +93,7 @@ async function run() {
   // this window launches runs there, not in the window. The runner checks
   // that the service outlives the window.
   if (process.platform === 'win32') return;
-  const run = path.join(os.homedir(), '.texra', 'run');
-  const record = path.join(run, 'serve.json');
+  const record = path.join(serviceRun, 'serve.json');
   const until = async (label, check) => {
     const end = Date.now() + 60_000;
     while (!check()) {
@@ -61,7 +101,9 @@ async function run() {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
   };
-  await until('the service record', () => existsSync(record));
+  await step('the service record', () =>
+    until('the service record', () => existsSync(record)),
+  );
   const info = JSON.parse(readFileSync(record, 'utf8'));
   assert.equal(
     info.version,
@@ -69,7 +111,9 @@ async function run() {
     'the service reports the extension version it was started from',
   );
   // No provider key in this home: the task ends at once, but in the service.
-  await vscode.commands
+  // The command settles when the task ends; the suite waits only for the
+  // service to start it.
+  void vscode.commands
     .executeCommand('texra.execute', {
       config: {
         agent: 'setup',
@@ -82,9 +126,11 @@ async function run() {
       () => undefined,
       () => undefined,
     );
-  const log = () => readFileSync(path.join(run, 'serve.log'), 'utf8');
-  await until('the service to start the task', () =>
-    /Starting run \(runId: [0-9a-f]{12}\)/.test(log()),
+  const log = () => readFileSync(serviceLog, 'utf8');
+  await step('the service to start the task', () =>
+    until('the service to start the task', () =>
+      /Starting run \(runId: [0-9a-f]{12}\)/.test(log()),
+    ),
   );
   // The window attached its editor (diagnostics, PDFs, tool-edit previews)
   // before its project's session was opened there.
