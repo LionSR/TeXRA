@@ -15,7 +15,12 @@
  * commits whole, so those are the crash points. For each point N the suite
  * copies the clean store, truncates it to commits 1..N (the store a process
  * killed after commit N leaves), hands its claims to a dead owner, opens a
- * fresh session over it and resumes the root run. The handoff, the
+ * fresh session over it and resumes the root run. The copy is rebuilt as
+ * the store stood at commit N (`crashAt`), and the run's files and the
+ * workspace's command effects are put back as the clean pass had them at
+ * that commit. A truncation cannot place the cut between an external
+ * effect and its result, which is the consequential crash; the golden
+ * suite's `golden_effect` is a real kill there. The handoff, the
  * compaction, the fork and the bypass changes are a user's requests, which
  * a crash loses: they are issued again when their rows are not in the
  * prefix. Every request is approved, and an unfinished call whose outcome
@@ -155,6 +160,11 @@ const rowsOf = (storage: string): Row[] => {
   }
 };
 
+/** A file's lines, none when it is absent. */
+const linesOf = (file: string): string[] =>
+  existsSync(file)
+    ? readFileSync(file, 'utf8').split('\n').filter(Boolean)
+    : [];
 const json = (row: Row) => JSON.parse(row.data) as Record<string, unknown>;
 const payload = (row: Row) => json(row).payload as Record<string, unknown>;
 const isResponse = (row: Row) =>
@@ -286,9 +296,17 @@ function outcome(rows: readonly Row[], root: string) {
   };
 }
 
-/** Truncate a copy of the clean store to its first `n` commits, as a process
- *  killed after commit `n` leaves it, its claims held by a dead owner. The
- *  projections rebuild from the rows on open. */
+/**
+ * Rebuild a copy of the clean store as a process killed after commit `n`
+ * left it, its claims held by a dead owner: every durable table at the cut,
+ * not the later store with rows cut away. Rows, their blobs and sequences
+ * go back to commit `n`; a plugin aggregate hangs where its last fact at
+ * the cut put it; current values and input history written after the cut's
+ * clock go (one the later run overwrote in place reads as never written).
+ * `stored_kind` is append-only and kept: every version in it is this
+ * build's, so the gate reads it as it would at the cut.
+ * The projections rebuild from the rows on open.
+ */
 function crashAt(clean: string, storage: string, n: number): void {
   mkdirSync(storage, { recursive: true });
   cpSync(clean, join(storage, 'texra.db'));
@@ -299,6 +317,11 @@ function crashAt(clean: string, storage: string, n: number): void {
   ]);
   const db = new DatabaseSync(join(storage, 'texra.db'));
   try {
+    const at = db
+      .prepare(
+        'SELECT at FROM event WHERE "commit" <= ? ORDER BY "commit" DESC LIMIT 1',
+      )
+      .get(n)?.at;
     db.exec(`
       DELETE FROM projection_state; DELETE FROM projected_row;
       DELETE FROM listing_entry; DELETE FROM run_usage; DELETE FROM run_model;
@@ -310,12 +333,40 @@ function crashAt(clean: string, storage: string, n: number): void {
         seq = (SELECT max(seq) FROM event WHERE aggregate = event_sequence.id),
         closed_by = CASE WHEN closed_by > ${n} THEN NULL ELSE closed_by END,
         owner_id = CASE WHEN owner_id IS NULL THEN NULL ELSE '${dead}' END;
+      UPDATE event_sequence SET parent_id = (
+        SELECT p.id FROM event e JOIN event_sequence p
+          ON p.kind = 'run' AND p.logical_id = json_extract(e.data, '$.parent')
+        WHERE e.aggregate = event_sequence.id AND e.type = 'plugin.fact'
+        ORDER BY e.seq DESC LIMIT 1)
+      WHERE kind <> 'run';
+      DELETE FROM current_value WHERE at > ${Number(at ?? 0)};
+      DELETE FROM input_history WHERE at > ${Number(at ?? 0)};
       UPDATE sqlite_sequence SET seq = ${n} WHERE name = 'event';
     `);
   } finally {
     db.close();
   }
 }
+
+/** The files a run keeps beside the store and the command effects in the
+ *  workspace, copied as the clean pass reached commit `n`: what a process
+ *  killed there left on disk. */
+const snapshotOf = (storage: string, n: number) =>
+  join(storage, 'snapshots', String(n));
+const FILES_BESIDE = ['executions'];
+const takeSnapshot = (
+  roots: ReturnType<typeof testWorkspaceRoots>,
+  n: number,
+): void => {
+  const to = snapshotOf(roots.storage, n);
+  for (const name of FILES_BESIDE) {
+    const from = join(roots.storage, name);
+    if (existsSync(from)) cpSync(from, join(to, name), { recursive: true });
+  }
+  const effects = join(roots.workspace!, 'effects.log');
+  mkdirSync(to, { recursive: true });
+  if (existsSync(effects)) cpSync(effects, join(to, 'effects.log'));
+};
 
 /** Approve every request the runs open above commit `after`. */
 const approveAll = (session: SessionHandle, after = 0) =>
@@ -681,7 +732,10 @@ const cleanPass = (
         const commits: number[] = [];
         yield* SubscriptionRef.changes(db.observedCommit).pipe(
           Stream.runForEach((commit) =>
-            Effect.sync(() => commits.push(commit)),
+            Effect.sync(() => {
+              commits.push(commit);
+              takeSnapshot(roots, commit);
+            }),
           ),
           Effect.forkScoped,
         );
@@ -728,11 +782,17 @@ const resumeFrom = (
   Effect.gen(function* () {
     const storage = join(roots.storage, `crash-${n}`);
     crashAt(clean, storage, n);
-    // The files runs keep beside the store outlive the process: a revision's
+    // The files on disk at the cut, never the later run's: a revision's
     // reply is on disk before the row that names it commits.
-    const files = join(roots.storage, 'executions');
-    if (existsSync(files))
-      cpSync(files, join(storage, 'executions'), { recursive: true });
+    const snapshot = snapshotOf(roots.storage, n);
+    for (const name of FILES_BESIDE)
+      if (existsSync(join(snapshot, name)))
+        cpSync(join(snapshot, name), join(storage, name), { recursive: true });
+    const effectsLog = join(roots.workspace!, 'effects.log');
+    rmSync(effectsLog, { force: true });
+    if (existsSync(join(snapshot, 'effects.log')))
+      cpSync(join(snapshot, 'effects.log'), effectsLog);
+    const effectsBefore = linesOf(effectsLog).length;
     const prefix = rowsOf(storage);
     const refused = yield* Effect.scoped(
       Effect.gen(function* () {
@@ -784,7 +844,9 @@ const resumeFrom = (
         ),
       ),
     );
-    return { prefix, final: rowsOf(storage), refused };
+    // What the resume's commands appended after the cut's effects.
+    const effects = linesOf(effectsLog).slice(effectsBefore);
+    return { prefix, final: rowsOf(storage), refused, effects };
   });
 
 export function crashConformanceSuite(plugins: string): void {
@@ -855,7 +917,6 @@ export function crashConformanceSuite(plugins: string): void {
       () =>
         Effect.gen(function* () {
           const roots = testWorkspaceRoots();
-          const effectsLog = join(roots.workspace!, 'effects.log');
           const root = generateRunId();
 
           const { points, clean } = yield* cleanPass(
@@ -928,18 +989,13 @@ export function crashConformanceSuite(plugins: string): void {
 
           const broken: string[] = [];
           for (const n of points) {
-            rmSync(effectsLog, { force: true });
-            const { prefix, final, refused } = yield* resumeFrom(
+            const { prefix, final, refused, effects } = yield* resumeFrom(
               roots,
               clean,
               n,
               root,
               (session, storage) => userSteps(session, storage, root),
             );
-            // No file: no command ran during the resume.
-            const effects = existsSync(effectsLog)
-              ? readFileSync(effectsLog, 'utf8').split('\n').filter(Boolean)
-              : [];
             const found = [
               ...(refused === null ? [] : [refused]),
               ...violations(prefix, final, n, root, expected, effects),

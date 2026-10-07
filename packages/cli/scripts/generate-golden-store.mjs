@@ -49,6 +49,14 @@
  *   fork, whose `run.start.provenance` names its source and whose first
  *   history row is a `context.edit` (cause `fork`); then `texra resume
  *   --handoff` on the fork: a `context.edit` (cause `handoff`).
+ * - `golden_effect` (headless, `yolo`): its command
+ *   appends to `approved.txt`, then a plugin's `PostToolUse` hook on `bash`
+ *   holds the call, and the process is killed (`SIGKILL`) there. A call's
+ *   PostToolUse rows commit with its settlement, so the store holds the
+ *   command's intent and no result: the consequential crash, after an
+ *   external effect and before its result commits. The file it left is the
+ *   fixture's artifact (`golden-effect/approved.txt`), which the golden
+ *   suite puts back before it resumes the run.
  * - one `golden_child` run, deleted with `texra history delete` once
  *   `texra serve` holds the project open: the tombstoned run, which no
  *   later open is left to collect.
@@ -95,6 +103,12 @@ const binaryPath = path.join(validationRoot, 'bin', 'texra.js');
 const fixturePath = path.join(
   repoRoot,
   'src/test-kernel/fixtures/storage/golden-1.0.sql',
+);
+/** The killed command's effect, kept beside the store it was killed in. */
+const effectPath = path.join(
+  path.dirname(fixturePath),
+  'golden-effect',
+  'approved.txt',
 );
 const FLAG_CONTENT = 'texra-cli-run-validation\n';
 const FAKE_KEY = 'texra-validation-fake-key';
@@ -386,7 +400,31 @@ process.stdin.on('end', function answer() {
     const code = await exited;
     if (code !== 0) fail(`texra serve exited ${code}\n${log}`);
   };
-  return { run, chat, serve, store, project, hooks };
+  // A headless run in the background, for the generator to kill.
+  const start = (command) => {
+    const child = spawn(process.execPath, argv(command), {
+      cwd: project,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    spawned.add(child);
+    let output = '';
+    child.stdout.on('data', (chunk) => (output += chunk));
+    child.stderr.on('data', (chunk) => (output += chunk));
+    const exited = new Promise((resolve) =>
+      child.on('exit', (code, signal) => {
+        spawned.delete(child);
+        resolve({ code, signal });
+      }),
+    );
+    return {
+      exited,
+      kill: () => child.kill('SIGKILL'),
+      done: () => child.exitCode !== null || child.signalCode !== null,
+      output: () => output,
+    };
+  };
+  return { run, start, chat, serve, store, project, hooks };
 }
 
 /** Rows of the workspace store, read from outside the CLI. */
@@ -717,6 +755,61 @@ async function generate(root) {
     'Saw: The handoff note.',
   );
 
+  // The consequential crash: the command's effect lands, then its
+  // PostToolUse hook holds the call until the process is killed, before
+  // the command's result commits.
+  const held = path.join(root, 'golden-effect-hooks');
+  mkdirSync(path.join(held, '.claude-plugin'), { recursive: true });
+  mkdirSync(path.join(held, 'hooks'));
+  writeFileSync(
+    path.join(held, '.claude-plugin', 'plugin.json'),
+    `${JSON.stringify({ name: 'golden-effect-hooks', version: '1.0.0' })}\n`,
+  );
+  const started = path.join(root, 'golden-effect.started');
+  writeFileSync(
+    path.join(held, 'hooks', 'hooks.json'),
+    `${JSON.stringify({
+      hooks: {
+        PostToolUse: [
+          {
+            matcher: 'bash',
+            hooks: [
+              {
+                type: 'command',
+                command: 'node',
+                args: [
+                  '-e',
+                  `require('node:fs').writeFileSync(${JSON.stringify(started)}, ''); setTimeout(() => {}, 60_000)`,
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    })}\n`,
+  );
+  cli.run(['plugin', 'install', held, '--print']);
+  cli.run(['plugin', 'enable', 'golden-effect-hooks', '--print'], 'y\n');
+  const effect = cli.start([
+    'run',
+    'golden_effect',
+    '--model',
+    'gpt56',
+    '--instruction',
+    'Run the command.',
+    '--approval-policy',
+    'yolo',
+    '--output-format',
+    'json',
+    '--print',
+  ]);
+  await until('the held command', () => existsSync(started), effect);
+  effect.kill();
+  await effect.exited;
+  cli.run(['plugin', 'disable', 'golden-effect-hooks', '--print']);
+  mkdirSync(path.dirname(effectPath), { recursive: true });
+  cpSync(path.join(cli.project, 'approved.txt'), effectPath);
+
   // The tombstone's run: a finished run, deleted in the service step below
   // with no later open left to collect it.
   const before = new Set(
@@ -826,6 +919,7 @@ async function generate(root) {
       service,
     );
   });
+
   return cli.store();
 }
 
