@@ -21,7 +21,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "gate": "npm run gate:invariants && npm run gate:typecheck && npm run lint",
-    "gate:invariants": "npm run check:ratchet-baselines && npm run check:dead-code-ratchet && npm run check:unexecuted-effects && npm run check:effect-test-runs && npm run check:core-quality && npm run check:extension-package-invariants && npm run check:package-contributes && npm run check:notice && npm run sync:remote-agents",
+    "gate:invariants": "npm run check:ratchet-baselines && npm run check:dead-code-ratchet && npm run check:unexecuted-effects && npm run check:effect-test-runs && npm run check:core-quality && npm run check:extension-package-invariants && npm run check:package-contributes && npm run check:notice",
     "gate:typecheck": "corepack pnpm --filter @texra-ai/cli smoke:react-compiler && npm run format:check && npm run typecheck",
     "hooks:install": "node scripts/install-local-hooks.mjs",
     "vite:webviews": "corepack pnpm --filter texra vite:webviews",
@@ -65,7 +65,6 @@
     "check:desktop-installers": "node scripts/verify-desktop.mjs installers",
     "sync:notice": "node scripts/sync-notice-files.mjs",
     "check:notice": "node scripts/sync-notice-files.mjs --check",
-    "sync:remote-agents": "node scripts/sync-remote-agents.mjs",
     "storage:freeze": "vitest run --config vitest.config.mjs --mode freeze src/test-kernel/schemas/rowVersions.vitest.ts"
   },
   "devDependencies": {
