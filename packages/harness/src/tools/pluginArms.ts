@@ -85,26 +85,36 @@ const ANNOUNCED: Readonly<Record<string, (value: unknown) => void>> = {
  * announced fact differs from the last level read, the first level included.
  * The rows themselves are read (`rows`), since the view keeps each kind's
  * latest value only and its tail coalesces wakes; a row at or below `since`
- * (the history a reopened session replays) is never announced.
+ * (the history a reopened session replays) is never announced. A failed
+ * read (a busy store) is logged and retried on the next change, from where
+ * the last good read left off: it never stops the announcer.
  */
 export function announceRunFacts(
   changes: Stream.Stream<SessionView>,
   rows: (runId: RunId) => Effect.Effect<readonly SessionEvent[], Error>,
   since: CommitOrdinal,
-): Effect.Effect<void, Error> {
+): Effect.Effect<void> {
   return Effect.suspend(() => {
     const seen = new Map<RunId, string>();
     const announcedTo = new Map<RunId, CommitOrdinal>();
     const announce = (runId: RunId) =>
-      Effect.map(rows(runId), (stored) => {
-        let last = announcedTo.get(runId) ?? since;
-        for (const row of stored) {
-          if (row.type !== 'plugin.fact' || row.commit <= last) continue;
-          ANNOUNCED[`${row.plugin}/${row.kind}`]?.(row.value);
-          last = row.commit;
-        }
-        announcedTo.set(runId, last);
-      });
+      rows(runId).pipe(
+        Effect.map((stored) => {
+          let last = announcedTo.get(runId) ?? since;
+          for (const row of stored) {
+            if (row.type !== 'plugin.fact' || row.commit <= last) continue;
+            ANNOUNCED[`${row.plugin}/${row.kind}`]?.(row.value);
+            last = row.commit;
+          }
+          announcedTo.set(runId, last);
+        }),
+        Effect.catch((error) => {
+          seen.delete(runId);
+          return Effect.logWarning(
+            `Run ${runId}'s facts were not read; announcing them on the next change`,
+          ).pipe(Effect.annotateLogs({ data: error }));
+        }),
+      );
     return Stream.runForEach(changes, (view) => {
       const moved: RunId[] = [];
       for (const run of view.runs.values()) {

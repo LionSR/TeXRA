@@ -144,8 +144,6 @@ export const makeSessionViewAccess = (
     const inputs = yield* SessionInputs;
     const subscriptions = yield* TranscriptSubscriptions;
     const local = yield* LocalRuntimeSource;
-    // What the session's runs announce, to this process's listeners, for
-    // the session's life.
     // What the session's runs announce from here on, to this process's
     // listeners, for the session's life: rows above the commit the store
     // holds now, so a reopened session never replays history as news.
