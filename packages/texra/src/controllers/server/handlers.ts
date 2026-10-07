@@ -12,8 +12,11 @@ import {
   Cause,
   Context,
   Deferred,
+  Duration,
   Effect,
+  Exit,
   FiberSet,
+  Schedule,
   Scope,
   Stream,
   SubscriptionRef,
@@ -47,8 +50,8 @@ import { listTasks } from './taskList';
 import type { ProcessServices } from '@texra-ai/harness';
 
 /** The projects the service serves: one session per folder, opened on
- *  demand and held until the service stops. The host that composes the
- *  service builds each project's roots, so this is its port. */
+ *  demand and closed once idle (see {@link serviceHandlers}). The host that
+ *  composes the service builds each project's roots, so this is its port. */
 export class ServiceProjects extends Context.Service<
   ServiceProjects,
   {
@@ -58,6 +61,8 @@ export class ServiceProjects extends Context.Service<
     readonly open: (workspace: string) => Effect.Effect<SessionHandle, Error>;
     /** The sessions open now, by storage root. */
     readonly opened: Effect.Effect<ReadonlyMap<string, SessionHandle>>;
+    /** Close the session of a storage root; a later `open` reopens it. */
+    readonly close: (storage: string) => Effect.Effect<void>;
   }
 >()('@texra/server/ServiceProjects') {}
 
@@ -74,6 +79,9 @@ export class ServiceControl extends Context.Service<
     readonly draining: Effect.Effect<boolean>;
     /** Stop now, or drain first; returns once the stop is asked. */
     readonly stop: (drain: boolean) => Effect.Effect<void>;
+    /** How long anything unused is kept: the service with no client and
+     *  no task, and a project's session with no client and no run held. */
+    readonly idleAfter: Duration.Duration;
   }
 >()('@texra/server/ServiceControl') {}
 
@@ -185,15 +193,73 @@ export const serviceHandlers = TexraRpcs.toLayer(
         );
     });
     const hosts = yield* makeHostWindows;
-    const presented = new WeakSet<SessionHandle>();
-    /** The service's presentation surface on a project's session, given
-     *  once: what its runs ask of a host goes to the project's windows. */
-    const present = (session: SessionHandle): Effect.Effect<void> =>
-      Effect.suspend(() => {
-        if (presented.has(session)) return Effect.void;
-        presented.add(session);
-        return hosts.adopt(session).pipe(Scope.provide(scope));
+    /**
+     * Each open session's residency: the client streams on it now (watches
+     * and window attachments), since when it has had none, and the scope of
+     * the presentation surface the service gives it (what its runs ask of a
+     * host goes to the project's windows), closed with the session.
+     */
+    const resident = new Map<
+      SessionHandle,
+      { clients: number; idleSince: number; scope: Scope.Closeable }
+    >();
+    const present = (session: SessionHandle) =>
+      Effect.gen(function* () {
+        const held = resident.get(session);
+        if (held !== undefined) return held;
+        const entry = {
+          clients: 0,
+          idleSince: Date.now(),
+          scope: yield* Scope.fork(scope),
+        };
+        resident.set(session, entry);
+        yield* hosts.adopt(session).pipe(Scope.provide(entry.scope));
+        return entry;
       });
+    /** `stream` as one client of `session` while it runs. */
+    const held = <A, E, R>(
+      session: SessionHandle,
+      stream: Stream.Stream<A, E, R>,
+    ): Stream.Stream<A, E, R> =>
+      Stream.unwrap(
+        Effect.map(present(session), (entry) => {
+          entry.clients += 1;
+          return stream.pipe(
+            Stream.ensuring(
+              Effect.sync(() => {
+                entry.clients -= 1;
+                entry.idleSince = Date.now();
+              }),
+            ),
+          );
+        }),
+      );
+    // A session with no client and no run held is closed once idle long
+    // enough: a service that lives for weeks keeps only the projects in use.
+    const idleMs = Duration.toMillis(control.idleAfter);
+    yield* Effect.forkScoped(
+      Effect.gen(function* () {
+        const now = Date.now();
+        for (const [storage, session] of yield* projects.opened) {
+          const entry = resident.get(session);
+          if (
+            entry === undefined ||
+            entry.clients > 0 ||
+            session.runs.heldIds().length > 0 ||
+            now - entry.idleSince < idleMs
+          )
+            continue;
+          resident.delete(session);
+          yield* Effect.logInfo(`Closing the idle session of ${storage}`);
+          yield* projects.close(storage);
+          yield* Scope.close(entry.scope, Exit.void);
+        }
+      }).pipe(
+        Effect.repeat(
+          Schedule.spaced(Duration.millis(Math.min(60_000, idleMs / 2))),
+        ),
+      ),
+    );
     const openSession = (workspace: string) =>
       projects.open(workspace).pipe(Effect.tap(present));
     const open = (workspace: string) =>
@@ -230,17 +296,20 @@ export const serviceHandlers = TexraRpcs.toLayer(
             const port = `service-watch-${(ports += 1)}`;
             // The client renders its own host state; the service has none.
             const host = yield* SubscriptionRef.make<HostSnapshot | null>(null);
-            return frameSubscription(
-              {
-                key: session.roots.storage,
-                view: session.view.ref,
-                inputs: session.view.inputs,
-                setTranscriptSubscriptions: session.view.subscribe,
-              },
-              port,
-              host,
-              { ...subscribe, session: session.roots.storage },
-            ).pipe(Stream.ensuring(session.view.subscribe(port, [])));
+            return held(
+              session,
+              frameSubscription(
+                {
+                  key: session.roots.storage,
+                  view: session.view.ref,
+                  inputs: session.view.inputs,
+                  setTranscriptSubscriptions: session.view.subscribe,
+                },
+                port,
+                host,
+                { ...subscribe, session: session.roots.storage },
+              ).pipe(Stream.ensuring(session.view.subscribe(port, []))),
+            );
           }),
         ),
       'task.ended': ({ workspace, runId }) =>
@@ -316,11 +385,16 @@ export const serviceHandlers = TexraRpcs.toLayer(
               .open(workspace)
               .pipe(Effect.mapError((error) => failed(error.message))),
             (session) =>
-              hosts.attach(session, capabilities).pipe(
-                // The session's surface is given once the window is held,
-                // so a first attach is never told that no window is.
-                Stream.tap((frame) =>
-                  frame.kind === 'attached' ? present(session) : Effect.void,
+              held(
+                session,
+                hosts.attach(session, capabilities).pipe(
+                  // The session's surface is given once the window is held,
+                  // so a first attach is never told that no window is.
+                  Stream.tap((frame) =>
+                    frame.kind === 'attached'
+                      ? Effect.asVoid(present(session))
+                      : Effect.void,
+                  ),
                 ),
               ),
           ),

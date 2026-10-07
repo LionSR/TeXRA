@@ -154,6 +154,7 @@ export const serve = Effect.fn('server.serve')(function* (
     startedAt,
     clients: Effect.suspend(() => clients),
     draining: Ref.get(draining),
+    idleAfter: Duration.fromInputUnsafe(options.idleAfter),
     stop: (drain) =>
       drain
         ? Ref.set(draining, true).pipe(

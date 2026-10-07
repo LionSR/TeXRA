@@ -131,12 +131,19 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
   // window holds can replace it.
   const sessions = new Map<string, SessionHandle>();
   const lanes = new Map<string, PerKeyLane>();
+  const projectRoots = new Map<
+    string,
+    Effect.Success<ReturnType<typeof openRoots>>
+  >();
   const open = (workspace: string) => {
     const root = canonicalizeWorkspacePath(workspace);
     return Effect.gen(function* () {
       const held = sessions.get(root);
       if (held !== undefined) return held;
-      const roots = yield* openRoots(root);
+      // A project's stores live as long as the service, so a session
+      // closed for idleness reopens over the same ones.
+      const roots = projectRoots.get(root) ?? (yield* openRoots(root));
+      projectRoots.set(root, roots);
       const session = yield* (yield* SessionOwner).open({
         roots,
         interruptedTasks: 'offer',
@@ -149,9 +156,23 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       Effect.provideContext(services),
     );
   };
+  // Closed on the project's lane, so an open of the same project waits
+  // for the close and then opens it anew.
+  const close = (storage: string) =>
+    Effect.suspend(() => {
+      const root = [...sessions].find(
+        ([, session]) => session.roots.storage === storage,
+      )?.[0];
+      if (root === undefined) return Effect.void;
+      return Effect.gen(function* () {
+        sessions.delete(root);
+        yield* (yield* SessionOwner).close(storage);
+      }).pipe(withPerKeyLane(lanes, root), Effect.provideContext(services));
+    });
   return {
     storageRoot,
     open,
+    close,
     opened: Effect.sync(
       () =>
         new Map(
