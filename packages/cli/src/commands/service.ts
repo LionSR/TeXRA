@@ -131,10 +131,11 @@ export const serveCommand = defineCliCommand({
     'idle-timeout': {
       type: 'string',
       valueHint: 'seconds',
-      description: `Exit after this long with no client and no running task (default ${DEFAULT_IDLE_SECONDS})`,
+      description: `Exit after this long with no client and no running task, and close a project's session after this long with no client and no task of its own (default ${DEFAULT_IDLE_SECONDS})`,
     },
   },
   catchExitCode: CliExitCode.AgentError,
+  install: 'service',
   run: (context, ctx) =>
     runServe(context, parseIdleSeconds(ctx.args['idle-timeout'])),
 });

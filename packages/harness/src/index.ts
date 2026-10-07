@@ -46,6 +46,9 @@ export {
   processLayer,
   type ProcessLayerOptions,
 } from '@controllers/session/sessionLayer';
+// A project's `.env` over the process environment, for a host surface that
+// serves one project (the desktop's), as each run reads it.
+export { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
 export {
   withForkFailureReporting,
   withProcessServices,

@@ -65,8 +65,10 @@ const TELEMETRY_OPT_OUT_ENV_VARS = [
   'DO_NOT_TRACK',
 ] as const;
 
-const telemetryOptOutEnvVar = (): string | undefined =>
-  TELEMETRY_OPT_OUT_ENV_VARS.find((name) => isEnvFlagEnabled(name));
+const telemetryOptOutEnvVar = (
+  env?: Readonly<Record<string, string | undefined>>,
+): string | undefined =>
+  TELEMETRY_OPT_OUT_ENV_VARS.find((name) => isEnvFlagEnabled(name, env));
 
 /**
  * The user's usage-logging opt-out, read live rather than snapshotted when
@@ -81,10 +83,14 @@ const telemetryOptOutEnvVar = (): string | undefined =>
  * `config` is the workspace's configuration the consent is read from: the
  * recording run's session roots, or the one captured with a queued entry.
  */
-function isTelemetryEnabledBySetting(config: ConfigProvider): boolean {
+function isTelemetryEnabledBySetting(
+  config: ConfigProvider,
+  env?: Readonly<Record<string, string | undefined>>,
+): boolean {
   // Checked before the config read so the kill switch also holds on a host that
-  // has not initialized its platform yet.
-  if (telemetryOptOutEnvVar()) return false;
+  // has not initialized its platform yet. `env` is the recording run's,
+  // so a project's `.env` opt-out holds for its runs.
+  if (telemetryOptOutEnvVar(env)) return false;
 
   // Which scope answers is the config store's rule (`projectValueIgnored`):
   // a project file may opt out but never opt in. The config files are
@@ -129,6 +135,7 @@ export function usageLoggingOptOut(config: ConfigProvider): UsageLoggingOptOut {
 interface QueuedUsageEntry {
   readonly entry: UsageLogEntry;
   readonly config: ConfigProvider;
+  readonly env?: Readonly<Record<string, string | undefined>>;
 }
 
 /** A batch that failed to send, kept with its consent sources for the retry. */
@@ -167,8 +174,13 @@ class UsageLogServiceImpl {
   private hostTelemetryEnabled: () => boolean = () => true;
 
   /** The host's own switch (VS Code's telemetry setting) and the user's opt-outs, read live. */
-  private allowed(config: ConfigProvider): boolean {
-    return this.hostTelemetryEnabled() && isTelemetryEnabledBySetting(config);
+  private allowed(
+    config: ConfigProvider,
+    env?: Readonly<Record<string, string | undefined>>,
+  ): boolean {
+    return (
+      this.hostTelemetryEnabled() && isTelemetryEnabledBySetting(config, env)
+    );
   }
 
   /** Start this instance's sender and ticker, then register its final drain. */
@@ -224,9 +236,10 @@ class UsageLogServiceImpl {
   log(
     entry: Omit<UsageLogEntry, 'timestamp' | 'extensionVersion' | 'editorType'>,
     config: ConfigProvider,
+    env?: Readonly<Record<string, string | undefined>>,
   ): void {
     if (!this.config.enabled) return;
-    if (!this.allowed(config)) return;
+    if (!this.allowed(config, env)) return;
 
     if (this.queue.length >= MAX_QUEUE_SIZE) {
       // `log` is synchronous (the invoker's usage report): its lines go straight to the sink.
@@ -242,6 +255,7 @@ class UsageLogServiceImpl {
         editorType: this.editorType,
       },
       config,
+      ...(env !== undefined && { env }),
     });
     const queued = `Queued usage entry (queue size: ${this.queue.length})`;
     writeLogLine('DEBUG', CHANNEL, queued);
@@ -353,7 +367,9 @@ class UsageLogServiceImpl {
       // queued before the opt-out instead of leaving the timer to send them,
       // and read from the workspace each entry was recorded in, since this
       // flush runs outside any run.
-      const kept = batch.entries.filter(({ config }) => this.allowed(config));
+      const kept = batch.entries.filter(({ config, env }) =>
+        this.allowed(config, env),
+      );
       const dropped = batch.entries.length - kept.length;
       if (dropped > 0) {
         yield* Effect.logDebug(

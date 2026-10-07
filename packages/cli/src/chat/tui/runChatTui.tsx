@@ -21,7 +21,11 @@ import { aggregateId } from '@texra-ai/harness';
 import type { AgentConfig } from '@agent/runtime';
 import { getVisibleAgents } from '@agent/index';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
-import { linkCliService, reachCliService } from '@cli/runtime/cliService';
+import {
+  linkCliService,
+  reachCliService,
+  serviceKeysNotice,
+} from '@cli/runtime/cliService';
 
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
@@ -166,6 +170,7 @@ export async function runChat(
   const runtime = installCliProcessRuntime(context.storageRoot, {
     resourcesPath: context.resourcesPath,
     minimumLogLevel: context.minimumLogLevel,
+    workspace: context.cwd,
   });
   const initialResume = init.initialResume;
   // The chat's hold on the background service, for its whole life.
@@ -421,6 +426,15 @@ export async function runChat(
     },
   });
   for (const notice of startupNotices) appendLocalNotice(notice);
+  // Said when the login shell has answered, without holding the chat.
+  if (runsElsewhere)
+    runtime.runFork(
+      serviceKeysNotice().pipe(
+        Effect.tap((keys) =>
+          Effect.sync(() => keys !== null && appendLocalNotice(keys)),
+        ),
+      ),
+    );
   // The service went away (retired by a newer build, or it died) and the
   // link reaches it again: the chat says so, rather than going quiet.
   if (link !== undefined)

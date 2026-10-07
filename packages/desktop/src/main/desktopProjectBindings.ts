@@ -173,7 +173,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
     const bindProject = Effect.fn('desktop.bindProject')(function* (
       project: DesktopProject,
     ) {
-      const spawn = desktopSpawner(runtime, yield* Scope.Scope);
+      const spawn = desktopSpawner(runtime, yield* Scope.Scope, project.root);
       const { workspace, browserViews, release } =
         createProjectWorkspace(project);
       const hosts = host.forProject(project);

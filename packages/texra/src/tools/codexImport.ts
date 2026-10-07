@@ -190,7 +190,7 @@ export const openCodexClient = Effect.fn('codex.openClient')(function* () {
   const codexPath = yield* findCodexBinaryPath();
   const codex = new CodexClass({
     codexPathOverride: codexPath,
-    env: inheritedEnv('openai'),
+    env: yield* inheritedEnv('openai'),
   });
   return { codex, codexPath };
 });

@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   Cause,
-  Data,
   Effect,
   Exit,
   Layer,
@@ -38,7 +37,6 @@ import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
-import { isFileNotFoundError } from '@common/errors';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import {
   appStateStoreFromDatabase,
@@ -109,11 +107,6 @@ import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands } from './commands';
 
 const EXTENSION_CHANNEL = 'extension';
-
-/** The workspace `.env` file could not be read into the process env. */
-class WorkspaceEnvFileUnreadable extends Data.TaggedError(
-  'WorkspaceEnvFileUnreadable',
-)<{ readonly cause: unknown }> {}
 
 // VS Code invokes activation and deactivation separately. Only this entry
 // reads back the scope the activation program ran in: its finalizer is the
@@ -209,6 +202,10 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         }),
         // The Output channel owns filtering, so emit every level.
         minimumLogLevel: 'Trace',
+        // The window's own reads (credential status, model discovery) see
+        // the workspace's `.env`, as its tasks do, without it ever being
+        // merged into the extension host's shared `process.env`.
+        workspace: workspaceRoot,
       }),
     ),
   );
@@ -422,19 +419,6 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   if (!rawWorkspacePath) return;
   const workspaceRoot = canonicalizeWorkspacePath(rawWorkspacePath);
 
-  yield* Effect.try({
-    try: () => process.loadEnvFile(path.join(workspaceRoot, '.env')),
-    catch: (cause) => new WorkspaceEnvFileUnreadable({ cause }),
-  }).pipe(
-    // A workspace without a .env is the normal case; any other failure
-    // (EACCES, ERR_INVALID_ARG_TYPE) stays loud instead of silently dropping
-    // it: activation fails with that same error.
-    Effect.catchTag('WorkspaceEnvFileUnreadable', (failure) =>
-      isFileNotFoundError(failure.cause)
-        ? Effect.void
-        : Effect.die(failure.cause),
-    ),
-  );
   setLogSink(createVsCodeLogSink());
   // Deactivation releases the output channels with the sink, so a reload does
   // not leave a disposed host surface installed.

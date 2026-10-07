@@ -6,12 +6,12 @@
  * cannot find latexmk or git. The service asks the user's own login shell
  * instead, so every window gets the same environment.
  */
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { homedir, userInfo } from 'node:os';
 
 import { Effect } from 'effect';
 
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 /** What the shell prints before its environment, so profile noise ahead of
  *  it is skipped. */
@@ -26,51 +26,77 @@ const TIMEOUT_MS = 10_000;
  * the reason when the shell does not answer, so the caller can say why it
  * runs without them.
  */
-function loginShellEnvironment(
+export function loginShellEnvironment(
   home: string,
 ): Effect.Effect<Readonly<Record<string, string>>, Error> {
-  return Effect.try({
-    try: () => {
-      const { shell, username } = userInfo();
-      const result = spawnSync(
-        shell || '/bin/sh',
-        ['-ilc', `printf '${MARKER}'; env -0`],
-        {
-          // The system PATH, so a profile that runs a tool by name before
-          // it sets PATH still finds it.
-          env: {
-            HOME: home,
-            USER: username,
-            LOGNAME: username,
-            PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
-          },
-          stdio: ['ignore', 'pipe', 'ignore'],
-          timeout: TIMEOUT_MS,
-          encoding: 'utf8',
-        },
-      );
-      if (result.error) throw result.error;
-      const at = result.stdout.indexOf(MARKER);
-      if (at < 0)
-        throw new Error(
-          `the login shell ${shell} printed no environment (exit ${result.status})`,
-        );
-      const entries = result.stdout
-        .slice(at + MARKER.length)
-        .split('\0')
-        .flatMap((line) => {
-          const eq = line.indexOf('=');
-          return eq > 0
-            ? [[line.slice(0, eq), line.slice(eq + 1)] as const]
-            : [];
-        });
-      return Object.fromEntries(entries);
-    },
-    catch: (cause) =>
-      new Error(
-        `The login shell's environment was not read: ${toErrorMessage(cause)}`,
+  // `userInfo` throws for an account with no passwd entry: that is this
+  // read's failure, not the caller's crash.
+  return Effect.try({ try: () => userInfo(), catch: ensureError })
+    .pipe(
+      Effect.flatMap(({ shell, username }) =>
+        Effect.callback<string, Error>((resume) => {
+          const child = spawn(
+            shell || '/bin/sh',
+            ['-ilc', `printf '${MARKER}'; env -0`],
+            {
+              // The system PATH, so a profile that runs a tool by name before
+              // it sets PATH still finds it.
+              env: {
+                HOME: home,
+                USER: username,
+                LOGNAME: username,
+                PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
+              },
+              stdio: ['ignore', 'pipe', 'ignore'],
+              // A session of its own: an interactive shell otherwise takes the
+              // controlling terminal of a caller that has one (a terminal chat),
+              // which then loses its raw mode.
+              detached: true,
+            },
+          );
+          let stdout = '';
+          child.stdout.setEncoding('utf8');
+          child.stdout.on('data', (chunk: string) => (stdout += chunk));
+          child.once('error', (error) => resume(Effect.fail(error)));
+          child.once('close', (code) => {
+            const at = stdout.indexOf(MARKER);
+            resume(
+              at < 0
+                ? Effect.fail(
+                    new Error(
+                      `the login shell ${shell} printed no environment (exit ${code})`,
+                    ),
+                  )
+                : Effect.succeed(stdout.slice(at + MARKER.length)),
+            );
+          });
+          return Effect.sync(() => child.kill('SIGKILL'));
+        }),
       ),
-  });
+    )
+    .pipe(
+      Effect.timeoutOrElse({
+        duration: TIMEOUT_MS,
+        orElse: () =>
+          Effect.fail(new Error(`it did not answer within ${TIMEOUT_MS} ms`)),
+      }),
+      Effect.map((printed) =>
+        Object.fromEntries(
+          printed.split('\0').flatMap((line) => {
+            const eq = line.indexOf('=');
+            return eq > 0
+              ? [[line.slice(0, eq), line.slice(eq + 1)] as const]
+              : [];
+          }),
+        ),
+      ),
+      Effect.mapError(
+        (cause) =>
+          new Error(
+            `The login shell's environment was not read: ${toErrorMessage(cause)}`,
+          ),
+      ),
+    );
 }
 
 /**

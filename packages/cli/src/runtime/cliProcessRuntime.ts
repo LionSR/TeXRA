@@ -132,6 +132,8 @@ interface CliProcessRuntimeInstall {
    * against. Absent only for the platform-less entries, which load no agents.
    */
   readonly resourcesPath?: string;
+  /** The project the process serves, whose `.env` its own reads see. */
+  readonly workspace?: string;
 }
 
 /**
@@ -241,6 +243,7 @@ export function installCliProcessRuntime(
           globalDatabase: options.globalDatabase,
         }),
         minimumLogLevel: options?.minimumLogLevel ?? 'Info',
+        workspace: options?.workspace,
       }),
     ),
   );

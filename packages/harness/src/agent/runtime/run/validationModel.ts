@@ -116,16 +116,15 @@ function goldenTurn(
     return Effect.succeed(text('Working through the golden parent task'));
   // A model call held until its release file appears (the service checks).
   if (system.includes('GOLDEN-PARK'))
-    return gate('golden-park.release').pipe(
-      Effect.as(text('Parked run released.')),
-    );
-  // A call awaiting approval: the tool named after the marker, else bash.
-  const asked = /GOLDEN-APPROVAL (\w+)/.exec(system)?.[1] ?? 'bash';
-  if (system.includes('GOLDEN-APPROVAL'))
+    return Effect.as(gate('golden-park.release'), text('Parked run released.'));
+  // A call awaiting approval: the tool and command after the marker.
+  const [marker, asked = 'bash', command = 'echo approved >> approved.txt'] =
+    /GOLDEN-APPROVAL(?: (\w+))?(?: (.+))?/.exec(system) ?? [];
+  if (marker !== undefined)
     return Effect.succeed(
-      results.length === 0
-        ? [call(asked, { command: 'echo approved >> approved.txt' })]
-        : text('The approved command ran.'),
+      results.length
+        ? text('The approved command ran.')
+        : [call(asked, { command })],
     );
   // A diagnostics read the service forwards to an attached window.
   if (system.includes('GOLDEN-DIAGNOSTICS'))

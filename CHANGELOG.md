@@ -902,6 +902,18 @@ show` print the same notice, and the new `texra agents customize`,
   file badges and agent lists did not update until you refreshed them. The
   change is now recorded on the task, and every window that shows the
   project picks it up.
+- **A project's `.env` reaches its tasks again, in every TeXRA app.**
+  Since tasks moved into the TeXRA service, a key kept only in the
+  project's `.env` was missing there, and a different key from your login
+  shell could be used instead. Each task now reads its project's `.env`
+  as it starts, over the environment, so an edited or rotated key applies
+  to the next task; its commands and MCP servers see the variables (never
+  a provider key), a `DO_NOT_TRACK` or `TEXRA_NO_TELEMETRY` there turns
+  usage logging off for its tasks, and one project's `.env` never reaches
+  another's. The CLI and the desktop app read it too, for their model
+  lists and key checks. A key you set only in the terminal that
+  starts a chat or `texra tasks start` does not reach a task in the
+  service, and the CLI now says so.
 
 - **The TeXRA service no longer grows with every project it ever
   opened.** A project's session in the service now closes once no window
