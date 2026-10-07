@@ -70,7 +70,16 @@ export function loginShellEnvironment(
                 : Effect.succeed(stdout.slice(at + MARKER.length)),
             );
           });
-          return Effect.sync(() => child.kill('SIGKILL'));
+          // Detached, the shell leads its own process group: a child its
+          // profile left hanging stops with it. The group is gone once
+          // everything in it exited, and then only the shell is signalled.
+          return Effect.sync(() => {
+            try {
+              process.kill(-(child.pid ?? 0), 'SIGKILL');
+            } catch {
+              child.kill('SIGKILL');
+            }
+          });
         }),
       ),
     )

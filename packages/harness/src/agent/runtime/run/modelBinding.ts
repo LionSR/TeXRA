@@ -38,7 +38,7 @@ import {
 import { type ModelOptionStores } from '@model/computeModelOptions';
 import { reasoningFor } from '@model/reasoningLevel';
 import type { CopilotModelRoute } from '@model/copilotRouting';
-import { longRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
+import { modelFetch } from '@platform/defaults/longRunningModelTransport';
 import { LanguageModel } from '@platform/languageModel';
 import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
@@ -386,7 +386,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
         },
         stores,
       ),
-      fetch: longRunningModelFetch,
+      fetch: yield* modelFetch,
     },
   });
   return {

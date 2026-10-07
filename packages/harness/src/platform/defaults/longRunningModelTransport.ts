@@ -5,18 +5,21 @@
  * timeout) cut short.
  *
  * Model traffic carries it as a bound fetch: `modelBinding` hands
- * {@link longRunningModelFetch} to every `packages/llm` model it constructs,
+ * {@link modelFetch} to every `packages/llm` model it constructs,
  * so a run gets this transport in any process, the agent package's embedder
  * included, without touching that process's global dispatcher. A host's
  * composition root, which owns its process, also installs the dispatcher
  * globally ({@link installProcessHttpDispatcher}) so the rest of its HTTP
  * traffic follows the same proxy policy.
  */
+import { Effect } from 'effect';
 import {
   EnvHttpProxyAgent,
   fetch as undiciFetch,
   setGlobalDispatcher,
 } from 'undici';
+
+import { ProjectEnvironment } from '@platform/defaults/nodeWorkspace';
 
 /** A streamed reasoning turn may sit silent this long between chunks. */
 const MODEL_STREAM_INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
@@ -29,13 +32,27 @@ const MODEL_RESPONSE_HEADERS_TIMEOUT_MS = 10 * 60 * 1000;
  */
 let dispatcher: EnvHttpProxyAgent | undefined;
 
-function modelDispatcher(): EnvHttpProxyAgent {
-  dispatcher ??= new EnvHttpProxyAgent({
+const agentOver = (proxy?: ProxyPolicy) =>
+  new EnvHttpProxyAgent({
+    ...proxy,
     headersTimeout: MODEL_RESPONSE_HEADERS_TIMEOUT_MS,
     bodyTimeout: MODEL_STREAM_INACTIVITY_TIMEOUT_MS,
   });
+
+function modelDispatcher(): EnvHttpProxyAgent {
+  dispatcher ??= agentOver();
   return dispatcher;
 }
+
+interface ProxyPolicy {
+  readonly httpProxy?: string;
+  readonly httpsProxy?: string;
+  readonly noProxy?: string;
+}
+
+/** One agent per proxy policy a project's `.env` names, kept for the
+ *  process: a project's runs share its pooled connections. */
+const projectDispatchers = new Map<string, EnvHttpProxyAgent>();
 
 /**
  * The fetch every model factory is constructed with. It is undici's own
@@ -52,23 +69,53 @@ function modelDispatcher(): EnvHttpProxyAgent {
  * The request is held until the fetch settles: a cloned `Request`'s signal
  * follows its parent only while the clone is alive.
  */
-export const longRunningModelFetch: typeof fetch = (input, init) => {
-  const request =
-    typeof input === 'string' || input instanceof URL ? undefined : input;
-  const response = undiciFetch(request?.url ?? (input as string | URL), {
-    ...(request && {
-      method: request.method,
-      headers: request.headers,
-      body: request.body,
-      signal: request.signal,
-      redirect: request.redirect,
-      ...(request.body !== null && { duplex: 'half' }),
-    }),
-    ...init,
-    dispatcher: modelDispatcher(),
-  } as Parameters<typeof undiciFetch>[1]) as unknown as Promise<Response>;
-  return request === undefined ? response : response.finally(() => request);
-};
+const fetchThrough =
+  (dispatch: () => EnvHttpProxyAgent): typeof fetch =>
+  (input, init) => {
+    const request =
+      typeof input === 'string' || input instanceof URL ? undefined : input;
+    const response = undiciFetch(request?.url ?? (input as string | URL), {
+      ...(request && {
+        method: request.method,
+        headers: request.headers,
+        body: request.body,
+        signal: request.signal,
+        redirect: request.redirect,
+        ...(request.body !== null && { duplex: 'half' }),
+      }),
+      ...init,
+      dispatcher: dispatch(),
+    } as Parameters<typeof undiciFetch>[1]) as unknown as Promise<Response>;
+    return request === undefined ? response : response.finally(() => request);
+  };
+
+const longRunningModelFetch = fetchThrough(modelDispatcher);
+
+/**
+ * The model fetch for the run's project: the process's transport, unless the
+ * project's `.env` sets its own proxy policy (`HTTP_PROXY`, `HTTPS_PROXY`,
+ * `NO_PROXY`, either case), which then wins over the process's, as every
+ * other project variable does. The service holds many projects, so the
+ * policy travels with the run rather than through `process.env`.
+ */
+export const modelFetch = Effect.map(ProjectEnvironment, (project) => {
+  // Undici's own order: the lowercase name first; a policy the project
+  // leaves unset falls back to the process's.
+  const named = (name: string) => project[name.toLowerCase()] ?? project[name];
+  const proxy: ProxyPolicy = {
+    httpProxy: named('HTTP_PROXY'),
+    httpsProxy: named('HTTPS_PROXY'),
+    noProxy: named('NO_PROXY'),
+  };
+  if (Object.values(proxy).every((value) => value === undefined))
+    return longRunningModelFetch;
+  const key = JSON.stringify(proxy);
+  return fetchThrough(() => {
+    let agent = projectDispatchers.get(key);
+    if (!agent) projectDispatchers.set(key, (agent = agentOver(proxy)));
+    return agent;
+  });
+});
 
 /** A host root's process-wide HTTP dispatcher: the same agent, globally. */
 export function installProcessHttpDispatcher(): void {
