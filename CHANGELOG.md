@@ -908,6 +908,12 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Reopening the desktop window works with the TeXRA service.** When the
+  app used the background service (the macOS default), clicking the Dock icon
+  after closing the window logged "could not be reopened", clicking a
+  notification did not show its task, and a second click could open a second
+  window. The window now reopens once, and a notification shows its task
+  after the window is back.
 - **Read conversations stay read after restarting.** Loading older chat history
   no longer resets the sidebar's read marker. Later activity still makes the
   conversation unread until it is viewed.

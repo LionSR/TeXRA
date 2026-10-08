@@ -7,7 +7,10 @@ import {
   bootstrapDesktopWindowLifecycle,
   installDesktopBeforeQuitWiring,
 } from '@desktop/main/desktopWindowLifecycle';
+import { createDesktopWindows } from '@desktop/main/desktopWindows';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { testRuntime } from '@test/support/testProcessRuntime';
+import type { BrowserWindow } from 'electron';
 
 class FakeWebContents extends EventEmitter {}
 
@@ -114,5 +117,36 @@ describe('desktop window lifecycle', () => {
     listener?.({ preventDefault: vi.fn() });
     expect(ranShutdown).toHaveBeenCalledOnce();
     expect(app.quit).toHaveBeenCalledTimes(2);
+  });
+
+  it('reopens through an open that waits on the service, once, revealing after it', async () => {
+    // The open waits, as one attaching the window to the background service
+    // waits on the IPC handshake.
+    const attached = createDeferred();
+    const open = vi.fn();
+    const revealed: string[] = [];
+    // The registry reads only the window's `closed` event and `isDestroyed`.
+    const window = Object.assign(new EventEmitter(), {
+      isDestroyed: () => false,
+    }) as unknown as BrowserWindow;
+    const windows = createDesktopWindows({
+      runtime: testRuntime(),
+      open: () =>
+        Effect.andThen(
+          Effect.sync(open),
+          Effect.promise(() => attached.promise),
+        ).pipe(Effect.as({ window, reveal: vi.fn() })),
+    });
+
+    windows.reopen();
+    // A second activate and an attention click land before the handshake.
+    windows.reopen();
+    windows.focus(() => revealed.push(windows.window() ? 'open' : 'missing'));
+    expect(windows.window()).toBeNull();
+
+    attached.resolve();
+    await vi.waitFor(() => expect(revealed).toEqual(['open']));
+    expect(open).toHaveBeenCalledOnce();
+    expect(windows.window()).toBe(window);
   });
 });
