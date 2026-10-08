@@ -27,7 +27,7 @@ import { formatTaskDiagnostics } from '@ui/copy/taskDiagnostics';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { statusIndicatorStyles } from '@ui/styles/statusIndicatorStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
-import { selectedItemValue } from '@ui/wa/selectTemplates';
+import { afterDropdownHides, selectedItemValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import '@progressView/frontend/components/ToolTimer';
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -539,7 +539,7 @@ export class RunHeader extends LitElement {
         @wa-select=${(event: WaSelectEvent) => {
           const value = selectedItemValue(event);
           if (value === RENAME_TASK) {
-            this.startRename();
+            afterDropdownHides(event, () => this.startRename());
             return;
           }
           if (value === FORK_TASK) {

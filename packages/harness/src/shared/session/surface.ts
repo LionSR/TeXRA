@@ -57,7 +57,6 @@ export const LaunchSurfaceSchema = UIFileFieldsSchema.merge(
   approval: z.enum(['policy', 'autoApprove']).prefault('policy'),
 });
 type LaunchSurface = z.infer<typeof LaunchSurfaceSchema>;
-
 type LaunchShape = typeof LaunchSurfaceSchema.shape;
 
 /** A change to the launcher, carried by the host's `surface.action`: every
@@ -339,12 +338,10 @@ export function reconcileLaunch(surface: Surface, host: HostSnapshot): Surface {
 
 /**
  * Whether a follow-up can be sent to a stream: the one rule the composer's
- * Send button and the host's submit accelerator (Cmd+Alt+E) both read, so
- * the surface a user sees and the keystroke that bypasses it cannot
- * disagree. The stream must take a follow-up at all (`acceptsFollowUp`, the
- * same answer that decides whether its composer is on screen), an empty
- * draft sends nothing, and a pasted image the host has not stored yet is
- * not ready to name.
+ * Send button and the host's submit accelerator (Cmd+Alt+E) both read. The
+ * stream must take a follow-up at all (`acceptsFollowUp`, which also decides
+ * whether its composer shows), the draft must not be empty, and every pasted
+ * image must already be stored by the host.
  */
 export function canSendFollowUp(
   run: RunView,
@@ -393,10 +390,7 @@ export type SurfaceAction =
     }
   | { readonly kind: 'workbench'; readonly layout: WorkbenchLayout | null }
   | { readonly kind: 'dismissStorageHint' }
-  | {
-      readonly kind: 'dismissInterrupted';
-      readonly runIds: readonly RunId[];
-    }
+  | { readonly kind: 'dismissInterrupted'; readonly runIds: readonly RunId[] }
   | { readonly kind: 'seen'; readonly view: SessionView };
 
 function withEntry<K, V>(map: ReadonlyMap<K, V>, key: K, value: V | null) {
