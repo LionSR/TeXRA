@@ -79,8 +79,8 @@ export interface SessionTools {
     off: Effect.Effect<ReadonlySet<string>, E>,
     options?: { readonly installed?: boolean; readonly held?: HeldPlugins },
   ) => Effect.Effect<ToolStep, E, Scope.Scope>;
-  /** Hold the configured MCP servers `declared` names, started with the
-   *  caller's project variables, until the caller's scope closes. */
+  /** At a run's start, after evicting failed starts: hold the configured
+   *  MCP servers `declared` names, with the caller's project variables. */
   readonly hold: (
     declared: readonly string[],
   ) => Effect.Effect<HeldPlugins, never, Scope.Scope>;
@@ -123,12 +123,9 @@ interface SessionResources {
   >;
 }
 
-/**
- * One MCP server process: its plugin's spec and revision, the installed
- * plugin's load key that started it ('' for a configured server) and the
- * project variables it starts with. Equal and hashed by those, not by the
- * plugin value: a changed one is a new process beside the open ones.
- */
+/** One MCP server process, equal by its plugin's spec and revision, the
+ *  installed plugin's load key ('' if configured) and the project
+ *  variables: a changed one is a new process beside the open ones. */
 class ServerKey implements Equal.Equal {
   readonly id: string;
   readonly plugin: LoadedPlugin;
@@ -362,6 +359,9 @@ export const sessionTools = Effect.fnUntraced(function* (
     [...shared.sessionLayerOf.keys()],
     (id) => RcMap.get(layers, id),
   );
+  // Servers that did not start stay failed until the next run starts
+  // (`hold`), so no step waits on a dead start twice in one run.
+  const failed = new Set<ServerKey>();
   const holdServer: SessionResources['holdServer'] = (
     plugin,
     owner,
@@ -370,9 +370,7 @@ export const sessionTools = Effect.fnUntraced(function* (
     Effect.gen(function* () {
       const key = new ServerKey(plugin, yield* ProjectEnvironment, load);
       const { tools, failure } = yield* RcMap.get(servers, key);
-      // A server that did not start is not kept for the idle time: the
-      // next use (a fixed config, a binary just installed) starts it anew.
-      if (failure !== undefined) yield* RcMap.invalidate(servers, key);
+      if (failure !== undefined) failed.add(key);
       const revision = sha256({ spec: plugin.spec, env: plugin.revision });
       return { failure, entries: entriesOf(owner, tools, { revision }) };
     });
@@ -380,6 +378,8 @@ export const sessionTools = Effect.fnUntraced(function* (
   return {
     pin: (off, options) => pinStep(shared, resources, off, options),
     hold: Effect.fn('ToolCatalog.hold')(function* (declared) {
+      for (const key of failed) yield* RcMap.invalidate(servers, key);
+      failed.clear();
       const read = yield* shared.loader(declared);
       const held = yield* Effect.forEach(
         read.plugins,
