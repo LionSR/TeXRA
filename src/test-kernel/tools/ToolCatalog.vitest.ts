@@ -1,20 +1,21 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Exit, Layer, Option, SubscriptionRef } from 'effect';
+import { Effect, Exit, Layer, Option, Stream } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports - real catalog and shared host edges
 import { AppState } from '@platform/interfaces';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { testRunRegistry } from '@test/support/runHandleFixtures';
 import { fakeHostAppState } from '@test/support/setupPlatform';
-import { LiveTools, toolTableLayer } from '@tools/liveTools';
+import { ToolCatalog, toolCatalogLayer } from '@tools/liveTools';
 import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
 import { toolTable } from '@tools/toolTable';
 
-// Failure mode: failed reconciliation leaks its contribution and cached
-// defect, leaving unusable tools published and poisoning subsequent readers.
+// Failure mode: a plugin layer whose build failed stays cached as a defect,
+// poisoning every later step and borrower instead of building afresh.
 it.effect(
-  'failed reconciliation withdraws the incomplete plugin and permits a fresh build',
+  'a failed plugin layer is dropped, and the next step builds it afresh',
   () => {
     const failure = new Error('plugin layer failed');
     let failed = false;
@@ -40,28 +41,28 @@ it.effect(
       },
     ]);
     return Effect.gen(function* () {
-      const live = yield* LiveTools;
-      expect(
-        yield* Effect.exit(
-          Effect.scoped(live.pinSwitched(Effect.succeed(new Set()))),
+      const catalog = yield* ToolCatalog;
+      const tools = yield* catalog.session(testRunRegistry);
+      const services = Effect.scoped(
+        Effect.flatMap(tools.pin(Effect.succeed(new Set())), (step) =>
+          step.services(new Set(['failed-plugin'])),
         ),
-      ).toStrictEqual(Exit.die(failure));
-      expect([
-        ...(yield* SubscriptionRef.get(live.registry.current)).entries.keys(),
-      ]).toEqual([]);
+      );
+      expect(yield* Effect.exit(services)).toStrictEqual(Exit.die(failure));
       expect(
-        yield* Effect.scoped(live.processServices('failed-plugin')),
+        yield* Effect.scoped(catalog.processServices('failed-plugin')),
       ).toEqual(Option.none());
-      const retried = yield* live.pinSwitched(Effect.succeed(new Set()));
-      expect([...retried.generation.entries.keys()]).toEqual(['probe']);
+      const step = yield* tools.pin(Effect.succeed(new Set()));
+      expect([...step.entries.keys()]).toEqual(['probe']);
+      yield* step.services(new Set(['failed-plugin']));
       expect(
         Option.isSome(
-          yield* Effect.scoped(live.processServices('failed-plugin')),
+          yield* Effect.scoped(catalog.processServices('failed-plugin')),
         ),
       ).toBe(true);
     }).pipe(
       Effect.provide(
-        toolTableLayer(table, undefined, new Set(['failed-plugin'])).pipe(
+        toolCatalogLayer(table, { switches: Stream.never }).pipe(
           Layer.provide(
             Layer.mergeAll(nodePlatformLayer, AppState.layer(fakeHostAppState)),
           ),

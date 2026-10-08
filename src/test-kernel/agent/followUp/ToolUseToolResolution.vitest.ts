@@ -1,6 +1,6 @@
 import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
-import { Effect, Exit, Layer, Scope } from 'effect';
+import { Effect, Exit, Layer, Scope, Stream } from 'effect';
 
 import {
   LanguageModel,
@@ -19,7 +19,7 @@ import {
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { resolveTestStep } from '@test/support/stepToolsTestUtils';
 import { texraPlugins } from '@texra/tools/registry';
-import { toolTableLayer } from '@tools/liveTools';
+import { toolCatalogLayer } from '@tools/liveTools';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
@@ -191,7 +191,7 @@ describe('tool-use tool resolution', () => {
   );
 
   it.effect(
-    'a switch reaches the next pin; a pinned generation keeps its plugin layer until it drains',
+    'a switch reaches the next pin; a step keeps its plugin layer until it closes',
     () => {
       const events: string[] = [];
       // One plugin whose layer records its lifetime.
@@ -241,8 +241,8 @@ describe('tool-use tool resolution', () => {
         expect(events).toEqual(['open']);
 
         yield* setToolEnabled('zotero', false, stores.globalState);
-        // The next pin is a new generation without the plugin, and a child
-        // reads the same catalog: it cannot keep what its parent's step was
+        // The next pin is without the plugin, and a child reads the same
+        // catalog: it cannot keep what its parent's step was
         // offered once the tool has left.
         const nextScope = yield* Scope.make();
         const next = yield* Scope.provide(resolve(), nextScope);
@@ -250,14 +250,15 @@ describe('tool-use tool resolution', () => {
         const child = yield* Scope.provide(resolve(first.offered), nextScope);
         expect(names(child)).toEqual([]);
 
-        // The first generation still holds the layer until it drains.
+        // The first step still holds the layer until it closes.
         expect(events).toEqual(['open']);
         yield* Scope.close(firstScope, Exit.void);
         expect(events).toEqual(['open', 'close']);
         yield* Scope.close(nextScope, Exit.void);
       }).pipe(
         Effect.provide(
-          toolTableLayer(table).pipe(
+          // No switch follower: only the steps hold the layer.
+          toolCatalogLayer(table, { switches: Stream.never }).pipe(
             Layer.provide(
               Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
             ),

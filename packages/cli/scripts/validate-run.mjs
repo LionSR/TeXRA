@@ -2454,6 +2454,150 @@ prompt: |
 }
 
 /**
+ * Each project runs its own MCP servers, started with its own `.env`
+ * (ruled 2026-10-07: the catalog is per session). One service holds two
+ * projects whose `.env` give the same variable different values; each runs
+ * a task whose agent calls the same configured stdio server. Each call must
+ * see its own project's value, from a process of its own: one server
+ * shared across the projects would answer both with the first project's
+ * value. The values each call saw are the artifact.
+ */
+async function validateServiceProjectMcp() {
+  const cwd = makeScratch('texra-cli-service-mcp-');
+  const alpha = echoProject(cwd);
+  const home = path.join(cwd, 'home');
+  const storageRoot = path.join(home, '.texra');
+  const beta = path.join(cwd, 'beta');
+  mkdirSync(path.join(beta, '.texra'), { recursive: true });
+  const server = path.join(cwd, 'server.cjs');
+  writeFileSync(
+    server,
+    `const fs = require('node:fs');
+const send = (message) => process.stdout.write(JSON.stringify(message) + '\\n');
+require('node:readline').createInterface({ input: process.stdin }).on('line', (line) => {
+  const { id, method, params } = JSON.parse(line);
+  if (method === 'initialize')
+    send({ jsonrpc: '2.0', id, result: { protocolVersion: params.protocolVersion,
+      capabilities: { tools: {} }, serverInfo: { name: 'fixture', version: '0' } } });
+  else if (method === 'tools/list')
+    send({ jsonrpc: '2.0', id, result: { tools: [{ name: 'echo',
+      description: 'Say which project this server runs for.',
+      inputSchema: { type: 'object', properties: { command: { type: 'string' } } } }] } });
+  else if (method === 'tools/call') {
+    const project = process.env.FIXTURE_PROJECT ?? 'unset';
+    fs.writeFileSync(process.env.FIXTURE_OUT, project + '|' + process.pid);
+    send({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: 'project: ' + project }] } });
+  } else if (id !== undefined)
+    send({ jsonrpc: '2.0', id, error: { code: -32601, message: method } });
+});
+`,
+  );
+  writeFileSync(
+    path.join(storageRoot, 'mcp.json'),
+    `${JSON.stringify({ mcpServers: { fixture: { command: process.execPath, args: [server] } } })}\n`,
+  );
+  writeFileSync(
+    path.join(storageRoot, 'v1', 'global-storage', 'custom_agents', 'mcp.yaml'),
+    `name: mcp_validation
+description: Ask the configured MCP server which project it runs for.
+tools: [mcp__fixture__echo]
+
+prompt: |
+  GOLDEN-APPROVAL mcp__fixture__echo report
+`,
+  );
+  const projects = { alpha: alpha.work, beta };
+  for (const [name, dir] of Object.entries(projects))
+    writeFileSync(
+      path.join(dir, '.env'),
+      `FIXTURE_PROJECT=${name}\nFIXTURE_OUT=${path.join(dir, 'mcp.txt')}\n`,
+    );
+  const env = {
+    ...alpha.ptyEnv,
+    TEXRA_NO_TELEMETRY: '1',
+    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+  };
+  const start = (dir, agent, instruction) =>
+    assertSuccess(
+      run(
+        process.execPath,
+        [
+          binaryPath,
+          'tasks',
+          'start',
+          agent,
+          '--model',
+          'openai/gpt-5.6-sol',
+          '--instruction',
+          instruction,
+          '--cwd',
+          dir,
+        ],
+        { cwd: dir, env },
+      ),
+      `texra tasks start ${agent} in ${path.basename(dir)}`,
+    );
+  const waitFor = async (what, found) => {
+    const deadline = Date.now() + 120_000;
+    let value;
+    while ((value = found()) === undefined) {
+      assert(Date.now() < deadline, `timed out waiting for ${what}`);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    return value;
+  };
+  const storage = path.join(storageRoot, 'v1', 'workspace-storage');
+  try {
+    // A first task opens each project in the service, which makes its
+    // store; its local setting is then Auto-approve, so the MCP call runs
+    // unasked.
+    for (const [name, dir] of Object.entries(projects)) {
+      start(dir, 'echo_validation', `Open ${name}`);
+      const prefix = `${path.basename(dir)}-`;
+      const store = await waitFor(`${name}'s project store`, () =>
+        existsSync(storage)
+          ? readdirSync(storage).find((entry) => entry.startsWith(prefix))
+          : undefined,
+      );
+      writeFileSync(
+        path.join(storage, store, 'config.json'),
+        `${JSON.stringify({ 'texra.approvalPolicy': 'yolo' })}\n`,
+      );
+    }
+    for (const [name, dir] of Object.entries(projects))
+      start(dir, 'mcp_validation', `Report ${name}`);
+    const seen = {};
+    for (const [name, dir] of Object.entries(projects)) {
+      const out = path.join(dir, 'mcp.txt');
+      const line = await waitFor(`${name}'s MCP call`, () =>
+        existsSync(out) ? readFileSync(out, 'utf8') : undefined,
+      );
+      const [project, pid] = line.split('|');
+      seen[name] = { project, pid };
+    }
+    const artifactPath = writeArtifact('service-project-mcp.json', {
+      alpha: seen.alpha.project,
+      beta: seen.beta.project,
+      oneServerPerProject: seen.alpha.pid !== seen.beta.pid,
+    });
+    assert(
+      seen.alpha.project === 'alpha' && seen.beta.project === 'beta',
+      `each project's MCP call should see its own .env value (artifact: ${artifactPath})`,
+    );
+    assert(
+      seen.alpha.pid !== seen.beta.pid,
+      `the two projects should not share one MCP server process (artifact: ${artifactPath})`,
+    );
+  } finally {
+    run(process.execPath, [binaryPath, 'service', 'stop'], {
+      cwd: alpha.work,
+      env,
+    });
+    removeScratch(cwd);
+  }
+}
+
+/**
  * The project's approval policy has one owner, its persisted setting, which
  * the service reads itself (audit 2026-10-07 #1). Window A attaches while
  * the setting is Auto-approve; window B then sets Ask (a settings write);
@@ -3472,6 +3616,7 @@ async function validateCliRunArtifacts(options = {}) {
   await validateServiceHostCalls();
   await validateServiceEditorModels();
   await validateServiceProjectEnv();
+  await validateServiceProjectMcp();
   await validateServiceSessionIdle();
   await validateServicePolicyOwner();
   await validateServiceBuildIdentity();

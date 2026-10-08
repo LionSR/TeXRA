@@ -30,8 +30,6 @@
   "packages/harness/src/tools/codemode/ScriptTool.ts": 1,
   "packages/harness/src/tools/executions/runGeneratedFiles.ts": 2,
   "packages/harness/src/tools/jsonRpc.ts": 2,
-  "packages/harness/src/tools/liveTools.ts": 1,
-  "packages/harness/src/tools/pluginLayers.ts": 2,
   "packages/harness/src/tools/plugins.ts": 2,
   "packages/harness/src/tools/structuredOutput.ts": 2,
   "packages/harness/src/tools/web/WebFetchTool.ts": 5,

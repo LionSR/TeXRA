@@ -1,7 +1,7 @@
 /**
  * What a script's `searchTools` and `describeTool` answer, from the tools
  * the step that offered the `script` call pinned, passed in as data: never
- * the live catalog. The ranker is Okapi BM25 over one run's catalog held in
+ * the tool catalog. The ranker is Okapi BM25 over one run's catalog held in
  * memory, not SQLite FTS5: nothing here is stored, and FTS5's `unicode61`
  * tokenizer does not split `inputFiles` or `read_file` the way a tool name
  * needs.

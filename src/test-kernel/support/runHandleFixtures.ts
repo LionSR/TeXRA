@@ -7,7 +7,6 @@ import { RunRegistry, type RunRegistryInit } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { emptySessionView } from '@shared/session/sessionView';
 import type { RunId, RunIdentity } from '@shared/schemas';
-import { testPinPlugins } from './testPluginServices';
 import { testRuntime } from './testProcessRuntime';
 
 /** A registry's launch door over the harness's process runtime, standing in
@@ -52,7 +51,6 @@ export function testRunRegistry(): RunRegistry {
   const registry: RunRegistry = new RunRegistry({
     session: () => session,
     fork: testRunFork,
-    pinPlugins: testPinPlugins(() => registry),
   });
   // No run is ever persisted here: a run's end is accepted as asked.
   registry.end = (input) =>

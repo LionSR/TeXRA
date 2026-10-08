@@ -29,7 +29,7 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { hostStores } from '@test/support/setupPlatform';
 import { resolveTestStep } from '@test/support/stepToolsTestUtils';
-import { toolTableLayer } from '@tools/liveTools';
+import { toolCatalogLayer } from '@tools/liveTools';
 import { mcpPluginLoader } from '@tools/mcp/mcpConfig';
 import { toolTable } from '@tools/toolTable';
 import {
@@ -86,10 +86,13 @@ const isAlive = (pid: number): boolean => {
 const mcpToolTableLayer = (dir: string) =>
   Layer.unwrap(
     FileSystem.FileSystem.useSync((fs) =>
-      toolTableLayer(
-        toolTable([]),
-        mcpPluginLoader(fs, path.join(dir, 'mcp.json'), TEST_REVISION_KEY),
-      ),
+      toolCatalogLayer(toolTable([]), {
+        loader: mcpPluginLoader(
+          fs,
+          path.join(dir, 'mcp.json'),
+          TEST_REVISION_KEY,
+        ),
+      }),
     ),
   ).pipe(Layer.provide(nodePlatformLayer));
 

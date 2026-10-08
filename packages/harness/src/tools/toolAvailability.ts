@@ -54,7 +54,7 @@ import {
   type AvailabilityResults,
   type ExternalToolCheckResult,
 } from '@tools/toolAvailabilityService';
-import { LiveTools } from '@tools/liveTools';
+import { ToolCatalog } from '@tools/liveTools';
 import { ToolRegistry } from '@tools/toolTable';
 import { forgetToolMisses } from '@utils/system/binaryResolver';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -160,11 +160,11 @@ interface ProbeRound {
 export const toolAvailabilityLayer: Layer.Layer<
   ToolAvailability,
   never,
-  ToolProbeServices | ToolRegistry | LiveTools
+  ToolProbeServices | ToolRegistry | ToolCatalog
 > = Layer.effect(
   ToolAvailability,
   Effect.gen(function* () {
-    const live = yield* LiveTools;
+    const catalog = yield* ToolCatalog;
     // The plugins the layer probes, in list order, and every secret key
     // some plugin's availability answer reads.
     const PROBED_PLUGINS = [...(yield* ToolRegistry).entries.values()].filter(
@@ -201,7 +201,7 @@ export const toolAvailabilityLayer: Layer.Layer<
         // brings a layer up, which could act (Copilot's registers tools).
         (plugin) =>
           Effect.scoped(
-            Effect.flatMap(live.processServices(plugin.id), (own) =>
+            Effect.flatMap(catalog.processServices(plugin.id), (own) =>
               Option.isSome(own)
                 ? Effect.provide(probeToolGroup(plugin, inputs), own.value)
                 : probeToolGroup(plugin, inputs),

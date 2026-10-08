@@ -1,11 +1,7 @@
 /** The plugin services a test run's steps and a test tool call are served. */
-import { Context, Effect, Layer, Scope } from 'effect';
+import { Effect, Layer, Scope } from 'effect';
 
-import {
-  Runs,
-  type RunRegistry,
-  type RunRegistryInit,
-} from '@agent/runtime/runRegistry';
+import { Runs } from '@agent/runtime/runRegistry';
 import type { PluginContext } from '@platform/processRuntime';
 import {
   claudeAgentSessionsLayer,
@@ -50,47 +46,28 @@ export const testPluginServicesLayer = Layer.mergeAll(
 
 /**
  * The plugin services of the session whose `Runs` a call is served, as a
- * step pins them: the session's own builds, which outlive the call, beside
- * the unread
- * GitHub tables, which are process services.
+ * step pins them: built once per `Runs` (a session's, or a suite's stand-in)
+ * and kept for the test's life, so they outlive the call as a session's
+ * do, beside the unread GitHub tables, which are process services.
  */
-const ALL: ReadonlySet<string> = new Set(['codemode', 'codex', 'claude-agent']);
+const builtFor = new WeakMap<object, PluginContext>();
 export const testCallPluginServices = Layer.merge(
   Layer.effectContext(
     Effect.flatMap(Runs, (runs) =>
-      // A suite's stand-in `Runs` has no session: the call gets its own.
-      typeof runs.pinPlugins === 'function'
-        ? runs.pinPlugins(0, ALL, ALL)
-        : Layer.build(testPluginServicesLayer),
+      Effect.suspend(() => {
+        const built = builtFor.get(runs);
+        if (built !== undefined) return Effect.succeed(built);
+        return Layer.build(testPluginServicesLayer).pipe(
+          Effect.provideService(Runs, runs),
+          Scope.provide(Scope.makeUnsafe()),
+          Effect.map((services) => {
+            const context = services as PluginContext;
+            builtFor.set(runs, context);
+            return context;
+          }),
+        );
+      }),
     ),
   ),
   Layer.succeed(GitHubSubscriptions)(unreadGitHubSubscriptions),
 );
-
-/**
- * A test session's `pinPlugins`: every plugin's services, built once for
- * the registry `runs` names and kept for the test's life, whatever the step
- * found switched on.
- */
-export function testPinPlugins(
-  runs: () => RunRegistry,
-): RunRegistryInit['pinPlugins'] {
-  let built: PluginContext | undefined;
-  return () =>
-    Effect.suspend(() =>
-      built !== undefined
-        ? Effect.succeed(built)
-        : Layer.build(testPluginServicesLayer).pipe(
-            Effect.provideService(Runs, runs()),
-            Scope.provide(Scope.makeUnsafe()),
-            Effect.map((services) => {
-              built = services as PluginContext;
-              return built;
-            }),
-          ),
-    );
-}
-
-/** A registry's `pinPlugins` for a suite that runs no tool: serves nothing. */
-export const pinNoPlugins: RunRegistryInit['pinPlugins'] = () =>
-  Effect.succeed(Context.empty() as PluginContext);

@@ -56,7 +56,7 @@ export const testRunTools = (
     injectInstalled: false,
     stores,
     workspaceRoot: undefined,
-    held: { warnings: [], loaded: new Map() },
+    held: { warnings: [], loaded: new Map(), entries: new Map() },
   },
   steps: noStep(),
 });

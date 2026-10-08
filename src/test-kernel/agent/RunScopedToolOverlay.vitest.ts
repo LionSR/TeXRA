@@ -41,7 +41,7 @@ import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { texraPlugins } from '@texra/tools/registry';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
-import { toolTableLayer } from '@tools/liveTools';
+import { toolCatalogLayer } from '@tools/liveTools';
 import { toolTable } from '@tools/toolTable';
 import { generateRunId } from '@utils/core';
 
@@ -411,7 +411,7 @@ describe('run-scoped tool resolution', () => {
         Effect.scoped,
         Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
         Effect.provide(
-          toolTableLayer(
+          toolCatalogLayer(
             toolTable([
               {
                 id: 'test',

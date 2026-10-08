@@ -50,7 +50,7 @@ import {
 } from '@texra/tools/lean/leanLanguageServices';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import { goalContinuation } from '@tools/goal/goalContinuation';
-import { toolTableLayer } from '@tools/liveTools';
+import { toolCatalogLayer } from '@tools/liveTools';
 import { toolTable } from '@tools/toolTable';
 import { nodeSpawnerLayer } from './childProcessTestLayer';
 import {
@@ -330,7 +330,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // An empty tool table (the real one loads every tool), with goal mode's
     // continuation (and its switch): a suite that resolves a run's tools runs
     // on the session graph's runtime or provides `pluginCatalogLayer`.
-    toolTableLayer(
+    toolCatalogLayer(
       toolTable([
         {
           id: 'goal',

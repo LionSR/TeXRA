@@ -34,7 +34,6 @@ import {
   testRunHandle,
 } from '@test/support/runHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { pinNoPlugins } from '@test/support/testPluginServices';
 import { generateRunId } from '@utils/core';
 
 // Local file imports
@@ -159,7 +158,6 @@ function createRegistry(
   const registry = new RunRegistry({
     session: () => session,
     fork: testRunFork,
-    pinPlugins: pinNoPlugins,
   });
   return { events, phases, registry, grants };
 }

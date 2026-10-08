@@ -29,7 +29,7 @@ import {
   type FinalizeRunInput,
   type FinalizeRunResult,
 } from '@agent/storage/runLifecycle';
-import type { PluginContext, ProcessServices } from '@platform/processRuntime';
+import type { ProcessServices } from '@platform/processRuntime';
 import {
   inheritedGrants,
   type ApprovalGrants,
@@ -117,13 +117,6 @@ export interface RunRegistryInit {
   readonly fork: <A, E>(
     effect: Effect.Effect<A, E, ProcessServices>,
   ) => Fiber.Fiber<A, E>;
-  /** Hold the session layers of the plugins `on` in catalog generation
-   *  `generation` (unless a newer one was applied), and pin those of `used`. */
-  readonly pinPlugins: (
-    generation: number,
-    on: ReadonlySet<string>,
-    used: ReadonlySet<string>,
-  ) => Effect.Effect<PluginContext, never, Scope.Scope>;
 }
 
 type AnyFiber = Fiber.Fiber<unknown, unknown>;
@@ -180,11 +173,6 @@ export class RunRegistry {
   };
 
   constructor(private readonly init: RunRegistryInit) {}
-
-  /** The session services a step pins (`RunRegistryInit.pinPlugins`). */
-  pinPlugins(...args: Parameters<RunRegistryInit['pinPlugins']>) {
-    return this.init.pinPlugins(...args);
-  }
 
   // ---------------------------------------------------------------- entries
 
