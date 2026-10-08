@@ -10,7 +10,7 @@ nested `AGENTS.md`; read it before working there:
 - [`src/test-kernel/AGENTS.md`](src/test-kernel/AGENTS.md): test tiers, writing tests, fixtures and fakes. Its live-LLM,
   journeys and E2E hygiene rules also bind `packages/llm` and `packages/desktop/tests/e2e`.
 - [`packages/harness/AGENTS.md`](packages/harness/AGENTS.md): config and storage access, agent execution, run
-  loop, tool input schemas, storage format, core quality. Settings writes go through `applyStateSettingUpdate`.
+  loop, tool input schemas, storage format, core quality. Settings-UI writes go through `applyStateSettingUpdate`.
 - [`packages/texra/AGENTS.md`](packages/texra/AGENTS.md): the UI toolkit.
 - [`packages/extension/src/AGENTS.md`](packages/extension/src/AGENTS.md): webviews, error surfacing.
 
