@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit, Scope } from 'effect';
+import { Cause, Effect, Exit, Scope, Semaphore } from 'effect';
 import { Menu, type BrowserWindow } from 'electron';
 
 import { workspaceEnvironmentLayer } from '@texra-ai/harness';
@@ -63,12 +63,13 @@ export interface DesktopWindows {
   focus(then?: () => void): void;
   /** Show a run of a project in the open window. */
   revealRun(key: string, runId: RunId): void;
-  /** Open the window when none is open or closing; a reopen asked for twice
-   *  opens one. */
+  /** Open the window when none is open, once the closed one has released,
+   *  then run `then`; a reopen asked for while one is opening joins it. */
   reopen(then?: () => void): void;
-  /** The first window, opened by the startup program. Opening is synchronous,
-   *  as Electron's window creation is, so a callback that asks for the window
-   *  finds it open when it returns. */
+  /** Open the window unless one is open. Opening waits (a project of the
+   *  background service attaches the window over IPC), so it is always run
+   *  as a fiber, never synchronously; opens run one at a time, and one that
+   *  finds the window open does nothing. */
   readonly open: Effect.Effect<void, never, ProcessServices>;
   /** Run `continueQuit` once the window has closed and released; the process
    *  shutdown resumes there. */
@@ -144,25 +145,36 @@ export function createDesktopWindows(options: {
     );
     const window: CurrentWindow = { ...opened, release };
     current = window;
-    opened.window.once('closed', () => onClosed(window));
+    // Closed while the open waited: release it now, as `closed` would have.
+    if (opened.window.isDestroyed()) onClosed(window);
+    else opened.window.once('closed', () => onClosed(window));
   });
 
+  // One open at a time: an open asked for while another is in flight waits
+  // for it and then finds the window open.
+  const opening = Semaphore.makeUnsafe(1);
+  const open = opening.withPermit(
+    Effect.suspend(() =>
+      current
+        ? Effect.void
+        : Effect.andThen(releasing ?? Effect.void, openWindow),
+    ),
+  );
+
   const reopen = (then?: () => void) => {
-    const open = () => {
-      if (!current) {
-        try {
-          runtime.runSync(openWindow);
-        } catch (error) {
-          console.error('The desktop window could not be reopened:', error);
-        }
-      }
-      then?.();
-    };
-    if (!releasing) {
-      open();
-      return;
-    }
-    runtime.runFork(Effect.andThen(releasing, Effect.sync(open)));
+    runtime.runFork(
+      open.pipe(
+        Effect.catchCause((cause) =>
+          Effect.sync(() =>
+            console.error(
+              'The desktop window could not be reopened:',
+              Cause.squash(cause),
+            ),
+          ),
+        ),
+        Effect.andThen(Effect.sync(() => then?.())),
+      ),
+    );
   };
 
   return {
@@ -182,7 +194,7 @@ export function createDesktopWindows(options: {
     },
     revealRun: (key, runId) => current?.reveal(key, runId),
     reopen,
-    open: openWindow,
+    open,
     continueQuitAfterClose: (resume) => {
       continueQuit = resume;
     },
