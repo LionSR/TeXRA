@@ -908,10 +908,6 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
-- **Rename from a menu stays open.** Choosing "Rename" from a project's or a
-  task's `⋯` menu right after opening it could close the name field before
-  you typed, keeping the old name. The field now opens once the menu has
-  closed.
 - **Read conversations stay read after restarting.** Loading older chat history
   no longer resets the sidebar's read marker. Later activity still makes the
   conversation unread until it is viewed.
