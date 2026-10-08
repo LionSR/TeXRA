@@ -74,26 +74,26 @@ export interface DesktopWindows {
   /** Run `continueQuit` once the window has closed and released; the process
    *  shutdown resumes there. */
   continueQuitAfterClose(continueQuit: () => void): void;
-  /** Interrupt a reopen in flight (its window releases what it built), then
-   *  wait for the open or closing window to release everything it held. */
+  /** The shutdown: interrupt a reopen in flight (its window releases what it
+   *  built) and refuse later ones, then wait for the open or closing window
+   *  to release everything it held. */
   readonly released: Effect.Effect<void>;
 }
 
 export function createDesktopWindows(options: {
   readonly runtime: ProcessRuntime;
-  /** The process's scope: a reopen still in flight when it closes is
-   *  interrupted. */
-  readonly scope: Scope.Scope;
   /** Builds the window into the scope it runs in. */
   readonly open: (
     hooks: DesktopWindowHooks,
   ) => Effect.Effect<OpenedDesktopWindow, never, Scope.Scope | ProcessServices>;
 }): DesktopWindows {
   const { runtime } = options;
-  // The reopens in flight; the shutdown interrupts them (`released`), so a
-  // window still opening releases its scope before the services drain.
+  // The reopens in flight. The shutdown closes this scope (`released`):
+  // a window still opening releases its scope before the services drain,
+  // and a reopen asked for afterwards never starts.
+  const reopensScope = Scope.makeUnsafe();
   const reopens = runtime.runSync(
-    FiberSet.make<void>().pipe(Scope.provide(options.scope)),
+    FiberSet.make<void>().pipe(Scope.provide(reopensScope)),
   );
   let current: CurrentWindow | undefined;
   let releasing: Effect.Effect<void> | undefined;
@@ -172,9 +172,9 @@ export function createDesktopWindows(options: {
 
   const reopen = (then?: () => void) => {
     // An interrupted reopen (the shutdown) neither logs nor runs `then`.
-    FiberSet.addUnsafe(
-      reopens,
-      runtime.runFork(
+    runtime.runFork(
+      FiberSet.run(
+        reopens,
         open.pipe(
           Effect.catchDefect((defect) =>
             Effect.sync(() =>
@@ -212,7 +212,7 @@ export function createDesktopWindows(options: {
       continueQuit = resume;
     },
     released: Effect.andThen(
-      FiberSet.clear(reopens),
+      Scope.close(reopensScope, Exit.void),
       Effect.suspend(() => current?.release ?? releasing ?? Effect.void),
     ),
   };
