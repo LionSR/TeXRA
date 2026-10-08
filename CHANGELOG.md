@@ -12,8 +12,9 @@ All notable changes to this project will be documented in this file.
   kinds as `arms` on its `Plugin` value, and a tool states a fact about its
   run by returning it in its result's `facts`: the fact is committed with
   the call's result, never apart from it. A task saved by an earlier build
-  that called a tool records the old `parallelSafe` field and cannot be
-  opened.
+  that called a tool cannot be opened: the task list and a resume say it
+  was "written by an earlier build of TeXRA; it can't be opened by this
+  one" instead of calling it damaged.
 - **Some tasks saved by an earlier build can no longer be opened.** Fields
   nothing read were removed from the stored records, and these records are
   checked strictly: a document task (any run that produced revisions), a
