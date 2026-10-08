@@ -10,7 +10,7 @@
   "dependencies": {
     "@texra-ai/harness": "file:harness.tgz",
     "@texra-ai/llm": "file:llm.tgz",
-    "effect": "4.0.0",
+    "effect": "4.0.1",
     "zod": "^4.4.3"
   }
 }

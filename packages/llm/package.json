@@ -54,10 +54,10 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@effect/vitest": "4.0.0",
+    "@effect/vitest": "4.0.1",
     "@types/ws": "8.18.2",
     "@typescript/native": "catalog:",
-    "effect": "4.0.0",
+    "effect": "4.0.1",
     "esbuild": "catalog:",
     "vitest": "^5.0.3",
     "zod": "4.4.3"
