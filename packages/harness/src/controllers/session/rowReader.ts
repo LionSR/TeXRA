@@ -14,12 +14,10 @@ import {
   RUN_EARLIER_BUILD_MESSAGE,
 } from '@shared/runs/runStatusDisplay';
 import {
-  ROW_KINDS,
   RunIdSchema,
   type LocalRuntimeState,
   type RunId,
   type SessionEvent,
-  type SessionEventDraft,
 } from '@shared/schemas';
 import type {
   DatabaseRowCorrupt,
@@ -30,22 +28,10 @@ import type { PluginArms } from '@tools/plugins';
 import {
   aggregateOf,
   decodeRow,
-  EVENT_FROM,
-  readableFrom,
+  EARLIER_RUNS,
   RowSchema,
   type SqlRow,
 } from './rowCodec';
-
-/** The kinds an earlier build may have written at a version this one cannot
- *  read, each with the lowest version it reads. */
-const EARLIER = (Object.keys(ROW_KINDS) as SessionEventDraft['type'][]) // cast: the record's keys are its kinds
-  .flatMap((type) =>
-    readableFrom(type) > 1 ? [[type, readableFrom(type)] as const] : [],
-  );
-
-/** The runs holding a row of a kind below the version this build reads. */
-const EARLIER_RUNS = `SELECT DISTINCT s.logical_id AS logicalId FROM ${EVENT_FROM}
-  WHERE s.kind = 'run' AND e.type = ? AND e.version < ?`;
 
 /** A selected row's reader, and the runs it found it cannot open. */
 export interface RowReader {
@@ -123,8 +109,8 @@ export function rowReader(path: string, arms: PluginArms): RowReader {
     read,
     damaged: (exec) =>
       Effect.gen(function* () {
-        for (const [type, floor] of scanned ? [] : EARLIER)
-          for (const { logicalId } of yield* exec(EARLIER_RUNS, [type, floor]))
+        for (const [statement, params] of scanned ? [] : EARLIER_RUNS)
+          for (const { logicalId } of yield* exec(statement, params))
             mark(RunIdSchema.parse(logicalId), true);
         scanned = true;
         return [...unopenable].map(([runId, detail]) => ({ runId, detail }));

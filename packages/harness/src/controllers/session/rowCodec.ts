@@ -136,8 +136,25 @@ const hasKind = (type: string): type is SessionEventDraft['type'] =>
 
 /** The lowest stored version of `type` this build reads: an older one has
  *  no upcaster here, so an earlier build wrote it. */
-export const readableFrom = (type: SessionEventDraft['type']): number =>
+const readableFrom = (type: SessionEventDraft['type']): number =>
   ROW_KINDS[type].version - ROW_KINDS[type].upcast.length;
+
+/** The queries, with their parameters, for the runs holding a row an
+ *  earlier build wrote below the version this build reads. */
+export const EARLIER_RUNS: readonly (readonly [string, readonly unknown[]])[] =
+  Object.keys(ROW_KINDS)
+    .filter(hasKind)
+    .flatMap((type) =>
+      readableFrom(type) > 1
+        ? [
+            [
+              `SELECT DISTINCT s.logical_id AS logicalId FROM ${EVENT_FROM}
+                WHERE s.kind = 'run' AND e.type = ? AND e.version < ?`,
+              [type, readableFrom(type)],
+            ] as const,
+          ]
+        : [],
+    );
 
 /** Where a refused row is: its commit and kind. */
 const corruptAt = (row: {
