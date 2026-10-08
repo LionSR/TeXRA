@@ -121,20 +121,34 @@ export const asideCopies = Effect.fnUntraced(function* (filename: string) {
   return copies;
 });
 
-/** Whether a failed open is SQLite reporting the file damaged or foreign:
- *  `SQLITE_CORRUPT` (11) or `SQLITE_NOTADB` (26), as a driver defect or a
- *  statement's classified cause. */
-export function isDamaged(cause: Cause.Cause<unknown>): boolean {
+/** Whether `cause` carries a SQLite primary result code among `codes`, as a
+ *  driver defect or in a classified failure's cause chain. */
+function hasSqliteCode(
+  cause: Cause.Cause<unknown>,
+  codes: readonly number[],
+): boolean {
   return cause.reasons.some((reason) => {
     if (reason._tag === 'Interrupt') return false;
     let error: unknown = reason._tag === 'Fail' ? reason.error : reason.defect;
     while (error !== null && typeof error === 'object') {
       const code = (error as { errcode?: unknown }).errcode;
-      if (typeof code === 'number') return [11, 26].includes(code & 0xff);
+      if (typeof code === 'number') return codes.includes(code & 0xff);
       error =
         (error as { reason?: { cause?: unknown } }).reason?.cause ??
         (error as { cause?: unknown }).cause;
     }
     return false;
   });
+}
+
+/** Whether a failed open is SQLite reporting the file damaged or foreign:
+ *  `SQLITE_CORRUPT` (11) or `SQLITE_NOTADB` (26). */
+export function isDamaged(cause: Cause.Cause<unknown>): boolean {
+  return hasSqliteCode(cause, [11, 26]);
+}
+
+/** Whether a failed open is SQLite unable to open the file at all
+ *  (`SQLITE_CANTOPEN`, 14): for a read-only probe, no store there yet. */
+export function cannotOpen(cause: Cause.Cause<unknown>): boolean {
+  return hasSqliteCode(cause, [14]);
 }

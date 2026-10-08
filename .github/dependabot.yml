@@ -31,18 +31,27 @@ updates:
       # Effect shipped prerelease versions (4.0.0-rc.N) until 4.0.0, and a prerelease bump was
       # neither 'minor' nor 'patch', so the groups below never caught it, and
       # every release opened one PR per @effect package. The packages must move
-      # in lockstep, so they get one group, matched first, for every update type.
+      # in lockstep, so they get one group for every update type. Order alone
+      # did not keep them there: the 4.0.1 release still put effect,
+      # @effect/vitest (dev group) and the platform/sql packages (prod group)
+      # in three PRs (#13907-#13909), so the type groups exclude them outright.
       effect:
         patterns:
           - 'effect'
           - '@effect/*'
       production-dependencies:
         dependency-type: 'production'
+        exclude-patterns:
+          - 'effect'
+          - '@effect/*'
         update-types:
           - 'minor'
           - 'patch'
       development-dependencies:
         dependency-type: 'development'
+        exclude-patterns:
+          - 'effect'
+          - '@effect/*'
         update-types:
           - 'minor'
           - 'patch'
