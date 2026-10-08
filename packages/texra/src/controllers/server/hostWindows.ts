@@ -275,6 +275,18 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
           });
         const id = randomUUID();
         let settled = false;
+        // In the stream's scope before the call is registered, so an
+        // interrupt at any point after (the frame's offer included) still
+        // drops the call and tells the window to cancel it.
+        yield* Effect.addFinalizer(() =>
+          Effect.suspend(() => {
+            if (!window.pending.delete(id)) return Effect.void;
+            calls.delete(id);
+            return settled || !windows.has(window)
+              ? Effect.void
+              : tell(window, { kind: 'cancel', call: id });
+          }),
+        );
         window.pending.set(id, {
           answer: (answer) => {
             if (!answer.ok) {
@@ -305,17 +317,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
         });
         calls.set(id, window);
         yield* Queue.offer(window.frames, { kind: 'call', id, call });
-        return Stream.fromQueue(items).pipe(
-          Stream.ensuring(
-            Effect.suspend(() => {
-              window.pending.delete(id);
-              calls.delete(id);
-              return settled || !windows.has(window)
-                ? Effect.void
-                : tell(window, { kind: 'cancel', call: id });
-            }),
-          ),
-        );
+        return Stream.fromQueue(items);
       }),
     );
 

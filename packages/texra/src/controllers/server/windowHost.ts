@@ -234,10 +234,13 @@ function attachTo(
       // acquisition streams through the same one.
       idleTimeToLive: Duration.infinity,
     });
-    const modelFor: ModelFor = (call) =>
-      Effect.scoped(
-        RcMap.get(acquisitions, JSON.stringify(call.configuration)),
+    const modelFor: ModelFor = (call) => {
+      const key = JSON.stringify(call.configuration);
+      // A failed acquisition is not kept: the next turn tries again.
+      return Effect.scoped(RcMap.get(acquisitions, key)).pipe(
+        Effect.onError(() => RcMap.invalidate(acquisitions, key)),
       );
+    };
     const answer = (id: string, call: HostCall) => {
       const work: Effect.Effect<unknown, unknown> =
         call.kind === 'lmStream'
