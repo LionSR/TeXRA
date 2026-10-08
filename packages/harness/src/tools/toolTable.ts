@@ -125,7 +125,7 @@ export type PluginLoader = (declared: readonly string[]) => Effect.Effect<{
  * skills the step lists. `key` changes exactly when what it would start or
  * ship does, which replaces its servers and its skills.
  */
-export interface InstalledToolPlugin {
+interface InstalledToolPlugin {
   readonly id: string;
   readonly key: string;
   readonly servers: readonly LoadedPlugin[];
