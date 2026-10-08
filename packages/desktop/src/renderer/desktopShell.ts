@@ -22,6 +22,7 @@ import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
+import { afterDropdownHides } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 /** One open project as the rail lists it: how its host names it, its session,
@@ -171,11 +172,11 @@ function projectSection(
         placement="bottom-end"
         @wa-select=${(event: CustomEvent<{ item: { value: string } }>) => {
           const action = event.detail.item.value;
-          if (
-            action === 'new-task' ||
-            action === 'rename' ||
-            action === 'close'
-          )
+          if (action === 'rename')
+            afterDropdownHides(event, () =>
+              callbacks.onProjectAction(key, action),
+            );
+          if (action === 'new-task' || action === 'close')
             callbacks.onProjectAction(key, action);
         }}
       >
