@@ -20,6 +20,7 @@ import {
   type CallFailure,
 } from '@agent/runtime/modelAccess/failureInfo';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
+import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type {
   FailedNext,
@@ -179,9 +180,13 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
     logger,
   }).pipe(Effect.ensuring(flush));
   if ('turn' in ended) return ended;
-  return yield* Effect.fail(
-    ended.kind === 'failed'
-      ? (ended.cause ?? new Error(ended.error.message))
-      : new Error(`The ${call.purpose} call was cancelled.`),
-  );
+  if (ended.kind === 'cancelled')
+    return yield* Effect.fail(
+      new Error(`The ${call.purpose} call was cancelled.`),
+    );
+  // The failure as recorded (quota reset and switch, overflow guidance),
+  // carried on the error every formatter recovers it from.
+  const failed = new Error(ended.error.message, { cause: ended.cause });
+  attachProviderError(failed, ended.error);
+  return yield* Effect.fail(failed);
 });

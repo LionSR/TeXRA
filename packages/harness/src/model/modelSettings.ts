@@ -94,20 +94,40 @@ const readEndpoints = Effect.fn('modelSettings.endpoints')(function* (
 ) {
   const entries = yield* Effect.forEach(
     MODEL_PROVIDER_PLUGINS,
-    ({ id, baseUrl }) =>
-      Effect.gen(function* () {
-        const custom = yield* getProviderEndpoint(stores, id);
-        if (custom) return [[id, `https://${hostPath(custom)}`] as const];
-        if (baseUrl == null || typeof baseUrl === 'string') return [];
-        const region = (yield* useChinaRegion(stores, id))
-          ? 'china'
-          : 'international';
-        return [[id, baseUrl[region]] as const];
-      }),
+    (plugin) => readEndpointEntries(stores, plugin),
     { concurrency: 'unbounded' },
   );
   return Object.fromEntries(entries.flat());
 });
+
+/** One provider's endpoint entry: its dashboard URL, else its region's default. */
+const readEndpointEntries = Effect.fn('modelSettings.endpoint')(function* (
+  stores: SettingsStores,
+  { id, baseUrl }: (typeof MODEL_PROVIDER_PLUGINS)[number],
+) {
+  const custom = yield* getProviderEndpoint(stores, id);
+  if (custom) return [[id, `https://${hostPath(custom)}`] as const];
+  if (baseUrl == null || typeof baseUrl === 'string') return [];
+  const region = (yield* useChinaRegion(stores, id))
+    ? 'china'
+    : 'international';
+  return [[id, baseUrl[region]] as const];
+});
+
+/**
+ * `provider`'s endpoint alone, as the route facts' `endpoints` hold it, for a
+ * request that needs no other model setting (audio transcription).
+ */
+export const readProviderEndpoint = Effect.fn('readProviderEndpoint')(
+  function* (
+    stores: SettingsStores,
+    provider: string,
+  ): Effect.fn.Return<Readonly<Record<string, string>>, StateReadFailed> {
+    const plugin = MODEL_PROVIDER_PLUGINS.find(({ id }) => id === provider);
+    if (plugin === undefined) return {};
+    return Object.fromEntries(yield* readEndpointEntries(stores, plugin));
+  },
+);
 
 /** A URL-like endpoint as `host/path`, without protocol or trailing slashes. */
 function hostPath(input: string): string {

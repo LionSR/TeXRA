@@ -74,9 +74,11 @@ function failureMessage(error: ModelError): string {
       `${error.message} Retrying would resend the same oversized request. ` +
       'Start a new session, or reduce attached files and tool output.'
     );
+  const reason =
+    error.status === undefined ? undefined : safeGetReasonPhrase(error.status);
   return httpErrorMessage(
     error.status,
-    error.message || 'Provider request failed',
+    error.message || reason || 'Provider request failed',
   );
 }
 

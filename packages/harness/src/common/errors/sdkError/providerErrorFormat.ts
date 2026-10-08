@@ -87,7 +87,11 @@ function formatFailure(err: unknown): ProviderError {
         ? undefined
         : safeGetReasonPhrase(known.status);
     return {
-      message: httpErrorMessage(known.status, known.message, statusText),
+      message: httpErrorMessage(
+        known.status,
+        known.message || statusText || 'Provider request failed',
+        statusText,
+      ),
       userRetryable: known.retryable,
       ...(known.status !== undefined && { statusCode: known.status }),
       ...(statusText !== undefined && { statusText }),

@@ -22,7 +22,7 @@ import {
 } from '@texra-ai/llm/node';
 
 import { RouteUnavailable } from '@common/errors/agentErrors';
-import { readModelSettings } from '@model/modelSettings';
+import { readProviderEndpoint } from '@model/modelSettings';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { PlatformSecrets } from '@platform/secrets';
 import { SUBSCRIPTION_AUTH_COPY } from '@shared/model/accountAuth';
@@ -218,20 +218,14 @@ export const ownKeyCredential = Effect.fn('ownKeyCredential')(function* (
   config: ModelConfig,
   provider: ApiKeyProviderId,
 ): Effect.fn.Return<RouteCredential, RouteUnavailable> {
-  const settings = yield* readModelSettings(stores).pipe(
-    Effect.mapError(
-      (cause) =>
-        new RouteUnavailable({
-          reason: 'unavailable',
-          message: cause.message,
-          cause,
-        }),
-    ),
+  // The key and its endpoint only: no other model setting can refuse it.
+  const endpoints = yield* readProviderEndpoint(stores, provider).pipe(
+    Effect.mapError(RouteUnavailable.of),
   );
   return yield* apiKeyCredential(
     { kind: 'api-key', provider, usageRoute: 'api-key' },
     config,
-    settings.route,
+    { endpoints },
     stores.secrets,
   );
 });
