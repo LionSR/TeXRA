@@ -1,18 +1,13 @@
 /**
  * One project's side of the tool catalog (`@tools/liveTools`), in its
- * session's scope: each plugin's `sessionLayer`, up while the plugin is on,
- * a step uses it or work it started holds it (`PluginHold`); and the MCP
- * servers its runs name (`hold`) and its steps' installed plugins start,
- * with the project's `.env` variables, up for 30 minutes past the last run
- * or step holding one (so consecutive runs share it) and never past the
- * session's close. No server is shared across projects.
- *
- * A step (`pin`, `@agent/runtime/loop/step`) reads the switches and the
- * installed plugins once and builds its tools from that read alone, so a
- * run's tools change only there; what it loaded and the layers it uses
- * (`services`) stay up for its scope. Each resource is an `RcMap` entry: a
- * use shares another's build, the last release stops it, and a build that
- * fails or is interrupted is dropped, so the next use builds afresh.
+ * session's scope: each plugin's `sessionLayer` (up while the plugin is on,
+ * a step uses it or `PluginHold` holds it) and the MCP servers its runs and
+ * steps start with the project's `.env`, kept 30 minutes past their last
+ * holder and never past the session's close; none is shared across
+ * projects. A step (`pin`) reads the switches and installed plugins once
+ * and builds its tools from that read alone, so a run's tools change only
+ * there. Each resource is an `RcMap` entry: one build per key, stopped by
+ * its last release; a failed or interrupted build is dropped.
  */
 import {
   Cause,
@@ -24,6 +19,7 @@ import {
   Hash,
   Layer,
   RcMap,
+  Schedule,
   Scope,
   Stream,
   SubscriptionRef,
@@ -182,8 +178,10 @@ export const buildPluginLayer = <R>(
  * Keep `hold(id)` up for each of `ids` the latest `on` names, forked in the
  * caller's scope: a change holds the new set before it lets the old go, so
  * a plugin on in both is never rebuilt. Each hold has its own scope, closed
- * at once if it fails (dropping the failed entry); the failure is logged,
- * and the next change or step that uses the plugin builds it again.
+ * at once if it fails (dropping the failed entry). A failed hold is logged
+ * and tried again in the background, backing off to once a minute, until
+ * it holds or the next change replaces the set, so a plugin left on keeps
+ * its standing services after a transient failure.
  */
 export const follow = (
   on: Stream.Stream<ReadonlySet<string>>,
@@ -198,19 +196,30 @@ export const follow = (
         const next = yield* Scope.fork(scope);
         yield* Effect.forEach(
           ids.filter((id) => switchedOn.has(id)),
-          (id) =>
-            Effect.flatMap(Scope.fork(next), (own) =>
+          (id) => {
+            const attempt = Effect.flatMap(Scope.fork(next), (own) =>
               hold(id).pipe(
                 Scope.provide(own),
                 Effect.onError(() => Scope.close(own, Exit.void)),
               ),
             ).pipe(
-              Effect.catchCause((cause) =>
+              Effect.sandbox,
+              Effect.tapError((cause) =>
                 Effect.logError(
                   `Plugin ${id}'s services did not come up: ${toErrorMessage(Cause.squash(cause))}`,
                 ),
               ),
-            ),
+            );
+            return attempt.pipe(
+              Effect.catch(() =>
+                attempt.pipe(
+                  Effect.retry({ schedule: HOLD_RETRY }),
+                  Effect.ignore({ log: 'Error' }),
+                  Effect.forkIn(next),
+                ),
+              ),
+            );
+          },
           { concurrency: 'unbounded', discard: true },
         );
         if (standing !== undefined) yield* Scope.close(standing, Exit.void);
@@ -218,6 +227,12 @@ export const follow = (
       }),
     );
   }).pipe(Effect.forkScoped, Effect.asVoid);
+
+/** A failed standing hold's retries: from a second, doubling, to a minute. */
+const HOLD_RETRY = Schedule.min([
+  Schedule.exponential('1 second'),
+  Schedule.spaced('1 minute'),
+]);
 
 /** How long an MCP server no run or step holds stays up for the next: long
  *  enough to read an answer before replying. In the service, a session left
@@ -355,6 +370,9 @@ export const sessionTools = Effect.fnUntraced(function* (
     Effect.gen(function* () {
       const key = new ServerKey(plugin, yield* ProjectEnvironment, load);
       const { tools, failure } = yield* RcMap.get(servers, key);
+      // A server that did not start is not kept for the idle time: the
+      // next use (a fixed config, a binary just installed) starts it anew.
+      if (failure !== undefined) yield* RcMap.invalidate(servers, key);
       const revision = sha256({ spec: plugin.spec, env: plugin.revision });
       return { failure, entries: entriesOf(owner, tools, { revision }) };
     });
