@@ -41,6 +41,10 @@ const repoRoot = process.argv[2] ? resolve(process.argv[2]) : sourceRoot;
 const GUIDANCE_FILES = [
   'CLAUDE.md',
   'AGENTS.md',
+  'src/test-kernel/AGENTS.md',
+  'packages/harness/AGENTS.md',
+  'packages/texra/AGENTS.md',
+  'packages/extension/src/AGENTS.md',
   'src/README.md',
   'packages/harness/src/agent/core/README.md',
   'packages/harness/src/agent/runtime/README.md',
