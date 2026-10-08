@@ -105,7 +105,7 @@ vi.mock('@agent/runtime/runAgent', async () => {
 vi.mock('@controllers/session/sessionLayer', async () => {
   const { Context, Deferred, Effect, Layer, Stream, SubscriptionRef } =
     await import('effect');
-  const { SessionOwner } = await import('@agent/runtime/SessionOwner');
+  const { SessionOwner } = await import('@platform/processRuntime');
   const { testRuntime } = await import('@test/support/testProcessRuntime');
   const { emptySessionView } = await import('@shared/session/sessionView');
   class FakeSession {

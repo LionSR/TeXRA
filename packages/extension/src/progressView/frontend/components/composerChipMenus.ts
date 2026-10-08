@@ -4,9 +4,11 @@
  * launcher's selections; the composer renders them and owns the dispatch.
  */
 import { html, nothing, type TemplateResult } from 'lit';
+import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 import {
+  agentName,
   isModelOptionAvailable,
   type AgentOptionData,
   type SessionType,
@@ -14,6 +16,11 @@ import {
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { Surface } from '@shared/session/surface';
 import type { TeXRAIconName } from '@shared/iconNames';
+import {
+  texraApprovalPolicyLabel,
+  formatTexraApprovalPolicy,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
 import { TASK_APPROVAL } from '@ui/copy/taskApproval';
 
 /** The agent menu's sections, one per launch mode: every agent chats, and
@@ -30,6 +37,7 @@ export interface ChipMenu {
   readonly icon: TeXRAIconName;
   readonly label: string;
   readonly title: string;
+  readonly description?: string;
   readonly items: TemplateResult;
   readonly onSelect: (value: string) => void;
 }
@@ -41,17 +49,25 @@ export function launcherChipMenus(
   host: HostSnapshot,
   actions: {
     setLaunch(patch: Partial<Launch>): void;
-    openSettings(section: 'agents' | 'teams' | 'models'): void;
+    openSettings(section: 'agents' | 'teams' | 'models' | 'general'): void;
   },
 ): ChipMenu[] {
   const team = host.teamOptions.find(
     (option) => option.value === launch.selectedTeamId,
   );
+  // The default and imported selections can be bare names; catalog options
+  // are source-qualified. Match a bare name against the effective catalog,
+  // while keeping an explicitly chosen source exact.
+  const name = agentName(launch.agent);
+  const agent = host.agentOptions.find(
+    (option) =>
+      option.value === launch.agent ||
+      (name === launch.agent && agentName(option.value) === name),
+  );
   const agentLabel =
     launch.launchTarget === 'team' && team
       ? team.label
-      : (host.agentOptions.find((option) => option.value === launch.agent)
-          ?.label ?? launch.agent);
+      : (agent?.label ?? launch.agent);
   const model = host.modelOptions.find(
     (option) => option.value === launch.model,
   );
@@ -73,11 +89,11 @@ export function launcherChipMenus(
                 html`<wa-dropdown-item
                   value=${`agent:${sessionType}:${option.value}`}
                   type="checkbox"
-                  ?checked=${
+                  .checked=${live(
                     launch.launchTarget === 'agent' &&
-                    launch.sessionType === sessionType &&
-                    option.value === launch.agent
-                  }
+                      launch.sessionType === sessionType &&
+                      option.value === agent?.value,
+                  )}
                   >${option.label}</wa-dropdown-item
                 >`,
             )}`;
@@ -92,10 +108,10 @@ export function launcherChipMenus(
                     html`<wa-dropdown-item
                       value=${`team:${option.value}`}
                       type="checkbox"
-                      ?checked=${
+                      .checked=${live(
                         launch.launchTarget === 'team' &&
-                        option.value === launch.selectedTeamId
-                      }
+                          option.value === launch.selectedTeamId,
+                      )}
                       >${option.label}</wa-dropdown-item
                     >`,
                 )}
@@ -142,7 +158,7 @@ export function launcherChipMenus(
             html`<wa-dropdown-item
               value=${`model:${option.value}`}
               type="checkbox"
-              ?checked=${option.value === launch.model}
+              .checked=${live(option.value === launch.model)}
               ?disabled=${!isModelOptionAvailable(option)}
               >${option.label}</wa-dropdown-item
             >`,
@@ -160,7 +176,7 @@ export function launcherChipMenus(
       },
     },
   ];
-  menus.push(approvalMenu(launch, actions.setLaunch));
+  menus.push(approvalMenu(launch, host.approvalPolicy, actions));
   if (host.workspaceRoots.length >= 2) {
     const root = host.workspaceRoots.find(
       (option) => option.value === launch.workingDirectory,
@@ -177,7 +193,7 @@ export function launcherChipMenus(
           html`<wa-dropdown-item
             value=${`root:${option.value}`}
             type="checkbox"
-            ?checked=${option.value === launch.workingDirectory}
+            .checked=${live(option.value === launch.workingDirectory)}
             >${option.label}</wa-dropdown-item
           >`,
       )}`,
@@ -195,29 +211,59 @@ export function launcherChipMenus(
  *  the moment of delegating; the run header then shows it and can revoke it. */
 function approvalMenu(
   launch: Launch,
-  setLaunch: (patch: Partial<Launch>) => void,
+  policy: TexraApprovalPolicy,
+  actions: {
+    setLaunch(patch: Partial<Launch>): void;
+    openSettings(section: 'general'): void;
+  },
 ): ChipMenu {
-  const choices = ['policy', 'autoApprove'] as const;
+  const overridden = launch.approval === 'autoApprove' && policy !== 'never';
+  const policyLabel = texraApprovalPolicyLabel(policy);
+  const policyDescription = formatTexraApprovalPolicy(policy);
   return {
     id: 'composer-approval',
-    icon: launch.approval === 'autoApprove' ? 'rocket' : 'shield',
-    label: TASK_APPROVAL[launch.approval].label,
+    icon: overridden ? 'rocket' : 'shield',
+    label: overridden ? TASK_APPROVAL.autoApprove.label : policyLabel,
     title: TASK_APPROVAL.title,
-    items: html`${choices.map(
-      (choice) =>
-        html`<wa-dropdown-item
-          value=${`approval:${choice}`}
-          type="checkbox"
-          title=${TASK_APPROVAL[choice].description}
-          ?checked=${launch.approval === choice}
-          >${TASK_APPROVAL[choice].label}<span slot="details"
-            >${TASK_APPROVAL[choice].detail}</span
-          ></wa-dropdown-item
-        >`,
-    )}`,
+    description: overridden
+      ? TASK_APPROVAL.autoApprove.description
+      : policyDescription,
+    items: html`
+      <wa-dropdown-item
+        value="approval:policy"
+        type="checkbox"
+        .checked=${live(!overridden)}
+        ><span class="menu-choice"
+          ><span>Use settings · ${policyLabel}</span>
+          <small>${policyDescription}</small></span
+        ></wa-dropdown-item
+      >
+      <wa-dropdown-item
+        value="approval:autoApprove"
+        type="checkbox"
+        .checked=${live(overridden)}
+        ?disabled=${policy === 'never'}
+        ><span class="menu-choice"
+          ><span>Auto-approve this task</span>
+          <small
+            >${
+              policy === 'never'
+                ? 'Blocked by your approval settings.'
+                : 'Allow file edits, commands and agent work without asking.'
+            }</small
+          ></span
+        ></wa-dropdown-item
+      >
+      <wa-dropdown-item value="settings:general"
+        >Open settings…</wa-dropdown-item
+      >
+    `,
     onSelect: (value) => {
       if (value === 'approval:policy' || value === 'approval:autoApprove') {
-        setLaunch({ approval: value.slice(9) as Launch['approval'] });
+        if (value === 'approval:autoApprove' && policy === 'never') return;
+        actions.setLaunch({ approval: value.slice(9) as Launch['approval'] });
+      } else if (value === 'settings:general') {
+        actions.openSettings('general');
       }
     },
   };

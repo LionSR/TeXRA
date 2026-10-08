@@ -111,10 +111,6 @@ const PATH_PREFIXES = [
   // Hidden note tree. Do not add a bare `agents/` prefix: that matches
   // skill sidecars like `agents/openai.yaml`, which are not repo-root paths.
   '.agents/',
-  // Cited from CLAUDE.md/AGENTS.md: prompts/agents/remote/ is the declared
-  // public home for the hosted agent YAMLs. Without this prefix a stale
-  // citation to it rots silently.
-  'prompts/',
 ];
 
 // Generated or installed at build or test time, so absent in a clean checkout.

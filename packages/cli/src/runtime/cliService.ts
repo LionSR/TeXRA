@@ -4,7 +4,7 @@
  * as the desktop opens its folders), the detached start a client asks for
  * when no service answers, and the connection the chat TUI holds.
  */
-import { hostname } from 'node:os';
+import { homedir, hostname } from 'node:os';
 import * as path from 'node:path';
 
 import {
@@ -17,6 +17,7 @@ import {
   type Path,
 } from 'effect';
 
+import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
 import { AppState, SessionOwner } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
@@ -31,6 +32,7 @@ import {
 } from '@controllers/session/appStateStore';
 import { setLogSink, silentLogSink, writeLogLine } from '@logger/logSink';
 import { JsonStore } from '@platform/defaults/jsonStore';
+import { loginShellEnvironment } from '@platform/defaults/loginShellEnv';
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@platform/defaults/nodeStores';
 import type {
@@ -54,7 +56,7 @@ import { envFlag } from '@utils/system/envFlags';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import { readCliEntrypointPath } from './cliContext';
+import { cliEnvValue, readCliEntrypointPath } from './cliContext';
 import type { CliContext } from './cliContext';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -189,8 +191,10 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       }
       if (now - project.idleSince < idleMs) return undefined;
       projects.delete(root);
-      yield* (yield* SessionOwner).close(project.session.roots.storage);
-      yield* Scope.close(project.scope, Exit.void);
+      // The stores close even if the session's close fails.
+      yield* (yield* SessionOwner)
+        .close(project.session.roots.storage)
+        .pipe(Effect.ensuring(Scope.close(project.scope, Exit.void)));
       return project.session;
     }).pipe(withPerKeyLane(lanes, root), Effect.provideContext(services));
   return {
@@ -304,3 +308,27 @@ export function connectCliService(
 ): Effect.Effect<ServiceConnection, Error, Scope.Scope> {
   return quietClient.pipe(Effect.andThen(reachCliService(storageRoot)));
 }
+
+/**
+ * What a client says when this terminal sets a provider key the service
+ * will not take from it. The service reads keys from the shared key store,
+ * the project's `.env` and its own login shell, never from a client, so a
+ * key this terminal set itself (`OPENAI_API_KEY=… texra chat`) does not
+ * reach the task. Null when every such key is the login shell's own.
+ */
+export const serviceKeysNotice = Effect.fn('serviceKeysNotice')(
+  function* (): Effect.fn.Return<string | null> {
+    const own = (name: string) => cliEnvValue(name)?.trim() || undefined;
+    const set = API_KEY_ENV_NAMES.filter((name) => own(name) !== undefined);
+    if (set.length === 0) return null;
+    // Best effort, for a notice only: a login shell that does not answer
+    // leaves the service without those keys too.
+    const login = yield* loginShellEnvironment(
+      cliEnvValue('HOME') ?? homedir(),
+    ).pipe(Effect.orElseSucceed((): Readonly<Record<string, string>> => ({})));
+    const unseen = set.filter((name) => login[name]?.trim() !== own(name));
+    if (unseen.length === 0) return null;
+    const one = unseen.length === 1;
+    return `${unseen.join(', ')} from this terminal ${one ? 'does' : 'do'} not reach tasks in the TeXRA service, which reads keys from \`texra setup\`, the project's .env and your login shell. Run with TEXRA_NO_SERVICE=1 to use this terminal's ${one ? 'key' : 'keys'}.`;
+  },
+);

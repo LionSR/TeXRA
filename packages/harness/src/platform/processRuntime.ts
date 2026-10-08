@@ -13,7 +13,7 @@
  */
 import {
   Cause,
-  type Context,
+  Context,
   Effect,
   Exit,
   type FileSystem,
@@ -22,7 +22,7 @@ import {
 } from 'effect';
 import type { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { RouteRetries } from '@agent/runtime/run/invocation';
-import type { SessionOwner } from '@agent/runtime/SessionOwner';
+import type { SessionOwnerShape } from '@agent/runtime/SessionHandle';
 import type { ProcessIdentity } from '@shared/session/sessionEvents';
 import type {
   GlobalDatabase,
@@ -96,6 +96,17 @@ export type PluginContext = Context.Context<never>;
  */
 export type AgentCatalogServices =
   GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState;
+
+/**
+ * The process's session owner: one session per workspace storage root,
+ * served by `processLayer` (`@controllers/session/sessionLayer`) over the
+ * `LayerMap` that owns every session's lifetime; its shape is
+ * {@link SessionOwnerShape}.
+ */
+export class SessionOwner extends Context.Service<
+  SessionOwner,
+  SessionOwnerShape
+>()('@texra-ai/harness/SessionOwner') {}
 
 /** The runtime a composition root makes over `processLayer`: the process
  *  services, and the `SessionOwner` that opens and closes its sessions. */

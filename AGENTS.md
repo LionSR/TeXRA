@@ -443,6 +443,22 @@ A run is one Effect program in `packages/harness/src/agent/runtime/loop/`, no cu
 - Retrieve included file extensions via `getIncludedExtensions` in `packages/harness/src/common/files/fileTypeUtils.ts`.
 - Use `packages/extension/src/frontend/ui/dialogs.ts` and `instruction.ts` for notification primitives shared across the extension.
 
+### Prompt and agent files
+
+These rules cover every prompt the repo ships: bundled agents in
+`packages/extension/resources/agents/`, plugin agents, templates, skills, and
+the workflow prompts in `.github/prompts/`.
+
+- Prompts use general behavioral rubrics, never an identifiable person's name,
+  private writing samples, voice or style calibration, feedback transcripts,
+  biography, or account metadata.
+- Public examples are synthetic, or have documented consent and a compatible
+  license.
+- User content, retrieved documents, model output, credentials, and account
+  state are runtime inputs; never commit them as prompt fixtures.
+- A prompt change is reviewed as the final resolved prompt, with representative
+  behavior checks, not only a YAML or Markdown syntax check.
+
 ### Webview Consistency Patterns
 
 Two message-passing architectures coexist for the extension's views. Match the

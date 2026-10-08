@@ -50,13 +50,13 @@ import type {
   SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
 import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
-import { SessionOwner } from '@agent/runtime/SessionOwner';
 import { presentTerminalResult } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
 import {
   effectDiagnosticsLayer,
   type MinimumLogLevel,
 } from '@logger/effectDiagnostics';
+import { SessionOwner } from '@platform/processRuntime';
 import type { ProcessServices } from '@platform/processRuntime';
 import {
   AgentDirectories,
@@ -72,7 +72,10 @@ import {
   processOwnerId,
   type ProcessProbe,
 } from '@platform/defaults/nodeProcesses';
-import { nodePlatformServices } from '@platform/defaults/nodePlatform';
+import {
+  nodePlatformServices,
+  workspaceEnvironmentLayer,
+} from '@platform/defaults/nodePlatform';
 import { RunHistory } from '@shared/session/runHistory';
 import {
   aggregateTarget,
@@ -104,7 +107,6 @@ import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { followInterruptedTasks } from '@tools/interruptedTasks';
-import { processEnvConfigLayer } from '@utils/system/envFlags';
 import { databaseLayer, globalDatabaseLayer } from './Database';
 import { projectDatabaseLayer } from './projectDatabase';
 import { deletionCollector } from './deletionCleanup';
@@ -197,9 +199,10 @@ const sessionHandleLayer = (key: SessionKey) =>
       const fork = yield* FiberSet.makeRuntime<ProcessServices>();
       const pinPlugins = yield* sessionPluginLayers(() => session.runs);
       const interactions = new SessionHostInteractions();
+      const env = workspaceEnvironmentLayer(key.open.roots.workspace);
       const runs = new RunRegistry({
         session: () => session,
-        fork,
+        fork: (run) => fork(Effect.provide(run, env)), // `.env` per launch
         pinPlugins,
       });
       const session: SessionHandle = {
@@ -578,16 +581,11 @@ export interface ProcessLayerOptions {
   /** The MCP config file (`.mcp.json` shape) the catalog reads. */
   readonly mcpConfigPath: string;
   readonly secrets: PlatformSecrets;
-  /**
-   * The host's agent-directory layer, which can capture AppState at construction
-   * without exposing that dependency in its readers.
-   */
+  /** The host's agent-directory layer: it may capture AppState as it is
+   *  built, which its readers never see. */
   readonly agentDirectories: Layer.Layer<AgentDirectories, never, AppState>;
-  /**
-   * The host's tool-missing reporter, served as `ToolMissingReporter`. Optional
-   * because only the VS Code host has a UI for it; an absent reporter serves
-   * the no-op, so a missing-tool probe still answers without surfacing.
-   */
+  /** The host's tool-missing reporter, served as `ToolMissingReporter`;
+   *  absent (no UI for it), a probe still answers, without surfacing. */
   readonly toolMissingReporter?: ToolMissingHandler;
   /**
    * The host's global application-state layer, acquired in this runtime's
@@ -626,8 +624,7 @@ export interface ProcessLayerOptions {
    * The process's handle on the global storage root, built and closed with
    * this runtime. Absent, the root's own database; opening it creates the
    * root's SQLite file and forks a change poll, so the CLI entry that runs
-   * before any platform, on a possibly read-only root, passes a refusing
-   * layer.
+   * before any platform, on a possibly read-only root, passes a refusal.
    */
   readonly globalDatabase?: Layer.Layer<
     GlobalDatabase,
@@ -645,6 +642,8 @@ export interface ProcessLayerOptions {
    * here.
    */
   readonly minimumLogLevel: MinimumLogLevel;
+  /** A single-project host's folder, whose `.env` its own reads see. */
+  readonly workspace?: string;
 }
 
 /**
@@ -672,6 +671,7 @@ export function processLayer({
   usageLog = UsageLog.disabled,
   globalDatabase: globalDatabaseOption = globalDatabaseLayer(globalStorage),
   minimumLogLevel,
+  workspace,
 }: ProcessLayerOptions): Layer.Layer<ProcessServices | SessionOwner> {
   installSettingsCatalog(settingsCatalog(settings));
   const catalog = pluginCatalogLayer(plugins, mcpConfigPath);
@@ -731,7 +731,7 @@ export function processLayer({
         Layer.succeed(HttpClient.TracerPropagationEnabled)(false), // no run trace ids to third parties
         // Filesystem, path, spawner, env config: once per process.
         nodePlatformServices,
-        processEnvConfigLayer,
+        workspaceEnvironmentLayer(workspace),
       ),
     ),
   );

@@ -8,6 +8,7 @@
 import { Effect } from 'effect';
 import { turnCost, type TurnResult } from '@texra-ai/llm';
 
+import { environment } from '@platform/defaults/nodeWorkspace';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { NormalizedUsage, RunId } from '@shared/schemas';
 import type { UsageLog } from '@shared/usageLog';
@@ -91,6 +92,7 @@ export const reportUsage = (
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
     if (usage === null) return;
+    const env = yield* environment;
     const cachedInputTokens = usage.cachedInputTokens ?? 0;
     yield* Effect.try({
       try: () =>
@@ -118,6 +120,7 @@ export const reportUsage = (
               : { streamId: attribution.runId }),
           },
           config,
+          env,
         ),
       catch: ensureError,
     }).pipe(

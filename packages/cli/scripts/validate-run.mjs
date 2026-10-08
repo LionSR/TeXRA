@@ -2297,6 +2297,163 @@ async function validateServiceSessionIdle() {
 }
 
 /**
+ * A project's `.env` reaches its service tasks and their commands, scoped
+ * to the project (audit 2026-10-07 #3): the service is started bare, the
+ * project's `.env` sets a variable and a provider key, and a task's
+ * command sees the variable but never the key. A key set only in the
+ * starting terminal is said not to reach the task. The command's output
+ * and the CLI's notice are the artifact.
+ */
+async function validateServiceProjectEnv() {
+  const cwd = makeScratch('texra-cli-service-env-');
+  const project = echoProject(cwd);
+  const storageRoot = path.join(cwd, 'home', '.texra');
+  writeFileSync(
+    path.join(storageRoot, 'v1', 'global-storage', 'custom_agents', 'env.yaml'),
+    `name: env_validation
+description: Report the environment a command runs with.
+tools: [bash]
+
+prompt: |
+  GOLDEN-APPROVAL bash printf "%s|%s" "$TEXRA_PROJECT_CHECK" "\${OPENAI_API_KEY:-withheld}" > env.txt
+`,
+  );
+  writeFileSync(
+    path.join(project.work, '.env'),
+    'TEXRA_PROJECT_CHECK=from-project-dotenv\nOPENAI_API_KEY=sk-project-dotenv\n',
+  );
+  const env = {
+    ...project.ptyEnv,
+    TEXRA_NO_TELEMETRY: '1',
+    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+    OPENAI_API_KEY: 'sk-terminal-only',
+  };
+  const output = path.join(project.work, 'env.txt');
+  const texra = (args, label) => {
+    const result = run(
+      process.execPath,
+      [binaryPath, ...args, '--cwd', project.work],
+      { cwd: project.work, env },
+    );
+    assertSuccess(result, label);
+    return result;
+  };
+  try {
+    // A first task opens the project in the service, which makes its
+    // store; then the user's local setting is Auto-approve, so the
+    // command runs unasked.
+    texra(
+      [
+        'tasks',
+        'start',
+        'echo_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        'Open the project',
+      ],
+      'texra tasks start echo_validation',
+    );
+    const storage = path.join(storageRoot, 'v1', 'workspace-storage');
+    const deadline = Date.now() + 120_000;
+    let dir;
+    while (
+      (dir = existsSync(storage)
+        ? readdirSync(storage).find((name) => name.startsWith('work-'))
+        : undefined) === undefined
+    ) {
+      assert(Date.now() < deadline, 'timed out waiting for the project store');
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    writeFileSync(
+      path.join(storage, dir, 'config.json'),
+      `${JSON.stringify({ 'texra.approvalPolicy': 'yolo' })}\n`,
+    );
+    const started = run(
+      process.execPath,
+      [
+        binaryPath,
+        'tasks',
+        'start',
+        'env_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        'Report the environment',
+        '--cwd',
+        project.work,
+      ],
+      { cwd: project.work, env },
+    );
+    assertSuccess(started, 'texra tasks start env_validation');
+    while (!existsSync(output)) {
+      assert(Date.now() < deadline, 'timed out waiting for env.txt');
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    const reported = readFileSync(output, 'utf8');
+    const artifactPath = writeArtifact('service-project-env.json', {
+      command: reported,
+      notice: started.stderr
+        .split('\n')
+        .filter((line) =>
+          line.includes('not reach tasks in the TeXRA service'),
+        ),
+    });
+    assert(
+      reported === 'from-project-dotenv|withheld',
+      `a service task's command should see the project's .env variable and no provider key (artifact: ${artifactPath})`,
+    );
+    // Each task reads the file as it starts: an edited value reaches the
+    // next task in the same running service.
+    rmSync(output);
+    writeFileSync(
+      path.join(project.work, '.env'),
+      'TEXRA_PROJECT_CHECK=edited-dotenv\n',
+    );
+    const second = run(
+      process.execPath,
+      [
+        binaryPath,
+        'tasks',
+        'start',
+        'env_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        'Report the environment again',
+        '--cwd',
+        project.work,
+      ],
+      { cwd: project.work, env },
+    );
+    assertSuccess(second, 'texra tasks start env_validation (edited)');
+    const editDeadline = Date.now() + 120_000;
+    while (!existsSync(output)) {
+      assert(Date.now() < editDeadline, 'timed out waiting for env.txt again');
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    const edited = readFileSync(output, 'utf8');
+    writeArtifact('service-project-env-edited.json', { command: edited });
+    assert(
+      edited === 'edited-dotenv|withheld',
+      `a task started after .env changed should read the new value (got ${edited})`,
+    );
+    assert(
+      /OPENAI_API_KEY[^\n]* from this terminal do(es)? not reach tasks/.test(
+        started.stderr,
+      ),
+      `a key set only in the starting terminal should be said not to reach the task (artifact: ${artifactPath})`,
+    );
+  } finally {
+    run(process.execPath, [binaryPath, 'service', 'stop'], {
+      cwd: project.work,
+      env,
+    });
+    removeScratch(cwd);
+  }
+}
+
+/**
  * The project's approval policy has one owner, its persisted setting, which
  * the service reads itself (audit 2026-10-07 #1). Window A attaches while
  * the setting is Auto-approve; window B then sets Ask (a settings write);
@@ -3152,6 +3309,7 @@ async function validateCliRunArtifacts(options = {}) {
   await validateServiceTasksInTui();
   await validateServiceChatsSeeEachOther();
   await validateServiceHostCalls();
+  await validateServiceProjectEnv();
   await validateServiceSessionIdle();
   await validateServicePolicyOwner();
   await validateServiceBuildIdentity();

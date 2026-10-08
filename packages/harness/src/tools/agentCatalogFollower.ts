@@ -237,6 +237,17 @@ export const agentCatalogFollower = Layer.effectDiscard(
       Stream.runDrain,
       Effect.forkScoped,
     );
+    // The team a workspace runs (`apply_team`, the settings view), written by
+    // this process or another sharing the store, a `texra serve` task's
+    // among them: every agent list here repaints. The first element is the
+    // subscription itself, not a change.
+    yield* appState.changes([GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]).pipe(
+      Stream.drop(1),
+      Stream.runForEach(() =>
+        Effect.sync(() => emitAppSignal('workspaceAgentsChanged', undefined)),
+      ),
+      Effect.forkScoped,
+    );
     // The first element is the catalog's load, and the build waits for it,
     // so nothing runs against a catalog that is not there. Later elements
     // are a plugin's switch, an install record or the custom directory

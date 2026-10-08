@@ -6,7 +6,7 @@
  * runs, so a task outlives the terminal that started it.
  */
 import { defineCommand } from 'citty';
-import { Effect } from 'effect';
+import { Effect, Fiber } from 'effect';
 
 import { AgentConfigSchema, type AgentConfigPayload } from '@agent/runtime';
 import { stricterPolicy } from '@shared/approvalBypassKind';
@@ -24,7 +24,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 import { resolveCliRunAgent } from '../runtime/agents';
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
-import { connectCliService } from '../runtime/cliService';
+import { connectCliService, serviceKeysNotice } from '../runtime/cliService';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { getStdoutColumns, writeTextStderr } from '../runtime/logSinks';
@@ -196,6 +196,8 @@ const startCommand = defineCliCommand({
         writeTextStderr(
           `The task runs in the TeXRA service under the project's approval policy, ${texraApprovalPolicyLabel(configured)}, not ${texraApprovalPolicyLabel(requested)}: a launch can only narrow it. Change the project's policy with /approval in \`texra chat\` or in the settings view.`,
         );
+      // Asked beside the launch, so a slow login shell never delays it.
+      const keys = yield* Effect.forkChild(serviceKeysNotice());
       const agent = yield* resolveCliRunAgent(services, ctx.args.agent);
       const model = yield* selectCliRunModel(
         context,
@@ -240,6 +242,8 @@ const startCommand = defineCliCommand({
           error instanceof Error ? error : new Error(error.message),
         ),
       );
+      const notice = yield* Fiber.join(keys);
+      if (notice !== null) writeTextStderr(notice);
       emitCliResult(context, {
         json: { runId, workspace: context.cwd },
         ndjson: { kind: 'task', task: { runId, workspace: context.cwd } },

@@ -1,6 +1,7 @@
 /**
  * The Node standard-library services every process serves once: the
- * filesystem, path, and child-process spawner. `processLayer` merges
+ * filesystem, path, and child-process spawner; and, last in this file, the
+ * environment a project's work reads (`workspaceEnvironmentLayer`). `processLayer` merges
  * this layer into every root's runtime, so a program that reads a file or
  * starts a child process takes the service from context instead of building a
  * Node layer of its own. Module paths, never the `@effect/platform-node`
@@ -64,12 +65,15 @@
  * spawner, on a `ChildProcess` the handle never exposes, so no wrapper here
  * can remove it; that fix belongs to the upstream module.
  */
-import { writeSync } from 'node:fs';
+import { readFileSync, writeSync } from 'node:fs';
+import { parseEnv } from 'node:util';
 import * as NodeChildProcessSpawner from '@effect/platform-node/NodeChildProcessSpawner';
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import * as NodePath from '@effect/platform-node/NodePath';
 import {
   Cause,
+  ConfigProvider,
+  Data,
   Duration,
   Effect,
   Exit,
@@ -78,6 +82,7 @@ import {
   Layer,
   Option,
   type Path,
+  Predicate,
   Scope,
 } from 'effect';
 import {
@@ -87,6 +92,7 @@ import {
   makeHandle,
 } from 'effect/process/ChildProcessSpawner';
 import { withLogChannel } from '@logger/effectLog';
+import { ProjectEnvironment } from '@platform/defaults/nodeWorkspace';
 import { ensureError } from '@utils/errors/errorMessage';
 import type * as ChildProcess from 'effect/process/ChildProcess';
 import type { PlatformError } from 'effect/PlatformError';
@@ -320,3 +326,63 @@ export const nodePlatformServices: Layer.Layer<
   Layer.provide(NodeChildProcessSpawner.layer),
   Layer.provideMerge(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
 );
+
+/** A project's `.env` exists but could not be read or parsed. */
+class ProjectEnvUnreadable extends Data.TaggedError('ProjectEnvUnreadable')<{
+  readonly file: string;
+  readonly cause: unknown;
+}> {
+  override get message(): string {
+    return `The project's ${this.file} could not be read: ${String(this.cause)}`;
+  }
+}
+
+/**
+ * A project's environment, read from `workspace`'s `.env` each time the
+ * layer builds (as each run launches, so an edited or rotated key reaches
+ * the next run) with Node's own reader, and served over this process's:
+ * as Effect's `ConfigProvider` (credentials, flags) and as
+ * `ProjectEnvironment` (what children start from). The project's file wins,
+ * as the more specific scope. No `.env` reads as none; one that cannot be
+ * read is a defect, so no work starts without the keys it would lack.
+ */
+export const workspaceEnvironmentLayer = (
+  workspace: string | undefined,
+): Layer.Layer<never> => {
+  const file = `${workspace}/.env`;
+  const read = Effect.try({
+    // Synchronous: a few lines, and some hosts build their layer so.
+    try: () => (workspace === undefined ? '' : readFileSync(file, 'utf8')),
+    catch: (cause) => new ProjectEnvUnreadable({ file, cause }),
+  }).pipe(
+    // No file is none, and so is a directory of that name (a virtualenv
+    // made with `python -m venv .env`): neither holds variables.
+    Effect.catchIf(
+      ({ cause }) =>
+        Predicate.hasProperty(cause, 'code') &&
+        (cause.code === 'ENOENT' || cause.code === 'EISDIR'),
+      () => Effect.succeed(''),
+    ),
+    Effect.map((text): Record<string, string> =>
+      // `FOO=` stays an empty value, which overrides the process's.
+      Object.fromEntries(
+        Object.entries(parseEnv(text)).filter(
+          (entry): entry is [string, string] => entry[1] !== undefined,
+        ),
+      ),
+    ),
+  );
+  return Layer.unwrap(
+    Effect.map(read, (project) =>
+      Layer.mergeAll(
+        ConfigProvider.layer(
+          ConfigProvider.orElse(
+            ConfigProvider.fromEnvRecord(project),
+            ConfigProvider.fromEnvRecord(process.env),
+          ),
+        ),
+        Layer.succeed(ProjectEnvironment)(project),
+      ),
+    ),
+  ).pipe(Layer.orDie);
+};

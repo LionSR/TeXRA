@@ -7,7 +7,14 @@
 
 import path from 'node:path';
 
-import { Cause, Effect, Exit, FileSystem, SubscriptionRef } from 'effect';
+import {
+  Cause,
+  Effect,
+  Exit,
+  FileSystem,
+  Layer,
+  SubscriptionRef,
+} from 'effect';
 import {
   Cancelled,
   Rejected,
@@ -18,6 +25,7 @@ import {
 } from '@texra-ai/harness';
 import {
   withProcessServices,
+  workspaceEnvironmentLayer,
   type ProcessRuntime,
   type ProcessServices,
 } from '@texra-ai/harness';
@@ -148,6 +156,10 @@ export function createDesktopHostRequests(
   /** The rooted filesystems of this window's paper, built once from the
    *  roots its session holds for its lifetime, never from an ambient store. */
   const sessionFiles = sessionFsLayer(session.roots);
+  /** The project's `.env` over the process's: what this window asks about
+   *  its project (model options, a polish's helper model) answers from it,
+   *  as the project's runs do. */
+  const projectEnv = workspaceEnvironmentLayer(options.workspacePath);
   // A shared controller's notice IS the refusal the request answers with.
   const rejectRequestEffect = (reason: string): Effect.Effect<void, Rejected> =>
     Effect.fail(new Rejected({ reason }));
@@ -163,7 +175,9 @@ export function createDesktopHostRequests(
       loadModelOptions: () =>
         withProcessServices(
           runtime,
-          loadModelOptions({ ...session.roots, secrets: options.secrets }),
+          loadModelOptions({ ...session.roots, secrets: options.secrets }).pipe(
+            Effect.provide(projectEnv),
+          ),
         ),
       // Only the "ask the user for a key" step is host-specific: on the
       // desktop that means opening the Models tab rather than a modal prompt.
@@ -611,7 +625,10 @@ export function createDesktopHostRequests(
   ): Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices> {
     // Over this paper's rooted filesystems: an arm that writes under the
     // session's storage takes the view the layer above built from its roots.
-    return Effect.provide(dispatch(request, port), sessionFiles);
+    return Effect.provide(
+      dispatch(request, port),
+      Layer.merge(sessionFiles, projectEnv),
+    );
   }
 
   return {

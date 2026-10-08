@@ -1,8 +1,14 @@
 import { defineConfig } from 'vite';
+import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 
 // Shared aliases keep desktop renderer imports aligned with extension webviews.
 import { aliases } from '../../scripts/aliases.mjs';
+
+// Monaco belongs to the shared app package after the source split.
+const requireApp = createRequire(
+  resolve(import.meta.dirname, '../texra/package.json'),
+);
 
 export default defineConfig({
   base: './',
@@ -16,7 +22,7 @@ export default defineConfig({
       'monaco-editor/features/register.all.js',
       'monaco-editor/languages/register.all.js',
       'monaco-editor/languages/features/register.all.js',
-    ],
+    ].map((entry) => requireApp.resolve(entry)),
   },
   build: {
     outDir: resolve(import.meta.dirname, 'dist/renderer'),

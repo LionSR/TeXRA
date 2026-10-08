@@ -35,6 +35,7 @@ jobs:
     outputs:
       code: ${{ steps.detect.outputs.code }}
       desktop: ${{ steps.detect.outputs.desktop }}
+      vscode: ${{ steps.detect.outputs.vscode }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -52,6 +53,7 @@ jobs:
             echo "Event '${{ github.event_name }}' -> full validation."
             echo "code=true" >> "$GITHUB_OUTPUT"
             echo "desktop=true" >> "$GITHUB_OUTPUT"
+            echo "vscode=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           base='${{ github.event.pull_request.base.sha }}'
@@ -76,6 +78,14 @@ jobs:
             echo "desktop=true" >> "$GITHUB_OUTPUT"
           else
             echo "desktop=false" >> "$GITHUB_OUTPUT"
+          fi
+          # VS Code host = the extension, the service and the session layer
+          # a window drives it through, the scripts that run it, and this
+          # workflow: a PR touching any of them runs the real VS Code.
+          if grep -qE '^packages/extension/|^packages/texra/src/controllers/(server|session)/|^packages/harness/src/controllers/session/|^packages/cli/src/(runtime/cliService|commands/service)\.ts$|^scripts/vscode-host-e2e|^\.github/workflows/ci\.yml$' <<<"$files"; then
+            echo "vscode=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "vscode=false" >> "$GITHUB_OUTPUT"
           fi
 
   # The static gate is `npm run gate` (package.json): invariants, then
@@ -349,11 +359,13 @@ jobs:
   vscode-host-e2e:
     name: vscode host e2e (${{ matrix.vscode }})
     needs: changes
-    # Off pull requests: it downloads two VS Code builds and runs on a macOS
-    # runner. It loads the built extension in a real VS Code and checks
-    # activation, command registration and the webview panels
-    # (scripts/vscode-host-e2e-suite.cjs); `minimum` is engines.vscode.
-    if: needs.changes.outputs.code == 'true' && github.event_name != 'pull_request'
+    # It loads the built extension in a real VS Code and checks activation,
+    # command registration, the webview panels and the window's service
+    # (scripts/vscode-host-e2e-suite.cjs); `minimum` is engines.vscode. It
+    # runs on a macOS runner, so a pull request runs it only when it touches
+    # the VS Code host (`changes.vscode`), and `validate` requires it: off
+    # pull requests it went red on main for days unseen.
+    if: needs.changes.outputs.vscode == 'true' && github.event_name != 'schedule'
     runs-on: macos-latest
     timeout-minutes: 20
     strategy:
@@ -373,6 +385,15 @@ jobs:
 
       - name: Run VS Code host e2e
         run: pnpm run test:vscode -- --vscode ${{ matrix.vscode }}
+
+      - name: Upload VS Code host e2e screenshot
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: vscode-host-e2e-${{ matrix.vscode }}
+          path: artifacts/vscode-e2e/
+          if-no-files-found: ignore
+          retention-days: 7
 
   desktop-e2e:
     name: desktop e2e (macOS)
@@ -491,6 +512,7 @@ jobs:
       - build
       - webview-smoke
       - desktop-e2e
+      - vscode-host-e2e
       - runtime-validation
       - docs-check
     if: always()
@@ -527,6 +549,7 @@ jobs:
             'build:${{ needs.build.result }}' \
             'webview-smoke:${{ needs.webview-smoke.result }}' \
             'desktop-e2e:${{ needs.desktop-e2e.result }}' \
+            'vscode-host-e2e:${{ needs.vscode-host-e2e.result }}' \
             'runtime-validation:${{ needs.runtime-validation.result }}' \
             'docs-check:${{ needs.docs-check.result }}'; do
             name="${result%%:*}"

@@ -294,7 +294,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     import('@platform/interfaces'),
     import('@platform/languageModel'),
     import('./toolAvailabilityTestLayer'),
-    import('@agent/runtime/SessionOwner'),
+    import('@platform/processRuntime'),
   ]);
   current = host;
   for (const key of Object.keys(harnessEnv)) delete harnessEnv[key];

@@ -135,6 +135,24 @@
   height: 100%;
   padding: 16px;
   color: var(--wa-color-text-quiet);
+  box-sizing: border-box;
+  gap: var(--wa-space-s);
+  min-width: 0;
+}
+.shell-dock-empty .empty-state-title {
+  margin-block: var(--wa-space-xs);
+  font-size: var(--font-size-lg);
+  color: var(--wa-color-text-normal);
+}
+.shell-dock-empty .empty-state-body {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+.shell-dock-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--wa-space-xs);
 }
 .shell-dock .dv-drop-target,
 .shell-dock .dv-drop-target-container {

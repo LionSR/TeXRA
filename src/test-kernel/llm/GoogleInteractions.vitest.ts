@@ -14,7 +14,7 @@ import {
   type TurnRequest,
   type TurnResult,
 } from '@texra-ai/llm';
-import { longRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
+import { modelFetch } from '@platform/defaults/longRunningModelTransport';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { googleInteractionsModel } from '../../../packages/llm/src/api/googleInteractions.js';
 import type { AddressInfo } from 'node:net';
@@ -504,7 +504,7 @@ describe('canonical Google Interactions protocol', () => {
             thinkingLevel: 'high',
           },
         },
-        { apiKey: 'synthetic-key', fetch: longRunningModelFetch },
+        { apiKey: 'synthetic-key', fetch: yield* modelFetch },
       );
       const turn = yield* configured.prepareTurn({
         ...request(),

@@ -1,6 +1,7 @@
 import { Cause, Effect, Exit, Scope } from 'effect';
 import { Menu, type BrowserWindow } from 'electron';
 
+import { workspaceEnvironmentLayer } from '@texra-ai/harness';
 import { DESKTOP_HEADLESS } from './desktopPresentation.js';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
@@ -18,9 +19,13 @@ export type DesktopSpawn = (
 export function desktopSpawner(
   runtime: ProcessRuntime,
   scope: Scope.Scope,
+  /** The project a surface serves: its programs (credential status, model
+   *  availability) see that project's `.env`, as its runs do. */
+  workspace?: string,
 ): DesktopSpawn {
+  const env = workspaceEnvironmentLayer(workspace);
   return (program) => {
-    runtime.runFork(Effect.forkIn(program, scope));
+    runtime.runFork(Effect.forkIn(Effect.provide(program, env), scope));
   };
 }
 

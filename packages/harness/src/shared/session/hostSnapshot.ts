@@ -18,6 +18,10 @@ import {
   TeamOptionDataSchema,
   WorkspaceRootOptionDataSchema,
 } from '@shared/schemas';
+import {
+  TexraApprovalPolicySchema,
+  TEXRA_APPROVAL_POLICY_DEFAULT,
+} from '@shared/approvalPolicy';
 import { getBasename } from '@utils/core';
 
 const visible = { visible: z.boolean() };
@@ -69,6 +73,8 @@ export const HostSnapshotSchema = z.object({
   modelOptions: z.array(ModelOptionDataSchema),
   teamOptions: z.array(TeamOptionDataSchema),
   workspaceRoots: z.array(WorkspaceRootOptionDataSchema),
+  /** The project's configured policy, shown before a task is launched. */
+  approvalPolicy: TexraApprovalPolicySchema,
   fileOptions: FileOptionsSchema,
   isGitRepo: z.boolean(),
   /** The one recorder per process and where its take is going. */
@@ -96,6 +102,7 @@ export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
     modelOptions: [],
     teamOptions: [],
     workspaceRoots: [],
+    approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
     fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
     isGitRepo: false,
     recording: null,
