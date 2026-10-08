@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK tool and plugin contract: `lane`, `arms` and `facts`.** A tool
+  declares where its calls run with `lane: 'parallel' | 'barrier' | 'own'`,
+  replacing `parallelSafe` and `ownsConcurrency`. A plugin lists its own row
+  kinds as `arms` on its `Plugin` value, and a tool states a fact about its
+  run by returning it in its result's `facts`: the fact is committed with
+  the call's result, never apart from it. A task saved by an earlier build
+  that called a tool records the old `parallelSafe` field and cannot be
+  opened.
 - **Some tasks saved by an earlier build can no longer be opened.** Fields
   nothing read were removed from the stored records, and these records are
   checked strictly: a document task (any run that produced revisions), a
