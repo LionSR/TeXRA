@@ -95,6 +95,10 @@ export class UsageLog extends Context.Service<
         'timestamp' | 'extensionVersion' | 'editorType'
       >,
       config: ConfigProvider,
+      /** The environment the recording run saw (its project's `.env`
+       *  over the process's), whose opt-out variables also gate it;
+       *  absent, the process's own. */
+      env?: Readonly<Record<string, string | undefined>>,
     ) => void;
   }
 >()('@texra/UsageLog') {

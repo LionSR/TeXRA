@@ -34,13 +34,12 @@ import { resumeRun } from '@agent/runtime/resumeRun';
 import { owningCall } from '@agent/storage/runRecords';
 import { runAgent as runValidatedAgent } from '@agent/runtime/runAgent';
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
-import type { SessionOwner } from '@agent/runtime/SessionOwner';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 
 // The composition root supplies its existing scoped services privately;
 // public Session capabilities carry no process implementation types.
-import type { ProcessServices } from '@platform/processRuntime';
+import type { ProcessServices, SessionOwner } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { InlinePersonaSchema, type RunId } from '@shared/schemas';
 import { generateRunId } from '@utils/core';

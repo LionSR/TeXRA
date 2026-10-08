@@ -179,24 +179,40 @@ export class SessionComposer extends LitElement {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: var(--wa-space-3xs);
+        gap: var(--wa-space-2xs);
         min-width: 0;
         flex: 1 1 auto;
       }
       .chip-trigger {
+        flex: none;
         max-width: 100%;
       }
       .chip-trigger::part(label) {
         min-width: 0;
       }
       .chip-trigger::part(base) {
-        gap: var(--wa-space-3xs);
-        padding-inline: var(--wa-space-2xs);
+        gap: var(--wa-space-2xs);
+        padding-inline: var(--wa-space-xs);
         font-size: var(--font-size-sm);
         border-radius: var(--field-radius);
       }
       .chip-trigger wa-icon {
+        flex: none;
         font-size: var(--font-size-sm);
+      }
+      .chip-trigger::part(caret) {
+        flex: none;
+      }
+      .menu-choice {
+        display: grid;
+        gap: var(--wa-space-3xs);
+        max-inline-size: 34ch;
+        white-space: normal;
+      }
+      .menu-choice small {
+        font-size: var(--font-size-xs);
+        line-height: var(--line-height-normal);
+        color: var(--wa-color-text-quiet);
       }
       .chip-label {
         display: block;
@@ -425,7 +441,9 @@ export class SessionComposer extends LitElement {
     this.dispatchEvent(SessionUiEvents.surface({ kind: 'launch', patch }));
   }
 
-  private openSettings(section: 'agents' | 'teams' | 'models'): void {
+  private openSettings(
+    section: 'agents' | 'teams' | 'models' | 'general',
+  ): void {
     this.dispatchEvent(SessionUiEvents.host({ kind: 'openSettings', section }));
   }
 
@@ -461,7 +479,9 @@ export class SessionComposer extends LitElement {
         >
         ${menu.items}
       </wa-dropdown>
-      <wa-tooltip for=${menu.id}>${menu.title}</wa-tooltip>`;
+      <wa-tooltip for=${menu.id}
+        >${menu.description ?? menu.title}</wa-tooltip
+      >`;
   }
 
   private renderChips(): TemplateResult {

@@ -5,10 +5,20 @@
 // their own views. A binding is a scope: everything it holds is a finalizer
 // of it, and releasing a project closes that scope, awaited.
 
-import { Effect, Exit, Queue, Scope, Stream, SubscriptionRef } from 'effect';
+import {
+  Cause,
+  Effect,
+  Exit,
+  Layer,
+  Queue,
+  Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 import {
   withProcessServices,
+  workspaceEnvironmentLayer,
   type ProcessRuntime,
   type ProcessServices,
 } from '@texra-ai/harness';
@@ -58,6 +68,9 @@ export interface ProjectBinding {
   readonly run: DesktopAgentRun;
   readonly workspace: ReturnType<typeof createDesktopWorkspaceIpc>;
   readonly browserViews: DesktopBrowserViews;
+  /** The project's `.env` over the process's: every question about this
+   *  project's models (its catalogs, its banners) is answered under it. */
+  readonly env: Layer.Layer<never>;
   /** The binding's lifetime; closing it releases everything above. */
   readonly scope: Scope.Closeable;
 }
@@ -67,7 +80,8 @@ export interface ProjectBindings {
   /** The binding of the project the window shows. */
   active(): ProjectBinding | undefined;
   all(): readonly ProjectBinding[];
-  /** Run `op` on every binding's snapshot source. */
+  /** Run `op` on every binding's snapshot source, each under its project's
+   *  own environment. */
   eachSnapshot<E, R>(
     op: (snapshot: ProjectBinding['snapshot']) => Effect.Effect<void, E, R>,
   ): Effect.Effect<void, E, R>;
@@ -173,7 +187,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
     const bindProject = Effect.fn('desktop.bindProject')(function* (
       project: DesktopProject,
     ) {
-      const spawn = desktopSpawner(runtime, yield* Scope.Scope);
+      const spawn = desktopSpawner(runtime, yield* Scope.Scope, project.root);
       const { workspace, browserViews, release } =
         createProjectWorkspace(project);
       const hosts = host.forProject(project);
@@ -318,8 +332,18 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         (attached) => attached.close,
       ).pipe(Effect.orDie);
       yield* Effect.addFinalizer(() => release);
-      yield* Effect.forkScoped(initialSnapshot);
-      return { project, bridge, port, snapshot, run, workspace, browserViews };
+      const env = workspaceEnvironmentLayer(project.root);
+      yield* Effect.forkScoped(Effect.provide(initialSnapshot, env));
+      return {
+        project,
+        bridge,
+        port,
+        snapshot,
+        run,
+        workspace,
+        browserViews,
+        env,
+      };
     });
 
     const bind = (project: DesktopProject) =>
@@ -348,10 +372,25 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       active,
       all: () => [...bindings.values()],
       eachSnapshot: (op) =>
-        Effect.forEach([...bindings.values()], (b) => op(b.snapshot), {
-          concurrency: 'unbounded',
-          discard: true,
-        }),
+        Effect.forEach(
+          [...bindings.values()],
+          // One project's failure (its unreadable `.env`) is that project's:
+          // logged, and never stops the others' refresh.
+          (b) =>
+            Effect.provide(op(b.snapshot), b.env).pipe(
+              Effect.catchCause((cause) =>
+                Cause.hasInterruptsOnly(cause)
+                  ? Effect.failCause(cause)
+                  : Effect.logWarning(
+                      `The project ${b.project.root ?? b.project.key} did not refresh: ${Cause.pretty(cause)}`,
+                    ),
+              ),
+            ),
+          {
+            concurrency: 'unbounded',
+            discard: true,
+          },
+        ),
       sync: Effect.gen(function* () {
         const open = new Map(
           [projects.fallback(), ...projects.list()].map(

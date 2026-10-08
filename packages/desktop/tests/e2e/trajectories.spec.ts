@@ -82,6 +82,75 @@ test('first launch shows a usable launcher chrome', async () => {
   await expect(mainSection).toBeVisible();
 });
 
+test('approval menu shows the current policy and keeps selection marks inside its rows', async () => {
+  const { page, app } = launched;
+  for (const [value, label] of [
+    ['never', 'Block'],
+    ['ask', 'Ask'],
+    ['yolo', 'Auto-approve'],
+  ] as const) {
+    await setSettingsTab(launched, 'general');
+    await page.locator('[data-section="approval"]').click();
+    const policy = page.locator('#texra-approval-policy');
+    await policy.locator(`wa-radio[value="${value}"]`).click();
+    await expect(policy).toHaveJSProperty('value', value);
+    await page.locator('.desktop-settings-close').click();
+    await showLauncher(launched);
+    const trigger = page.locator('#composer-approval');
+    await expect(trigger).toContainText(label);
+    await trigger.click();
+    const selected = page.locator(
+      'session-composer wa-dropdown-item[value="approval:policy"]',
+    );
+    await expect(selected).toBeVisible();
+    await expect(selected).toHaveJSProperty('checked', true);
+    await expect(selected).toContainText(`Use settings · ${label}`);
+    const contained = await selected.evaluate((item) => {
+      const check = item.shadowRoot!.querySelector('#check')!;
+      const row = item.getBoundingClientRect();
+      const mark = check.getBoundingClientRect();
+      return mark.left >= row.left && mark.right <= row.right;
+    });
+    expect(contained).toBe(true);
+    await expect(
+      page.locator('wa-dropdown-item[value="approval:autoApprove"]'),
+    ).toHaveJSProperty('disabled', value === 'never');
+    await page.screenshot({
+      path: test.info().outputPath(`approval-${value}.png`),
+    });
+    await page.keyboard.press('Escape');
+  }
+  // The same shared gutter applies to other checkbox menus at narrow widths.
+  await app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()[0]!.setContentSize(760, 700);
+  });
+  await page.locator('#composer-agent').click();
+  const selectedAgent = page
+    .locator('session-composer')
+    .getByRole('menuitemcheckbox', { name: 'orchestrator', exact: true });
+  await expect(selectedAgent).toBeVisible();
+  await expect(selectedAgent).toHaveJSProperty('checked', true);
+  expect(
+    await selectedAgent.evaluate((item) => {
+      const row = item.getBoundingClientRect();
+      const mark = item
+        .shadowRoot!.querySelector('#check')!
+        .getBoundingClientRect();
+      return mark.left >= row.left && mark.right <= row.right;
+    }),
+  ).toBe(true);
+  await selectedAgent.click();
+  await page.locator('#composer-agent').click();
+  await expect(selectedAgent).toHaveJSProperty('checked', true);
+  await page.screenshot({
+    path: test.info().outputPath('agent-menu-narrow.png'),
+  });
+  await page.keyboard.press('Escape');
+  await app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()[0]!.setContentSize(1280, 800);
+  });
+});
+
 /**
  * Trajectory 2 — Settings: Models tab carries model access + provider keys.
  *

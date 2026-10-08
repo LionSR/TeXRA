@@ -615,7 +615,7 @@ host.
    (`packages/harness/src/agent/index/agentRegistry.ts:113-128`). There is no per-embedder agent
    namespace.
 4. **One session per storage root.** `SessionOwner.open`
-   (`packages/harness/src/agent/runtime/SessionOwner.ts`) returns the session
+   (`packages/harness/src/platform/processRuntime.ts`) returns the session
    already open over the same root, built from what its first opener
    supplied. Embedding inside a process that already hosts TeXRA shares that
    session.

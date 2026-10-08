@@ -89,11 +89,12 @@ export interface AppSignalPayloads {
    * on purpose: every listener re-reads the agent list, so which team or agent
    * moved carries no information.
    *
-   * Emitted by the in-process workspace agents writers that bypass the settings
-   * round-trip: `apply_team`, which the setup agent runs mid-conversation;
-   * and by the tool registry (`pluginCatalogLayer`) once it has reloaded the agent
-   * catalog after a tool switch or the plugin install record changed, in
-   * this process or another.
+   * Emitted, in every process sharing the global store, when the default
+   * team changes (`apply_team`, which the setup agent runs mid-conversation,
+   * even in a `texra serve` task; `agentCatalogFollower`); and by the tool
+   * registry (`pluginCatalogLayer`) once it has reloaded the agent catalog
+   * after a tool switch or the plugin install record changed, in this
+   * process or another.
    * Settings-originated changes repaint through their own handler and do not
    * emit.
    *
@@ -129,6 +130,9 @@ export interface AppSignalPayloads {
   /**
    * One or more files were written directly to the workspace. Frontends can
    * badge or refresh those files without routing through a run-scoped channel.
+   * A run's accepted files arrive as its `documents/accepted` fact, announced
+   * in every process that folds the run (`announceRunFacts`); a host's own
+   * write (an accepted diff, the progress view's Accept) emits here directly.
    *
    * Consumed by: extension (VS Code's `FileDecorationProvider` badges the
    * written Explorer entries) and desktop (its file tree caches a directory

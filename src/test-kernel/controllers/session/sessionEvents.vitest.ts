@@ -79,9 +79,11 @@ import {
 import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { onAppSignal } from '@eventBus/AppSignals';
 import { withProcessServices } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
+import { documentsAcceptedRow } from '@shared/plugins/documents';
 import { inquiryThreadRow } from '@shared/plugins/externalInquiry';
 import {
   aggregateId as qualifyAggregateId,
@@ -90,7 +92,9 @@ import {
   LocalRuntimeStateSchema,
   RUN_PHASE,
   RunIdSchema,
+  type CommitOrdinal,
   type RunId,
+  type SessionEvent,
   type SessionEventDraft,
   type InquiryThreadSummary,
 } from '@shared/schemas';
@@ -115,6 +119,7 @@ import {
   nodeSpawnerLayer,
   scriptedSpawnerLayer,
 } from '@test/support/childProcessTestLayer';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
@@ -123,6 +128,7 @@ import { identityReads } from '@test/support/sessionGraphInstall';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { runActionGuard } from '@texra/controllers/session/runActionGuard';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
+import { announceRunFacts } from '@tools/pluginArms';
 import { toolTable } from '@tools/toolTable';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -1255,6 +1261,105 @@ describe('Sessions owner', () => {
           abandoned: [slow],
         });
         expect(yield* isLive(session)).toBe(false);
+      }),
+  );
+  it.live(
+    'announces each accepted-files row once, never the history a reopen replays',
+    () =>
+      withProcessServices(
+        testRuntime(),
+        Effect.gen(function* () {
+          const storage = mkdtempSync(join(tmpdir(), 'texra-accepted-'));
+          const heard: string[][] = [];
+          const ready = yield* Deferred.make<void>();
+          const listening = yield* Effect.forkDetach(
+            onAppSignal(
+              'workspaceFilesWritten',
+              ({ absolutePaths }) => heard.push(absolutePaths),
+              ready,
+            ),
+          );
+          yield* Deferred.await(ready);
+          const open = () =>
+            openTestSession({
+              roots: createFakeWorkspaceRoots({ storagePath: storage }),
+            });
+          const first = yield* open();
+          const runId = publishTestRunStart(first, 'abcdef123456' as RunId);
+          yield* first.log.settled;
+          // Two acceptances committed close together fold to one view level.
+          yield* Effect.all(
+            [
+              first.log.transact([
+                documentsAcceptedRow(runId, ['/w/a.tex'], 1),
+              ]),
+              first.log.transact([
+                documentsAcceptedRow(runId, ['/w/b.tex'], 2),
+              ]),
+            ],
+            { concurrency: 'unbounded' },
+          );
+          for (let i = 0; i < 100 && heard.length < 2; i++)
+            yield* Effect.sleep('20 millis');
+          expect(heard).toEqual([['/w/a.tex'], ['/w/b.tex']]);
+          yield* closeSessionOf(first);
+          const reopened = yield* open();
+          yield* reopened.log.settled;
+          yield* Effect.sleep('300 millis');
+          expect(heard).toHaveLength(2);
+          yield* closeSessionOf(reopened);
+          yield* Fiber.interrupt(listening);
+          rmSync(storage, { recursive: true, force: true });
+        }),
+      ),
+  );
+
+  it.live(
+    "a failed read of a run's facts is retried on the next change, never stops the announcer",
+    () =>
+      Effect.gen(function* () {
+        const heard: string[][] = [];
+        const ready = yield* Deferred.make<void>();
+        const listening = yield* Effect.forkDetach(
+          onAppSignal(
+            'workspaceFilesWritten',
+            ({ absolutePaths }) => heard.push(absolutePaths),
+            ready,
+          ),
+        );
+        yield* Deferred.await(ready);
+        const runId = 'abcdef123456' as RunId;
+        const level = (paths: string[]) =>
+          ({
+            runs: new Map([
+              [runId, { id: runId, facts: { 'documents/accepted': paths } }],
+            ]),
+          }) as unknown as SessionView;
+        const stored = (paths: string[], commit: number) => ({
+          ...documentsAcceptedRow(runId, paths, commit),
+          commit,
+        });
+        let reads = 0;
+        yield* announceRunFacts(
+          Stream.make(
+            level(['/w/a.tex']),
+            level(['/w/b.tex']),
+            level(['/w/b.tex']),
+          ),
+          () =>
+            ++reads === 1
+              ? Effect.fail(new Error('SQLITE_BUSY'))
+              : Effect.succeed([
+                  stored(['/w/a.tex'], 5),
+                  stored(['/w/b.tex'], 6),
+                ] as unknown as readonly SessionEvent[]),
+          0 as CommitOrdinal,
+        );
+        for (let i = 0; i < 100 && heard.length < 2; i++)
+          yield* Effect.sleep('20 millis');
+        expect(heard).toEqual([['/w/a.tex'], ['/w/b.tex']]);
+        expect(reads).toBe(2);
+        yield* Fiber.interrupt(listening);
       }),
   );
 });

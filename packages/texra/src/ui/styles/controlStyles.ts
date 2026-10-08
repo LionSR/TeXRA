@@ -534,6 +534,27 @@ export const formControlStyles: CSSResult = css`
     font-size: var(--font-size-icon-sm);
   }
 
+  /* Web Awesome draws checkmarks into a reserved leading gutter. Preserve
+     that gutter when applying the shared row padding, including normal items
+     next to checkbox items so their labels remain aligned. */
+  wa-dropdown-item[checkbox-adjacent],
+  wa-dropdown-item[type='checkbox'] {
+    padding-inline-start: calc(var(--wa-space-xs) + 1.5em);
+  }
+
+  wa-dropdown-item::part(checkmark) {
+    flex: none;
+    inline-size: 1em;
+    block-size: 1em;
+    font-size: inherit;
+    margin-inline-start: -1.5em;
+    margin-inline-end: 0.5em;
+  }
+
+  wa-dropdown-item::part(submenu-icon) {
+    inset-inline-end: var(--wa-space-xs);
+  }
+
   /* Makes a form control fill its row. The min-width reset is the load-bearing
      part — a wa-input's intrinsic min-width otherwise overflows a flex row
      instead of shrinking. */

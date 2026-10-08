@@ -2,13 +2,15 @@
 // starts the service from the bundle it ships and stays its client while it
 // runs. A CLI of the same build shares that service; a CLI of a newer build
 // retires it, and the open app reaches the newer one and lists its tasks
-// again. The service outlives the app. Every host stamps the same build
+// again. A file a service task accepts into the project shows in the app's
+// file tree, heard from the run's rows. The service outlives the app. Every host stamps the same build
 // identity, so "newer" means the same thing to all of them.
 import { spawnSync } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   symlinkSync,
@@ -98,7 +100,7 @@ function alive(pid: number): boolean {
 
 test.skip(process.platform === 'win32', 'no service runs on Windows yet');
 
-test('the desktop app shares the service with a CLI of its build, and reaches the one a newer build starts', async () => {
+test('the desktop app shares the service with a CLI of its build, reaches the one a newer build starts, and lists a file its task accepts', async () => {
   test.setTimeout(300_000);
   // The app's data root is the scratch home's ~/.texra, the one root a
   // service serves, so the app, the service and the CLIs share it.
@@ -115,6 +117,13 @@ test('the desktop app shares the service with a CLI of its build, and reaches th
     join(agents, 'park-validation.yaml'),
     'name: park_validation\ndescription: Hold its model call until released.\n\nprompt: |\n  GOLDEN-PARK\n',
   );
+  // A task that accepts `draft.tex` into the project as `accepted.tex`.
+  writeFileSync(
+    join(agents, 'accept-validation.yaml'),
+    'name: accept_validation\ndescription: Accept one file into the workspace.\ntools: [accept_run_files]\n\nprompt: |\n  GOLDEN-ACCEPT\n',
+  );
+  const draft = 'Accepted by a task in the service.\n';
+  writeFileSync(join(work, 'draft.tex'), draft);
   const flag = join(work, 'texra-validation.flag');
   writeFileSync(flag, 'texra-cli-run-validation\n');
   const scripted = {
@@ -199,6 +208,50 @@ test('the desktop app shares the service with a CLI of its build, and reaches th
       await launched.page.screenshot({
         path: test.info().outputPath('desktop-reconnected.png'),
       });
+      // A task in the service accepts a file into the project. The app hears
+      // it from the run's rows, as every process that folds the run does,
+      // and lists the file without a refresh.
+      const treeRow = (path: string) =>
+        launched.page.locator(`.desktop-editor-tree-row[data-path="${path}"]`);
+      await launched.page.locator('#shellToggleSidePanel').click();
+      await expect(treeRow('draft.tex')).toBeVisible({ timeout: 15_000 });
+      await expect(treeRow('accepted.tex')).toHaveCount(0);
+      // The service follows the project's own approval policy, which a
+      // client can narrow but never widen: auto-approve it, as a window's
+      // settings view would, so the acceptance needs no answer.
+      const storage = join(dataRoot, 'v1', 'workspace-storage');
+      const project = readdirSync(storage).find((name) =>
+        name.startsWith('work-'),
+      );
+      writeFileSync(
+        join(storage, project!, 'config.json'),
+        `${JSON.stringify({ 'texra.approvalPolicy': 'yolo' })}\n`,
+      );
+      const accept = JSON.parse(
+        cli(
+          nextBuild,
+          home,
+          [
+            'tasks',
+            'start',
+            'accept_validation',
+            '--model',
+            'openai/gpt-5.6-sol',
+            '--instruction',
+            `Accept draft.tex from ${task.runId}`,
+            '--output-format',
+            'json',
+            '--cwd',
+            work,
+          ],
+          scripted,
+        ),
+      ) as { readonly runId: string };
+      await expect(treeRow('accepted.tex')).toBeVisible({ timeout: 60_000 });
+      await launched.page.screenshot({
+        path: test.info().outputPath('desktop-accepted-file.png'),
+      });
+      const accepted = readFileSync(join(work, 'accepted.tex'), 'utf8');
       const reconnected = status(nextBuild, home);
       const nextTasks = JSON.parse(
         cli(nextBuild, home, ['tasks', 'list', '--output-format', 'json']),
@@ -212,6 +265,9 @@ test('the desktop app shares the service with a CLI of its build, and reaches th
           appListsTheNewerServicesTask: true,
           newerBuildVersion: next.version,
           cliListsTheTask: nextTasks.some((t) => t.runId === task.runId),
+          serviceTaskAcceptedTheFile: accepted === draft,
+          appListsTheAcceptedFile: true,
+          acceptingTaskListed: nextTasks.some((t) => t.runId === accept.runId),
         },
         shared: { record: started, cliStatus: shared, cliTasks: sharedTasks },
         next: { status: reconnected, tasks: nextTasks },

@@ -173,8 +173,9 @@ export ANTHROPIC_API_KEY=sk-…
 texra run polish --input paper.tex
 ```
 
-The CLI doesn't read `.env` files automatically. If you already keep keys
-there, load them into the shell first (in bash/zsh: `set -a; . .env; set +a`).
+A project's `.env` file is read by every task of that project. A key set
+only in this terminal does not reach a task that runs in the TeXRA service;
+the CLI says so, and `TEXRA_NO_SERVICE=1` keeps the task in this terminal.
 
 **Use a provider subscription.** ChatGPT, Grok (xAI), Kimi Code, and the GLM
 Coding Plan can serve model calls in place of an API key:

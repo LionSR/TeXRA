@@ -18,12 +18,6 @@ is complete only after:
 Only then may a separate public-release change remove the private files from
 this repository.
 
-Public prompt definitions remain in this repository. Private deployment may
-copy a released prompt into storage for delivery, but it must not author or
-modify prompt content. Each deployed prompt should record the public source
-commit and a content hash so a client can verify which public prompt it
-received.
-
 Do not commit any of the following to a public repository:
 
 - project references, service-role keys, access tokens, or provider secrets;

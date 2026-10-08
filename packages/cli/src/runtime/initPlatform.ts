@@ -297,6 +297,7 @@ export function initCliPlatform(
         installCliProcessRuntime(context.storageRoot, {
           resourcesPath: context.resourcesPath,
           minimumLogLevel: context.minimumLogLevel,
+          workspace: context.cwd,
         }),
       catch: ensureError,
     });

@@ -461,7 +461,9 @@ All notable changes to this project will be documented in this file.
   remain open for follow-ups after stopping, failing, or completing. Messages
   group the author and time, with Copy and collapse controls at the edge.
   Agent YAML opens in the app's editor, and clean editor tabs refresh when
-  reopened after an external change.
+  reopened after an external change. Empty groups offer a close action and
+  buttons to open a view. Approval menus explain the active policy, keep
+  selection marks inside the menu, and respect settings that block actions.
 - **Agent SDK: persistent sessions, resume, and approvals.**
   `sessions.open(roots, { persistent: true })` keeps a session's history in
   the same on-disk store the TeXRA apps keep, and `session.resume(runId)`
@@ -909,6 +911,25 @@ show` print the same notice, and the new `texra agents customize`,
 - **Read conversations stay read after restarting.** Loading older chat history
   no longer resets the sidebar's read marker. Later activity still makes the
   conversation unread until it is viewed.
+- **A window shows the files a background task accepts.** When a task in the
+  TeXRA service (`texra serve`) accepted files into the project, or the setup
+  agent applied an agent team there, the desktop file tree and the editor's
+  file badges and agent lists did not update until you refreshed them. The
+  change is now recorded on the task, and every window that shows the
+  project picks it up.
+- **A project's `.env` reaches its tasks again, in every TeXRA app.**
+  Since tasks moved into the TeXRA service, a key kept only in the
+  project's `.env` was missing there, and a different key from your login
+  shell could be used instead. Each task now reads its project's `.env`
+  as it starts, over the environment, so an edited or rotated key applies
+  to the next task; its commands see the variables (never
+  a provider key), a `DO_NOT_TRACK` or `TEXRA_NO_TELEMETRY` there turns
+  usage logging off for its tasks, and one project's `.env` never reaches
+  another's. The CLI and the desktop app read it too, for their model
+  lists and key checks. A key you set only in the terminal that
+  starts a chat or `texra tasks start` does not reach a task in the
+  service, and the CLI now says so.
+
 - **The TeXRA service no longer grows with every project it ever
   opened.** A project's session in the service now closes once no window
   or terminal is attached to it and none of its tasks is running or
@@ -1048,9 +1069,10 @@ show` print the same notice, and the new `texra agents customize`,
 - **One warning per media file a model can't read.** Attaching an image
   or PDF to a model without vision used to log two warnings: a
   launch-time "Model has no vision support" summary, repeated on every
-  resume, and then "Skipping <file>" for each dropped file. Only the
-  per-file "Skipping <file>: the model does not accept
-  images/documents/audio" warning remains, written where the file is
+  resume, and then `Skipping <file>` for each dropped file. Only the
+  per-file
+  `Skipping <file>: the model does not accept images/documents/audio`
+  warning remains, written where the file is
   dropped: on a chat's first message, a follow-up, a subagent's opening,
   and each revision of a document task.
 - **A resumed task no longer asks whether a command ran that never

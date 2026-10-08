@@ -14,7 +14,11 @@ import { repeat } from 'lit/directives/repeat.js';
 import { type ApprovalBypassKind } from '@shared/approvalBypassKind';
 import { resolveBypass } from '@shared/approvalBypassKind';
 import { goalStateOf, type GoalState } from '@shared/plugins/goal';
-import type { SessionView, RunView } from '@shared/session/sessionView';
+import {
+  acceptsFollowUp,
+  type SessionView,
+  type RunView,
+} from '@shared/session/sessionView';
 import type { TeXRAIconName } from '@shared/iconNames';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { CopyButtonController } from '@texra/shared/litControllers/CopyButtonController';
@@ -108,7 +112,7 @@ export class RunHeader extends LitElement {
       }
 
       #activeRunName {
-        flex: 1;
+        flex: 0 1 auto;
         min-width: 6ch;
         margin: 0;
         overflow: hidden;
@@ -163,6 +167,10 @@ export class RunHeader extends LitElement {
       tool-timer {
         flex: 0 0 auto;
         white-space: nowrap;
+      }
+      .header-spacer {
+        flex: 1;
+        min-width: 0;
       }
 
       .status-indicator {
@@ -251,10 +259,9 @@ export class RunHeader extends LitElement {
         font-variant-numeric: tabular-nums;
       }
 
-      /* A narrow row keeps the title: the status word and the pass chip
-         move into the menu's status line. */
+      /* Keep the status word visible; secondary provenance and pass labels
+         remain available from the menu when the pane is narrow. */
       @container (max-width: 640px) {
-        .status-label,
         .forked-from,
         wa-tag.progress-badge {
           display: none;
@@ -430,7 +437,11 @@ export class RunHeader extends LitElement {
   override render(): TemplateResult | typeof nothing {
     const run = this.run;
     if (!run) return nothing;
-    const statusLabel = run.statusLabel;
+    const canContinue =
+      run.group !== 'running' &&
+      run.group !== 'waiting' &&
+      acceptsFollowUp(run, { terminalBacked: false });
+    const statusLabel = canContinue ? 'Ready' : run.statusLabel;
     const goal = goalStateOf(run);
     // The header offers exactly what the fold's `actions` licenses.
     const canStop = run.actions.includes('stop');
@@ -452,15 +463,20 @@ export class RunHeader extends LitElement {
           aria-label=${statusLabel}
           class=${classMap({
             'status-indicator': true,
-            [TONE_INDICATOR_CLASS[run.tone]]: true,
+            [TONE_INDICATOR_CLASS[canContinue ? 'neutral' : run.tone]]: true,
           })}
         ></span>
         <wa-tooltip for=${ELEMENT_IDS.STATUS_INDICATOR}>
-          ${run.statusDetail ?? statusLabel}
+          ${
+            canContinue
+              ? `${run.statusLabel}. Send a message to continue.`
+              : (run.statusDetail ?? statusLabel)
+          }
         </wa-tooltip>
         <span class="status-label" aria-hidden="true">${statusLabel}</span>
         ${this.renderRunElapsed(run)} ${this.renderGoalChip(goal)}
         ${this.renderPassBadge(passLabel)}
+        <span class="header-spacer"></span>
         ${
           canGrant
             ? renderRunGrantChips(

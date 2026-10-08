@@ -153,6 +153,19 @@ test.afterAll(async () => {
 test('splits in both directions, keeps the explorer and agent, and restores the grid', async () => {
   const { page, app } = launched;
   await expect(panel('agent').locator('session-composer')).toBeVisible();
+  // An explicitly split empty group must offer an immediate way to remove it.
+  const groupsBeforeSplit = await page.locator('.dv-groupview').count();
+  await menu(groupOf(tab('agent')), 'split-right');
+  const closeEmpty = page.getByRole('button', {
+    name: 'Close empty group',
+    exact: true,
+  });
+  await expect(closeEmpty).toBeVisible();
+  await page.screenshot({
+    path: test.info().outputPath('empty-group-actions.png'),
+  });
+  await closeEmpty.click();
+  await expect(page.locator('.dv-groupview')).toHaveCount(groupsBeforeSplit);
   await openFile('first.ts');
   await expect(panel('editor').locator('.view-lines')).toContainText(
     'firstDocument',

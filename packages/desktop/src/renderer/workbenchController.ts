@@ -12,6 +12,7 @@ import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
 import {
+  WORKBENCH_KIND_META,
   closeWorkbenchTab,
   openWorkbenchTab,
   type DesktopShellState,
@@ -363,15 +364,50 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
       createWatermarkComponent: () => {
         const watermark = document.createElement('div');
         watermark.className = 'shell-dock-empty';
-        render(
-          renderEmptyState({
-            icon: 'table-columns',
-            title: 'Arrange your workspace',
-            body: 'Drag a tab here, or use the group menu to open a view.',
-          }),
-          watermark,
-        );
-        return { element: watermark, init() {} };
+        return {
+          element: watermark,
+          init({ containerApi, group }) {
+            const target = containerApi.groups.find(
+              (candidate) => candidate.id === group?.id,
+            );
+            render(
+              html`
+                ${renderEmptyState({
+                  icon: 'table-columns',
+                  title: target ? 'Empty group' : 'Open a view',
+                  body: 'Drag a tab here, or choose a view below.',
+                })}
+                <div class="shell-dock-empty-actions">
+                  ${(['agent', 'files', 'terminal'] as const).map((kind) =>
+                    renderLabeledActionButton({
+                      text: WORKBENCH_KIND_META[kind].label,
+                      icon: WORKBENCH_KIND_META[kind].icon,
+                      kind: 'secondary',
+                      onClick: () => openKind(kind, target),
+                    }),
+                  )}
+                  ${
+                    target
+                      ? renderLabeledActionButton({
+                          text: 'Close empty group',
+                          icon: 'xmark',
+                          kind: 'ghost',
+                          onClick: () => {
+                            if (target.panels.length === 0)
+                              containerApi.removeGroup(target);
+                          },
+                        })
+                      : nothing
+                  }
+                </div>
+              `,
+              watermark,
+            );
+          },
+          dispose() {
+            render(nothing, watermark);
+          },
+        };
       },
     });
     reconciling = true;

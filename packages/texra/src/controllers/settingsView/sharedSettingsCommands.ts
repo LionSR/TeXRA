@@ -29,6 +29,7 @@ import {
 import { discoverCopilotRoutes } from '@model/copilotRouting';
 import { type StorageFs, withSessionFs } from '@platform/rootedFs';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import type { SubscriptionUsageProvider } from '@shared/schemas';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
 import { CODING_PLAN_BY_API_PROVIDER } from '@shared/schemas';
@@ -291,6 +292,9 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
       }
       if (codingPlanForUsageSetting(key) !== undefined) {
         yield* postUsage(false);
+      }
+      if (key === TEXRA_APPROVAL_POLICY_CONFIG_KEY) {
+        yield* bindings.refreshCatalogs();
       }
       yield* bindings.stateSettingApplied(key);
     });

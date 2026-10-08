@@ -131,10 +131,11 @@ export const serveCommand = defineCliCommand({
     'idle-timeout': {
       type: 'string',
       valueHint: 'seconds',
-      description: `Exit after this long with no client and no running task (default ${DEFAULT_IDLE_SECONDS})`,
+      description: `Exit after this long with no client and no running task, and close a project's session after this long with no client and no task of its own (default ${DEFAULT_IDLE_SECONDS})`,
     },
   },
   catchExitCode: CliExitCode.AgentError,
+  install: 'service',
   run: (context, ctx) =>
     runServe(context, parseIdleSeconds(ctx.args['idle-timeout'])),
 });
@@ -188,6 +189,7 @@ function stopService(context: CliContext) {
 const statusCommand = defineCliCommand({
   meta: { name: 'status', description: 'Show whether the TeXRA service runs' },
   args: { ...GLOBAL_ARGS },
+  install: 'service',
   catchExitCode: CliExitCode.AgentError,
   run: (context) =>
     probeCliService(context.storageRoot).pipe(
@@ -205,6 +207,7 @@ const stopCommand = defineCliCommand({
       'Stop the TeXRA service; its running tasks stop and can be resumed',
   },
   args: { ...GLOBAL_ARGS },
+  install: 'service',
   catchExitCode: CliExitCode.AgentError,
   run: (context) =>
     stopService(context).pipe(
@@ -222,6 +225,7 @@ const stopCommand = defineCliCommand({
 const restartCommand = defineCliCommand({
   meta: { name: 'restart', description: 'Stop the TeXRA service and start it' },
   args: { ...GLOBAL_ARGS },
+  install: 'service',
   catchExitCode: CliExitCode.AgentError,
   run: (context) =>
     Effect.gen(function* () {

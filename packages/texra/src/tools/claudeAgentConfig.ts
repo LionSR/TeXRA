@@ -150,7 +150,7 @@ export const buildClaudeAgentEnv = Effect.fn('buildClaudeAgentEnv')(function* (
   const apiKeyVar = apiKeyEnvName('anthropic');
   // The other providers' keys stay out of the subprocess: what its tools
   // print comes back as a tool result. Its own Anthropic key is resolved below.
-  const env: NodeJS.ProcessEnv = inheritedEnv('anthropic');
+  const env: NodeJS.ProcessEnv = yield* inheritedEnv('anthropic');
   env.CLAUDE_AGENT_SDK_CLIENT_APP = 'texra';
   env.CLAUDE_CODE_ENABLE_TODO_TOOLS = '1';
   const oauthToken = env.CLAUDE_CODE_OAUTH_TOKEN?.trim();
