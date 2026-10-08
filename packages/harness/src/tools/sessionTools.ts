@@ -255,18 +255,21 @@ const pinStep = <E>(
         ),
       { concurrency: 'unbounded' },
     );
+    // An installed plugin's tools go before a configured server's: a
+    // child inheriting one keeps it when a configured server reuses the
+    // name, and the configured one is refused loudly.
     const merged = mergeEntries([
       ...builtIn.map(({ plugin, entries }) => [plugin.id, entries] as const),
+      ...loads.map(
+        ({ id, held }) =>
+          [id, new Map(held.flatMap(({ entries }) => [...entries]))] as const,
+      ),
       ...[
         ...Map.groupBy(
           options?.held?.entries ?? new Map<string, ToolEntry>(),
           ([, entry]) => entry.plugin,
         ),
       ].map(([owner, own]) => [owner, new Map(own)] as const),
-      ...loads.map(
-        ({ id, held }) =>
-          [id, new Map(held.flatMap(({ entries }) => [...entries]))] as const,
-      ),
     ]);
     const failures = loads.flatMap(({ held }) =>
       held.flatMap(({ failure }) => failure ?? []),
