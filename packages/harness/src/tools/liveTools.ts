@@ -102,9 +102,9 @@ export class LiveTools extends Context.Service<
       E,
       Scope.Scope
     >;
-    /** A plugin's process services for the caller's scope while its layer
-     *  is up (switched on, or pinned by a step that uses it), for a host that
-     *  shows, ends or drains its state; none once it is down. */
+    /** Borrow an existing plugin layer for the caller's scope without
+     *  starting one. A switched-off layer remains available while held; none
+     *  once its last holder releases it or the catalog closes. */
     readonly processServices: (
       plugin: string,
     ) => Effect.Effect<Option.Option<Services>, never, Scope.Scope>;
@@ -142,19 +142,11 @@ const liveToolsLayer = (
       // Each plugin's process layer, in its map entry's scope: its switch and
       // each generation that includes it hold a reference. It may read this
       // catalog (Copilot's tools follow it), built by then.
-      // The plugins whose process layer is up, however it is held.
-      const up = new Set<string>();
       const layers = yield* RcMap.make({
         lookup: (id: string) =>
           buildPluginLayer(id, table.entries.get(id)!.processLayer!.layer).pipe(
             Effect.provideService(LiveTools, service),
             Effect.provide(process),
-            Effect.tap(() =>
-              Effect.acquireRelease(
-                Effect.sync(() => up.add(id)),
-                () => Effect.sync(() => up.delete(id)),
-              ),
-            ),
           ),
       });
       // Built-in contributions (closed when off) and installed loads, by id.
@@ -202,10 +194,17 @@ const liveToolsLayer = (
                   id,
                   entriesOf(id, new Map(Object.entries(plugin.tools ?? {}))),
                 )
-                .pipe(Scope.provide(contribution), Effect.orDie);
-              // The switch's own hold on the plugin's process services.
-              if (plugin.processLayer !== undefined)
-                yield* RcMap.get(layers, id).pipe(Scope.provide(contribution));
+                .pipe(
+                  Effect.orDie,
+                  // The switch's own hold on the plugin's process services.
+                  Effect.andThen(
+                    plugin.processLayer === undefined
+                      ? Effect.void
+                      : RcMap.get(layers, id),
+                  ),
+                  Scope.provide(contribution),
+                  Effect.onError(() => Scope.close(contribution, Exit.void)),
+                );
               builtIns.set(id, contribution);
             } else if (!on && held !== undefined) {
               builtIns.delete(id);
@@ -369,11 +368,7 @@ const liveToolsLayer = (
         return { warnings: read.warnings, loaded };
       });
       const processServices = (id: string) =>
-        locked(
-          up.has(id)
-            ? Effect.map(RcMap.get(layers, id), Option.some)
-            : Effect.succeed(Option.none()),
-        );
+        locked(RcMap.getOption(layers, id));
       const service: LiveTools['Service'] = {
         registry,
         pinSwitched,

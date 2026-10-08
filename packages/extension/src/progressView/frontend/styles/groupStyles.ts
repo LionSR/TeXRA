@@ -1,42 +1,19 @@
 // Third-party imports
 import { css } from 'lit';
+import { panelFrameStyles } from '@ui/styles/surfaceStyles';
 
 /**
  * Log group styles for collapsible task groups and run containers.
  */
 export const groupStyles = css`
   .log-group-header {
-    padding: var(--wa-space-xs);
+    ${panelFrameStyles}
+    padding: var(--panel-padding-block) var(--panel-padding-inline);
     margin: var(--wa-space-2xs) 0;
-    border-radius: var(--wa-border-radius-m, var(--border-radius-small));
     cursor: pointer;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    background-color: color-mix(
-      in srgb,
-      var(--wa-color-neutral-fill-quiet) 58%,
-      transparent
-    );
-    border-inline-start: 2px solid var(--color-border);
-
-    &.is-running {
-      border-inline-start-color: var(--wa-color-status-warning-bg);
-    }
-
-    &.is-failed {
-      border-inline-start-color: var(--wa-color-danger-on-quiet);
-    }
-
-    &.is-completed {
-      border-inline-start-color: var(--wa-color-success-fill-loud);
-    }
-
-    /* A user stop is neither success nor error, so the rail reads neutral,
-       matching the shared status dot and the CLI row marker. */
-    &.is-cancelled {
-      border-inline-start-color: var(--border-control);
-    }
   }
 
   .log-group-content {
@@ -81,7 +58,7 @@ export const groupStyles = css`
   /* Group banners are <wa-details> (matching Plan / Background Tasks etc.),
      so the disclosure chevron is consistent with every other panel. Strip the
      WA card chrome so the group reads as an inline disclosure rather than a
-     boxed panel — our .log-group-header (status rail + padding) and
+     boxed panel — our .log-group-header (frame + padding) and
      .log-group-content (dashed connector) own the visuals. Unlike the shared
      .collapsible-quiet panels, collapse here is by lazy DOM removal in
      TaskGroupList (not the 1fr/0fr grid trick), so no content-grid rules. */
@@ -100,10 +77,6 @@ export const groupStyles = css`
     padding: 0;
   }
 
-  :is(.log-line, .banner-details)[data-group-id] {
-    border-inline-start: var(--border-medium) solid transparent;
-  }
-
   /* Align custom-element panels with native banner-details indent. */
   .log-group-content
     > :is(
@@ -115,10 +88,6 @@ export const groupStyles = css`
       latexdiff-results
     ) {
     margin-inline-start: var(--wa-space-2xs);
-  }
-
-  .log-group-content .log-group-header {
-    border-inline-start-width: var(--border-thin);
   }
 
   .log-group-content

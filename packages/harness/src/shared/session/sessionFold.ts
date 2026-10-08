@@ -1099,9 +1099,8 @@ function foldDurable(
     return true;
   }
   const known = view.runs.get(runId);
-  // Existence: only `run.start` mints a run, once. A fact for a run
-  // the view has no `run.start` for changes nothing and leaves no entry (its
-  // publisher logs it).
+  // Existence: only `run.start` mints a run, once. A fact for a run without
+  // one changes nothing and leaves no entry (its publisher logs it).
   if (!known && event.type !== 'run.start') return false;
   latest.set(listingKey, event.commit);
   if (event.type === 'run.removed') return foldRunRemoved(view, runId);
@@ -1136,7 +1135,9 @@ function foldDurable(
   }
   // A fresh incarnation can end again.
   if (event.type === 'run.activate') sessionIndexesOf(view).ended.delete(runId);
-  let next: RunView = { ...own, lastTimestamp: event.at };
+  // Reads arrive in any order: older history never moves the clock back.
+  const lastTimestamp = Math.max(own.lastTimestamp ?? event.at, event.at);
+  let next: RunView = { ...own, lastTimestamp };
   setRun(view, next);
 
   if (created || next.parentId !== before.parentId) {
@@ -1174,10 +1175,8 @@ function foldTraceEvent(
   // A filtered fact still advances its source cursor. Keep the run and
   // transcript references stable when that fact produced no presentation.
   if (transcript === run.transcript) return true;
-  setRun(
-    view,
-    withTranscriptFacts({ ...run, transcript, lastTimestamp: event.at }),
-  );
+  const lastTimestamp = Math.max(run.lastTimestamp ?? event.at, event.at);
+  setRun(view, withTranscriptFacts({ ...run, transcript, lastTimestamp }));
   return true;
 }
 

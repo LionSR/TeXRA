@@ -65,19 +65,21 @@ function setupMonacoWorkers(workers: MonacoWorkerConstructors): void {
  * clears the cache so a later attempt can retry rather than being stuck with a
  * rejected promise forever.
  *
- * `editor.api.js` is deliberately paired with `languages/register.all.js`. The
- * api entry is the bare editor *core*: it ships no grammars at all, so on its
- * own every file renders as undifferentiated plain text regardless of the model's
- * language id. register.all contributes the ~80 bundled Monarch grammars, each
- * behind a lazy `loader: () => import(...)`, so registering them all costs a
- * table of ids up front and downloads a grammar only when a file of that type is
- * actually opened.
+ * The bare API needs both editor features and language registrations. Register
+ * features before creating any editor or model: Monaco snapshots singleton
+ * services at first use, so late registration leaves suggestions, code actions
+ * and other contributions without their dependencies.
+ *
+ * Grammars and language services remain lazy; these registration modules load
+ * their implementation only when a file of that language is opened.
  */
 export async function loadMonaco(): Promise<MonacoModule> {
   monacoLoad ??= (async () => {
     try {
       const [
         monaco,
+        ,
+        ,
         ,
         editorWorker,
         jsonWorker,
@@ -86,7 +88,9 @@ export async function loadMonaco(): Promise<MonacoModule> {
         tsWorker,
       ] = await Promise.all([
         import('monaco-editor/editor/editor.api.js'),
+        import('monaco-editor/features/register.all.js'),
         import('monaco-editor/languages/register.all.js'),
+        import('monaco-editor/languages/features/register.all.js'),
         import('monaco-editor/editor/editor.worker?worker'),
         import('monaco-editor/language/json/json.worker?worker'),
         import('monaco-editor/language/css/css.worker?worker'),

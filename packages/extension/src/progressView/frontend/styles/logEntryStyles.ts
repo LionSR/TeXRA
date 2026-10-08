@@ -11,7 +11,11 @@ export const logEntryStyles = css`
   .log-container {
     flex: 1 1 auto;
     width: 100%;
-    padding: var(--wa-space-xs) var(--wa-space-m) var(--wa-space-s);
+    padding-block: var(--message-gap);
+    padding-inline: max(
+      var(--conversation-gutter, var(--wa-space-m)),
+      calc((100% - var(--conversation-width, 760px)) / 2)
+    );
     box-sizing: border-box;
     min-width: 0;
     min-height: 0;
@@ -253,7 +257,7 @@ export const logEntryStyles = css`
   }
 
   .banner-details {
-    margin: var(--wa-space-3xs) 0;
+    margin: 0 0 var(--message-gap);
     content-visibility: auto;
     contain-intrinsic-size: auto 40px;
   }
@@ -266,7 +270,7 @@ export const logEntryStyles = css`
   }
 
   .details-summary {
-    gap: var(--wa-space-3xs);
+    gap: var(--wa-space-xs);
     min-width: 0;
     color: var(--wa-color-text-quiet);
     font-size: var(--font-size-sm);
@@ -276,13 +280,22 @@ export const logEntryStyles = css`
     color: var(--color-text-muted);
   }
 
+  .error-timestamp {
+    flex: 0 0 auto;
+    margin-inline-start: auto;
+    color: var(--wa-color-text-quiet);
+    font-size: var(--font-size-xs);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
   .banner-content {
     margin: 0;
   }
 
   .banner-content--model {
     color: var(--wa-color-text-normal);
-    font-size: var(--font-size);
+    font-size: var(--font-size-reading);
     line-height: 1.6;
   }
 
@@ -342,7 +355,7 @@ export const logEntryStyles = css`
 
   @container (max-width: 640px) {
     .log-container {
-      padding-inline: var(--wa-space-xs);
+      padding-inline: var(--conversation-gutter, var(--wa-space-xs));
     }
   }
 `;

@@ -53,15 +53,11 @@ const SessionKeySchema = z.string().min(1);
 /**
  * A run's transcript slice: what hosts paint, and nothing else. The fold
  * keeps its incremental indexes (row and group positions, the compaction
- * projection's working state, the measured live text per streaming row)
- * beside the value in a module-private map, so a host
- * can neither depend on nor mutate them. The slice value is replaced on every
- * change and `rows` and `taskGroups` are never written after the fold that
- * produced them returns (D5); hosts read, never write.
- *
- * The row and block elements are the shared renderers' own TypeScript
- * shapes (`transcriptRow.ts`, `compactionActivityProjection.ts`); they have no schema of their own yet, so the
- * element types are stated rather than re-declared here.
+ * projection's working state, the live text per streaming row) in a
+ * module-private map beside it, so a host can neither depend on nor mutate
+ * them. The slice is replaced on every change and never written after the
+ * fold that produced it returns (D5). Row and block elements are the shared
+ * renderers' own TypeScript shapes, stated here rather than re-declared.
  */
 const TranscriptViewSchema = z.object({
   /** The transcript fold's rows (`transcriptFold.ts`) plus the compaction
@@ -264,14 +260,24 @@ export interface FollowUpHost {
  * Whether a run takes a follow-up at all, the one rule every host reads (it
  * decides whether the composer shows). A run with no follow-up support, a
  * terminal-backed run on a host that cannot drive one, and a run this process
- * may not act on take none; a run still going or waiting takes one, as does a
- * conversation not yet started (`ready`, nothing written).
+ * may not act on take none; a run still going or waiting takes one, as do a
+ * conversation not yet started (`ready`, nothing written) and a stopped native
+ * one with saved steps, which admission resumes from its history.
  */
 export function acceptsFollowUp(run: RunView, host: FollowUpHost): boolean {
   if (run.followUpSupport === 'unsupported' || run.readOnly) return false;
   if (run.followUpSupport === 'terminalBacked' && !host.terminalBacked)
     return false;
   if (run.group === 'running' || run.group === 'waiting') return true;
+  if (
+    run.followUpSupport === 'nativeInteractive' &&
+    run.identity.kind === 'agent' &&
+    run.parentId === null &&
+    !run.documentTask &&
+    run.resumeBlocked === null &&
+    (run.turn !== null || run.forkPoint !== null)
+  )
+    return true;
   return run.status === 'ready' && run.lastTimestamp === null;
 }
 
@@ -294,18 +300,16 @@ export function requestAnswerability(
   return 'resume';
 }
 
-/** A pending request: which run is asking and the payload the UI shows (its
- *  `kind` is the request's kind). The list is a set keyed by `requestId` (5.2): opened
- *  without decided. */
+/** A pending request: which run asks and the payload the UI shows. The list
+ *  is a set keyed by `requestId` (5.2): opened without decided. */
 const PendingRequestSchema = z.object({
   runId: RunIdSchema,
   requestId: z.string(),
   payload: PermissionPayloadSchema,
 });
 
-/** A queued follow-up as a composer lists it: the row's key and the text it
- *  shows (`displayText`, else `text`). Per run a set keyed by `followUpId`
- *  (5.2): queued without consumed, in queue order. */
+/** A queued follow-up as a composer lists it (`displayText`, else `text`).
+ *  Per run a set keyed by `followUpId` (5.2): queued, unconsumed, in order. */
 const QueuedFollowUpViewSchema = z.object({
   followUpId: z.string(),
   text: z.string(),
@@ -431,10 +435,8 @@ export function emptySessionView(
   };
 }
 
-/** The read shape `descendantRuns` needs: satisfied by `SessionView`
- *  itself and by any deep-readonly projection of it (a `Map` structurally
- *  satisfies `ReadonlyMap`), so a consumer holding a readonly view never
- *  needs to re-derive the walk to keep its own copy. */
+/** The read shape `descendantRuns` needs: `SessionView` itself or any
+ *  deep-readonly projection of it (a `Map` satisfies `ReadonlyMap`). */
 type RunTopology = {
   readonly runs: ReadonlyMap<RunId, { readonly childIds: readonly RunId[] }>;
 };
@@ -451,9 +453,7 @@ export function descendantRuns(
 ): readonly RunId[] {
   if (rootRunId === undefined) return [];
   const out: RunId[] = [];
-  // An index cursor over an append-only queue keeps this linear in the
-  // topology's size; `Array.shift()` would re-index the remainder on every
-  // pop and make a large fan-out's walk quadratic.
+  // An index cursor, not `Array.shift()`, keeps a large fan-out's walk linear.
   const pending = [rootRunId];
   const seen = new Set<RunId>();
   for (let cursor = 0; cursor < pending.length; cursor++) {

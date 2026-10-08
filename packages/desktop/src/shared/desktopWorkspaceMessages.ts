@@ -13,6 +13,7 @@ const DesktopWorkspaceMessageSchema = z.object({ session: z.string() });
 export const DESKTOP_WORKSPACE_COMMANDS = {
   // Editor
   FILES_CHANGED: 'desktop:workspace:filesChanged',
+  OPEN_DOCUMENT: 'desktop:workspace:openDocument',
   // Terminal
   TERMINAL_START: 'desktop:terminal:start',
   TERMINAL_INPUT: 'desktop:terminal:input',
@@ -45,6 +46,12 @@ export const DESKTOP_WORKSPACE_COMMANDS = {
 export const DesktopWorkspaceFilesChangedMessageSchema =
   DesktopWorkspaceMessageSchema.extend({
     command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED),
+  });
+
+export const DesktopOpenDocumentMessageSchema =
+  DesktopWorkspaceMessageSchema.extend({
+    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.OPEN_DOCUMENT),
+    target: z.string(),
   });
 
 // ── Terminal ──

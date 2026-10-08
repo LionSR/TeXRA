@@ -5,7 +5,7 @@
 // deliberately minimal — open, read, edit, save. No debugger, no extensions, no
 // multi-root workspaces.
 //
-// Monaco arrives through the shared @shared/monaco/monacoLoader so the worker
+// Monaco arrives through the shared @texra/shared/monaco/monacoLoader so the worker
 // setup is identical to the diff viewer's (that config is a module global; two
 // copies would race).
 //
@@ -21,15 +21,16 @@ import type { Theme } from '@shared/schemas';
 import { monacoLanguageForPath } from '@texra/shared/monaco/monacoLanguage';
 import {
   loadMonaco,
-  monacoThemeForHostTheme,
   type MonacoModule,
 } from '@texra/shared/monaco/monacoLoader';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
+import { applyMonacoTheme } from '@ui/wa/monacoTheme';
+import { monacoPresentationOptions } from '@ui/wa/monacoOptions';
+import { installMonacoCommandDescriptions } from '@ui/wa/monacoCommandDescriptions';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLoadingState } from '@ui/wa/loadingState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
-import { getDesktopChromeFontSize } from './desktopTypography';
 import { createEditorFileNotice } from './editorFileNotice';
 import {
   buildEditorDirectoryEntries,
@@ -46,6 +47,7 @@ interface EditorPaneCallbacks {
   listFiles(directory: string): Promise<readonly EditorFileEntry[]>;
   readFile(path: string): Promise<string>;
   writeFile(path: string, contents: string): Promise<void>;
+  isReadOnly?(path: string): boolean;
   /** Reports dirty state so the tab strip can show its indicator. */
   onDirtyChange(path: string, dirty: boolean): void;
   /**
@@ -91,6 +93,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   treeHost.className = 'desktop-editor-tree';
   const editorHost = document.createElement('div');
   editorHost.className = 'desktop-editor-surface';
+  const disposeCommandTooltips = installMonacoCommandDescriptions(editorHost);
   const notice = createEditorFileNotice({
     onError: callbacks.onError,
     retrySave: (path) => void open(path).then(save),
@@ -119,6 +122,10 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   // One model per opened file so switching tabs preserves each file's undo
   // history and cursor — recreating a model on every switch would lose both.
   const models = new Map<string, TextModel>();
+  const viewStates = new Map<
+    string,
+    NonNullable<ReturnType<CodeEditor['saveViewState']>>
+  >();
   const pendingModelLoads = new Map<string, Promise<TextModel | undefined>>();
   // The tail of each path's model-sync lane; see `onModelSyncLane`.
   const modelSyncTails = new Map<string, Promise<void>>();
@@ -324,30 +331,18 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         const loadedMonaco = await loadMonaco();
         if (disposed) return undefined;
         monaco = loadedMonaco;
-        const editorFontSize = getDesktopChromeFontSize();
         editor = loadedMonaco.editor.create(editorHost, {
-          theme: monacoThemeForHostTheme(theme),
+          ...monacoPresentationOptions(document.body),
+          theme: applyMonacoTheme(loadedMonaco, theme, document.body),
           // Monaco measures its own container, and the pane is resized by splits
           // and divider drags, not only by the window.
           automaticLayout: true,
-          // A minimap on a prose-shaped document is noise; the file tree already
-          // names the file. Line numbers stay because errors are reported by line.
-          minimap: { enabled: false },
-          fontSize: editorFontSize,
-          lineHeight: Math.round(editorFontSize * 1.5),
           // Papers and proofs have paragraph-length lines, so wrapping beats a
           // horizontal scrollbar — but wrap on word boundaries, not anywhere.
           wordWrap: 'bounded',
           wordWrapColumn: 120,
-          wrappingStrategy: 'advanced',
-          scrollBeyondLastLine: false,
-          renderWhitespace: 'selection',
-          lineNumbersMinChars: 3,
-          glyphMargin: false,
+          wrappingStrategy: 'simple',
           folding: true,
-          padding: { top: 12, bottom: 12 },
-          smoothScrolling: true,
-          cursorBlinking: 'smooth',
         });
         return editor;
       } catch (error) {
@@ -484,8 +479,23 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       // Populate every requested model, but only the newest request may choose
       // which one is visible.
       if (!model || disposed || request !== latestOpenRequest) return;
-      target.setModel(model);
+      if (target.getModel() !== model) {
+        if (openPath) {
+          const state = target.saveViewState();
+          if (state) viewStates.set(openPath, state);
+        }
+        target.setModel(model);
+        const state = viewStates.get(path);
+        if (state) target.restoreViewState(state);
+      }
       openPath = path;
+      target.updateOptions({
+        readOnly: callbacks.isReadOnly?.(path) ?? false,
+        readOnlyMessage: {
+          value:
+            'This definition is read-only. Use **Customize** in Settings to edit a copy.',
+        },
+      });
       notice.clear(path);
       renderTree();
     } catch (error) {
@@ -550,7 +560,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   async function save(): Promise<void> {
     const path = openPath;
     const model = path ? models.get(path) : undefined;
-    if (!path || !model) return;
+    if (!path || !model || callbacks.isReadOnly?.(path)) return;
     const savedVersion = model.getVersionId();
     activeWrites.set(path, (activeWrites.get(path) ?? 0) + 1);
     writeEpochs.set(path, (writeEpochs.get(path) ?? 0) + 1);
@@ -589,7 +599,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       // `monaco.editor.setTheme` is global, not per-instance; applying it here
       // also re-themes the diff viewer, which is the desired behavior since
       // both follow the one host theme.
-      monaco?.editor.setTheme(monacoThemeForHostTheme(next));
+      if (monaco) applyMonacoTheme(monaco, next, document.body);
     },
 
     layout() {
@@ -610,18 +620,21 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       }
       models.get(path)?.dispose();
       models.delete(path);
+      viewStates.delete(path);
       dirtyPaths.delete(path);
       renderTree();
     },
 
     dispose() {
       disposed = true;
+      disposeCommandTooltips();
       latestOpenRequest += 1;
       treeRevision += 1;
       editor?.dispose();
       editor = undefined;
       for (const model of models.values()) model.dispose();
       models.clear();
+      viewStates.clear();
     },
   };
 }

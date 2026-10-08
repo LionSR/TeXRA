@@ -125,4 +125,19 @@ describe('run-header over the fold', () => {
       await cleanOffered({ status: RUN_PHASE.COMPLETED, group: 'recent' }),
     ).toBe(true);
   });
+
+  it('keeps an idle chat free of stop or end actions', async () => {
+    const view = fanOutView();
+    const run = {
+      ...runOfEvent(view, ROOT),
+      status: RUN_PHASE.WAITING,
+      substate: null,
+      approval: 'none',
+    } as RunView;
+    const { element } = await mountHeader(view, run);
+    expect(
+      element.shadowRoot?.querySelector(`#${ELEMENT_IDS.STOP_STREAM_BTN}`),
+    ).toBeNull();
+    expect(element.shadowRoot?.textContent).not.toMatch(/End\s+task/);
+  });
 });

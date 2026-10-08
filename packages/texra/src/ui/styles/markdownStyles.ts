@@ -143,7 +143,7 @@ export const markdownStyles: CSSResult = css`
 
   .markdown-content blockquote {
     border-inline-start: var(--border-medium) solid
-      var(--wa-color-activity-badge-bg);
+      var(--wa-color-surface-border);
     margin: var(--wa-space-xs) 0;
     padding-inline-start: var(--wa-space-l);
     color: var(--color-text-secondary);

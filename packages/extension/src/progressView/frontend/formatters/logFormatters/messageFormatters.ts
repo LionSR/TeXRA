@@ -84,6 +84,7 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
   const { id, groupId, timestamp } = row;
   const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
     new Date(timestamp),
+    'minute',
   );
 
   const summaryText = row.summary.full.trim() || 'Error occurred';
@@ -105,17 +106,22 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
   // prettier-ignore
   const contentTemplate = html`<div class="banner-content log-entry-content banner-content--error">${detailTemplate}</div>`;
   // prettier-ignore
-  const labelSpan = html`<span class="label" title=${tooltipTimestamp}>[${timeDisplay}] ${summaryText}</span>`;
-  // The copy button is shared markup (buildCopyButton); the label span is
-  // built here because its title carries the formatted timestamp.
+  const labelSpan = html`<span class="label">${summaryText}</span>`;
+  const timestampLabel = html`<time
+    class="error-timestamp message-timestamp"
+    datetime=${new Date(timestamp).toISOString()}
+    title=${tooltipTimestamp}
+    >${timeDisplay}</time
+  >`;
   // prettier-ignore
   const copyButton = buildCopyButton('Copy error details', {
     content: rawContent,
+    labeled: true,
   });
   // prettier-ignore
-  const summaryTemplate = html`<div slot="summary" class="details-summary">${waIcon('circle-exclamation', { className: 'icon' })}${labelSpan}${copyButton}</div>`;
+  const summaryTemplate = html`<div slot="summary" class="details-summary message-header"><span class="message-label">${waIcon('circle-exclamation', { className: 'icon' })}${labelSpan}</span>${timestampLabel}${copyButton}</div>`;
   // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="start" class="banner-details banner-details--error" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}>${summaryTemplate}${contentTemplate}</wa-details>`;
+  return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--error message-disclosure" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}>${summaryTemplate}${contentTemplate}</wa-details>`;
 }
 
 function plainLineText(row: LogRow | PhaseRow): string {

@@ -4,7 +4,7 @@ packages:
 # own dependency names (pnpm links a workspace package before any build script
 # runs), and both manifests take the version from here through `catalog:`.
 catalog:
-  '@anthropic-ai/claude-agent-sdk': '^0.3.288'
+  '@anthropic-ai/claude-agent-sdk': '^0.3.289'
   '@anthropic-ai/sdk': '^0.125.0'
   '@cantoo/pdf-lib': '^2.9.2'
   '@effect/platform-node': '4.0.0'
@@ -37,7 +37,7 @@ catalog:
   nunjucks: '^3.2.4'
   openai: '^7.20.0'
   pathe: '^2.0.3'
-  postal-mime: '^4.0.2'
+  postal-mime: '^4.0.4'
   pretty-bytes: '7.2.0'
   pretty-ms: '^9.3.1'
   quickjs-emscripten-core: '0.32.0'

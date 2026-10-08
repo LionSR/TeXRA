@@ -7,45 +7,43 @@ import { css, html, LitElement, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { designTokens } from '@ui/styles';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 /** The hero card's layout, shared with the setup hero `<progress-app>`
  *  renders itself. */
 export const heroStyles = css`
   .hero {
     display: grid;
-    justify-items: center;
-    gap: var(--wa-space-2xs);
-    padding: 0 var(--wa-space-xs);
-    text-align: center;
+    justify-items: var(--hero-align, center);
+    gap: var(--wa-space-xs);
+    padding: 0 var(--hero-padding-inline, var(--wa-space-xs));
+    text-align: var(--hero-text-align, center);
   }
 
   .hero-mark {
     display: grid;
     place-items: center;
-    width: 42px;
-    height: 42px;
-    border-radius: var(--wa-border-radius-l);
-    border: var(--border-thin) solid var(--wa-color-brand-border-quiet);
-    background: var(--wa-color-brand-fill-quiet);
+    width: 24px;
+    height: 24px;
     color: var(--wa-color-brand-on-quiet);
-    font-size: 18px;
+    font-size: 20px;
   }
 
   .hero h1 {
     margin: var(--wa-space-3xs) 0 0;
-    font-size: var(--font-size-h2, 1.25em);
+    font-size: var(--hero-heading-size, var(--font-size-h1));
     font-weight: var(--font-weight-semibold);
-    letter-spacing: -0.005em;
+    letter-spacing: -0.025em;
     line-height: var(--line-height-heading, 1.25);
+    text-wrap: balance;
   }
 
   .hero p {
     margin: 0;
-    max-width: 34ch;
-    font-size: var(--font-size-sm);
+    max-width: 52ch;
+    font-size: var(--font-size);
     line-height: var(--line-height-normal, 1.5);
     color: var(--color-text-secondary);
+    text-wrap: pretty;
   }
 
   .hero-actions {
@@ -73,11 +71,8 @@ export class NewTaskHero extends LitElement {
 
   override render(): TemplateResult {
     return html`<section class="hero" aria-labelledby="new-task-hero-title">
-      <div class="hero-mark" aria-hidden="true">
-        ${waIcon('wand-magic-sparkles')}
-      </div>
-      <h1 id="new-task-hero-title">What are you working on?</h1>
-      <p>Describe the outcome you want for ${this.projectName}.</p>
+      <h1 id="new-task-hero-title">What would you like to do?</h1>
+      <p>Work with TeXRA on ${this.projectName}.</p>
     </section>`;
   }
 }

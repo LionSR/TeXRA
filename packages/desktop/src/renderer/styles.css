@@ -27,11 +27,7 @@ body {
   line-height: var(--line-height-normal);
   /* A native app does not rubber-band its whole window. */
   overscroll-behavior: none;
-  /* The ambient wash (radial brand tints over a deep gradient in dark, a soft
-     paper fade in light) is what stops the window reading as a flat rectangle.
-     Fixed so it doesn't scroll with pane content. */
-  background: var(--desktop-canvas-wash);
-  background-attachment: fixed;
+  background: var(--wa-color-surface-default);
   color: var(--wa-color-text-normal);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -44,30 +40,31 @@ wa-button[hidden] {
   display: none !important;
 }
 
-/* Every imperative dialog receives this shared close control from
-   overlayDialog.ts. The route-specific class stays only as a testing/ownership
-   hook; position and skin no longer depend on which overlay created it. */
-wa-button.desktop-overlay-close {
-  position: absolute;
-  top: var(--wa-space-s);
-  right: var(--wa-space-s);
-  z-index: 10;
+/* The one spinner keyframe the light-DOM shell uses. */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-/* OverlayDialog applies the canonical large icon-button skin. These controls
-   float over the dialog's content, so this local rule adds only the raised
-   backing they need to stay legible over it. */
-wa-button.desktop-overlay-close::part(base) {
-  background: var(--wa-color-surface-raised);
+.spin {
+  animation: spin 2s linear infinite;
 }
 
-/* The hover overlay composited onto the opaque backing, rather than replacing
-   it: same alpha step as every other hover, still legible over content. */
-wa-button.desktop-overlay-close::part(base):hover {
-  background:
-    linear-gradient(var(--surface-hover), var(--surface-hover)),
-    var(--wa-color-surface-raised);
-  color: var(--wa-color-text-normal);
+/* Dialog titles and close actions share a row instead of floating at
+   unrelated offsets. Their control skin comes from the shared button sheet. */
+.desktop-overlay-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--control-size-s);
+  align-items: center;
+  column-gap: var(--wa-space-xs);
+}
+
+.desktop-overlay-subtitle {
+  grid-column: 1 / -1;
 }
 
 /* =====================================================================
@@ -118,7 +115,15 @@ wa-dialog.desktop-prompt-overlay .desktop-prompt-title {
    --------------------------------------------------------------------- */
 
 wa-dialog.desktop-settings-overlay {
-  --width: min(1080px, calc(100vw - var(--wa-space-l) * 2));
+  --width: min(1040px, calc(100vw - var(--wa-space-l) * 2));
+}
+
+wa-dialog.desktop-settings-overlay::part(dialog),
+wa-dialog.desktop-prompt-overlay::part(dialog) {
+  border: var(--border-thin) solid var(--wa-color-menu-border);
+  border-radius: var(--wa-border-radius-xl);
+  background: var(--wa-color-surface-default);
+  box-shadow: var(--desktop-shadow-lg);
 }
 
 wa-dialog.desktop-settings-overlay::part(body) {
@@ -129,18 +134,19 @@ wa-dialog.desktop-settings-overlay::part(body) {
 wa-dialog.desktop-settings-overlay .desktop-settings-body {
   display: flex;
   flex-direction: column;
-  height: min(760px, calc(100vh - var(--wa-space-3xl) * 2));
+  height: min(720px, calc(100vh - var(--wa-space-xl) * 2));
 }
 
 wa-dialog.desktop-settings-overlay .desktop-settings-header {
   flex: none;
-  padding: var(--wa-space-l) var(--wa-space-l) var(--wa-space-s);
+  padding: var(--wa-space-xs) var(--wa-space-m);
+  border-bottom: var(--border-thin) solid var(--wa-color-surface-border);
 }
 
 wa-dialog.desktop-settings-overlay .desktop-settings-title {
   margin: 0;
   color: var(--wa-color-text-normal);
-  font-size: var(--font-size-h2);
+  font-size: var(--font-size-lg);
   font-weight: var(--wa-font-weight-semibold);
   line-height: var(--line-height-heading);
 }
@@ -148,6 +154,7 @@ wa-dialog.desktop-settings-overlay .desktop-settings-title {
 .desktop-settings-content {
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .desktop-settings-content > settings-app {
@@ -298,7 +305,8 @@ wa-input.desktop-command-palette-input::part(input) {
 .desktop-command-palette-item::part(base) {
   justify-content: flex-start;
   width: 100%;
-  min-height: 48px;
+  height: auto;
+  min-height: 40px;
   padding: var(--wa-space-2xs);
   border: 0;
   border-radius: var(--row-radius);
@@ -346,9 +354,6 @@ wa-input.desktop-command-palette-input::part(input) {
   width: var(--control-size-s);
   height: var(--control-size-s);
   place-items: center;
-  border: var(--border-thin) solid var(--border-hairline);
-  border-radius: var(--wa-border-radius-s);
-  background: var(--wa-color-surface-lowered);
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-icon-sm);
 }
@@ -396,7 +401,7 @@ wa-input.desktop-command-palette-input::part(input) {
   align-items: center;
   justify-content: space-between;
   gap: var(--wa-space-xs);
-  min-height: 42px;
+  min-height: 32px;
   padding: var(--wa-space-2xs) var(--wa-space-s);
   border-top: var(--border-thin) solid var(--border-hairline);
   background: var(--wa-color-surface-lowered);
@@ -807,8 +812,8 @@ wa-input.desktop-command-palette-input::part(input) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: var(--wa-height-header);
-  padding: 0 var(--wa-space-2xs) 0 var(--wa-space-s);
+  min-height: 28px;
+  padding: 0 var(--wa-space-2xs);
   box-sizing: border-box;
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-sm);
@@ -842,7 +847,7 @@ wa-input.desktop-command-palette-input::part(input) {
   display: block;
   width: 100%;
   color: var(--wa-color-text-quiet);
-  font-family: var(--wa-font-family-mono);
+  font-family: var(--wa-font-family-body);
   font-size: var(--font-size-sm);
 }
 
@@ -859,18 +864,29 @@ wa-input.desktop-command-palette-input::part(input) {
 .desktop-editor-tree-row::part(label) {
   display: flex;
   align-items: center;
-  gap: var(--wa-space-3xs);
+  flex: 0 1 auto;
+  gap: var(--wa-space-2xs);
   min-width: 0;
+  padding: var(--wa-space-2xs) var(--wa-space-xs);
+  border-radius: var(--row-radius);
 }
 
 .desktop-editor-tree-row::part(item):hover {
-  background: var(--surface-hover);
+  background: transparent;
   color: var(--wa-color-text-normal);
 }
 
 .desktop-editor-tree-row[selected]::part(item) {
-  background: var(--surface-selected);
+  background: transparent;
   color: var(--wa-color-text-normal);
+}
+
+.desktop-editor-tree-row:hover::part(label) {
+  background: var(--surface-hover);
+}
+
+.desktop-editor-tree-row[selected]::part(label) {
+  background: var(--surface-selected);
 }
 
 .desktop-editor-tree-icon {
@@ -1004,15 +1020,14 @@ wa-input.desktop-command-palette-input::part(input) {
   background: var(--wa-color-surface-default);
 }
 
-.desktop-terminal-pane .desktop-terminal-surface {
+.desktop-terminal-surface {
   padding: var(--wa-space-xs);
   border: 0;
   border-radius: 0;
   background: var(--wa-color-surface-default);
 }
 
-/* Sessions stack in one cell; inactive ones are [hidden]. Keeping them mounted
-   preserves scrollback and the running shell. */
+/* Each docked terminal owns its surface and retains its running shell. */
 .desktop-terminal-surface {
   grid-area: 1 / 1;
   min-width: 0;

@@ -452,6 +452,18 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **A dockable desktop workspace.** Arrange Agent, Files, editors, terminals,
+  and Browser in movable tab groups. Drag previews show the destination,
+  including columns beside the whole workspace, and layouts survive restarts
+  and project switches. Project and task actions support renaming; shared
+  controls, message headers, settings catalogs, and editor menus use consistent
+  spacing and themes. New task opens a fresh draft; chats with saved history
+  remain open for follow-ups after stopping, failing, or completing. Messages
+  group the author and time, with Copy and collapse controls at the edge.
+  Agent YAML opens in the app's editor, and clean editor tabs refresh when
+  reopened after an external change. Empty groups offer a close action and
+  buttons to open a view. Approval menus explain the active policy, keep
+  selection marks inside the menu, and respect settings that block actions.
 - **Agent SDK: persistent sessions, resume, and approvals.**
   `sessions.open(roots, { persistent: true })` keeps a session's history in
   the same on-disk store the TeXRA apps keep, and `session.resume(runId)`
@@ -896,6 +908,13 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Rename from a menu stays open.** Choosing "Rename" from a project's or a
+  task's `⋯` menu right after opening it could close the name field before
+  you typed, keeping the old name. The field now opens once the menu has
+  closed.
+- **Read conversations stay read after restarting.** Loading older chat history
+  no longer resets the sidebar's read marker. Later activity still makes the
+  conversation unread until it is viewed.
 - **A window shows the files a background task accepts.** When a task in the
   TeXRA service (`texra serve`) accepted files into the project, or the setup
   agent applied an agent team there, the desktop file tree and the editor's
@@ -1061,9 +1080,10 @@ show` print the same notice, and the new `texra agents customize`,
 - **One warning per media file a model can't read.** Attaching an image
   or PDF to a model without vision used to log two warnings: a
   launch-time "Model has no vision support" summary, repeated on every
-  resume, and then "Skipping <file>" for each dropped file. Only the
-  per-file "Skipping <file>: the model does not accept
-  images/documents/audio" warning remains, written where the file is
+  resume, and then `Skipping <file>` for each dropped file. Only the
+  per-file
+  `Skipping <file>: the model does not accept images/documents/audio`
+  warning remains, written where the file is
   dropped: on a chat's first message, a follow-up, a subagent's opening,
   and each revision of a document task.
 - **A resumed task no longer asks whether a command ran that never

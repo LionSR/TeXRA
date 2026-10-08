@@ -182,11 +182,11 @@ export function createSettingsAgentActions(
         }
 
         yield* writeStampedCopy(entry.path, targetPath, entry.digest);
+        yield* options.refreshAfterMutation();
         yield* options.openDocument(targetPath);
         yield* options.showInfoMessage(
           `Created custom copy: ${path.basename(targetPath)}`,
         );
-        yield* options.refreshAfterMutation();
       }),
 
     deleteCustomAgent: (message) =>
