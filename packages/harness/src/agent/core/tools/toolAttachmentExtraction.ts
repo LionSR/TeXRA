@@ -49,10 +49,12 @@ interface ExtractedToolAttachments {
  * success vs error before this projection sees the result.
  *
  * @param result - Raw tool result, possibly containing binary data.
+ * @param checkFacts - Throws on a fact the calling tool may not state.
  * @returns Extracted attachments and typed payload without binary data.
  */
 export function extractToolAttachments(
   result: ToolResult,
+  checkFacts: (facts: readonly ToolFact[]) => void = () => undefined,
 ): ExtractedToolAttachments {
   // The parse IS the field whitelist: `ToolResultSchema` has no catchall, so
   // every undeclared key is already stripped here. Re-listing the declared
@@ -77,6 +79,7 @@ export function extractToolAttachments(
   }
 
   const { files, facts = [], diagnostics: rawDiagnostics, ...rest } = parsed;
+  checkFacts(facts);
   const diagnostics = sanitizeDiagnostics(rawDiagnostics);
   const attachments: ToolFileAttachment[] = files ?? [];
 

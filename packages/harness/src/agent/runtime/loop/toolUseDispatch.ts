@@ -81,6 +81,8 @@ import {
   type CallStatus,
   type PendingCall,
 } from '@shared/session/inFlight';
+import { checkOwnFacts } from '@tools/plugins';
+import { ToolRegistry } from '@tools/toolTable';
 import { generateShortId, getBasename } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
@@ -281,13 +283,9 @@ function settlementContent(
   return [{ kind: 'text', text }, ...media];
 }
 
-/** Where a response's call runs against the calls issued before it
- *  (`ITool.lane`): its tool's lane only when parallel, since an `'own'`
- *  tool's call of a response is a barrier; a duplicate takes `'own'`, as it
- *  only waits for its primary and holds nothing back. */
-const responseLane = (
-  fact: Pick<DispatchFacts, 'duplicateOf' | 'lane'>,
-): DispatchFacts['lane'] => {
+/** A response call's lane: its tool's (`ITool.lane`) when parallel, else a
+ *  barrier; a duplicate's `'own'` (it only waits for its primary). */
+const responseLane = (fact: DispatchFacts): DispatchFacts['lane'] => {
   if (fact.duplicateOf !== null) return 'own';
   return fact.lane === 'parallel' ? 'parallel' : 'barrier';
 };
@@ -392,6 +390,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     cell.opened.pendingResponse?.responseId === responseId &&
     !run.config.script;
   const calls = localCallsOf(pending.assistant.content);
+  const { entries } = yield* ToolRegistry;
+  const pluginOf = new Map(step.offered.map((t) => [t.name, t.plugin]));
   // The calls answer the instruction the committed state records.
   const at = initial.input.instruction;
   const userInstruction =
@@ -727,7 +727,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     // A result the schema refuses becomes an error result the model can read;
     // the projection of an error result cannot itself fail.
     const extracted = yield* Effect.try({
-      try: () => extractToolAttachments(result),
+      try: () =>
+        extractToolAttachments(result, (facts) =>
+          checkOwnFacts(entries.get(pluginOf.get(fact.toolName) ?? ''), facts),
+        ),
       catch: ensureError,
     }).pipe(
       Effect.catch((error) =>
@@ -1056,16 +1059,12 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             attachments: settledNow.attachments,
           };
         });
-
-        const plugins = new Map(
-          step.offered.map(({ name, plugin }) => [name, plugin]),
-        );
         return {
           catalog: step.definitions
             .filter(({ name }) => name !== script.toolName)
             .map((definition) => ({
               definition,
-              plugin: plugins.get(definition.name) ?? 'run',
+              plugin: pluginOf.get(definition.name) ?? 'run',
             })),
           globals: step.definitions.flatMap(({ name }) => {
             const global =

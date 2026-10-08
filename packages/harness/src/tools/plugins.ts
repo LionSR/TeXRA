@@ -32,6 +32,7 @@ import type {
   JsonValue,
   RunId,
   SessionEvent,
+  ToolFact,
 } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -280,4 +281,25 @@ export function armsOf(plugins: Iterable<Plugin>): PluginArms {
       arms.set(name, arm);
     }
   return Object.fromEntries(arms);
+}
+
+/**
+ * Throw unless every fact a call of `plugin`'s tool states is a row of one of
+ * that plugin's own arms, at the arm's version, with a value its schema
+ * accepts: the dispatch turns the throw into the call's error result, so a
+ * fact the store could not read back, or one that would mark the store as
+ * written by a newer build, never commits.
+ */
+export function checkOwnFacts(
+  plugin: Plugin | undefined,
+  facts: readonly ToolFact[],
+): void {
+  for (const { kind, version, value, ...fact } of facts) {
+    const arm = plugin?.arms?.find((own) => own.kind === kind);
+    if (arm === undefined || fact.plugin !== plugin?.id)
+      throw new Error(`the fact ${fact.plugin}/${kind} is not its plugin's`);
+    if (version !== arm.version)
+      throw new Error(`${arm.plugin}/${kind} is at version ${arm.version}`);
+    arm.schema.parse(value);
+  }
 }
