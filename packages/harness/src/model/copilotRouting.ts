@@ -200,7 +200,7 @@ export function copilotRouteUnavailableReason(
       return `Copilot access to "${model}" is temporarily unavailable in VS Code.`;
     // No discovered route means Copilot cannot serve the model right now.
     case undefined:
-      return `VS Code does not currently offer "${model}" through Copilot.`;
+      return `No VS Code window offers "${model}" through Copilot: Copilot models run through a VS Code window of this project. Open the project in VS Code with GitHub Copilot, or stop using Copilot for this model.`;
     default:
       return access satisfies never;
   }

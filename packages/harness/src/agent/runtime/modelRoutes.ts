@@ -382,7 +382,7 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
   if (route.route === undefined) {
     return yield* Effect.fail(
       new Error(
-        `No editor route is discovered for model ${config.label}; refresh the model list.`,
+        `No editor offers ${config.label} through Copilot now: Copilot models run through a VS Code window of this project with GitHub Copilot, and none is open or none offers this model. Open the project in VS Code, or turn off Copilot for this model.`,
       ),
     );
   }

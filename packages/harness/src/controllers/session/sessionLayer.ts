@@ -132,13 +132,10 @@ const logFailure =
     log(message).pipe(Effect.annotateLogs({ data }), withLogChannel(CHANNEL));
 
 /**
- * Which session an entry is: its storage root, the value `SessionView.key`
- * carries, together with what the opener supplied for building it (the roots,
- * the transcript store mode the graph opens its stores with, the response text
- * policy, the host interactions it is born with). Equal and hashed by the
- * storage root alone: two opens of one root resolve one session, over what the
- * first of them supplied. Nothing store-bound can be injected past that
- * boundary (PR #11893, agent SDK architecture proposal, section 3).
+ * Which session an entry is: its storage root (`SessionView.key`), with what
+ * the opener supplied for building it. Equal and hashed by the root alone:
+ * two opens of one root resolve one session, over what the first supplied,
+ * and nothing store-bound is injected past that (PR #11893, section 3).
  */
 class SessionKey implements Equal.Equal {
   constructor(readonly open: SessionHandleInit) {}
@@ -199,10 +196,17 @@ const sessionHandleLayer = (key: SessionKey) =>
       const fork = yield* FiberSet.makeRuntime<ProcessServices>();
       const pinPlugins = yield* sessionPluginLayers(() => session.runs);
       const interactions = new SessionHostInteractions();
-      const env = workspaceEnvironmentLayer(key.open.roots.workspace);
+      // Each run's `.env`, read as it launches, and its window's models.
+      const env = Layer.merge(
+        workspaceEnvironmentLayer(key.open.roots.workspace),
+        LanguageModel.layer(
+          yield* LanguageModel,
+          () => interactions.languageModel,
+        ),
+      );
       const runs = new RunRegistry({
         session: () => session,
-        fork: (run) => fork(Effect.provide(run, env)), // `.env` per launch
+        fork: (run) => fork(Effect.provide(run, env)),
         pinPlugins,
       });
       const session: SessionHandle = {
@@ -250,9 +254,8 @@ const sessionHandleLayer = (key: SessionKey) =>
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => session.runs.dispose()),
       );
-      // The presentation host an opener hands over is attached here, as its
-      // own step: `use` replays what is queued for it, which is a program,
-      // and a constructor cannot run one.
+      // An opener's presentation host attaches as its own step: `use`
+      // replays its queue, a program a constructor cannot run.
       if (key.open.interactions)
         yield* session.interactions.use(key.open.interactions);
       // The local half of a committed removal; its plugin rows go with it.
@@ -262,10 +265,9 @@ const sessionHandleLayer = (key: SessionKey) =>
           releaseRunResources(runId, session);
         })
         .pipe(Scope.provide(consumerScope));
-      // The registry's phase notification rides the fold-gated tail, not the
-      // raw one: its waiters and child lists read `RunView.status`
-      // synchronously, so a row reaches them only once the view holds the
-      // state it produced. Host notifications belong to the authoring process.
+      // The registry's phase notification rides the fold-gated tail: its
+      // waiters read `RunView.status` synchronously, so a row reaches them
+      // once the view holds its state. Host notices go to the author.
       yield* Stream.runForEach(store.folded, (event) =>
         Effect.gen(function* () {
           const target = aggregateTarget(event.aggregateId);
@@ -487,9 +489,8 @@ const settleRun = (session: SessionHandle, runId: RunId): Effect.Effect<void> =>
   );
 
 /**
- * Close the session of one root: the one way a session ends, whoever asks —
- * an SDK close, a desktop project's close, a host's shutdown, a host
- * releasing its default session. In order, on the caller's fiber:
+ * Close the session of one root, the one way a session ends, whoever asks.
+ * In order, on the caller's fiber:
  *
  * 1. refuse new runs;
  * 2. stop every run (it cascades into children; a process child's OS
@@ -632,14 +633,11 @@ export interface ProcessLayerOptions {
     ProcessIdentity | ProcessProbe
   >;
   /**
-   * The runtime's emission threshold for Effect diagnostics, from facts the
-   * composition root holds that cannot change mid-process: the surface kind
-   * (the extension's `LogOutputChannel` filters for itself, so it passes
-   * `'Trace'`; the desktop's rotated log file passes `'Debug'`) or the CLI's
-   * `--quiet` / `--verbose` argv. The reference it feeds is fiberCached and
-   * read before any logger runs, which is exactly why a live user setting
-   * must arrive by another road (the transcript fold's `debug` flag) and not
-   * here.
+   * The runtime's emission threshold for Effect diagnostics, from facts that
+   * cannot change mid-process: the surface (the extension's channel filters
+   * itself: `'Trace'`; the desktop's log file: `'Debug'`) or the CLI's
+   * `--quiet` / `--verbose`. It is read before any logger runs, so a live
+   * user setting arrives by another road (the fold's `debug` flag).
    */
   readonly minimumLogLevel: MinimumLogLevel;
   /** A single-project host's folder, whose `.env` its own reads see. */

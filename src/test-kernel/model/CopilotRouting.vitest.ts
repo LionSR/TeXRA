@@ -185,7 +185,7 @@ describe('Copilot route discovery', () => {
       // A model the editor does not offer cannot route.
       expect(
         copilotRouteUnavailableReason(GPT56_TERRA, routes.get(GPT56_TERRA)),
-      ).toMatch(/does not currently/);
+      ).toMatch(/No VS Code window offers/);
     }),
   );
 });
