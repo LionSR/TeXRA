@@ -22,6 +22,7 @@ import { ModelError, ModelErrorFieldsSchema, type Model } from '@texra-ai/llm';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { withLogChannel } from '@logger/effectLog';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { RpcClientError } from 'effect/rpc';
 import type { LanguageModelPort } from '@texra-ai/harness';
 
 import type { ServiceClient, ServiceLink } from './client';
@@ -242,7 +243,10 @@ function attachTo(
       );
     };
     const answer = (id: string, call: HostCall) => {
-      const work: Effect.Effect<unknown, unknown> =
+      const work: Effect.Effect<
+        unknown,
+        Error | RpcClientError.RpcClientError
+      > =
         call.kind === 'lmStream'
           ? // Each item as it comes, then the end; the service's `cancel`
             // interrupts it (`answering`).
