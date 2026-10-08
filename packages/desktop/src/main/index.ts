@@ -223,6 +223,7 @@ if (ownsSingleInstanceLock) {
           installContentSecurityPolicy();
           const windows = createDesktopWindows({
             runtime,
+            scope: processScope,
             open: (hooks) =>
               openDesktopWindow(
                 {

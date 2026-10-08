@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit, Scope, Semaphore } from 'effect';
+import { Cause, Effect, Exit, FiberSet, Scope, Semaphore } from 'effect';
 import { Menu, type BrowserWindow } from 'electron';
 
 import { workspaceEnvironmentLayer } from '@texra-ai/harness';
@@ -74,18 +74,27 @@ export interface DesktopWindows {
   /** Run `continueQuit` once the window has closed and released; the process
    *  shutdown resumes there. */
   continueQuitAfterClose(continueQuit: () => void): void;
-  /** Wait for the open or closing window to release everything it held. */
+  /** Interrupt a reopen in flight (its window releases what it built), then
+   *  wait for the open or closing window to release everything it held. */
   readonly released: Effect.Effect<void>;
 }
 
 export function createDesktopWindows(options: {
   readonly runtime: ProcessRuntime;
+  /** The process's scope: a reopen still in flight when it closes is
+   *  interrupted. */
+  readonly scope: Scope.Scope;
   /** Builds the window into the scope it runs in. */
   readonly open: (
     hooks: DesktopWindowHooks,
   ) => Effect.Effect<OpenedDesktopWindow, never, Scope.Scope | ProcessServices>;
 }): DesktopWindows {
   const { runtime } = options;
+  // The reopens in flight; the shutdown interrupts them (`released`), so a
+  // window still opening releases its scope before the services drain.
+  const reopens = runtime.runSync(
+    FiberSet.make<void>().pipe(Scope.provide(options.scope)),
+  );
   let current: CurrentWindow | undefined;
   let releasing: Effect.Effect<void> | undefined;
   let continueQuit: (() => void) | undefined;
@@ -162,17 +171,21 @@ export function createDesktopWindows(options: {
   );
 
   const reopen = (then?: () => void) => {
-    runtime.runFork(
-      open.pipe(
-        Effect.catchCause((cause) =>
-          Effect.sync(() =>
-            console.error(
-              'The desktop window could not be reopened:',
-              Cause.squash(cause),
+    // An interrupted reopen (the shutdown) neither logs nor runs `then`.
+    FiberSet.addUnsafe(
+      reopens,
+      runtime.runFork(
+        open.pipe(
+          Effect.catchDefect((defect) =>
+            Effect.sync(() =>
+              console.error(
+                'The desktop window could not be reopened:',
+                defect,
+              ),
             ),
           ),
+          Effect.andThen(Effect.sync(() => then?.())),
         ),
-        Effect.andThen(Effect.sync(() => then?.())),
       ),
     );
   };
@@ -198,8 +211,9 @@ export function createDesktopWindows(options: {
     continueQuitAfterClose: (resume) => {
       continueQuit = resume;
     },
-    released: Effect.suspend(
-      () => current?.release ?? releasing ?? Effect.void,
+    released: Effect.andThen(
+      FiberSet.clear(reopens),
+      Effect.suspend(() => current?.release ?? releasing ?? Effect.void),
     ),
   };
 }
