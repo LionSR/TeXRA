@@ -951,6 +951,15 @@ show` print the same notice, and the new `texra agents customize`,
   lists and key checks. A key you set only in the terminal that
   starts a chat or `texra tasks start` does not reach a task in the
   service, and the CLI now says so.
+- **MCP servers start with their project's `.env`.** Each project now runs
+  its own MCP servers, from `~/.texra/mcp.json` and from installed
+  plugins: a server starts with that project's `.env` variables over the
+  environment (never a provider key), stays up for the project's next task
+  (30 minutes after the last one used it), and stops when the project
+  closes. In the TeXRA service,
+  one project's server is never shared with another's, and a server no
+  longer starts without its project's variables. An edited `.env` starts a
+  fresh server for the next task.
 
 - **The TeXRA service no longer grows with every project it ever
   opened.** A project's session in the service now closes once no window

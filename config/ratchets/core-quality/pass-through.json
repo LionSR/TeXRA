@@ -6,7 +6,6 @@
   "packages/harness/src/agent/runtime/FollowUps.ts": 1,
   "packages/harness/src/agent/runtime/index.ts": 1,
   "packages/harness/src/agent/runtime/nativeSubagentStrategy.ts": 1,
-  "packages/harness/src/agent/runtime/runRegistry.ts": 1,
   "packages/harness/src/agent/storage/index.ts": 1,
   "packages/harness/src/agent/storage/runRecords.ts": 1,
   "packages/harness/src/agent/trace/index.ts": 1,

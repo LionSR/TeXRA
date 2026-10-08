@@ -36,7 +36,6 @@ import {
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import { LiveTools } from '@tools/liveTools';
 import { buildTerminalTool } from '@tools/structuredOutput';
 import { RunFileService } from '@utils/files/runStorage';
 import type { HttpClient } from 'effect/http';
@@ -164,7 +163,7 @@ export const agentRunLayer = (
 ): Layer.Layer<
   AgentRun | ModelAccess,
   Error,
-  RunHistory | LanguageModel | HttpClient.HttpClient | LiveTools
+  RunHistory | LanguageModel | HttpClient.HttpClient
 > =>
   Layer.effect(
     AgentRun,
@@ -216,10 +215,11 @@ export const agentRunLayer = (
             ?.filter(({ plugin }) => plugin !== 'run')
             .map(({ name }) => name) ?? PLUGIN_AGENT_DEFAULT_TOOLS
         ).map((name) => ({ name }));
-      // The loaded plugins (MCP servers) the declared tools name, held for
-      // the run's life; the read's problems reach its transcript.
+      // The loaded plugins (MCP servers) the declared tools name, held in
+      // the project's catalog for the run's life and started with its
+      // variables; the read's problems reach its transcript.
       const declared = declaredToolNames(tools);
-      const held = yield* (yield* LiveTools)
+      const held = yield* session.tools
         .hold(declared)
         .pipe(Scope.provide(scope));
       for (const warning of held.warnings) logger.warn(warning);

@@ -53,6 +53,7 @@ import type { RunHistoryDraft } from '@shared/session/runStateFold';
 import type { Append } from '@shared/session/sessionEvents';
 import type { SessionInputs } from '@shared/session/sessionInputs';
 import type { RunView, SessionView } from '@shared/session/sessionView';
+import type { SessionTools } from '@tools/sessionTools';
 import type { Context, Effect, Scope, Stream, SubscriptionRef } from 'effect';
 
 import type {
@@ -350,6 +351,8 @@ export interface SessionHandle {
   /** Registration, lookup, stop, lineage, and the run's one terminal
    *  writer (`end`). */
   readonly runs: RunRegistry;
+  /** The project's tools: its plugin layers and MCP servers, closed with it. */
+  readonly tools: SessionTools;
   /** The one handler of every request a surface issues, and the run's
    *  questions to a person (`ask`, `decide`). */
   readonly requests: SessionRequests;
@@ -389,15 +392,12 @@ export interface SessionOwnerShape {
   readonly open: (
     init: SessionHandleInit,
   ) => Effect.Effect<SessionHandle, SessionOpenError>;
-  /** Every session the owner holds, entries still building waited for
-   *  within the close budget. */
+  /** Every session the owner holds, waiting within the close budget. */
   readonly list: Effect.Effect<readonly SessionHandle[]>;
-  /**
-   * Close the session of a storage root: refuse new runs, interrupt the
-   * ones it owns and wait for them inside {@link SESSION_CLOSE_DEADLINE_MS},
-   * settle the ones still live, flush, release. A root with no open
-   * session reports `settled`. Never touches another root's session.
-   */
+  /** Close the session of a storage root: refuse new runs, interrupt the
+   *  ones it owns and wait for them inside {@link SESSION_CLOSE_DEADLINE_MS},
+   *  settle the ones still live, flush, release. A root with no open
+   *  session reports `settled`. Never touches another root's session. */
   readonly close: (root: string) => Effect.Effect<SessionCloseReport>;
   /** A process shutdown's close: drain what the plugins' pollers admitted,
    *  then close every held session at once, under one deadline. */

@@ -7,10 +7,10 @@
  * TeXRA's plugins (`texraPlugins` in `@tools/registry`) to
  * `processLayer`: it is up while the plugin is on, and closing it
  * disposes every registration. While up, Copilot sees each of these tools
- * the live catalog's current generation (`@tools/liveTools`) holds, and it
- * re-reads on each generation the catalog publishes. The process applies a
- * switch flipped here to the catalog at once (`pluginCatalogLayer`), so a
- * switched-off plugin's tool leaves the generation, and Copilot, with it.
+ * whose plugin is on in the tool catalog (`@tools/liveTools`), and follows
+ * each change of the switches, which reach the catalog at once
+ * (`pluginCatalogLayer`): a switched-off plugin's tool leaves Copilot with
+ * it.
  *
  * Only context-free, read-only research tools are surfaced — they need no
  * agent runtime state and are safe to call from an arbitrary chat session.
@@ -19,15 +19,7 @@
  */
 
 import * as vscode from 'vscode';
-import {
-  Context,
-  Effect,
-  Fiber,
-  Layer,
-  Option,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Context, Effect, Fiber, Layer, Option, Stream } from 'effect';
 
 import {
   IssuingScript,
@@ -41,7 +33,7 @@ import { sessionFsLayer } from '@platform/rootedFs';
 
 import type { ToolResult } from '@shared/schemas';
 import type { ToolEntry } from '@tools/catalogEntries';
-import { LiveTools } from '@tools/liveTools';
+import { ToolCatalog } from '@tools/liveTools';
 import type { ProcessPluginLayer } from '@tools/toolTable';
 import { generateShortId } from '@utils/core';
 
@@ -68,7 +60,7 @@ function toResultText(result: ToolResult): string {
 
 /**
  * The `copilot` plugin's process layer: the curated TeXRA tools registered
- * with the VS Code Language Model Tool API while the live catalog offers
+ * with the VS Code Language Model Tool API while the tool catalog offers
  * them, for as long as the layer is up. A call runs on the process runtime
  * and the workspace's default session, read when the call arrives.
  */
@@ -86,7 +78,7 @@ const copilotTools = Effect.fnUntraced(function* (
   const lm = (vscode as { lm?: Partial<typeof vscode.lm> }).lm;
   if (typeof lm?.registerTool !== 'function') return;
   const registerTool = lm.registerTool.bind(lm);
-  const live = yield* LiveTools;
+  const catalog = yield* ToolCatalog;
   const registered = new Map<string, vscode.Disposable>();
   yield* Effect.addFinalizer(() =>
     Effect.sync(() => registered.forEach((disposable) => disposable.dispose())),
@@ -139,7 +131,7 @@ const copilotTools = Effect.fnUntraced(function* (
               if (token.isCancellationRequested) return yield* Effect.interrupt;
               // Its plugin's process services, as a step would serve them
               // (the research tools' plugins own none).
-              const services = yield* live.processServices(plugin);
+              const services = yield* catalog.processServices(plugin);
               return yield* tool.call(options.input).pipe(
                 Effect.provide(
                   Option.getOrElse(
@@ -171,9 +163,9 @@ const copilotTools = Effect.fnUntraced(function* (
         ]);
       },
     });
-  // The current generation first, then each one the catalog publishes.
-  yield* SubscriptionRef.changes(live.registry.current).pipe(
-    Stream.runForEach(({ entries }) =>
+  // The built-in tools as the switches stand, then on each change.
+  yield* catalog.current.pipe(
+    Stream.runForEach((entries) =>
       Effect.sync(() => {
         for (const [lmName, toolName] of Object.entries(LM_TOOL_NAMES)) {
           const entry = entries.get(toolName);

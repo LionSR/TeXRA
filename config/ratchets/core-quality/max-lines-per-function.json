@@ -20,8 +20,6 @@
   "packages/harness/src/tools/delegation/AgentTool.ts": 1,
   "packages/harness/src/tools/delegation/inBandSubagentRun.ts": 1,
   "packages/harness/src/tools/jsonRpc.ts": 1,
-  "packages/harness/src/tools/liveTools.ts": 2,
-  "packages/harness/src/tools/serverHolds.ts": 1,
   "packages/harness/src/tools/toolAvailability.ts": 1,
   "packages/llm/src/api/anthropicMessages.ts": 4,
   "packages/llm/src/api/googleInteractions.ts": 1,

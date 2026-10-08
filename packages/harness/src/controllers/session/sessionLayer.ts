@@ -97,10 +97,9 @@ import {
   type StateSettingEntry,
 } from '@shared/state/stateSettings';
 import { releaseRunResources } from '@tools/approval';
-import { LiveTools } from '@tools/liveTools';
+import { ToolCatalog } from '@tools/liveTools';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import type { Plugin } from '@tools/plugins';
-import { drainPlugins, sessionPluginLayers } from '@tools/pluginLayers';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
@@ -187,9 +186,9 @@ const sessionHandleLayer = (key: SessionKey) =>
       // The publisher drains inside the one close deadline, after the runs'
       // fibers (registered before their fork) published their last rows.
       yield* Effect.addFinalizer(() => store.close);
-      // The runs' fork and the history store end with this scope.
+      // The runs' fork and the project's tools end with this scope.
       const fork = yield* FiberSet.makeRuntime<ProcessServices>();
-      const pinPlugins = yield* sessionPluginLayers(() => session.runs);
+      const tools = yield* (yield* ToolCatalog).session(() => session.runs);
       const interactions = new SessionHostInteractions();
       // Each run's `.env`, read as it launches, and its window's models.
       const env = Layer.merge(
@@ -202,13 +201,13 @@ const sessionHandleLayer = (key: SessionKey) =>
       const runs = new RunRegistry({
         session: () => session,
         fork: (run) => fork(Effect.provide(run, env)),
-        pinPlugins,
       });
       const session: SessionHandle = {
         roots: key.open.roots,
         log: store.log,
         view,
         runs,
+        tools,
         requests: sessionRequests({
           session: () => session,
           log: {
@@ -566,8 +565,8 @@ export interface ProcessLayerOptions {
   readonly globalStorage: string;
   /**
    * The app's plugins, in order, the harness's built-ins among them: the
-   * process serves them as `ToolRegistry` and the live catalog over it
-   * (`LiveTools`). The harness names no plugin of its own; TeXRA's entries
+   * process serves them as `ToolRegistry` and the tool catalog over it
+   * (`ToolCatalog`). The harness names no plugin of its own; TeXRA's entries
    * pass `texraPlugins` (`@tools/registry`).
    */
   readonly plugins: readonly Plugin[];
@@ -738,17 +737,14 @@ const sessionOwnerLayer = Layer.effect(
   SessionOwner,
   Effect.gen(function* () {
     const map = yield* SessionMap;
-    const live = yield* LiveTools;
-    const registry = yield* ToolRegistry;
+    const catalog = yield* ToolCatalog;
     const withMap = <A, E>(
       effect: Effect.Effect<A, E, SessionMap>,
     ): Effect.Effect<A, E> => Effect.provideService(effect, SessionMap, map);
     const closeAll = Effect.gen(function* () {
       // What a plugin admitted for a session (a GitHub poll round's
       // delivery) lands before that session closes, not after.
-      yield* drainPlugins(live).pipe(
-        Effect.provideService(ToolRegistry, registry),
-      );
+      yield* catalog.drain;
       return yield* Effect.forEach(
         yield* listSessions,
         (session) => closeSession(session.roots.storage),

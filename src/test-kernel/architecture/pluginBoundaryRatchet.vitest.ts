@@ -33,7 +33,7 @@ import {
  *   row no arm checks appears;
  * - a plugin's service is reached outside its own plugin's code, which the
  *   step serves it to, and the one host door (the settings Git tab reading
- *   the GitHub plugin's process services through `LiveTools`), so plugin
+ *   the GitHub plugin's process services through `ToolCatalog`), so plugin
  *   state is used past its switch and its pin. The table holds each
  *   plugin with its services erased (`PluginContext` in `processRuntime.ts`),
  *   so no `ProcessServices` arm names one.

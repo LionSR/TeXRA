@@ -29,7 +29,7 @@ import type {
   ProjectDatabases,
 } from '@shared/session/database';
 import type { UsageLog } from '@shared/usageLog';
-import type { LiveTools } from '@tools/liveTools';
+import type { ToolCatalog } from '@tools/liveTools';
 import type { ToolAvailability } from '@tools/toolAvailabilityService';
 import type { ToolRegistry } from '@tools/toolTable';
 import type { HttpClient } from 'effect/http';
@@ -54,7 +54,7 @@ import type { Secrets } from './secrets';
  * `ProjectDatabases`, whose project-scoped borrows share each persistent
  * connection between application state and a session graph, `ToolRegistry`,
  * the plugin table every run's offered tools are rebuilt from,
- * `LiveTools`, the live catalog each run's step pins a generation of, and
+ * `ToolCatalog`, the tool catalog each session's steps pin their tools in, and
  * `ToolAvailability`, each workspace's last dependency probe. Every run
  * and session of the process is provided these; the `SessionOwner` above
  * them is the composition root's alone ({@link ProcessRuntime}).
@@ -75,7 +75,7 @@ export type ProcessServices =
   | AgentEngine
   | UsageLog
   | ToolRegistry
-  | LiveTools
+  | ToolCatalog
   | ToolAvailability
   | RouteRetries;
 

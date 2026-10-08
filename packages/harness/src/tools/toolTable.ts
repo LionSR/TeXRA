@@ -1,7 +1,7 @@
 /**
  * The process's plugin table: the plugin list an entry passes to
  * `processLayer` (TeXRA's is `texraPlugins` in `@tools/registry`),
- * by plugin id, and each tool by name. What a plugin contributes to the live catalog (`@tools/liveTools`)
+ * by plugin id, and each tool by name. What a plugin contributes to the tool catalog (`@tools/liveTools`)
  * is read off its value. The `ToolRegistry` service holds it, beside
  * the catalog built over it. This module imports no tool or plugin layer, so
  * a reader of the tag loads none of them.
@@ -26,17 +26,17 @@ import type {
 } from '@shared/schemas';
 import type { GlobalDatabase } from '@shared/session/database';
 import type { RunState } from '@shared/session/runStateFold';
-import type { LiveTools } from '@tools/liveTools';
+import type { ToolCatalog } from '@tools/liveTools';
 import type { Plugin } from '@tools/plugins';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
- * What a plugin's process layer is built over: the live catalog it belongs
+ * What a plugin's process layer is built over: the tool catalog it belongs
  * to, and the process's filesystem, paths, child processes and application
  * state (a language server pool spawns and reads its settings).
  */
 export type PluginLayerServices =
-  | LiveTools
+  | ToolCatalog
   | FileSystem.FileSystem
   | Path.Path
   | ChildProcessSpawner
@@ -45,7 +45,7 @@ export type PluginLayerServices =
 /**
  * A plugin's process-lifetime services (its `processLayer`): built
  * when the plugin is switched on or first pinned, released when it is
- * switched off and no step pins it (`@tools/liveTools`). `ROut` is what it
+ * switched off and no step uses it (`@tools/liveTools`). `ROut` is what it
  * serves its own plugin's code (`definePlugin`); the table holds it erased.
  * `drain` is its step of the core shutdown protocol, run before the
  * sessions close while its services are still up.
@@ -84,8 +84,8 @@ export interface LoadedPluginTools {
 /**
  * A plugin read from user configuration rather than the manifest (an MCP
  * server): its tools are known only once its resources are up, so a run
- * that names it holds its `spec` and revision, and the catalog contributes
- * its tools while any run holds them (`@tools/liveTools`).
+ * that names it holds its `spec` and revision in its project's catalog,
+ * whose steps offer its tools while the run holds them (`@tools/liveTools`).
  */
 export interface LoadedPlugin {
   /** Stable id, e.g. `mcp:<server>`. */
@@ -94,8 +94,7 @@ export interface LoadedPlugin {
   readonly spec: Readonly<Record<string, unknown>>;
   /**
    * A keyed digest of what the spec leaves out (an MCP server's env values):
-   * a changed revision is a new hold with fresh resources beside the open
-   * ones. Keyed per process, so it reveals nothing about the values it
+   * a changed revision is a new process beside the open ones. Keyed per process, so it reveals nothing about the values it
    * digests, and never recorded: an offered tool records its spec's digest.
    */
   readonly revision: string;
@@ -126,7 +125,7 @@ export type PluginLoader = (declared: readonly string[]) => Effect.Effect<{
  * skills the step lists. `key` changes exactly when what it would start or
  * ship does, which replaces its servers and its skills.
  */
-export interface InstalledToolPlugin {
+interface InstalledToolPlugin {
   readonly id: string;
   readonly key: string;
   readonly servers: readonly LoadedPlugin[];
