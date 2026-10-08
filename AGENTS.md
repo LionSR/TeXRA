@@ -2,6 +2,17 @@
 
 This document sets the common conventions for contributions. Follow these norms when working anywhere in this repository.
 
+## Folder-scoped guides
+
+This file holds the rules every change needs. Material for one subtree lives in a
+nested `AGENTS.md`; read it before working there:
+
+- [`src/test-kernel/AGENTS.md`](src/test-kernel/AGENTS.md): test tiers, writing tests, fixtures and fakes.
+- [`packages/harness/AGENTS.md`](packages/harness/AGENTS.md): config and storage access, agent execution, run
+  loop, tool input schemas, storage format, core quality.
+- [`packages/texra/AGENTS.md`](packages/texra/AGENTS.md): the UI toolkit.
+- [`packages/extension/src/AGENTS.md`](packages/extension/src/AGENTS.md): webviews, error surfacing.
+
 ## TeXRA 1.0 direction
 
 TeXRA 1.0 is the next release generation, developed on `main`, with breaking
@@ -72,53 +83,9 @@ When updating CHANGELOG.md:
    - Lint TypeScript sources with `npm run lint`.
    - Run the affected Vitest suites with `npm run test:changed`, and the
      `pure` tier with `npm run test:pure` before pushing (see "Scoping the
-     test run" below). Run the full suite with `npm test` before opening a
+     test run" in `src/test-kernel/AGENTS.md`). Run the full suite with `npm test` before opening a
      pull request.
 4. Commit only when `npm run lint` completes without errors.
-
-### Test tiers
-
-`vitest.config.mjs` runs suites in two projects, and a suite's cost is decided
-by what it reaches, not by how many tests it has:
-
-- **`pure`** — suites that reach no host: no setup file, no fake platform, no
-  DOM, one module registry shared between files. Roughly 8x cheaper per suite
-  than `kernel`, and deterministic, because nothing in it installs or replaces
-  anything.
-- **`kernel`** — everything that needs a host: the fake platform installed per
-  file, each file in its own module registry. The DOM suites (`progressView`,
-  `settings`, `frontend`, `desktop`) live here too; a Lit element
-  class is bound to the window that first loaded it.
-
-Membership is computed from the suite's source, not declared. A suite under a
-`pure` directory is `pure` unless it calls `vi.mock` / `vi.doMock` on a
-repository module, imports `@platform/*` or a support module that installs or
-reads a host, or brings its own DOM (`lit`, `jsdom`) — then it is `kernel`.
-Process-wide state a source scan cannot see (such as the environment chalk takes
-its color level from) is found by file-order shuffles and fixed in the suite:
-set the state on the instance it lives on and restore it after. There is no
-list of exempt suites. A module under test that reaches for an ambient host or
-the workspace roots itself is a production defect; make it take its host as a
-layer or a value. So for a new suite: test the module directly, provide
-dependencies as values or layers, and do not mock repository modules. A
-`vi.mock` is what moves your suite to the slow tier; the tier is not a target
-to opt into.
-
-`packages/llm` carries a third project, `packages/llm/vitest.live.config.mjs`:
-one suite per HTTP route (a vendor endpoint and the credential it takes), run
-against the real provider (`npm run test:live`). It is never part of `npm test`
-because it spends money and needs the network; each suite gates itself on its
-route's key, and CI runs it only on the `live-llm` label
-(`.github/workflows/live-llm.yml`). `packages/cli/scripts/validate-journeys.mjs`
-is the end-to-end sibling: the polish, latexFixer, latexdiff and citations
-journeys run through the real `texra run` NDJSON on each cheap model the script lists. It runs
-only on demand, on the `live-journeys` label or by dispatch
-(`.github/workflows/live-journeys.yml`), never on a schedule or in `npm test`;
-in CI a missing model key fails the run, locally it skips that model.
-
-### Scoping the test run
-
-The loop (`test:watch`, `test:changed [ref]`, `test:pure`, `npm test`) is in CLAUDE.md "Commands". `test:pure` includes the architecture ratchets, which read the repository from disk and are never selected by a module graph. Selection is only as good as that graph: a changed YAML resource or image selects nothing, and a change to the harness itself (`vitest.config.mjs`, `src/test-kernel/support/`) is not covered; those are what `npm test` is for.
 
 ### Build system: esbuild + Vite
 
@@ -152,7 +119,6 @@ root `tsconfig.json` already includes `packages/extension/src/**`. Use
 - Use the path aliases defined in `tsconfig.json` (for example `@frontend/*`, `@common/*`, `@utils/*`) instead of long relative import chains.
 - Document functions with concise comments. Use JSDoc style for public APIs.
 - Keep functions small and focused; extract helpers or modules when logic becomes complex.
-- Keep webview directory structure aligned where views share a concern (`components/`, `styles/`); beyond that `progressView` and `settingsView` intentionally diverge (see "Webview Consistency Patterns").
 - Place a host's own request handling beside the view it serves (e.g. `packages/extension/src/progressView/extensionHostRequests.ts`, `packages/desktop/src/main/desktopHostRequests.ts`); host-neutral session bridging lives under `packages/harness/src/controllers/session/`.
 
 ### Naming conventions
@@ -172,16 +138,7 @@ One of those baselines budgets the code itself rather than an import edge, and i
 
 Another code budget reached zero and is now a hardcoded rule: `unknownErrorChannelRatchet.vitest.ts` fails on any production `Effect.Effect<A, unknown, R>` or `Effect.fn.Return<A, unknown, R>`. Type the channel with the tagged error the path already raises; a port whose hosts each fail with their own surface's error takes `Error`; a foreign rejection becomes an `Error` at its boundary with `ensureError` (`@utils/errors/errorMessage`), never a `catch: (e) => e` / `onError: (e) => e` pass-through (the same test fails one, outside its `IDENTITY_CATCH_JOINS` list of late-rejection joins that compare the raw value by identity), and never the thunk form `Effect.try(() => …)` / `Effect.tryPromise(() => …)`, whose `UnknownError` hides the real message behind a fixed one; a combinator that absorbs any failure is generic in it.
 
-- `packages/extension/src/frontend/` contains extension-host utilities that power shared UI flows (agent directories, file listers, instruction banners, tool workflows; subfolders `system/`, `ui/`, `editor/`, `agents/`, `latex/`, `media/`). Prefer these helpers over duplicating logic in commands or webviews.
-- `packages/harness/src/common/` holds host-neutral, cross-cutting logic with domain meaning (errors, files, parsing, storage, constants), not a backend-only zone. Some browser-adjacent shared code imports dependency-light modules such as `@common/parsing/safeParseJson`; import through the `@common/*` alias and check the target's dependencies before using it from browser code.
-- `packages/extension/src/common/` holds extension-only helpers (webview base classes, shared styles):
-  - `packages/extension/src/common/webview/` - Webview content provider (`BundledViewContentProvider`), webview HTML builder (`buildWebviewHtml`), command constants
-- `packages/harness/src/utils/` is host-agnostic; only the four `BROWSER_SAFE_UTILS` modules in `eslint.config.mjs` are browser-reachable (CLAUDE.md "Layout"). Helpers specific to one side belong in `frontend/` or `common/`; an import added to one of the four must stay browser-safe.
-  - `utils/core/` - Async, type-guard, math, comparator, and path-basics primitives (`debounce`, `filterNotNull`, `clamp`, `byName`, `normalizeFilePath`, `getBasename`, `getFileStem`)
-    - `utils/core/perKeyQueue.ts` - `withPerKeyLane`, the one per-key serialization lane (Effect-based; `KeyedMutex` and `async-mutex` were retired by #12696)
-
-- `packages/harness/src/platform/` - Platform abstraction layer: the host ports and the process runtime types. Each host's composition root builds one `ManagedRuntime` over `processLayer()` at startup; agnostic code reads the ports from the Effect context that runtime serves, and the root opens and closes sessions through its `SessionOwner`.
-- `packages/texra/src/ui/` (`@ui/*`) - The host-neutral UI toolkit all three hosts render from (`ui/wa/`, `ui/styles/`, `ui/markdown/`, `ui/copy/`); see CLAUDE.md "Layout" for its boundaries, including the `litControllers/`, `monaco/`, `highlighting/` trio in `packages/texra/src/shared/`. The transcript row model is the harness's, in `packages/harness/src/shared/transcript/` (`@shared/transcript`). `packages/harness/src/transcript/` (`@transcript`) is the unrelated run-transcript persistence layer.
+- Package directories: the nested guides' "Directory organization" (see "Folder-scoped guides").
 
 ### Pragmatic implementations
 
@@ -242,45 +199,8 @@ Concretely:
   "renders without crashing", and re-assertions of a schema's defaults are
   cost with no signal.
 
-How to write the tests that do earn a place (adapted from the testing guides
-in [opencode](https://github.com/sst/opencode/blob/dev/AGENTS.md)):
-
-- **Test the real implementation; avoid mocks.** Run the production code
-  against real resources: a temp directory, a real git repo, a real SQLite
-  file, a real child process. Fake only at an edge — the provider's HTTP
-  endpoint (a scripted local server replaying recorded responses), or a host
-  port through its shared fake (see "Test fixtures and fakes") — never a
-  repository module (see "Test tiers"). Never patch `globalThis`. When a test
-  must stub a service, stub only the methods it needs with `Layer.mock`: any
-  other method throws, so an unexpected dependency fails loudly rather than
-  returning a quiet placeholder.
-- **Do not duplicate logic into tests.** An expected value that the test
-  computes by re-running the algorithm passes whenever the code is wrong in
-  the same way. Write the expected output down as a literal, or check a
-  property the code has to satisfy.
-- **Synchronize on published signals, never wall-clock.** A fixed sleep that
-  waits "long enough" for a forked fiber, a process, or a render is a flake on
-  a slow CI host. Wait on the state the next step needs: a `Deferred`, a
-  session status, an event on the trace, a file appearing, a Playwright
-  web-first assertion. A real sleep is acceptable only where wall-clock time
-  is the thing under test (mtime resolution, a real subprocess timeout); an
-  Effect program's delays, retries, and debounces run on the test clock
-  instead (see "Test fixtures and fakes").
-- **E2E hygiene.** Drive the app through user-visible roles, labels, and text,
-  with isolated, deterministic data per test. Register an event or network wait
-  before the action that triggers it. Retry idempotent readiness checks, never
-  state-changing actions. Assert exact outcomes and identities, so stale state,
-  duplicate rendering, or the wrong element cannot pass. Never use
-  `waitForTimeout`.
-- Extend the module's existing suite rather than adding a new test file. Add
-  one only when the module has no existing suite (one suite per module,
-  path-mirrored under `src/test-kernel/`) or for one named cross-module
-  scenario, stated in the PR body. Collapse 4+ structurally identical cases
-  into `test.each`.
-- Do not test what `npm run typecheck` or a Zod schema already guarantees, and
-  do not create tests for speculative abstractions, trivial data plumbing,
-  implementation details, or compatibility behavior that the product does not
-  intend to preserve.
+How to write the tests that do earn a place: `src/test-kernel/AGENTS.md`
+"Writing tests that earn a place".
 
 The same discipline applies in review: do not ask an author to add tests unless
 the diff leaves a consequential contract or reproduced defect unprotected. When
@@ -328,13 +248,8 @@ Examples: `.prefault(0)` / `.prefault([])` when loading saved state; `.catch('co
 
 Use `.nullish()` instead of `.optional()` for optional fields in tool input schemas (`z.strictObject({ required: z.string(), optional: z.string().nullish() })`). OpenAI-compatible APIs (DeepSeek, Kimi, etc.) require optional fields to also be nullable for structured output compatibility. Check for missing optional values with `== null` (not `=== undefined`), and coalesce with `?? undefined` when passing a nullish tool value to a function expecting `T | undefined`.
 
-**Discriminated-union branches use `.looseObject()`, not `.strictObject()`.** Provider conversion flattens a top-level union into ONE object schema whose properties are the union of every branch's, and it emits no `additionalProperties` key - so the model is never told the flattened object is closed. OpenAI-compatible providers (DeepSeek, Kimi, etc.) then fill every advertised property, including ones that belong to a different command, with `null` rather than omitting it. A `strictObject` branch rejects that as an unrecognized key regardless of nullability; `looseObject` tolerates the cross-branch leakage while still enforcing each branch's own required fields.
-
-A union-branch field with a default needs `nullishWithDefault` (`packages/harness/src/tools/core/inputSchema.ts`) rather than `.prefault()`: `.prefault()` substitutes only for `undefined`, so an explicit `null` fails validation inside the correctly-selected branch, where `looseObject` gives no help.
-
-**Design for the model's first call**
-
-Any parameter with an obvious default should be optional with that default applied at dispatch time (`.nullish()` plus a default when the tool runs), not required: a required parameter that models routinely omit is a tool bug, not a model error. When a description string enumerates dispatch behavior, verify it against the actual dispatch table whenever either changes.
+Union branches, `nullishWithDefault`, and designing for the model's first call:
+`packages/harness/AGENTS.md` "Tool input schemas".
 
 **Compatibility and format retirement**
 
@@ -347,14 +262,8 @@ exceptions are formats with consumers outside TeXRA and wire protocols TeXRA
 still supports; normalize those once at their boundary, and reject any other
 unsupported state with a clear error. `trace.json` is **not** such an exception:
 the owner ruled that 1.0's exports start fresh, so a document from an older
-build fails loudly at the parse boundary (#12359). The session database is
-the same stance made mechanical: `storeSchema.ts`
-(`packages/harness/src/controllers/session/`) stamps every `texra.db` with its schema version
-and moves a store written before 1.0 aside whole at open (`texra.db.pre1`,
-never read again, settings included) and refuses one of a newer schema. Row
-kinds carry their own versions (`packages/harness/src/shared/schemas/rowVersions.ts`), read by
-the row codec (`rowCodec.ts`) alone; until the 1.0 release freezes them, every
-kind is unreleased and changes with no upcaster and no bump.
+build fails loudly at the parse boundary (#12359). The session database's format stamp and row versions:
+`packages/harness/AGENTS.md` "Storage format".
 
 `config.json` is additive-only from 1.0 (ruled 2026-09-30): a key may be added,
 and a released key keeps its meaning, so no retired-key list and no rewrite of
@@ -395,53 +304,13 @@ For good separation of concerns and platform independence, core business logic s
 
 ### Patterns across the codebase
 
-**Configuration, storage, and workspace files**
-
-- For a raw config path, read with `config.get(path)` on the `ConfigProvider` the caller holds (a tool call's `call.roots.config`, a run's `session.roots.config`, a host command's `session.roots.config`) and write with that provider's `update(...)`; there is no standalone `updateConfig`/`watchConfig` helper and no change-notification API. Nearly every `texra.*` path is modeled in the Zod catalog, declared by owner: the harness's rows in `packages/harness/src/shared/state/stateSettings.ts` (schemas in `packages/harness/src/shared/schemas/coreSettings.ts`), TeXRA's own in `packages/texra/src/shared/settingsView/texraSettings.ts`, and a plugin's on its `Plugin` value's `settings`; hosts pass TeXRA's rows to `processLayer`, which installs the one catalog; for those, prefer the catalog helpers in `packages/harness/src/utils/config/platformSettings.ts` (`readSettingFrom(stores, key)`, `writeSettingTo(stores, key, value)`) over a raw cast, since they route through the shared validation/`onWrite` path. The `stores` are the settings slots the caller holds (a `WorkspaceRoots` is a `SettingsStores`); there is no ambient reader, so a caller that cannot name its slots has an owner to fix, not a fallback to reach for. Exceptions: the `configTarget: 'global'` rows (the five Models-tab provider toggles, `texra.telemetry.enabled`) keep merged-config semantics on runtime reads and do not go through the catalog reader, which answers a global-target row from global scope only (telemetry's project-file rule, opt out but never in, is the store's `projectValueIgnored` in `jsonConfigProvider.ts`, driven by the row's `projectMayOptOut`); and the CLI's git-author keys (`GIT_MARK_COMMITS`, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_WORKTREE_SUPPORT`) go through the CLI's own `readGitAuthorSettingsFromState`, since the catalog helpers default to the `'vscode'` storage slot. For a write reachable from a settings UI (extension/desktop `UPDATE_STATE_SETTING`, CLI `/config`), call `applyStateSettingUpdate` (`packages/texra/src/shared/settingsView/handlers/stateSettingWrite.ts`) rather than `writeSettingTo` directly: it adds the open-workspace guard and the approval-policy side effect a bare catalog write skips.
-- Inside Effect, reach a session's files through the rooted services (`WorkspaceFs`, `StorageFs`, `GlobalStorageFs` in `@platform/rootedFs`): each captures its root when its layer is built and refuses a path that escapes it. Workspace path math is a pure function of the root (`workspaceAbsolutePath`/`workspaceRelativePath`/`locateInWorkspace` in `@utils/files/workspaceFS`). Outside Effect, a helper takes the root as data: every run-storage path helper in `@utils/files/runStorageFs` has the root as its first parameter. Nothing in `@utils/files` resolves a root on its own.
-- Generate and identify pasted-image filenames with `@utils/files/pastedImageName` and resolve, validate, and persist their paths with `@utils/files/pastedImageUtils` (keeps Node filesystem code out of browser bundles).
-- Surface files through the shared listing (`listWorkspaceFilesOfType` in `packages/texra/src/controllers/session/workspaceFileOptions.ts`) and agents through the process catalog (`@agent/index`) instead of duplicating discovery logic.
+Config and storage access, agent execution, the run loop, webviews: see "Folder-scoped guides".
 
 **Logging and telemetry**
 
 - Log with `Effect.log*` and name the channel with `withLogChannel` (`@logger/effectLog`). Only a synchronous publication point with no fiber (the trace emitter, pre-runtime and shutdown paths) writes `writeLogEntry` from `@logger/logSink` directly. Agent flows should use `AgentTrace` (`@agent/trace`) to get grouped output and tool-use aware channels.
 - Always pass structured payloads as raw `data` (`Effect.annotateLogs({ data })`) (file lists, missing outputs, latexdiff results, usage statistics) so the progress view can render rich entries without custom parsing.
 - Publish runtime progress through session events and `SessionHandle.interactions.emit`; keep non-agent logs on the shared `TeXRA` output channel.
-
-**Agent execution and tool-use**
-
-- An agent is written in the one definition format (`AgentDefinitionSchema` in `@shared/schemas`, a YAML file or an SDK inline persona) and launched with an `AgentConfig` (`packages/harness/src/agent/core/definition/`); compose runs via the factories in `packages/harness/src/agent/runtime`.
-- Launch executions via `runAgent` and resume via `resumeRun` (see CLAUDE.md "Agent system"); use the lower-level `executeAgent` only when you already own the `runId` (e.g. subagent dispatch in `packages/harness/src/tools/delegation/inBandSubagentRun.ts`). Attach presentation and approval behavior to the run's `SessionHandle.interactions`.
-- A new provider is a protocol arm in `packages/llm` plus a route row in `packages/harness/src/agent/runtime/modelRoutes.ts` and `packages/harness/src/agent/runtime/run/modelBinding.ts`; there is no per-provider handler class. Register capabilities/pricing in `packages/harness/src/model/computeModelOptions.ts`.
-
-**Run loop architecture**
-
-A run is one Effect program in `packages/harness/src/agent/runtime/loop/`, no cursor and no graph:
-
-- **One program**: `runToolUse` (`loop/toolUse.ts`, with `loop/toolUseDispatch.ts`). A document task runs it on the documents plugin's recipe script (`packages/texra/src/agent/output/documentRecipe.ts`), which calls the agent once per revision and handles its output with the document tools (`packages/texra/src/tools/documents/`). `loop/rows.ts` builds every run history draft the loop appends. `core/tools/toolCallParsing.ts` parses the response's tool calls.
-- **State is row data.** The loop never holds its own copy of the conversation: it continues from the folded `RunState` (`packages/harness/src/shared/session/runStateFold.ts`) that `RunHistory.appendBatch` returns, so the live path and the resume path are one function. Resume reads only the fold; `flow_<id>.json` is never read.
-- **Services come from context**, provided once at the `executeAgent` boundary: `AgentRun` (`runtime/run/AgentRun.ts`, everything one run owns), `ModelInvoker` (the only service that calls the `packages/llm` `Model`), and the session-root `RunHistory` and `Runs` (`runtime/runRegistry.ts`: admission, lanes, live handles, waiting termination; built by the session layer). No services bag, no node fields.
-- **A run's input queue is its own, never context.** A conversation run claims its lease over the follow-up queue in its own scope (`claimFollowUps` in `runtime/FollowUps.ts`, from `runToolUse`); a round-mode run takes no input and claims none. A child launched from a parent's tool call runs in that call's fiber, so a context-provided queue would hand it the parent's: never read another run's input from context.
-- **Write points are the contract**: a `model.message attempt` before a billed request leaves the process; the `response` row before any tool dispatches; `tool.intent` as each call's body starts (after its hooks, guard and approval, so before it nothing of the attempt ran); `tool.result` before the loop continues; a `run.position` for every wait and every halt. Every fact the loop branches on is a row field the fold reads (a run's model and binding on its `run.config`, its input on the `append` that changes it, a nudge's `reason`); no row restates loop state.
-- **One retry loop**, `runInvocation` in `run/invocation.ts`, for every model call. Its next move is `nextAttempt` (`shared/session/inFlight.ts`) over the invocation's rows: each failed attempt commits a `failed` row with the move after it (`retry`, `unchain`, `ask`, `stop`, `cancel`); automatic resends run under the process's `ModelRetryGate` within a budget counted from the rows, so a crash does not refill it; past it, the `failed` row opens a retry request in its own batch and the person's `request.decided` admits the next attempt, which consumes it. An attempt of an invocation a person admitted, whose outcome no row recorded, is asked about again, never resent unasked. Nothing else retries a model call; provider SDK retries stay disabled. A compaction summary records its attempts on the run's history (`purpose: 'summary'`, which the run fold skips); a helper call records none.
-- **Interruption is the fiber's.** Each activity/append pair runs under `Effect.uninterruptibleMask` with only the handoff and the durable append masked; there is no `AbortSignal` threading inside the loop.
-- **Agent owns lifecycle**: `executeAgent` / `AgentRunLifecycle` handle init and finalize; the loop only executes.
-
-**Webviews and UI**
-
-- Generate HTML through `BundledViewContentProvider` (`packages/extension/src/common/webview/BundledViewContentProvider.ts`) and its `buildWebviewHtml` helper. There is no shared message-handler base class: `settingsView` owns its inbound dispatch inside `SettingsViewMessageHandler` and `progressView` routes through typed host requests, so follow the pattern of the view you are touching (see "Webview Consistency Patterns").
-- Use Web Awesome (`<wa-icon>` via `waIcon()` from `@ui/wa/webAwesomeIcons`) and shared utilities from `@utils/text/stringUtils` and `@utils/core` (path basics: `normalizeFilePath`, `getBasename`, `getFileStem`). Keep CSS modular: per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `packages/extension/src/common/styles/common.css`.
-
-**Error handling and types**
-
-- Format and surface errors through `showLoggedErrorMessage` and `showLoggedMessageWithDocs` in `packages/extension/src/frontend/ui/errorHandlingUtils.ts` for consistent telemetry and documentation links.
-- Derive runtime-safe interfaces with `zod` plus `z.infer`, colocated with their domains (e.g., `packages/harness/src/agent/core/state`).
-
-**Miscellaneous**
-
-- Execute VS Code commands with `safeExecuteCommand` from `packages/extension/src/frontend/system/commandUtils.ts` and shell commands with `executeCommand` from `packages/harness/src/utils/system/execUtils.ts` so logging and error handling stay uniform.
-- Retrieve included file extensions via `getIncludedExtensions` in `packages/harness/src/common/files/fileTypeUtils.ts`.
-- Use `packages/extension/src/frontend/ui/dialogs.ts` and `instruction.ts` for notification primitives shared across the extension.
 
 ### Prompt and agent files
 
@@ -458,38 +327,6 @@ the workflow prompts in `.github/prompts/`.
   state are runtime inputs; never commit them as prompt fixtures.
 - A prompt change is reviewed as the final resolved prompt, with representative
   behavior checks, not only a YAML or Markdown syntax check.
-
-### Webview Consistency Patterns
-
-Two message-passing architectures coexist for the extension's views. Match the
-one the view you're touching already uses:
-
-- **`settingsView`** is request/response: `SettingsViewMessageHandler`
-  (`packages/extension/src/settingsView/`) owns its inbound dispatch directly
-  over the shared settings body
-  (`packages/texra/src/controllers/settingsView/sharedSettingsCommands.ts`) and its page
-  modules; only the VS Code-specific LaTeX arms live in
-  `settingsView/handlers/latexSettingsHandlers.ts`. Commands are named constants in `packages/harness/src/shared/ipc.ts` (`COMMON_COMMANDS`,
-  `SETTINGS_VIEW_COMMANDS`), not string literals. Frontend state lives in
-  module-level reactive signals in `settingsView/frontend/settingsState.ts`
-  (`trackedSignal`); `settingsView/frontend/messageDispatcher.ts` holds the one
-  outbound handler registry (`settingsViewHandlers`, typed
-  `SettingsViewOutboundHandlerRegistry` so it stays exhaustive).
-- **`progressView`** (the sidebar and editor-tab conversation shell) is
-  event-fold: `ProgressViewProvider` implements `vscode.WebviewViewProvider`
-  directly, composed with `BundledViewContentProvider`, and routes through
-  `SessionBridge` / `HostDraftRequests` as typed `runtime.request` /
-  `host.request` calls (see
-  `.agents/docs/implemented/architecture/2026-09-03-one-view-state-three-renderers.md`).
-  Its Lit components (`progressView/frontend/components/`) read the
-  `SessionView` fold (`packages/harness/src/shared/session/sessionView.ts`) and `Surface`
-  records as properties.
-- **Naming Convention**: within whichever pattern applies, follow
-  `[Domain]View[Component]` (e.g. `SettingsViewMessageHandler`,
-  `ProgressViewProvider`). Adding a genuinely new pattern needs an update to
-  this section, not a silent third variant.
-- **Resource Access**: Include all common module paths in `localResourceRoots` to prevent 401 errors.
-- **Design system**: tokens, control skins, and the brand and human-in-the-loop rules are in `packages/texra/src/ui/README.md`. Read it before adding a control or a local style override
 
 ### UI anti-patterns
 
@@ -529,7 +366,7 @@ These rules were learned from a 2026-07 whole-repo simplification campaign. They
 
 - **Exports are contracts; default to file-local.** A new export needs a consumer in the same PR. The dead-export ratchet (`npm run check:dead-code-ratchet`, per-symbol baseline in `config/ratchets/knip-baseline.json`) fails any unused export not in the baseline.
 
-- **The core holds the pi bar, shrink-only.** In the harness and llm cores (`CORE_QUALITY_DIRS` in `eslint.config.mjs`), `npm run check:core-quality` holds the sixteen rules of the core-quality study (texra-design-pages `core-quality-study.md` §14) plus a few of its own, per file: `any`, `!`, `as` casts without a `// cast:` reason, object-literal assertions, exported functions without a return type, exports without TSDoc, runtime import cycles, files over 400 lines, functions over 150 physical lines (layer closures included) or modified complexity 15 or depth 4, `new Promise`, `.then(`, `Effect.run*` outside a named entry, try/catch around Effect code, silent fallbacks, exported records over 20 public members, non-erasable syntax, `vi.mock` of a core module, ranged core dependencies, the files and packages each core entry reaches, the numbered durable invariants, and core READMEs without a diagram. Decision codes in comments are measured only. Baselines live in `config/ratchets/core-quality/`; a value that rises fails, and one that falls must be lowered with `--update` in the same change (`--move old=new` carries a rename). `config/api-reports/` holds each core package entry's public surface, regenerated by `--update`, so a surface change shows as a diff. When a hotspot is too complex, find the data structure, duplicated fact or misplaced owner behind it; never split a file mechanically.
+- **The core holds the pi bar, shrink-only.** What `npm run check:core-quality` holds in the harness and llm cores (`CORE_QUALITY_DIRS` in `eslint.config.mjs`) is in `packages/harness/AGENTS.md` "Core quality".
 
 - **No convenience barrels.** A barrel/index re-export file exists only for a documented public surface (for example, the trace events SDK contract, which declares its surface in its own docstring). Everything else imports the file that defines the symbol. Nothing has a re-export shim.
 
@@ -540,16 +377,6 @@ These rules were learned from a 2026-07 whole-repo simplification campaign. They
 - **No bare module-level mutable singletons in tested code.** State that tests need to isolate belongs behind an injectable, resettable handle.
 
 - **Serialize asynchronous work through Effect.** Use Effect concurrency primitives or `withPerKeyLane` (`packages/harness/src/utils/core/perKeyQueue.ts`) when operations must run one at a time per key. Resource ownership must be released on success, failure, and interruption. Do not hand-write Promise chains for it; follow the TeXRA 1.0 direction above.
-
-### Test fixtures and fakes
-
-- **Fixture rule of three.** When the same literal setup block appears three or more times in one test file, extract it to a file-local helper. Setup shared across suites is promoted to `src/test-kernel/support/`.
-
-- **One fake per port.** Tests use the shared fakes in `src/test-kernel/support/` for platform ports. A local fake for a port that already has a shared fake requires a one-line comment naming the capability the shared fake deliberately lacks.
-
-- **Effect-based tests use `@effect/vitest`.** A test body that executes an `Effect` program uses `it.effect` (`import { it } from '@effect/vitest'`; `describe`/`expect` stay on `vitest`) with `Effect.gen` + `yield*` instead of `await Effect.runPromise(...)`; rejection assertions use `Effect.flip` or `Effect.exit` plus `expect`. `it.effect` provides a `TestContext` whose clock starts at 0, so tests that depend on real time (real sleeps, polling loops, subprocess or network timeouts) use `it.live` instead. Keep `Effect.runPromise` only in hooks and non-test helpers. Inside `it.effect`/`it.live`, cleanup goes through `Effect.addFinalizer` or `Effect.acquireRelease` (the tester already provides a `Scope`), never `try/finally` around `yield*`: Effect's generator driver does not resume the generator's `finally` after a failed yield. Exemplar: `src/test-kernel/tools/Cancellation.vitest.ts`.
-
-- **`expect` and `node:assert` are both supported.** New `src/test-kernel/` suites use Vitest `expect`. Existing `node:assert` suites stay as they are; convert only in a dedicated mechanical PR (one file or directory, no behavior changes) using the strict mapping: `assert.equal` to `toBe`, `assert.deepEqual` to `toStrictEqual` (never `toEqual`), `assert.ok` to `toBeTruthy()`. `shared/stateSettings.vitest.ts` keeps `node:assert` for its per-key message argument.
 
 ## Documentation
 

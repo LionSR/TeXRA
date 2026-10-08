@@ -5,8 +5,10 @@ document processing using LLMs. It ships as a VS Code extension, an Electron
 desktop app, and a terminal CLI (`texra`) — three hosts over one host-agnostic
 core.
 
-Coding conventions and full patterns live in [AGENTS.md](./AGENTS.md). This file
-covers what you can't learn by reading the tree.
+Coding conventions and full patterns live in [AGENTS.md](./AGENTS.md), with
+folder-scoped additions in the nested `AGENTS.md` files it lists (each nested
+`CLAUDE.md` imports its sibling). This file covers what you can't learn by
+reading the tree.
 
 ## Commands
 
@@ -29,7 +31,7 @@ in front of every local commit it gets skipped. The loop is stock Vitest:
 `test:watch` while editing, `test:changed` before a commit, `test:pure` before
 a push — 30s, and it covers the architecture ratchets, which no module graph
 ties to the code they scan. `npm test` before opening a PR. Tiers and why a
-suite lands in one: AGENTS.md "Test tiers".
+suite lands in one: `src/test-kernel/AGENTS.md` "Test tiers".
 
 **Builds don't type check.** esbuild and Vite only strip TypeScript types; they
 treat it as "JavaScript with annotations to remove." Run `npm run typecheck`, or
@@ -251,8 +253,7 @@ lower-level `executeAgent` only when you already own the `runId` (subagent
 dispatch). `runAgent` launches fresh runs only: a persisted run resumes
 through `resumeRun`, which continues it with
 `resumeToolUseFromResumeData`. Loop conventions and the
-write points: AGENTS.md "Patterns across the codebase" (Run loop
-architecture).
+write points: `packages/harness/AGENTS.md` "Run loop architecture".
 
 **There is no flow engine.** A run is one Effect program that appends rows to
 the run history (`packages/harness/src/shared/session/runHistory.ts`) and continues from the
