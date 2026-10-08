@@ -238,15 +238,16 @@ function attachTo(
       Effect.scoped(
         RcMap.get(acquisitions, JSON.stringify(call.configuration)),
       );
-    const answer = (id: string, call: HostCall) =>
-      (call.kind === 'lmStream'
-        ? // Each item as it comes, then the end; the service's `cancel`
-          // interrupts it (`answering`).
-          Stream.runForEach(performStream(call, modelFor), (item) =>
-            send(id, { ok: true, value: asJsonValue(item), more: true }),
-          ).pipe(Effect.as(null))
-        : perform(host, call, modelFor)
-      ).pipe(
+    const answer = (id: string, call: HostCall) => {
+      const work: Effect.Effect<unknown, unknown> =
+        call.kind === 'lmStream'
+          ? // Each item as it comes, then the end; the service's `cancel`
+            // interrupts it (`answering`).
+            Stream.runForEach(performStream(call, modelFor), (item) =>
+              send(id, { ok: true, value: asJsonValue(item), more: true }),
+            ).pipe(Effect.as(null))
+          : perform(host, call, modelFor);
+      return work.pipe(
         // Any end but an interrupt is answered, a defect included, so the
         // service never waits on a call that died here.
         Effect.matchCauseEffect({
@@ -265,6 +266,7 @@ function attachTo(
               ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
         ),
       );
+    };
     return yield* client['host.attach']({
       workspace,
       capabilities: capabilitiesOf(host),

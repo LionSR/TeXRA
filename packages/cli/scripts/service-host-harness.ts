@@ -98,7 +98,7 @@ await Effect.runPromise(
                   yield* say('ACQUIRED');
                   const origin = {
                     protocol: 'vscode-lm' as const,
-                    codecVersion: 1,
+                    codecVersion: 1 as const,
                     requestedModel: configuration.requestedModel,
                     deployment: configuration.deployment,
                   };
