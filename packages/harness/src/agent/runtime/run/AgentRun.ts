@@ -18,6 +18,11 @@ import {
   type StepToolInputs,
 } from '@agent/runtime/agentToolResolution';
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
+import {
+  ModelAccess,
+  modelAccessLayer,
+  type BoundModel,
+} from '@agent/runtime/modelAccess/ModelAccess';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
 import type { DocumentTask, Persona } from '@shared/schemas';
@@ -34,10 +39,9 @@ import {
 import { LiveTools } from '@tools/liveTools';
 import { buildTerminalTool } from '@tools/structuredOutput';
 import { RunFileService } from '@utils/files/runStorage';
-
-import { bindModel, type BoundModel } from './modelBinding';
-import type { OpenStep } from '../loop/step';
 import type { HttpClient } from 'effect/http';
+
+import type { OpenStep } from '../loop/step';
 import type { AgentLaunchContext } from '../AgentLaunchContext';
 import type { SessionHandle } from '../SessionHandle';
 
@@ -83,8 +87,8 @@ export interface AgentRunShape {
   readonly toolPolicy: ToolPolicy;
   readonly workingDirectory?: string;
   readonly delegationAgentScope?: AgentDelegationScope | null;
-  /** The process stores the launch read; every route and credential read
-   *  below the loop takes them from here. */
+  /** The session's setting slots and the process secret store the launch
+   *  read, for what the run reads besides its model (`ModelAccess` owns that). */
   readonly stores: ModelOptionStores;
   /** What the run opens from; null for a tool-use run whose rows hold its
    *  opening, which a resume never renders again. */
@@ -148,15 +152,17 @@ interface AgentRunLayerInput {
 }
 
 /**
- * Build the run's service from its launch context. A resumed run is on its
- * newest `run.config`'s model and backend, never a file's; a fresh run binds
- * the launch's model under the route the launch context already resolved.
+ * Build the run's service, and the model access its bindings go through,
+ * from its launch context. A resumed run is on its newest `run.config`'s
+ * model and backend, never a file's; a fresh run binds the launch's model
+ * under the route the launch context already resolved. Model access is
+ * built here, in the run's fiber, under its project's environment.
  */
 export const agentRunLayer = (
   ctx: AgentLaunchContext,
   input: AgentRunLayerInput,
 ): Layer.Layer<
-  AgentRun,
+  AgentRun | ModelAccess,
   Error,
   RunHistory | LanguageModel | HttpClient.HttpClient | LiveTools
 > =>
@@ -262,16 +268,17 @@ export const agentRunLayer = (
       // force is open. `bindingScope` is written only inside the ref's
       // update, which serializes every swap.
       let bindingScope = yield* Scope.fork(scope);
-      const bound = yield* bindModel({
-        modelId,
-        config: modelConfig,
-        stores: ctx.stores,
-        backend,
-        ownApiKeyFallback: ctx.ownApiKeyFallback,
-        declinedRoutes,
-        textOnly,
-        temperature: persona.temperature,
-      }).pipe(Scope.provide(bindingScope));
+      const bound = yield* (yield* ModelAccess)
+        .bind({
+          modelId,
+          config: modelConfig,
+          backend,
+          ownApiKeyFallback: ctx.ownApiKeyFallback,
+          declinedRoutes,
+          textOnly,
+          temperature: persona.temperature,
+        })
+        .pipe(Scope.provide(bindingScope));
       const model = yield* SynchronizedRef.make(bound);
       const swapModel: AgentRunShape['swapModel'] = (next) =>
         SynchronizedRef.updateAndGetEffect(model, (current) =>
@@ -318,4 +325,4 @@ export const agentRunLayer = (
         callbacks: input.callbacks,
       };
     }),
-  );
+  ).pipe(Layer.provideMerge(modelAccessLayer(ctx.stores)));

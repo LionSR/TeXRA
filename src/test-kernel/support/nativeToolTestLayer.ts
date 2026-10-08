@@ -3,7 +3,6 @@ import { type Effect, Layer, Scope, SynchronizedRef } from 'effect';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { Runs } from '@agent/runtime/runRegistry';
-import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import {
   ToolContext,
   type ToolContextShape,
@@ -19,6 +18,7 @@ import {
 import type { AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { OpenStep } from '@agent/runtime/loop/step';
 import type { RuntimeTool } from '@agent/runtime/ToolServices';
+import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { sessionFsLayer } from '@platform/rootedFs';
 import type { PermissionPayload } from '@shared/schemas';

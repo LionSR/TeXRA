@@ -16,6 +16,7 @@ import {
   startCompactionActivity,
   type AgentTrace,
 } from '@agent/trace';
+import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import type { StateReadFailed } from '@platform/interfaces';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
@@ -34,7 +35,6 @@ import { contextTokens, estimateMessageTokens } from './contextTokens';
 import { turnText } from './turnText';
 import type { ModelInvoker } from '../ModelInvoker';
 import type { CallResult } from './modelCall';
-import type { BoundModel } from './modelBinding';
 import type { RunCell } from '../loop/runProgram';
 
 /**

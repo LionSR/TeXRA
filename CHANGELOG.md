@@ -908,6 +908,15 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A model failure that a retry cannot fix no longer offers Retry.** When
+  a provider refused a request as invalid or unsupported, or rejected its
+  credentials, without an HTTP status, the retry prompt still offered a
+  Retry that sent the same request and failed again. It now offers one only
+  when the provider's reply says the same request can succeed, or after a
+  used-up plan (where the retry switches to your own key). The offer follows
+  the model's retryable and quota classification rather than the HTTP
+  status, so a 429 or 5xx whose reply says the context overflowed is not
+  offered Retry either.
 - **Reopening the desktop window works with the TeXRA service.** When the
   app used the background service (the macOS default), clicking the Dock icon
   after closing the window logged "could not be reopened", clicking a

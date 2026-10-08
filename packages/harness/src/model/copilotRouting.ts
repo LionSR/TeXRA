@@ -134,16 +134,6 @@ const liveRouteModels = (stored: readonly string[]) =>
     (model) => !modelConfig(model)?.retired && !modelConfig(model)?.deprecated,
   );
 
-/** Whether the user prefers the Copilot route for this canonical base model. */
-export function prefersCopilotRoute(
-  model: string,
-  state: Pick<StateStore, 'get'>,
-) {
-  return Effect.gen(function* () {
-    return (yield* preferredCopilotRouteModels(state)).includes(model);
-  });
-}
-
 /**
  * Persist (or clear) the Copilot route preference for one base model. A
  * stored list that fails the reader's schema reads as empty, as it does for

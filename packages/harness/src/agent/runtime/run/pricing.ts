@@ -8,14 +8,13 @@
 import { Effect } from 'effect';
 import { turnCost, type TurnResult } from '@texra-ai/llm';
 
+import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { environment } from '@platform/defaults/nodeWorkspace';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { NormalizedUsage, RunId } from '@shared/schemas';
 import type { UsageLog } from '@shared/usageLog';
 import { roundTo } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
-
-import type { BoundModel } from './modelBinding';
 
 /**
  * The priced usage of one turn, or `null` when the provider reported none.

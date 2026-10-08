@@ -62,6 +62,7 @@ vi.mock('@agent/runtime/executeAgent', async () => {
   };
 });
 
+import { ModelError } from '@texra-ai/llm';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import type { RunRegistry } from '@agent/runtime/runRegistry';
@@ -71,11 +72,7 @@ import {
   classifyAgentError,
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
-import { AgentError } from '@common/errors/agentErrors';
-import {
-  attachContextWindowError,
-  attachMissingApiKeyError,
-} from '@common/errors/sdkError/errorMetadata';
+import { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
 import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
@@ -419,14 +416,18 @@ describe('runAgent run ownership', () => {
     'preserves the %s run failure and cleanup diagnostics before releasing ownership',
     (kind) =>
       Effect.gen(function* () {
-        const primaryError = new Error(
-          kind === 'context-window'
-            ? 'maximum context length is 128000'
-            : 'run failed',
-        );
-        if (kind === 'missing-api-key') attachMissingApiKeyError(primaryError);
-        // The run classified the package's overflow verdict and marked it.
-        if (kind === 'context-window') attachContextWindowError(primaryError);
+        // Model access's missing key, and the package's overflow verdict.
+        const primaryError: Error = {
+          'missing-api-key': new RouteUnavailable({
+            reason: 'missing-api-key',
+            message: 'run failed',
+          }),
+          'context-window': new ModelError({
+            kind: 'context-overflow',
+            message: 'maximum context length is 128000',
+          }),
+          unexpected: new Error('run failed'),
+        }[kind];
         const runError = new AgentError(primaryError.message, {
           cause: primaryError,
         });

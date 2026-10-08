@@ -18,11 +18,14 @@ import {
 } from '@agent/runtime/loop/rows';
 import type { RunCell } from '@agent/runtime/loop/runProgram';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
-import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter } from '@agent/trace';
+import {
+  ModelAccess,
+  type BoundModel,
+} from '@agent/runtime/modelAccess/ModelAccess';
 import { PersonaSchema } from '@shared/schemas';
 import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
@@ -145,6 +148,21 @@ export type ScriptedTurn =
 export function scriptedInvokerLayer(
   script: readonly ScriptedTurn[],
   seen: InvokeRequest[] = [],
+) {
+  return Layer.merge(unreachedModelAccess, scriptedInvoker(script, seen));
+}
+
+/** Model access a scripted run never reaches: its binding is the scenario's. */
+const unreachedModelAccess = Layer.succeed(ModelAccess, {
+  bind: () => Effect.die(new Error('A scripted run binds no model.')),
+  admit: () => Effect.die(new Error('A scripted run switches no model.')),
+  credentialSwitch: () => Effect.succeed(null),
+  delivery: () => Effect.succeed('foreground'),
+});
+
+function scriptedInvoker(
+  script: readonly ScriptedTurn[],
+  seen: InvokeRequest[],
 ) {
   return Layer.effect(
     ModelInvoker,

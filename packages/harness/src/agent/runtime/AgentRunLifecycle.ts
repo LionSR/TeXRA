@@ -7,11 +7,7 @@ import {
   AgentError,
   classifyAgentError,
 } from '@common/errors';
-import {
-  attachContextWindowError,
-  attachMissingApiKeyError,
-  attachProviderError,
-} from '@common/errors/sdkError/errorMetadata';
+import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
@@ -204,33 +200,12 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
  * Recover a run's carried failure as an `Error`, so the one failure path below
  * classifies and logs a reported failure exactly as it does an exception that
  * escaped the flow. `RetryErrorInfo` is a `ProviderError` minus the bulky
- * `rawErrorBody`, so it attaches as-is: the missing field stays absent.
+ * `rawErrorBody`, so it attaches as-is: its classification is what the
+ * classifier reads.
  */
 function toRunFailureError(error: RetryErrorInfo): Error {
   const failure = new Error(error.message);
   attachProviderError(failure, error);
-  // Restore the typed runtime marker selected by the canonical persisted
-  // classification. Exhaustion kinds need no Error marker: their actionable
-  // route remains on the attached ProviderError.
-  const classificationKind = error.classification?.kind;
-  switch (classificationKind) {
-    case 'missing-api-key':
-      attachMissingApiKeyError(failure);
-      break;
-    case 'context-window':
-      attachContextWindowError(failure);
-      break;
-    case 'upstream-credit':
-    case 'chatgpt-subscription':
-    case 'copilot-subscription':
-    case 'kimi-code-subscription':
-    case 'glm-coding-plan':
-    case 'xai-subscription':
-    case undefined:
-      break;
-    default:
-      classificationKind satisfies never;
-  }
   return failure;
 }
 

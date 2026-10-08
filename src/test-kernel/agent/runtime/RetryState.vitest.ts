@@ -1,9 +1,9 @@
 /**
  * The invoker's two owners of retry, over the run history.
  *
- * Automatic resends are route-scoped: `classifyModelFailure` decides whether
- * an attempt repeats at all and what the process's recovery gate is told
- * about the wire route. Past the budget a person decides, durably: a
+ * Automatic resends are route-scoped: llm's `ModelError` verdict decides
+ * whether an attempt repeats at all, and `routePolicies` what the process's
+ * recovery gate is told about the wire route. Past the budget a person decides, durably: a
  * `failed` row that asks, its `request.opened`, and a decision that is a
  * retry, a denial (failed, never cancelled — #7331) or a cancellation.
  */
@@ -52,11 +52,14 @@ import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import { makeRunCell } from '@agent/runtime/loop/runProgram';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
-import type { BoundModel } from '@agent/runtime/run/modelBinding';
-import { classifyModelFailure } from '@agent/runtime/run/modelFailure';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter, type AgentTrace } from '@agent/trace';
-import { attachContextWindowError } from '@common/errors/sdkError/errorMetadata';
+import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
+import {
+  failureInfo,
+  routePolicies,
+} from '@agent/runtime/modelAccess/failureInfo';
+import { modelAccessLayer } from '@agent/runtime/modelAccess/ModelAccess';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -79,7 +82,7 @@ import { noopTrace } from '@test/support/noopTrace';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { installPlatform } from '@test/support/setupPlatform';
+import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { judgeFailure } from '../../../../packages/llm/src/api/verdict.js';
 import {
@@ -366,8 +369,14 @@ const openRun = Effect.fn('openRun')(function* (
       Layer.mergeAll(
         Layer.succeed(AgentRun, agentRun(runId, session, logger, bound, binds)),
         UsageLog.disabled,
-        LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
-        testHttpClientLayer,
+        modelAccessLayer(hostStores()).pipe(
+          Layer.provide(
+            Layer.merge(
+              LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+              testHttpClientLayer,
+            ),
+          ),
+        ),
       ),
     ),
     Layer.merge(Layer.succeed(RunHistory, session.runHistory)),
@@ -445,154 +454,34 @@ function statuslessServerError(message: string): ModelError {
 const BOUND = boundModel(stubModel([]).model);
 
 /**
- * The two recovery projections `gatedAttempt` hands the session gate: the
- * wire route cools on shared-route evidence, the model route only on a limit
- * the provider scoped to one model.
+ * The two recovery projections the attempt hands the process gate: the wire
+ * route cools on shared-route evidence, the model route only on a limit the
+ * provider scoped to one model.
  */
-const wireRouteRecovery = (
-  error: Error,
-): { retryAfterMs: number | undefined } | undefined => {
-  const { verdict } = classifyModelFailure(error, BOUND);
-  return verdict.wireRouteFailure
-    ? { retryAfterMs: verdict.retryAfterMs }
-    : undefined;
-};
-const modelRouteRecovery = (
-  error: Error,
-): { retryAfterMs: number | undefined } | undefined => {
-  const { verdict } = classifyModelFailure(error, BOUND);
-  return verdict.rateLimitScope === 'model'
-    ? { retryAfterMs: verdict.retryAfterMs }
-    : undefined;
-};
+const [modelRoute, wireRoute] = routePolicies(BOUND);
+const wireRouteRecovery = (error: Error) => wireRoute.classifyFailure(error);
+const modelRouteRecovery = (error: Error) => modelRoute.classifyFailure(error);
 
-describe('model failure classification', () => {
-  it('treats a user abort as a cancellation, never an automatic retry', () => {
-    const abort = new DOMException('Request aborted', 'AbortError');
-
-    expect(classifyModelFailure(abort, BOUND).autoRetryable).toBe(false);
-  });
-
+describe('the failure a run records', () => {
   it('carries the text streamed before the failure onto the retry surface', () => {
-    // The one producer of `partialText`: the loop hands `classifyModelFailure`
-    // the tail it had already received, and the retry panel reads it back off
-    // the classified error rather than from a provider handler.
-    const error = new OpenAIAPIError(
-      500,
-      { message: 'stream dropped' },
-      'stream dropped',
-      undefined,
-    );
+    const error = httpError('stream dropped', 500);
 
-    const failure = classifyModelFailure(error, BOUND, 'partial answer');
-
-    expect(failure.formatted.partialText).toBe('partial answer');
-    expect(failure.info.partialText).toBe('partial answer');
-    // A failure with nothing streamed carries no tail at all.
     expect(
-      classifyModelFailure(statuslessServerError('nothing streamed'), BOUND)
-        .formatted.partialText,
-    ).toBeUndefined();
+      failureInfo(error, 'openai', { partialText: 'partial answer' })
+        .partialText,
+    ).toBe('partial answer');
+    // A failure with nothing streamed carries no tail at all.
+    expect(failureInfo(error, 'openai').partialText).toBeUndefined();
   });
 
   it('reports a retryable provider failure with its formatted message', () => {
-    const error = new OpenAIAPIError(
-      503,
-      { message: 'transient provider failure' },
-      'transient provider failure',
-      undefined,
-    );
-
-    expect(classifyModelFailure(error, BOUND).formatted).toMatchObject({
-      message: 'HTTP 503 Service Unavailable – 503 transient provider failure',
+    expect(
+      failureInfo(httpError('transient provider failure', 503), 'openai'),
+    ).toMatchObject({
+      message: 'HTTP 503 Service Unavailable – transient provider failure',
       userRetryable: true,
     });
   });
-
-  it.each([
-    {
-      name: 'a status-less OpenAI server_error response',
-      error: statuslessServerError('temporary provider failure'),
-      autoRetryable: true,
-    },
-    {
-      name: 'an unknown status-less provider reply',
-      error: judged(
-        new ModelError({
-          kind: 'provider-rejection',
-          message: 'Unexpected provider failure.',
-          cause: new OpenAIAPIError(
-            undefined,
-            {
-              type: 'unexpected_error',
-              message: 'Unexpected provider failure.',
-            },
-            'Unexpected provider failure.',
-            undefined,
-          ),
-        }),
-      ),
-      autoRetryable: false,
-    },
-    {
-      name: 'an HTTP conflict after provider SDK retries are disabled',
-      error: httpError('request lock is still held', 409),
-      autoRetryable: true,
-    },
-    {
-      name: 'a transient stream failure',
-      error: new Error('stream closed after response started'),
-      autoRetryable: true,
-    },
-    {
-      name: 'a raw undici fetch failure',
-      error: new TypeError('fetch failed', {
-        cause: Object.assign(
-          new Error('HTTP/2: "stream timeout after 300000"'),
-          { code: 'UND_ERR_INFO', name: 'InformationalError' },
-        ),
-      }),
-      autoRetryable: true,
-    },
-    {
-      name: 'a wrapped provider fetch failure',
-      error: new Error('Connection error', {
-        cause: new TypeError('fetch failed'),
-      }),
-      autoRetryable: true,
-    },
-    {
-      // Regression for the retry storm where a context-window overflow that
-      // slipped past compaction recovery was flattened into a plain,
-      // code-free Error by the transport before classification ran, so it
-      // looked transient and got auto-retried with the same oversized payload
-      // forever.
-      name: 'a context-window overflow',
-      error: (() => {
-        const overflow = new Error(
-          'OpenAI WebSocket response failed: overflow',
-        );
-        attachContextWindowError(overflow);
-        return overflow;
-      })(),
-      autoRetryable: false,
-    },
-  ])('classifies $name', ({ error, autoRetryable }) => {
-    expect(classifyModelFailure(error, BOUND).autoRetryable).toBe(
-      autoRetryable,
-    );
-  });
-
-  // The package's own refusals are deterministic: repeating them bills again
-  // for the same answer.
-  it.each(['invalid-request', 'unsupported', 'authentication'] as const)(
-    'never auto-retries a %s refusal from the package',
-    (kind) => {
-      const error = new ModelError({ kind, message: 'refused' });
-
-      expect(classifyModelFailure(error, BOUND).autoRetryable).toBe(false);
-    },
-  );
 });
 
 describe('recovery-route verdicts', () => {
@@ -779,25 +668,6 @@ describe('ModelInvoker retry', () => {
         expect(outcome.error.message).toContain('Model response was empty');
       }
       denied.detach();
-      yield* closeSessionOf(session);
-    }),
-  );
-
-  it.effect('treats a user abort as a cancellation without prompting', () =>
-    Effect.gen(function* () {
-      const session = yield* sessionWithInteractions(undefined);
-      const requests = autoDecideRequests(session, () => ({
-        action: 'retry',
-      }));
-      const stub = stubModel([
-        { fail: new DOMException('Request aborted', 'AbortError') },
-      ]);
-
-      const outcome = yield* invokeOn(yield* openRun(session, stub.model));
-
-      expect(outcome.kind).toBe('cancelled');
-      expect(requests.opened).toEqual([]);
-      requests.detach();
       yield* closeSessionOf(session);
     }),
   );

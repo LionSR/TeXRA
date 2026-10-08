@@ -38,15 +38,11 @@ import {
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-import {
-  reasoningEffortOverrides,
-  reasoningLevelLabel,
-} from './reasoningLevel';
-import { readRouteFacts } from './modelRoute';
+import { reasoningLevelLabel } from './reasoningLevel';
+import { readModelSettings, routeFactsFor } from './modelSettings';
 import {
   copilotRouteUnavailableReason,
   discoverCopilotRoutes,
-  prefersCopilotRoute,
   type CopilotModelRoute,
 } from './copilotRouting';
 
@@ -159,6 +155,8 @@ type ProviderKeyStatuses = Partial<Record<ApiKeyProviderId, boolean>>;
  */
 interface ModelRouteContext {
   reasoningLevels: Readonly<Record<string, ReasoningEffort>>;
+  /** Models whose Copilot route the user prefers. */
+  copilotModels: readonly string[];
   hasOpenRouter: boolean;
   facts: HostRouteFacts;
 }
@@ -314,7 +312,7 @@ function readProviderKeyStatuses(
 
 /**
  * Stage 0: every host fact the routes are decided over, resolved once per
- * call. The Kimi Code key status is a route fact (`readRouteFacts` reads it),
+ * call. The Kimi Code key status is a route fact (`readModelSettings` reads it),
  * so it seeds the key statuses, and the OpenRouter branch is decided by the
  * OpenRouter key alone.
  */
@@ -322,19 +320,17 @@ function buildAvailabilityContext(
   stores: ModelOptionStores,
 ): Effect.Effect<ModelAvailabilityContext, ModelHostFactUnreadable> {
   return Effect.gen(function* () {
-    const [facts, reasoningLevels, openRouterKey] = yield* Effect.all(
+    const [settings, openRouterKey] = yield* Effect.all(
       [
-        hostFact('the routing preferences', readRouteFacts(stores)),
-        hostFact(
-          'the stored reasoning levels',
-          reasoningEffortOverrides(stores.globalState),
-        ),
+        hostFact('the model settings', readModelSettings(stores)),
         readProviderKeyStatuses(stores.secrets, ['openRouter']),
       ] as const,
       { concurrency: 'unbounded' },
     );
+    const facts = routeFactsFor(settings, []);
     return {
-      reasoningLevels,
+      reasoningLevels: settings.reasoningLevels,
+      copilotModels: settings.copilotModels,
       facts,
       hasOpenRouter: openRouterKey.openRouter === true,
       keyStatuses: { ...openRouterKey, kimiCode: facts.kimiCodeKey },
@@ -354,11 +350,7 @@ const presentedCopilotRoutes = discoverCopilotRoutes().pipe(
  * rather than re-deciding over inputs that may have moved while the key read
  * was in flight.
  */
-function routeModels(
-  stores: ModelOptionStores,
-  models: readonly string[],
-  ctx: ModelRouteContext,
-) {
+function routeModels(models: readonly string[], ctx: ModelRouteContext) {
   return Effect.gen(function* () {
     const routed = new Map<string, RoutedModel>();
     let copilotRoutes: ReadonlyMap<string, CopilotModelRoute> | undefined;
@@ -369,8 +361,7 @@ function routeModels(
       const rawConfig = selected.config;
       // A retired row settles without its Copilot preference.
       const prefersCopilot =
-        !rawConfig.retired &&
-        (yield* prefersCopilotRoute(rawConfig.ref, stores.globalState));
+        !rawConfig.retired && ctx.copilotModels.includes(rawConfig.ref);
       const copilotRoute = prefersCopilot
         ? (copilotRoutes ??= yield* presentedCopilotRoutes).get(rawConfig.ref)
         : undefined;
@@ -719,12 +710,7 @@ export const readModelAvailabilityInputs = Effect.fn(
       ),
       routeCtx,
     );
-  // Stage 1's live state reads (the Copilot route preference, the GLM endpoint
-  // settings) fail like the reads above.
-  const routed = yield* hostFact(
-    'the route preferences',
-    routeModels(stores, visible, routeCtx),
-  );
+  const routed = yield* routeModels(visible, routeCtx);
   const context = yield* withConsultedKeyStatuses(
     stores.secrets,
     routed,

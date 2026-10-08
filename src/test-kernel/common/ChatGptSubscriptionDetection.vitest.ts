@@ -2,7 +2,7 @@ import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it } from 'vitest';
 import { ModelError } from '@texra-ai/llm';
 
-import { classifyModelFailure } from '@agent/runtime/run/modelFailure';
+import { failureInfo } from '@agent/runtime/modelAccess/failureInfo';
 import { judgeFailure } from '../../../packages/llm/src/api/verdict.js';
 
 const USAGE_LIMIT_BODY = {
@@ -29,9 +29,7 @@ function codexFailure(body: unknown) {
   );
   return {
     judged,
-    formatted: classifyModelFailure(judged, {
-      config: { provider: ModelProvider.OPENAI },
-    }).formatted,
+    formatted: failureInfo(judged, ModelProvider.OPENAI),
   };
 }
 

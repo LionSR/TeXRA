@@ -163,3 +163,7 @@ export type {
   ToolProbeInputs,
   ToolProbeServices,
 } from '@tools/toolProbes';
+
+// Model access a host request makes outside a run: the user's own key and
+// the endpoint they set (audio transcription).
+export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';

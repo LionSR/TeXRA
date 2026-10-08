@@ -65,7 +65,7 @@ const ToolChoiceSchema = z.union([
 ]);
 // This package speaks its own protocol vocabulary and takes no llm-zoo
 // dependency; the registry's enum is checked against this one by assignment at
-// the `modelBinding.ts` call sites that feed it.
+// the harness's model-access call sites that feed it.
 const ReasoningEffortSchema = z
   .enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'])
   .nullable();
