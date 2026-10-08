@@ -3,8 +3,8 @@
  * session's scope: each plugin's `sessionLayer`, up while the plugin is on,
  * a step uses it or work it started holds it (`PluginHold`); and the MCP
  * servers its runs name (`hold`) and its steps' installed plugins start,
- * with the project's `.env` variables, up for a minute past the last run or
- * step holding one (so consecutive runs share it) and never past the
+ * with the project's `.env` variables, up for 30 minutes past the last run
+ * or step holding one (so consecutive runs share it) and never past the
  * session's close. No server is shared across projects.
  *
  * A step (`pin`, `@agent/runtime/loop/step`) reads the switches and the
@@ -219,8 +219,11 @@ export const follow = (
     );
   }).pipe(Effect.forkScoped, Effect.asVoid);
 
-/** How long an MCP server no run or step holds stays up for the next. */
-const SERVER_IDLE = Duration.minutes(1);
+/** How long an MCP server no run or step holds stays up for the next: long
+ *  enough to read an answer before replying. In the service, a session left
+ *  idle closes sooner (`texra serve --idle-timeout`), and a session's close
+ *  always stops its servers. */
+const SERVER_IDLE = Duration.minutes(30);
 
 /** Reads no plugins, from configuration or installed. */
 export const NONE = Effect.succeed({ plugins: [], warnings: [] });
