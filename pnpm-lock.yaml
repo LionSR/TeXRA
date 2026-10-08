@@ -675,8 +675,8 @@ importers:
         specifier: 2.27.0
         version: 2.27.0(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.4.3))(supports-color@10.2.2)
       '@openrouter/sdk':
-        specifier: 1.4.21
-        version: 1.4.21
+        specifier: 1.4.22
+        version: 1.4.22
       llm-zoo:
         specifier: 'catalog:'
         version: 2.0.0(zod@4.4.3)
@@ -1833,8 +1833,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@openrouter/sdk@1.4.21':
-    resolution: {integrity: sha512-fWaxZ6NV7/qfocMfZfwb0cAjMLTh69B7S/H2b+Mb2dJzS2eZTTGTCb4egHEpB60SRcovUMv/ZqKW2DFU8tpExw==}
+  '@openrouter/sdk@1.4.22':
+    resolution: {integrity: sha512-8IPn9VCf2K+qpMtQMuLOJrcdEF38bLG26Qjo9DqPYPtv1C+Sfv+BRGg4OPjNmgXgmFeD2Six6akasgsY7nka0g==}
 
   '@opentelemetry/api@1.9.1':
     resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
@@ -6750,7 +6750,7 @@ snapshots:
   '@openai/codex@0.160.0-win32-x64':
     optional: true
 
-  '@openrouter/sdk@1.4.21':
+  '@openrouter/sdk@1.4.22':
     dependencies:
       zod: 4.4.3
 

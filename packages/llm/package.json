@@ -44,7 +44,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "0.131.0",
     "@google/genai": "2.27.0",
-    "@openrouter/sdk": "1.4.21",
+    "@openrouter/sdk": "1.4.22",
     "llm-zoo": "catalog:",
     "openai": "7.20.0",
     "ws": "8.22.0"
