@@ -192,8 +192,12 @@ export class DatabaseRowCorrupt extends Data.TaggedError('DatabaseRowCorrupt')<{
   readonly commit: number;
   readonly type: string;
   readonly detail: string;
+  /** An earlier build wrote it, at a version this one cannot upcast. */
+  readonly earlier?: true;
 }> {
-  override readonly message = `The session store's ${this.type} row at commit ${this.commit} does not decode (${this.detail}).`;
+  override readonly message = this.earlier
+    ? `The session store's ${this.type} row at commit ${this.commit} was written by an earlier build of TeXRA; it can't be opened by this one.`
+    : `The session store's ${this.type} row at commit ${this.commit} does not decode (${this.detail}).`;
 }
 
 /**
@@ -379,7 +383,11 @@ export class Database extends Context.Service<
         readonly events: readonly SessionEvent[];
         readonly checkedAggregateIds: readonly AggregateId[];
         readonly state: readonly AggregateState[];
-        readonly damaged: readonly AggregateId[];
+        /** Each unreadable run, with why it cannot be opened. */
+        readonly damaged: readonly {
+          readonly id: AggregateId;
+          readonly detail: string;
+        }[];
       },
       DatabaseReadFailed
     >;

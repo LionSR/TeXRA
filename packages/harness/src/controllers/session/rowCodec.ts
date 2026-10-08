@@ -28,6 +28,10 @@ import { Effect, Predicate, Result } from 'effect';
 import { z } from 'zod';
 import { withLogChannel } from '@logger/effectLog';
 import {
+  RUN_DAMAGED_MESSAGE,
+  RUN_EARLIER_BUILD_MESSAGE,
+} from '@shared/runs/runStatusDisplay';
+import {
   AggregateIdSchema,
   aggregateTarget,
   CURRENT_VALUE_VERSION,
@@ -254,8 +258,19 @@ function decodeRow(
   if (!hasKind(row.type)) return corrupt('a kind this build does not read');
   // A projected row has no version: this build's projector wrote it.
   const version = row.version ?? ROW_KINDS[row.type].version;
-  if (version > ROW_KINDS[row.type].version)
+  const { version: current, upcast } = ROW_KINDS[row.type];
+  if (version > current)
     return Result.fail(new DatabaseStoreNewer({ type: row.type, version }));
+  // An older version with no upcaster to this one: an earlier build's row.
+  if (upcast.slice(version - 1).length < current - version)
+    return Result.fail(
+      new DatabaseRowCorrupt({
+        commit: row.commit,
+        type: row.type,
+        detail: `version ${version}`,
+        earlier: true,
+      }),
+    );
   let data: Record<string, JsonValue>;
   try {
     data = JsonObjectSchema.parse(parseData(row));
@@ -321,10 +336,13 @@ export function rowReader(
     readonly SessionEvent[],
     DatabaseStoreNewer | DatabaseRowCorrupt
   >;
-  readonly damaged: () => readonly AggregateId[];
+  readonly damaged: () => readonly {
+    readonly id: AggregateId;
+    readonly detail: string;
+  }[];
 } {
   const warned = new Set<string>();
-  const damaged = new Set<AggregateId>();
+  const damaged = new Map<AggregateId, string>();
   const warnOnce = (key: string, message: string) =>
     warned.has(key)
       ? Effect.void
@@ -353,13 +371,23 @@ export function rowReader(
           `${path}: ${decoded.failure.message} It is left out of the listing and the tail, and its run is shown as damaged and cannot be opened.`,
         );
         const { kind, logicalId } = RowSchema.parse(row);
-        if (kind === 'run') damaged.add(aggregateOf(kind, logicalId));
+        const id = aggregateOf(kind, logicalId);
+        if (kind === 'run' && !damaged.has(id))
+          damaged.set(
+            id,
+            decoded.failure.earlier
+              ? RUN_EARLIER_BUILD_MESSAGE
+              : RUN_DAMAGED_MESSAGE,
+          );
         const start = bareStart(row);
         if (start !== null) events.push(start);
       }
       return events;
     });
-  return { read, damaged: () => [...damaged] };
+  return {
+    read,
+    damaged: () => [...damaged].map(([id, detail]) => ({ id, detail })),
+  };
 }
 
 /** A damaged `run.start` as a bare one, so its run still lists. */

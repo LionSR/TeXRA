@@ -28,7 +28,6 @@ import {
   type AggregateState,
   type DatabaseReadFailed,
 } from '@shared/session/database';
-import { RUN_DAMAGED_MESSAGE } from '@shared/runs/runStatusDisplay';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import {
@@ -259,15 +258,15 @@ export const sessionInputsLayer = Layer.effect(
  *  does not decode, so it never opens. */
 const markDamaged = (
   ref: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
-  damaged: readonly AggregateId[],
+  damaged: readonly { readonly id: AggregateId; readonly detail: string }[],
 ) =>
   Effect.gen(function* () {
     const local = yield* SubscriptionRef.get(ref);
     const known = new Set(local.unreadable.map(({ runId }) => runId));
-    const fresh = damaged.flatMap((id) => {
+    const fresh = damaged.flatMap(({ id, detail }) => {
       const target = aggregateTarget(id);
       return target.kind === 'run' && !known.has(target.id)
-        ? [{ runId: RunIdSchema.parse(target.id), detail: RUN_DAMAGED_MESSAGE }]
+        ? [{ runId: RunIdSchema.parse(target.id), detail }]
         : [];
     });
     // Only a new damaged run moves the level: an unchanged one would wake

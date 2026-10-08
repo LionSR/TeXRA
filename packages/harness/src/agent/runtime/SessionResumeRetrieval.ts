@@ -12,6 +12,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { deriveResumability } from '@agent/storage/resumability';
 import { withLogChannel } from '@logger/effectLog';
+import { RUN_EARLIER_BUILD_MESSAGE } from '@shared/runs/runStatusDisplay';
 import type { RunId } from '@shared/schemas';
 
 const CHANNEL = 'SessionResumeRetrieval';
@@ -45,6 +46,8 @@ export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
         ),
       );
     }
+    if (resumability.kind === 'earlierBuild')
+      return yield* Effect.fail(new Error(RUN_EARLIER_BUILD_MESSAGE));
     if (resumability.kind === 'none') {
       yield* Effect.logWarning('Run is not resumable').pipe(
         Effect.annotateLogs({ data: { agent: agentConfig.agent, runId } }),

@@ -7,6 +7,7 @@ import type { ResumeRunResult } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
+import { RUN_EARLIER_BUILD_MESSAGE } from '@shared/runs/runStatusDisplay';
 import type { RunId } from '@shared/schemas';
 import type { InboxItem } from './Inbox';
 
@@ -32,6 +33,7 @@ import type { InboxItem } from './Inbox';
 export type FollowUpFailureReason =
   | 'finished'
   | 'unusable_checkpoint'
+  | 'earlier_build'
   | 'read_failed'
   | 'owned_elsewhere'
   | 'not_resumable'
@@ -67,6 +69,7 @@ const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
   finished: 'This run has finished. Start a new agent task to continue.',
   unusable_checkpoint:
     "This run's saved state could not be loaded, so it cannot be continued. Delete it from history and start a new agent task.",
+  earlier_build: RUN_EARLIER_BUILD_MESSAGE,
   read_failed:
     "TeXRA couldn't read this task right now. Try again in a moment.",
   owned_elsewhere:
@@ -258,6 +261,7 @@ function admitQueued(
 const REFUSAL_REASON = {
   held_elsewhere: 'owned_elsewhere',
   finished: 'finished',
+  earlier_build: 'earlier_build',
   unreadable: 'read_failed',
 } as const satisfies Record<string, FollowUpFailureReason>;
 
