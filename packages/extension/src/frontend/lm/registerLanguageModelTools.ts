@@ -19,14 +19,7 @@
  */
 
 import * as vscode from 'vscode';
-import {
-  Context,
-  Effect,
-  Fiber,
-  Layer,
-  Option,
-  Stream,
-} from 'effect';
+import { Context, Effect, Fiber, Layer, Option, Stream } from 'effect';
 
 import {
   IssuingScript,

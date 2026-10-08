@@ -288,9 +288,7 @@ const openStep = Effect.fn('Step.open')(function* (
       ...(continuing === null ? [] : [continuing.id]),
       ...contributing.map(({ id }) => id),
     ]);
-    const services = yield* pinned
-      .services(used)
-      .pipe(Scope.provide(scope));
+    const services = yield* pinned.services(used).pipe(Scope.provide(scope));
     // The skills: the built-in plugins on and the installed ones the step
     // accepted contribute, as it accepted them, so a plugin enabled or
     // updated since reaches this step's text. A step held to the record
