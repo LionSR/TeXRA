@@ -68,7 +68,6 @@
     "storage:freeze": "vitest run --config vitest.config.mjs --mode freeze src/test-kernel/schemas/rowVersions.vitest.ts"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "catalog:",
     "@effect/language-service": "^0.87.3",
     "@effect/platform-node": "catalog:",
     "@effect/sql-sqlite-node": "catalog:",

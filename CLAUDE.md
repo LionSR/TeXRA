@@ -240,7 +240,7 @@ takes from context (`AgentRun`, model binding, pricing, media, tools) and
 tool calls. `output/` holds the document recipe (`documentRecipe.ts`), the
 script a document task's run executes over the documents plugin's tools
 (`packages/texra/src/tools/documents/`), and its output pipeline. Provider APIs are reached
-only through the `packages/llm` `Model` that `runtime/run/modelBinding.ts`
+only through the `packages/llm` `Model` that `runtime/modelAccess/ModelAccess.ts`
 binds; the `helperModel` path binds through that same route. New agents come
 from the built-in `creator` agent or the settings view's "Create from
 template". Agents are flat persona YAML (`name`, `description`, `prompt`,

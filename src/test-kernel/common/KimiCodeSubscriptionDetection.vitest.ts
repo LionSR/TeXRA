@@ -2,7 +2,7 @@ import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it } from 'vitest';
 import { ModelError } from '@texra-ai/llm';
 
-import { classifyModelFailure } from '@agent/runtime/run/modelFailure';
+import { failureInfo } from '@agent/runtime/modelAccess/failureInfo';
 import {
   judgeFailure,
   type BillingRoute,
@@ -27,18 +27,19 @@ function kimiCodeFailure(
   route: BillingRoute = 'kimi-code-subscription',
 ) {
   const cause = Object.assign(new Error(message), { status, error: body });
-  return classifyModelFailure(
-    judgeFailure(
-      new ModelError({
-        kind: status === 403 ? 'authentication' : 'provider-rejection',
-        message,
-        status,
-        cause,
-      }),
-      route,
-    ),
-    { config: { provider: ModelProvider.MOONSHOT } },
+  const judged = judgeFailure(
+    new ModelError({
+      kind: status === 403 ? 'authentication' : 'provider-rejection',
+      message,
+      status,
+      cause,
+    }),
+    route,
   );
+  return {
+    autoRetryable: judged.retryable,
+    formatted: failureInfo(judged, ModelProvider.MOONSHOT),
+  };
 }
 
 describe('the Kimi Code subscription usage limit', () => {

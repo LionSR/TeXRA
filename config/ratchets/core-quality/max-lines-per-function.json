@@ -10,7 +10,6 @@
   "packages/harness/src/agent/runtime/ModelInvoker.ts": 2,
   "packages/harness/src/agent/runtime/nativeSubagentStrategy.ts": 1,
   "packages/harness/src/agent/runtime/run/AgentRun.ts": 2,
-  "packages/harness/src/agent/runtime/run/modelBinding.ts": 1,
   "packages/harness/src/agent/runtime/run/validationModel.ts": 2,
   "packages/harness/src/agent/runtime/RunHistory.ts": 1,
   "packages/harness/src/controllers/session/Database.ts": 4,

@@ -9,6 +9,7 @@ import {
   chooseReasoning,
   CODEX_ROUTE_EFFORTS,
   defaultReasoningLevel,
+  type ReasoningChoice,
   type ReasoningRequest,
 } from '@texra-ai/llm';
 import type { StateStore } from '@platform/interfaces';
@@ -96,46 +97,27 @@ function routeReasoning(
 }
 
 /**
- * {@link reasoningFor} without logging its substitution note: a check made
- * ahead of the bind (a model switch's admission), which logs it when it runs.
- */
-export const decideReasoning = Effect.fn('decideReasoning')(function* (
-  config: ModelConfig,
-  request: ReasoningRequest,
-  globalState: StateStore,
-  route: ReasoningRoute,
-) {
-  const userEffort = (yield* reasoningEffortOverrides(globalState))[config.ref];
-  const routeEfforts = route.codexSubscription
-    ? CODEX_ROUTE_EFFORTS
-    : undefined;
-  return yield* Effect.try({
-    try: () =>
-      chooseReasoning(routeReasoning(config, route), request, {
-        userEffort,
-        routeEfforts,
-      }),
-    catch: ensureError,
-  });
-});
-
-/**
  * The run's reasoning decision: the model string's own request, else the
  * user's saved level for the model, else the default, for the reasoning the
  * route can control; the Codex subscription narrows the levels. A level the
- * model lacks is substituted and logged; a request it cannot run fails the
- * bind.
+ * model lacks is substituted (the choice's `note` says so); a request the
+ * route cannot carry fails.
  */
-export const reasoningFor = Effect.fn('reasoningFor')(function* (
+export function decideReasoning(
   config: ModelConfig,
   request: ReasoningRequest,
-  globalState: StateStore,
+  userEffort: ReasoningEffort | undefined,
   route: ReasoningRoute,
-) {
-  const choice = yield* decideReasoning(config, request, globalState, route);
-  if (choice.note !== undefined) yield* Effect.logInfo(choice.note);
-  return choice;
-});
+): Effect.Effect<ReasoningChoice, Error> {
+  return Effect.try({
+    try: () =>
+      chooseReasoning(routeReasoning(config, route), request, {
+        userEffort,
+        routeEfforts: route.codexSubscription ? CODEX_ROUTE_EFFORTS : undefined,
+      }),
+    catch: ensureError,
+  });
+}
 
 /**
  * The reasoning column of a model row: the user's saved level, else the

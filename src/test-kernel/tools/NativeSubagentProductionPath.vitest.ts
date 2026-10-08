@@ -29,14 +29,29 @@ import {
   TurnResultSchema,
 } from '@texra-ai/llm';
 
-const modelBindingMocks = vi.hoisted(() => ({
+const bindingMocks = vi.hoisted(() => ({
   bindModel: vi.fn(),
 }));
 
-vi.mock('@agent/runtime/run/modelBinding', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/runtime/run/modelBinding')>()),
-  bindModel: modelBindingMocks.bindModel,
-}));
+// Every run binds its model through the scripted binder: model access is
+// the one seam between a run and its provider.
+vi.mock('@agent/runtime/modelAccess/ModelAccess', async (importActual) => {
+  const actual =
+    await importActual<
+      typeof import('@agent/runtime/modelAccess/ModelAccess')
+    >();
+  const { Effect: E, Layer: L } = await import('effect');
+  return {
+    ...actual,
+    modelAccessLayer: () =>
+      L.succeed(actual.ModelAccess, {
+        bind: (request) => bindingMocks.bindModel(request),
+        admit: () => E.succeed(null),
+        credentialSwitch: () => E.succeed(null),
+        delivery: () => E.succeed('foreground'),
+      }),
+  };
+});
 
 // Local imports - agent runtime
 import { refresh } from '@agent/index';
@@ -47,7 +62,6 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import { offeredBy } from '@agent/runtime/loop/step';
-import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import type { Message } from '@agent/runtime/loop/rows';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
@@ -57,6 +71,7 @@ import { type SessionHandle } from '@agent/runtime/SessionHandle';
 // Local imports - shared/runtime boundaries
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { RunToolCall } from '@agent/runtime/RunCall';
+import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { launchDesktopAgent } from '@desktop/main/desktopAgentLaunch';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
@@ -522,7 +537,7 @@ async function launchWaitingChild(options: {
   readonly observedRequests: ObservedRequest[];
 }> {
   const observedRequests: ObservedRequest[] = [];
-  modelBindingMocks.bindModel.mockImplementation(
+  bindingMocks.bindModel.mockImplementation(
     (input: { readonly config: BoundModel['config'] }) =>
       Effect.succeed(
         scriptedBoundModel(
@@ -691,7 +706,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
         const firstHandle = session.runs.getHandle(runId);
-        const initialBindings = modelBindingMocks.bindModel.mock.calls.length;
+        const initialBindings = bindingMocks.bindModel.mock.calls.length;
         yield* waitForParentTurns(1);
         const budget = yield* session.runs.childRunBudget(1);
         expect(yield* budget.takeIfAvailable(1)).toBe(true);
@@ -705,9 +720,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result B.'));
         yield* waitForParentTurns(2);
         expect(session.runs.getHandle(runId)).toBe(firstHandle);
-        expect(modelBindingMocks.bindModel).toHaveBeenCalledTimes(
-          initialBindings,
-        );
+        expect(bindingMocks.bindModel).toHaveBeenCalledTimes(initialBindings);
 
         // The next turn asks the model with the follow-up as its last message
         // and turn 1's answer still in the history it carries.
@@ -834,7 +847,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(childTurns).toHaveLength(0);
         yield* session.runs.stop(runId, { reason: 'user' }).settlement;
         yield* Effect.promise(() => waitForClaimRelease(runId));
-        modelBindingMocks.bindModel.mockReturnValueOnce(
+        bindingMocks.bindModel.mockReturnValueOnce(
           Effect.fail(new Error('Recovered model binding failed.')),
         );
         parentTurns.push({ text: 'Parent received failed recovery.' });
@@ -1259,7 +1272,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             text: '<documents>\n<document name="notes.md">\nPolished notes.\n</document>\n</documents>',
           },
         ];
-        modelBindingMocks.bindModel.mockImplementation(
+        bindingMocks.bindModel.mockImplementation(
           (input: { readonly config: BoundModel['config'] }) =>
             Effect.succeed(
               scriptedBoundModel(
@@ -1373,7 +1386,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     () =>
       Effect.gen(function* () {
         const runId = 'b9531b9531b9' as RunId;
-        modelBindingMocks.bindModel.mockImplementation(
+        bindingMocks.bindModel.mockImplementation(
           (input: { readonly config: BoundModel['config'] }) =>
             Effect.succeed(
               scriptedBoundModel(

@@ -5,7 +5,10 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { assert, describe, expect } from 'vitest';
 
 import { apiKeySecretName, selectModel } from '@texra-ai/llm';
-import { bindModel } from '@agent/runtime/run/modelBinding';
+import {
+  ModelAccess,
+  modelAccessLayer,
+} from '@agent/runtime/modelAccess/ModelAccess';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -80,7 +83,7 @@ describe('isOpenRouterRoutingUnsupported', () => {
   });
 });
 
-describe('bindModel', () => {
+describe('ModelAccess.bind', () => {
   setupPlatform({
     globalState: {
       [GlobalStateKey.USE_OPENROUTER]: true,
@@ -96,18 +99,24 @@ describe('bindModel', () => {
       Effect.exit(
         Effect.scoped(
           Effect.provide(
-            Layer.merge(
-              testHttpClientLayer,
-              LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+            modelAccessLayer(hostStores()).pipe(
+              Layer.provide(
+                Layer.merge(
+                  testHttpClientLayer,
+                  LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+                ),
+              ),
             ),
           )(
-            bindModel({
-              modelId,
-              config: selected.config,
-              stores: hostStores(),
-              textOnly: true,
-              temperature: 0,
-            }),
+            Effect.flatMap(ModelAccess, (access) =>
+              access.bind({
+                modelId,
+                config: selected.config,
+                declinedRoutes: [],
+                textOnly: true,
+                temperature: 0,
+              }),
+            ),
           ),
         ),
       ),

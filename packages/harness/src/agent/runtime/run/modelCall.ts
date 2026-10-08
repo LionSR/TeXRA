@@ -15,7 +15,11 @@ import {
 } from '@texra-ai/llm';
 
 import type { AgentTrace } from '@agent/trace';
-import type { PlatformSecrets } from '@platform/secrets';
+import {
+  failureInfo,
+  type CallFailure,
+} from '@agent/runtime/modelAccess/failureInfo';
+import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type {
   FailedNext,
@@ -28,10 +32,7 @@ import { UsageLog } from '@shared/usageLog';
 import { sha256 } from '@utils/core/idHash';
 
 import { runInvocation, type RouteRetries } from './invocation';
-import { AttemptFailed, classifyModelFailure } from './modelFailure';
 import { priceTurnUsage, reportUsage, type UsageAttribution } from './pricing';
-import type { HttpClient } from 'effect/http';
-import type { BoundModel } from './modelBinding';
 
 /** A completed call and its priced usage (`null`: none reported). */
 export interface CallResult {
@@ -44,16 +45,17 @@ export interface ModelCall<R = never> {
   readonly purpose: 'compaction' | 'helper';
   /** The binding in force, read again before every attempt. */
   readonly binding: Effect.Effect<BoundModel>;
-  /** Replace a binding a failure killed or a refresh renewed; a failure
-   *  ends the call (`runInvocation`'s `rebound`). */
+  /** Replace a binding a failure killed, or one whose subscription token
+   *  must be `renew`ed; a failure ends the call (`runInvocation`'s
+   *  `rebound`). */
   readonly reacquire: (
     failed: BoundModel,
-  ) => Effect.Effect<Result.Result<unknown, Error>, never, R>;
+    renew: boolean,
+  ) => Effect.Effect<Result.Result<unknown, CallFailure>, never, R>;
   /** A foreground request; each attempt prepares it on its binding. */
   readonly request: TurnRequest;
   /** The session's settings: usage consent reads them. */
   readonly settings: SettingsStores;
-  readonly secrets: PlatformSecrets;
   readonly attribution: UsageAttribution;
   /** Automatic retries; the binding's when absent. */
   readonly retries?: number;
@@ -87,8 +89,8 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
   call: ModelCall<R>,
 ): Effect.fn.Return<
   CallResult,
-  Error,
-  UsageLog | R | HttpClient.HttpClient | RouteRetries
+  CallFailure | Error,
+  UsageLog | R | RouteRetries
 > {
   const usageLog = yield* UsageLog;
   // The trace's sinks are synchronous; with no trace, lines queue here and
@@ -119,17 +121,11 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
       requests: {},
     })),
     binding: call.binding,
-    rebind: (_credentials, failed) => call.reacquire(failed),
+    rebind: (credentials, failed) =>
+      call.reacquire(failed, credentials === 'renewed'),
     attempt: (bound, ref) =>
       Effect.gen(function* () {
-        const prepared = yield* bound.model.prepareTurn(call.request).pipe(
-          Effect.mapError(
-            (cause) =>
-              new AttemptFailed({
-                failure: classifyModelFailure(cause, bound),
-              }),
-          ),
-        );
+        const prepared = yield* bound.model.prepareTurn(call.request);
         if (prepared.mode !== 'foreground') {
           return yield* Effect.die(
             new Error(`A ${call.purpose} call prepared as background work.`),
@@ -148,16 +144,7 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
           origin: bound.origin,
         });
         const started = yield* Clock.currentTimeMillis;
-        const turn = yield* completedTurn(
-          bound.model.streamTurn(prepared),
-        ).pipe(
-          Effect.mapError(
-            (cause) =>
-              new AttemptFailed({
-                failure: classifyModelFailure(cause, bound),
-              }),
-          ),
-        );
+        const turn = yield* completedTurn(bound.model.streamTurn(prepared));
         const usage = priceTurnUsage(
           bound,
           turn.usage,
@@ -172,23 +159,23 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
         );
         return { turn, usage };
       }),
-    failed: (ref, failure, next) =>
+    failed: (ref, { error, unsent }, next, bound) =>
       Effect.gen(function* () {
-        if (call.record !== null)
-          yield* call.record.failed(ref, failure.info, next);
+        const info = failureInfo(error, bound.config.provider, { unsent });
+        if (call.record !== null) yield* call.record.failed(ref, info, next);
         yield* fold({
           kind: 'failed',
           invocation: ref,
           purpose: 'summary',
-          error: failure.info,
+          error: info,
           next,
         });
+        return info;
       }),
     asker: null,
     // The request carries no continuation.
     chains: () => Effect.succeed(false),
     retries: call.retries ?? (yield* call.binding).automaticRetries,
-    secrets: call.secrets,
     logger,
   }).pipe(Effect.ensuring(flush));
   if ('turn' in ended) return ended;

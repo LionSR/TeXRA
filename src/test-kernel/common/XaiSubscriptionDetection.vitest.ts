@@ -2,7 +2,7 @@ import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it } from 'vitest';
 import { ModelError } from '@texra-ai/llm';
 
-import { classifyModelFailure } from '@agent/runtime/run/modelFailure';
+import { failureInfo } from '@agent/runtime/modelAccess/failureInfo';
 import {
   judgeFailure,
   type BillingRoute,
@@ -30,7 +30,7 @@ function xaiFailure(
     error: body,
     ...(status === undefined ? {} : { status }),
   });
-  return classifyModelFailure(
+  return failureInfo(
     judgeFailure(
       new ModelError({
         kind: 'provider-rejection',
@@ -40,8 +40,8 @@ function xaiFailure(
       }),
       route,
     ),
-    { config: { provider: ModelProvider.XAI } },
-  ).formatted;
+    ModelProvider.XAI,
+  );
 }
 
 describe('the Grok subscription usage limit', () => {

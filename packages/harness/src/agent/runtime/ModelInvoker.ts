@@ -27,13 +27,13 @@ import {
   Exit,
   type FileSystem,
   Layer,
+  Result,
   Stream,
   SynchronizedRef,
 } from 'effect';
 import {
   ModelError,
   type BackgroundEvent,
-  type ResolvedTurn,
   type TurnEvent,
   type TurnRequest,
   type TurnResult,
@@ -46,9 +46,12 @@ import {
   logProviderError,
   type StreamHandle,
 } from '@agent/trace';
-import { routeCredentialSwitch } from '@model/modelRoute';
+import { failureInfo } from '@agent/runtime/modelAccess/failureInfo';
+import {
+  ModelAccess,
+  type BoundModel,
+} from '@agent/runtime/modelAccess/ModelAccess';
 import type { StateReadFailed } from '@platform/interfaces';
-import type { LanguageModel } from '@platform/languageModel';
 import { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
@@ -66,12 +69,6 @@ import { generateShortId } from '@utils/core';
 
 import { policyDecidedRows } from './requestPolicy';
 import { AgentRun } from './run/AgentRun';
-import {
-  backgroundDelivery,
-  bindModel,
-  type BoundModel,
-} from './run/modelBinding';
-import { AttemptFailed, classifyModelFailure } from './run/modelFailure';
 import { runInvocation, type RouteRetries } from './run/invocation';
 import { callModel, type CallResult } from './run/modelCall';
 import { observeBackground, submitAndObserve } from './run/backgroundTurn';
@@ -88,7 +85,6 @@ import {
 import { dispatchFactsFor, localCallsOf } from './run/tools';
 import { rowAggregate, positionRow } from './loop/rows';
 import type { CellError, RunCell } from './loop/runProgram';
-import type { HttpClient } from 'effect/http';
 
 /** The answer the invoker gives itself for an automatic quota fallback. */
 const PERSONAL_RETRY = {
@@ -165,8 +161,7 @@ type InvocationOutcome =
 export type InvokeError = CellError | StateReadFailed;
 
 /** What an invocation reads from its run's context. */
-type InvokeServices =
-  FileSystem.FileSystem | LanguageModel | HttpClient.HttpClient | RouteRetries;
+type InvokeServices = FileSystem.FileSystem | RouteRetries;
 
 export class ModelInvoker extends Context.Service<
   ModelInvoker,
@@ -191,7 +186,7 @@ export class ModelInvoker extends Context.Service<
 export const modelInvokerLayer = (): Layer.Layer<
   ModelInvoker,
   never,
-  AgentRun | UsageLog | LanguageModel | HttpClient.HttpClient | RouteRetries
+  AgentRun | UsageLog | ModelAccess | RouteRetries
 > =>
   Layer.effect(
     ModelInvoker,
@@ -200,8 +195,8 @@ export const modelInvokerLayer = (): Layer.Layer<
       const { runId, session, logger } = run;
       const aggregateId = rowAggregate(runId);
       const usageLog = yield* UsageLog;
-      type Binders = LanguageModel | HttpClient.HttpClient | RouteRetries;
-      const binders = yield* Effect.context<Binders>();
+      const access = yield* ModelAccess;
+      const gate = yield* Effect.context<RouteRetries>();
       const attribution = {
         agentName: usageAgentName(run.config.agent, run.config.agentSource),
         runId,
@@ -225,18 +220,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           roots: session.roots,
         });
 
-      /** Recheck the binding's background policy against live session settings. */
-      const backgroundRequested = (bound: BoundModel) =>
-        backgroundDelivery(
-          {
-            backgroundCapable: bound.backgroundCapable,
-            protocol: bound.origin.protocol,
-            modelName: bound.config.id,
-            textOnly: bound.textOnly,
-          },
-          session.roots,
-        );
-
       /** The semantic request an attempt admits: the folded history, the
        *  caller's system and tools, the run as its cache key, and the last
        *  response's continuation while the binding matches its whole origin.
@@ -258,33 +241,25 @@ export const modelInvokerLayer = (): Layer.Layer<
         cacheKey: run.runId,
       });
 
-      const failAttempt = (
-        cause: unknown,
-        bound: BoundModel,
-        partialText?: string,
-      ) =>
-        Effect.fail(
-          new AttemptFailed({
-            failure: classifyModelFailure(cause, bound, partialText),
+      /**
+       * The tail of the text the failing attempt had streamed, which its
+       * `failed` row carries for the retry surface. Attempts of one run go
+       * one at a time, so the last one written is the failure's.
+       */
+      let streamedTail = '';
+      const failAttempt = (error: ModelError, streamedText = '') =>
+        Effect.suspend(() => {
+          streamedTail = streamedText;
+          return Effect.fail(error);
+        });
+
+      /** Prepare one attempt's turn: a failure is the attempt's own, unsent. */
+      const prepareAttempt = (bound: BoundModel, request: TurnRequest) =>
+        Effect.tapError(bound.model.prepareTurn(request), () =>
+          Effect.sync(() => {
+            streamedTail = '';
           }),
         );
-
-      /**
-       * Prepare one attempt's turn. A preparation that fails is this
-       * attempt's own failure, unsent; an interruption stays an interruption.
-       */
-      const prepareAttempt = Effect.fn('ModelInvoker.prepare')(function* (
-        bound: BoundModel,
-        request: TurnRequest,
-      ): Effect.fn.Return<ResolvedTurn, AttemptFailed> {
-        const prepared = yield* Effect.exit(bound.model.prepareTurn(request));
-        if (Exit.isFailure(prepared)) {
-          if (Cause.hasInterrupts(prepared.cause))
-            return yield* Effect.interrupt;
-          return yield* failAttempt(Cause.squash(prepared.cause), bound);
-        }
-        return prepared.value;
-      });
 
       interface AttemptTrace {
         readonly thinking: StreamHandle;
@@ -374,11 +349,11 @@ export const modelInvokerLayer = (): Layer.Layer<
         bound: BoundModel,
         trace: AttemptTrace,
         started: number,
-        streamed: Exit.Exit<void, unknown>,
+        streamed: Exit.Exit<void, ModelError | InvokeError>,
         completed: AttemptOutcome,
       ): Effect.fn.Return<
         InvocationResponse,
-        AttemptFailed | InvokeError,
+        ModelError | InvokeError,
         FileSystem.FileSystem
       > {
         if (Exit.isFailure(streamed)) {
@@ -388,8 +363,12 @@ export const modelInvokerLayer = (): Layer.Layer<
             return yield* Effect.interrupt;
           const refused = findStorageRefusal(streamed.cause);
           if (refused) return yield* Effect.fail(refused);
-          const cause = Cause.squash(streamed.cause);
-          return yield* failAttempt(cause, bound, completed.streamedText);
+          const found = Cause.findError(streamed.cause);
+          if (Result.isFailure(found))
+            return yield* Effect.die(Cause.squash(streamed.cause));
+          return yield* found.success instanceof ModelError
+            ? failAttempt(found.success, completed.streamedText)
+            : Effect.fail(found.success);
         }
         const responseTimeMs = (yield* Clock.currentTimeMillis) - started;
         const turn = completed.value;
@@ -401,7 +380,6 @@ export const modelInvokerLayer = (): Layer.Layer<
               kind: 'malformed-output',
               message: EMPTY_RESPONSE_ERROR_MESSAGE,
             }),
-            bound,
             completed.streamedText,
           );
         }
@@ -474,7 +452,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         bound: BoundModel,
       ): Effect.fn.Return<
         InvocationResponse,
-        AttemptFailed | InvokeError,
+        ModelError | InvokeError,
         FileSystem.FileSystem
       > {
         const state = yield* cell.current;
@@ -482,7 +460,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           state,
           request,
           bound,
-          (yield* backgroundRequested(bound)) ? 'background' : 'foreground',
+          yield* access.delivery(bound),
         );
         let resolved = yield* prepareAttempt(bound, turnRequest);
         yield* saveDebug(
@@ -505,7 +483,6 @@ export const modelInvokerLayer = (): Layer.Layer<
                 kind: 'context-overflow',
                 message: `Input is ${inputTokens} tokens, which exceeds the model's context window of ${bound.contextWindow} tokens.`,
               }),
-              bound,
             );
           }
           const { controls } = resolved;
@@ -592,7 +569,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           accepted: NonNullable<Attempt['accepted']>,
         ): Effect.fn.Return<
           InvocationResponse,
-          AttemptFailed | InvokeError,
+          ModelError | InvokeError,
           FileSystem.FileSystem
         > {
           const background = bound.model.background;
@@ -603,7 +580,6 @@ export const modelInvokerLayer = (): Layer.Layer<
                 message:
                   'The run resumed onto a model that cannot observe its accepted background operation.',
               }),
-              bound,
             );
           }
           const resolved = admittedTurn(yield* cell.current);
@@ -639,28 +615,28 @@ export const modelInvokerLayer = (): Layer.Layer<
        * the run declines as its rows now stand; a failure keeps it, loudly.
        */
       const rebind =
-        (cell: RunCell) => (selection: RetryCredentials, failed: BoundModel) =>
+        (cell: RunCell) =>
+        (selection: RetryCredentials | 'renewed', failed: BoundModel) =>
           Effect.flatMap(cell.current, ({ declinedRoutes }) =>
             run.swapModel((current) =>
               // A switch may have landed while the panel waited; never undo it.
               current !== failed
                 ? Effect.succeed(current)
-                : bindModel({
+                : access.bind({
                     modelId: failed.modelId,
                     // A personal-key retry leaves the failed route's overlay
                     // behind (subscription window, prices, PDF admission, a
                     // Kimi coding endpoint) and binds the catalog model.
                     config:
                       selection === 'personal' ? undefined : failed.config,
-                    stores: run.stores,
                     backend: failed.backend,
                     declinedRoutes,
                     textOnly: failed.textOnly,
                     temperature: run.persona.temperature,
+                    renew: selection === 'renewed',
                   }),
             ),
           ).pipe(
-            Effect.provideContext(binders),
             Effect.tapError((error) =>
               Effect.sync(() =>
                 logger.warn('Failed to refresh the model binding', {
@@ -697,11 +673,10 @@ export const modelInvokerLayer = (): Layer.Layer<
         };
         if (next.kind !== 'ask') return [failed];
         const { requestId } = next;
-        const credentialSwitch = yield* routeCredentialSwitch(
+        const credentialSwitch = yield* access.credentialSwitch(
           bound,
           error,
           (yield* cell.current).declinedRoutes,
-          run.stores.secrets,
         );
         const automatic =
           credentialSwitch?.kind === 'decline-route' &&
@@ -756,19 +731,24 @@ export const modelInvokerLayer = (): Layer.Layer<
             accepted === null
               ? attemptOnce(cell, ref, request, bound)
               : observeAccepted(cell, ref, request, bound, accepted),
-          failed: (ref, failure, next, bound) =>
+          failed: (ref, { error, unsent }, next, bound) =>
             Effect.gen(function* () {
+              const info = failureInfo(error, bound.config.provider, {
+                partialText: unsent ? undefined : streamedTail,
+                unsent,
+              });
               if (next.kind === 'ask' || next.kind === 'stop')
                 yield* logProviderError(
                   logger,
                   next.kind === 'ask'
                     ? 'Model request failed'
                     : 'Model request failed (no retry available)',
-                  failure.formatted,
+                  { ...info, rawErrorBody: error.cause },
                 );
               yield* cell.append(
-                yield* failedRows(cell, ref, failure.info, next, bound),
+                yield* failedRows(cell, ref, info, next, bound),
               );
+              return info;
             }),
           asker: {
             requestId: () => `retry-${generateShortId()}`,
@@ -819,7 +799,6 @@ export const modelInvokerLayer = (): Layer.Layer<
                 'continuation' in chainedContinuation(state, bound.origin),
             ),
           retries: (yield* SynchronizedRef.get(run.model)).automaticRetries,
-          secrets: run.stores.secrets,
           logger,
         });
         if (ended.kind === 'response') return ended;
@@ -835,10 +814,10 @@ export const modelInvokerLayer = (): Layer.Layer<
         callModel({
           purpose: 'compaction',
           binding: SynchronizedRef.get(run.model),
-          reacquire: (failed) => rebind(cell)('configured', failed),
+          reacquire: (failed, renew) =>
+            rebind(cell)(renew ? 'renewed' : 'configured', failed),
           request,
           settings: session.roots,
-          secrets: run.stores.secrets,
           attribution,
           logger,
           record: {
@@ -874,7 +853,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           },
         }).pipe(
           Effect.provideService(UsageLog, usageLog),
-          Effect.provideContext(binders),
+          Effect.provideContext(gate),
         );
 
       return { invoke, call };

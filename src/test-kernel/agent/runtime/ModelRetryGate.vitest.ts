@@ -191,7 +191,7 @@ describe('ModelRetryGate', () => {
   it.effect('keeps model rate limits off the shared wire route', () =>
     Effect.gen(function* () {
       const gate = yield* ModelRetryGate.make;
-      const modelRoutes = (modelRoute: string): [RoutePolicy, RoutePolicy] => [
+      const routesOf = (modelRoute: string): [RoutePolicy, RoutePolicy] => [
         {
           key: modelRoute,
           classifyFailure: (error) => (error === RATE_LIMIT ? {} : undefined),
@@ -205,18 +205,18 @@ describe('ModelRetryGate', () => {
 
       expect(
         yield* Effect.flip(
-          gated(gate, modelRoutes(MODEL_ROUTE), Effect.fail(RATE_LIMIT)),
+          gated(gate, routesOf(MODEL_ROUTE), Effect.fail(RATE_LIMIT)),
         ),
       ).toBe(RATE_LIMIT);
 
       const limitedAttempt = admitted();
       const limited = yield* Effect.forkChild(
-        gated(gate, modelRoutes(MODEL_ROUTE), limitedAttempt.attempt),
+        gated(gate, routesOf(MODEL_ROUTE), limitedAttempt.attempt),
       );
       const otherModelAttempt = admitted();
       yield* gated(
         gate,
-        modelRoutes(OTHER_MODEL_ROUTE),
+        routesOf(OTHER_MODEL_ROUTE),
         otherModelAttempt.attempt,
       );
 
@@ -233,7 +233,7 @@ describe('ModelRetryGate', () => {
     () =>
       Effect.gen(function* () {
         const gate = yield* ModelRetryGate.make;
-        const modelRoutes = (
+        const routesOf = (
           modelRoute: string,
           modelRetryAfterMs?: number,
         ): [RoutePolicy, RoutePolicy] => [
@@ -253,26 +253,22 @@ describe('ModelRetryGate', () => {
 
         expect(
           yield* Effect.flip(
-            gated(
-              gate,
-              modelRoutes(MODEL_ROUTE, 10_000),
-              Effect.fail(RATE_LIMIT),
-            ),
+            gated(gate, routesOf(MODEL_ROUTE, 10_000), Effect.fail(RATE_LIMIT)),
           ),
         ).toBe(RATE_LIMIT);
         expect(
           yield* Effect.flip(
-            gated(gate, modelRoutes(OTHER_MODEL_ROUTE), Effect.fail(TRANSIENT)),
+            gated(gate, routesOf(OTHER_MODEL_ROUTE), Effect.fail(TRANSIENT)),
           ),
         ).toBe(TRANSIENT);
 
         const limitedAttempt = admitted();
         const limited = yield* Effect.forkChild(
-          gated(gate, modelRoutes(MODEL_ROUTE, 10_000), limitedAttempt.attempt),
+          gated(gate, routesOf(MODEL_ROUTE, 10_000), limitedAttempt.attempt),
         );
         const siblingAttempt = admitted();
         const sibling = yield* Effect.forkChild(
-          gated(gate, modelRoutes(OTHER_MODEL_ROUTE), siblingAttempt.attempt),
+          gated(gate, routesOf(OTHER_MODEL_ROUTE), siblingAttempt.attempt),
         );
 
         yield* TestClock.adjust(1000);

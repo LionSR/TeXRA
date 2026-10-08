@@ -12,11 +12,16 @@ import { randomUUID } from 'node:crypto';
 
 import { StatusCodes } from 'http-status-codes';
 import { Cause, Context, Effect, Exit, Result } from 'effect';
+import { ModelError } from '@texra-ai/llm';
 
 import type { AgentTrace } from '@agent/trace';
-import { hasMissingApiKeyErrorMarker } from '@common/errors/sdkError/errorMetadata';
-import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
-import type { PlatformSecrets } from '@platform/secrets';
+import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
+import {
+  offersRetry,
+  routePolicies,
+  type CallFailure,
+} from '@agent/runtime/modelAccess/failureInfo';
+import { RouteUnavailable } from '@common/errors/agentErrors';
 import {
   type FailedNext,
   type InvocationRef,
@@ -33,16 +38,7 @@ import {
 } from '@shared/session/inFlight';
 import type { RunPosition } from '@shared/session/runRows';
 
-import { refreshRejectedSubscription } from '../modelRoutes';
-import {
-  AttemptFailed,
-  bindingFailure,
-  routePolicies,
-  type ModelFailure,
-} from './modelFailure';
-import type { HttpClient } from 'effect/http';
 import type { ModelRetryGate } from '../ModelRetryGate';
-import type { BoundModel } from './modelBinding';
 
 /** The process's one retry gate, served by `processLayer`: a 429 cools a
  *  credential for every run of every project. */
@@ -54,8 +50,19 @@ export class RouteRetries extends Context.Service<
 /** Base delay between automatic attempts; the gate scales its own on top. */
 const RETRY_BACKOFF_MS = 1000;
 
-const isAttemptFailed = (error: unknown): error is AttemptFailed =>
-  error instanceof AttemptFailed;
+/** A failed attempt: llm's verdict, or no route to send it on. */
+const isCallFailure = (error: unknown): error is CallFailure =>
+  error instanceof ModelError || error instanceof RouteUnavailable;
+
+/**
+ * One failure of attempt `ref`, as its driver records it. `unsent` marks a
+ * binding that could not be replaced (a renewal or a rebind that failed):
+ * nothing was sent, and no retry repeats it.
+ */
+export interface AttemptFailure {
+  readonly error: CallFailure;
+  readonly unsent: boolean;
+}
 
 /** Where an invocation stands: its attempts, and the run's requests a
  *  person answers (none off a run). */
@@ -84,25 +91,27 @@ export interface InvocationDriver<A, E, R> {
   /** The binding in force, read again before every attempt. */
   readonly binding: Effect.Effect<BoundModel>;
   /** Replace `failed`: after a person's retry answer (on the credentials
-   *  it picked), a refreshed credential, or a connection a failure killed. */
+   *  it picked), a renewed subscription token, or a connection a failure
+   *  killed. */
   readonly rebind: (
-    credentials: RetryCredentials,
+    credentials: RetryCredentials | 'renewed',
     failed: BoundModel,
-  ) => Effect.Effect<Result.Result<unknown, Error>, never, R>;
+  ) => Effect.Effect<Result.Result<unknown, CallFailure>, never, R>;
   /** One billed attempt `ref` on `bound`, its attempt row first, or the
    *  observation of the operation it left accepted (unbilled). */
   readonly attempt: (
     bound: BoundModel,
     ref: InvocationRef,
     accepted: Attempt['accepted'],
-  ) => Effect.Effect<A, AttemptFailed | E, R>;
-  /** Record the failure of attempt `ref` and the move after it. */
+  ) => Effect.Effect<A, CallFailure | E, R>;
+  /** Record the failure of attempt `ref` and the move after it; the
+   *  failure as recorded. */
   readonly failed: (
     ref: InvocationRef,
-    failure: ModelFailure,
+    failure: AttemptFailure,
     next: FailedNext,
     bound: BoundModel,
-  ) => Effect.Effect<void, E, R>;
+  ) => Effect.Effect<RetryErrorInfo, E, R>;
   /** A turn's person; null where nobody can be asked. */
   readonly asker: Asker<E, R> | null;
   /** Whether an attempt on `bound` sends a continuation, which a vendor
@@ -110,7 +119,6 @@ export interface InvocationDriver<A, E, R> {
   readonly chains: (bound: BoundModel) => Effect.Effect<boolean>;
   /** Automatic resends per invocation. */
   readonly retries: number;
-  readonly secrets: PlatformSecrets;
   readonly logger: Pick<AgentTrace, 'warn' | 'debug'>;
 }
 
@@ -120,7 +128,7 @@ export type InvocationEnd =
       readonly kind: 'failed';
       readonly error: RetryErrorInfo;
       /** The live failure, when this process saw it. */
-      readonly cause: Error | null;
+      readonly cause: CallFailure | null;
     }
   | { readonly kind: 'cancelled' };
 
@@ -136,36 +144,33 @@ const nextRef = (invocation: Invocation | null): InvocationRef =>
 /**
  * The once-per-invocation renewal of a subscription access token the
  * provider rejects before its stored expiry (revoked, or expired
- * server-side): refreshed, and the binding rebound on the new session.
- * `true` when the attempt may go again on it. A refresh or rebind that fails
- * takes the stale 401's place as a terminal failure, so the user reads the
- * "sign in again" instruction rather than "token is expired", and no retry
- * resends the rejected token.
+ * server-side): the binding rebound on a refreshed session. `true` when the
+ * attempt may go again on it. A renewal that fails takes the stale 401's
+ * place as an unsent failure, so the user reads the "sign in again"
+ * instruction rather than "token is expired", and no retry resends the
+ * rejected token.
  */
 const credentialRenewal = <R>(
-  secrets: PlatformSecrets,
   rebind: InvocationDriver<unknown, unknown, R>['rebind'],
 ) => {
   let spent = false;
   return (
-    failure: ModelFailure,
+    failure: AttemptFailure,
     bound: BoundModel,
-  ): Effect.Effect<ModelFailure | true, never, R | HttpClient.HttpClient> => {
+  ): Effect.Effect<AttemptFailure | true, never, R> => {
     const route = bound.usageRoute;
     if (
       spent ||
-      failure.formatted.statusCode !== StatusCodes.UNAUTHORIZED ||
+      !(failure.error instanceof ModelError) ||
+      failure.error.status !== StatusCodes.UNAUTHORIZED ||
       (route !== 'chatgpt-subscription' && route !== 'xai-subscription')
     )
       return Effect.succeed(failure);
     spent = true;
-    return refreshRejectedSubscription(route, secrets).pipe(
-      Effect.andThen(rebind('configured', bound)),
-      Effect.flatMap(Effect.fromResult),
-      Effect.as(true as const),
-      Effect.catch((error: Error) =>
-        Effect.succeed(bindingFailure(error, bound)),
-      ),
+    return Effect.map(rebind('renewed', bound), (result) =>
+      Result.isSuccess(result)
+        ? (true as const)
+        : { error: result.failure, unsent: true },
     );
   };
 };
@@ -186,7 +191,7 @@ const rebound = Effect.fn('ModelInvoker.rebound')(function* <A, E, R>(
   if (move.retry === null && !dead) return true;
   const result = yield* driver.rebind(move.retry ?? 'configured', bound);
   if (Result.isSuccess(result)) return true;
-  const failure = bindingFailure(result.failure, bound);
+  const failure = { error: result.failure, unsent: true };
   const next = yield* moveAfter(driver, failure, ref, bound, false);
   yield* driver.failed(ref, failure, next, bound);
   return false;
@@ -203,7 +208,7 @@ const tryAttempt = <A, E, R>(
   move: Extract<Move, { kind: 'send' | 'observe' }>,
   ref: InvocationRef,
   bound: BoundModel,
-): Effect.Effect<{ readonly ok: A } | AttemptFailed, E, R | RouteRetries> =>
+): Effect.Effect<{ readonly ok: A } | AttemptFailure, E, R | RouteRetries> =>
   Effect.exit(
     move.kind === 'send'
       ? Effect.flatMap(RouteRetries, (gate) =>
@@ -218,15 +223,15 @@ const tryAttempt = <A, E, R>(
       : driver.attempt(bound, ref, move.attempt.accepted),
   ).pipe(
     Effect.flatMap(
-      (exit): Effect.Effect<{ readonly ok: A } | AttemptFailed, E> => {
+      (exit): Effect.Effect<{ readonly ok: A } | AttemptFailure, E> => {
         if (Exit.isSuccess(exit)) return Effect.succeed({ ok: exit.value });
         if (Cause.hasInterrupts(exit.cause)) return Effect.interrupt;
         const found = Cause.findError(exit.cause);
         if (Result.isFailure(found))
           return Effect.die(Cause.squash(exit.cause));
         const error = found.success;
-        return isAttemptFailed(error)
-          ? Effect.succeed(error)
+        return isCallFailure(error)
+          ? Effect.succeed({ error, unsent: false })
           : Effect.fail(error);
       },
     ),
@@ -254,26 +259,26 @@ const consult = <A, E, R>(
 const pauseBefore = <A, E, R>(
   driver: InvocationDriver<A, E, R>,
   next: FailedNext,
-  failure: ModelFailure,
+  failure: AttemptFailure,
 ): Effect.Effect<void> => {
   if (next.kind === 'unchain')
     driver.logger.warn(
-      `Chained response gone (${failure.info.message}); retrying once with the full transcript.`,
+      `Chained response gone (${failure.error.message}); retrying once with the full transcript.`,
     );
   else if (next.kind === 'retry')
     driver.logger.debug(
       `Model request failed; automatic retry in ${RETRY_BACKOFF_MS}ms.`,
-      { data: failure.info.message },
+      { data: failure.error.message },
     );
   else return Effect.void;
   return Effect.sleep(RETRY_BACKOFF_MS);
 };
 
 /** The move after `failure` of attempt `ref`, read off the attempts
- *  before it, the failure's facts and the budget. */
+ *  before it, llm's verdict and the budget. */
 const moveAfter = <A, E, R>(
   driver: InvocationDriver<A, E, R>,
-  failure: ModelFailure,
+  { error, unsent }: AttemptFailure,
   ref: InvocationRef,
   bound: BoundModel,
   observed: boolean,
@@ -282,15 +287,20 @@ const moveAfter = <A, E, R>(
     failedNext(
       failuresBefore(invocation, ref),
       {
-        abort: isUserAbort(failure.error),
         // A 404 on a request that chained nothing is an ordinary failure,
         // and a failed observation is never resubmitted unasked: the work
         // it watched was already billed.
-        unchain: !observed && chains && failure.storedResponseGone,
-        automatic: !observed && failure.autoRetryable,
-        offered:
-          failure.formatted.userRetryable &&
-          !hasMissingApiKeyErrorMarker(failure.error),
+        unchain:
+          !observed &&
+          chains &&
+          error instanceof ModelError &&
+          error.kind === 'continuation-gone',
+        automatic:
+          !observed &&
+          !unsent &&
+          error instanceof ModelError &&
+          error.retryable,
+        offered: !unsent && offersRetry(error),
       },
       driver.retries,
       driver.asker?.requestId() ?? null,
@@ -315,24 +325,21 @@ const ended = (
 const afterFailure = <A, E, R>(
   driver: InvocationDriver<A, E, R>,
   renew: ReturnType<typeof credentialRenewal<R>>,
-  failed: ModelFailure,
+  failed: AttemptFailure,
   move: Extract<Move, { kind: 'send' | 'observe' }>,
   ref: InvocationRef,
   bound: BoundModel,
 ): Effect.Effect<
-  { readonly failure: ModelFailure; readonly next: FailedNext } | null,
+  { readonly failure: AttemptFailure; readonly next: FailedNext } | null,
   never,
-  R | HttpClient.HttpClient
+  R
 > =>
   renew(failed, bound).pipe(
     Effect.flatMap((renewed) => {
       if (renewed !== true)
         return Effect.map(
           moveAfter(driver, renewed, ref, bound, move.kind === 'observe'),
-          (next) => ({
-            failure: renewed,
-            next,
-          }),
+          (next) => ({ failure: renewed, next }),
         );
       return Effect.succeed(
         move.kind === 'observe'
@@ -352,12 +359,8 @@ export const runInvocation = Effect.fn('ModelInvoker.invocation')(function* <
   R,
 >(
   driver: InvocationDriver<A, E, R>,
-): Effect.fn.Return<
-  A | InvocationEnd,
-  E,
-  R | HttpClient.HttpClient | RouteRetries
-> {
-  const renew = credentialRenewal(driver.secrets, driver.rebind);
+): Effect.fn.Return<A | InvocationEnd, E, R | RouteRetries> {
+  const renew = credentialRenewal(driver.rebind);
   // A renewed credential observes the same operation again, unrecorded;
   // `failedOn` is the binding the last attempt went out on.
   let again: Move | null = null;
@@ -378,22 +381,15 @@ export const runInvocation = Effect.fn('ModelInvoker.invocation')(function* <
     failedOn = bound;
     const tried = yield* tryAttempt(driver, move, ref, bound);
     if ('ok' in tried) return tried.ok;
-    const after = yield* afterFailure(
-      driver,
-      renew,
-      tried.failure,
-      move,
-      ref,
-      bound,
-    );
+    const after = yield* afterFailure(driver, renew, tried, move, ref, bound);
     if (after === null) {
       again = move;
       continue;
     }
     const { failure, next } = after;
-    yield* driver.failed(ref, failure, next, bound);
+    const recorded = yield* driver.failed(ref, failure, next, bound);
     if (next.kind === 'stop')
-      return { kind: 'failed', error: failure.info, cause: failure.error };
+      return { kind: 'failed', error: recorded, cause: failure.error };
     if (next.kind === 'cancel') return CANCELLED;
     yield* pauseBefore(driver, next, failure);
   }

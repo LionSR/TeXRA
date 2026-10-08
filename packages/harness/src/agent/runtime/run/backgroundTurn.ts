@@ -14,13 +14,13 @@ import {
   type ResolvedTurn,
   type TurnResult,
 } from '@texra-ai/llm';
+import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import type { InvocationRef } from '@shared/schemas';
 
 import { rowAggregate } from '../loop/rows';
 import type { RunCell } from '../loop/runProgram';
 import type { InvokeError } from '../ModelInvoker';
 import type { AgentRunShape } from './AgentRun';
-import type { BoundModel } from './modelBinding';
 
 type BackgroundTurn = Extract<ResolvedTurn, { mode: 'background' }>;
 type Background = NonNullable<Model['background']>;

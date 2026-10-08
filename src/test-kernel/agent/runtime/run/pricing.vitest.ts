@@ -8,8 +8,8 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { priceTurnUsage } from '@agent/runtime/run/pricing';
+import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 

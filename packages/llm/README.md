@@ -95,7 +95,7 @@ retired acquisition rather than silently selecting a replacement.
 
 ## Who calls it
 
-`packages/harness/src/agent/runtime/run/modelBinding.ts` binds a route to a `Model`, and
+`packages/harness/src/agent/runtime/modelAccess/ModelAccess.ts` binds a route to a `Model`, and
 `packages/harness/src/agent/runtime/ModelInvoker.ts` is the one service that calls it — every
 route, helper, tool-use turn and workflow round included. Retry has two owners
 inside `ModelInvoker` (an automatic route-scoped batch under the session's

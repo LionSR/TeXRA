@@ -32,8 +32,8 @@ import { z } from 'zod';
 import type { FollowUpBatch } from '@agent/followUp/RunInput';
 import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { logUserMessage } from '@agent/trace';
+import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
 import type { ProcessServices } from '@platform/processRuntime';
-import { LanguageModel } from '@platform/languageModel';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
   RUN_OUTCOME,
@@ -124,24 +124,27 @@ const nudge = (text: string) => ({
   content: [{ kind: 'text' as const, text }],
 });
 
+/** What a turn of the loop reads from its run's context. */
+type TurnServices =
+  | AgentRun
+  | RunHistory
+  | ProcessServices
+  | Runs
+  | ModelAccess
+  | WorkspaceFs
+  | StorageFs;
+
 export const runToolUse = Effect.fn('toolUse.run')(function* (
   start: ToolUseStart,
 ): Effect.fn.Return<
   ToolUseResult,
   Error,
-  | AgentRun
-  | RunHistory
-  | ProcessServices
-  | Runs
-  | ModelInvoker
-  | WorkspaceFs
-  | StorageFs
-  | Scope.Scope
+  TurnServices | ModelInvoker | Scope.Scope
 > {
   const run = yield* AgentRun;
   const runs = yield* Runs;
   const invoker = yield* ModelInvoker;
-  const languageModel = yield* LanguageModel;
+  const access = yield* ModelAccess;
   const { runId, session, logger } = run;
   const isChild = () => (runs.getHandle(runId)?.parent ?? null) !== null;
   // A script's run: it opens on the call it was handed and ends when that
@@ -220,7 +223,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           );
         yield* Deferred.await(done);
       }),
-    ...modelSwitchPort(run, languageModel),
+    ...modelSwitchPort(run, access),
   };
   const attach = (): void => {
     if (live) return;
@@ -324,11 +327,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   // ------------------------------------------------------------ the turn
   const runTurn = Effect.fn('toolUse.turn')(function* (
     cell: RunCell,
-  ): Effect.fn.Return<
-    RunExit,
-    Error,
-    AgentRun | RunHistory | ProcessServices | Runs | WorkspaceFs | StorageFs
-  > {
+  ): Effect.fn.Return<RunExit, Error, TurnServices> {
     let state = yield* cell.current;
     // A turn begins at a settled boundary; a resumed one where its rows left.
     const begins = state.phase === 'waiting' || state.phase === 'halted';

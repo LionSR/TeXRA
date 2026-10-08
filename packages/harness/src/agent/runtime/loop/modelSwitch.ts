@@ -6,16 +6,12 @@
 import { Effect, SynchronizedRef } from 'effect';
 
 import { selectModel } from '@texra-ai/llm';
-import { resolveModelRoute, routeBackend } from '@agent/runtime/modelRoutes';
-import { decideReasoning } from '@model/reasoningLevel';
-import { LanguageModel } from '@platform/languageModel';
+import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunState } from '@shared/session/runStateFold';
 
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
-import { bindModel, PROTOCOL_BY_BACKEND } from '../run/modelBinding';
 import { configRow, consumedRows } from './rows';
-import type { HttpClient } from 'effect/http';
 import type { RunCell } from './runProgram';
 
 /** Apply the model switches the run's input queues (the latest wins): the
@@ -31,12 +27,9 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
     beforeSwap: (cell: RunCell) => Effect.Effect<RunState, Error>,
     /** The run's pending requests; its model switches are applied. */
     controls: readonly QueuedFollowUp[],
-  ): Effect.fn.Return<
-    RunState,
-    Error,
-    AgentRun | LanguageModel | HttpClient.HttpClient
-  > {
+  ): Effect.fn.Return<RunState, Error, AgentRun | ModelAccess> {
     const run = yield* AgentRun;
+    const access = yield* ModelAccess;
     const switches = controls.flatMap((f) =>
       f.control?.kind === 'model' ? [{ ...f, model: f.control.model }] : [],
     );
@@ -55,10 +48,9 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
     let switched = state;
     yield* run.swapModel(() =>
       Effect.gen(function* () {
-        const next = yield* bindModel({
+        const next = yield* access.bind({
           modelId: model,
           config: selected.config,
-          stores: run.stores,
           backend: current.backend,
           declinedRoutes: state.declinedRoutes,
           textOnly: current.textOnly,
@@ -78,84 +70,26 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
   },
 );
 
-const MODEL_SWITCH_DIFFERENT_FORMAT_ERROR =
-  'Cannot switch this conversation to a model with a different conversation format. Start a new chat to use that model.';
-const MODEL_SWITCH_DIFFERENT_FORMAT_REASON =
-  'different conversation format; start new chat';
-
 /** The host port's switch methods: whether `model` can replace the run's,
  *  and the admission the loop applies at its next model boundary. */
 export function modelSwitchPort(
   run: AgentRunShape,
-  languageModel: LanguageModel['Service'],
+  access: ModelAccess['Service'],
 ) {
-  /** The switch's route and backend, or why it cannot replace the run's. */
-  const admission = Effect.fn('toolUse.modelSwitchAdmission')(function* (
-    model: string,
-  ) {
-    const current = SynchronizedRef.getUnsafe(run.model);
-    if (current.modelId === model)
-      return { reason: undefined, admitted: undefined };
-    const selected = selectModel(model);
-    if (!selected) {
-      return {
-        reason: `Model ${model} is not registered`,
-        admitted: undefined,
-      };
-    }
-    const nextConfig = selected.config;
-    // The run's backend and declined routes, so the preflight decides the
-    // route the bind at the next model boundary will.
-    const { route } = yield* resolveModelRoute(run.stores, nextConfig, {
-      mode: selected.request.mode,
-      backend: current.backend,
-      declinedRoutes: run.declinedRoutes,
-    }).pipe(Effect.provideService(LanguageModel, languageModel));
-    const nextBackend = yield* routeBackend(nextConfig, route);
-    if (!nextBackend) {
-      return {
-        reason: `Unsupported model provider: ${nextConfig.provider}`,
-        admitted: undefined,
-      };
-    }
-    if (current.backend !== nextBackend) {
-      return {
-        reason: MODEL_SWITCH_DIFFERENT_FORMAT_REASON,
-        admitted: undefined,
-      };
-    }
-    return { reason: undefined, admitted: { selected, route, nextBackend } };
-  });
-  const modelSwitchDisabledReason = (model: string) =>
-    admission(model).pipe(Effect.map(({ reason }) => reason));
+  /** Why `model` cannot replace the run's, decided as the next bind will. */
+  const admission = (model: string) =>
+    access.admit(
+      model,
+      SynchronizedRef.getUnsafe(run.model),
+      run.declinedRoutes,
+    );
   return {
-    modelSwitchDisabledReason,
+    modelSwitchDisabledReason: (model: string) =>
+      Effect.map(admission(model), (refused) => refused?.reason),
     switchModel: Effect.fn('toolUse.switchModel')(function* (model: string) {
-      const admitted = yield* admission(model);
-      if (admitted.reason !== undefined) {
-        return yield* Effect.fail(
-          new Error(
-            admitted.reason === MODEL_SWITCH_DIFFERENT_FORMAT_REASON
-              ? MODEL_SWITCH_DIFFERENT_FORMAT_ERROR
-              : admitted.reason,
-          ),
-        );
-      }
-      // A reasoning request the route cannot carry (`@none` on a model that
-      // always thinks) is refused here, as the command's error, instead of
-      // failing the bind inside the loop and ending the conversation.
-      if (admitted.admitted !== undefined) {
-        const { selected, route, nextBackend } = admitted.admitted;
-        yield* decideReasoning(
-          selected.config,
-          selected.request,
-          run.stores.globalState,
-          {
-            protocol: PROTOCOL_BY_BACKEND[nextBackend],
-            codexSubscription: route.kind === 'chatgpt-subscription',
-          },
-        );
-      }
+      const refused = yield* admission(model);
+      if (refused !== null)
+        return yield* Effect.fail(new Error(refused.message));
       // Queued on the run's input, durable at once; the loop binds and
       // records it at its next model boundary, which consumes it. A switch
       // back to the current model is queued too: the latest request wins.

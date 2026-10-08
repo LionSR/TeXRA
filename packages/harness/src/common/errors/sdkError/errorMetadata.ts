@@ -48,26 +48,6 @@ function createErrorMarker(name: string): {
   };
 }
 
-const contextWindowErrorMarker = createErrorMarker('contextWindowError');
-
-/**
- * Marks an error as a context-window overflow where it is classified
- * (`run/modelFailure.ts` from the llm package's `context-overflow` verdict,
- * `AgentRunLifecycle.ts`), so later readers recognize it without reading
- * any message.
- */
-export const attachContextWindowError = contextWindowErrorMarker.attach;
-export const hasContextWindowErrorMarker = contextWindowErrorMarker.has;
-
-const missingApiKeyErrorMarker = createErrorMarker('missingApiKeyError');
-
-/** Marks "no usable credential for this provider" at its throw site,
- *  `resolveRouteCredential` in `runtime/modelRoutes.ts`. `classifyAgentError`
- *  reads this instead of matching the per-provider wording that function owns; the cause-chain
- *  lookup keeps it reachable through any later rethrow. */
-export const attachMissingApiKeyError = missingApiKeyErrorMarker.attach;
-export const hasMissingApiKeyErrorMarker = missingApiKeyErrorMarker.has;
-
 const errorPresentationClaimedMarker = createErrorMarker(
   'errorPresentationClaimed',
 );
