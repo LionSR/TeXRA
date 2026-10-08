@@ -10,6 +10,7 @@ import { Effect, SubscriptionRef } from 'effect';
 import type {
   ClosureFact,
   RunTrace,
+  SessionLog,
   StreamClosure,
 } from '@agent/runtime/SessionHandle';
 import { runEventDraft } from '@agent/runtime/SessionEvents';
@@ -34,6 +35,8 @@ import type { InflightText, InflightTextChunk } from './sessionSources';
 
 /** A session's trace sink, and the tail's hand-off of each committed row. */
 export interface RunTraceSink extends RunTrace {
+  /** The session log's display door ({@link SessionLog.publish}). */
+  readonly publish: SessionLog['publish'];
   /** Drop the transient text a committed row closes: a stream's final text
    *  or a card's terminal result its own, a phase move that rests or ends
    *  the run, and its removal, every chunk of the run. */

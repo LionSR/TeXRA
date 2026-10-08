@@ -12,11 +12,7 @@ import { Deferred, Effect, Result, type Scope } from 'effect';
 import type { ResumeRunResult } from '@agent/runtime/resumeRun';
 import type { SessionLog } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  aggregateId,
-  type RunId,
-  type SessionEventDraft,
-} from '@shared/schemas';
+import { aggregateId, type RunId } from '@shared/schemas';
 import {
   heldElsewhereBy,
   type DatabaseReadFailed,
@@ -256,29 +252,6 @@ export class Inbox {
         Effect.map((result) => ({ result, joined: false })),
       );
     });
-  }
-
-  /** Consume, with no turn, the run's pending deliveries from `childRunId`
-   *  (`turnDeliveryId`): the run already took the result another way (a wait
-   *  that returned it). One publisher job, so no send interleaves. */
-  withdraw(
-    runId: RunId | undefined,
-    childRunId: RunId,
-  ): Effect.Effect<number, Error> {
-    if (runId === undefined || this.disposed) return Effect.succeed(0);
-    return this.port.log.transact((tx) =>
-      Effect.gen({ self: this }, function* () {
-        const rows = (yield* this.read(runId)).followUps
-          .filter(({ followUpId }) => followUpId.startsWith(`${childRunId}:`))
-          .map(({ followUpId }): SessionEventDraft => ({
-            type: 'followup.consumed',
-            aggregateId: aggregateId('run', runId),
-            followUpId,
-          }));
-        if (rows.length > 0) yield* tx.append(rows);
-        return rows.length;
-      }),
-    );
   }
 
   /** Hear each run that takes no more input, and the inbox's own close. */

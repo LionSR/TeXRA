@@ -33,7 +33,7 @@ import type {
  *   owners dead before moving the claim and a live foreign owner is the
  *   `DatabaseClaimRefused` verdict it fails with (a claim taken after that
  *   proof is `DatabaseNotOwner`); and from `appendBatch`,
- *   where `SessionEvents.publish` refuses a target this process no longer
+ *   where the session's log (`SessionLog.transact`) refuses a target this process no longer
  *   holds open as `DatabaseNotOwner`, nothing written. It is never
  *   synthesised from any other write failure: a disk error stays a
  *   `DatabaseWriteFailed` (F3). A loop that meets it mid-turn stops with it,

@@ -267,7 +267,7 @@ describe('ExecutionsTool', () => {
   // child's queued delivery pending, so the parent took the same result
   // again as a follow-up and ran a second turn.
   it.live(
-    'withdraws the queued delivery of a child whose result a wait returned',
+    'answers the queued delivery of a child whose result a wait returned',
     () =>
       withSession((session) =>
         Effect.gen(function* () {
@@ -315,16 +315,14 @@ describe('ExecutionsTool', () => {
           expect(waited.output).toContain(
             '<subagent-result>full report</subagent-result>',
           );
+          // The result names the delivery it answers; the call's settlement
+          // consumes it, so until then it stays queued.
+          expect(
+            waited.status === 'executed' ? waited.consumedFollowUps : null,
+          ).toEqual([delivery.deliveryId]);
           expect(
             (yield* session.followUps.read(parentRunId)).followUps,
-          ).toEqual([]);
-          // The child loop's replayed wake finds the row consumed.
-          expect(yield* session.followUps.send(parentRunId, delivery)).toEqual({
-            kind: 'duplicate',
-          });
-          expect(
-            (yield* session.followUps.read(parentRunId)).followUps,
-          ).toEqual([]);
+          ).toHaveLength(1);
         }),
       ),
   );

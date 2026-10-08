@@ -316,28 +316,30 @@ function publishRun(
       approvalPolicy: null,
     },
   ]);
-  session.trace.publish(runId, {
-    type: 'run.config',
-    runId,
-    config: AgentConfigSchema.parse({
-      agent,
-      model: 'deepseek/deepseek-v4-flash',
-      inputFiles: overrides.inputFiles ?? ['paper.tex'],
-      contextFiles: [],
-      mediaFiles: [],
-      outputFiles: [],
-      editedFile: null,
-      toolConfig: {
-        autoExtractFigure: false,
-        autoExtractTikzFigure: false,
-        attachTeXCount: false,
-        autoCompileInputPdf: false,
-      },
-      memories: [],
-      instruction: '',
-      workingDirectory: '/tmp/project',
-    }),
-  });
+  publishTestRows(session, [
+    {
+      type: 'run.config',
+      aggregateId: qualifyAggregateId('run', runId),
+      config: AgentConfigSchema.parse({
+        agent,
+        model: 'deepseek/deepseek-v4-flash',
+        inputFiles: overrides.inputFiles ?? ['paper.tex'],
+        contextFiles: [],
+        mediaFiles: [],
+        outputFiles: [],
+        editedFile: null,
+        toolConfig: {
+          autoExtractFigure: false,
+          autoExtractTikzFigure: false,
+          attachTeXCount: false,
+          autoCompileInputPdf: false,
+        },
+        memories: [],
+        instruction: '',
+        workingDirectory: '/tmp/project',
+      }),
+    },
+  ]);
   publishTestRows(session, [
     {
       type: 'run.activate',

@@ -1,13 +1,15 @@
 /**
- * The run history over the root's event plane: claims and reads through
- * `Database`, writes through `SessionEvents.publish` (the one transaction),
- * `foldRunState` on both paths. Mirrors `sessionEventsLayer`'s placement.
+ * The run history over one session's log: claims through `Database`, reads
+ * and writes through the session's one door (`SessionLog.rows`,
+ * `SessionLog.transact`), `foldRunState` on both paths. A batch it commits
+ * returns once the session's view has folded it, as every other awaited
+ * write of the session does.
  *
- * Reads use `Database.readAggregate`, never `SessionEvents.aggregate`: the
- * latter filters to display rows and would silently drop every
+ * Reads take the aggregate's every row (`SessionLog.rows`), never the
+ * display tail: that filters to display rows and would silently drop every
  * run-history-private row.
  */
-import { Effect, Layer, Result } from 'effect';
+import { type Context, Effect, Result } from 'effect';
 
 import { PreparedHistorySchema, type ModelOrigin } from '@texra-ai/llm';
 import {
@@ -17,12 +19,12 @@ import {
   type SessionEventDraft,
 } from '@shared/schemas';
 import {
-  Database,
+  type Database,
   DatabaseClaimRefused,
-  DatabaseNotOwner,
+  type DatabaseNotOwner,
   DatabaseWriteFailed,
 } from '@shared/session/database';
-import { RunHistory, RunHistoryRefused } from '@shared/session/runHistory';
+import { type RunHistory, RunHistoryRefused } from '@shared/session/runHistory';
 import {
   foldRunState,
   RunHistoryInconsistent,
@@ -34,8 +36,8 @@ import type {
   HistoryMessage,
   RunHistoryRow,
 } from '@shared/session/historyTurns';
-import { SessionEvents } from '@shared/session/sessionEvents';
 import { runHistoryRows, storedDraft } from './storedTurn';
+import type { SessionLog } from './SessionHandle';
 
 const isResponse = (row: RunHistoryDraft): boolean =>
   row.type === 'model.message' && row.payload.kind === 'response';
@@ -291,25 +293,72 @@ const loaded = (
     return state;
   });
 
-export const runHistoryLayer: Layer.Layer<
-  RunHistory,
-  never,
-  SessionEvents | Database
-> = Layer.effect(
-  RunHistory,
-  Effect.gen(function* () {
-    const events = yield* SessionEvents;
-    const log = yield* Database;
-
-    // `acquireClaims` proves prior owners dead before moving the claim, and
-    // succeeds when this process already holds it. A live foreign owner is a
-    // claim verdict (`DatabaseClaimRefused`, carried as the write failure's
-    // cause), and a claim another process took after that proof is
-    // `DatabaseNotOwner`; those are the refusals that mean `not-owner`, and
-    // every other database failure passes through unconverted (F3).
-    const acquire = Effect.fn('RunHistory.acquire')(function* (run: RunId) {
-      const aggregate = qualifyAggregateId('run', run);
-      yield* log.acquireClaims([aggregate]).pipe(
+/**
+ * One session's run history over its log (`SessionLog`): every row it
+ * commits goes through the session's one door, and only the claims are
+ * taken on the database directly.
+ */
+export function makeRunHistory(
+  sessionLog: Pick<SessionLog, 'transact' | 'rows'>,
+  claims: Pick<
+    Context.Service.Shape<typeof Database>,
+    'acquireClaims' | 'releaseClaims'
+  >,
+): RunHistory['Service'] {
+  // `acquireClaims` proves prior owners dead before moving the claim, and
+  // succeeds when this process already holds it. A live foreign owner is a
+  // claim verdict (`DatabaseClaimRefused`, carried as the write failure's
+  // cause), and a claim another process took after that proof is
+  // `DatabaseNotOwner`; those are the refusals that mean `not-owner`, and
+  // every other database failure passes through unconverted (F3).
+  const acquire = Effect.fn('RunHistory.acquire')(function* (run: RunId) {
+    const aggregate = qualifyAggregateId('run', run);
+    yield* claims.acquireClaims([aggregate]).pipe(
+      Effect.catchTag('DatabaseNotOwner', (failure) =>
+        Effect.fail(
+          new RunHistoryRefused({
+            reason: 'not-owner',
+            runId: run,
+            detail: notOwnerDetail(failure),
+          }),
+        ),
+      ),
+      Effect.mapError((error) =>
+        error instanceof DatabaseWriteFailed &&
+        error.cause instanceof DatabaseClaimRefused
+          ? new RunHistoryRefused({
+              reason: 'not-owner',
+              runId: run,
+              detail: `held by ${error.cause.ownerId} (${error.cause.verdict})`,
+            })
+          : error,
+      ),
+    );
+    // A tool call's own request carries an id its attempt derives, so the
+    // resume re-enters it; what else the previous owner left open is a
+    // later request of an attempt already past its own answer,
+    // whose body died with that owner. Taking the claim retires exactly
+    // those as cancelled, so no surface outlives the process that asked.
+    // Rows that do not fold are `load`'s refusal, from the same read.
+    const stored = yield* sessionLog.rows(aggregate);
+    const folded = foldStored(null, stored);
+    if (Result.isFailure(folded) || folded.success === null)
+      return yield* loaded(run, folded);
+    const unbound = unboundRequests(folded.success);
+    if (unbound.length === 0) return yield* loaded(run, folded);
+    const cancelled = yield* sessionLog
+      .transact(
+        unbound.map((requestId) => ({
+          type: 'request.decided' as const,
+          aggregateId: aggregate,
+          requestId,
+          decision: {
+            action: 'cancel' as const,
+            cause: 'The process that asked exited.',
+          },
+        })),
+      )
+      .pipe(
         Effect.catchTag('DatabaseNotOwner', (failure) =>
           Effect.fail(
             new RunHistoryRefused({
@@ -319,187 +368,134 @@ export const runHistoryLayer: Layer.Layer<
             }),
           ),
         ),
-        Effect.mapError((error) =>
-          error instanceof DatabaseWriteFailed &&
-          error.cause instanceof DatabaseClaimRefused
-            ? new RunHistoryRefused({
-                reason: 'not-owner',
-                runId: run,
-                detail: `held by ${error.cause.ownerId} (${error.cause.verdict})`,
-              })
-            : error,
-        ),
       );
-      // A tool call's own request carries an id its attempt derives, so the
-      // resume re-enters it; what else the previous owner left open is a
-      // later request of an attempt already past its own answer,
-      // whose body died with that owner. Taking the claim retires exactly
-      // those as cancelled, so no surface outlives the process that asked.
-      // Rows that do not fold are `load`'s refusal, from the same read.
-      const stored = yield* log.readAggregate(aggregate, 1);
-      const folded = foldStored(null, stored);
-      if (Result.isFailure(folded) || folded.success === null)
-        return yield* loaded(run, folded);
-      const unbound = unboundRequests(folded.success);
-      if (unbound.length === 0) return yield* loaded(run, folded);
-      const cancelled = yield* events
-        .transact((append) =>
-          append(
-            unbound.map((requestId) => ({
-              type: 'request.decided' as const,
-              aggregateId: aggregate,
-              requestId,
-              decision: {
-                action: 'cancel' as const,
-                cause: 'The process that asked exited.',
-              },
-            })),
-          ),
-        )
-        .pipe(
-          Effect.catchTag('DatabaseNotOwner', (failure) =>
-            Effect.fail(
-              new RunHistoryRefused({
-                reason: 'not-owner',
-                runId: run,
-                detail: notOwnerDetail(failure),
-              }),
-            ),
-          ),
-        );
-      // The cancellations fold onto the same read: the run is read once.
-      return yield* loaded(run, foldStored(folded.success, cancelled));
-    });
+    // The cancellations fold onto the same read: the run is read once.
+    return yield* loaded(run, foldStored(folded.success, cancelled));
+  });
 
-    const load = Effect.fn('RunHistory.load')(function* (
-      run: RunId,
-      through?: number,
-    ) {
-      const rows = yield* log.readAggregate(qualifyAggregateId('run', run), 1);
-      return yield* loaded(
-        run,
-        foldStored(
-          null,
-          through === undefined ? rows : rows.filter((r) => r.seq <= through),
-        ),
+  const load = Effect.fn('RunHistory.load')(function* (
+    run: RunId,
+    through?: number,
+  ) {
+    const rows = yield* sessionLog.rows(qualifyAggregateId('run', run));
+    return yield* loaded(
+      run,
+      foldStored(
+        null,
+        through === undefined ? rows : rows.filter((r) => r.seq <= through),
+      ),
+    );
+  });
+
+  const appendBatch = Effect.fn('RunHistory.appendBatch')(function* (
+    run: RunId,
+    state: RunState | null,
+    rows: readonly RunHistoryDraft[],
+    registration: readonly SessionEventDraft[] = [],
+  ) {
+    const violation = contractViolation(run, state, rows, registration);
+    if (violation !== null) {
+      return yield* Effect.die(
+        new Error(`RunHistory.appendBatch contract: ${violation}`),
       );
-    });
-
-    const appendBatch = Effect.fn('RunHistory.appendBatch')(function* (
-      run: RunId,
-      state: RunState | null,
-      rows: readonly RunHistoryDraft[],
-      registration: readonly SessionEventDraft[] = [],
-    ) {
-      const violation = contractViolation(run, state, rows, registration);
-      if (violation !== null) {
-        return yield* Effect.die(
-          new Error(`RunHistory.appendBatch contract: ${violation}`),
-        );
-      }
-      for (const row of rows) {
-        for (const origin of rowOrigins(row)) {
-          const unsafe = unsafeEndpoint(origin);
-          if (unsafe !== null) {
-            return yield* new RunHistoryRefused({
-              reason: 'unsafe-endpoint',
-              runId: run,
-              detail: `a ${row.type} origin is not a scheme, host and path alone: ${unsafe}`,
-            });
-          }
+    }
+    for (const row of rows) {
+      for (const origin of rowOrigins(row)) {
+        const unsafe = unsafeEndpoint(origin);
+        if (unsafe !== null) {
+          return yield* new RunHistoryRefused({
+            reason: 'unsafe-endpoint',
+            runId: run,
+            detail: `a ${row.type} origin is not a scheme, host and path alone: ${unsafe}`,
+          });
         }
       }
-      // Fold the batch before publishing it. `load` folds the same rows, so a
-      // batch that fails an invariant after the transaction has committed
-      // leaves a run nothing can read again; the refusal has to arrive while
-      // it still means "this batch was not written".
-      const candidate = foldRunState(state, candidates(state, rows));
-      if (Result.isFailure(candidate)) {
-        return yield* inconsistent(run, candidate.failure);
-      }
-      if (candidate.success === null) {
-        return yield* Effect.die(
-          new Error(
-            'RunHistory.appendBatch contract: a batch on a fresh run appends a run history row',
+    }
+    // Fold the batch before publishing it. `load` folds the same rows, so a
+    // batch that fails an invariant after the transaction has committed
+    // leaves a run nothing can read again; the refusal has to arrive while
+    // it still means "this batch was not written".
+    const candidate = foldRunState(state, candidates(state, rows));
+    if (Result.isFailure(candidate)) {
+      return yield* inconsistent(run, candidate.failure);
+    }
+    if (candidate.success === null) {
+      return yield* Effect.die(
+        new Error(
+          'RunHistory.appendBatch contract: a batch on a fresh run appends a run history row',
+        ),
+      );
+    }
+    // D11: the history this batch assembles is the history `load` runs
+    // through `PreparedHistorySchema`, so every batch that appends to or
+    // rewrites it is checked here, where the refusal is still actionable —
+    // an edit whose `range` cuts a group, and equally an append
+    // that adds an orphan tool group or a call without its results. An
+    // empty history goes unchecked, exactly as `load` leaves one unchecked.
+    if (rows.some(isMessageBearing) && candidate.success.messages.length > 0) {
+      // Only what follows the already-checked `state` history is new, or,
+      // after an edit (the batch's first message-bearing row), what
+      // follows its range's start; re-checking it all is quadratic per run.
+      const edit = rows.find((row) => row.type === 'context.edit');
+      const held = state?.messages.length ?? 0;
+      const kept =
+        edit?.type === 'context.edit'
+          ? Math.min(edit.payload.range.from, held)
+          : held;
+      const refusal = unprepared(run, candidate.success.messages, kept);
+      if (refusal !== null) return yield* refusal;
+    }
+    // A target this process no longer holds open is the run history's
+    // `not-owner`, nothing written (D6 b, R7); any other rollback stays the
+    // write failure it is (F3).
+    const committed = yield* sessionLog
+      .transact([...registration, ...rows.map(storedDraft)])
+      .pipe(
+        Effect.catchTag('DatabaseNotOwner', (failure) =>
+          Effect.fail(
+            new RunHistoryRefused({
+              reason: 'not-owner',
+              runId: run,
+              detail: notOwnerDetail(failure),
+            }),
           ),
-        );
-      }
-      // D11: the history this batch assembles is the history `load` runs
-      // through `PreparedHistorySchema`, so every batch that appends to or
-      // rewrites it is checked here, where the refusal is still actionable —
-      // an edit whose `range` cuts a group, and equally an append
-      // that adds an orphan tool group or a call without its results. An
-      // empty history goes unchecked, exactly as `load` leaves one unchecked.
-      if (
-        rows.some(isMessageBearing) &&
-        candidate.success.messages.length > 0
-      ) {
-        // Only what follows the already-checked `state` history is new, or,
-        // after an edit (the batch's first message-bearing row), what
-        // follows its range's start; re-checking it all is quadratic per run.
-        const edit = rows.find((row) => row.type === 'context.edit');
-        const held = state?.messages.length ?? 0;
-        const kept =
-          edit?.type === 'context.edit'
-            ? Math.min(edit.payload.range.from, held)
-            : held;
-        const refusal = unprepared(run, candidate.success.messages, kept);
-        if (refusal !== null) return yield* refusal;
-      }
-      // A target this process no longer holds open is the run history's
-      // `not-owner`, nothing written (D6 b, R7); any other rollback stays the
-      // write failure it is (F3).
-      const committed = yield* events
-        .transact((append) =>
-          append([...registration, ...rows.map(storedDraft)]),
-        )
+        ),
+      );
+    // A run registered with its history is its host's to resume, as any
+    // parked run is: the claim its birth took here goes back at once. The
+    // rows are durable whatever happens to the claim, so a release that
+    // fails is no failure of the batch; it says so, and the next process
+    // proves this one dead before it takes the claim.
+    if (registration.length > 0)
+      yield* claims
+        .releaseClaims([qualifyAggregateId('run', run)])
         .pipe(
-          Effect.catchTag('DatabaseNotOwner', (failure) =>
-            Effect.fail(
-              new RunHistoryRefused({
-                reason: 'not-owner',
-                runId: run,
-                detail: notOwnerDetail(failure),
-              }),
-            ),
+          Effect.catch((error) =>
+            Effect.logWarning(
+              `Run ${run} was registered with its history, but its claim was not released: this process cannot resume it`,
+            ).pipe(Effect.annotateLogs({ data: error })),
           ),
         );
-      // A run registered with its history is its host's to resume, as any
-      // parked run is: the claim its birth took here goes back at once. The
-      // rows are durable whatever happens to the claim, so a release that
-      // fails is no failure of the batch; it says so, and the next process
-      // proves this one dead before it takes the claim.
-      if (registration.length > 0)
-        yield* log
-          .releaseClaims([qualifyAggregateId('run', run)])
-          .pipe(
-            Effect.catch((error) =>
-              Effect.logWarning(
-                `Run ${run} was registered with its history, but its claim was not released: this process cannot resume it`,
-              ).pipe(Effect.annotateLogs({ data: error })),
-            ),
-          );
-      // The same fold over the same rows, at the commits the publisher
-      // actually assigned: that is the state the loop continues from. It
-      // differs from the candidate fold only in those ordinals, so a failure
-      // here is a defect in this module, not an outcome a caller can act on —
-      // and by now the rows are durable, which is what the fold above exists
-      // to prevent.
-      const folded = foldStored(state, committed);
-      if (Result.isFailure(folded) || folded.success === null) {
-        return yield* Effect.die(
-          new Error(
-            `RunHistory.appendBatch published a batch its own fold rejects: ${
-              Result.isFailure(folded)
-                ? folded.failure.detail
-                : 'no run history row folded'
-            }`,
-          ),
-        );
-      }
-      return folded.success;
-    });
+    // The same fold over the same rows, at the commits the publisher
+    // actually assigned: that is the state the loop continues from. It
+    // differs from the candidate fold only in those ordinals, so a failure
+    // here is a defect in this module, not an outcome a caller can act on —
+    // and by now the rows are durable, which is what the fold above exists
+    // to prevent.
+    const folded = foldStored(state, committed);
+    if (Result.isFailure(folded) || folded.success === null) {
+      return yield* Effect.die(
+        new Error(
+          `RunHistory.appendBatch published a batch its own fold rejects: ${
+            Result.isFailure(folded)
+              ? folded.failure.detail
+              : 'no run history row folded'
+          }`,
+        ),
+      );
+    }
+    return folded.success;
+  });
 
-    return { acquire, load, appendBatch };
-  }),
-);
+  return { acquire, load, appendBatch };
+}

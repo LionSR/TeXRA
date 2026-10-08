@@ -164,15 +164,17 @@ function registerScriptRun(name: string, model?: string) {
     );
     if (model !== undefined) {
       const session = testDefaultSession();
-      session.trace.publish(runId, {
-        type: 'run.config',
-        runId,
-        config: AgentConfigSchema.parse({
-          agent: name,
-          model,
-          instruction: `Script '${name}'`,
-        }),
-      });
+      publishTestRows(session, [
+        {
+          type: 'run.config',
+          aggregateId: aggregateId('run', runId),
+          config: AgentConfigSchema.parse({
+            agent: name,
+            model,
+            instruction: `Script '${name}'`,
+          }),
+        },
+      ]);
       yield* session.log.settled;
     }
     return runId;

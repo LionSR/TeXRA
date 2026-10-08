@@ -342,9 +342,9 @@ describe('completedRunArchive facade', () => {
 
         // The resumed run's trace writes its first event through the reopened
         // writer; the second turn lands beside it.
-        const publishRunEvent = session.trace.publish.bind(session.trace);
+        const publishRunEvent = session.log.publish.bind(session.log);
         const resumedWriter = vi
-          .spyOn(session.trace, 'publish')
+          .spyOn(session.log, 'publish')
           .mockImplementationOnce((requestedRunId, event) => {
             publishRunEvent(requestedRunId, event);
             publishTestRows(session, [

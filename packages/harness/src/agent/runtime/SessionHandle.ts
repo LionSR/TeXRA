@@ -84,11 +84,10 @@ export interface SessionTransaction {
 }
 
 /**
- * The session's one door to its store: ordered transactions on the
- * session's one publisher, and the reads beside them. Every awaited write of
- * a session fact is one {@link transact}; a run's own trace rows go through
- * {@link SessionHandle.trace} and its loop's rows through
- * {@link SessionHandle.runHistory}, both on the same publisher order.
+ * The session's doors to its store, on its one publisher, and the reads
+ * beside them. Every awaited write is one {@link transact} (a run's own rows
+ * too, through {@link SessionHandle.runHistory}); trace rows go through
+ * {@link publish}.
  */
 export interface SessionLog {
   /**
@@ -104,6 +103,11 @@ export interface SessionLog {
   transact<A, E>(
     job: (tx: SessionTransaction) => Effect.Effect<A, E>,
   ): Effect.Effect<A, E | LogWriteError>;
+  /** Publish one trace event (display rows only: no {@link AgentEvent} arm
+   *  is a row the run's state folds) as its durable arm, a chunk as
+   *  transient text; its order is this call, a refusal the run's own
+   *  ({@link RunTrace.lost}). */
+  publish(runId: RunId, event: AgentEvent): void;
   /** A barrier: every job enqueued before it has run and the view has
    *  folded what they committed. A refused detached row is heard by its own
    *  writer (a run's trace, at its end), never here. */
@@ -209,14 +213,10 @@ export type ClosureFact =
   StreamClosure | Extract<SessionEventDraft, { type: 'stage.end' }>;
 
 /**
- * Each run's trace sink: its rows in publication order, the transient text
- * of what it streams, and what it left open. A refused row is the run's own
- * to hear at its end ({@link lost}), never another writer's.
+ * What each run's trace ({@link SessionLog.publish}) left: the first row the
+ * store refused, the run's own to hear at its end, and its open work.
  */
 export interface RunTrace {
-  /** Publish one trace event as its durable arm (a chunk as transient
-   *  text); its place in the order is this call. */
-  publish(runId: RunId, event: AgentEvent): void;
   /** The first of `runId`'s rows the store refused, taken, as the error
    *  its `run.end` carries; read after every row before it was tried. */
   lost(runId: RunId): Effect.Effect<RunEnd['error'] | undefined>;
@@ -359,10 +359,10 @@ export interface SessionHandle {
   readonly interactions: SessionHostInteractions;
   /** Every run's input, one reader each. */
   readonly followUps: Inbox;
-  /** Every run's trace sink. */
+  /** What every run's trace left: its refused rows and open work. */
   readonly trace: RunTrace;
-  /** The run history over this session's log: the loop's one writer of run
-   *  rows, provided to each run's program at launch. */
+  /** The run history over this session's log: each run's cell commits
+   *  through it, provided to each run's program at launch. */
   readonly runHistory: Context.Service.Shape<typeof RunHistory>;
   /** The history query store (`executions` `query`), closed with the
    *  session. */

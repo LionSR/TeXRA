@@ -42,7 +42,7 @@ import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
-import { runHistoryLayer } from '@agent/runtime/RunHistory';
+import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import type {
@@ -76,14 +76,13 @@ import {
   nodePlatformServices,
   workspaceEnvironmentLayer,
 } from '@platform/defaults/nodePlatform';
-import { RunHistory } from '@shared/session/runHistory';
 import {
   aggregateTarget,
   RUN_OUTCOME,
   type RunId,
   type SessionCloseReport,
 } from '@shared/schemas';
-import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
+import { ProcessIdentity } from '@shared/session/sessionEvents';
 import {
   Database,
   ProjectDatabases,
@@ -169,9 +168,7 @@ class Session extends Context.Service<Session, SessionHandle>()(
 const sessionHandleLayer = (key: SessionKey) =>
   Layer.effectContext(
     Effect.gen(function* () {
-      const events = yield* SessionEvents;
       const database = yield* Database;
-      const runHistory = yield* RunHistory;
       const plugins = yield* ToolRegistry;
       const globalDatabase = yield* GlobalDatabase;
       const local = yield* LocalRuntimeSource;
@@ -189,9 +186,7 @@ const sessionHandleLayer = (key: SessionKey) =>
       const initialListing = yield* database.readListing();
       // The publisher drains inside the one close deadline, after the runs'
       // fibers (registered before their fork) published their last rows.
-      yield* Effect.addFinalizer(() =>
-        events.drain.pipe(Effect.ensuring(Effect.sync(() => store.close()))),
-      );
+      yield* Effect.addFinalizer(() => store.close);
       // The runs' fork and the history store end with this scope.
       const fork = yield* FiberSet.makeRuntime<ProcessServices>();
       const pinPlugins = yield* sessionPluginLayers(() => session.runs);
@@ -220,7 +215,7 @@ const sessionHandleLayer = (key: SessionKey) =>
             ...database,
             removeRun: (id, mode, start) =>
               Effect.tap(
-                events.removeRun(id, mode, start),
+                store.removeRun(id, mode, start),
                 () => collectDeletions,
               ),
             detach: store.detach,
@@ -239,7 +234,7 @@ const sessionHandleLayer = (key: SessionKey) =>
           live: (runId) => runs.isLive(runId),
         }),
         trace: store.trace,
-        runHistory,
+        runHistory: makeRunHistory(store.log, database),
         history: yield* HistoryQuery.make(() => session),
       };
       // The session's teardown is this scope's finalizers, run in the reverse
@@ -336,7 +331,6 @@ const sessionGraphLayer = (key: SessionKey) => {
   return ownerLiveness.pipe(
     Layer.provideMerge(SessionViewService.layer),
     Layer.provideMerge(sessionInputsLayer),
-    Layer.provideMerge(runHistoryLayer),
     Layer.provideMerge(sessionEventsLayer.pipe(Layer.provideMerge(database))),
     Layer.provideMerge(
       Layer.mergeAll(

@@ -175,7 +175,7 @@ const projectionOver = Effect.fnUntraced(function* (session: SessionHandle) {
     writeRecord,
   );
   const publish = async (source: Source): Promise<void> => {
-    if ('run' in source) session.trace.publish(runId, source.run);
+    if ('run' in source) session.log.publish(runId, source.run);
     else publishTestRows(session, [source.draft]);
     await Effect.runPromise(session.log.settled);
   };

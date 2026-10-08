@@ -32,20 +32,24 @@ export type CellError =
   RunHistoryRefused | DatabaseWriteFailed | DatabaseReadFailed;
 
 /**
- * The run's one state holder and its only run history writer. Seeded with the
- * opened state inside the acquire, so no reader branches on null: "the run
- * has rows and a phase" is the acquire's postcondition. The loop hands the
- * same cell to the invoker and the dispatch unit, so no run service keeps a
- * copy of the state it commits against.
+ * The run's one state holder and its only run history writer: the opening,
+ * every step, settlement and delivery, the input it consumes, a compaction's
+ * edit and a model switch all commit through {@link RunCell.append}, and
+ * nothing sets the state it holds but what that folds back. Seeded inside
+ * the acquire, so no reader branches on null: a resumed run's stored state,
+ * or a fresh run's state before its opening batch. The loop hands the same
+ * cell to the invoker and the dispatch unit, so no run service keeps a copy
+ * of the state it commits against.
  */
 export interface RunCell {
   readonly runId: RunId;
   /** The state the loop continues from. Nothing mirrors it. */
   readonly current: Effect.Effect<RunState>;
-  /** The state the cell opened on: what a resume folded from stored rows. */
+  /** The state the cell opened on: what a resume folded from stored rows,
+   *  or a fresh run's before its opening batch. */
   readonly opened: RunState;
   /**
-   * Commit one batch against the current state and adopt what the run history
+   * Commit one batch against the current state and hold what the run history
    * folds back. Rows that read the state (a step, a settlement, a delivery)
    * are built from the state the batch commits
    * against. Read-append-write is one uninterruptible region under the
@@ -60,11 +64,6 @@ export interface RunCell {
       | readonly RunHistoryDraft[]
       | ((state: RunState) => readonly RunHistoryDraft[]),
   ) => Effect.Effect<RunState, RunHistoryRefused | DatabaseWriteFailed>;
-  /**
-   * Adopt a state a run service already committed against (the follow-up
-   * consumer, the compaction).
-   */
-  readonly adopt: (state: RunState) => Effect.Effect<RunState>;
   /**
    * Re-read the run under the cell's lock: the state with every row another
    * writer committed (a `request.decided` the decide command landed), in
@@ -102,7 +101,6 @@ export const makeRunCell = (
             typeof rows === 'function' ? rows(state) : rows,
           ),
         ).pipe(Effect.uninterruptible),
-      adopt: (state) => SynchronizedRef.set(ref, state).pipe(Effect.as(state)),
       refresh: SynchronizedRef.updateAndGetEffect(ref, () =>
         Effect.flatMap(runHistory.load(runId), (state) =>
           // The cell opened on rows, so the run has some.

@@ -56,13 +56,17 @@ import { TextChunkSource } from './sessionSources';
 
 const CHANNEL = 'sessionStore';
 
-/** What the session layer composes a session from, beside the handle. */
+/** What the session layer composes a session from, beside the handle. The
+ *  store is the one owner of the session's publisher: nothing else reaches
+ *  its transactions. */
 export interface SessionStore {
   readonly log: SessionLog;
   readonly trace: RunTrace;
   /** The publisher's detached door: for a producer with no fiber to wait on
    *  (the inbox's own sends, an interrupted request's cancellation). */
   readonly detach: SessionEventsShape['detach'];
+  /** Remove a run and its dependents, as the publisher's next job. */
+  readonly removeRun: SessionEventsShape['removeRun'];
   /** The tail as the view has folded it: every row above the store's
    *  opening commit, released once the view holds the state that folded
    *  it, for a reader that reads the view beside each row. */
@@ -76,10 +80,11 @@ export interface SessionStore {
   readonly deliver: (
     removed: (runId: RunId) => void,
   ) => Effect.Effect<void, never, Scope.Scope>;
-  /** Shut the doors: from here on a trace row, a transcript subscription and
-   *  an interrupted request's cancellation write nothing, and the first late
-   *  trace row says so. */
-  readonly close: () => void;
+  /** Drain the publisher inside the close deadline, then shut the doors:
+   *  from here on a trace row, a transcript subscription and an interrupted
+   *  request's cancellation write nothing, and the first late trace row
+   *  says so. */
+  readonly close: Effect.Effect<void>;
   readonly closed: () => boolean;
 }
 
@@ -267,6 +272,17 @@ export const makeSessionStore = (
     const transact = transaction(events, database, settle.to);
     let doorsShut = false;
     const closed = () => doorsShut;
+    /** Every job enqueued before it has run, and the view folded it. */
+    const settled = events
+      .transact(() => database.currentCommit)
+      .pipe(Effect.orDie, Effect.flatMap(settle.to));
+    const trace = makeRunTrace({
+      storage,
+      events,
+      text: chunks.ref,
+      settled,
+      closed,
+    });
     const log: SessionLog = {
       transact: <A, E>(
         work:
@@ -276,9 +292,8 @@ export const makeSessionStore = (
         typeof work === 'function'
           ? transact(work)
           : transact((tx) => tx.append(work)),
-      settled: events
-        .transact(() => database.currentCommit)
-        .pipe(Effect.orDie, Effect.flatMap(settle.to)),
+      publish: trace.publish,
+      settled,
       now: () => SubscriptionRef.getUnsafe(database.observedCommit),
       rows: (id, types) => database.readAggregate(id, 1, types),
       records: (runId) =>
@@ -305,17 +320,11 @@ export const makeSessionStore = (
       owner: (runId) => database.claimOwner(qualifyAggregateId('run', runId)),
       movedAside: database.movedAside,
     };
-    const trace = makeRunTrace({
-      storage,
-      events,
-      text: chunks.ref,
-      settled: log.settled,
-      closed,
-    });
     return {
       log,
       trace,
       detach: events.detach,
+      removeRun: events.removeRun,
       folded: tailFrom(
         database.readDisplay,
         { get: Effect.sync(settle.cursor), changes: settle.changes },
@@ -342,9 +351,13 @@ export const makeSessionStore = (
           Effect.forkScoped,
           Effect.asVoid,
         ),
-      close: () => {
-        doorsShut = true;
-      },
+      close: events.drain.pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            doorsShut = true;
+          }),
+        ),
+      ),
       closed,
     };
   });

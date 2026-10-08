@@ -159,6 +159,7 @@ interface DispatchOutcome {
  */
 function settledResult(result: ToolResult): Settlement['result'] {
   const { diagnostics, ...rest } = result;
+  if (rest.status === 'executed') delete rest.consumedFollowUps; // own rows
   if (diagnostics === undefined) return rest;
   return { ...rest, diagnostics: JsonValueSchema.parse(diagnostics) };
 }
@@ -196,45 +197,28 @@ const captureAttachments = Effect.fn('toolUse.captureAttachments')(function* (
         ? { description: attachment.description }
         : {}),
     };
-    if (attachment.base64Data !== undefined && attachment.base64Data !== '') {
-      captured.push({
-        ...base,
-        content: { kind: 'base64', data: attachment.base64Data },
-      });
-      continue;
-    }
-    if (attachment.bytes !== undefined && attachment.bytes.length > 0) {
-      captured.push({
-        ...base,
-        content: {
-          kind: 'base64',
-          data: Buffer.from(attachment.bytes).toString('base64'),
-        },
-      });
-      continue;
-    }
-    const read = yield* Effect.exit(
-      fs.readFile(
-        pathToLocationIn(workspaceRoot, attachment.path).absolutePath,
-      ),
-    );
-    captured.push(
-      Exit.isSuccess(read)
-        ? {
-            ...base,
-            content: {
-              kind: 'base64',
-              data: Buffer.from(read.value).toString('base64'),
-            },
-          }
+    const inline =
+      attachment.base64Data ||
+      Buffer.from(attachment.bytes ?? []).toString('base64');
+    const read =
+      inline !== ''
+        ? Exit.succeed(inline)
+        : yield* Effect.exit(
+            fs
+              .readFile(
+                pathToLocationIn(workspaceRoot, attachment.path).absolutePath,
+              )
+              .pipe(Effect.map((b) => Buffer.from(b).toString('base64'))),
+          );
+    captured.push({
+      ...base,
+      content: Exit.isSuccess(read)
+        ? { kind: 'base64', data: read.value }
         : {
-            ...base,
-            content: {
-              kind: 'metadata-only',
-              reason: toErrorMessage(Cause.squash(read.cause)),
-            },
+            kind: 'metadata-only',
+            reason: toErrorMessage(Cause.squash(read.cause)),
           },
-    );
+    });
   }
   return captured;
 });
@@ -571,7 +555,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       const text = chunk.slice(0, STREAMED_OUTPUT_MAX - streamed);
       if (text.length === 0) return;
       streamed += text.length;
-      run.session.trace.publish(runId, {
+      run.session.log.publish(runId, {
         type: 'stream.chunk',
         id: fact.logId,
         text,
@@ -779,8 +763,13 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     // terminal card outside the batch would tell the transcript the call
     // completed while recovery still sees an unsettled call.
     const cards = settledCards(fact, parsedInput, status, attempt, editedFiles);
-    // An executed call's PostToolUse rows commit with its settlement.
+    // An executed call's PostToolUse rows commit with its settlement, as do
+    // the queued follow-ups its result answers.
     const post = pre ? yield* pre.after(extracted.sanitizedResult) : [];
+    const answered =
+      extracted.sanitizedResult.status === 'executed'
+        ? (extracted.sanitizedResult.consumedFollowUps ?? [])
+        : [];
     yield* retireStanding;
     yield* settle(
       fact,
@@ -794,7 +783,15 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         result: settledResult(extracted.sanitizedResult),
         attachments,
       },
-      (state) => [...cards(state), ...post],
+      (state) => [
+        ...cards(state),
+        ...post,
+        ...answered.map((followUpId) => ({
+          type: 'followup.consumed' as const,
+          aggregateId,
+          followUpId,
+        })),
+      ],
     );
   });
 
@@ -907,7 +904,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           title: string | null,
         ) {
           if (yield* Ref.getAndSet(stageOpened, true)) return;
-          run.session.trace.publish(runId, {
+          run.session.log.publish(runId, {
             type: 'stage.start',
             id: stageId,
             label: title ?? 'Script',
@@ -923,7 +920,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               settled?.result.status === 'executed' ? 'completed' : 'failed';
             if (Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause))
               status = 'cancelled';
-            run.session.trace.publish(runId, {
+            run.session.log.publish(runId, {
               type: 'stage.end',
               id: stageId,
               status,
