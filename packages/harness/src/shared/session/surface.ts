@@ -416,7 +416,13 @@ export function applySurfaceAction(
     case 'select':
       return { ...surface, selected: action.runId, drawerOpen: false };
     case 'selectNew':
-      return { ...surface, selected: null, drawerOpen: false };
+      return {
+        ...surface,
+        selected: null,
+        drawerOpen: false,
+        requestError: null,
+        launch: { ...surface.launch, instruction: '' },
+      };
     case 'toggleDrawer':
       return { ...surface, drawerOpen: !surface.drawerOpen };
     case 'drawer':

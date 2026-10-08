@@ -48,10 +48,11 @@ export function createProjectRail(deps: {
         case 'close':
           postMessage(DESKTOP_PROJECT_COMMANDS.CLOSE_PROJECT, {
             key,
-            hasUnsavedChanges: project?.editorPane.hasUnsavedChanges() ?? false,
+            hasUnsavedChanges: project?.hasUnsavedChanges() ?? false,
           });
           return;
         case 'new-task':
+          project?.workbench.openKind('agent');
           sessions.act(key, { kind: 'selectNew' });
           break;
       }

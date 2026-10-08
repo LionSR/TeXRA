@@ -2,7 +2,7 @@ import { css, type CSSResult } from 'lit';
 
 /**
  * Compact wa-input / wa-select sizing — stricter IDE-density form controls.
- * WA defaults to ~38px tall; the host's `--height-control-compact` pulls that
+ * WA defaults to ~38px tall; the host's `--height-control` pulls that
  * down to editor-panel density in the extension and window density on desktop.
  *
  * Exported as a focused subset so file-select / main-view components can pull
@@ -12,23 +12,39 @@ import { css, type CSSResult } from 'lit';
  * unless you specifically want only these two elements.
  */
 export const compactFormControlStyles: CSSResult = css`
-  wa-select {
+  wa-input,
+  wa-select,
+  wa-textarea {
+    min-width: 0;
+    font-family: var(--font-family);
+    font-size: var(--font-size);
+    --wa-form-control-height: var(--height-control);
+  }
+
+  :is(wa-input, wa-select, wa-textarea)::part(label) {
+    margin-block-end: var(--wa-space-2xs);
     font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    line-height: var(--line-height-normal);
+  }
+
+  :is(wa-input, wa-select, wa-textarea)::part(hint) {
+    margin-block-start: var(--wa-space-2xs);
+    font-size: var(--font-size-xs);
+    line-height: var(--line-height-normal);
   }
 
   wa-select::part(combobox) {
-    min-height: var(--height-control-compact);
+    min-height: var(--height-control);
     min-width: 0;
     padding-block: 0;
     padding-inline: var(--control-padding-inline);
-    border: var(--border-thin) solid
-      var(--wa-color-surface-border, var(--color-border));
+    border: var(--border-thin) solid var(--wa-form-control-border-color);
   }
 
   wa-select::part(display-input) {
-    padding-block: 1px;
-    padding-inline: var(--control-padding-inline);
-    font-size: var(--font-size-sm);
+    padding: 0;
+    font-size: var(--font-size);
   }
 
   wa-select::part(expand-icon) {
@@ -41,21 +57,28 @@ export const compactFormControlStyles: CSSResult = css`
     box-shadow: var(--wa-shadow-s, var(--wa-shadow-m));
   }
 
-  wa-input {
-    font-size: var(--font-size-sm);
-  }
-
   wa-input::part(base) {
-    min-height: var(--height-control-compact);
-    padding-block: 0;
-    border: var(--border-thin) solid
-      var(--wa-color-surface-border, var(--color-border));
+    box-sizing: border-box;
+    height: var(--height-control);
+    min-height: var(--height-control);
+    padding: 0;
+    border: var(--border-thin) solid var(--wa-form-control-border-color);
   }
 
   wa-input::part(input) {
-    padding-block: 1px;
+    padding-block: 0;
     padding-inline: var(--control-padding-inline);
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size);
+    height: 100%;
+    min-width: 0;
+  }
+
+  wa-input::part(start) {
+    padding-inline-start: var(--control-padding-inline);
+  }
+
+  wa-input::part(end) {
+    padding-inline-end: var(--control-padding-inline);
   }
 
   /* Web Awesome draws focus as an outline offset outside the border, which

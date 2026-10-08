@@ -28,9 +28,16 @@ import type {
   HostSnapshot,
   ProjectDisplay,
 } from '@shared/session/hostSnapshot';
+import {
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import { readRecentCommits } from '@texra/utils/git/repositoryOverview';
-import { readSettingFrom } from '@utils/config/platformSettings';
+import {
+  readSettingFrom,
+  readConfigSettingFrom,
+} from '@utils/config/platformSettings';
 import type { AgentCatalogServices } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -173,6 +180,10 @@ export function createHostSnapshotSource(
   const publish = Effect.suspend(() =>
     options.publish({
       project: options.project,
+      approvalPolicy: readConfigSettingFrom<TexraApprovalPolicy>(
+        options.stores.config,
+        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+      ),
       ...catalogs,
       workspaceRoots: options.workspaceRoots?.() ?? [],
       fileOptions: { ...fileOptions, commit: ['HEAD', ...commits.commits] },

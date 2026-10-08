@@ -2,6 +2,7 @@ import { Cause, Effect, Exit, Scope } from 'effect';
 import { Menu, type BrowserWindow } from 'electron';
 
 import { workspaceEnvironmentLayer } from '@texra-ai/harness';
+import { DESKTOP_HEADLESS } from './desktopPresentation.js';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
@@ -172,9 +173,11 @@ export function createDesktopWindows(options: {
         reopen(then);
         return;
       }
-      if (window.isMinimized()) window.restore();
-      window.show();
-      window.focus();
+      if (!DESKTOP_HEADLESS) {
+        if (window.isMinimized()) window.restore();
+        window.show();
+        window.focus();
+      }
       then?.();
     },
     revealRun: (key, runId) => current?.reveal(key, runId),

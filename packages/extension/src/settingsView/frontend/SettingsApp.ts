@@ -172,15 +172,21 @@ export class SettingsApp extends SignalWatcher(LitElement) {
   }
 
   /**
-   * APG tabs keyboard contract for both nav rows: ArrowLeft/ArrowRight move
-   * (wrapping), Home/End jump to the ends, and moving selects the tab.
+   * Horizontal tabs use Left/Right; the desktop's vertical navigation uses
+   * Up/Down. Home/End jump to the ends, and moving selects the tab.
    */
   private async handleTablistKeydown(event: KeyboardEvent): Promise<void> {
     const tablist = event.currentTarget as HTMLElement;
     const tabs = [...tablist.querySelectorAll<HTMLElement>('[role="tab"]')];
     const current = tabs.indexOf(event.target as HTMLElement);
     if (current < 0) return;
-    const next = nextTablistIndex(event.key, current, tabs.length);
+    let key = event.key;
+    if (tablist.getAttribute('aria-orientation') === 'vertical') {
+      if (key === 'ArrowDown') key = 'ArrowRight';
+      else if (key === 'ArrowUp') key = 'ArrowLeft';
+      else if (key === 'ArrowLeft' || key === 'ArrowRight') return;
+    }
+    const next = nextTablistIndex(key, current, tabs.length);
     if (next === undefined) return;
     event.preventDefault();
     tabs[next].click();
@@ -196,12 +202,11 @@ export class SettingsApp extends SignalWatcher(LitElement) {
     const desktop = this.isDesktopHost;
     return SETTINGS_NAV_ENTRIES.flatMap((entry) => {
       if (entry.panel === 'shortcuts' && !desktop) return [];
-      if (!desktop) return [entry];
       return [
         {
           ...entry,
-          sections: entry.sections.filter(
-            ({ section }) => section !== 'vscode',
+          sections: entry.sections.filter(({ section }) =>
+            desktop ? section !== 'vscode' : section !== 'appearance',
           ),
         },
       ];
@@ -211,19 +216,29 @@ export class SettingsApp extends SignalWatcher(LitElement) {
   private renderSettingsNavigation(
     entries: readonly SettingsNavEntry[],
     activeEntry: SettingsNavEntry,
-    activeSection: SettingsSectionName | undefined,
   ): TemplateResult {
     return html`
       <nav class="settings-navigation" aria-label="Settings">
         <div
           class="settings-page-nav"
           role="tablist"
+          aria-orientation=${this.isDesktopHost ? 'vertical' : 'horizontal'}
           aria-label="Settings pages"
           @keydown=${this.handleTablistKeydown}
         >
-          ${entries.map((entry) => {
+          ${entries.map((entry, index) => {
             const active = entry === activeEntry;
             return html`
+              ${
+                this.isDesktopHost && entry.group !== entries[index - 1]?.group
+                  ? html`<span
+                      class="settings-nav-group-label"
+                      role="presentation"
+                      aria-hidden="true"
+                      >${entry.group}</span
+                    >`
+                  : nothing
+              }
               <wa-button
                 class="settings-page-button"
                 appearance="plain"
@@ -235,7 +250,6 @@ export class SettingsApp extends SignalWatcher(LitElement) {
                 tabindex=${active ? '0' : '-1'}
                 data-active=${String(active)}
                 data-panel=${entry.panel}
-                title=${entry.label}
                 @click=${() => this.selectSettingsEntry(entry)}
               >
                 ${waIcon(entry.icon, {
@@ -247,39 +261,40 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             `;
           })}
         </div>
-        ${
-          activeEntry.sections.length < 2
-            ? nothing
-            : html`
-                <div
-                  class="settings-page-nav settings-section-nav"
-                  role="tablist"
-                  aria-label=${`${activeEntry.label} sections`}
-                  @keydown=${this.handleTablistKeydown}
-                >
-                  ${activeEntry.sections.map(({ section, label }) => {
-                    const active = section === activeSection;
-                    return html`
-                      <wa-button
-                        class="settings-page-button settings-section-button"
-                        appearance="plain"
-                        size="s"
-                        role="tab"
-                        aria-selected=${String(active)}
-                        aria-controls="settings-panel"
-                        tabindex=${active ? '0' : '-1'}
-                        data-active=${String(active)}
-                        data-section=${section}
-                        @click=${() =>
-                          this.selectSettingsEntry(activeEntry, section)}
-                        >${label}</wa-button
-                      >
-                    `;
-                  })}
-                </div>
-              `
-        }
       </nav>
+    `;
+  }
+
+  private renderSectionNavigation(
+    entry: SettingsNavEntry,
+    activeSection: SettingsSectionName | undefined,
+  ): TemplateResult | typeof nothing {
+    if (entry.sections.length < 2) return nothing;
+    return html`
+      <div
+        class="settings-section-nav"
+        role="tablist"
+        aria-orientation="horizontal"
+        aria-label=${`${entry.label} sections`}
+        @keydown=${this.handleTablistKeydown}
+      >
+        ${entry.sections.map(({ section, label }) => {
+          const active = section === activeSection;
+          return html`<wa-button
+            class="settings-section-button"
+            appearance="plain"
+            size="s"
+            role="tab"
+            aria-selected=${String(active)}
+            aria-controls="settings-panel-content"
+            tabindex=${active ? '0' : '-1'}
+            data-active=${String(active)}
+            data-section=${section}
+            @click=${() => this.selectSettingsEntry(entry, section)}
+            >${label}</wa-button
+          >`;
+        })}
+      </div>
     `;
   }
 
@@ -390,6 +405,8 @@ export class SettingsApp extends SignalWatcher(LitElement) {
           ></memory-tab>
         `;
       case 'general':
+        if (desktopHost && section === 'appearance')
+          return html`<slot name="appearance"></slot>`;
         if (section === 'approval')
           return html`
             <approval-tab
@@ -446,7 +463,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
 
     return html`
       <div class="settings-container">
-        ${this.renderSettingsNavigation(entries, activeEntry, activeSection)}
+        ${this.renderSettingsNavigation(entries, activeEntry)}
         <section
           id="settings-panel"
           class="settings-panel"
@@ -459,7 +476,10 @@ export class SettingsApp extends SignalWatcher(LitElement) {
               <p>${activeEntry.description}</p>
             </div>
           </header>
-          ${this.renderActivePanel(activePanel, activeSection, desktopHost)}
+          ${this.renderSectionNavigation(activeEntry, activeSection)}
+          <div id="settings-panel-content">
+            ${this.renderActivePanel(activePanel, activeSection, desktopHost)}
+          </div>
         </section>
       </div>
     `;

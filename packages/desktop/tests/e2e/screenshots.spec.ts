@@ -4,8 +4,10 @@ import { test, expect, type TestInfo } from '@playwright/test';
 
 import {
   closeTexraApp,
+  chooseDesktopTheme,
   dismissOnboarding,
   launchTexraApp,
+  openDesktopAppearance,
   showLauncher,
   type LaunchedApp,
 } from './electronApp.js';
@@ -75,10 +77,21 @@ test('first-run screenshot', async () => {
   expect(
     await launched.page.locator('wa-dialog.desktop-onboarding').count(),
   ).toBe(0);
-  await launched.page.screenshot({
-    path: getScreenshotPath(test.info(), 'startup.png'),
-    fullPage: false,
-  });
+  for (const theme of ['light', 'dark'] as const) {
+    await launched.page.emulateMedia({ colorScheme: theme });
+    await expect(launched.page.locator('body')).toHaveClass(
+      new RegExp(`vscode-${theme}`),
+    );
+    await launched.page.evaluate(() => document.fonts.ready);
+    await launched.page.screenshot({
+      path: getScreenshotPath(
+        test.info(),
+        theme === 'light' ? 'startup.png' : 'startup-dark.png',
+      ),
+      animations: 'disabled',
+      fullPage: false,
+    });
+  }
   await dismissOnboarding(launched.page);
 });
 
@@ -90,6 +103,239 @@ test('command palette opens and dismisses', async () => {
     .filter({ hasText: 'Commands' })
     .click();
   await expect.poll(commandPaletteEntryCount).toBeGreaterThan(0);
+  await launched.page.screenshot({
+    path: test.info().outputPath('command-palette-dark.png'),
+    animations: 'disabled',
+  });
   await launched.page.keyboard.press('Escape');
   await expect.poll(commandPaletteIsClosed).toBe(true);
+});
+
+// The vertical settings navigation must remain operable by keyboard, and
+// its controls must stay reachable when the native window shrinks.
+test('settings navigation and appearance across window sizes', async () => {
+  const { app, page } = launched;
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await expect(page.locator('body')).toHaveClass(
+      new RegExp(`vscode-${theme}`),
+    );
+    await page.screenshot({
+      path: test.info().outputPath(`launcher-${theme}.png`),
+      animations: 'disabled',
+    });
+    await page
+      .locator('.shell-sidebar-footer .shell-sidebar-action')
+      .filter({ hasText: 'Settings' })
+      .click();
+    const settings = page.locator('wa-dialog.desktop-settings-overlay');
+    await expect(settings).toHaveJSProperty('open', true);
+    const pages = settings.getByRole('tablist', { name: 'Settings pages' });
+    await expect(pages).toHaveAttribute('aria-orientation', 'vertical');
+    const tabs = pages.getByRole('tab');
+    await expect(tabs.first()).toHaveAccessibleName('General');
+    for (const tab of await tabs.all()) {
+      await tab.click();
+      await expect(tab).toHaveAttribute('aria-selected', 'true');
+      const name = await tab.getAttribute('data-panel');
+      await page.screenshot({
+        path: test.info().outputPath(`settings-${name}-${theme}.png`),
+        animations: 'disabled',
+      });
+      if (name === 'agents') {
+        await settings.locator('[data-section="skills"]').click();
+        await expect(
+          settings.getByRole('textbox', { name: 'Search skills', exact: true }),
+        ).toBeVisible();
+        await page.screenshot({
+          path: test.info().outputPath(`settings-skills-${theme}.png`),
+          animations: 'disabled',
+        });
+        await settings.locator('[data-section="library"]').click();
+      }
+      if (name === 'plugins') {
+        await settings
+          .getByRole('button', { name: 'Goal Mode', exact: true })
+          .click();
+        await expect(
+          settings.getByRole('switch', {
+            name: 'Available to agents',
+            exact: true,
+          }),
+        ).toBeVisible();
+        await page.screenshot({
+          path: test.info().outputPath(`settings-goal-plugin-${theme}.png`),
+          animations: 'disabled',
+        });
+      }
+    }
+    await tabs.first().focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+    // Crossing a visual group heading still advances to the next page.
+    await page.keyboard.press('ArrowDown');
+    await expect(tabs.nth(2)).toHaveAttribute('aria-selected', 'true');
+    await page.keyboard.press('Home');
+    await expect(tabs.first()).toHaveAttribute('aria-selected', 'true');
+    await app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0].setContentSize(960, 640);
+    });
+    await expect(settings.getByRole('tabpanel')).toBeVisible();
+    await page.screenshot({
+      path: test.info().outputPath(`settings-compact-${theme}.png`),
+      animations: 'disabled',
+    });
+    await settings.getByRole('tab', { name: 'Agents', exact: true }).click();
+    const catalog = settings.locator('agent-selection-panel');
+    await expect(
+      catalog.getByRole('textbox', { name: 'Search agents', exact: true }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: test.info().outputPath(`settings-agents-compact-${theme}.png`),
+      animations: 'disabled',
+    });
+    await settings.getByRole('tab', { name: 'Plugins', exact: true }).click();
+    await settings
+      .getByRole('button', { name: 'Goal Mode', exact: true })
+      .click();
+    const availability = settings.locator(
+      'plugin-card .settings-row.is-toggle',
+    );
+    const labelBounds = await availability
+      .locator('.settings-row-label')
+      .boundingBox();
+    const switchBounds = await availability.locator('wa-switch').boundingBox();
+    expect(labelBounds).not.toBeNull();
+    expect(switchBounds).not.toBeNull();
+    expect(switchBounds!.x).toBeGreaterThan(
+      labelBounds!.x + labelBounds!.width,
+    );
+    expect(
+      Math.abs(
+        labelBounds!.y +
+          labelBounds!.height / 2 -
+          (switchBounds!.y + switchBounds!.height / 2),
+      ),
+    ).toBeLessThan(2);
+    await page.screenshot({
+      path: test.info().outputPath(`settings-goal-plugin-compact-${theme}.png`),
+      animations: 'disabled',
+    });
+    await settings
+      .getByRole('tab', { name: 'Models', exact: true })
+      .first()
+      .click();
+    await settings.locator('[data-section="subscriptions"]').click();
+    const subscription = settings.locator('subscription-section').first();
+    // Presentation fixture only: exercise the reported usage-card boundaries
+    // without credentials, provider requests, or changes to account state.
+    await subscription.evaluate((element) => {
+      const now = Date.now();
+      Object.assign(element, {
+        auth: {
+          provider: 'chatgpt',
+          signedIn: true,
+          email: 'researcher@example.org',
+          preferSubscription: true,
+        },
+        now,
+        usage: {
+          provider: 'chatgpt',
+          providerName: 'ChatGPT',
+          planName: 'Plus',
+          state: 'available',
+          fetchedAt: now,
+          windows: [
+            {
+              name: '5-hour',
+              percentUsed: 1,
+              percentRemaining: 99,
+              resetAt: now + 34 * 60_000,
+            },
+            {
+              name: '7-day',
+              percentUsed: 0,
+              percentRemaining: 100,
+              resetAt: now + 6 * 86_400_000,
+            },
+          ],
+        },
+      });
+    });
+    await expect(subscription.locator('.usage-plan')).toContainText('Plus');
+    await page.screenshot({
+      path: test.info().outputPath(`settings-subscription-${theme}.png`),
+      animations: 'disabled',
+    });
+    await settings.locator('.desktop-settings-close').click();
+    await expect(settings).toHaveJSProperty('open', false);
+    await page.screenshot({
+      path: test.info().outputPath(`launcher-compact-${theme}.png`),
+      animations: 'disabled',
+    });
+    await app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0].setContentSize(1280, 800);
+    });
+  }
+});
+
+test('appearance settings override the system and remember the choice', async () => {
+  const { page } = launched;
+  async function chooseTheme(theme: 'light' | 'dark' | 'system') {
+    await chooseDesktopTheme(page, theme);
+  }
+  async function expectTheme(theme: 'light' | 'dark') {
+    await expect(page.locator('body')).toHaveClass(
+      new RegExp(`vscode-${theme}`),
+    );
+    await expect(page.locator('html')).toHaveCSS('color-scheme', theme);
+  }
+
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expectTheme('light');
+  const lightBackground = await page
+    .locator('.shell-frame')
+    .evaluate((element) => getComputedStyle(element).backgroundColor);
+  await chooseTheme('dark');
+  await expectTheme('dark');
+  await expect(page.locator('.shell-frame')).not.toHaveCSS(
+    'background-color',
+    lightBackground,
+  );
+  // Selecting the current choice must retain a valid single selection.
+  await chooseTheme('dark');
+  await page.reload();
+  await expectTheme('dark');
+  const themeControl = await openDesktopAppearance(page);
+  await expect(themeControl).toHaveJSProperty('value', 'dark');
+  await themeControl.click();
+  await page.screenshot({
+    path: test.info().outputPath('appearance-theme-dark.png'),
+    animations: 'disabled',
+  });
+  await page.keyboard.press('Escape');
+  await page.locator('.desktop-settings-close').click();
+
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await chooseTheme('light');
+  await expectTheme('light');
+  await expect(page.locator('.shell-frame')).toHaveCSS(
+    'background-color',
+    lightBackground,
+  );
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expectTheme('light');
+  await page.screenshot({
+    path: test.info().outputPath('theme-override-light.png'),
+    animations: 'disabled',
+  });
+  await chooseTheme('system');
+  await expectTheme('dark');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expectTheme('light');
+  await page.emulateMedia({ forcedColors: 'active' });
+  await expect(page.locator('body')).toHaveClass(/vscode-high-contrast/);
+  await page.emulateMedia({ forcedColors: 'none', colorScheme: 'dark' });
+  await expectTheme('dark');
 });

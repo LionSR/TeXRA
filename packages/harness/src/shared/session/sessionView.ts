@@ -265,13 +265,24 @@ export interface FollowUpHost {
  * decides whether the composer shows). A run with no follow-up support, a
  * terminal-backed run on a host that cannot drive one, and a run this process
  * may not act on take none; a run still going or waiting takes one, as does a
- * conversation not yet started (`ready`, nothing written).
+ * conversation not yet started (`ready`, nothing written). A stopped native
+ * conversation with saved steps also takes one: follow-up admission resumes
+ * that same run from history. Ending execution does not end the conversation.
  */
 export function acceptsFollowUp(run: RunView, host: FollowUpHost): boolean {
   if (run.followUpSupport === 'unsupported' || run.readOnly) return false;
   if (run.followUpSupport === 'terminalBacked' && !host.terminalBacked)
     return false;
   if (run.group === 'running' || run.group === 'waiting') return true;
+  if (
+    run.followUpSupport === 'nativeInteractive' &&
+    run.identity.kind === 'agent' &&
+    run.parentId === null &&
+    !run.documentTask &&
+    run.resumeBlocked === null &&
+    (run.turn !== null || run.forkPoint !== null)
+  )
+    return true;
   return run.status === 'ready' && run.lastTimestamp === null;
 }
 

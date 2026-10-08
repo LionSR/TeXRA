@@ -1,16 +1,36 @@
 import { defineConfig } from 'vite';
+import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 
 // Shared aliases keep desktop renderer imports aligned with extension webviews.
 import { aliases } from '../../scripts/aliases.mjs';
 
+// Monaco belongs to the shared app package after the source split.
+const requireApp = createRequire(
+  resolve(import.meta.dirname, '../texra/package.json'),
+);
+
 export default defineConfig({
   base: './',
   root: resolve(import.meta.dirname, 'src/renderer'),
+  // These entry points are loaded together by the shared Monaco loader.
+  // Discovering them only after Electron starts invalidates the optimizer's
+  // common chunks and forces a reload while the renderer is bootstrapping.
+  optimizeDeps: {
+    include: [
+      'monaco-editor/editor/editor.api.js',
+      'monaco-editor/features/register.all.js',
+      'monaco-editor/languages/register.all.js',
+      'monaco-editor/languages/features/register.all.js',
+    ].map((entry) => requireApp.resolve(entry)),
+  },
   build: {
     outDir: resolve(import.meta.dirname, 'dist/renderer'),
     emptyOutDir: true,
     target: 'es2022',
+    // Electron supports native light-dark(). Lowering it to OS media queries
+    // prevents the in-app theme preference from recoloring inherited tokens.
+    cssTarget: 'chrome140',
     rollupOptions: {
       input: resolve(import.meta.dirname, 'src/renderer/index.html'),
     },

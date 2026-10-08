@@ -9,14 +9,20 @@ import {
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports
 import type { RunView } from '@shared/session/sessionView';
 import { type TeXRAIconName } from '@shared/iconNames';
+import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { designTokens } from '@ui/styles';
-import { focusRingStyles } from '@ui/styles/controlStyles';
+import {
+  buttonStyles,
+  focusRingStyles,
+  formControlStyles,
+} from '@ui/styles/controlStyles';
+import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { AGENT_DECORATORS, type RunDecorator } from '@ui/wa/icons';
 
 // Side-effect imports - register WA components
@@ -24,6 +30,8 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
+import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
+import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import './WorktreeChip';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
@@ -33,7 +41,7 @@ import { runTabStyles } from './RunTab.styles';
 
 /** Shape cue per tone (G4: the fold spells the tone, the host the glyph). */
 const TONE_ICONS: Record<RunView['tone'], TeXRAIconName> = {
-  running: 'play',
+  running: 'circle',
   success: 'circle-check',
   danger: 'circle-exclamation',
   warning: 'triangle-exclamation',
@@ -95,7 +103,13 @@ function runDecorator(run: RunView) {
  */
 @customElement('run-tab')
 export class RunTab extends LitElement {
-  static override styles = [designTokens, focusRingStyles, runTabStyles];
+  static override styles = [
+    designTokens,
+    buttonStyles,
+    focusRingStyles,
+    formControlStyles,
+    runTabStyles,
+  ];
 
   @property({ attribute: false }) run!: RunView;
   @property({ type: Boolean }) active = false;
@@ -110,6 +124,34 @@ export class RunTab extends LitElement {
   /** The row offers Delete (the desktop rail); set only on a run whose
    *  `actions` hold `delete`. */
   @property({ type: Boolean }) removable = false;
+  @state() private renaming = false;
+
+  private startRename(): void {
+    if (!this.run.actions.includes('rename')) return;
+    this.renaming = true;
+    void this.updateComplete.then(() => {
+      const input =
+        this.renderRoot.querySelector<HTMLInputElement>('.tab-rename');
+      input?.focus();
+      input?.select();
+    });
+  }
+
+  private finishRename(input: HTMLInputElement, save: boolean): void {
+    if (!this.renaming) return;
+    this.renaming = false;
+    const title = input.value.trim();
+    if (save && title && title !== (this.run.description || this.run.label)) {
+      this.dispatchEvent(
+        SessionUiEvents.runtime({
+          kind: 'run.rename',
+          runId: this.run.id,
+          title,
+        }),
+      );
+    }
+    void this.updateComplete.then(() => this.focus());
+  }
 
   private decorator: RunDecorator = AGENT_DECORATORS.agentRuns.chat;
 
@@ -128,6 +170,7 @@ export class RunTab extends LitElement {
   override render(): TemplateResult {
     const run = this.run;
     const pendingApproval = run.approval !== 'none';
+    const showStatus = pendingApproval || run.tone !== 'neutral';
     const statusGlyph = pendingApproval
       ? 'triangle-exclamation'
       : TONE_ICONS[run.tone];
@@ -153,6 +196,12 @@ export class RunTab extends LitElement {
 
     return html`
       <div
+        @keydown=${(event: KeyboardEvent) => {
+          if (event.key === 'F2' && !this.renaming) {
+            event.preventDefault();
+            this.startRename();
+          }
+        }}
         class=${classMap({
           'tab-container': true,
           'is-active': this.active,
@@ -182,13 +231,34 @@ export class RunTab extends LitElement {
             : nothing
         }
         <div class="tab-select-tooltip-anchor">
+          ${
+            this.renaming
+              ? html`<input
+                  class="tab-rename inline-rename"
+                  aria-label="Task title"
+                  .value=${runTitle}
+                  @keydown=${(event: KeyboardEvent) => {
+                    event.stopPropagation();
+                    if (event.key === 'Enter')
+                      this.finishRename(event.target as HTMLInputElement, true);
+                    if (event.key === 'Escape')
+                      this.finishRename(
+                        event.target as HTMLInputElement,
+                        false,
+                      );
+                  }}
+                  @blur=${(event: FocusEvent) => this.finishRename(event.target as HTMLInputElement, true)}
+                />`
+              : nothing
+          }
           <button
             id="run-tab-select-button"
             class="tab focus-ring-inset"
             data-run=${run.id}
             data-action="select"
             aria-label=${tooltip}
-            title=${tooltip}
+            ?hidden=${this.renaming}
+            @dblclick=${() => this.startRename()}
           >
             <div class="tab-header">
               ${
@@ -221,18 +291,6 @@ export class RunTab extends LitElement {
                     >`
                   : nothing
               }
-              <span
-                id="run-tab-status"
-                class="tab-status"
-                role="img"
-                aria-label=${accessibleStatusLabel}
-              >
-                ${waIcon(statusGlyph, { className: 'tab-status-icon' })}${
-                  pendingApproval
-                    ? html`<span class="tab-status-label">Needs approval</span>`
-                    : nothing
-                }
-              </span>
             </div>
             <div id="run-tab-meta" class="tab-meta">
               ${
@@ -270,25 +328,55 @@ export class RunTab extends LitElement {
                 : nothing
             }
           </button>
-          <wa-tooltip for="run-tab-status">${accessibleStatusLabel}</wa-tooltip>
+          ${showStatus ? html`<wa-tooltip for="run-tab-status">${accessibleStatusLabel}</wa-tooltip>` : nothing}
         </div>
+        ${
+          showStatus
+            ? html`<span
+                id="run-tab-status"
+                class="tab-status"
+                role="img"
+                aria-label=${accessibleStatusLabel}
+              >
+                ${waIcon(statusGlyph, { className: 'tab-status-icon' })}
+                ${pendingApproval ? html`<span class="tab-status-label">Needs approval</span>` : nothing}
+              </span>`
+            : nothing
+        }
         <wa-tooltip for="run-tab-kind">${this.decorator.label}</wa-tooltip>
         ${
-          this.removable
-            ? html`<wa-button
-                  id="run-tab-remove-button"
-                  class="tab-remove"
-                  appearance="plain"
-                  variant="neutral"
-                  size="s"
-                  type="button"
-                  aria-label=${`${deleteLabel}: ${runTitle}`}
-                  data-run=${run.id}
-                  data-action="delete"
-                  >${waIcon('xmark')}</wa-button
-                ><wa-tooltip for="run-tab-remove-button"
-                  >${deleteLabel}</wa-tooltip
-                >`
+          this.removable || run.actions.includes('rename')
+            ? html`<wa-dropdown
+                class="tab-actions"
+                placement="bottom-end"
+                @wa-select=${(
+                  event: CustomEvent<{ item: { value: string } }>,
+                ) => {
+                  event.stopPropagation();
+                  if (event.detail.item.value === 'rename') this.startRename();
+                  if (event.detail.item.value === 'delete') {
+                    this.dispatchEvent(
+                      new CustomEvent('run-row-delete', {
+                        bubbles: true,
+                        composed: true,
+                      }),
+                    );
+                  }
+                }}
+              >
+                ${renderIconActionButton({
+                  id: 'run-tab-actions',
+                  icon: 'ellipsis',
+                  slot: 'trigger',
+                  label: `Actions for ${run.identity.kind === 'agent' ? 'agent' : 'task'} ${runTitle}`,
+                  tooltip:
+                    run.identity.kind === 'agent'
+                      ? 'Agent actions'
+                      : 'Task actions',
+                })}
+                ${run.actions.includes('rename') ? html`<wa-dropdown-item value="rename">${waIcon('pencil', { slot: 'icon' })}Rename…</wa-dropdown-item>` : nothing}
+                ${this.removable ? html`<wa-dropdown-item class="tab-remove" value="delete" variant="danger">${waIcon('trash', { slot: 'icon' })}${deleteLabel}</wa-dropdown-item>` : nothing}
+              </wa-dropdown>`
             : nothing
         }
       </div>

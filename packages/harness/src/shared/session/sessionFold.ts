@@ -1136,7 +1136,12 @@ function foldDurable(
   }
   // A fresh incarnation can end again.
   if (event.type === 'run.activate') sessionIndexesOf(view).ended.delete(runId);
-  let next: RunView = { ...own, lastTimestamp: event.at };
+  // Listing and transcript reads can arrive in either order. Replaying older
+  // history must not move the activity clock (and persisted read marker) back.
+  let next: RunView = {
+    ...own,
+    lastTimestamp: Math.max(own.lastTimestamp ?? event.at, event.at),
+  };
   setRun(view, next);
 
   if (created || next.parentId !== before.parentId) {
@@ -1176,7 +1181,11 @@ function foldTraceEvent(
   if (transcript === run.transcript) return true;
   setRun(
     view,
-    withTranscriptFacts({ ...run, transcript, lastTimestamp: event.at }),
+    withTranscriptFacts({
+      ...run,
+      transcript,
+      lastTimestamp: Math.max(run.lastTimestamp ?? event.at, event.at),
+    }),
   );
   return true;
 }

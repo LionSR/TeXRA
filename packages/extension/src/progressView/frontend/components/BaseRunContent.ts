@@ -99,14 +99,16 @@ export abstract class BaseRunContent extends LitElement {
     const fix = run.resumeBlocked && resumeBlockerFix(run.resumeBlocked);
     const request = (kind: 'resume') => () =>
       this.dispatchEvent(SessionUiEvents.host({ kind, runId: run.id }));
+    let explanation = `${run.statusLabel}.`;
+    if (live)
+      explanation = `This ${run.parentId === null ? 'task' : 'agent'} takes no messages.`;
+    else if (run.actions.includes('resume'))
+      explanation += ' Resume to continue.';
+    else if (run.actions.includes('fork'))
+      explanation += ' Fork to continue with this conversation’s history.';
     return html`<div class="conversation-ended">
       <span role="status" aria-atomic="true"
-        >${
-          run.statusDetail ??
-          (live
-            ? `This ${run.parentId === null ? 'task' : 'agent'} takes no messages.`
-            : `This ${run.parentId === null ? 'task' : 'agent'} has ended.`)
-        }</span
+        >${run.statusDetail ?? explanation}</span
       >
       ${
         // The task's one Resume (an interrupted task, a workflow from its

@@ -213,11 +213,7 @@ test('the desktop app shares the service with a CLI of its build, reaches the on
       // and lists the file without a refresh.
       const treeRow = (path: string) =>
         launched.page.locator(`.desktop-editor-tree-row[data-path="${path}"]`);
-      const add = launched.page.locator('.shell-workbench-add:visible').first();
-      if ((await add.count()) === 0)
-        await launched.page.locator('#shellToggleSidePanel').click();
-      await add.locator('wa-button[slot="trigger"]').click();
-      await add.locator('wa-dropdown-item[value="files"]').click();
+      await launched.page.locator('#shellToggleSidePanel').click();
       await expect(treeRow('draft.tex')).toBeVisible({ timeout: 15_000 });
       await expect(treeRow('accepted.tex')).toHaveCount(0);
       // The service follows the project's own approval policy, which a

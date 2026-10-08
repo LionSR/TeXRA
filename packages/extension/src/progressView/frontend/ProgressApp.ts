@@ -324,8 +324,9 @@ export class ProgressApp extends LitElement {
   }
 
   /** The New-task state's menu: the window items alone. */
-  private renderOverflow(): TemplateResult {
+  private renderOverflow(): TemplateResult | typeof nothing {
     const items = this.windowItems();
+    if (items.length === 0) return nothing;
     return html`
       <wa-dropdown
         placement="bottom-end"
@@ -418,7 +419,10 @@ export class ProgressApp extends LitElement {
       </section>`;
     }
     if (host.banners.gettingStarted) {
-      return html`<getting-started-banner></getting-started-banner>`;
+      return html`<new-task-hero
+          .projectName=${host.project.name}
+        ></new-task-hero>
+        <getting-started-banner></getting-started-banner>`;
     }
     return html`<new-task-hero
       .projectName=${host.project.name}

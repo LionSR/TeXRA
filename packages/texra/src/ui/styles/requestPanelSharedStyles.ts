@@ -1,11 +1,12 @@
 /**
  * Shared CSS for the one request card every pending request renders as
  * (`BaseRequestPanel.renderCard`): `.request-card` with its `__ask`,
- * `__details`, `__actions` and `__note` parts. A panel sets its accent with
- * `:host { --request-accent: … }` and adds only its own body rules.
+ * `__details`, `__actions` and `__note` parts. Panels add only their body rules;
+ * the common surface frame owns padding, borders, radius and background.
  */
 
 import { css, unsafeCSS, type CSSResult } from 'lit';
+import { panelFrameStyles } from './surfaceStyles';
 
 export const sp = {
   tiny: unsafeCSS('var(--wa-space-3xs)'),
@@ -22,19 +23,13 @@ export const requestPanelSharedStyles: CSSResult = css`
   }
 
   .request-card {
+    ${panelFrameStyles}
     display: flex;
     flex-direction: column;
-    gap: ${sp.medium};
+    gap: var(--panel-gap);
     position: relative;
-    box-sizing: border-box;
-    min-width: 0;
     max-width: 100%;
-    padding: ${sp.medium};
-    border: var(--border-thin) solid var(--wa-color-surface-border);
-    border-inline-start: var(--border-medium) solid
-      var(--request-accent, var(--wa-color-text-normal));
-    border-radius: var(--border-radius);
-    background: var(--wa-color-surface-raised);
+    padding: var(--panel-padding-block) var(--panel-padding-inline);
   }
 
   /* The ask is the card's heading: one sentence naming what the agent
@@ -59,12 +54,12 @@ export const requestPanelSharedStyles: CSSResult = css`
   .request-card__details {
     display: flex;
     flex-direction: column;
-    gap: ${sp.small};
+    gap: var(--panel-gap);
     flex: 1 1 auto;
     min-height: 0;
     max-height: min(28vh, 16rem);
     overflow-y: auto;
-    scrollbar-gutter: stable;
+    scrollbar-width: thin;
   }
 
   @media (max-height: 900px) {
@@ -78,6 +73,7 @@ export const requestPanelSharedStyles: CSSResult = css`
     flex-wrap: wrap;
     align-items: center;
     gap: ${sp.small};
+    margin: 0;
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
   }
@@ -86,7 +82,7 @@ export const requestPanelSharedStyles: CSSResult = css`
   .request-card__context {
     padding: ${sp.small} ${sp.medium};
     border-radius: var(--border-radius-small);
-    background: var(--wa-color-surface-lowered);
+    background: var(--panel-background);
     color: var(--wa-color-text-quiet);
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
@@ -96,7 +92,7 @@ export const requestPanelSharedStyles: CSSResult = css`
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: ${sp.small};
+    gap: var(--wa-space-xs);
     min-width: 0;
     max-width: 100%;
     /* Pinned under the details so the buttons stay visible while long
@@ -107,7 +103,7 @@ export const requestPanelSharedStyles: CSSResult = css`
     z-index: 1;
     margin-block-start: auto;
     padding-block-start: ${sp.small};
-    background: var(--wa-color-surface-raised);
+    background: var(--wa-color-surface-lowered);
   }
 
   .request-card__actions > * {

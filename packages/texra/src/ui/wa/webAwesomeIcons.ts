@@ -1,5 +1,6 @@
 // Third-party imports
 import { faArrowDown } from '@fortawesome/free-solid-svg-icons/faArrowDown';
+import { faTableColumns } from '@fortawesome/free-solid-svg-icons/faTableColumns';
 import { faArrowRight } from '@fortawesome/free-solid-svg-icons/faArrowRight';
 import { faArrowRotateLeft } from '@fortawesome/free-solid-svg-icons/faArrowRotateLeft';
 import { faArrowsRotate } from '@fortawesome/free-solid-svg-icons/faArrowsRotate';
@@ -51,6 +52,8 @@ import { faDatabase } from '@fortawesome/free-solid-svg-icons/faDatabase';
 import { faDiagramProject } from '@fortawesome/free-solid-svg-icons/faDiagramProject';
 import { faDownload } from '@fortawesome/free-solid-svg-icons/faDownload';
 import { faEllipsis } from '@fortawesome/free-solid-svg-icons/faEllipsis';
+import { faEye } from '@fortawesome/free-solid-svg-icons/faEye';
+import { faEyeSlash } from '@fortawesome/free-solid-svg-icons/faEyeSlash';
 import { faFile } from '@fortawesome/free-solid-svg-icons/faFile';
 import { faFileCirclePlus } from '@fortawesome/free-solid-svg-icons/faFileCirclePlus';
 import { faFileCode } from '@fortawesome/free-solid-svg-icons/faFileCode';
@@ -196,6 +199,8 @@ const icons = {
   'diagram-project': faDiagramProject,
   download: faDownload,
   ellipsis: faEllipsis,
+  eye: faEye,
+  'eye-slash': faEyeSlash,
   file: faFile,
   'file-circle-plus': faFileCirclePlus,
   'file-code': faFileCode,
@@ -252,6 +257,7 @@ const icons = {
   video: faVideo,
   'wand-magic-sparkles': faWandMagicSparkles,
   'window-maximize': faWindowMaximize,
+  'table-columns': faTableColumns,
   wrench: faWrench,
   xmark: faXmark,
 } as const satisfies Record<
@@ -304,7 +310,7 @@ export function waIcon(
     library=${TEXRA_ICON_LIBRARY}
     name=${name}
     variant="solid"
-    canvas="auto"
+    canvas="square"
     slot=${ifDefined(options.slot)}
     class=${ifDefined(options.className)}
     label=${ifDefined(options.label)}

@@ -18,8 +18,7 @@ export const PLUGINS_PAGE = Object.freeze({
   openMcpConfig: 'Open mcp.json',
   loading: 'Checking plugins…',
   empty: 'No plugins found.',
-  /** The visible label of a row's one switch. */
-  on: 'On',
+  availableToAgents: 'Available to agents',
   review: 'Review',
   update: 'Update',
   remove: 'Remove',

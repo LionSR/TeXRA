@@ -225,22 +225,140 @@ test('the rail deletes a finished conversation at once, and it stays deleted', a
     await dismissOnboarding(currentLaunch.page);
     const row = railRow(currentLaunch, WAITING_RUN);
     await expect(row).toHaveCount(1);
+    const page = currentLaunch.page;
+    const newTask = page.locator('#shellNewTask');
+    await newTask.click();
+    const launcherInput = page.locator(
+      'session-composer.launch-composer textarea',
+    );
+    await launcherInput.fill('A previous launch draft');
+    await row.locator('[data-action="select"]').click();
+    await newTask.click();
+    await expect(launcherInput).toHaveValue('');
+    await expect(page.locator('run-conversation')).toHaveCount(0);
+    await page.reload();
+    await expect(
+      page.locator('session-composer.launch-composer textarea'),
+    ).toHaveValue('');
+    await expect(page.locator('run-conversation')).toHaveCount(0);
 
-    // Hover reveals the ×, and it deletes at once: no question asked.
+    // A task header's menu must open real actions, including after restoring
+    // history. Verify both pointer activation and Escape/focus recovery.
+    await row.locator('[data-action="select"]').click();
+    const taskActions = currentLaunch.page.getByRole('button', {
+      name: 'Task actions',
+      exact: true,
+    });
+    await taskActions.click();
+    const rename = currentLaunch.page.locator(
+      'run-header wa-dropdown-item[value="renameTask"]',
+    );
+    await expect(rename).toBeVisible();
+    const menuGeometry = await currentLaunch.page
+      .locator('run-header wa-dropdown-item')
+      .evaluateAll((items) =>
+        items
+          .filter((item) => item.querySelector('[slot="icon"]'))
+          .map((item) => ({
+            labelX: item
+              .shadowRoot!.querySelector('#label')!
+              .getBoundingClientRect().x,
+            iconWidth: item
+              .querySelector('[slot="icon"]')!
+              .getBoundingClientRect().width,
+          })),
+      );
+    expect(menuGeometry.length).toBeGreaterThan(1);
+    for (const key of ['labelX', 'iconWidth'] as const) {
+      const values = menuGeometry.map((item) => item[key]);
+      expect(Math.max(...values) - Math.min(...values)).toBeLessThan(1);
+    }
+    await currentLaunch.page.screenshot({
+      path: test.info().outputPath('task-actions-menu.png'),
+      animations: 'disabled',
+    });
+    await currentLaunch.page.keyboard.press('Escape');
+    await expect(rename).toBeHidden();
+    await taskActions.press('Enter');
+    await expect(rename).toBeVisible();
+    await rename.click();
+    await expect(
+      currentLaunch.page.locator('run-header .rename-input'),
+    ).toBeVisible();
+    await currentLaunch.page.keyboard.press('Escape');
+
+    // The project and task menus occupy the same action column. Task names
+    // and selected backgrounds use the project label's content column.
     await row.hover();
-    await expect(row.locator('.tab-remove')).toBeVisible();
+    const rowMenu = row.locator('#run-tab-actions');
+    const centers = await Promise.all([
+      currentLaunch.page.locator('#shellProjectAdd').boundingBox(),
+      currentLaunch.page
+        .locator('.shell-project-menu [slot="trigger"]')
+        .first()
+        .boundingBox(),
+      rowMenu.boundingBox(),
+    ]);
+    const centerX = centers.map((box) => box!.x + box!.width / 2);
+    expect(Math.max(...centerX) - Math.min(...centerX)).toBeLessThan(1);
+    const rowBox = await row.boundingBox();
+    const titleBox = await row.locator('.tab-title').boundingBox();
+    expect(Math.abs(titleBox!.x - rowBox!.x - 8)).toBeLessThan(1);
+    const projectStatus = await page
+      .locator('.shell-project-status')
+      .boundingBox();
+    const taskStatus = await row.locator('.tab-status').boundingBox();
+    expect(
+      Math.abs(
+        projectStatus!.x +
+          projectStatus!.width / 2 -
+          taskStatus!.x -
+          taskStatus!.width / 2,
+      ),
+    ).toBeLessThan(1);
     await currentLaunch.page.screenshot({
       path: test.info().outputPath('rail-row-hover.png'),
+      animations: 'disabled',
     });
+    await rowMenu.click();
+    await row.locator('wa-dropdown-item[value="rename"]').click();
+    await row.locator('.tab-rename').fill('Renamed from the sidebar');
+    await row.locator('.tab-rename').press('Enter');
+    await expect(row.locator('.tab-title')).toHaveText(
+      'Renamed from the sidebar',
+    );
+    await rowMenu.click();
     await row.locator('.tab-remove').click();
     await expect(row).toHaveCount(0);
     await expect(railRow(currentLaunch, ORPHAN_RUN)).toHaveCount(1);
+
+    await currentLaunch.page
+      .locator('.shell-project-menu [slot="trigger"]')
+      .first()
+      .click();
+    await currentLaunch.page
+      .locator('.shell-project-menu wa-dropdown-item[value="rename"]')
+      .click();
+    const projectName = currentLaunch.page.getByRole('textbox', {
+      name: 'Project display name',
+    });
+    await projectName.fill('Research workspace');
+    await projectName.press('Enter');
+    await expect(currentLaunch.page.locator('.shell-project-name')).toHaveText(
+      'Research workspace',
+    );
+    await expect(
+      currentLaunch.page.locator('.shell-workspace-project'),
+    ).toHaveText('Research workspace');
 
     await closeTexraApp(currentLaunch);
     currentLaunch = await launchTexraApp({ workspacePath, userDataPath });
     await dismissOnboarding(currentLaunch.page);
     await expect(railRow(currentLaunch, ORPHAN_RUN)).toHaveCount(1);
     await expect(railRow(currentLaunch, WAITING_RUN)).toHaveCount(0);
+    await expect(currentLaunch.page.locator('.shell-project-name')).toHaveText(
+      'Research workspace',
+    );
     // The artifact: the relaunched rail without the deleted conversation.
     await currentLaunch.page.screenshot({
       path: test.info().outputPath('rail-after-delete.png'),

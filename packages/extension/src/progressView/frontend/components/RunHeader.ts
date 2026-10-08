@@ -14,7 +14,11 @@ import { repeat } from 'lit/directives/repeat.js';
 import { type ApprovalBypassKind } from '@shared/approvalBypassKind';
 import { resolveBypass } from '@shared/approvalBypassKind';
 import { goalStateOf, type GoalState } from '@shared/plugins/goal';
-import type { SessionView, RunView } from '@shared/session/sessionView';
+import {
+  acceptsFollowUp,
+  type SessionView,
+  type RunView,
+} from '@shared/session/sessionView';
 import type { TeXRAIconName } from '@shared/iconNames';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { CopyButtonController } from '@texra/shared/litControllers/CopyButtonController';
@@ -108,7 +112,7 @@ export class RunHeader extends LitElement {
       }
 
       #activeRunName {
-        flex: 1;
+        flex: 0 1 auto;
         min-width: 6ch;
         margin: 0;
         overflow: hidden;
@@ -125,13 +129,6 @@ export class RunHeader extends LitElement {
         flex: 1;
         min-width: 6ch;
         margin: 0;
-        padding: var(--wa-space-3xs) var(--wa-space-2xs);
-        border: 1px solid var(--wa-color-brand-border-normal);
-        border-radius: var(--border-radius-small);
-        background: var(--wa-color-surface-default);
-        color: var(--wa-color-text-normal);
-        font: inherit;
-        font-size: var(--font-size);
         font-weight: var(--font-weight-semibold);
       }
 
@@ -170,6 +167,10 @@ export class RunHeader extends LitElement {
       tool-timer {
         flex: 0 0 auto;
         white-space: nowrap;
+      }
+      .header-spacer {
+        flex: 1;
+        min-width: 0;
       }
 
       .status-indicator {
@@ -258,10 +259,9 @@ export class RunHeader extends LitElement {
         font-variant-numeric: tabular-nums;
       }
 
-      /* A narrow row keeps the title: the status word and the pass chip
-         move into the menu's status line. */
+      /* Keep the status word visible; secondary provenance and pass labels
+         remain available from the menu when the pane is narrow. */
       @container (max-width: 640px) {
-        .status-label,
         .forked-from,
         wa-tag.progress-badge {
           display: none;
@@ -336,7 +336,7 @@ export class RunHeader extends LitElement {
   private renderTitle(run: RunView): TemplateResult {
     if (this.renaming)
       return html`<input
-        class="rename-input"
+        class="rename-input inline-rename"
         aria-label="Task title"
         .value=${run.title}
         @keydown=${(event: KeyboardEvent) => {
@@ -437,10 +437,18 @@ export class RunHeader extends LitElement {
   override render(): TemplateResult | typeof nothing {
     const run = this.run;
     if (!run) return nothing;
-    const statusLabel = run.statusLabel;
+    const canContinue =
+      run.group !== 'running' &&
+      run.group !== 'waiting' &&
+      acceptsFollowUp(run, { terminalBacked: false });
+    const statusLabel = canContinue ? 'Ready' : run.statusLabel;
     const goal = goalStateOf(run);
     // The header offers exactly what the fold's `actions` licenses.
     const canStop = run.actions.includes('stop');
+    const idle =
+      run.status === 'waiting' &&
+      run.group === 'running' &&
+      run.approval === 'none';
     const canGrant = run.actions.includes('grant');
     const passLabel = progressBadgeLabel(run, this.plannedPasses);
 
@@ -455,15 +463,20 @@ export class RunHeader extends LitElement {
           aria-label=${statusLabel}
           class=${classMap({
             'status-indicator': true,
-            [TONE_INDICATOR_CLASS[run.tone]]: true,
+            [TONE_INDICATOR_CLASS[canContinue ? 'neutral' : run.tone]]: true,
           })}
         ></span>
         <wa-tooltip for=${ELEMENT_IDS.STATUS_INDICATOR}>
-          ${run.statusDetail ?? statusLabel}
+          ${
+            canContinue
+              ? `${run.statusLabel}. Send a message to continue.`
+              : (run.statusDetail ?? statusLabel)
+          }
         </wa-tooltip>
         <span class="status-label" aria-hidden="true">${statusLabel}</span>
         ${this.renderRunElapsed(run)} ${this.renderGoalChip(goal)}
         ${this.renderPassBadge(passLabel)}
+        <span class="header-spacer"></span>
         ${
           canGrant
             ? renderRunGrantChips(
@@ -473,7 +486,7 @@ export class RunHeader extends LitElement {
             : nothing
         }
         ${
-          canStop
+          canStop && !idle
             ? renderIconActionButton({
                 id: ELEMENT_IDS.STOP_STREAM_BTN,
                 icon: 'circle-stop',
@@ -566,8 +579,10 @@ export class RunHeader extends LitElement {
           variant="neutral"
           size="s"
           type="button"
-          aria-label="More"
-          >${waIcon('ellipsis')}</wa-button
+          aria-label="Task actions"
+          >${waIcon('ellipsis')}<span class="action-button-label"
+            >Task actions</span
+          ></wa-button
         >
         <div class="menu-status">
           ${statusLabel}${passLabel ? ` · ${passLabel}` : ''}
@@ -632,7 +647,7 @@ export class RunHeader extends LitElement {
             : nothing
         }
       </wa-dropdown>
-      <wa-tooltip for=${ELEMENT_IDS.HEADER_MORE_BTN}>More</wa-tooltip>
+      <wa-tooltip for=${ELEMENT_IDS.HEADER_MORE_BTN}>Task actions</wa-tooltip>
     `;
   }
 
