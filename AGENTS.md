@@ -7,9 +7,10 @@ This document sets the common conventions for contributions. Follow these norms 
 This file holds the rules every change needs. Material for one subtree lives in a
 nested `AGENTS.md`; read it before working there:
 
-- [`src/test-kernel/AGENTS.md`](src/test-kernel/AGENTS.md): test tiers, writing tests, fixtures and fakes.
+- [`src/test-kernel/AGENTS.md`](src/test-kernel/AGENTS.md): test tiers, writing tests, fixtures and fakes. Its live-LLM,
+  journeys and E2E hygiene rules also bind `packages/llm` and `packages/desktop/tests/e2e`.
 - [`packages/harness/AGENTS.md`](packages/harness/AGENTS.md): config and storage access, agent execution, run
-  loop, tool input schemas, storage format, core quality.
+  loop, tool input schemas, storage format, core quality. Settings-UI writes go through `applyStateSettingUpdate`.
 - [`packages/texra/AGENTS.md`](packages/texra/AGENTS.md): the UI toolkit.
 - [`packages/extension/src/AGENTS.md`](packages/extension/src/AGENTS.md): webviews, error surfacing.
 
@@ -137,8 +138,6 @@ One of those baselines budgets the code itself rather than an import edge, and i
 - `refuted-candidates.json` — the refactor candidates that were investigated, costed and refused, with their ruling anchors (`refutedCandidatesRatchet.vitest.ts` pins each symbol's shape; `.github/workflows/refuted-candidates.yml` fails a PR whose diff touches one without citing its ruling id in the body). Re-proposing a refused candidate as specified is what it stops; landing one on new evidence cites the id and rewrites the entry.
 
 Another code budget reached zero and is now a hardcoded rule: `unknownErrorChannelRatchet.vitest.ts` fails on any production `Effect.Effect<A, unknown, R>` or `Effect.fn.Return<A, unknown, R>`. Type the channel with the tagged error the path already raises; a port whose hosts each fail with their own surface's error takes `Error`; a foreign rejection becomes an `Error` at its boundary with `ensureError` (`@utils/errors/errorMessage`), never a `catch: (e) => e` / `onError: (e) => e` pass-through (the same test fails one, outside its `IDENTITY_CATCH_JOINS` list of late-rejection joins that compare the raw value by identity), and never the thunk form `Effect.try(() => …)` / `Effect.tryPromise(() => …)`, whose `UnknownError` hides the real message behind a fixed one; a combinator that absorbs any failure is generic in it.
-
-- Package directories: the nested guides' "Directory organization" (see "Folder-scoped guides").
 
 ### Pragmatic implementations
 
