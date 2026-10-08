@@ -452,7 +452,7 @@ describe('CLI history runtime', () => {
       const runId = 'a11ce7a11ce7' as RunId;
       const session = testDefaultSession();
       publishTestRunStart(session, runId);
-      session.trace.publish(runId, {
+      session.log.publish(runId, {
         type: 'log',
         level: 'info',
         message: 'Root status only',

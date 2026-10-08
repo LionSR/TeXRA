@@ -1,8 +1,9 @@
 /**
  * The tool-use program: one plain Effect loop over the run history, no cursor
  * and no graph. Durable phases are row data; the loop never holds its own
- * copy of the conversation, it continues from the state every `appendBatch`
- * returns, which makes the live path and the resume path the same function.
+ * copy of the conversation, it continues from the state its run cell folds
+ * back from every batch, which makes the live path and the resume path the
+ * same function. Every write point below is one `cell.append`.
  *
  * The write points, in order (manifest section 1.2): the opening batch of a
  * fresh run (its message and input, its `run.config` binding, `turn.ready`);
@@ -138,7 +139,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   | Scope.Scope
 > {
   const run = yield* AgentRun;
-  const runHistory = yield* RunHistory;
   const runs = yield* Runs;
   const invoker = yield* ModelInvoker;
   const languageModel = yield* LanguageModel;
@@ -148,7 +148,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   // call settles.
   const script = run.config.script ?? null;
   // A conversation claims its own input lease, never a parent's (FollowUps).
-  const followUps = yield* claimFollowUps(run, runHistory);
+  const followUps = yield* claimFollowUps(run);
   const compaction = yield* backgroundCompaction({
     runId,
     logger,
@@ -235,8 +235,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   // -------------------------------------------------------------- opening
   const openFresh = Effect.fn('toolUse.open')(function* (
-    opening: RunState,
-  ): Effect.fn.Return<RunState, Error, ProcessServices> {
+    cell: RunCell,
+  ): Effect.fn.Return<RunCell, Error, ProcessServices> {
+    const opening = cell.opened;
     // Keep preparation interruptible inside the masked acquire.
     const { bound, content, offered } = yield* Effect.interruptible(
       Effect.gen(function* () {
@@ -301,7 +302,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     const misses = run.opening?.attachedMemoryMisses ?? [];
     // The opening: its message with what it answers, the step it opened
     // on, the binding it runs on, and the position that opens the run.
-    const opened = yield* runHistory.appendBatch(runId, null, [
+    yield* cell.append([
       appendRow(runId, [{ role: 'user', content }], {
         input: {
           ...(openingSystem !== undefined && { system: sha256(openingSystem) }),
@@ -317,7 +318,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       positionRow(runId, opening, 'turn.ready'),
     ]);
     run.callbacks.onProgress?.({ kind: 'started' });
-    return opened;
+    return cell;
   });
 
   // ------------------------------------------------------------ the turn
@@ -393,7 +394,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       );
       for (;;) {
         state = yield* applyPendingModelSwitch(
-          state,
           cell,
           (at) => compaction.settle(at, 'the model is switching'),
           yield* followUps.controls,
@@ -443,9 +443,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           // them, or, with nothing to summarize, by this round's admission.
           const controls = yield* followUps.controls;
           const requests = consumedRows(runId, controls, 'compact');
-          state = yield* cell.adopt(
-            yield* compaction.atBoundary(state, cell, bound, requests),
-          );
+          state = yield* compaction.atBoundary(cell, bound, requests);
           // A compaction replaced the history, the context updates in it
           // too: a new step renders the system text anew, each one in it.
           if (state.offeredContext === null) {
@@ -497,7 +495,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     // publisher's, seeded where `loadRun`'s claim moved here.
     const entry = yield* loadRun(runId, start.resume);
     if (entry._tag === 'fresh')
-      return yield* makeRunCell(runId, yield* openFresh(entry.opening));
+      return yield* openFresh(yield* makeRunCell(runId, entry.opening));
     // A run parked after a turn answers with that turn's text, which a
     // resumed child that runs no further turn hands its call.
     const { loaded } = entry;
@@ -572,13 +570,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           // A reset or handoff replaces the view a background summary
           // was computed from: that summary lands, or stops, first.
           const consumed: ConsumedFollowUps = yield* followUps.consume(
-            state,
+            cell,
             batch,
             batch.kind === 'edit'
               ? (at) => compaction.settle(at, 'the task is being reset')
               : undefined,
           );
-          yield* cell.adopt(consumed.state);
           if (!consumed.turn) continue;
         }
         restoring = false;
@@ -590,7 +587,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           return finish(state, RUN_OUTCOME.CANCELLED);
         }
         // A summary the turn started lands before the turn ends.
-        state = yield* cell.adopt(yield* compaction.finish(state));
+        state = yield* compaction.finish(cell);
         // The turn's trace rows are queued ahead of the boundary: the
         // barrier lets the open streams `waiting` closes count every one.
         yield* session.log.settled;
@@ -618,11 +615,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         state =
           next === null
             ? yield* cell.append([...hooks, ...ending])
-            : yield* cell.adopt(
-                (yield* followUps.consume(state, next, undefined, {
-                  rows: [...hooks, ...ending, ...(pin?.rows ?? [])],
-                })).state,
-              );
+            : (yield* followUps.consume(cell, next, undefined, {
+                rows: [...hooks, ...ending, ...(pin?.rows ?? [])],
+              })).state;
         // A turn's end is idle even when it took its next input with it.
         if (next !== null) run.callbacks.onIdle?.();
         if (turn.outcome === 'completed') {
@@ -672,18 +667,18 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           // finished summary lands before the halt (its usage is the
           // run's); one still running stops with the run.
           Effect.andThen(
-            cell.current.pipe(
-              Effect.flatMap((at) => compaction.settle(at, 'the run stopped')),
-              Effect.flatMap(cell.adopt),
-              Effect.catch((error) =>
-                Effect.sync(() =>
-                  logger.warn(
-                    'A finished background compaction could not be recorded as the run stopped',
-                    { data: error },
+            compaction
+              .settle(cell, 'the run stopped')
+              .pipe(
+                Effect.catch((error) =>
+                  Effect.sync(() =>
+                    logger.warn(
+                      'A finished background compaction could not be recorded as the run stopped',
+                      { data: error },
+                    ),
                   ),
                 ),
               ),
-            ),
             settleRun(cell, followUps)(exit),
           ),
         );

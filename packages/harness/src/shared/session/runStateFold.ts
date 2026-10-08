@@ -167,8 +167,7 @@ export type RunState = RunPosition &
     readonly hookOutcomes: HookOutcomes;
   };
 
-/** Companions committed beside the run history fact, which the loop
- *  ignores (`response.finalized` folds into the run's facts alone). */
+/** Companions committed beside a history fact, which the loop ignores. */
 type CardRowType = CardType | SettlementType;
 type CardType = 'tool.start' | 'tool.end' | 'stream.end' | 'response.finalized';
 type SettlementType = 'run.report' | 'run.result' | 'child.turn';
@@ -178,12 +177,13 @@ type FoldedRowType =
   | SharedRunRow['type']
   | Exclude<RunHistoryDraft['type'], CardRowType>
   | 'run.activate';
+/** Every row kind the run's state (its facts too) is read from. */
+export type RunStateRowType = FoldedRowType | 'response.finalized';
 
 /**
- * Display rows ignored by name. Anything on the run aggregate that is neither
- * here nor a folded row is `unknown-run-row`, never a quiet `default`. The
- * record is total over the event vocabulary, so a new display arm is a
- * compile error here until it is classified.
+ * Display rows ignored by name: any other unfolded row on the run aggregate
+ * is `unknown-run-row`, never a quiet `default`. The record is total over the
+ * vocabulary, so a new display arm is a compile error here until classified.
  */
 const IGNORED_ROW_TYPES: Readonly<
   Record<Exclude<SessionEvent['type'], FoldedRowType>, true>

@@ -56,9 +56,7 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
   const runs = yield* Runs;
   // The run's canonical event publication, from its first event: the trace
   // is built with the session as its sink, and closed with the run.
-  const trace = new TraceEmitter((event) =>
-    session.trace.publish(runId, event),
-  );
+  const trace = new TraceEmitter((event) => session.log.publish(runId, event));
   const handle = new RunHandle(
     {
       runId,

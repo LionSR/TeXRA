@@ -140,6 +140,11 @@ const ExecutedToolResultSchema = z.object({
   reuseKey: z.string().min(1).optional(),
   /** The call whose result this one took under its `reuseKey`. */
   reusedFrom: z.string().min(1).optional(),
+  /** Follow-ups queued on the calling run that this result answers (a
+   *  child's report a wait returned): consumed in the call's settlement
+   *  batch, so they leave the run's input only with the result. Not stored
+   *  on the result. */
+  consumedFollowUps: z.array(z.string().min(1)).optional(),
   ...ToolResultSharedFields,
 });
 
@@ -231,7 +236,10 @@ const SettledFileSchema = ToolFileAttachmentSchema.transform(
   for (const issue of metadata.error.issues) ctx.addIssue({ ...issue });
 });
 export const SettledToolResultSchema = z.discriminatedUnion('status', [
-  ExecutedToolResultSchema.omit({ files: true }).extend({
+  ExecutedToolResultSchema.omit({
+    files: true,
+    consumedFollowUps: true,
+  }).extend({
     files: z.array(SettledFileSchema).optional(),
     diagnostics: JsonValueSchema.optional(),
   }),

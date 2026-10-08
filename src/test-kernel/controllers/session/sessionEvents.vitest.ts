@@ -57,7 +57,7 @@ vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
   >()),
 }));
 
-import { runHistoryLayer } from '@agent/runtime/RunHistory';
+import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
@@ -71,6 +71,7 @@ import { openProjectStateStore } from '@controllers/session/appStateStore';
 import { deletionCollector } from '@controllers/session/deletionCleanup';
 import { openStore } from '@controllers/session/storeSchema';
 import { sessionRequests } from '@controllers/session/SessionRequests';
+import { makeSessionStore } from '@controllers/session/sessionStore';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -310,6 +311,17 @@ const graph = (
     Layer.provide(nodePlatformLayer),
   );
 };
+
+/** The run history as the session builds it: over its store's log, whose
+ *  tail is delivered, so a batch returns once the view folded it. */
+const runHistoryOverStore = Layer.effect(
+  RunHistory,
+  Effect.gen(function* () {
+    const store = yield* makeSessionStore('/workspace/framing');
+    yield* store.deliver(() => {});
+    return makeRunHistory(store.log, yield* Database);
+  }),
+).pipe(Layer.provide(ProcessIdentity.layer(SELF)));
 
 /** What a renderer would draw of each state: the run's status and the
  *  outstanding requests, at the state's cursor. */
@@ -1126,7 +1138,7 @@ describe('Sessions owner', () => {
         yield* session.log.settled;
         // A trace row on a run with no `run.start` is refused whole.
         const unborn = RunIdSchema.parse('fe12dc');
-        session.trace.publish(unborn, {
+        session.log.publish(unborn, {
           type: 'log',
           level: 'info',
           message: 'lost',
@@ -2863,9 +2875,8 @@ describe('the C1 event table and the C6 publisher', () => {
         expect((yield* restarted.appendAll([waiting]))[0]?.commit).toBe(3);
       }).pipe(
         Effect.provide(
-          runHistoryLayer.pipe(
-            Layer.provideMerge(sessionEventsLayer),
-            Layer.provideMerge(substrate(storage)),
+          runHistoryOverStore.pipe(
+            Layer.provideMerge(graph([], substrate(storage).pipe(Layer.orDie))),
           ),
         ),
       );
@@ -2966,17 +2977,7 @@ describe('the C1 event table and the C6 publisher', () => {
 
 describe('RunHistory', () => {
   const runHistory = () =>
-    runHistoryLayer.pipe(
-      Layer.provideMerge(sessionEventsLayer),
-      Layer.provideMerge(databaseLayer('ephemeral').pipe(Layer.orDie)),
-      Layer.provide(
-        Layer.succeed(WorkspaceRoots)(
-          createFakeWorkspaceRoots({ storagePath: '/workspace/run-history' }),
-        ),
-      ),
-      Layer.provide(ProcessIdentity.layer(SELF)),
-      Layer.provide(nodePlatformLayer),
-    );
+    runHistoryOverStore.pipe(Layer.provideMerge(graph([])));
   const AGGREGATE = qualifyAggregateId('run', RUN);
   const SECRET = 'sk-abcdefghijklmnopqrstuvwxyz0123';
   const ORIGIN = {

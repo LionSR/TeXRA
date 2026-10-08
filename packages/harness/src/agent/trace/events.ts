@@ -19,11 +19,15 @@
  * `trace.info(text, { messageType, data })`.
  */
 import type { RunId, SessionEventDraft } from '@shared/schemas';
+import type { RunStateRowType } from '@shared/session/runStateFold';
 
-/** One session arm as the trace carries it; distributive over `T`. */
-type TraceArm<T extends SessionEventDraft['type']> = T extends unknown
-  ? Omit<Extract<SessionEventDraft, { type: T }>, 'aggregateId'>
-  : never;
+/** One session arm as the trace carries it; distributive over `T`. A row
+ *  the run's state is folded from is never a trace arm: the trace is the
+ *  display door, and those rows commit through the run's cell. */
+type TraceArm<T extends Exclude<SessionEventDraft['type'], RunStateRowType>> =
+  T extends unknown
+    ? Omit<Extract<SessionEventDraft, { type: T }>, 'aggregateId'>
+    : never;
 
 /**
  * The terminal fact as the runtime hands it to in-process consumers
@@ -60,6 +64,4 @@ export type AgentEvent =
       | 'stream.start'
       | 'stream.end'
     >
-  /** Mutable persisted run config changed after run.start. */
-  | (TraceArm<'run.config'> & { readonly runId: RunId })
   | StreamChunkEvent;

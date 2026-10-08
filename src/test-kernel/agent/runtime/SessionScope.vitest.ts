@@ -34,7 +34,7 @@ describe('session-owned transcripts and follow-up queues', () => {
         publishTestRunStart(launching, runId);
         yield* launching.log.settled;
         const trace = new TraceEmitter((event) =>
-          launching.trace.publish(runId, event),
+          launching.log.publish(runId, event),
         );
         yield* Effect.addFinalizer(() => Effect.sync(() => trace.close()));
         const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
@@ -62,7 +62,7 @@ describe('session-owned transcripts and follow-up queues', () => {
       publishTestRunStart(session, runId);
       yield* session.log.settled;
       const trace = new TraceEmitter((event) =>
-        session.trace.publish(runId, event),
+        session.log.publish(runId, event),
       );
       yield* Effect.addFinalizer(() => Effect.sync(() => trace.close()));
       const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);

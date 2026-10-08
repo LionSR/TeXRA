@@ -1801,24 +1801,24 @@ if (SHOW_STREAMING_TOOL_OUTPUT) {
     Effect.gen(function* () {
       yield* Effect.sleep('1 second');
       seedPhase(HARNESS_RUN_ID, RUN_PHASE.RUNNING);
-      session().trace.publish(HARNESS_RUN_ID, {
+      session().log.publish(HARNESS_RUN_ID, {
         type: 'stream.start',
         id: 'streaming-thinking',
         kind: MESSAGE_TYPES.THINKING,
       });
-      session().trace.publish(HARNESS_RUN_ID, {
+      session().log.publish(HARNESS_RUN_ID, {
         type: 'stream.chunk',
         id: 'streaming-thinking',
         text: 'Checking the streamed calculation.',
       });
-      session().trace.publish(HARNESS_RUN_ID, {
+      session().log.publish(HARNESS_RUN_ID, {
         type: 'tool.start',
         logId: 'streaming-tool',
         toolName: 'bash',
         input: { command: 'python3 calculation.py' },
       });
       for (let index = 1; index <= 12; index += 1) {
-        session().trace.publish(HARNESS_RUN_ID, {
+        session().log.publish(HARNESS_RUN_ID, {
           type: 'stream.chunk',
           id: 'streaming-tool',
           text: `output-${index}: ${'long result '.repeat(30)}\n`,

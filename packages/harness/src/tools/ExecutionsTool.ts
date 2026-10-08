@@ -80,7 +80,7 @@ import { scriptCallsView } from './executions/scriptCallsView';
 
 interface RunToolContext {
   readonly session: SessionHandle;
-  readonly runId: RunId | undefined;
+  readonly runId: RunId;
 }
 
 /**
@@ -107,11 +107,7 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
     const phases = (view: SessionView): string =>
       runIds.map((id) => view.runs.get(id)?.status ?? '').join(',');
     const sent = (view: SessionView): readonly string[] =>
-      context.runId === undefined
-        ? []
-        : (view.queuedFollowUps.get(context.runId) ?? []).map(
-            (f) => f.followUpId,
-          );
+      (view.queuedFollowUps.get(context.runId) ?? []).map((f) => f.followUpId);
     const initial = SubscriptionRef.getUnsafe(context.session.view.ref);
     const started = phases(initial);
     const held = new Set(sent(initial));
@@ -226,12 +222,21 @@ const runExecutions = Effect.fn('ExecutionsTool.run')(function* (
           runId,
           input.message,
         );
-      case 'wait':
+      case 'wait': {
         yield* waitForRuns(context, input.timeout, [runId]);
-        return yield* showSummary(context, runId, {
-          suppressAutoDeliveredSubagentReport:
-            !(yield* context.session.followUps.withdraw(context.runId, runId)),
+        // The child's deliveries still queued on the caller: this result
+        // answers them, and its settlement consumes them with it.
+        const queued = yield* context.session.followUps
+          .read(context.runId)
+          .pipe(Effect.orDie);
+        const answered = queued.followUps
+          .map(({ followUpId }) => followUpId)
+          .filter((followUpId) => followUpId.startsWith(`${runId}:`));
+        const summary = yield* showSummary(context, runId, {
+          suppressAutoDeliveredSubagentReport: answered.length === 0,
         });
+        return { ...summary, consumedFollowUps: answered };
+      }
       case 'view':
         return yield* showSummary(context, runId, {
           suppressAutoDeliveredSubagentReport: false,
@@ -301,17 +306,7 @@ function resolveRunId(
   context: RunToolContext,
   id: string,
 ): Effect.Effect<RunId, ToolError> {
-  if (id === 'current') {
-    const runId = context.runId;
-    if (!runId) {
-      return Effect.fail(
-        new ToolError(
-          'No active run. Use a specific run ID instead of "current".',
-        ),
-      );
-    }
-    return Effect.succeed(runId);
-  }
+  if (id === 'current') return Effect.succeed(context.runId);
   const result = RunIdSchema.safeParse(id);
   if (!result.success) {
     return Effect.fail(
@@ -391,12 +386,11 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
   }
 
   // A report the caller already received as a follow-up is elided; a wait
-  // withdraws one still queued and shows it here. Only a live handle proves
+  // answers one still queued and shows it here. Only a live handle proves
   // the child-run loop delivered it (a background bash run included).
   const suppressReport =
     options.suppressAutoDeliveredSubagentReport === true &&
     run.identity.kind === 'agent' &&
-    context.runId !== undefined &&
     run.parentId === context.runId &&
     (yield* Runs).getHandle(runId) !== undefined;
 
@@ -417,8 +411,6 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
   context: RunToolContext,
   runId: RunId,
 ) {
-  const callerRunId = context.runId;
-
   if (context.runId === runId) {
     return yield* Effect.fail(
       new ToolError(`Cannot kill your own run (${runId}).`),
@@ -433,8 +425,8 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
     );
   }
 
-  // Scope: can only kill your own children. Deny if no context.
-  if (!target.isOwnedBy(callerRunId)) {
+  // Scope: can only kill your own children.
+  if (!target.isOwnedBy(context.runId)) {
     return yield* Effect.fail(
       new ToolError(`Cannot kill run ${runId}: not a child of this session.`),
     );

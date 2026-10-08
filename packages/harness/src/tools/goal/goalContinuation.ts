@@ -53,7 +53,7 @@ export const goalContinuation: Continuation = {
         .cost ?? 0;
     if (cap > 0 && spent >= cap) {
       yield* pauseActive({ session, runId });
-      session.trace.publish(runId, {
+      session.log.publish(runId, {
         type: 'log',
         level: 'warn',
         message:

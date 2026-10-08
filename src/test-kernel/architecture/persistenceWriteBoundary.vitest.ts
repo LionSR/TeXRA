@@ -78,6 +78,19 @@ const CURRENT_VALUES_MODULE =
  *  invariant 1). */
 const PUBLISHER_MODULE = 'packages/harness/src/agent/runtime/SessionEvents.ts';
 
+/** The session store owns the publisher: the one module that takes its tag,
+ *  so its transactions are reached through the session's log alone, never
+ *  around it (a run's rows included). The layer that builds it imports the
+ *  tag to provide it. */
+const PUBLISHER_OWNERS = [
+  'packages/harness/src/controllers/session/sessionStore.ts',
+  PUBLISHER_MODULE,
+];
+/** A value import of the publisher's tag; a type import or the shape is
+ *  not one. */
+const PUBLISHER_TAG_IMPORT =
+  /import\s*\{(?:[^}]*,)?\s*SessionEvents\s*[,}][^;]*from\s*['"]@shared\/session\/sessionEvents['"]/;
+
 /** A call of the database's append, or of the run removal whose transaction
  *  appends the tombstone; never a declaration or a `Pick` key. */
 const APPEND_CALL = /(?:\.appendAll|\.prepareRunRemoval|\bappendRows)\s*\(/;
@@ -188,6 +201,26 @@ describe('persistence write boundary', () => {
         ),
     );
     expect(stale).toEqual([]);
+  });
+
+  it('takes the publisher in the session store and nowhere else', () => {
+    const found = offenders(PUBLISHER_TAG_IMPORT, PUBLISHER_OWNERS);
+
+    expect(
+      found,
+      found.length === 0
+        ? undefined
+        : "Write through the session log (`SessionLog.transact`, `SessionLog.publish`); the publisher is the session store's own.",
+    ).toEqual([]);
+    // Not vacuous: each owner takes the tag.
+    expect(
+      PUBLISHER_OWNERS.filter(
+        (file) =>
+          !PUBLISHER_TAG_IMPORT.test(
+            stripComments(readFileSync(resolve(REPO_ROOT, file), 'utf8')),
+          ),
+      ),
+    ).toEqual([]);
   });
 
   it('binds SQL with anonymous parameters only', () => {

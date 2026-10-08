@@ -47,7 +47,7 @@ import type {
   RuntimeToolRegistry,
   ToolServices,
 } from '@agent/runtime/ToolServices';
-import { makeRunCell } from '@agent/runtime/loop/runProgram';
+import { makeRunCell, type RunCell } from '@agent/runtime/loop/runProgram';
 import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
 import { appendRow, positionRow, rowAggregate } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
@@ -234,8 +234,9 @@ interface DispatchKit {
   readonly session: SessionHandle;
   /** The folded state with the turn's response pending and unsettled. */
   readonly state: RunState;
-  /** The state before the response: the one a live dispatch's cell opened on. */
-  readonly opened: RunState;
+  /** The cell a live dispatch runs on: opened before the response, which
+   *  it then committed, as the invoker's does. */
+  readonly cell: RunCell;
   readonly readFiles: Set<string>;
   /** The tools the dispatch's step offers. */
   readonly tools: RuntimeToolRegistry;
@@ -276,7 +277,10 @@ const openDispatch = Effect.fn('openDispatch')(function* (
     positionRow(runId, freshState(), 'turn.ready'),
   ]);
   const turn = turnWithCalls(options.calls);
-  const state = yield* session.runHistory.appendBatch(runId, opened, [
+  const cell = yield* makeRunCell(runId, opened).pipe(
+    Effect.provideService(RunHistory, session.runHistory),
+  );
+  const state = yield* cell.append([
     {
       type: 'model.message',
       aggregateId: rowAggregate(runId),
@@ -326,7 +330,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
     runId,
     session,
     state,
-    opened,
+    cell,
     readFiles: new Set<string>(),
     tools,
     layer,
@@ -335,20 +339,14 @@ const openDispatch = Effect.fn('openDispatch')(function* (
 
 /** Dispatch the pending response of an opened run. */
 const dispatch = (kit: DispatchKit) =>
-  makeRunCell(kit.runId, kit.opened).pipe(
-    Effect.tap((cell) => cell.adopt(kit.state)),
-    Effect.flatMap((cell) =>
-      dispatchPendingResponse(cell, kit.readFiles, {
-        definitions: [],
-        registry: kit.tools,
-        offered: [],
-        services: Context.empty() as PluginContext,
-        stepRoots: [],
-        hooks: [],
-      }),
-    ),
-    Effect.provide(kit.layer),
-  );
+  dispatchPendingResponse(kit.cell, kit.readFiles, {
+    definitions: [],
+    registry: kit.tools,
+    offered: [],
+    services: Context.empty() as PluginContext,
+    stepRoots: [],
+    hooks: [],
+  }).pipe(Effect.provide(kit.layer));
 
 /** The one tool group the dispatch delivers, in call order. */
 function deliveredResults(

@@ -44,7 +44,7 @@ import { afterAll, afterEach, beforeEach, describe, expect } from 'vitest';
 
 import { refresh } from '@agent/index';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { runHistoryLayer } from '@agent/runtime/RunHistory';
+import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import { databaseLayer } from '@controllers/session/Database';
 import {
@@ -59,6 +59,7 @@ import {
 } from '@controllers/session/sessionSources';
 import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
+import { makeSessionStore } from '@controllers/session/sessionStore';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
@@ -70,7 +71,6 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { Database } from '@shared/session/database';
-import { RunHistory } from '@shared/session/runHistory';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { fold } from '@shared/session/sessionFold';
 import {
@@ -428,7 +428,10 @@ describe('the golden 1.0 store', () => {
       expect(
         [...folded.queuedFollowUps].map(([id, queued]) => [id, queued.length]),
       ).toEqual([[CHAT, 2]]);
-      const runHistory = yield* RunHistory;
+      const runHistory = makeRunHistory(
+        (yield* makeSessionStore(storage)).log,
+        yield* Database,
+      );
       const stateOf = (id: RunId) =>
         Effect.map(runHistory.load(id), (state) => ({
           at: state?.at,
@@ -453,7 +456,8 @@ describe('the golden 1.0 store', () => {
       });
       expect((yield* runHistory.load(CHAT))?.modelId).toBe('gemini38f');
     }).pipe(
-      Effect.provide(runHistoryLayer.pipe(Layer.provideMerge(graph(storage)))),
+      Effect.provide(graph(storage)),
+      Effect.provide(ProcessIdentity.layer(SELF)),
       Effect.scoped,
     );
   });
