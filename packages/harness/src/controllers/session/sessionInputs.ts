@@ -16,7 +16,6 @@ import {
   referencedAggregates,
   isDisplaySessionEvent,
   RunIdSchema,
-  aggregateTarget,
   type AggregateId,
   type LocalRuntimeState,
   type ExistenceReconciliation,
@@ -254,21 +253,16 @@ export const sessionInputsLayer = Layer.effect(
   }),
 );
 
-/** Show each damaged run read-only with why (`unreadable`): one of its rows
- *  does not decode, so it never opens. */
+/** Show each run that cannot open read-only with why (`unreadable`): a
+ *  row of it does not decode, or an earlier build wrote one. */
 const markDamaged = (
   ref: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
-  damaged: readonly { readonly id: AggregateId; readonly detail: string }[],
+  damaged: LocalRuntimeState['unreadable'],
 ) =>
   Effect.gen(function* () {
     const local = yield* SubscriptionRef.get(ref);
     const known = new Set(local.unreadable.map(({ runId }) => runId));
-    const fresh = damaged.flatMap(({ id, detail }) => {
-      const target = aggregateTarget(id);
-      return target.kind === 'run' && !known.has(target.id)
-        ? [{ runId: RunIdSchema.parse(target.id), detail }]
-        : [];
-    });
+    const fresh = damaged.filter(({ runId }) => !known.has(runId));
     // Only a new damaged run moves the level: an unchanged one would wake
     // this reader again for nothing, forever.
     if (fresh.length > 0)

@@ -99,11 +99,11 @@ import {
   encodeDraft,
   pluginKind,
   prepareEventDraft,
-  rowReader,
   storeGate,
   type EncodedRow,
   type SqlRow,
 } from './rowCodec';
+import { rowReader } from './rowReader';
 import { isBusy, isDamaged, retryBusy } from './storeAside';
 import { openStore, reclaimFreePages } from './storeSchema';
 /** The database file of a session root, beside the stores it replaces. */
@@ -990,7 +990,7 @@ export const databaseLayer = (
                 events,
                 checkedAggregateIds,
                 state: yield* readState(checkedAggregateIds),
-                damaged: damaged(),
+                damaged: yield* damaged(exec),
               };
             }),
           ),

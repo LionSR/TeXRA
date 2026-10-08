@@ -102,7 +102,10 @@ import {
   type SessionEventDraft,
   type InquiryThreadSummary,
 } from '@shared/schemas';
-import { RUN_DAMAGED_MESSAGE } from '@shared/runs/runStatusDisplay';
+import {
+  RUN_DAMAGED_MESSAGE,
+  RUN_EARLIER_BUILD_MESSAGE,
+} from '@shared/runs/runStatusDisplay';
 import { Database, GlobalDatabase } from '@shared/session/database';
 import { runActions } from '@shared/session/runActions';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -1805,6 +1808,57 @@ describe('the C1 event table and the C6 publisher', () => {
           _tag: 'DatabaseReadFailed',
           cause: { _tag: 'DatabaseRowCorrupt', type: 'run.start', commit: 1 },
         });
+      });
+    },
+  );
+
+  it.effect(
+    "lists a run with an earlier build's row as that build's, not as damaged",
+    () => {
+      // `model.message` v1 has no upcaster to this build's version.
+      const storage = workspace();
+      return Effect.gen(function* () {
+        yield* Database.pipe(
+          Effect.flatMap((db) =>
+            db.appendAll([
+              runStart,
+              {
+                type: 'model.message',
+                aggregateId: runStart.aggregateId,
+                payload: {
+                  kind: 'append',
+                  sourceResponse: null,
+                  messages: [
+                    { role: 'user', content: [{ kind: 'text', text: 'hi' }] },
+                  ],
+                },
+              },
+            ]),
+          ),
+          Effect.provide(substrate(storage)),
+        );
+        const raw = reader(storage);
+        raw.exec(`UPDATE event SET version = 1 WHERE type = 'model.message'`);
+        raw.close();
+        const read = yield* Effect.flip(
+          Effect.flatMap(Database, (db) =>
+            db.readAggregate(runStart.aggregateId, 0),
+          ).pipe(Effect.provide(substrate(storage))),
+        );
+        expect(read.cause).toMatchObject({
+          _tag: 'DatabaseRowCorrupt',
+          earlier: true,
+        });
+        yield* Effect.gen(function* () {
+          const view = yield* SessionViewService;
+          yield* settle(view.ref, (v) => v.runs.get(RUN)?.readOnly === true);
+          expect(
+            (yield* SubscriptionRef.get(view.ref)).runs.get(RUN)?.statusDetail,
+          ).toBe(RUN_EARLIER_BUILD_MESSAGE);
+        }).pipe(
+          Effect.provide(graph([], substrate(storage).pipe(Layer.orDie))),
+          Effect.scoped,
+        );
       });
     },
   );

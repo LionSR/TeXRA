@@ -20,6 +20,7 @@ import type {
   OwnerLiveness,
   SessionEvent,
   SessionEventDraft,
+  LocalRuntimeState,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { ValueFamily } from './valueFamily';
@@ -162,11 +163,9 @@ export class DatabaseReadFailed extends Data.TaggedError('DatabaseReadFailed')<{
 }
 
 /**
- * What opening a store moved aside, whole: a store written before 1.0, which
- * this build never reads, or a file SQLite reports damaged or not a
- * database. Null when nothing was moved. The one fact a host presents about
- * it; this build never reads the moved file.
- */
+ * What opening a store moved aside, whole (never read again): a store written
+ * before 1.0, or a file SQLite reports damaged or not a database. Null when
+ * nothing was moved. The one fact a host presents about it. */
 export interface SessionStoreMovedAside {
   readonly path: string;
   readonly aside: string;
@@ -186,18 +185,15 @@ export class DatabaseStoreNewer extends Data.TaggedError('DatabaseStoreNewer')<{
   override readonly message = `The session store holds ${this.type} rows at version ${this.version}, which this build does not read: a newer TeXRA wrote them, or a pre-release of a different format. Update TeXRA, or move the store aside to start a fresh one. Nothing in the store was changed.`;
 }
 
-/** A stored row that does not decode as its kind's shape: its read fails,
- *  naming the row, as the cause of the `DatabaseReadFailed`. */
+/** A stored row that does not decode, or an earlier build's (`earlier`):
+ *  its read fails, naming the row, as `DatabaseReadFailed`'s cause. */
 export class DatabaseRowCorrupt extends Data.TaggedError('DatabaseRowCorrupt')<{
   readonly commit: number;
   readonly type: string;
   readonly detail: string;
-  /** An earlier build wrote it, at a version this one cannot upcast. */
   readonly earlier?: true;
 }> {
-  override readonly message = this.earlier
-    ? `The session store's ${this.type} row at commit ${this.commit} was written by an earlier build of TeXRA; it can't be opened by this one.`
-    : `The session store's ${this.type} row at commit ${this.commit} does not decode (${this.detail}).`;
+  override readonly message = `The session store's ${this.type} row at commit ${this.commit} ${this.earlier ? "was written by an earlier build of TeXRA; it can't be opened by this one" : `does not decode (${this.detail})`}.`;
 }
 
 /**
@@ -383,11 +379,7 @@ export class Database extends Context.Service<
         readonly events: readonly SessionEvent[];
         readonly checkedAggregateIds: readonly AggregateId[];
         readonly state: readonly AggregateState[];
-        /** Each unreadable run, with why it cannot be opened. */
-        readonly damaged: readonly {
-          readonly id: AggregateId;
-          readonly detail: string;
-        }[];
+        readonly damaged: LocalRuntimeState['unreadable'];
       },
       DatabaseReadFailed
     >;

@@ -47,11 +47,8 @@ import { resumeRun } from '@agent/runtime/resumeRun';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import { databaseLayer } from '@controllers/session/Database';
-import {
-  EVENT_COLUMNS,
-  EVENT_FROM,
-  rowReader,
-} from '@controllers/session/rowCodec';
+import { EVENT_COLUMNS, EVENT_FROM } from '@controllers/session/rowCodec';
+import { rowReader } from '@controllers/session/rowReader';
 import {
   LocalRuntimeSource,
   TextChunkSource,
