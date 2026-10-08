@@ -2460,7 +2460,9 @@ prompt: |
  * a task whose agent calls the same configured stdio server. Each call must
  * see its own project's value, from a process of its own: one server
  * shared across the projects would answer both with the first project's
- * value. The values each call saw are the artifact.
+ * value. A second task in the first project then reaches the same process
+ * (its call count goes on), as a chat's next message does. What each call
+ * saw is the artifact.
  */
 async function validateServiceProjectMcp() {
   const cwd = makeScratch('texra-cli-service-mcp-');
@@ -2474,6 +2476,7 @@ async function validateServiceProjectMcp() {
     server,
     `const fs = require('node:fs');
 const send = (message) => process.stdout.write(JSON.stringify(message) + '\\n');
+let calls = 0;
 require('node:readline').createInterface({ input: process.stdin }).on('line', (line) => {
   const { id, method, params } = JSON.parse(line);
   if (method === 'initialize')
@@ -2485,7 +2488,8 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', (l
       inputSchema: { type: 'object', properties: { command: { type: 'string' } } } }] } });
   else if (method === 'tools/call') {
     const project = process.env.FIXTURE_PROJECT ?? 'unset';
-    fs.writeFileSync(process.env.FIXTURE_OUT, project + '|' + process.pid);
+    calls += 1;
+    fs.writeFileSync(process.env.FIXTURE_OUT, project + '|' + process.pid + '|' + calls);
     send({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: 'project: ' + project }] } });
   } else if (id !== undefined)
     send({ jsonrpc: '2.0', id, error: { code: -32601, message: method } });
@@ -2566,19 +2570,30 @@ prompt: |
     }
     for (const [name, dir] of Object.entries(projects))
       start(dir, 'mcp_validation', `Report ${name}`);
-    const seen = {};
-    for (const [name, dir] of Object.entries(projects)) {
+    const call = async (name, dir) => {
       const out = path.join(dir, 'mcp.txt');
       const line = await waitFor(`${name}'s MCP call`, () =>
         existsSync(out) ? readFileSync(out, 'utf8') : undefined,
       );
-      const [project, pid] = line.split('|');
-      seen[name] = { project, pid };
-    }
+      rmSync(out);
+      const [project, pid, calls] = line.split('|');
+      return { project, pid, calls: Number(calls) };
+    };
+    const seen = {};
+    for (const [name, dir] of Object.entries(projects))
+      seen[name] = await call(name, dir);
+    // The project's next task, as a chat's next message.
+    start(alpha.work, 'mcp_validation', 'Report alpha again');
+    const again = await call('alpha (again)', alpha.work);
     const artifactPath = writeArtifact('service-project-mcp.json', {
       alpha: seen.alpha.project,
       beta: seen.beta.project,
       oneServerPerProject: seen.alpha.pid !== seen.beta.pid,
+      alphaNextTask: {
+        project: again.project,
+        sameServer: again.pid === seen.alpha.pid,
+        calls: again.calls,
+      },
     });
     assert(
       seen.alpha.project === 'alpha' && seen.beta.project === 'beta',
@@ -2587,6 +2602,12 @@ prompt: |
     assert(
       seen.alpha.pid !== seen.beta.pid,
       `the two projects should not share one MCP server process (artifact: ${artifactPath})`,
+    );
+    assert(
+      again.project === 'alpha' &&
+        again.pid === seen.alpha.pid &&
+        again.calls === 2,
+      `a project's next task should reach the same MCP server (artifact: ${artifactPath})`,
     );
   } finally {
     run(process.execPath, [binaryPath, 'service', 'stop'], {

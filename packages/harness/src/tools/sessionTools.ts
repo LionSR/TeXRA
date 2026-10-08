@@ -3,8 +3,9 @@
  * session's scope: each plugin's `sessionLayer`, up while the plugin is on,
  * a step uses it or work it started holds it (`PluginHold`); and the MCP
  * servers its runs name (`hold`) and its steps' installed plugins start,
- * with the project's `.env` variables, until the last run or step holding
- * one ends or the session closes. No server is shared across projects.
+ * with the project's `.env` variables, up for a minute past the last run or
+ * step holding one (so consecutive runs share it) and never past the
+ * session's close. No server is shared across projects.
  *
  * A step (`pin`, `@agent/runtime/loop/step`) reads the switches and the
  * installed plugins once and builds its tools from that read alone, so a
@@ -16,6 +17,7 @@
 import {
   Cause,
   Context,
+  Duration,
   Effect,
   Equal,
   Exit,
@@ -217,6 +219,9 @@ export const follow = (
     );
   }).pipe(Effect.forkScoped, Effect.asVoid);
 
+/** How long an MCP server no run or step holds stays up for the next. */
+const SERVER_IDLE = Duration.minutes(1);
+
 /** Reads no plugins, from configuration or installed. */
 export const NONE = Effect.succeed({ plugins: [], warnings: [] });
 
@@ -319,12 +324,17 @@ export const sessionTools = Effect.fnUntraced(function* (
         Effect.provideService(PluginHold, holdFor(id)),
       ),
   });
+  // A server outlives its last holder by `SERVER_IDLE`, so the project's
+  // next run (a chat's next message) reuses the process and its state; a
+  // superseded key's process stops once that idle time passes, and the
+  // session's close stops every one.
   const servers: RcMap.RcMap<ServerKey, LoadedPluginTools> = yield* RcMap.make({
     lookup: (key: ServerKey) =>
       key.plugin.acquire.pipe(
         Effect.provideService(ChildProcessSpawner, shared.spawner),
         Effect.provideService(ProjectEnvironment, key.env),
       ),
+    idleTimeToLive: SERVER_IDLE,
   });
   yield* follow(
     SubscriptionRef.changes(shared.on),
