@@ -258,19 +258,21 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
     key: string,
     call: Extract<HostCall, { kind: 'lmStream' }>,
     schema: z.ZodType<A>,
+    window = target(key, CALL_CAPABILITY[call.kind]),
   ): Stream.Stream<A, WindowCallFailed> =>
     Stream.unwrap(
       Effect.gen(function* () {
-        const window = target(key, CALL_CAPABILITY[call.kind]);
+        // Made first, so the check below and the registration are one step
+        // and a detach either finds this call or came before it.
+        const items = yield* Queue.unbounded<
+          A,
+          WindowCallFailed | Cause.Done
+        >();
         if (window === undefined || !windows.has(window))
           return yield* new WindowCallFailed({
             reason: 'detached',
             message: 'No TeXRA window of this project is attached.',
           });
-        const items = yield* Queue.unbounded<
-          A,
-          WindowCallFailed | Cause.Done
-        >();
         const id = randomUUID();
         let settled = false;
         window.pending.set(id, {
@@ -399,22 +401,30 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
               { kind: 'lmModels', vendor: selector?.vendor ?? null },
               CallResultSchemas.lmModels,
             ).pipe(Effect.mapError((failure) => new Error(failure.message))),
-          // The window acquires the model per call: a turn's binding lives
-          // in the window that runs it.
+          // The window holds the editor's model; a turn prepared in one
+          // window streams in that window (its acquisition prepared it).
           acquire: (configuration) =>
-            Effect.succeed({
-              prepareTurn: (request) =>
-                ask(
-                  key,
-                  { kind: 'lmPrepare', configuration, request },
-                  CallResultSchemas.lmPrepare,
-                ).pipe(Effect.mapError(modelError)),
-              streamTurn: (turn) =>
-                askStream(
-                  key,
-                  { kind: 'lmStream', configuration, turn },
-                  CallResultSchemas.lmStream,
-                ).pipe(Stream.mapError(modelError)),
+            Effect.sync(() => {
+              let preparedIn: Window | undefined;
+              return {
+                prepareTurn: (request) =>
+                  Effect.suspend(() => {
+                    preparedIn = target(key, 'languageModel');
+                    return ask(
+                      key,
+                      { kind: 'lmPrepare', configuration, request },
+                      CallResultSchemas.lmPrepare,
+                      preparedIn,
+                    );
+                  }).pipe(Effect.mapError(modelError)),
+                streamTurn: (turn) =>
+                  askStream(
+                    key,
+                    { kind: 'lmStream', configuration, turn },
+                    CallResultSchemas.lmStream,
+                    preparedIn,
+                  ).pipe(Stream.mapError(modelError)),
+              };
             }),
         };
       },

@@ -5,19 +5,22 @@
 // `ATTACHED` once its attachment is up, `LINKED` each time its link
 // reaches a service (a restart prints it again), and `CALLED <path>` per
 // read, and runs until it is killed. `lm` also offers the editor's language
-// models: it lists one Copilot model and refuses every turn with
-// `HARNESS-COPILOT`, printing `CALLED lmModels` / `CALLED lmPrepare`. With
+// models: it lists one Copilot model and streams every turn's reply
+// (`HARNESS-COPILOT streamed this reply.`), refusing a turn prepared by
+// another acquisition as the editor does, and prints `ACQUIRED` and
+// `CALLED lmModels` / `lmPrepare` / `lmStream`. With
 // `lm` or `start` it then starts a task on `<model>` itself, as a VS Code
 // window launches one, and prints `STARTED <runId>` (`start` offers no
 // models).
 //
 //   node service-host-harness.js <storageRoot> <workspace> <answer|hang|lm|start> [model]
 
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import { Effect, Stream, SubscriptionRef } from 'effect';
 
-import { ModelError } from '@texra-ai/llm';
+import { ModelError, TurnResultSchema, type Model } from '@texra-ai/llm';
 
 import { AgentConfigSchema } from '@agent/runtime';
 import { linkService } from '@texra/controllers/server/client';
@@ -29,6 +32,9 @@ if (storageRoot === undefined || workspace === undefined)
   throw new Error(
     'usage: service-host-harness <storageRoot> <workspace> <answer|hang|lm>',
   );
+
+/** The editor model's reply, streamed in these pieces. */
+const STREAMED = ['HARNESS-COPILOT streamed ', 'this reply.'];
 
 const say = (line: string) =>
   Effect.sync(() => process.stdout.write(`${line}\n`));
@@ -84,26 +90,86 @@ await Effect.runPromise(
                     },
                   ]),
                 ),
-              acquire: () =>
-                Effect.succeed({
-                  prepareTurn: () =>
-                    say('CALLED lmPrepare').pipe(
-                      Effect.andThen(
-                        Effect.fail(
-                          new ModelError({
-                            kind: 'authentication',
-                            message: 'HARNESS-COPILOT refused this turn',
-                          }),
+              // One acquisition per call of `acquire`, as the editor's: a
+              // turn streams only through the acquisition that prepared it.
+              acquire: (configuration) =>
+                Effect.gen(function* () {
+                  const acquisitionId = randomUUID();
+                  yield* say('ACQUIRED');
+                  const origin = {
+                    protocol: 'vscode-lm' as const,
+                    codecVersion: 1,
+                    requestedModel: configuration.requestedModel,
+                    deployment: configuration.deployment,
+                  };
+                  return {
+                    prepareTurn: (request) =>
+                      say('CALLED lmPrepare').pipe(
+                        Effect.as({
+                          ...origin,
+                          mode: 'foreground' as const,
+                          acquisitionId,
+                          system: request.system,
+                          messages: request.messages,
+                          tools: request.tools ?? [],
+                          controls: {
+                            justification: configuration.defaults.justification,
+                            toolChoice: 'auto' as const,
+                          },
+                        }),
+                      ),
+                    streamTurn: (turn) =>
+                      Stream.unwrap(
+                        say('CALLED lmStream').pipe(
+                          Effect.andThen(
+                            turn.protocol === 'vscode-lm' &&
+                              turn.acquisitionId === acquisitionId
+                              ? Effect.succeed(
+                                  Stream.fromIterable(
+                                    STREAMED.map((text) => ({
+                                      kind: 'delta' as const,
+                                      part: 'text' as const,
+                                      text,
+                                    })),
+                                  ).pipe(
+                                    Stream.concat(
+                                      Stream.succeed({
+                                        kind: 'completed' as const,
+                                        result: TurnResultSchema.parse({
+                                          kind: 'editor',
+                                          requestedOrigin: origin,
+                                          providerResponseId: null,
+                                          returnedModel: null,
+                                          modelFingerprint: null,
+                                          finishReason: null,
+                                          usage: null,
+                                          content: [
+                                            {
+                                              kind: 'message',
+                                              content: [
+                                                {
+                                                  kind: 'text',
+                                                  text: STREAMED.join(''),
+                                                },
+                                              ],
+                                            },
+                                          ],
+                                        }),
+                                      }),
+                                    ),
+                                  ),
+                                )
+                              : Effect.fail(
+                                  new ModelError({
+                                    kind: 'unsupported',
+                                    message:
+                                      'HARNESS-COPILOT: the prepared turn belongs to another acquisition.',
+                                  }),
+                                ),
+                          ),
                         ),
                       ),
-                    ),
-                  streamTurn: () =>
-                    Stream.fail(
-                      new ModelError({
-                        kind: 'authentication',
-                        message: 'HARNESS-COPILOT refused this turn',
-                      }),
-                    ),
+                  } satisfies Model;
                 }),
             },
           }),

@@ -2672,9 +2672,11 @@ prompt: |
  * VS Code window of the project. With Copilot preferred for a model and no
  * window offering editor models, a service task fails saying so; with a
  * window that offers them (the harness's `lm` mode: one Copilot model that
- * refuses every turn), the service discovers the route and prepares the
- * turn through that window, and the task fails with the window's own model
- * error. The tasks' failures and the window's calls are the artifact.
+ * streams its reply in pieces, and refuses a turn another acquisition
+ * prepared, as the editor does), the service discovers the route, prepares
+ * the turn and streams it through that window, and the task finalizes the
+ * streamed reply. The windowless task's end, the reply's rows and the
+ * window's calls are the artifact.
  */
 async function validateServiceEditorModels() {
   const cwd = makeScratch('texra-cli-service-lm-');
@@ -2783,16 +2785,16 @@ async function validateServiceEditorModels() {
     window.child.kill('SIGKILL');
     window = await startWindow('lm');
     const served = /STARTED ([0-9a-f]{12})/.exec(window.stdout)[1];
-    // The window's model refused the turn: the run records that failure
-    // (and asks how to go on), carrying the window's own message.
-    await waitFor(
-      'the windowed task to record the window model failure',
-      () => saying(served, 'HARNESS-COPILOT').length > 0,
+    // The window's model streamed the turn: the run finalizes its reply
+    // and waits for a follow-up.
+    const reply = 'HARNESS-COPILOT streamed this reply.';
+    await waitFor('the windowed task to finalize the streamed reply', () =>
+      saying(served, reply).includes('response.finalized'),
     );
     const artifactPath = writeArtifact('service-editor-models.json', {
       terminal: refused.stderr.trim().split('\n').at(-1),
       alone: ended(alone),
-      served: saying(served, 'HARNESS-COPILOT'),
+      streamed: saying(served, reply),
       window: window.stdout.trim().split('\n'),
     });
     assert(
@@ -2808,8 +2810,13 @@ async function validateServiceEditorModels() {
     assert(
       window.stdout.includes('CALLED lmModels') &&
         window.stdout.includes('CALLED lmPrepare') &&
-        saying(served, 'HARNESS-COPILOT refused this turn').length > 0,
-      `a Copilot task should run its turn through the attached window (artifact: ${artifactPath})`,
+        window.stdout.includes('CALLED lmStream') &&
+        // One acquisition, which prepared and streamed the turn.
+        window.stdout.split('ACQUIRED').length === 2 &&
+        saying(served, 'another acquisition').length === 0 &&
+        saying(served, reply).includes('stream.end') &&
+        saying(served, reply).includes('model.message'),
+      `a Copilot task should stream its turn through the attached window (artifact: ${artifactPath})`,
     );
   } finally {
     window?.child.kill('SIGKILL');

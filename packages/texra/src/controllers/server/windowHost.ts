@@ -7,15 +7,17 @@
 import {
   Cause,
   Deferred,
+  Duration,
   Effect,
   FiberHandle,
   FiberMap,
+  RcMap,
   type Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
 
-import { ModelError, ModelErrorFieldsSchema } from '@texra-ai/llm';
+import { ModelError, ModelErrorFieldsSchema, type Model } from '@texra-ai/llm';
 
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { withLogChannel } from '@logger/effectLog';
@@ -90,28 +92,31 @@ function failureAnswer(error: unknown): HostAnswer {
 
 /** The streamed call's items: a turn of the editor's model. */
 function performStream(
-  host: WindowHost,
   call: Extract<HostCall, { kind: 'lmStream' }>,
+  modelFor: ModelFor,
 ): Stream.Stream<unknown, Error> {
-  const models = host.languageModel;
   const { turn } = call;
-  if (models === undefined) return Stream.fail(unofferedError(call));
   // An editor model runs only foreground turns.
   if (turn.mode !== 'foreground')
     return Stream.fail(
       new Error('An editor model runs foreground turns only.'),
     );
   return Stream.unwrap(
-    Effect.map(models.acquire(call.configuration), (model) =>
-      model.streamTurn(turn),
-    ),
+    Effect.map(modelFor(call), (model) => model.streamTurn(turn)),
   );
 }
+
+/** The window's one acquisition of an editor model per configuration, held
+ *  for the attachment: a turn prepared through it streams through it. */
+type ModelFor = (
+  call: Extract<HostCall, { kind: 'lmPrepare' | 'lmStream' }>,
+) => Effect.Effect<Model, Error>;
 
 /** Carry out one call; its value, or the window's failure. */
 function perform(
   host: WindowHost,
   call: HostCall,
+  modelFor: ModelFor,
 ): Effect.Effect<unknown, Error> {
   switch (call.kind) {
     case 'readDiagnostics':
@@ -160,14 +165,9 @@ function perform(
         ) ?? unoffered(call)
       );
     case 'lmPrepare':
-      return host.languageModel === undefined
-        ? unoffered(call)
-        : Effect.scoped(
-            Effect.flatMap(
-              host.languageModel.acquire(call.configuration),
-              (model) => model.prepareTurn(call.request),
-            ),
-          );
+      return Effect.flatMap(modelFor(call), (model) =>
+        model.prepareTurn(call.request),
+      );
     // Streamed and cancelled by `attachTo`, never performed here.
     case 'lmStream':
     case 'cancel':
@@ -221,37 +221,50 @@ function attachTo(
 ): Effect.Effect<void> {
   const send = (id: string, answer: HostAnswer) =>
     client['host.answer']({ id, answer });
-  const answer = (id: string, call: HostCall) =>
-    (call.kind === 'lmStream'
-      ? // Each item as it comes, then the end; the service's `cancel`
-        // interrupts it (`streams`).
-        Stream.runForEach(performStream(host, call), (item) =>
-          send(id, { ok: true, value: asJsonValue(item), more: true }),
-        ).pipe(
-          Effect.matchEffect({
-            onSuccess: () => send(id, { ok: true, value: null }),
-            onFailure: (error) => send(id, failureAnswer(error)),
-          }),
-        )
-      : perform(host, call).pipe(
-          Effect.matchEffect({
-            onSuccess: (value) =>
-              send(id, { ok: true, value: asJsonValue(value) }),
-            onFailure: (error) => send(id, failureAnswer(error)),
-          }),
-        )
-    ).pipe(
-      Effect.catchCause((cause) =>
-        Cause.hasInterruptsOnly(cause)
-          ? Effect.void
-          : Effect.logWarning(
-              `A host call (${call.kind}) was not answered`,
-            ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
-      ),
-    );
   return Effect.gen(function* () {
     // The calls answering now, by id, so the service's `cancel` stops one.
     const answering = yield* FiberMap.make<string>();
+    const editor = host.languageModel;
+    const acquisitions = yield* RcMap.make({
+      lookup: (configuration: string) =>
+        editor === undefined
+          ? Effect.fail(new Error('This window offers no editor models.'))
+          : editor.acquire(JSON.parse(configuration)),
+      // Kept until the attachment ends, so a turn prepared through one
+      // acquisition streams through the same one.
+      idleTimeToLive: Duration.infinity,
+    });
+    const modelFor: ModelFor = (call) =>
+      Effect.scoped(
+        RcMap.get(acquisitions, JSON.stringify(call.configuration)),
+      );
+    const answer = (id: string, call: HostCall) =>
+      (call.kind === 'lmStream'
+        ? // Each item as it comes, then the end; the service's `cancel`
+          // interrupts it (`answering`).
+          Stream.runForEach(performStream(call, modelFor), (item) =>
+            send(id, { ok: true, value: asJsonValue(item), more: true }),
+          ).pipe(Effect.as(null))
+        : perform(host, call, modelFor)
+      ).pipe(
+        // Any end but an interrupt is answered, a defect included, so the
+        // service never waits on a call that died here.
+        Effect.matchCauseEffect({
+          onSuccess: (value) =>
+            send(id, { ok: true, value: asJsonValue(value) }),
+          onFailure: (cause) =>
+            Cause.hasInterruptsOnly(cause)
+              ? Effect.failCause(cause)
+              : send(id, failureAnswer(Cause.squash(cause))),
+        }),
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.void
+            : Effect.logWarning(
+                `A host call (${call.kind}) was not answered`,
+              ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
+        ),
+      );
     return yield* client['host.attach']({
       workspace,
       capabilities: capabilitiesOf(host),
