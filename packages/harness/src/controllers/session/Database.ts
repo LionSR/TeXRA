@@ -5,14 +5,12 @@
  * aggregate lifecycle, deletion and collection, and the reads. One database
  * per session root (`WorkspaceRoots`), never a process singleton; an
  * ephemeral session runs the same schema in SQLite memory, and a failed file
- * open is an error, never the ephemeral mode.
- *
- * `storeSchema.ts` owns the DDL and the open sequence; `rowCodec.ts` every
- * stored shape (this module hands it drafts, gets events or refusals back,
- * and reads no payload field); `projections.ts` the projectors whose
- * operations run in the append transaction. This module owns the envelope:
- * the writer (C5, `ProcessIdentity`), the publish clock, and the `seq` and
- * `commit` ordinals, none of which a caller supplies.
+ * open is an error, never the ephemeral mode. `storeSchema.ts` owns the DDL
+ * and the open sequence; `rowCodec.ts` every stored shape, by the arms the
+ * process's plugins contribute (this module reads no payload); `projections`
+ * the projectors whose operations run in the append transaction. This module
+ * owns the envelope: the writer (C5, `ProcessIdentity`), the publish clock,
+ * and the `seq` and `commit` ordinals, none of which a caller supplies.
  */
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -64,7 +62,8 @@ import {
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from '@shared/session/database';
-import { PLUGIN_ARMS } from '@tools/pluginArms';
+import { armsOf } from '@tools/plugins';
+import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { currentValues } from './currentValues';
 import { localDatabasePath } from './localDatabasePath';
 import {
@@ -142,7 +141,7 @@ export const databaseLayer = (
 ): Layer.Layer<
   Database,
   DatabaseOpenFailed,
-  WorkspaceRoots | ProcessIdentity | ProcessProbe
+  WorkspaceRoots | ProcessIdentity | ProcessProbe | ToolRegistry
 > =>
   Layer.effect(
     Database,
@@ -205,8 +204,9 @@ export const databaseLayer = (
       const execOne = (statement: string, params?: readonly unknown[]) =>
         exec(statement, params).pipe(Effect.map((rows) => rows[0]));
       /** The store gate (`storeGate`), in the caller's transaction. */
-      const gate = storeGate(exec);
-      const { read: decoded, damaged } = rowReader(path);
+      const arms = armsOf((yield* ToolRegistry).entries.values());
+      const gate = storeGate(exec, arms);
+      const { read: decoded, damaged } = rowReader(path, arms);
       const decodedRows = (
         statement: string,
         params: readonly unknown[],
@@ -743,13 +743,12 @@ export const databaseLayer = (
             )).findLast(
               (row) =>
                 row.type === 'plugin.fact' &&
-                row.plugin === draft.plugin &&
-                row.kind === draft.kind,
+                `${row.plugin}/${row.kind}` === name,
             );
             const refused =
               target.kind === 'run' && draft.parent !== null
                 ? `A run's own plugin fact names no parent: ${name}`
-                : PLUGIN_ARMS.get(name)?.admits?.(
+                : arms[name]?.admits?.(
                     last?.type === 'plugin.fact' ? last : undefined,
                     draft,
                   );
@@ -1180,6 +1179,7 @@ export const globalDatabaseLayer = (
     Layer.provide(
       databaseLayer('persistent').pipe(
         Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
+        Layer.provide(Layer.succeed(ToolRegistry)(toolTable([]))),
       ),
     ),
   );

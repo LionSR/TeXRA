@@ -45,7 +45,7 @@ import {
   DatabaseRowCorrupt,
   DatabaseStoreNewer,
 } from '@shared/session/database';
-import { PLUGIN_ARMS } from '@tools/pluginArms';
+import type { PluginArms } from '@tools/plugins';
 
 /** One selected store row, its columns by name, decoded where it is read. */
 export type SqlRow = Readonly<Record<string, unknown>>;
@@ -230,13 +230,12 @@ interface LeftOut {
 }
 
 /**
- * A selected row as its event, or {@link LeftOut}. A row of a kind or
- * newer version fails `DatabaseStoreNewer` (another build wrote it after
- * this one passed the store gate); one that does not decode, or of a kind
- * this build lacks, fails `DatabaseRowCorrupt` naming it.
- */
+ * A selected row as its event, or {@link LeftOut}: a newer kind or version
+ * fails `DatabaseStoreNewer` (written after this build's store gate), and an
+ * undecodable row or unknown kind `DatabaseRowCorrupt`, naming it. */
 function decodeRow(
   input: SqlRow,
+  arms: PluginArms,
 ): Result.Result<
   SessionEvent | LeftOut,
   DatabaseStoreNewer | DatabaseRowCorrupt
@@ -285,7 +284,7 @@ function decodeRow(
   const event = parsed.data;
   if (event.type !== 'plugin.fact') return Result.succeed(event);
   const name = `${event.plugin}/${event.kind}`;
-  const arm = PLUGIN_ARMS.get(name);
+  const arm = arms[name];
   if (arm === undefined) return Result.succeed({ _tag: 'leftOut', kind: name });
   if (event.version > arm.version)
     return Result.fail(
@@ -311,7 +310,10 @@ function decodeRow(
  * session. Any undecodable row of a run marks that run in `damaged`, shown
  * read-only and never opened. An absent plugin's kind is left out, warned.
  */
-export function rowReader(path: string): {
+export function rowReader(
+  path: string,
+  arms: PluginArms,
+): {
   readonly read: (
     rows: readonly SqlRow[],
     whole: boolean,
@@ -334,7 +336,7 @@ export function rowReader(path: string): {
     Effect.gen(function* () {
       const events: SessionEvent[] = [];
       for (const row of rows) {
-        const decoded = decodeRow(row);
+        const decoded = decodeRow(row, arms);
         if (Result.isSuccess(decoded)) {
           if (!('_tag' in decoded.success)) events.push(decoded.success);
           else
@@ -386,34 +388,31 @@ export const pluginKind = (plugin: string, kind: string): string =>
 /** The `stored_kind` entry every current value is recorded under. */
 export const CURRENT_VALUE_KIND = 'current_value';
 
-/** The highest version of a `stored_kind` entry this build reads, or
- *  `Infinity` for a plugin's kind whose plugin it lacks (left out of every
- *  read), or 0 for a core kind it lacks. */
-function readableVersion(type: string): number {
+/** The highest version of a `stored_kind` entry this build reads: `Infinity`
+ *  for a plugin kind it lacks (left out), 0 for a core kind it lacks. */
+function readableVersion(type: string, arms: PluginArms): number {
   if (type === CURRENT_VALUE_KIND) return CURRENT_VALUE_VERSION;
   if (type.startsWith('plugin.fact/'))
-    return (
-      PLUGIN_ARMS.get(type.slice('plugin.fact/'.length))?.version ?? Infinity
-    );
+    return arms[type.slice('plugin.fact/'.length)]?.version ?? Infinity;
   if (RETIRED_ROW_KINDS.has(type)) return Infinity;
   return hasKind(type) ? ROW_KINDS[type].version : 0;
 }
 
 /**
  * The store gate: fails on the first kind `stored_kind` names at a version
- * this build does not read. Run at open and inside every write
- * transaction, so no build reads part of a store or writes beside rows it
- * cannot read.
+ * this build does not read. Run at open and inside every write transaction,
+ * so no build reads part of a store or writes beside rows it cannot read.
  */
 export const storeGate = <E>(
   exec: (statement: string) => Effect.Effect<readonly SqlRow[], E>,
+  arms: PluginArms,
 ): Effect.Effect<void, E | DatabaseStoreNewer> =>
   Effect.gen(function* () {
     for (const input of yield* exec('SELECT type, version FROM stored_kind')) {
       const { type, version } = z
         .object({ type: z.string(), version: z.int() })
         .parse(input);
-      if (version > readableVersion(type))
+      if (version > readableVersion(type, arms))
         return yield* Effect.fail(new DatabaseStoreNewer({ type, version }));
     }
   });

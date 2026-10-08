@@ -14,6 +14,10 @@ import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
 import {
+  DOCUMENTS_ACCEPTED_ARM,
+  DOCUMENTS_OUTPUT_ARM,
+} from '@shared/plugins/documents';
+import {
   claudeAgent,
   codex,
   externalInquiry,
@@ -196,6 +200,7 @@ const documents: Plugin = {
     document_review: DocumentReviewTool,
     document_propose: DocumentProposeTool,
   },
+  arms: [DOCUMENTS_OUTPUT_ARM, DOCUMENTS_ACCEPTED_ARM],
 };
 
 /**

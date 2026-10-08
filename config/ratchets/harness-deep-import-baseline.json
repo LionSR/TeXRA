@@ -337,7 +337,6 @@
       "@tools/approval/toolEditApproval",
       "@tools/attachments",
       "@tools/builtinPlugins",
-      "@tools/core/define",
       "@tools/core/inputSchema",
       "@tools/core/result",
       "@tools/delegation/AgentTool",

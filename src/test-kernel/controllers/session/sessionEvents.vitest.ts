@@ -84,7 +84,10 @@ import { onAppSignal } from '@eventBus/AppSignals';
 import { withProcessServices } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
-import { documentsAcceptedRow } from '@shared/plugins/documents';
+import {
+  DOCUMENTS_ACCEPTED_ARM,
+  documentsAcceptedFact,
+} from '@shared/plugins/documents';
 import { inquiryThreadRow } from '@shared/plugins/externalInquiry';
 import {
   aggregateId as qualifyAggregateId,
@@ -127,11 +130,24 @@ import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import '@test/support/sessionGraphTestSetup';
 import { identityReads } from '@test/support/sessionGraphInstall';
 import { REPO_ROOT } from '@test/support/repoScan';
+import { storePluginsLayer } from '@test/support/setupPlatform';
 import { runActionGuard } from '@texra/controllers/session/runActionGuard';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
-import { announceRunFacts } from '@tools/pluginArms';
+import { armsOf, announceRunFacts } from '@tools/plugins';
 import { toolTable } from '@tools/toolTable';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+
+/** The `documents/accepted` row a call's result commits for `runId`. */
+const acceptedRow = (
+  runId: RunId,
+  paths: readonly string[],
+  at: number,
+): SessionEventDraft => ({
+  type: 'plugin.fact',
+  aggregateId: qualifyAggregateId('run', runId),
+  ...documentsAcceptedFact(paths, at),
+  parent: null,
+});
 
 /** A second OS process's writer: this build's `Database` over the store at
  *  `storage`, owned as `owner`, creating `run` and, once `<storage>/go`
@@ -144,6 +160,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { Effect, Layer } from 'effect';
 import { databaseLayer } from '@controllers/session/Database';
+import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { nodePlatformServices } from '@platform/defaults/nodePlatform';
 import { aggregateId } from '@shared/schemas';
@@ -171,6 +188,7 @@ const append = Effect.gen(function* () {
 await Effect.runPromise(append.pipe(Effect.provide(databaseLayer('persistent').pipe(
   Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
   Layer.provide(ProcessIdentity.layer(owner)),
+  Layer.provide(Layer.succeed(ToolRegistry)(toolTable([]))),
   Layer.provide(nodePlatformServices)))));
 `;
 
@@ -283,7 +301,10 @@ const graph = (
     Database,
     never,
     ProcessIdentity | WorkspaceRoots | ProcessProbe
-  > = databaseLayer('ephemeral').pipe(Layer.orDie),
+  > = databaseLayer('ephemeral').pipe(
+    Layer.orDie,
+    Layer.provide(storePluginsLayer),
+  ),
 ) => {
   const roots = createFakeWorkspaceRoots({ storagePath: '/workspace/framing' });
   const seeded = Layer.effectDiscard(
@@ -1302,12 +1323,8 @@ describe('Sessions owner', () => {
           // Two acceptances committed close together fold to one view level.
           yield* Effect.all(
             [
-              first.log.transact([
-                documentsAcceptedRow(runId, ['/w/a.tex'], 1),
-              ]),
-              first.log.transact([
-                documentsAcceptedRow(runId, ['/w/b.tex'], 2),
-              ]),
+              first.log.transact([acceptedRow(runId, ['/w/a.tex'], 1)]),
+              first.log.transact([acceptedRow(runId, ['/w/b.tex'], 2)]),
             ],
             { concurrency: 'unbounded' },
           );
@@ -1348,7 +1365,7 @@ describe('Sessions owner', () => {
             ]),
           }) as unknown as SessionView;
         const stored = (paths: string[], commit: number) => ({
-          ...documentsAcceptedRow(runId, paths, commit),
+          ...acceptedRow(runId, paths, commit),
           commit,
         });
         let reads = 0;
@@ -1366,6 +1383,7 @@ describe('Sessions owner', () => {
                   stored(['/w/b.tex'], 6),
                 ] as unknown as readonly SessionEvent[]),
           0 as CommitOrdinal,
+          armsOf([{ id: 'documents', arms: [DOCUMENTS_ACCEPTED_ARM] }]),
         );
         for (let i = 0; i < 100 && heard.length < 2; i++)
           yield* Effect.sleep('20 millis');
@@ -1400,6 +1418,7 @@ describe('the C1 event table and the C6 publisher', () => {
   ) =>
     databaseLayer('persistent').pipe(
       Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
+      Layer.provide(storePluginsLayer),
       Layer.provide(ProcessIdentity.layer(owner)),
       Layer.provide(spawner),
       Layer.provide(nodePlatformLayer),
@@ -3028,7 +3047,7 @@ describe('RunHistory', () => {
       callId: 'call-a',
       toolName: 'bash',
       ordinal: 0,
-      parallelSafe: false,
+      lane: 'barrier',
       replay: 'unsafe',
       duplicateOf: null,
       logId: 'card-a',
@@ -3038,7 +3057,7 @@ describe('RunHistory', () => {
       callId: 'call-b',
       toolName: 'bash',
       ordinal: 1,
-      parallelSafe: false,
+      lane: 'barrier',
       replay: 'unsafe',
       duplicateOf: 'call-a',
       logId: 'card-b',

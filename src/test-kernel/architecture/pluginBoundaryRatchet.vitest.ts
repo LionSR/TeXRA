@@ -8,8 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { TEXRA_PLUGIN_CARDS } from '@texra/tools/pluginCards';
 import { texraPlugins } from '@texra/tools/registry';
 import { harnessBuiltins } from '@tools/builtinPlugins';
-import { PLUGIN_ARMS } from '@tools/pluginArms';
-import type { Plugin } from '@tools/plugins';
+import { armsOf, type Plugin } from '@tools/plugins';
 import {
   ALL_HOST_PRODUCTION_ROOTS,
   collectModuleSpecifiers,
@@ -22,13 +21,14 @@ import {
 
 /**
  * Invariants 1 and 6 of the core concepts, for what a plugin brings: its
- * own row kinds (`PLUGIN_EVENT_ARMS`) and its services (a `Plugin`'s
+ * own row kinds (`Plugin.arms`) and its services (a `Plugin`'s
  * `processLayer` and `sessionLayer`). Failure modes guarded:
  *
  * - core (the harness's `shared/`, `agent/`) imports a plugin's arm, so a plugin's
  *   row kind is hard-coded in core again and a new stateful plugin edits
  *   core;
- * - a plugin row is drafted anywhere but its plugin's arm module, or a
+ * - a plugin row is drafted anywhere but its plugin's arm module or the
+ *   dispatch that commits a call's facts with its result, or a
  *   plugin reaches the store's append port, so a second append path or a
  *   row no arm checks appears;
  * - a plugin's service is reached outside its own plugin's code, which the
@@ -39,7 +39,7 @@ import {
  *   so no `ProcessServices` arm names one.
  */
 const PLUGIN_ARM_MODULES = /^packages\/harness\/src\/shared\/plugins\//;
-const PLUGIN_ARM_IMPORT = /^@shared\/plugins\/|^@tools\/pluginArms$/;
+const PLUGIN_ARM_IMPORT = /^@shared\/plugins\//;
 const CORE = /^packages\/harness\/src\/(?:shared|agent)\//;
 const APPEND_PORTS =
   /^@(?:controllers\/session\/Database|shared\/session\/database|agent\/runtime\/SessionEvents)$/;
@@ -101,7 +101,12 @@ describe('plugin boundaries (invariants 1 and 6)', () => {
     const appends = files()
       .filter((file) => PLUGIN_ARM_MODULES.test(file))
       .filter((file) => specifiers(file).some((s) => APPEND_PORTS.test(s)));
-    expect({ drafts, appends }).toEqual({ drafts: [], appends: [] });
+    // The one generic writer: the dispatch commits a call's facts
+    // (`ToolResult.facts`) as rows of its run with its `tool.result`.
+    expect({ drafts, appends }).toEqual({
+      drafts: ['packages/harness/src/agent/runtime/loop/toolUseDispatch.ts'],
+      appends: [],
+    });
   });
 
   it('reaches plugin services only from their plugin and the step', () => {
@@ -211,18 +216,13 @@ describe('plugin rosters', () => {
     }).toEqual({ switchedWithoutCard: [], cardWithoutPlugin: [] });
   });
 
-  it('pins the row kinds plugins write, each of a listed plugin', () => {
-    const ids = new Set(texraPlugins().map(({ id }) => id));
-    expect(
-      [...PLUGIN_ARMS.values()].map(({ plugin, kind }) => [
-        `${plugin}/${kind}`,
-        ids.has(plugin),
-      ]),
-    ).toEqual([
-      ['goal/state', true],
-      ['documents/output', true],
-      ['documents/accepted', true],
-      ['external-inquiry/thread', true],
+  it('pins the row kinds plugins write', () => {
+    // `armsOf` refuses an arm of another plugin's id, or a kind twice.
+    expect(Object.keys(armsOf(texraPlugins())).toSorted()).toEqual([
+      'documents/accepted',
+      'documents/output',
+      'external-inquiry/thread',
+      'goal/state',
     ]);
   });
 

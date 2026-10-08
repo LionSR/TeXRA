@@ -23,8 +23,8 @@ type DuplicateCallMap = Map<string, number>;
  * model and the UI more than a shared success does. Execution still happens
  * only once.
  *
- * Parallel-safe (read-only) sharing is limited to a contiguous run of
- * parallel-safe calls: any side-effect call in between may change what a
+ * Parallel (read-only) sharing is limited to a contiguous run of
+ * parallel calls: any side-effect call in between may change what a
  * repeated read would return, so it acts as a barrier that invalidates
  * earlier shareable signatures.
  *
@@ -36,14 +36,14 @@ export function partitionDuplicateCalls<
   Call extends { callId: string; name: string; input: unknown },
 >(
   toolCalls: readonly Call[],
-  isParallelSafe: (call: Call) => boolean,
+  isParallel: (call: Call) => boolean,
 ): DuplicateCallMap {
   const sharedWithPrimary: DuplicateCallMap = new Map();
   const segmentPrimaries = new Map<string, number>();
   const unsafeSeen = new Map<string, number>();
   for (const [index, call] of toolCalls.entries()) {
     const key = `${call.name}\0${stableStringify(call.input)}`;
-    if (isParallelSafe(call)) {
+    if (isParallel(call)) {
       const primary = segmentPrimaries.get(key);
       if (primary !== undefined) {
         sharedWithPrimary.set(call.callId, primary);
@@ -60,7 +60,7 @@ export function partitionDuplicateCalls<
         // A different mutation changes workspace state, which makes an
         // identical repeat of an earlier mutation plausibly intentional
         // again (e.g. write x; edit x; write x as a restore) — reset the
-        // tracking window. Parallel-safe calls do not reset it: with state
+        // tracking window. Parallel calls do not reset it: with state
         // unchanged, an identical mutation repeat stays redundant.
         unsafeSeen.clear();
         unsafeSeen.set(key, index);

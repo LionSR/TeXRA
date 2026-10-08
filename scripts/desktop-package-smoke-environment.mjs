@@ -90,6 +90,7 @@ export async function loadDatabaseFixture(userDataPath) {
         export { openDesktopProjectRecords } from '@desktop/main/desktopProjectRecords';
         export { nodeProcesses, processOwnerId } from '@platform/defaults/nodeProcesses';
         export { nodePlatformServices } from '@platform/defaults/nodePlatform';
+        export { ToolRegistry, toolTable } from '@tools/toolTable';
       `,
       loader: 'ts',
       resolveDir: root,

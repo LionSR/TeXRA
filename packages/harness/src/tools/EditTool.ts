@@ -17,7 +17,7 @@ import { pluralize } from '@utils/text/stringUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { defineTool } from './core/define';
+import { defineTool } from './core/definition';
 
 const EditInputSchema = z.strictObject({
   path: z

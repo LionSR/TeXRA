@@ -9,6 +9,7 @@ import { Context, type Effect } from 'effect';
 
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
+  DispatchFacts,
   PermissionPayload,
   RequestDecision,
   ToolDefinition,
@@ -74,28 +75,24 @@ export interface ITool<E = Error, R = never> {
    *  live each step: a window that attaches mid-run brings it. */
   readonly hostCapability?: HostToolCapability;
   /**
-   * True only for tools that are side-effect-free AND approval-free, so
-   * parallel calls in one model response may execute concurrently.
-   * Declared on the tool (not the YAML-overridable definition) so agent
-   * configs cannot mark arbitrary tools parallel-safe.
+   * Where its calls run beside their siblings (omitted: `'barrier'`).
+   * Declared on the tool, not the YAML-overridable definition, so an agent
+   * config cannot move an arbitrary tool out of order.
    *
-   * The two properties are coupled on purpose and both are load-bearing in
-   * `partitionDuplicateCalls`: every non-parallel-safe call acts as an
-   * ordering barrier that clears the read-dedup segment. A read-only tool
-   * that requires user approval is therefore NOT parallel-safe — it cannot
-   * run concurrently with siblings in the same batch (it needs an approval
-   * round-trip first), so it must stay a barrier. Only set this when a call
-   * both mutates nothing and never prompts for approval.
+   * - `'parallel'`: side-effect-free AND approval-free, so calls of one
+   *   response (or one script) run concurrently within the parallel window,
+   *   and identical ones collapse onto one (`partitionDuplicateCalls`). A
+   *   read-only tool that prompts for approval is not parallel: it needs an
+   *   approval round-trip first, so it stays a barrier.
+   * - `'barrier'`: waits for every call issued before it and holds back
+   *   every call after it until it settles.
+   * - `'own'`: in a script, its calls neither wait for the calls issued
+   *   before them nor block the ones after, and take no place in the
+   *   parallel window: the tool bounds how many of its own calls run at
+   *   once (a call that waits on a child run). A later barrier still waits
+   *   for it; a response's call of it is a barrier.
    */
-  readonly parallelSafe?: boolean;
-  /**
-   * In a script, its calls neither wait for the calls issued before them
-   * nor block the ones after, and take no place in the parallel window: the
-   * tool bounds how many of its own calls run at once. For a call that
-   * waits on long-running work it does not perform itself (a child run). A
-   * later barrier still waits for it.
-   */
-  readonly ownsConcurrency?: boolean;
+  readonly lane?: DispatchFacts['lane'];
   /**
    * The tool is also a global function of a script, taking its `positional`
    * field as the first argument and the rest as the second:
@@ -106,7 +103,7 @@ export interface ITool<E = Error, R = never> {
    * Whether a call recorded as started, with no result, may run again on
    * resume without asking: `'safe'` only for a read-only or idempotent tool,
    * whose second run changes nothing the first did not. Omitted is
-   * `'unsafe'`. Independent of `parallelSafe`, which is about concurrency.
+   * `'unsafe'`. Independent of `lane`, which is about concurrency.
    * The response row saves the declaration with each call, and a resume
    * re-runs a call only when that saved word and the current one both say
    * `'safe'` (`toolUseDispatch.ts`).

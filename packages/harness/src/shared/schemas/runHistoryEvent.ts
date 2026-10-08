@@ -119,7 +119,7 @@ const DispatchFactsSchema = z.strictObject({
   callId: CallIdSchema,
   toolName: z.string().min(1),
   ordinal: z.int().nonnegative(),
-  parallelSafe: z.boolean(),
+  lane: z.enum(['parallel', 'barrier', 'own']),
   /** The tool's replay declaration when the call was committed: a resume
    *  re-runs an unfinished call unasked only when this and the tool's
    *  current declaration both say `safe`. */

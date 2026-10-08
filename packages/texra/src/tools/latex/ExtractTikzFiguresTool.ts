@@ -1,7 +1,7 @@
 // Third-party imports
 import { Effect, type FileSystem } from 'effect';
 import { z } from 'zod';
-import { ToolContext } from '@texra-ai/harness';
+import { defineTool, ToolContext } from '@texra-ai/harness';
 import type { RunCall } from '@agent/runtime/RunCall';
 
 // Local imports - tools
@@ -9,7 +9,6 @@ import { TikzPictureManager } from '@latex/TikzPictureManager';
 import type { WorkspaceFs } from '@platform/rootedFs';
 import { type ToolFileAttachment, type ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
-import { defineTool } from '@tools/core/define';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {

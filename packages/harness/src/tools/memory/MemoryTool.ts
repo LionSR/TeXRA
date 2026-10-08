@@ -45,7 +45,7 @@ import {
 } from '@utils/text/stringUtils';
 
 // Local file imports
-import { defineTool } from '../core/define';
+import { defineTool } from '../core/definition';
 import { nullishWithDefault } from '../core/inputSchema';
 import {
   recordToolFileRead,

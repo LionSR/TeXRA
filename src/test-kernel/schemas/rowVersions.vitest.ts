@@ -26,7 +26,8 @@ import {
   WORKSPACE_STORES,
 } from '@shared/session/valueFamily';
 import { UPDATE_CHECKS } from '@texra/utils/system/updateCheck';
-import { PLUGIN_ARMS } from '@tools/pluginArms';
+import { texraPlugins } from '@texra/tools/registry';
+import { armsOf } from '@tools/plugins';
 import {
   productionFilesUnder,
   productionRoots,
@@ -77,7 +78,7 @@ const VERSIONED: readonly Versioned[] = [
       schema: arm,
     };
   }),
-  ...[...PLUGIN_ARMS].map(([name, arm]) => ({
+  ...Object.entries(armsOf(texraPlugins())).map(([name, arm]) => ({
     name: `plugin.fact.${name.replace('/', '.')}`,
     version: arm.version,
     upcasts: arm.upcasters.length,

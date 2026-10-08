@@ -3,13 +3,13 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
+import { defineTool } from '@texra-ai/harness';
 import { ToolError } from '@shared/schemas';
 import { LATEX_WORKSHOP_EXT_ID } from '@texra/shared/constants/latexToolchain';
 import { LEAN4_EXTENSION_ID } from '@texra/tools/lean/leanTypes';
 import { executed } from '@tools/core/result';
 
 // Local file imports
-import { defineTool } from '@tools/core/define';
 import { assertInSetupAllowlist, SetupPlatform } from './platform';
 
 /**

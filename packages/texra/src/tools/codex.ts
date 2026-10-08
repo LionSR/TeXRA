@@ -22,7 +22,11 @@ import { Effect, Stream, type FileSystem } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { ToolContext, type WorkspaceRoots } from '@texra-ai/harness';
+import {
+  defineTool,
+  ToolContext,
+  type WorkspaceRoots,
+} from '@texra-ai/harness';
 import {
   emitToolUseCard,
   endOpenToolUseCards,
@@ -54,7 +58,6 @@ import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
 import { buildSyntheticToolUseConfig } from '@texra/tools/core/syntheticAgentConfig';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
-import { defineTool } from '@tools/core/define';
 import type { DetachedChildRunLaunch } from '@tools/delegation/detachedChildRun';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { formatWallTimeSeconds, previewLabel } from '@utils/text/stringUtils';
@@ -492,7 +495,7 @@ export const CodexTool = defineTool({
     // A resumed thread keeps its stored workspace: name none, not the wrong one.
     cwd: 'unknown',
   },
-  execute: (input) => runCodex(input),
+  execute: runCodex,
 });
 
 const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (

@@ -14,14 +14,18 @@ import { z } from 'zod';
 import { Clock, Effect, FileSystem } from 'effect';
 
 // Local imports
-import { ToolContext, type ToolContextShape } from '@texra-ai/harness';
+import {
+  defineTool,
+  ToolContext,
+  type ToolContextShape,
+} from '@texra-ai/harness';
 import { getRunRecords } from '@agent/storage';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { requireToolRun, type RunCall } from '@agent/runtime/RunCall';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
-import { documentsAcceptedRow } from '@shared/plugins/documents';
+import { documentsAcceptedFact } from '@shared/plugins/documents';
 import {
   RunIdSchema,
   ToolError,
@@ -32,7 +36,6 @@ import {
   FileLocation,
 } from '@shared/schemas';
 import { assertNoParentTraversal } from '@tools/pathResolution';
-import { defineTool } from '@tools/core/define';
 import {
   buildApprovalRejectedResult,
   requestToolEditApproval,
@@ -365,19 +368,6 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
     });
   }
 
-  // The files it wrote, as a fact on this run: every process that folds the
-  // run (a window over a service task among them) badges and refreshes them.
-  if (acceptedEntries.length > 0) {
-    const { run } = yield* requireToolRun('accept_run_files');
-    yield* run.session.log.transact([
-      documentsAcceptedRow(
-        run.runId,
-        acceptedEntries.map((e) => e.destAbsolutePath),
-        yield* Clock.currentTimeMillis,
-      ),
-    ]);
-  }
-
   const changed = files.length - unchanged;
   const detailedOutput = (summary: string): string =>
     `${summary}:\n${results.map((r) => `  - ${r}`).join('\n')}`;
@@ -421,6 +411,17 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
     summary,
     output: detailedOutput(summary),
     edits,
+    // The files it wrote, as a fact on this run, committed as the call
+    // settles: every process that folds the run (a window over a service
+    // task among them) badges and refreshes them.
+    ...(accepted > 0 && {
+      facts: [
+        documentsAcceptedFact(
+          acceptedEntries.map((e) => e.destAbsolutePath),
+          yield* Clock.currentTimeMillis,
+        ),
+      ],
+    }),
   };
 });
 

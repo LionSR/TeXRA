@@ -1,7 +1,7 @@
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
-import { ToolContext } from '@texra-ai/harness';
+import { defineTool, ToolContext } from '@texra-ai/harness';
 import type { RunCall } from '@agent/runtime/RunCall';
 
 // Local imports - tools
@@ -9,7 +9,6 @@ import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import type { ToolResult } from '@shared/schemas';
 import { resolveToolPath } from '@tools/pathResolution';
 import { formatToolOutput } from '@tools/formatting';
-import { defineTool } from '@tools/core/define';
 import { unique } from '@utils/core';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { formatResultCount } from '@utils/text/stringUtils';

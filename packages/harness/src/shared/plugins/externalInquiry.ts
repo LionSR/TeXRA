@@ -1,6 +1,5 @@
 /**
- * The external-inquiry plugin's rows (`PLUGIN_EVENT_ARMS` in
- * `@tools/pluginArms`): each thread is an aggregate the plugin owns,
+ * The external-inquiry plugin's rows (its `arms`, `@tools/plugins`): each thread is an aggregate the plugin owns,
  * `('plugin', 'external-inquiry:<threadId>')`, and its latest `plugin.fact`
  * of kind `thread` is the summary the Background Tasks panel lists under the
  * run that asked, the row's `parent`. The thread's full record stays in the

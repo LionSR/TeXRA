@@ -34,19 +34,19 @@ function inEventDatabase<A, E>(
   return Effect.runPromise(
     operation.pipe(
       Effect.provide(
-        fixture
-          .databaseLayer('persistent')
-          .pipe(
-            Layer.provide(
-              Layer.mergeAll(
-                Layer.succeed(fixture.WorkspaceRoots)({ storage: storagePath }),
-                fixture.ProcessIdentity.layer(
-                  JSON.stringify([hostname().toLowerCase(), process.pid, null]),
-                ),
-                fixture.nodePlatformServices,
+        fixture.databaseLayer('persistent').pipe(
+          Layer.provide(
+            Layer.mergeAll(
+              Layer.succeed(fixture.WorkspaceRoots)({ storage: storagePath }),
+              fixture.ProcessIdentity.layer(
+                JSON.stringify([hostname().toLowerCase(), process.pid, null]),
               ),
+              fixture.nodePlatformServices,
+              // The canonical runs write no plugin rows.
+              Layer.succeed(fixture.ToolRegistry)(fixture.toolTable([])),
             ),
           ),
+        ),
       ),
     ),
   );

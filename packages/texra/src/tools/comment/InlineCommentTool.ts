@@ -1,7 +1,7 @@
 // Third-party imports
 import { Context, Effect, Option } from 'effect';
 import { z } from 'zod';
-import { ToolContext } from '@texra-ai/harness';
+import { defineTool, ToolContext } from '@texra-ai/harness';
 import type { RunCall } from '@agent/runtime/RunCall';
 
 // Internal imports
@@ -9,7 +9,6 @@ import { withLogChannel } from '@logger/effectLog';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { resolveToolPath } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
-import { defineTool } from '@tools/core/define';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 

@@ -10,6 +10,7 @@
 import { Cause, Effect } from 'effect';
 import { z } from 'zod';
 
+import { defineTool } from '@texra-ai/harness';
 import { getRunRecords } from '@agent/storage';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import { postProcessResponse } from '@latex/texraResponseTextProcessing';
@@ -43,7 +44,6 @@ import {
   revisionPrompt,
   type Documents,
 } from '@texra/tools/documents/documentState';
-import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
@@ -201,7 +201,6 @@ export const DocumentExtractTool = defineTool({
         message,
       });
     }
-    yield* docs.commit;
     yield* present(docs, summary.filesToOpen);
     const files = round.outputs.map((output) =>
       fileLocationDisplayPath(output.location),
@@ -214,6 +213,7 @@ export const DocumentExtractTool = defineTool({
         `Revision ${revision + 1}: ${files.length} files`,
       ),
       value: { files, missing },
+      facts: [docs.fact()],
     };
   }),
 });
@@ -251,7 +251,6 @@ export const DocumentCompileTool = defineTool({
     );
     const failures = compileFailuresOf(check.compileResult);
     setCompileFailures(docs.state, revision, failures);
-    yield* docs.commit;
     if (yield* autoOpensPdf(docs))
       yield* present(
         docs,
@@ -271,6 +270,7 @@ export const DocumentCompileTool = defineTool({
         failures.length === 0 ? 'Compiles' : `${failures.length} failed`,
       ),
       value: { failures: summary, checked: check.compileResult !== undefined },
+      facts: [docs.fact()],
     };
   }),
 });

@@ -119,6 +119,18 @@ const ToolResultSharedFields = {
   attachmentSummary: z.string().optional(),
 };
 
+/** A `plugin.fact` of one of the calling tool's plugin's arms
+ *  (`Plugin.arms`), committed in its call's `tool.result` batch. */
+const ToolFactSchema = z.strictObject({
+  plugin: z.string().min(1),
+  kind: z.string().min(1),
+  /** The arm's version `value` is written at. */
+  version: z.int().positive(),
+  value: JsonValueSchema,
+});
+/** A fact a tool's call states about its run (`ToolFactSchema`). */
+export type ToolFact = z.infer<typeof ToolFactSchema>;
+
 const ExecutedToolResultSchema = z.object({
   status: z.literal('executed'),
   /** Detailed output from the tool */
@@ -145,6 +157,9 @@ const ExecutedToolResultSchema = z.object({
    *  batch, so they leave the run's input only with the result. Not stored
    *  on the result. */
   consumedFollowUps: z.array(z.string().min(1)).optional(),
+  /** Facts about the call's run, committed beside its `tool.result` as
+   *  `plugin.fact` rows; never stored on the result itself. */
+  facts: z.array(ToolFactSchema).optional(),
   ...ToolResultSharedFields,
 });
 
@@ -239,6 +254,7 @@ export const SettledToolResultSchema = z.discriminatedUnion('status', [
   ExecutedToolResultSchema.omit({
     files: true,
     consumedFollowUps: true,
+    facts: true,
   }).extend({
     files: z.array(SettledFileSchema).optional(),
     diagnostics: JsonValueSchema.optional(),

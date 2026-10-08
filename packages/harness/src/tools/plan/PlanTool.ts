@@ -32,7 +32,7 @@ import {
   type GoalAutoApprovalScope,
 } from '@tools/goal';
 import { requireNonEmptyString } from '@tools/utils';
-import { defineTool } from '@tools/core/define';
+import { defineTool } from '@tools/core/definition';
 import { errorResult, executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatCompactDuration } from '@utils/text/stringUtils';

@@ -193,7 +193,7 @@ describe('tool dispatch interrupted mid-turn', () => {
       const runId = generateRunId();
       publishTestRunStart(session, runId);
       const toolB = blockingTool('toolB');
-      const tools = { toolB: { ...toolB.tool, parallelSafe: true } };
+      const tools = { toolB: { ...toolB.tool, lane: 'parallel' as const } };
       const calls = [{ id: 'call-b', name: 'toolB' }];
       const fiber = yield* Effect.forkDetach(
         runToolUse({ resume: false }).pipe(

@@ -11,6 +11,7 @@ import type { CodeSandbox } from '@agent/codeSandbox/codeSandbox';
 import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
+import { GOAL_STATE_ARM } from '@shared/plugins/goal';
 import { BashTool } from '@tools/bash';
 import { codeSandboxLayer, ScriptTool } from '@tools/codemode/ScriptTool';
 import { agentTool } from '@tools/delegation/AgentTool';
@@ -81,8 +82,7 @@ export const memoryWorkflow: Plugin = {
  * The `plan` tool owns planning and the goal lifecycle (update, pause,
  * complete), so any agent with tools can drive the goal loop while the plugin
  * is on; the synthetic turns are its continuation
- * (`@tools/goal/goalContinuation`). Its rows are the `goal/state` arm
- * (`@tools/pluginArms`).
+ * (`@tools/goal/goalContinuation`). Its rows are the `goal/state` arm.
  */
 export const goal: Plugin = {
   id: 'goal',
@@ -91,6 +91,7 @@ export const goal: Plugin = {
   toggle: 'on',
   availability: ALWAYS_AVAILABLE,
   continuation: goalContinuation,
+  arms: [GOAL_STATE_ARM],
 };
 
 /** Child agents: the `agent` tool. */

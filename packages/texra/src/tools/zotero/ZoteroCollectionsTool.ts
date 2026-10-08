@@ -14,7 +14,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - core
-import { defineTool } from '@tools/core/define';
+import { defineTool } from '@texra-ai/harness';
 import { executed } from '@tools/core/result';
 import { filterNotNull } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -211,7 +211,7 @@ const listCollections = Effect.fn('ZoteroCollectionsTool.execute')(function* (
 export const ZoteroCollectionsTool = defineTool({
   name: 'zotero_collections',
   replay: 'safe',
-  parallelSafe: true,
+  lane: 'parallel',
   description:
     'List Zotero collections (folders) with their keys. ' +
     'Use this to discover collection keys before adding items with zotero_add. ' +

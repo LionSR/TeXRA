@@ -17,6 +17,7 @@ import { ProcessIdentity } from '@shared/session/sessionEvents';
 
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { storePluginsLayer } from '@test/support/setupPlatform';
 
 describe('application state on SQLite', () => {
   const tempDirs = useTempDirs();
@@ -26,6 +27,7 @@ describe('application state on SQLite', () => {
       Layer.build(
         databaseLayer('persistent').pipe(
           Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
+          Layer.provide(storePluginsLayer),
         ),
       ),
       (context) =>

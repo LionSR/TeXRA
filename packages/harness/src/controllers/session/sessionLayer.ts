@@ -317,7 +317,7 @@ const sessionGraphLayer = (key: SessionKey) => {
   const database: Layer.Layer<
     Database,
     DatabaseOpenFailed,
-    ProjectDatabases | ProcessIdentity | WorkspaceRoots | ProcessProbe
+    ProjectDatabases | Layer.Services<ReturnType<typeof databaseLayer>>
   > =
     key.open.transcriptMode?.kind === 'ephemeral'
       ? databaseLayer('ephemeral')

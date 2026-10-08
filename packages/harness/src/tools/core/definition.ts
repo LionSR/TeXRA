@@ -30,7 +30,7 @@ export type DefinedTool<T, R = never> = Omit<ITool<Error, R>, 'call'> & {
   call(
     rawInput: unknown,
   ): Effect.Effect<ToolResult, Error, Exclude<R, Scope.Scope>>;
-  readonly parallelSafe: boolean | undefined;
+  readonly lane: ITool['lane'];
   readonly replay: ITool['replay'];
   readonly requiresApproval: ITool['requiresApproval'];
   readonly slow: boolean | undefined;
@@ -48,8 +48,7 @@ export type DefineToolOptions<T, R = never> = Required<
     ITool,
     | 'unavailableHosts'
     | 'hostCapability'
-    | 'parallelSafe'
-    | 'ownsConcurrency'
+    | 'lane'
     | 'scriptGlobal'
     | 'replay'
     | 'requiresApproval'
@@ -102,10 +101,7 @@ export function defineTool<T, R = never>(
         scriptReturns: def.scriptReturns,
       }),
     },
-    parallelSafe: def.parallelSafe,
-    ...(def.ownsConcurrency !== undefined && {
-      ownsConcurrency: def.ownsConcurrency,
-    }),
+    lane: def.lane,
     ...(def.scriptGlobal !== undefined && { scriptGlobal: def.scriptGlobal }),
     replay: def.replay,
     requiresApproval: def.requiresApproval,

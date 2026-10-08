@@ -19,7 +19,7 @@ import type { AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
 import {
-  documentsOutputRow,
+  documentsOutputFact,
   latestDocumentRounds,
 } from '@shared/plugins/documents';
 import {
@@ -31,6 +31,7 @@ import {
   fileLocationDisplayPath,
   ToolError,
   type FileLocation,
+  type ToolFact,
 } from '@shared/schemas';
 import { XmlOutputManager } from '@texra/agent/output/XmlOutputManager';
 import {
@@ -77,8 +78,9 @@ export interface Documents {
   /** Where each base file's pre-run content lives: every revision diffs
    *  against these, never the live file an in-place revision overwrote. */
   readonly baseFiles: FileLocation[];
-  /** Commit the revisions as the run's documents. */
-  readonly commit: Effect.Effect<void, Error>;
+  /** The revisions as the run's documents: the fact the call's result
+   *  states (`ToolResult.facts`), built from the state as the call left it. */
+  readonly fact: () => ToolFact;
 }
 
 /** The files a revision works on: the inputs, then the last outputs. */
@@ -169,12 +171,7 @@ export const openDocuments = Effect.fn('documents.open')(function* (
       roots,
     ),
     baseFiles,
-    // Suspended: the row is built from the state as the call left it.
-    commit: Effect.suspend(() =>
-      session.log.transact([
-        documentsOutputRow(runId, roundsToPersisted(state)),
-      ]),
-    ).pipe(Effect.asVoid),
+    fact: () => documentsOutputFact(roundsToPersisted(state)),
   } satisfies Documents;
 });
 

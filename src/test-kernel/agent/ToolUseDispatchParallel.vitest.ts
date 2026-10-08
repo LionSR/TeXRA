@@ -110,11 +110,11 @@ function probeTool(
   probe: DispatchProbe,
   name: string,
   wait: number | Effect.Effect<void>,
-  options: { endTurn?: boolean; parallelSafe?: boolean } = {},
+  options: { endTurn?: boolean; lane?: ITool['lane'] } = {},
 ): ITool {
   return {
     definition: { name, description: name, parameters: {} },
-    parallelSafe: options.parallelSafe,
+    lane: options.lane,
     call: Effect.fn(function* (input: unknown): Effect.fn.Return<ToolResult> {
       const tag = `${name}:${JSON.stringify(input)}`;
       probe.events.push(`start ${tag}`);
@@ -549,9 +549,9 @@ describe('tool-use dispatch', () => {
       });
       const kit = yield* openDispatch({
         tools: {
-          grep: probeTool(probe, 'grep', awaitSibling, { parallelSafe: true }),
+          grep: probeTool(probe, 'grep', awaitSibling, { lane: 'parallel' }),
           read_file: probeTool(probe, 'read_file', awaitSibling, {
-            parallelSafe: true,
+            lane: 'parallel',
           }),
         },
         calls: [
@@ -579,7 +579,7 @@ describe('tool-use dispatch', () => {
       const probe = newProbe();
       const kit = yield* openDispatch({
         tools: {
-          read_file: probeTool(probe, 'read_file', 20, { parallelSafe: true }),
+          read_file: probeTool(probe, 'read_file', 20, { lane: 'parallel' }),
           write_file: probeTool(probe, 'write_file', 10),
         },
         calls: [
@@ -643,7 +643,7 @@ describe('tool-use dispatch', () => {
       Effect.gen(function* () {
         const probe = newProbe();
         const kit = yield* openDispatch({
-          tools: { grep: probeTool(probe, 'grep', 5, { parallelSafe: true }) },
+          tools: { grep: probeTool(probe, 'grep', 5, { lane: 'parallel' }) },
           calls: [
             makeCall('c1', 'grep', { pattern: 'same' }),
             makeCall('c2', 'grep', { pattern: 'same' }),
@@ -743,10 +743,10 @@ describe('tool-use dispatch', () => {
       const kit = yield* openDispatch({
         tools: {
           grep: probeTool(probe, 'grep', awaitInterruption, {
-            parallelSafe: true,
+            lane: 'parallel',
           }),
           read_file: probeTool(probe, 'read_file', awaitInterruption, {
-            parallelSafe: true,
+            lane: 'parallel',
           }),
         },
         calls: [
@@ -792,8 +792,8 @@ describe('tool-use dispatch', () => {
       const probe = newProbe();
       const kit = yield* openDispatch({
         tools: {
-          grep: probeTool(probe, 'grep', 0, { parallelSafe: true }),
-          read_file: probeTool(probe, 'read_file', 0, { parallelSafe: true }),
+          grep: probeTool(probe, 'grep', 0, { lane: 'parallel' }),
+          read_file: probeTool(probe, 'read_file', 0, { lane: 'parallel' }),
         },
         calls: [
           makeCall('c1', 'grep', { pattern: 'a' }),
@@ -861,7 +861,7 @@ describe('tool-use dispatch', () => {
       const probe = newProbe();
       const kit = yield* openDispatch({
         tools: {
-          read_file: probeTool(probe, 'read_file', 5, { parallelSafe: true }),
+          read_file: probeTool(probe, 'read_file', 5, { lane: 'parallel' }),
           write_file: probeTool(probe, 'write_file', 5),
         },
         calls: [

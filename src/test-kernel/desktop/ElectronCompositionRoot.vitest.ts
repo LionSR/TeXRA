@@ -22,7 +22,7 @@ import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { DatabaseWriteFailed, GlobalDatabase } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { createFakeHost } from '@test/support/setupPlatform';
+import { createFakeHost, storePluginsLayer } from '@test/support/setupPlatform';
 import {
   closeAllTestSessions,
   closeTestSession,
@@ -114,6 +114,7 @@ describe('desktop composition root and launch environment', () => {
       ).pipe(
         Effect.provide(nodePlatformLayer),
         Effect.provide(projectDatabaseLayer),
+        Effect.provide(storePluginsLayer),
         Effect.provide(ProcessIdentity.layer(processOwnerId(undefined))),
         Effect.provide(nodePlatformLayer),
       ),
@@ -197,6 +198,7 @@ describe('desktop composition root and launch environment', () => {
       ).pipe(
         Effect.provide(nodePlatformLayer),
         Effect.provide(projectDatabaseLayer),
+        Effect.provide(storePluginsLayer),
         Effect.provide(ProcessIdentity.layer(processOwnerId(undefined))),
         Effect.provide(nodePlatformLayer),
       ),
@@ -276,6 +278,7 @@ describe('desktop composition root and launch environment', () => {
     ).pipe(
       Effect.provide(nodePlatformLayer),
       Effect.provide(projectDatabaseLayer),
+      Effect.provide(storePluginsLayer),
       Effect.provide(ProcessIdentity.layer(processOwnerId(undefined))),
       Effect.provide(nodePlatformLayer),
     ),

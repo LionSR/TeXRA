@@ -1,5 +1,5 @@
 {
-  "packages/harness/src/agent/core/tools/ToolTypes.ts": 45,
+  "packages/harness/src/agent/core/tools/ToolTypes.ts": 44,
   "packages/harness/src/agent/runtime/RunHandle.ts": 27,
   "packages/harness/src/platform/interfaces.ts": 49,
   "packages/harness/src/platform/languageModel.ts": 22,
@@ -7,7 +7,6 @@
   "packages/harness/src/shared/schemas/index.ts": 74,
   "packages/harness/src/shared/schemas/jsonValue.ts": 4,
   "packages/harness/src/tools/core/result.ts": 6,
-  "packages/harness/src/tools/plugins.ts": 23,
   "packages/harness/src/tools/toolAvailabilityService.ts": 11,
   "packages/llm/src/models/kimiCodeRetryGate.ts": 8,
   "packages/llm/src/models/modelSelection.ts": 10,

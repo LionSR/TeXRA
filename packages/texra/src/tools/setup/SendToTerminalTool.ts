@@ -3,13 +3,13 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
+import { defineTool } from '@texra-ai/harness';
 import { ToolError } from '@shared/schemas';
 import { TERMINAL_OUTPUT_MAX_CHARS } from '@texra/common/terminalOutput';
 import { executed } from '@tools/core/result';
 
 // Local file imports
 import { nullishWithDefault } from '@tools/core/inputSchema';
-import { defineTool } from '@tools/core/define';
 import { SetupPlatform } from './platform';
 
 const DEFAULT_TIMEOUT_MS = 300_000;

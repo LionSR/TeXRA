@@ -131,7 +131,7 @@ export interface AppSignalPayloads {
    * One or more files were written directly to the workspace. Frontends can
    * badge or refresh those files without routing through a run-scoped channel.
    * A run's accepted files arrive as its `documents/accepted` fact, announced
-   * in every process that folds the run (`announceRunFacts`); a host's own
+   * in every process that folds the run (the arm's `writes`); a host's own
    * write (an accepted diff, the progress view's Accept) emits here directly.
    *
    * Consumed by: extension (VS Code's `FileDecorationProvider` badges the

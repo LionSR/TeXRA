@@ -1,6 +1,7 @@
 // Local imports - tool result schemas
 import {
   type FileReference,
+  type ToolFact,
   type ToolFileAttachment,
   type ToolResult,
   ToolResultSchema,
@@ -33,8 +34,11 @@ function sanitizeDiagnostics(
 interface ExtractedToolAttachments {
   /** Extracted file attachments with binary data. */
   attachments: ToolFileAttachment[];
-  /** Sanitized result payload without binary data. */
+  /** Sanitized result payload without binary data or facts. */
   sanitizedResult: ToolResult;
+  /** The facts an executed result states about its run, which commit as
+   *  rows beside its settlement, never on the stored result. */
+  facts: readonly ToolFact[];
 }
 
 /**
@@ -64,6 +68,7 @@ export function extractToolAttachments(
     const diagnostics = sanitizeDiagnostics(rawDiagnostics);
     return {
       attachments: [],
+      facts: [],
       sanitizedResult: {
         ...rest,
         ...(diagnostics !== undefined ? { diagnostics } : {}),
@@ -71,12 +76,13 @@ export function extractToolAttachments(
     };
   }
 
-  const { files, diagnostics: rawDiagnostics, ...rest } = parsed;
+  const { files, facts = [], diagnostics: rawDiagnostics, ...rest } = parsed;
   const diagnostics = sanitizeDiagnostics(rawDiagnostics);
   const attachments: ToolFileAttachment[] = files ?? [];
 
   return {
     attachments,
+    facts,
     sanitizedResult: {
       ...rest,
       // Binary payloads (base64Data/bytes) are the one thing the schema keeps

@@ -3,7 +3,7 @@
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
-import { ToolContext } from '@texra-ai/harness';
+import { defineTool, ToolContext } from '@texra-ai/harness';
 import { callerRun } from '@agent/runtime/RunCall';
 
 // Local imports
@@ -17,7 +17,6 @@ import {
 import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
-import { defineTool } from '@tools/core/define';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { runStorageLocationInRunUnder } from '@utils/files/runStorageFs';
 import { hasExtension } from '@utils/core/pathCore';
