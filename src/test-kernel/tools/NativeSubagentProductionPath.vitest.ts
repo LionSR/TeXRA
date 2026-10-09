@@ -574,6 +574,10 @@ async function launchWaitingChild(options: {
     session,
     model: PARENT_MODEL,
   };
+  const fixtureRequests = {
+    nextId: (prefix: string) => prefix,
+    open: () => Effect.die(new Error('This fixture opens no request.')),
+  };
   const parentCall = {
     callId: 'parent-call',
     env: { roots: session.roots, workingDirectory: process.cwd() },
@@ -583,11 +587,9 @@ async function launchWaitingChild(options: {
     instruction: undefined,
     attempt: 1,
     logId: 'parent-card',
-    requests: {
-      nextId: (prefix: string) => prefix,
-      open: () => Effect.die(new Error('This fixture opens no request.')),
-    },
+    requests: fixtureRequests,
     run: {
+      requests: fixtureRequests,
       runId: PARENT_RUN_ID,
       session,
       task: null,

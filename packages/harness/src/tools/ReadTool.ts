@@ -3,8 +3,9 @@ import { Effect, FileSystem, Scope } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import type { RunCall } from '@agent/runtime/RunCall';
+import { type RunCall } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { recordToolFileRead } from '@agent/runtime/RunCall';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import {
   resolveToolPath,
@@ -12,7 +13,6 @@ import {
 } from '@tools/pathResolution';
 import { buildBytesAttachment, buildFileAttachment } from '@tools/attachments';
 import { formatFileView } from '@tools/formatting';
-import { recordToolFileRead } from '@tools/fileInteractions';
 import { parseEml, type EmlImageAttachment } from '@tools/emlParser';
 import {
   formatBytes,

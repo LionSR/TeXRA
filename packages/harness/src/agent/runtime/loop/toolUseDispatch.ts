@@ -680,11 +680,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
                 workingDirectory: run.workingDirectory,
                 stepRoots: step.stepRoots,
               },
-              requests,
+              run: { ...run, requests },
               emit: onToolOutput,
             }),
             Effect.provideService(RunCall, {
-              run,
               readFiles,
               responseId,
               instruction: userInstruction,

@@ -1,12 +1,16 @@
 /**
  * The tool contract: a tool (`ITool`), its registry, its guard, and what
  * its body reads of its own call (`ToolContext`: its id, where it works, how
- * it asks a person, where its transient output goes). What the harness's
- * built-in tools read of a call made under a run is `@agent/runtime/RunCall`.
+ * it asks a person, the run it works for, where its transient output goes).
+ * The run's window and the helpers over it (`ToolRun`, `requireRun`,
+ * `callerRun`) are in `@agent/runtime/RunCall`, published to plugin authors
+ * on `@texra-ai/harness/plugins`; the rest of that module (the call's place
+ * in its run, the script plumbing) is the harness's built-ins' alone.
  */
 
 import { Context, type Effect } from 'effect';
 
+import type { ToolRun } from '@agent/runtime/RunCall';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   DispatchFacts,
@@ -207,9 +211,10 @@ export interface ToolContextShape {
   readonly callId: string;
   /** Where the call works. */
   readonly env: ToolEnv;
-  /** Where the call's requests to a person open; absent for a standalone
-   *  host invocation outside an agent run, which has nobody to ask. */
-  readonly requests?: CallRequests;
+  /** The run the call works for, with where the call's requests to a
+   *  person open; absent for a standalone host invocation outside an agent
+   *  run, which has nobody to ask. */
+  readonly run?: ToolRun & { readonly requests: CallRequests };
   /** Transient output for the call's card while it runs, never a row. */
   readonly emit: (text: string) => void;
 }

@@ -18,8 +18,8 @@
 import { Cause, Effect } from 'effect';
 import { z } from 'zod';
 import { defineTool } from '@texra-ai/harness';
+import { callerRun } from '@texra-ai/harness/plugins';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { callerRun } from '@agent/runtime/RunCall';
 import { withLogChannel } from '@logger/effectLog';
 import {
   InquiryRecords,

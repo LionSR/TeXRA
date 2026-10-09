@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 import { defineTool } from '@texra-ai/harness';
-import { requireToolRun } from '@agent/runtime/RunCall';
+import { requireRun } from '@texra-ai/harness/plugins';
 import { withLogChannel } from '@logger/effectLog';
 import {
   UserQuestionAnswersSchema,
@@ -41,7 +41,7 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
   const {
     run: { runId },
     requests,
-  } = yield* requireToolRun('ask_user_question');
+  } = yield* requireRun('ask_user_question');
   const requestId = requests.nextId('userQuestion');
 
   yield* Effect.logInfo('User question requested').pipe(

@@ -2,7 +2,6 @@
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 import { defineTool, ToolContext } from '@texra-ai/harness';
-import type { RunCall } from '@agent/runtime/RunCall';
 
 // Local imports - tools
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
@@ -32,7 +31,7 @@ const extractFigures = Effect.fn('ExtractLatexFiguresTool.execute')(function* ({
 }: ExtractFiguresInput): Effect.fn.Return<
   ToolResult,
   Error,
-  ToolContext | RunCall | FileSystem.FileSystem
+  ToolContext | FileSystem.FileSystem
 > {
   const call = yield* ToolContext;
   const { path, display } = yield* resolveLatexFile(texPath);

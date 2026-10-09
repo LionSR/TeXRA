@@ -19,9 +19,9 @@ import {
   ToolContext,
   type ToolContextShape,
 } from '@texra-ai/harness';
+import { requireRun } from '@texra-ai/harness/plugins';
 import { getRunRecords } from '@agent/storage';
 import type { ToolServices } from '@agent/runtime/ToolServices';
-import { requireToolRun, type RunCall } from '@agent/runtime/RunCall';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
@@ -189,7 +189,7 @@ function executeAcceptRunFilesTool(
     const call = yield* ToolContext;
     const {
       run: { session },
-    } = yield* requireToolRun('accept_run_files');
+    } = yield* requireRun('accept_run_files');
     const directory = yield* findExistingRunStoragePathUnder(
       call.env.roots.storage,
       input.execution_id,
@@ -214,7 +214,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
 ): Effect.fn.Return<
   ToolResult,
   Error,
-  ToolContext | RunCall | FileSystem.FileSystem | WorkspaceFs
+  ToolContext | FileSystem.FileSystem | WorkspaceFs
 > {
   const { execution_id: runId, files, strip_criticize } = input;
 

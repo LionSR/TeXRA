@@ -13,7 +13,7 @@ import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { offeredBy } from '@agent/runtime/loop/step';
 import { createScriptRunStrategy } from '@agent/runtime/scriptRun';
 import { registerRun } from '@agent/storage/runLifecycle';
-import type { RunToolCall } from '@agent/runtime/RunCall';
+import { type RunToolCall } from '@agent/runtime/RunCall';
 import { withLogChannel } from '@logger/effectLog';
 import { USER_FOLLOW_UP_SUPPORT, type RunId } from '@shared/schemas';
 import { executed } from '@tools/core/result';

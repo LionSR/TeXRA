@@ -17,7 +17,7 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import { createNativeSubagentStrategy } from '@agent/runtime/nativeSubagentStrategy';
-import type { RunToolCall } from '@agent/runtime/RunCall';
+import { type RunToolCall } from '@agent/runtime/RunCall';
 import { withLogChannel } from '@logger/effectLog';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {

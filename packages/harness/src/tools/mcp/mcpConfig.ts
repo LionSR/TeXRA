@@ -14,13 +14,30 @@
  * revision: an edited entry gives its tools a new identity, and an
  * unchanged one keeps it across restarts.
  *
+ * A project's servers run in its session's server pool (`projectServers`,
+ * held by `@tools/sessionTools`): one process per server key (spec and
+ * revision, an installed plugin's load key, the project's `.env`), shared
+ * by the project's runs and steps, kept 30 minutes past its last holder
+ * and stopped with the session; a start that failed stays failed until
+ * the project's next root run, so one task waits on a dead start once.
+ *
  * An entry that does not validate is skipped with a warning the resolving
  * run shows in its transcript. The project-level `.texra/mcp.json` is not
  * read: a checked-in file that spawns processes needs a trust prompt first.
  */
 import * as path from 'node:path';
 
-import { Effect, type FileSystem } from 'effect';
+import {
+  Duration,
+  Effect,
+  Equal,
+  type FileSystem,
+  Hash,
+  Option,
+  RcMap,
+  type Scope,
+} from 'effect';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { z } from 'zod';
 
 import {
@@ -29,7 +46,13 @@ import {
   type McpServerConfig,
 } from '@common/plugins/mcpServers';
 import { TEXRA_STORAGE_DIR_NAME } from '@platform/defaults/nodeStorage';
-import type { LoadedPlugin, PluginLoader } from '@tools/toolTable';
+import { ProjectEnvironment } from '@platform/defaults/nodeWorkspace';
+import type {
+  LoadedPlugin,
+  LoadedPluginTools,
+  PluginLoader,
+} from '@tools/toolTable';
+import { sha256 } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { safeHomedir } from '@utils/system/platformPaths';
 
@@ -203,3 +226,120 @@ export const mcpPluginLoader =
         Effect.succeed({ plugins: [], warnings: [error.message] }),
       ),
     );
+
+/** A project's server pool. */
+export interface ProjectServers {
+  /** A server of `plugin` (of the installed plugin with key `load`, if
+   *  any) with the caller's project variables, for the caller's scope: its
+   *  tools under its recorded revision, or why it has none. */
+  readonly holdServer: (
+    plugin: LoadedPlugin,
+    load?: string,
+  ) => Effect.Effect<HeldServer, never, Scope.Scope>;
+  /** At a run's start (a root run first evicts failed starts): hold the
+   *  configured MCP servers `declared` names, with the project variables. */
+  readonly hold: (
+    declared: readonly string[],
+    root: boolean,
+  ) => Effect.Effect<
+    {
+      readonly warnings: readonly string[];
+      readonly held: readonly (HeldServer & { readonly id: string })[];
+    },
+    never,
+    Scope.Scope
+  >;
+}
+
+/** A held server's tools and the revision rows record, or why it has none. */
+interface HeldServer extends LoadedPluginTools {
+  readonly revision: string;
+}
+
+/** One MCP server process, equal by its plugin's spec and revision, the
+ *  installed plugin's load key ('' if configured) and the project
+ *  variables: a changed one is a new process beside the open ones. */
+class ServerKey implements Equal.Equal {
+  readonly id: string;
+  readonly plugin: LoadedPlugin;
+  readonly env: Readonly<Record<string, string>>;
+
+  constructor(
+    plugin: LoadedPlugin,
+    env: Readonly<Record<string, string>>,
+    load: string,
+  ) {
+    this.plugin = plugin;
+    this.env = env;
+    this.id = sha256([plugin.id, plugin.spec, plugin.revision, load, env]);
+  }
+
+  [Equal.symbol](that: Equal.Equal): boolean {
+    return that instanceof ServerKey && that.id === this.id;
+  }
+
+  [Hash.symbol](): number {
+    return Hash.string(this.id);
+  }
+}
+
+/** How long an MCP server no run or step holds stays up for the next: long
+ *  enough to read an answer before replying. In the service, a session left
+ *  idle closes sooner (`texra serve --idle-timeout`), and a session's close
+ *  always stops its servers. */
+const SERVER_IDLE = Duration.minutes(30);
+
+/** The project's server pool, in the caller's scope (the session's). */
+export const projectServers = Effect.fnUntraced(function* (
+  spawner: ChildProcessSpawner['Service'],
+  loader: PluginLoader,
+) {
+  // A server outlives its last holder by `SERVER_IDLE`, so the project's
+  // next run (a chat's next message) reuses the process and its state; a
+  // superseded key's process stops once that idle time passes, and the
+  // session's close stops every one.
+  const servers: RcMap.RcMap<ServerKey, LoadedPluginTools> = yield* RcMap.make({
+    lookup: (key: ServerKey) =>
+      key.plugin.acquire.pipe(
+        Effect.provideService(ChildProcessSpawner, spawner),
+        Effect.provideService(ProjectEnvironment, key.env),
+      ),
+    idleTimeToLive: SERVER_IDLE,
+  });
+  // Servers that did not start stay failed until the next root run starts
+  // (`hold`): no step, and no subagent of the task, waits on a dead start
+  // twice.
+  const failed = new Set<ServerKey>();
+  const holdServer: ProjectServers['holdServer'] = (plugin, load = '') =>
+    Effect.gen(function* () {
+      const key = new ServerKey(plugin, yield* ProjectEnvironment, load);
+      const { tools, failure } = yield* RcMap.get(servers, key);
+      if (failure !== undefined) failed.add(key);
+      const revision = sha256({ spec: plugin.spec, env: plugin.revision });
+      return { failure, tools, revision };
+    });
+  const hold: ProjectServers['hold'] = Effect.fn('ToolCatalog.hold')(
+    function* (declared, root) {
+      for (const key of root ? failed : []) {
+        // Only a key whose entry still holds that failure: one started
+        // healthily since is left running.
+        const entry = yield* Effect.scoped(RcMap.getOption(servers, key));
+        if (Option.isSome(entry) && entry.value.failure !== undefined)
+          yield* RcMap.invalidate(servers, key);
+        failed.delete(key);
+      }
+      const read = yield* loader(declared);
+      const held = yield* Effect.forEach(
+        read.plugins,
+        (plugin) =>
+          Effect.map(holdServer(plugin), (server) => ({
+            id: plugin.id,
+            ...server,
+          })),
+        { concurrency: 'unbounded' },
+      );
+      return { warnings: read.warnings, held };
+    },
+  );
+  return { holdServer, hold } satisfies ProjectServers;
+});

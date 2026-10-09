@@ -251,7 +251,6 @@
       "@agent/runtime/resumeRun",
       "@agent/runtime/run/AgentRun",
       "@agent/runtime/runAgent",
-      "@agent/runtime/RunCall",
       "@agent/runtime/RunEndResult",
       "@agent/runtime/RunHandle",
       "@agent/runtime/runRegistry",

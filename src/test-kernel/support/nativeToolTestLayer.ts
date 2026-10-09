@@ -77,6 +77,20 @@ export function nativeToolTestLayer(
   const roots = options.roots ?? testWorkspaceRoots();
   const { run, readFiles, origin, workingDirectory, stepRoots } = options;
   const callId = options.callId ?? `call-${generateShortId()}`;
+  // A fixture is the slice of the run its case reads; the run answers for
+  // its own config and trace with the inert pair.
+  const toolRun: ToolRun | undefined = run && {
+    config: AgentConfigSchema.parse({ agent: 'test', model: 'test-model' }),
+    model: testModelCell('test-model'),
+    logger: noopTrace,
+    steps: noStep(),
+    scope: Scope.makeUnsafe(),
+    task: null,
+    opening: null,
+    fileService: new RunFileService(run.runId, roots),
+    callbacks: {},
+    ...run,
+  };
   return Layer.mergeAll(
     Layer.effectContext(testRuntime().contextEffect),
     // The call's rooted filesystems, from the same roots it is given.
@@ -91,15 +105,18 @@ export function nativeToolTestLayer(
         ...(stepRoots !== undefined && { stepRoots }),
       },
       emit: options.emit ?? (() => undefined),
-      ...(run !== undefined && {
-        // A run's requests open unbound on its session: a test call has no
-        // loop to bind them to.
-        requests: {
-          nextId: (prefix: string) => `${prefix}-${generateShortId()}`,
-          open: (
-            payload: PermissionPayload,
-            opened?: { readonly onNeverCommitted?: Effect.Effect<void> },
-          ) => run.session.requests.ask(run.runId, payload, opened),
+      ...(toolRun !== undefined && {
+        run: {
+          ...toolRun,
+          // A run's requests open unbound on its session: a test call has
+          // no loop to bind them to.
+          requests: {
+            nextId: (prefix: string) => `${prefix}-${generateShortId()}`,
+            open: (
+              payload: PermissionPayload,
+              opened?: { readonly onNeverCommitted?: Effect.Effect<void> },
+            ) => toolRun.session.requests.ask(toolRun.runId, payload, opened),
+          },
         },
       }),
     })),
@@ -109,23 +126,6 @@ export function nativeToolTestLayer(
     run === undefined
       ? Layer.succeed(RunCall)(null)
       : Layer.succeed(RunCall)({
-          // A fixture is the slice of the run its case reads; the run
-          // answers for its own config and trace with the inert pair.
-          run: {
-            config: AgentConfigSchema.parse({
-              agent: 'test',
-              model: 'test-model',
-            }),
-            model: testModelCell('test-model'),
-            logger: noopTrace,
-            steps: noStep(),
-            scope: Scope.makeUnsafe(),
-            task: null,
-            opening: null,
-            fileService: new RunFileService(run.runId, roots),
-            callbacks: {},
-            ...run,
-          },
           readFiles: readFiles ?? new Set<string>(),
           responseId: 'test-response',
           instruction: undefined,

@@ -6,6 +6,7 @@ import { Effect, type Context } from 'effect';
 
 // Local imports
 import { ToolContext, type ToolContextShape } from '@texra-ai/harness';
+import { requireRun, type ToolRun } from '@texra-ai/harness/plugins';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import type { Runs } from '@agent/runtime/runRegistry';
@@ -15,11 +16,6 @@ import type {
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
 import { registerRun } from '@agent/storage';
-import {
-  requireToolRun,
-  type ToolRun,
-  type RunCall,
-} from '@agent/runtime/RunCall';
 import {
   describeFollowUpFailure,
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
@@ -147,7 +143,7 @@ const resumeOrLaunchAgentCliSession = Effect.fn(
       releaseClaim?: () => void,
     ) => Effect.Effect<ToolResult, ToolError, R>;
   },
-): Effect.fn.Return<ToolResult, ToolError, R | ToolContext | RunCall> {
+): Effect.fn.Return<ToolResult, ToolError, R | ToolContext> {
   const { id } = params;
   if (!id) return yield* params.launch();
 
@@ -299,8 +295,8 @@ const withAgentCliRun = Effect.fn('agentCliShared.withAgentCliRun')(function* <
 >(
   toolName: string,
   run: (run: ToolRun) => Effect.Effect<ToolResult, ToolError, R>,
-): Effect.fn.Return<ToolResult, ToolError, R | ToolContext | RunCall> {
-  const { run: activeRun } = yield* requireToolRun(toolName);
+): Effect.fn.Return<ToolResult, ToolError, R | ToolContext> {
+  const { run: activeRun } = yield* requireRun(toolName);
   if (activeRun.toolPolicy.stopAfterCycle) {
     return yield* Effect.fail(
       new ToolError(
@@ -323,7 +319,7 @@ export const agentCliApprovalCommand = (
   agentName: string,
   prompt: string,
   mode: (stores: SettingsStores) => Effect.Effect<string, Error>,
-): Effect.Effect<string, Error, ToolContext | RunCall> =>
+): Effect.Effect<string, Error, ToolContext> =>
   Effect.gen(function* () {
     const { roots } = (yield* ToolContext).env;
     const resolved = yield* mode(roots);
@@ -371,7 +367,7 @@ export function dispatchAgentCliTool<R = never, S = never>(params: {
   launch: (
     context: AgentCliLaunchContext,
   ) => Effect.Effect<ToolResult, ToolError, R>;
-}): Effect.Effect<ToolResult, ToolError, R | S | ToolContext | RunCall> {
+}): Effect.Effect<ToolResult, ToolError, R | S | ToolContext> {
   const { agentName, store, resumeId, sourceId, prompt, labels, launch } =
     params;
   return withAgentCliRun(agentName, (run) =>

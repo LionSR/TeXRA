@@ -1,12 +1,13 @@
 /**
- * A tool call made under a run, as the harness's built-in tools read it:
- * its place in the run (`RunCall`: the run, the files it read, the
+ * A tool call made under a run, as only the harness's built-in tools read
+ * it: its place in the run (`RunCall`: the files the run read, the
  * response and attempt it belongs to), the script that issued it
  * (`IssuingScript`), and a `script` call's door to the run's tools
- * (`ScriptCalls`). The public contract every tool reads is
- * `ToolContext` (`@agent/core/tools/ToolTypes`).
+ * (`ScriptCalls`). The public contract every tool reads, the run
+ * included, is `ToolContext` (`@agent/core/tools/ToolTypes`); an app's
+ * tool reads nothing here.
  */
-import { Context, Data, Effect } from 'effect';
+import { Context, Data, Effect, Option } from 'effect';
 
 import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
 import {
@@ -16,11 +17,14 @@ import {
 } from '@agent/core/tools/ToolTypes';
 import {
   ToolError,
+  type ToolResult,
   type ToolDefinition,
   type ToolResultPayload,
 } from '@shared/schemas';
-import type { AgentRunShape } from './run/AgentRun';
+import { errorResult } from '@tools/core/result';
+
 import type { InvokeError } from './ModelInvoker';
+import type { AgentRunShape } from './run/AgentRun';
 
 /** A resumed script issued another call at `seq` than its rows recorded. */
 export class ScriptDiverged extends Data.TaggedError('ScriptDiverged')<{
@@ -107,10 +111,10 @@ export interface ScriptScope extends ScriptSource {
 }
 
 /**
- * What a run already answers for (its model, its delegation scope, its tool
- * policy, its scope) is read from the run rather than copied onto the call.
- * A tool that starts something the run should stop at its end registers
- * that stop on the run's scope.
+ * What a tool reads of the run its call works for (its session, model,
+ * policy, configuration and scope), read from the run rather than copied
+ * onto the call. A tool that starts something the run should stop at its
+ * end registers that stop on the run's scope.
  */
 export type ToolRun = Pick<
   AgentRunShape,
@@ -131,9 +135,6 @@ export type ToolRun = Pick<
 
 /** A call made under a run, as its loop dispatched it (`RunCall`). */
 export interface RunCallShape {
-  /** The run the call works for: the loop's own `AgentRun`, seen through
-   *  the window its tools read. */
-  readonly run: ToolRun;
   /** The files the run read since its loop started, which an edit of an
    *  existing file requires. Memory only: a resumed run reads again. */
   readonly readFiles: Set<string>;
@@ -170,34 +171,92 @@ export class ScriptCalls extends Context.Service<
   Effect.Effect<ScriptDoor> | null
 >()('@texra/agent/ScriptCalls') {}
 
-/** A tool call made under a run: the call, where its requests open, and
- *  its place in the run. */
-export type RunToolCall = ToolContextShape &
-  RunCallShape & { readonly requests: CallRequests };
-
-/** The run the current call works for; none for a standalone host
- *  invocation outside an agent run. */
-export const callerRun: Effect.Effect<ToolRun | undefined, never, RunCall> =
+/** The run the current call works for; none for a standalone host call. */
+export const callerRun: Effect.Effect<ToolRun | undefined, never, ToolContext> =
   Effect.gen(function* () {
-    return (yield* RunCall)?.run;
+    return (yield* ToolContext).run;
   });
 
 /**
- * The current call, narrowed to one made under a run, or the shared refusal.
- * This is the one place that refusal is worded, so the model reads the same
- * sentence whichever tool it reached for. `toolName` names the thing that
- * needs the run, so it can be narrower than the tool itself
- * (`'bash run_in_background'`) when only one branch asks.
+ * The current call, narrowed to one made under a run, or the shared refusal:
+ * the one place it is worded, so the model reads the same sentence whichever
+ * tool it reached for. `toolName` names what needs the run, which can be
+ * narrower than the tool (`'bash run_in_background'`).
  */
+export const requireRun = (
+  toolName: string,
+): Effect.Effect<
+  ToolContextShape & {
+    readonly run: NonNullable<ToolContextShape['run']>;
+    readonly requests: CallRequests;
+  },
+  ToolError,
+  ToolContext
+> =>
+  Effect.gen(function* () {
+    const call = yield* ToolContext;
+    const { run } = call;
+    if (run === undefined)
+      return yield* Effect.fail(
+        new ToolError(`${toolName} requires an active run context.`),
+      );
+    return { ...call, run, requests: run.requests };
+  });
+
+/** A built-in's call made under a run: the call, the run, where its
+ *  requests open, and its place in the run. */
+export type RunToolCall = ToolContextShape &
+  RunCallShape & {
+    readonly run: NonNullable<ToolContextShape['run']>;
+    readonly requests: CallRequests;
+  };
+
+/** {@link requireRun}, with the call's place in its run, for built-ins. */
 export const requireToolRun = (
   toolName: string,
 ): Effect.Effect<RunToolCall, ToolError, ToolContext | RunCall> =>
   Effect.gen(function* () {
-    const call = yield* ToolContext;
+    const call = yield* requireRun(toolName);
     const runCall = yield* RunCall;
-    if (runCall === null || call.requests === undefined)
+    if (runCall === null)
       return yield* Effect.fail(
         new ToolError(`${toolName} requires an active run context.`),
       );
-    return { ...call, ...runCall, requests: call.requests };
+    return { ...call, ...runCall };
   });
+
+/** Count `path` as read by the current call's run, if it has one: a later
+ *  edit of it then needs no fresh read. Needs nothing of the caller, so a
+ *  plugin's tool that writes through an approved write records it too. */
+export const recordToolFileRead = Effect.fn('RunCall.recordFileRead')(
+  function* (path: string): Effect.fn.Return<void> {
+    const call = yield* Effect.serviceOption(RunCall);
+    if (path && Option.isSome(call)) call.value?.readFiles.add(path);
+  },
+);
+
+/** The refusal an edit of an existing file gets when the run never read it,
+ *  or null: an edit needs a read first, which the run's `readFiles` holds. */
+export const requireFileReadForEdit = Effect.fn('RunCall.requireReadForEdit')(
+  function* (
+    path: string,
+    exists: boolean,
+    errorMessage?: string,
+    /** How the card names the file; the tracker keys on `path`. */
+    displayPath: string = path,
+  ): Effect.fn.Return<ToolResult | null, never, RunCall> {
+    const call = yield* RunCall;
+    if (!exists || call?.readFiles.has(path) === true) {
+      return null;
+    }
+    return errorResult(
+      errorMessage ??
+        'Edits to existing files require a prior read in this session. Please call read_file first.',
+      {
+        // Not "Read …": the card would read as a read_file call.
+        summary: `Not edited: ${displayPath} was not read first`,
+        diagnostics: { reason: 'unread-file', path },
+      },
+    );
+  },
+);

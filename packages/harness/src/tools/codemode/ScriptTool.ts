@@ -18,10 +18,10 @@ import {
 import { RUN_LOG_MAX_LINES } from '@agent/codeSandbox/limits';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
-  callerRun,
   requireToolRun,
   ScriptCalls,
   type ScriptDoor,
+  callerRun,
 } from '@agent/runtime/RunCall';
 import {
   JsonValueSchema,
