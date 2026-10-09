@@ -6,6 +6,7 @@ import {
   isDocumentTaskConfig,
   isLoopDriven,
   type RunId,
+  DatabaseRowEarlier,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { runEndFromEvents } from './runRecords';
@@ -37,10 +38,12 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
   session: SessionHandle,
 ): Effect.fn.Return<ResumabilityDecision> {
   const read = yield* session.log.records(runId).pipe(Effect.result);
+  // An earlier build's row: this build cannot open the run, and says so.
   if (
     read._tag === 'Failure' &&
-    'earlier' in read.failure &&
-    read.failure.earlier
+    [read.failure, read.failure.cause].some(
+      (error) => error instanceof DatabaseRowEarlier,
+    )
   )
     return { kind: 'earlierBuild' };
   if (read._tag === 'Failure') {

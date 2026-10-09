@@ -185,15 +185,14 @@ export class DatabaseStoreNewer extends Data.TaggedError('DatabaseStoreNewer')<{
   override readonly message = `The session store holds ${this.type} rows at version ${this.version}, which this build does not read: a newer TeXRA wrote them, or a pre-release of a different format. Update TeXRA, or move the store aside to start a fresh one. Nothing in the store was changed.`;
 }
 
-/** A stored row that does not decode, or an earlier build's (`earlier`):
- *  its read fails, naming the row, as `DatabaseReadFailed`'s cause. */
+/** A stored row that does not decode as its kind's shape: its read fails,
+ *  naming the row, as the cause of the `DatabaseReadFailed`. */
 export class DatabaseRowCorrupt extends Data.TaggedError('DatabaseRowCorrupt')<{
   readonly commit: number;
   readonly type: string;
   readonly detail: string;
-  readonly earlier?: true;
 }> {
-  override readonly message = `The session store's ${this.type} row at commit ${this.commit} ${this.earlier ? "was written by an earlier build of TeXRA; it can't be opened by this one" : `does not decode (${this.detail})`}.`;
+  override readonly message = `The session store's ${this.type} row at commit ${this.commit} does not decode (${this.detail}).`;
 }
 
 /**

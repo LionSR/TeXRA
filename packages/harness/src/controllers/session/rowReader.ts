@@ -18,6 +18,7 @@ import {
   type LocalRuntimeState,
   type RunId,
   type SessionEvent,
+  type DatabaseRowEarlier,
 } from '@shared/schemas';
 import type {
   DatabaseRowCorrupt,
@@ -45,7 +46,7 @@ export interface RowReader {
     whole: boolean,
   ) => Effect.Effect<
     readonly SessionEvent[],
-    DatabaseStoreNewer | DatabaseRowCorrupt
+    DatabaseStoreNewer | DatabaseRowCorrupt | DatabaseRowEarlier
   >;
   /** Every run found unopenable so far, with why: shown read-only. The
    *  first call also finds, through `exec`, every run holding an earlier
@@ -99,7 +100,10 @@ export function rowReader(path: string, arms: PluginArms): RowReader {
         );
         const { kind, logicalId } = RowSchema.parse(row);
         if (kind === 'run')
-          mark(RunIdSchema.parse(logicalId), decoded.failure.earlier === true);
+          mark(
+            RunIdSchema.parse(logicalId),
+            decoded.failure._tag === 'DatabaseRowEarlier',
+          );
         const start = bareStart(row);
         if (start !== null) events.push(start);
       }

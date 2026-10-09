@@ -39,6 +39,7 @@ import {
   type JsonValue,
   type SessionEvent,
   type SessionEventDraft,
+  DatabaseRowEarlier,
 } from '@shared/schemas';
 import {
   DatabaseRowCorrupt,
@@ -156,15 +157,6 @@ export const EARLIER_RUNS: readonly (readonly [string, readonly unknown[]])[] =
         : [],
     );
 
-/** Where a refused row is: its commit and kind. */
-const corruptAt = (row: {
-  readonly commit: number;
-  readonly type: string;
-}) => ({
-  commit: row.commit,
-  type: row.type,
-});
-
 /** Validate a draft and encode it at its kind's current version. Throws on
  *  a draft that does not parse, is not JSON, or whose blob does not hash to
  *  its digest. */
@@ -269,13 +261,13 @@ export function decodeRow(
   arms: PluginArms,
 ): Result.Result<
   SessionEvent | LeftOut,
-  DatabaseStoreNewer | DatabaseRowCorrupt
+  DatabaseStoreNewer | DatabaseRowCorrupt | DatabaseRowEarlier
 > {
   const row = RowSchema.parse(input);
   const corrupt = (error: unknown, type = row.type) =>
     Result.fail(
       new DatabaseRowCorrupt({
-        ...corruptAt(row),
+        commit: row.commit,
         type,
         detail: causeOf(error),
       }),
@@ -289,7 +281,7 @@ export function decodeRow(
     return Result.fail(new DatabaseStoreNewer({ type: row.type, version }));
   if (version < readableFrom(row.type))
     return Result.fail(
-      new DatabaseRowCorrupt({ ...corruptAt(row), detail: '', earlier: true }),
+      new DatabaseRowEarlier({ commit: row.commit, type: row.type }),
     );
   let data: Record<string, JsonValue>;
   try {

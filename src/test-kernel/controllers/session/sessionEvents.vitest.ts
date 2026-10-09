@@ -1846,8 +1846,8 @@ describe('the C1 event table and the C6 publisher', () => {
           ).pipe(Effect.provide(substrate(storage))),
         );
         expect(read.cause).toMatchObject({
-          _tag: 'DatabaseRowCorrupt',
-          earlier: true,
+          _tag: 'DatabaseRowEarlier',
+          type: 'model.message',
         });
         yield* Effect.gen(function* () {
           const view = yield* SessionViewService;
