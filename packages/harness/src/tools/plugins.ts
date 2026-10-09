@@ -27,13 +27,17 @@ import type { Runs } from '@agent/runtime/runRegistry';
 import type { RuntimeTool, ToolServices } from '@agent/runtime/ToolServices';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { StateReadFailed, type StateStore } from '@platform/interfaces';
-import type {
-  CommitOrdinal,
-  JsonValue,
-  RunId,
-  SessionEvent,
-  ToolFact,
+import {
+  aggregateId,
+  type CommitOrdinal,
+  type JsonValue,
+  type RunId,
+  type SessionEvent,
+  type SessionEventDraft,
+  type ToolFact,
 } from '@shared/schemas';
+import type { RunHistoryDraft } from '@shared/session/runStateFold';
+import type { CoWrite } from '@shared/session/sessionEvents';
 import type { SessionView } from '@shared/session/sessionView';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
@@ -294,12 +298,47 @@ export function checkOwnFacts(
   plugin: Plugin | undefined,
   facts: readonly ToolFact[],
 ): void {
-  for (const { kind, version, value, ...fact } of facts) {
+  for (const { kind, version, value, aggregate, ...fact } of facts) {
     const arm = plugin?.arms?.find((own) => own.kind === kind);
     if (arm === undefined || fact.plugin !== plugin?.id)
       throw new Error(`the fact ${fact.plugin}/${kind} is not its plugin's`);
+    if (aggregate !== undefined && !aggregate.startsWith(`${arm.plugin}:`))
+      throw new Error(`${arm.plugin}/${kind} names another plugin's aggregate`);
     if (version !== arm.version)
       throw new Error(`${arm.plugin}/${kind} is at version ${arm.version}`);
     arm.schema.parse(value);
   }
+}
+
+/**
+ * The rows the facts of a call of `runId` commit in its `tool.result`
+ * batch: a fact about the run on the run's history, and one about its
+ * plugin's own aggregate (`aggregate`), hung under the run, as the batch's
+ * co-write, so each commits with the result or not at all.
+ */
+export function factRows(
+  facts: readonly ToolFact[],
+  runId: RunId,
+): {
+  readonly run: readonly RunHistoryDraft[];
+  readonly alongside: Effect.Effect<CoWrite>;
+} {
+  const run: RunHistoryDraft[] = [];
+  const rows: SessionEventDraft[] = [];
+  for (const { aggregate, ...fact } of facts) {
+    const row = { type: 'plugin.fact', ...fact } as const;
+    if (aggregate === undefined)
+      run.push({
+        ...row,
+        aggregateId: aggregateId('run', runId),
+        parent: null,
+      });
+    else
+      rows.push({
+        ...row,
+        aggregateId: aggregateId('plugin', aggregate),
+        parent: runId,
+      });
+  }
+  return { run, alongside: Effect.succeed({ rows, committed: Effect.void }) };
 }

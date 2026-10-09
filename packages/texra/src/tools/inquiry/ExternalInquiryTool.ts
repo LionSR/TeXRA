@@ -23,7 +23,7 @@ import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import {
   InquiryRecords,
-  inquiryThreadRow,
+  inquiryThreadFact,
   type InquiryThreadRecord,
 } from '@shared/plugins/externalInquiry';
 import {
@@ -333,22 +333,9 @@ function executeAsk(
         ),
       );
 
-    // Background Tasks panel: announce the open thread.
+    // The Background Tasks panel's row for the open thread, a fact of the
+    // call: it commits with the call's `tool.result`, or not at all.
     const summary = yield* records.getThreadSummary(manifest.threadId);
-    // The panel's announcement, after the request is durable: a refused row
-    // is logged, never the tool's failure (the thread record is the authority).
-    if (summary) {
-      yield* session.log
-        .transact([inquiryThreadRow(summary)])
-        .pipe(
-          Effect.catch((error) =>
-            Effect.logWarning('The inquiry thread row was not written').pipe(
-              Effect.annotateLogs({ data: error }),
-              withLogChannel(CHANNEL),
-            ),
-          ),
-        );
-    }
 
     const message =
       'Question dispatched to the user. The tool returned without waiting. ' +
@@ -357,10 +344,13 @@ function executeAsk(
       'If your next step depends on this answer, end your turn now; ' +
       'otherwise proceed with independent work.';
 
-    return executed(
-      `status: dispatched\nthread_id: ${manifest.threadId}\n\n${message}`,
-      `Inquiry dispatched (${manifest.threadId})`,
-    );
+    return {
+      ...executed(
+        `status: dispatched\nthread_id: ${manifest.threadId}\n\n${message}`,
+        `Inquiry dispatched (${manifest.threadId})`,
+      ),
+      ...(summary && { facts: [inquiryThreadFact(summary)] }),
+    };
   });
 }
 

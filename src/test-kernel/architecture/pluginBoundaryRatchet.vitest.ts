@@ -101,10 +101,10 @@ describe('plugin boundaries (invariants 1 and 6)', () => {
     const appends = files()
       .filter((file) => PLUGIN_ARM_MODULES.test(file))
       .filter((file) => specifiers(file).some((s) => APPEND_PORTS.test(s)));
-    // The one generic writer: the dispatch commits a call's facts
-    // (`ToolResult.facts`) as rows of its run with its `tool.result`.
+    // The one generic writer: `factRows` drafts a call's facts
+    // (`ToolResult.facts`), which the dispatch commits with its `tool.result`.
     expect({ drafts, appends }).toEqual({
-      drafts: ['packages/harness/src/agent/runtime/loop/toolUseDispatch.ts'],
+      drafts: ['packages/harness/src/tools/plugins.ts'],
       appends: [],
     });
   });

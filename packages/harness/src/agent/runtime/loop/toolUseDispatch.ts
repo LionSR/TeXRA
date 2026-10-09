@@ -81,7 +81,7 @@ import {
   type CallStatus,
   type PendingCall,
 } from '@shared/session/inFlight';
-import { checkOwnFacts } from '@tools/plugins';
+import { checkOwnFacts, factRows } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 import { generateShortId, getBasename } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -421,6 +421,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     rows:
       | readonly RunHistoryDraft[]
       | ((state: RunState) => readonly RunHistoryDraft[]),
+    alongside?: ReturnType<typeof factRows>['alongside'],
   ) =>
     append((state) => {
       const own = typeof rows === 'function' ? rows(state) : rows;
@@ -428,27 +429,32 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       return script !== null && recordOf(state, fact.callId) === null
         ? [{ type: 'script.call', aggregateId, payload: script }, ...own]
         : own;
-    });
+    }, alongside);
 
   const settle = (
     fact: CallFacts,
     attempt: number,
     settlement: Settlement,
     cards: (state: RunState) => readonly RunHistoryDraft[] = () => [],
+    alongside?: ReturnType<typeof factRows>['alongside'],
   ) =>
-    commit(fact, (state) => [
-      {
-        type: 'tool.result',
-        aggregateId,
-        payload: {
-          responseId,
-          callId: fact.callId,
-          attempt,
-          ...settlement,
+    commit(
+      fact,
+      (state) => [
+        {
+          type: 'tool.result',
+          aggregateId,
+          payload: {
+            responseId,
+            callId: fact.callId,
+            attempt,
+            ...settlement,
+          },
         },
-      },
-      ...cards(state),
-    ]);
+        ...cards(state),
+      ],
+      alongside,
+    );
 
   const slow = (fact: CallFacts) =>
     step.registry.get(fact.toolName)?.slow === true;
@@ -760,26 +766,18 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     );
     const status: ToolCallStatus =
       extracted.sanitizedResult.status === 'error' ? 'failed' : 'completed';
-    // The whole card commits with the settlement: a slow tool's card is
-    // already open and only closes here, and a fast tool's opens and closes
-    // in this same batch under the id its dispatch facts carry. Publishing a
-    // terminal card outside the batch would tell the transcript the call
-    // completed while recovery still sees an unsettled call.
+    // The whole card commits with the settlement (a slow tool's closes here,
+    // a fast tool's opens and closes here): a terminal card outside the batch
+    // would show the call completed while recovery sees it unsettled.
     const cards = settledCards(fact, parsedInput, status, attempt, editedFiles);
-    // An executed call's PostToolUse rows commit with its settlement, as do
-    // the queued follow-ups its result answers and the facts it states about
-    // its run.
+    // An executed call's PostToolUse rows, the follow-ups its result answers
+    // and its facts (the run's, and its plugin's own aggregates') commit too.
     const post = pre ? yield* pre.after(extracted.sanitizedResult) : [];
     const answered =
       extracted.sanitizedResult.status === 'executed'
         ? (extracted.sanitizedResult.consumedFollowUps ?? [])
         : [];
-    const facts = extracted.facts.map((fact): RunHistoryDraft => ({
-      type: 'plugin.fact',
-      aggregateId,
-      ...fact,
-      parent: null,
-    }));
+    const facts = factRows(extracted.facts, runId);
     yield* retireStanding;
     yield* settle(
       fact,
@@ -801,8 +799,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           aggregateId,
           followUpId,
         })),
-        ...facts,
+        ...facts.run,
       ],
+      facts.alongside,
     );
   });
 
