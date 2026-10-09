@@ -12,11 +12,8 @@
 import {
   Cause,
   Context,
-  Duration,
   Effect,
-  Equal,
   Exit,
-  Hash,
   Layer,
   RcMap,
   Schedule,
@@ -29,7 +26,6 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
-import { ProjectEnvironment } from '@platform/defaults/nodeWorkspace';
 import type { PluginContext } from '@platform/processRuntime';
 import {
   entriesOf,
@@ -41,12 +37,10 @@ import type { Plugin } from '@tools/plugins';
 import {
   PluginHold,
   type InstalledToolReader,
-  type LoadedPlugin,
-  type LoadedPluginTools,
   type PluginLoader,
   type SessionPluginLayer,
 } from '@tools/toolTable';
-import { sha256 } from '@utils/core/idHash';
+import { projectServers, type ProjectServers } from '@tools/mcp/mcpConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** What one step pinned: its tools and the plugins they come from. */
@@ -79,10 +73,11 @@ export interface SessionTools {
     off: Effect.Effect<ReadonlySet<string>, E>,
     options?: { readonly installed?: boolean; readonly held?: HeldPlugins },
   ) => Effect.Effect<ToolStep, E, Scope.Scope>;
-  /** At a run's start, after evicting failed starts: hold the configured
-   *  MCP servers `declared` names, with the caller's project variables. */
+  /** At a run's start (a root run first evicts failed starts): hold the
+   *  configured MCP servers `declared` names, with the project variables. */
   readonly hold: (
     declared: readonly string[],
+    root: boolean,
   ) => Effect.Effect<HeldPlugins, never, Scope.Scope>;
 }
 
@@ -107,47 +102,7 @@ export interface ProcessCatalog {
 /** What a step pins of its session. */
 interface SessionResources {
   readonly layers: RcMap.RcMap<string, PluginContext>;
-  /** A server of `plugin` for the caller's scope, as entries under
-   *  `owner`, or why it has none. */
-  readonly holdServer: (
-    plugin: LoadedPlugin,
-    owner: string,
-    load?: string,
-  ) => Effect.Effect<
-    {
-      readonly failure?: string;
-      readonly entries: ReadonlyMap<string, ToolEntry>;
-    },
-    never,
-    Scope.Scope
-  >;
-}
-
-/** One MCP server process, equal by its plugin's spec and revision, the
- *  installed plugin's load key ('' if configured) and the project
- *  variables: a changed one is a new process beside the open ones. */
-class ServerKey implements Equal.Equal {
-  readonly id: string;
-  readonly plugin: LoadedPlugin;
-  readonly env: Readonly<Record<string, string>>;
-
-  constructor(
-    plugin: LoadedPlugin,
-    env: Readonly<Record<string, string>>,
-    load: string,
-  ) {
-    this.plugin = plugin;
-    this.env = env;
-    this.id = sha256([plugin.id, plugin.spec, plugin.revision, load, env]);
-  }
-
-  [Equal.symbol](that: Equal.Equal): boolean {
-    return that instanceof ServerKey && that.id === this.id;
-  }
-
-  [Hash.symbol](): number {
-    return Hash.string(this.id);
-  }
+  readonly holdServer: ProjectServers['holdServer'];
 }
 
 /** A plugin's layer (from `layers`, by its id) built in the caller's
@@ -231,12 +186,6 @@ const HOLD_RETRY = Schedule.min([
   Schedule.spaced('1 minute'),
 ]);
 
-/** How long an MCP server no run or step holds stays up for the next: long
- *  enough to read an answer before replying. In the service, a session left
- *  idle closes sooner (`texra serve --idle-timeout`), and a session's close
- *  always stops its servers. */
-const SERVER_IDLE = Duration.minutes(30);
-
 /** Reads no plugins, from configuration or installed. */
 export const NONE = Effect.succeed({ plugins: [], warnings: [] });
 
@@ -261,11 +210,9 @@ const pinStep = <E>(
       read.plugins,
       ({ id, key, servers }) =>
         Effect.map(
-          Effect.forEach(
-            servers,
-            (server) => session.holdServer(server, id, key),
-            { concurrency: 'unbounded' },
-          ),
+          Effect.forEach(servers, (server) => session.holdServer(server, key), {
+            concurrency: 'unbounded',
+          }),
           (held) => ({ id, held }),
         ),
       { concurrency: 'unbounded' },
@@ -277,7 +224,14 @@ const pinStep = <E>(
       ...builtIn.map(({ plugin, entries }) => [plugin.id, entries] as const),
       ...loads.map(
         ({ id, held }) =>
-          [id, new Map(held.flatMap(({ entries }) => [...entries]))] as const,
+          [
+            id,
+            new Map(
+              held.flatMap(({ tools, revision }) => [
+                ...entriesOf(id, tools, { revision }),
+              ]),
+            ),
+          ] as const,
       ),
       ...[
         ...Map.groupBy(
@@ -342,59 +296,24 @@ export const sessionTools = Effect.fnUntraced(function* (
         Effect.provideService(PluginHold, holdFor(id)),
       ),
   });
-  // A server outlives its last holder by `SERVER_IDLE`, so the project's
-  // next run (a chat's next message) reuses the process and its state; a
-  // superseded key's process stops once that idle time passes, and the
-  // session's close stops every one.
-  const servers: RcMap.RcMap<ServerKey, LoadedPluginTools> = yield* RcMap.make({
-    lookup: (key: ServerKey) =>
-      key.plugin.acquire.pipe(
-        Effect.provideService(ChildProcessSpawner, shared.spawner),
-        Effect.provideService(ProjectEnvironment, key.env),
-      ),
-    idleTimeToLive: SERVER_IDLE,
-  });
   yield* follow(
     SubscriptionRef.changes(shared.on),
     [...shared.sessionLayerOf.keys()],
     (id) => RcMap.get(layers, id),
   );
-  // Servers that did not start stay failed until the next run starts
-  // (`hold`), so no step waits on a dead start twice in one run.
-  const failed = new Set<ServerKey>();
-  const holdServer: SessionResources['holdServer'] = (
-    plugin,
-    owner,
-    load = '',
-  ) =>
-    Effect.gen(function* () {
-      const key = new ServerKey(plugin, yield* ProjectEnvironment, load);
-      const { tools, failure } = yield* RcMap.get(servers, key);
-      if (failure !== undefined) failed.add(key);
-      const revision = sha256({ spec: plugin.spec, env: plugin.revision });
-      return { failure, entries: entriesOf(owner, tools, { revision }) };
-    });
-  const resources = { layers, holdServer };
+  const servers = yield* projectServers(shared.spawner, shared.loader);
+  const resources = { layers, holdServer: servers.holdServer };
   return {
     pin: (off, options) => pinStep(shared, resources, off, options),
-    hold: Effect.fn('ToolCatalog.hold')(function* (declared) {
-      for (const key of failed) yield* RcMap.invalidate(servers, key);
-      failed.clear();
-      const read = yield* shared.loader(declared);
-      const held = yield* Effect.forEach(
-        read.plugins,
-        (plugin) =>
-          Effect.map(holdServer(plugin, plugin.id), (server) => ({
-            id: plugin.id,
-            ...server,
-          })),
-        { concurrency: 'unbounded' },
-      );
-      return {
-        warnings: read.warnings,
+    hold: (declared, root) =>
+      Effect.map(servers.hold(declared, root), ({ warnings, held }) => ({
+        warnings,
         loaded: new Map(held.map(({ id, failure }) => [id, failure])),
-        entries: new Map(held.flatMap(({ entries }) => [...entries])),
-      };
-    }),
+        entries: new Map(
+          held.flatMap(({ id, tools, revision }) => [
+            ...entriesOf(id, tools, { revision }),
+          ]),
+        ),
+      })),
   } satisfies SessionTools;
 });

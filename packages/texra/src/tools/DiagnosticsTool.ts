@@ -4,7 +4,7 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 import { defineTool, ToolContext } from '@texra-ai/harness';
-import { callerRun } from '@agent/runtime/RunCall';
+import { callerRun } from '@texra-ai/harness/plugins';
 
 // Local imports
 import type { HostInteractions } from '@agent/runtime/HostInteractions';

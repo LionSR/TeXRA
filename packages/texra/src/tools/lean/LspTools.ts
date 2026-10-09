@@ -6,7 +6,7 @@ import {
   ToolContext,
   type ToolContextShape,
 } from '@texra-ai/harness';
-import { callerRun, type ToolRun, type RunCall } from '@agent/runtime/RunCall';
+import { callerRun, type ToolRun } from '@texra-ai/harness/plugins';
 import { withLogChannel } from '@logger/effectLog';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { resolveToolPath } from '@tools/pathResolution';
@@ -147,11 +147,7 @@ const catchLeanFailure = (
 
 function executeLeanDiagnosticsTool(
   input: LeanDiagnosticsInput,
-): Effect.Effect<
-  ToolResult,
-  Error,
-  ToolContext | RunCall | LeanLanguageServices
-> {
+): Effect.Effect<ToolResult, Error, ToolContext | LeanLanguageServices> {
   const { command, file } = input;
   return diagnose(file, command).pipe(
     catchLeanFailure(
@@ -255,11 +251,7 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
   schema: LeanFileInputSchema,
   execute: (
     input: LeanFileInput,
-  ): Effect.Effect<
-    ToolResult,
-    Error,
-    ToolContext | RunCall | LeanLanguageServices
-  > => {
+  ): Effect.Effect<ToolResult, Error, ToolContext | LeanLanguageServices> => {
     const { command, file } = input;
     const { description } = LEAN_FILE_COMMANDS[command];
     return Effect.gen(function* () {
@@ -296,11 +288,7 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
   schema: LeanProjectInputSchema,
   execute: (
     input: LeanProjectInput,
-  ): Effect.Effect<
-    ToolResult,
-    Error,
-    ToolContext | RunCall | LeanLanguageServices
-  > => {
+  ): Effect.Effect<ToolResult, Error, ToolContext | LeanLanguageServices> => {
     const { command } = input;
     const { description } = LEAN_PROJECT_COMMANDS[command];
     return Effect.gen(function* () {
@@ -329,11 +317,7 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
 
 function executeLeanInspectTool(
   input: LeanInspectInput,
-): Effect.Effect<
-  ToolResult,
-  Error,
-  ToolContext | RunCall | LeanLanguageServices
-> {
+): Effect.Effect<ToolResult, Error, ToolContext | LeanLanguageServices> {
   const { type, file, line, column } = input;
   // Convert to 0-indexed for LSP
   const line0 = line - 1;
@@ -352,11 +336,7 @@ function executeLeanInspectTool(
     ) => Effect.Effect<LspResult<T>>,
     empty: { readonly message: string; readonly summary: string },
     render: (data: T) => ToolResult,
-  ): Effect.Effect<
-    ToolResult,
-    Error,
-    ToolContext | RunCall | LeanLanguageServices
-  > =>
+  ): Effect.Effect<ToolResult, Error, ToolContext | LeanLanguageServices> =>
     Effect.gen(function* () {
       const call = yield* ToolContext;
       const services = yield* LeanLanguageServices;
@@ -376,7 +356,7 @@ function executeLeanInspectTool(
   let program: Effect.Effect<
     ToolResult,
     Error,
-    ToolContext | RunCall | LeanLanguageServices
+    ToolContext | LeanLanguageServices
   >;
   switch (type) {
     case 'goal':
@@ -474,8 +454,9 @@ function leanFilePath(file: string, call: ToolContextShape) {
   });
 }
 
-/** The runs whose end already stops the Lean servers they started. */
-const stopRegistered = new WeakSet<ToolRun>();
+/** The runs whose end already stops the Lean servers they started, by
+ *  their scope: one per run, whatever object a call sees the run through. */
+const stopRegistered = new WeakSet<ToolRun['scope']>();
 
 /**
  * The run a Lean request is attributed to. The first request of a run also
@@ -485,14 +466,14 @@ const stopRegistered = new WeakSet<ToolRun>();
  */
 function leanRunId(
   services: LeanLanguageServicesShape,
-): Effect.Effect<RunId | undefined, never, RunCall> {
+): Effect.Effect<RunId | undefined, never, ToolContext> {
   return Effect.flatMap(callerRun, (run) => {
     if (!run) return Effect.succeed(undefined);
     const { runId } = run;
-    if (!services.stopSessionsForRun || stopRegistered.has(run)) {
+    if (!services.stopSessionsForRun || stopRegistered.has(run.scope)) {
       return Effect.succeed(runId);
     }
-    stopRegistered.add(run);
+    stopRegistered.add(run.scope);
     return Scope.addFinalizer(
       run.scope,
       // A finalizer on the run's scope: a failure here must not replace the

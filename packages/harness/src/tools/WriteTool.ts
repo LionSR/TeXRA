@@ -1,7 +1,7 @@
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
-import type { RunCall } from '@agent/runtime/RunCall';
+import { type RunCall } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - tools

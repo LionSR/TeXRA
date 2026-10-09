@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Plugin tools read their run through `ToolContext`.** A plugin's tool
+  gets the run its call works for from `ToolContext` (`env.run`), with
+  `requireRun` and `callerRun` and the `ToolRun` type from
+  `@texra-ai/harness/plugins`; the harness's internal `RunCall` is no
+  longer for plugins. `ToolRun` is a step: it still carries thirteen of the
+  run's fields, and will narrow to the ones plugin tools read, the rest
+  moving behind plugin services.
 - **SDK tool and plugin contract: `lane`, `arms` and `facts`.** A tool
   declares where its calls run with `lane: 'parallel' | 'barrier' | 'own'`,
   replacing `parallelSafe` and `ownsConcurrency`. A plugin lists its own row

@@ -1,7 +1,6 @@
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 import { imageSize } from 'image-size';
-import type { RunCall } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports
@@ -120,7 +119,7 @@ export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
 }: BuildFileAttachmentOptions): Effect.fn.Return<
   ToolFileAttachment,
   ToolError,
-  ToolContext | RunCall | FileSystem.FileSystem
+  ToolContext | FileSystem.FileSystem
 > {
   const call = yield* ToolContext;
   if (!isNonEmptyString(filePath)) {

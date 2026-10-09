@@ -9,12 +9,12 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 import { defineTool } from '@texra-ai/harness';
+import { requireRun } from '@texra-ai/harness/plugins';
 import {
   findAgentByIdentifier,
   getCatalogAgent,
   resolveDelegationScopeAgents,
 } from '@agent/index/agentRegistry';
-import { requireToolRun } from '@agent/runtime/RunCall';
 import { agentKey, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { errorResult } from '@tools/core/result';
@@ -69,7 +69,7 @@ type DocumentTaskInput = z.infer<typeof DocumentTaskInputSchema>;
 const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
   input: DocumentTaskInput,
 ) {
-  const call = yield* requireToolRun('document_task');
+  const call = yield* requireRun('document_task');
   const agents = yield* resolveDelegationScopeAgents(
     call.env.roots,
     call.run.delegationAgentScope ?? undefined,

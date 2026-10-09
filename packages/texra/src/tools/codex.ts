@@ -38,7 +38,6 @@ import {
 } from '@agent/trace';
 import type { Runs } from '@agent/runtime/runRegistry';
 import type { ChildRunPort } from '@agent/runtime/childRunLoop';
-import type { RunCall } from '@agent/runtime/RunCall';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { withLogChannel } from '@logger/effectLog';
 import type {
@@ -448,7 +447,6 @@ const runCodex = Effect.fn('CodexTool.run')(function* (
   ToolResult,
   ToolError,
   | ToolContext
-  | RunCall
   | Runs
   | CodexThreads
   | ChildProcessSpawner
@@ -505,7 +503,7 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
-  ToolContext | RunCall | Runs | ChildProcessSpawner | FileSystem.FileSystem
+  ToolContext | Runs | ChildProcessSpawner | FileSystem.FileSystem
 > {
   const { roots } = (yield* ToolContext).env;
   const { thread, run } = yield* createCodexThread(

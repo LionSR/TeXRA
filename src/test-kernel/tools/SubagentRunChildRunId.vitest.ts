@@ -65,6 +65,10 @@ describe('launchDetachedSubagent child run launch', () => {
   } as never;
 
   const roots = createFakeWorkspaceRoots();
+  const fixtureRequests = {
+    nextId: (prefix: string) => prefix,
+    open: () => Effect.die(new Error('This fixture opens no request.')),
+  };
   const parent: RunToolCall = {
     callId: 'parent-call',
     env: { roots },
@@ -74,10 +78,7 @@ describe('launchDetachedSubagent child run launch', () => {
     instruction: undefined,
     attempt: 1,
     logId: 'parent-card',
-    requests: {
-      nextId: (prefix: string) => prefix,
-      open: () => Effect.die(new Error('This fixture opens no request.')),
-    },
+    requests: fixtureRequests,
     run: {
       runId: 'parent-exec' as RunId,
       session: { tag: 'parent-session' } as never,

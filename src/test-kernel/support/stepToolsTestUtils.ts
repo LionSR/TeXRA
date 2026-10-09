@@ -39,7 +39,7 @@ export const resolveTestStep = Effect.fn('resolveTestStep')(function* (
     >,
 ) {
   const tools = yield* (yield* ToolCatalog).session(testRunRegistry);
-  const held = yield* tools.hold(declaredToolNames(input.tools));
+  const held = yield* tools.hold(declaredToolNames(input.tools), true);
   const pinned = yield* tools.pin(readDisabledTools(input.stores.globalState), {
     held,
   });

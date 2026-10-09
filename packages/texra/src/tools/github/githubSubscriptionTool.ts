@@ -21,8 +21,8 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 import { defineTool, Secrets, ToolContext } from '@texra-ai/harness';
+import { requireRun } from '@texra-ai/harness/plugins';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { requireToolRun } from '@agent/runtime/RunCall';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { parseWorkingDirectory } from '@tools/pathResolution';
@@ -598,7 +598,7 @@ export const GitHubSubscriptionTool = defineTool({
   execute: (input: GitHubSubscriptionInput) =>
     Effect.gen(function* () {
       const toolCall = yield* ToolContext;
-      const { run } = yield* requireToolRun('github_subscription');
+      const { run } = yield* requireRun('github_subscription');
       switch (input.command) {
         case 'subscribe':
           return yield* execSubscribe(input, run.runId, run.session);

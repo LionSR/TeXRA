@@ -7,7 +7,11 @@ import { z } from 'zod';
 
 // Local imports
 import { Runs } from '@agent/runtime/runRegistry';
-import { callerRun } from '@agent/runtime/RunCall';
+import {
+  callerRun,
+  recordToolFileRead,
+  requireFileReadForEdit,
+} from '@agent/runtime/RunCall';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
@@ -47,10 +51,6 @@ import {
 // Local file imports
 import { defineTool } from '../core/definition';
 import { nullishWithDefault } from '../core/inputSchema';
-import {
-  recordToolFileRead,
-  requireFileReadForEdit,
-} from '../fileInteractions';
 import {
   formatFileView,
   formatLinesWithNumbers,

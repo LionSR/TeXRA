@@ -2,7 +2,6 @@
 import { Context, Effect, Option } from 'effect';
 import { z } from 'zod';
 import { defineTool, ToolContext } from '@texra-ai/harness';
-import type { RunCall } from '@agent/runtime/RunCall';
 
 // Internal imports
 import { withLogChannel } from '@logger/effectLog';
@@ -275,7 +274,7 @@ const listThreads = Effect.fn('InlineCommentTool.list')(function* (
 
 function inlineComment(
   input: InlineCommentInput,
-): Effect.Effect<ToolResult, ToolError, ToolContext | RunCall> {
+): Effect.Effect<ToolResult, ToolError, ToolContext> {
   switch (input.command) {
     case 'add':
       return addThread(input);

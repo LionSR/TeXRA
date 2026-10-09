@@ -6,7 +6,6 @@ import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 import { defineTool, ToolContext } from '@texra-ai/harness';
 import { relativeToRoot } from '@texra-ai/harness/node';
-import type { RunCall } from '@agent/runtime/RunCall';
 
 // Local imports - tools
 import {
@@ -73,7 +72,7 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
   }: ExtractBibliographyInput): Effect.fn.Return<
     ToolResult,
     Error,
-    ToolContext | RunCall | WorkspaceFs | FileSystem.FileSystem
+    ToolContext | WorkspaceFs | FileSystem.FileSystem
   > {
     const call = yield* ToolContext;
     const { path, display } = yield* resolveLatexFile(texPath);

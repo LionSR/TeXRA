@@ -7,11 +7,10 @@ import * as nodePath from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import type { RunCall } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { recordToolFileRead, type RunCall } from '@agent/runtime/RunCall';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError } from '@shared/schemas';
-import { recordToolFileRead } from '@tools/fileInteractions';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';

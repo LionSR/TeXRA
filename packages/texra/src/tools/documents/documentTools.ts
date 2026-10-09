@@ -11,8 +11,8 @@ import { Cause, Effect } from 'effect';
 import { z } from 'zod';
 
 import { defineTool } from '@texra-ai/harness';
+import { requireRun } from '@texra-ai/harness/plugins';
 import { getRunRecords } from '@agent/storage';
-import { requireToolRun } from '@agent/runtime/RunCall';
 import { postProcessResponse } from '@latex/texraResponseTextProcessing';
 import { documentsSummary } from '@shared/plugins/documents';
 import {
@@ -57,7 +57,7 @@ export const RevisionSchema = z
 export const documentsOfCall = Effect.fn('documents.ofCall')(function* (
   tool: string,
 ) {
-  const { run } = yield* requireToolRun(tool);
+  const { run } = yield* requireRun(tool);
   return yield* openDocuments(run);
 });
 

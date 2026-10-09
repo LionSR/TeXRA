@@ -4,10 +4,10 @@ import * as nodePath from 'node:path';
 import { Cause, Effect, FileSystem } from 'effect';
 
 // Local imports - common
-import type { RunCall } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - shared schemas
+import { requireFileReadForEdit, type RunCall } from '@agent/runtime/RunCall';
 import type { AgentCatalogServices } from '@platform/processRuntime';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, type ToolResult } from '@shared/schemas';
@@ -15,7 +15,6 @@ import { resolveToolPath } from '@tools/pathResolution';
 
 // Local imports - tools
 import { reloadAgentCatalog } from '@tools/agentCatalogFollower';
-import { requireFileReadForEdit } from '@tools/fileInteractions';
 import {
   appendApprovalDiffNote,
   buildApprovalRejectedResult,

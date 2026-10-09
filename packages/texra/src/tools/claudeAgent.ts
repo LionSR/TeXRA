@@ -30,7 +30,6 @@ import {
   ToolContext,
   type ToolContextShape,
 } from '@texra-ai/harness';
-import type { RunCall } from '@agent/runtime/RunCall';
 
 // Local imports
 import {
@@ -524,7 +523,6 @@ const run = Effect.fn('ClaudeAgentTool.run')(function* (
   ToolError,
   | Secrets
   | ToolContext
-  | RunCall
   | Runs
   | ClaudeAgentSessions
   | ChildProcessSpawner
@@ -587,12 +585,7 @@ const launchClaudeAgentSession = Effect.fn(
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
-  | Secrets
-  | ToolContext
-  | RunCall
-  | Runs
-  | ChildProcessSpawner
-  | FileSystem.FileSystem
+  Secrets | ToolContext | Runs | ChildProcessSpawner | FileSystem.FileSystem
 > {
   const config = yield* getClaudeAgentConfig;
   const { roots } = (yield* ToolContext).env;

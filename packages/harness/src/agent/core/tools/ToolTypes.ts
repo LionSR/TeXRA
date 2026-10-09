@@ -1,8 +1,12 @@
 /**
  * The tool contract: a tool (`ITool`), its registry, its guard, and what
  * its body reads of its own call (`ToolContext`: its id, where it works, how
- * it asks a person, where its transient output goes). What the harness's
- * built-in tools read of a call made under a run is `@agent/runtime/RunCall`.
+ * it asks a person, the run it works for, where its transient output goes).
+ * The run's window (`ToolRun`) is declared here with its id; the runtime
+ * adds the rest of it, and the helpers over it (`requireRun`, `callerRun`),
+ * in `@agent/runtime/RunCall`, published to plugin authors on
+ * `@texra-ai/harness/plugins`. The rest of that module (the call's place in
+ * its run, the script plumbing) is the harness's built-ins' alone.
  */
 
 import { Context, type Effect } from 'effect';
@@ -12,6 +16,7 @@ import type {
   DispatchFacts,
   PermissionPayload,
   RequestDecision,
+  RunId,
   ToolDefinition,
   ToolResult,
 } from '@shared/schemas';
@@ -141,7 +146,6 @@ export interface ITool<E = Error, R = never> {
 /** Tool lookup abstraction — supports dependency injection and mock tools. */
 export interface IToolRegistry<E = Error, R = never> {
   get(name: string): ITool<E, R> | undefined;
-  has(name: string): boolean;
 }
 
 /** Map- or Record-backed IToolRegistry. */
@@ -157,10 +161,6 @@ export class MapToolRegistry<E = Error, R = never> implements IToolRegistry<
 
   get(name: string): ITool<E, R> | undefined {
     return this.tools.get(name);
-  }
-
-  has(name: string): boolean {
-    return this.tools.has(name);
   }
 }
 
@@ -199,6 +199,17 @@ export interface ToolEnv {
   readonly roots: WorkspaceRoots;
   readonly workingDirectory?: string;
   readonly stepRoots?: readonly StepRoot[];
+  /** The run the call works for; absent for a standalone host invocation. */
+  readonly run?: ToolRun;
+}
+
+/**
+ * What a tool reads of the run its call works for, read from the run rather
+ * than copied onto the call. The core names its id; the runtime declares the
+ * rest (`@agent/runtime/RunCall`), so the core imports nothing of it.
+ */
+export interface ToolRun {
+  readonly runId: RunId;
 }
 
 /** What every tool call knows of itself. */

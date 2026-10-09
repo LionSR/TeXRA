@@ -19,7 +19,7 @@ import { deliveredOutput, getRunRecords } from '@agent/storage';
 import { callChildRunId, readChildTurnState } from '@agent/storage/runRecords';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
-import type { RunToolCall } from '@agent/runtime/RunCall';
+import { type RunToolCall } from '@agent/runtime/RunCall';
 import {
   RUN_OUTCOME,
   type RunEnd,
