@@ -10,7 +10,6 @@ import {
   type MarkdownItInstance,
 } from './createMarkdownRenderer';
 
-
 let md: MarkdownItInstance | null = null;
 
 /** Returns a shared, lazily-initialized MarkdownIt instance. */
