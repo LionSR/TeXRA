@@ -10,12 +10,12 @@ import { z } from 'zod';
 
 import { defineTool } from '@texra-ai/harness';
 import { requireRun } from '@texra-ai/harness/plugins';
+import { ChildRuns } from '@texra-ai/harness/plugins';
 import {
   findAgentByIdentifier,
   getCatalogAgent,
   resolveDelegationScopeAgents,
 } from '@agent/index/agentRegistry';
-import { ChildRuns } from '@agent/runtime/ToolServices';
 import { agentKey, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { errorResult } from '@tools/core/result';

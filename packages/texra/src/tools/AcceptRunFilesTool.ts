@@ -21,7 +21,6 @@ import {
 } from '@texra-ai/harness';
 import { requireRun } from '@texra-ai/harness/plugins';
 import { getRunRecords } from '@agent/storage';
-import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
@@ -52,6 +51,7 @@ import {
   inspectRunStorageEntryUnder,
 } from '@utils/files/runStorageFs';
 import { ensureError } from '@utils/errors/errorMessage';
+import type { PluginToolServices } from '@texra-ai/harness/plugins';
 
 /**
  * Whether `target` is a file, following links: a symlink to a file is a

@@ -19,7 +19,6 @@ import { z } from 'zod';
 
 // Local imports
 import { ToolContext } from '@texra-ai/harness';
-import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import {
   isTransportReason,
@@ -27,6 +26,7 @@ import {
   scopedOkClient,
   withRequestTimeout,
 } from '@tools/timeouts';
+import type { PluginToolServices } from '@texra-ai/harness/plugins';
 
 const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s
 const ZOTERO_PING_TIMEOUT_MS = 2_000; // 2 s

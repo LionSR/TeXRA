@@ -256,7 +256,6 @@
       "@agent/runtime/runtimePresentationEvents",
       "@agent/runtime/SessionHandle",
       "@agent/runtime/terminalResultToast",
-      "@agent/runtime/ToolServices",
       "@agent/storage",
       "@agent/storage/leaseOwnerLiveness",
       "@agent/storage/runRecords",
